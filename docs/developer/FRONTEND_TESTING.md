@@ -196,7 +196,7 @@ describe('MyComponent with Router', () => {
 })
 ```
 
-Real example from `SettingsPanel.test.ts`: use `renderComponent(SettingsPanel, { router: true })`
+Illustrative example, from the since-retired `SettingsPanel.test.ts` (#19532): use `renderComponent(SettingsPanel, { router: true })`
 to automatically set up router with test defaults.
 
 ---

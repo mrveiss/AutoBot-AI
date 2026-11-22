@@ -25,7 +25,7 @@ function deps(): UseCodeIntelAnalysisDeps {
     rootPath: ref('/src'),
     sourceIdParam: computed(() => ''),
     sourceIdQuery: computed(() => ({})),
-    withSourceId: (u: string) => u,
+    withSourceId: (u: string) => `${u}${u.includes('?') ? '&' : '?'}source_id=s1`,
   } as unknown as UseCodeIntelAnalysisDeps
 }
 

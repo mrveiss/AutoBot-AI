@@ -166,3 +166,114 @@ async def test_a_user_with_no_company_runs_a_read_and_a_forged_company_is_still_
         {"name": "write_file", "params": {}}, forged, [], verified_company=False, stored=L1
     )
     assert refused.type == "error" and filed == 0
+
+
+# -- an unregistered name is not an action (it reaches the unknown_tool error), a registered MCP tool is ---------
+
+
+def _mcp(found, raises=False):
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    dispatcher = MagicMock(_cache_loaded=True)
+    dispatcher.has_tool = AsyncMock(
+        side_effect=RuntimeError("registry down") if raises else None, return_value=found is not None
+    )
+    dispatcher.ensure_loaded = AsyncMock()
+    dispatcher.find_tool = (
+        MagicMock(side_effect=RuntimeError("registry down")) if raises else MagicMock(return_value=found)
+    )
+    dispatcher.refresh_tool_cache = AsyncMock()
+    return patch("services.mcp_dispatch.get_mcp_dispatcher", return_value=dispatcher)
+
+
+async def _line_guard(name, mcp):
+    from chat_workflow.tool_handler import ToolHandlerMixin
+
+    handler = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    with mcp:
+        message, _ = await arun_guard_via(handler, {"name": name, "params": {}})
+    return message
+
+
+async def arun_guard_via(handler, call):
+    from tests.unit.chat_workflow.test_ai_line_support import ai_line_world
+
+    ctx = _ctx(consecutive_invalid_tool_calls=0)
+    with ai_line_world():
+        return await handler._enforce_ai_line(call, ctx, []), 0
+
+
+@pytest.mark.asyncio
+async def test_a_name_registered_nowhere_has_no_line_and_reaches_the_unknown_tool_path():
+    message = await _line_guard("no_such_tool", _mcp(None))
+    assert message.metadata["message_type"] == "unknown_tool"  # explicit verdict, not "None" (which would mean line 1)
+
+
+@pytest.mark.asyncio
+async def test_a_tool_registered_with_mcp_but_absent_from_the_catalogue_is_still_held_when_unset():
+    held = await _line_guard("some_registered_mcp_tool", _mcp({"name": "some_registered_mcp_tool"}))
+    assert held is not None and held.type == "approval_required"
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_registry_keeps_the_line_rather_than_dropping_it():
+    held = await _line_guard("some_registered_mcp_tool", _mcp(None, raises=True))
+    assert held is not None and held.type == "approval_required"
+
+
+@pytest.mark.asyncio
+async def test_a_name_judged_unregistered_never_reaches_mcp_dispatch_even_if_the_registry_then_has_it():
+    """The race: the seam sees no tool, a TTL refresh then registers it. The seam's verdict is explicit, so
+    ``_try_mcp_dispatch`` is never called and the agent gets the unknown_tool error."""
+    from unittest.mock import AsyncMock, patch
+
+    from chat_workflow.tool_handler import ToolHandlerMixin
+
+    handler = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    results: list = []
+    late = AsyncMock(return_value="would have run")
+    with (
+        patch("chat_workflow.tool_handler.is_registered_tool", AsyncMock(return_value=False)),
+        patch("chat_workflow.tool_handler._try_mcp_dispatch", late),
+        ai_line_world_cm(),
+    ):
+        messages = [
+            m
+            async for m in handler._dispatch_tool_call(
+                {"name": "late_tool", "params": {}},
+                "s",
+                "t",
+                "http://x",
+                "m",
+                results,
+                [],
+                ctx=_ctx(consecutive_invalid_tool_calls=0, agent_context=None),
+            )
+            if not isinstance(m, tuple)
+        ]
+    late.assert_not_awaited()
+    assert messages[0].metadata["message_type"] == "unknown_tool" and results[0]["status"] == "error"
+
+
+def ai_line_world_cm():
+    from tests.unit.chat_workflow.test_ai_line_support import ai_line_world
+
+    return ai_line_world()
+
+
+@pytest.mark.asyncio
+async def test_a_tool_found_by_mcp_dispatch_is_resolved_against_its_line_again():
+    """Belt and braces: even if the seam was skipped, `_try_mcp_dispatch` holds an unset mutating MCP tool."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from chat_workflow.tool_handler import _try_mcp_dispatch
+
+    dispatcher = MagicMock()
+    dispatcher.ensure_loaded = AsyncMock()
+    dispatcher.find_tool = MagicMock(return_value={"name": "some_mcp_tool", "input_schema": {}})
+    dispatcher.dispatch = AsyncMock()
+    results: list = []
+    with patch("services.mcp_dispatch.get_mcp_dispatcher", return_value=dispatcher), ai_line_world_cm():
+        held = await _try_mcp_dispatch("some_mcp_tool", {"name": "some_mcp_tool", "params": {}}, results, ctx=_ctx())
+    assert held is not None and held.type == "approval_required"
+    dispatcher.dispatch.assert_not_awaited()

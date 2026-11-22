@@ -9,7 +9,7 @@ gated fork run.
 The production failure modes covered here:
 
 * runs created with ``conclusion=action_required`` (parked behind the fork-PR
-  approval policy after ``auto-update-pr-branches`` pushes as the bot),
+  approval policy after a bot-attributed push, e.g. the retired ``auto-update-pr-branches``),
 * runs created but never allocated a job while the self-hosted runner pool is
   empty (``status=queued``, ``jobs: []``),
 * an API error being mistaken for "CI never dispatched", and

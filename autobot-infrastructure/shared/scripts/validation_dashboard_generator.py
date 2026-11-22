@@ -15,7 +15,7 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -130,6 +130,7 @@ _DASHBOARD_HTML_TEMPLATE = """
                 </div>
 
                 <h3>Maturity Trend</h3>
+                {trend_note}
                 <div class="chart-container">
                     <canvas id="maturityChart"></canvas>
                 </div>
@@ -271,6 +272,7 @@ class ValidationDashboardGenerator:
             },
             "metrics": current_metrics,
             "trends": trend_data,
+            "trends_available": any(trend_data.values()),
             "recommendations": recommendations,
             "alerts": alerts,
         }
@@ -313,9 +315,10 @@ class ValidationDashboardGenerator:
 
         metrics = {
             "completion_statistics": {
-                "average_completion": sum(completion_scores) / len(completion_scores),
-                "min_completion": min(completion_scores),
-                "max_completion": max(completion_scores),
+                # #20655: with every phase unscored there is no figure, and None says so; 0 would read as measured.
+                "average_completion": sum(completion_scores) / len(completion_scores) if completion_scores else None,
+                "min_completion": min(completion_scores, default=None),
+                "max_completion": max(completion_scores, default=None),
                 "phases_above_50": len([s for s in completion_scores if s >= 50.0]),
                 "phases_above_90": len([s for s in completion_scores if s >= 90.0]),
             },
@@ -340,45 +343,14 @@ class ValidationDashboardGenerator:
         return metrics
 
     async def _generate_trend_data(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Generate trend data for charts"""
-        try:
-            # Get historical state data
-            await self.state_tracker.get_state_summary()
+        """Trend series for charts: empty, because no stored history backs them (#20523).
 
-            # Generate time series data (last 24 hours)
-            end_time = datetime.now()
-            start_time = end_time - timedelta(hours=self.chart_data_points)
-
-            # Mock trend data (in production, this would come from historical snapshots)
-            trend_data = {
-                "maturity_trend": [
-                    {
-                        "timestamp": (start_time + timedelta(hours=i)).isoformat(),
-                        "value": min(100, 50 + i * 2 + (i % 3)),  # Mock increasing trend
-                    }
-                    for i in range(self.chart_data_points)
-                ],
-                "phase_completion_trend": [
-                    {
-                        "timestamp": (start_time + timedelta(hours=i)).isoformat(),
-                        "completed_phases": min(10, i // 3),  # Mock phase progression
-                    }
-                    for i in range(self.chart_data_points)
-                ],
-                "capability_growth": [
-                    {
-                        "timestamp": (start_time + timedelta(hours=i)).isoformat(),
-                        "capabilities": min(100, 20 + i * 2),  # Mock capability growth
-                    }
-                    for i in range(self.chart_data_points)
-                ],
-            }
-
-            return trend_data
-
-        except Exception as e:
-            logger.error("Error generating trend data: %s", e)
-            return {}
+        The series used to come from a fixed formula marked "Mock trend data", so the screen drew
+        movement that never happened. The state tracker keeps snapshots, not these three series;
+        until they are derived from those snapshots each series is empty and the report says so
+        (``trends_available``), instead of showing numbers nothing measured.
+        """
+        return {"maturity_trend": [], "phase_completion_trend": [], "capability_growth": []}
 
     def _format_phase_details(self, phases: Dict[str, Dict]) -> List[Dict[str, Any]]:
         """Format phase details for dashboard display"""
@@ -743,6 +715,8 @@ class ValidationDashboardGenerator:
             "recommendations_html": (self._generate_recommendations_html(recommendations)),
             "maturity_labels": json.dumps([p["timestamp"][-8:-3] for p in trends]),
             "maturity_data": json.dumps([p["value"] for p in trends]),
+            # #20523: the empty chart says why it is empty
+            "trend_note": "" if report_data["trends_available"] else "<p>No stored trend history is available yet.</p>",
             "refresh_timeout": self.refresh_interval * 1000,
         }
 

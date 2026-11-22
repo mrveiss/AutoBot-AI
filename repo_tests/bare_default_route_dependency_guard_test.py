@@ -67,6 +67,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 _REPO = repo_root()
 
@@ -169,7 +170,7 @@ def _scan_repo() -> Tuple[int, List[Tuple[Path, str, int]], List[Tuple[Path, str
     unreadable: List[Tuple[Path, str]] = []
     for path in _tracked_python_files():
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError, ValueError, OSError) as failure:
             unreadable.append((path, f"{type(failure).__name__}: {failure}"))
             continue
@@ -224,7 +225,7 @@ class TestKnownLegitimateCaseStaysUnflagged:
         silencing the guard instead of fixing the name.
         """
         path = _REPO / "autobot-backend" / "api" / "knowledge.py"
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         (func,) = (f for f in _iter_route_functions(tree) if f.name == "search_man_pages")
         flagged = {arg for arg, _lineno in _bare_default_args(func)}
         assert "limit" not in flagged, "QueryDefaults.DEFAULT_SEARCH_LIMIT was flagged -- see module docstring"
@@ -244,7 +245,7 @@ async def trigger_cognition_seed(request, background_tasks, _user: bool = Depend
 
 
 def _only_route_function(source: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
-    (func,) = _iter_route_functions(ast.parse(source))
+    (func,) = _iter_route_functions(parse_cache.parse(source))
     return func
 
 

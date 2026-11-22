@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the py-banned-route-path rule."""
 
-import ast
 from pathlib import Path
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint.canonical.context import Context
 from tools.lint.canonical.rules import py_banned_route_path
 
@@ -15,14 +15,14 @@ REG_FIXTURES = FIXTURES / "initialization" / "router_registry"
 def _check(name: str) -> list:
     path = FIXTURES / name
     ctx = Context(repo_root=path.parent)
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"), filename=str(path))
     return py_banned_route_path.check(path, tree, ctx)
 
 
 def _check_reg(name: str) -> list:
     path = REG_FIXTURES / name
     ctx = Context(repo_root=path.parent)
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"), filename=str(path))
     return py_banned_route_path.check(path, tree, ctx)
 
 

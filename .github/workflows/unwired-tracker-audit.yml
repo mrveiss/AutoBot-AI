@@ -53,8 +53,11 @@ jobs:
             autobot-backend/requirements*.txt
             autobot-slm-backend/requirements*.txt
 
-      - name: Install pytest
-        run: pip install pytest
+      # #21582: pytest.ini's addopts carries --asyncio-mode=auto, which bare pytest rejects
+      # ("unrecognized arguments"), so the asyncio plugin is installed too. Both versions come
+      # from constraints/shared.txt, the one place the repo declares them -- not restated here.
+      - name: Install pytest and the plugin pytest.ini needs
+        run: pip install -c constraints/shared.txt pytest pytest-asyncio
 
       - name: Test audit script (#6929)
         run: pytest pipeline-scripts/test_audit_unwired_trackers.py -v
@@ -62,16 +65,27 @@ jobs:
       - name: Run audit (dry-run, JSON output)
         id: scan
         shell: bash
+        env:
+          # #21582: the script reads closed-issue states with `gh issue list`; without a token gh
+          # exits 4 (authentication required) and every tracker state degrades to UNKNOWN.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          python3 pipeline-scripts/audit_unwired_trackers.py --json > findings.json || true
+          # Exit 1 = findings (reported below); 2 = the audit could not read tracker states (#21582).
+          # Capturing with `|| rc=$?` keeps errexit from aborting before the check.
+          rc=0
+          python3 pipeline-scripts/audit_unwired_trackers.py --json > findings.json || rc=$?
+          if [ "$rc" -gt 1 ]; then
+            echo "::error::audit exited ${rc}: it could not run to completion, findings.json is not a report"
+            exit "$rc"
+          fi
           count=$(jq 'length' findings.json)
           echo "count=${count}" >> "$GITHUB_OUTPUT"
-          jq -r '"\(.file)\t#\(.tracker)"' findings.json | head -50
+          jq -r '.[:50][] | "\(.file)\t#\(.tracker)"' findings.json
 
       - name: Upload findings artifact
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: unwired-tracker-findings
           path: findings.json
@@ -102,7 +116,7 @@ jobs:
             echo ""
             if [ "${FINDING_COUNT}" != "0" ] && [ -f findings.json ]; then
               echo '```'
-              jq -r '"\(.file)  tracker=#\(.tracker)  callers=\(.production_callers)"' findings.json | head -50
+              jq -r '.[:50][] | "\(.file)  tracker=#\(.tracker)  callers=\(.production_callers)"' findings.json
               echo '```'
             fi
             echo ""

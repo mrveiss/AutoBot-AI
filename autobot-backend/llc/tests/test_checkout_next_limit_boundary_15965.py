@@ -62,7 +62,13 @@ async def session(engine) -> AsyncIterator[AsyncSession]:  # noqa: ANN001
 async def _ready_item(session: AsyncSession, company: str, title: str, *, position: int, assignee: str | None):
     """Seed through the service, so the fixture cannot disagree with production."""
     svc = WorkItemService()
-    item = await svc.create(session, company_id=company, type=WorkItemType.TASK, title=title)
+    item = await svc.create(
+        session,
+        company_id=company,
+        type=WorkItemType.TASK,
+        title=title,
+        project_id=await harness.seed_project(session, company),
+    )
     item.status = WorkItemStatus.READY.value
     # Explicit ordering: `backlog_order()` sorts on `backlog_position` first, so
     # this is what puts the decoys AHEAD of the eligible item rather than relying

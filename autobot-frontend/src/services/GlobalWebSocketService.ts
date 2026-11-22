@@ -12,6 +12,7 @@
  * Author: mrveiss
  */
 
+import { backoffDelay } from '@autobot/ui'
 import { ref, reactive, watch, type Ref } from 'vue'
 import { DEFAULT_CONFIG } from '@/config/defaults.js'
 import { createLogger } from '@/utils/debugUtils'
@@ -540,12 +541,8 @@ class GlobalWebSocketService {
     this.reconnectAttempts++
     this.state.reconnectCount = this.reconnectAttempts
 
-    const backoffDelay = Math.min(
-      this.baseDelay * Math.pow(2, this.reconnectAttempts - 1),
-      this.maxDelay
-    )
-    const jitter = crypto.getRandomValues(new Uint16Array(1))[0] % 1000
-    const delay = backoffDelay + jitter
+    // Jitter (< 1s) spreads clients out; the cap includes it (#15402).
+    const delay = backoffDelay(this.reconnectAttempts - 1, { base: this.baseDelay, max: this.maxDelay, jitterMs: 1000 })
 
     logger.debug(
       `Reconnecting in ${Math.round(delay)}ms ` +

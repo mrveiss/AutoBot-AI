@@ -18,6 +18,7 @@ when the dependency is built, which is import time for a route module, and an
 unknown member name fails as an ``AttributeError`` before that.
 """
 
+import logging
 import uuid
 from typing import Any, Callable, Iterable, NoReturn
 
@@ -31,6 +32,10 @@ from autobot_shared.auth.permission_evaluator import (
     require_permission_member,
 )
 from autobot_shared.auth.permissions import Permission
+
+# stdlib logging, not get_logger: the SLM's hermetic auth harnesses stub autobot_shared
+# submodules, and this module must import and deny cleanly under them.
+logger = logging.getLogger(__name__)
 
 
 def _subject(caller: dict) -> str | None:
@@ -59,6 +64,18 @@ async def audit_permission_denied(request: Request, caller: dict, permissions: t
     )
 
 
+def _count_lost_denial(error_type: str) -> None:
+    """Count a lost deny record on the shared audit-loss counter, when the metrics layer is importable."""
+    try:
+        from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely  # noqa: PLC0415
+    except Exception as exc:  # the metrics layer can fail to import, not only be absent
+        logger.error(
+            "permission gate: audit-loss counter unavailable (%s); the loss is only logged", type(exc).__name__
+        )
+        return
+    record_audit_write_failure_safely("permission_denied", error_type)
+
+
 class PermissionGate:
     """The shared decision bound to one service's caller dependency."""
 
@@ -79,7 +96,12 @@ class PermissionGate:
         self._load_db_names = load_db_names or default_db_loader
 
     async def _wired_db_names(self, user_id: uuid.UUID, org_id: uuid.UUID | None) -> Iterable[str]:
-        self._wire_rbac()
+        """The caller's DB grants; an unavailable RBAC wiring grants nothing (fail closed)."""
+        try:
+            self._wire_rbac()
+        except Exception as exc:
+            logger.error("permission gate: RBAC wiring unavailable, no DB grants (%s)", type(exc).__name__)
+            return ()
         return await self._load_db_names(user_id, org_id)
 
     def require_permission(self, permission: Permission) -> Callable:
@@ -111,10 +133,23 @@ class PermissionGate:
         await self.deny(request, caller, permissions)
 
     async def deny(self, request: Request, caller: dict, permissions: tuple[Permission, ...]) -> NoReturn:
-        """Audit the denial, then raise 403."""
-        self._wire_rbac()
-        await audit_permission_denied(request, caller, permissions)
+        """Audit the denial, then raise 403 -- the 403 whatever happens to the audit record."""
+        await self._audit_denial(request, caller, permissions)
         raise self.forbidden(permissions)
+
+    async def _audit_denial(self, request: Request, caller: dict, permissions: tuple[Permission, ...]) -> None:
+        """Write the deny record; a record that cannot be written is logged and counted, never raised.
+
+        Same contract as ``_emit_permission_denied_audit`` (#14750): a failing audit must not
+        turn a clean 403 into a 500. That covers the wiring import too, which runs on first
+        need and can fail where the service's database layer is absent (#18338 train 12b).
+        """
+        try:
+            self._wire_rbac()
+            await audit_permission_denied(request, caller, permissions)
+        except Exception as exc:
+            logger.error("permission gate: deny audit not written (%s)", type(exc).__name__)
+            _count_lost_denial(type(exc).__name__)
 
     @staticmethod
     def forbidden(permissions: tuple[Permission, ...]) -> HTTPException:

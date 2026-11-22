@@ -38,6 +38,8 @@ import re
 import pytest
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 #: `re` entry points whose first positional argument is a pattern.
@@ -161,6 +163,12 @@ CONCEPTS = (
             "autobot-backend/voice_processing/language_detection.py": (
                 "`.split()` into filename tokens -- tokenising, not sanitising; no output string is built"
             ),
+            "repo_tests/_ui_literal_rederive.py": (
+                "a measurement, not a sanitiser: `_outside_class` strips the characters the #12732 regex "
+                "re-derivation cannot match only to ask whether the REST of a literal would have matched, "
+                "so a parser/regex difference is explained by position rather than waved through; no "
+                "output string is built or shown (#12732)"
+            ),
             "autobot_shared/text_tokens.py": (
                 "the one word tokenizer (`tokenize`): a split into tokens, not a sanitiser; has its own "
                 "`word-tokenizer` concept below"
@@ -200,7 +208,7 @@ def _tracked_python_files() -> tuple[str, ...]:
 
 
 def _is_test(rel: str) -> bool:
-    return rel.endswith("_test.py") or "/tests/" in rel or rel.rsplit("/", 1)[-1].startswith("test_")
+    return is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in rel
 
 
 @functools.lru_cache(maxsize=1)
@@ -216,7 +224,7 @@ def _regex_literals() -> tuple[tuple[str, int, str], tuple[int, ...]]:
     skipped = 0
     for rel in _tracked_python_files():
         try:
-            tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (OSError, SyntaxError):
             skipped += 1
             continue
@@ -376,11 +384,6 @@ _STRING_FENCE_CALLS = (
 
 _STRING_FENCE_ALLOWED = {
     "autobot_shared/frontmatter.py": "the canonical parser; `startswith` is its fast reject",
-    "autobot-infrastructure/shared/scripts/utilities/optimize_agents.py": (
-        "a tenth variant, left in place: this tree's sys.path bootstrap is itself broken "
-        "(#18126), so adding an autobot_shared import here would depend on a path that "
-        "does not resolve. Fix #18126 first, then migrate it."
-    ),
 }
 
 

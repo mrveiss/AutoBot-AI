@@ -54,8 +54,10 @@ if timeout 2 bash -c "echo > /dev/tcp/${AUTOBOT_REDIS_HOST:-localhost}/${AUTOBOT
 else
     echo "UNREACHABLE"
 fi
-echo -n "  ChromaDB (${AUTOBOT_REDIS_HOST:-localhost}:8000): "
-if timeout 2 bash -c "echo > /dev/tcp/${AUTOBOT_REDIS_HOST:-localhost}/8000" 2>/dev/null; then
+# #19321: ChromaDB's own host and port from ssot-config.sh. This dialled the Redis host on
+# :8000, where ChromaDB never listens (it listens on PortConfig.chromadb, 8100).
+echo -n "  ChromaDB (${AUTOBOT_CHROMADB_HOST}:${AUTOBOT_CHROMADB_PORT}): "
+if timeout 2 bash -c "echo > /dev/tcp/${AUTOBOT_CHROMADB_HOST}/${AUTOBOT_CHROMADB_PORT}" 2>/dev/null; then
     echo "OK"
 else
     echo "UNREACHABLE"

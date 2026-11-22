@@ -84,3 +84,27 @@ def test_the_wiring_hook_runs_before_a_deny_audit(audit):
 
     assert TestClient(app).get("/admin").status_code == 403
     assert calls == ["wired"]
+
+
+def _broken_wiring():
+    raise ModuleNotFoundError("user_management.middleware")
+
+
+async def test_a_deny_whose_audit_cannot_be_written_is_still_403(caplog):
+    """#18338 train 12b: the wiring import on the deny path failed and turned the 403 into a 500."""
+    gate = PermissionGate(lambda: None, wire_rbac=_broken_wiring)
+    with pytest.raises(HTTPException) as exc:
+        await gate.require_permission(Permission.ADMIN_SYSTEM)(request=_REQUEST, caller={"role": "user"})
+    assert exc.value.status_code == 403
+    assert "deny audit not written (ModuleNotFoundError)" in caplog.text
+
+
+async def test_unavailable_wiring_grants_no_db_permissions():
+    """Fail closed: a DB-granted caller is denied, not 500'd, when RBAC wiring cannot load."""
+    loader = AsyncMock(return_value=["admin.system"])
+    gate = PermissionGate(lambda: None, wire_rbac=_broken_wiring, load_db_names=loader)
+    caller = {"role": "user", "user_id": "00000000-0000-0000-0000-000000000001"}
+    with pytest.raises(HTTPException) as exc:
+        await gate.require_permission(Permission.ADMIN_SYSTEM)(request=_REQUEST, caller=caller)
+    assert exc.value.status_code == 403
+    loader.assert_not_awaited()

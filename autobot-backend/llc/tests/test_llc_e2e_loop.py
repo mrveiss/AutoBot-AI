@@ -136,6 +136,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
         return {
             "id": str(_FIXED_USER_ID),
             "user_id": str(_FIXED_USER_ID),
+            "auth_method": "session",
             "username": "admin",
             "role": "admin",
             "is_platform_admin": True,
@@ -207,13 +208,17 @@ def _seed_pricing_cache():
 # ---------------------------------------------------------------------------
 
 
-async def _seed_agent(session_factory, company_id: str) -> str:  # noqa: ANN001
-    """Seed an AgentOrgNode (the "hired" agent) and return its agent_id."""
+async def _seed_agent(session_factory, company_id: str) -> tuple[str, str]:  # noqa: ANN001
+    """Seed an AgentOrgNode (the "hired" agent); return its ``agent_id`` slug and its node ``id``.
+
+    Dual keyspace (#10032): the slug keys budgets and runs, the node id is what a work item's assignee holds.
+    """
     agent_id = str(uuid.uuid4())
+    node_id = uuid.uuid4()
     async with session_factory() as session:
         session.add(
             AgentOrgNode(
-                id=uuid.uuid4(),
+                id=node_id,
                 agent_id=agent_id,
                 name="Worker One",
                 org_role=OrgRole.WORKER.value,
@@ -222,7 +227,15 @@ async def _seed_agent(session_factory, company_id: str) -> str:  # noqa: ANN001
             )
         )
         await session.commit()
-    return agent_id
+    return agent_id, str(node_id)
+
+
+async def _seed_project(session_factory, company_id: str) -> str:  # noqa: ANN001
+    """Seed the project a work item must belong to (#18978); there is no project POST in this loop."""
+    async with session_factory() as session:
+        project_id = await harness.seed_project(session, company_id)
+        await session.commit()
+    return project_id
 
 
 async def _seed_budget(session_factory, company_id: str, agent_id: str) -> None:  # noqa: ANN001
@@ -288,13 +301,15 @@ async def test_llc_core_loop_end_to_end(app, client, session_factory):  # noqa: 
     assert get_resp.json()["id"] == company_id
 
     # ---- 2. hire agent (SEEDED — see module docstring) --------------------
-    agent_id = await _seed_agent(session_factory, company_id)
+    agent_id, node_id = await _seed_agent(session_factory, company_id)
 
     # ---- 3. create work item (PUBLIC: POST /api/llc/work-items) -----------
+    project_id = await _seed_project(session_factory, company_id)
     wi_resp = await client.post(
         "/api/llc/work-items",
         json={
             "company_id": company_id,
+            "project_id": project_id,
             "type": "task",
             "title": "Ship the LLC loop",
             "description": "Prove the core loop end to end.",
@@ -337,19 +352,17 @@ async def test_llc_core_loop_end_to_end(app, client, session_factory):  # noqa: 
     # 5a. agent checks the item out (PUBLIC) → IN_PROGRESS, assigned to agent.
     checkout_resp = await client.post(
         f"/api/llc/work-items/{work_item_id}/checkout",
-        json={"agent_id": agent_id, "run_id": run_id},
+        json={"agent_id": node_id, "run_id": run_id},  # the node id, not the slug (#10032)
     )
     assert checkout_resp.status_code == 200, checkout_resp.text
     assert checkout_resp.json()["status"] == "in_progress"
-    assert checkout_resp.json()["assignee_agent_id"] == agent_id
+    assert checkout_resp.json()["assignee_agent_id"] == node_id
 
     # 5b. agent hands off to a human reviewer (PUBLIC) → IN_REVIEW.
     handoff_resp = await client.post(
         f"/api/llc/work-items/{work_item_id}/handoff/to-human",
         json={
-            "agent_id": agent_id,
             "reviewer_user_id": str(_FIXED_USER_ID),
-            "company_id": company_id,
             "agent_notes": "Work complete, ready for review.",
         },
     )
@@ -361,7 +374,6 @@ async def test_llc_core_loop_end_to_end(app, client, session_factory):  # noqa: 
     # 5c. human reviewer approves (PUBLIC) → DONE.
     approve_resp = await client.post(
         f"/api/llc/work-items/{work_item_id}/review/approve",
-        json={"reviewer_user_id": str(_FIXED_USER_ID), "company_id": company_id},
     )
     assert approve_resp.status_code == 200, approve_resp.text
     approved = approve_resp.json()

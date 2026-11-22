@@ -97,3 +97,30 @@ def parse_risk_tier(value: Any) -> RiskTier:
         if lowered in RiskTier._value2member_map_:
             return RiskTier(lowered)
     raise ValueError(f"{value!r} is not a risk tier (expected one of {[t.value for t in RiskTier]})")
+
+
+def presented_risk_tier(value: Any) -> RiskTier | None:
+    """The tier to SHOW for a stored risk value, or ``None`` when it has none (#13422).
+
+    For response fields a badge renders, never for gating: an approval decision must use
+    :func:`parse_risk_tier`, which refuses to guess. Beyond what that accepts, this reads a
+    Severity spelled as a string (``"warning"``, ``"error"``, ``"minimal"``…, which the
+    workflow wire carries) through the same ``_FROM_SEVERITY`` map, and gives ``None`` for
+    anything ungradable (``"unknown"``, free text) so the caller shows the raw value instead.
+    """
+    try:
+        return parse_risk_tier(value)
+    except ValueError:
+        pass
+    if isinstance(value, str):
+        try:
+            return risk_tier_from_severity(Severity(value.strip().lower()))
+        except ValueError:
+            return None
+    return None
+
+
+def presented_risk_tier_value(value: Any) -> str | None:
+    """:func:`presented_risk_tier` as the plain string a response dict carries, or ``None``."""
+    tier = presented_risk_tier(value)
+    return tier.value if tier is not None else None

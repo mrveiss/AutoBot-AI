@@ -19,9 +19,11 @@ from typing import Tuple
 
 from services.role_units import REDIS_UNIT
 from services.service_restart import run_systemctl_over_ssh
+from services.ssh_utils import ssh_destination_args, ssh_remote_path
 
 logger = logging.getLogger(__name__)
 
+_SCP_DOWNLOAD_CONNECT_TIMEOUT_S = 30  # seconds; the ConnectTimeout the backup download always used
 _REDIS_UNIT_TIMEOUT_S = 30  # seconds; the value `_run_command(..., timeout=30)` used for stop/start
 
 
@@ -37,8 +39,26 @@ def ssh_base_command(host: str, user: str, port: int) -> list:
         "BatchMode=yes",
         "-p",
         str(port),
-        f"{user}@{host}",
+        *ssh_destination_args(user, host),
     ]
+
+
+def _scp_command(port: int, operands: list, connect_timeout: int | None = None) -> list:
+    """scp argv: options, then ``--``, then the validated operands."""
+    timeout_opts = ["-o", f"ConnectTimeout={connect_timeout}"] if connect_timeout else []
+    return ["/usr/bin/scp", "-o", "StrictHostKeyChecking=accept-new", *timeout_opts, "-P", str(port), "--", *operands]
+
+
+def scp_upload_command(host: str, user: str, port: int, local_path: str, remote_path: str) -> list:
+    """Copy *local_path* to ``user@host:remote_path``."""
+    return _scp_command(port, [local_path, ssh_remote_path(user, host, remote_path)])
+
+
+def scp_download_command(host: str, user: str, port: int, remote_path: str, local_path: str) -> list:
+    """Copy ``user@host:remote_path`` to *local_path* (connect timeout `_SCP_DOWNLOAD_CONNECT_TIMEOUT_S`)."""
+    return _scp_command(
+        port, [ssh_remote_path(user, host, remote_path), local_path], connect_timeout=_SCP_DOWNLOAD_CONNECT_TIMEOUT_S
+    )
 
 
 async def _reported(call) -> Tuple[bool, str]:
