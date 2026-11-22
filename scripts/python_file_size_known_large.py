@@ -164,7 +164,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/code_intelligence/conversation_analysis/analyzer.py": 906,
     "autobot-backend/code_intelligence/conversation_flow_analyzer_test.py": 900,
     "autobot-backend/code_intelligence/cross_language_patterns/detector.py": 1184,
-    "autobot-backend/code_intelligence/cross_language_patterns/extractors.py": 886,
+    "autobot-backend/code_intelligence/cross_language_patterns/extractors.py": 883,
     "autobot-backend/code_intelligence/doc_generation/markdown_generator.py": 738,
     "autobot-backend/code_intelligence/fingerprinting/detector.py": 968,
     "autobot-backend/code_intelligence/llm_code_generator_test.py": 960,
@@ -315,7 +315,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/causal_inference_engine.py": 668,  # #13422: model split out
     "autobot-backend/services/chat_knowledge_service_test.py": 773,
     "autobot-backend/services/claim_verifier.py": 768,
-    "autobot-backend/services/codebase_indexing_service.py": 1010,
+    "autobot-backend/services/codebase_indexing_service.py": 1007,
     "autobot-backend/services/command_approval_manager.py": 633,
     "autobot-backend/services/docker_task_workspace.py": 673,
     "autobot-backend/services/execution/docker_backend.py": 604,

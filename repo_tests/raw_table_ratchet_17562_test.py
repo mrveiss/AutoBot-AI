@@ -36,8 +36,8 @@ from tools.lint._comment_syntax import strip_html_comments
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/)")
 _TAG = re.compile(r"<table(?:[\s>]|$)")
 _COMMENT = re.compile(r"^\s*//")
-# Closed comments only: an unclosed ``<!--`` (e.g. inside a JS string) must not swallow the rest of the
-# file and hide a live table after it -- an unclosed opener leaves the text counted, failing closed.
+# HTML comments are removed by the shared ``strip_html_comments`` (#21643), which keeps newlines so line numbers
+# hold; a table inside a closed comment is not counted, and an unclosed ``<!--`` leaves the text counted (fail closed).
 
 # Measured on the live tree: 38 table-opening lines in 27 autobot-frontend files, 51 in 32
 # autobot-slm-frontend files (#19698, #17562 batch 2). Lower an entry by exactly what a PR converts; delete it at 0.
