@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import Request
+from fastapi import HTTPException, Request, WebSocket
 from starlette.datastructures import State
+from starlette.requests import HTTPConnection
 
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
@@ -32,6 +33,8 @@ logger = get_logger(__name__)
 #: The header the company switcher sends on every request (the same one ``get_tenant_context`` reads).
 ACTIVE_COMPANY_HEADER = "X-Organization-Id"
 _STATE_KEY = "active_company_scope"
+#: The key a live connection's user payload carries its active company under, resolved once at connect.
+ACTIVE_COMPANY_KEY = "active_company"
 
 
 def _parse(value) -> uuid.UUID | None:
@@ -103,13 +106,24 @@ async def company_of_session(request: Request, session_id: str) -> str | None:
         raise fixed_refusal(503) from None
 
 
+class OtherCompanyRefusal(HTTPException):
+    """The canonical 403 for a chat of another company.
+
+    A subclass so a route that must not reveal a chat exists (``validate_strict_hidden``) can answer it as not found.
+    """
+
+    def __init__(self) -> None:
+        refusal = fixed_refusal(403)
+        super().__init__(status_code=refusal.status_code, detail=refusal.detail)
+
+
 def refuse_other_company(scope: ActiveCompany, stored_company: str | None) -> None:
     """The one company rule behind HTTP, WebSocket and import: the canonical 403 for a chat of another company.
 
     No active company, or an Unassigned chat, or the same company, passes.
     """
     if scope.active is not None and not scope.allows(stored_company):
-        raise fixed_refusal(403)
+        raise OtherCompanyRefusal()
 
 
 async def enforce_session_company(session_id: str, request: Request, user: dict | None = None) -> None:
@@ -117,6 +131,44 @@ async def enforce_session_company(session_id: str, request: Request, user: dict 
     scope = await resolve_company_scope(request, user)
     if scope.active is not None:
         refuse_other_company(scope, await company_of_session(request, session_id))
+
+
+async def require_session_company(conn: HTTPConnection) -> None:
+    """Route dependency for a router whose paths name a chat session: another company's chat is the canonical 403.
+
+    The session is the path's ``session_id`` / ``chat_id``; a path with neither, or with an id that is not a chat
+    session id (read as such nowhere else), is left to its route. HTTP and WebSocket routes both take it.
+    """
+    from utils.chat_utils import validate_chat_session_id
+
+    session_id = next((conn.path_params[k] for k in ("session_id", "chat_id") if k in conn.path_params), None)
+    if session_id and validate_chat_session_id(str(session_id)):
+        await enforce_session_company(str(session_id), conn)  # type: ignore[arg-type]
+
+
+async def connection_company(websocket: WebSocket, user: dict | None) -> ActiveCompany | None:
+    """The socket's ``ActiveCompany``, resolved once at connect; None after the socket is closed 4403.
+
+    A header naming a company the caller may not act in refuses the connection (accept, then close, so the client
+    sees a close frame). No identity, or no header, is no active company.
+    """
+    from autobot_shared.websocket_subprotocol import accept_websocket
+
+    try:
+        return await resolve_company_scope(websocket, user)  # type: ignore[arg-type]
+    except HTTPException:
+        await accept_websocket(websocket)
+        await websocket.close(code=4403, reason="Forbidden")
+        return None
+
+
+async def session_in_company(manager, session_id: str, scope: ActiveCompany) -> bool:
+    """Whether *scope* may reach *session_id*: the canonical rule as a yes/no for socket and event filters."""
+    try:
+        refuse_other_company(scope, await manager.get_session_company(session_id) if scope.active else None)
+    except HTTPException:
+        return False
+    return True
 
 
 async def creation_company_metadata(request: Request, client_metadata: dict | None, user: dict | None) -> dict:

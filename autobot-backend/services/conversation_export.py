@@ -350,7 +350,11 @@ async def _refuse_other_company(chat_history_manager, session_id: str, company_m
     from security.session_company import refuse_other_company  # noqa: PLC0415
 
     active = ActiveCompany((company_metadata or {}).get("company_id"))
-    refuse_other_company(active, await chat_history_manager.get_session_company(session_id))
+    try:
+        stored = await chat_history_manager.get_session_company(session_id)
+    except SessionOwnerUnreadable:
+        raise deny_unreadable_owner(session_id, None) from None  # fails closed, as ``_recorded_owner`` does
+    refuse_other_company(active, stored)
 
 
 async def _import_target(manager, session_id: str, exists: bool, owns_it: bool, on_conflict: str):

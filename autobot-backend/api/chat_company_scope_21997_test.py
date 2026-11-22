@@ -10,6 +10,7 @@ route shares), not at a helper in isolation.
 
 import ast
 import asyncio
+import contextlib
 import json
 import pathlib
 import uuid
@@ -293,9 +294,9 @@ def _ownership():
     return {"authorized": True, "reason": "owner_match", "user_data": dict(_USER)}
 
 
-async def _assign(manager, company=CO_A, member=True, exists=True, audit=None):
-    body = chat_session_company.SessionCompanyAssign(company_id=company)
-    audit = audit if audit is not None else AsyncMock(return_value=True)
+@contextlib.contextmanager
+def _assign_patches(manager, member=True, exists=True, audit=None):
+    """ONE patch scope for the assign route; concurrent assigns enter it once, around both calls."""
     with (
         patch.object(chat_session_company, "get_chat_history_manager", return_value=manager),
         patch("utils.chat_utils.get_chat_history_manager", return_value=manager),
@@ -305,7 +306,18 @@ async def _assign(manager, company=CO_A, member=True, exists=True, audit=None):
         patch("security.session_share_audit.audit_log", new=audit),
         patch("api.chat_sessions.log_request_context"),
     ):
-        return await chat_session_company.assign_session_company("s1", body, MagicMock(), _ownership()), audit
+        yield
+
+
+async def _call_assign(company):
+    body = chat_session_company.SessionCompanyAssign(company_id=company)
+    return await chat_session_company.assign_session_company("s1", body, MagicMock(), _ownership())
+
+
+async def _assign(manager, company=CO_A, member=True, exists=True, audit=None):
+    audit = audit if audit is not None else AsyncMock(return_value=True)
+    with _assign_patches(manager, member, exists, audit):
+        return await _call_assign(company), audit
 
 
 class TestAssignCompany:
@@ -407,15 +419,12 @@ class TestConcurrentAssignIsACompareAndSet:
         manager = _Manager(str(tmp_path))
         await manager.save_session("s1", messages=[{"sender": "user", "text": "hi", "timestamp": "t0"}])
         audit = AsyncMock(return_value=True)
-        outcomes = await asyncio.gather(
-            _assign(manager, company=CO_A, audit=audit),
-            _assign(manager, company=CO_B, audit=audit),
-            return_exceptions=True,
-        )
+        with _assign_patches(manager, audit=audit):  # one patch lifetime around both calls
+            outcomes = await asyncio.gather(_call_assign(CO_A), _call_assign(CO_B), return_exceptions=True)
         won = [o for o in outcomes if not isinstance(o, BaseException)]
         lost = [o for o in outcomes if isinstance(o, HTTPException)]
         assert len(won) == 1 and [e.status_code for e in lost] == [409]
-        winner = _payload(won[0][0])["company_id"]
+        winner = _payload(won[0])["company_id"]
         assert await manager.get_session_company("s1") == winner
         results = sorted(c.args[1] for c in audit.await_args_list)
         assert results == ["attempted", "attempted", "failed", "success"]

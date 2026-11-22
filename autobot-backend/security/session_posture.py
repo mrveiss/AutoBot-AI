@@ -36,7 +36,7 @@ from fastapi import HTTPException, Request
 from auth_middleware import resolve_human_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
-from security.session_company import enforce_session_company
+from security.session_company import OtherCompanyRefusal, enforce_session_company
 from utils.catalog_http_exceptions import raise_internal_error
 
 logger = get_logger(__name__)
@@ -184,7 +184,7 @@ async def validate_strict_hidden(session_id: str, request: Request, *, must_exis
     """
     try:
         decision = await validate_strict(session_id, await authenticated_user(session_id, request), request)
-    except NotSessionOwner:
+    except (NotSessionOwner, OtherCompanyRefusal):  # another company's chat answers as an unknown id (#21997)
         raise session_not_found() from None
     if must_exist and decision.get("reason") == "legacy_unowned":
         raise session_not_found()

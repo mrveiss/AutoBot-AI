@@ -249,11 +249,10 @@ async def batch_chat_initialization(request: Request, current_user: dict = Depen
     start_time = time.time()
     logger.info("Starting batch chat initialization...")
 
+    company = await resolve_company_scope(request, current_user)  # a refusal (403) is the caller's answer, not a 500
     try:
         results = await asyncio.gather(
-            get_chat_sessions(
-                request.app, current_user.get("username"), await resolve_company_scope(request, current_user)
-            ),
+            get_chat_sessions(request.app, current_user.get("username"), company),
             get_system_health(),
             get_service_health_legacy(),
             get_settings(request.app),

@@ -699,8 +699,8 @@ async def _track_session_in_memory_graph(
         )
 
 
-async def _reject_session_id_collision(chat_history_manager, session_id: str, user_data: dict | None) -> None:
-    """Refuse to create over an existing session the caller does not own (#14012).
+async def _reject_session_id_collision(chat_history_manager, session_id: str, user_data: dict | None) -> bool:
+    """Refuse to create over an existing session the caller does not own (#14012); True for the caller's own retry.
 
     The caller-supplied id (#6746) is validated for shape only, so without this a
     request naming someone else's session id would overwrite their messages and
@@ -719,12 +719,12 @@ async def _reject_session_id_collision(chat_history_manager, session_id: str, us
         if legacy_transcript_file(session_id) is not None:  # #18293: a legacy-only id is never taken over
             logger.warning("Refusing create over legacy transcript id %s", session_id)
             raise _session_id_taken_error()
-        return
+        return False
 
     owner = owner_from_metadata((existing.get("metadata") or {}) if isinstance(existing, dict) else {})
     caller = (user_data or {}).get("username")
     if owner and caller and owner == caller:
-        return  # the caller's own session — a retry, not a takeover
+        return True  # the caller's own session — a retry, not a takeover
 
     logger.warning("Refusing create over existing session %s (owner=%s, caller=%s)", session_id, owner, caller)
     raise _session_id_taken_error()
@@ -768,13 +768,14 @@ async def create_session(session_data: SessionCreate, request: Request):
     # SECURITY: Extract authenticated user and add to metadata as owner; a revoked JWT is 401 (#18688)
     user_data = await resolve_human_user(request)
 
+    is_retry = False
     if session_data.id and validate_chat_session_id(session_data.id):
         session_id = session_data.id
         # #14012: the id above is caller-supplied and only its FORMAT was
         # checked. Without this, creating over an existing id replaced the
         # stored messages with [] and reassigned ownership — one request that
         # destroyed a conversation and took the session over.
-        await _reject_session_id_collision(chat_history_manager, session_id, user_data)
+        is_retry = await _reject_session_id_collision(chat_history_manager, session_id, user_data)
     else:
         session_id = generate_chat_session_id()
     session_title = session_data.title or DEFAULT_SESSION_TITLE
@@ -785,7 +786,8 @@ async def create_session(session_data: SessionCreate, request: Request):
     # #14020: one builder for every path that stamps ownership (#684 org/team
     # hierarchy included), so create and backfill cannot drift apart.
     metadata.update(build_owner_metadata(user_data, session_data.team_id))
-    metadata.update(await creation_company_metadata(request, session_data.metadata, user_data))  # #21997
+    if not is_retry:  # #21997: only the assign route changes an existing chat's company; a retry keeps its own
+        metadata.update(await creation_company_metadata(request, session_data.metadata, user_data))
     if user_data and user_data.get("username"):
         logger.info(
             "Session %s created with owner: %s (org: %s)",
