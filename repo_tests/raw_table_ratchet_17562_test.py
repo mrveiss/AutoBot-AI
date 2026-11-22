@@ -31,12 +31,13 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table, base_tree_texts
 
+from tools.lint._comment_syntax import strip_html_comments
+
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/)")
 _TAG = re.compile(r"<table(?:[\s>]|$)")
 _COMMENT = re.compile(r"^\s*//")
 # Closed comments only: an unclosed ``<!--`` (e.g. inside a JS string) must not swallow the rest of the
 # file and hide a live table after it -- an unclosed opener leaves the text counted, failing closed.
-_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 
 # Measured on the live tree: 38 table-opening lines in 27 autobot-frontend files, 51 in 32
 # autobot-slm-frontend files (#19698, #17562 batch 2). Lower an entry by exactly what a PR converts; delete it at 0.
@@ -127,7 +128,7 @@ def scan_raw_tables(root: Path) -> tuple[dict[str, int], int]:
 
 def count_tables(text: str) -> int:
     """Raw ``<table>``-opening lines in one ``.vue`` file, closed HTML comments stripped first."""
-    text = _HTML_COMMENT.sub("", text)
+    text = strip_html_comments(text)
     return sum(1 for line in text.splitlines() if _TAG.search(line) and not _COMMENT.match(line))
 
 

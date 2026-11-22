@@ -31,17 +31,19 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_file_present, base_table, raised_known_entries
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import strip_html_comments
+
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins")
 _SKIPPED = re.compile(r"(/node_modules/|/dist/|\.test\.|\.spec\.|\.stories\.|/__tests__/)")
 _KEYFRAMES = re.compile(r"@keyframes\s+spin(?![\w-])")
 _UTILITY = re.compile(r"\b(?:animate-spin|fa-spin)(?![\w-])")
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
-_BLOCK_COMMENT = re.compile(r"/\*.*?\*/|<!--.*?-->", re.S)
+_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
 
 
 def _code_only(text: str) -> str:
     """*text* with block comments blanked (newlines kept) and comment lines dropped."""
-    blanked = _BLOCK_COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
+    blanked = _BLOCK_COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), strip_html_comments(text))
     return _COMMENT_LINE.sub("", blanked)
 
 
