@@ -23,7 +23,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-from tools.lint._comment_syntax import code_lines
+from tools.lint._comment_syntax import code_lines, code_text
 
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 ROLE = ANSIBLE / "roles" / "slm_manager"
@@ -294,21 +294,49 @@ _ANSIBLE_YML_GLOB = "autobot-slm-backend/ansible/**/*.yml"
 _RESOLVE_INCLUDES = ("ansible.builtin.import_tasks", "ansible.builtin.include_tasks")
 
 
+_NESTED = ("block", "rescue", "always")
+
+
+def _flat(tasks: object) -> list[dict]:
+    """Tasks in execution order, descending into `block`, `rescue` and `always`."""
+    out: list[dict] = []
+    for task in tasks if isinstance(tasks, list) else []:
+        if not isinstance(task, dict):
+            continue
+        out.append(task)
+        for key in _NESTED:
+            out.extend(_flat(task.get(key)))
+    return out
+
+
+def _module_arg(task: dict, module: str) -> object:
+    """The argument of *module* whether written `ansible.builtin.<module>` or the short form."""
+    return task.get(f"ansible.builtin.{module}", task.get(module))
+
+
+def _template_src(task: dict) -> str | None:
+    """The `src` of a template task: dict form, or the legacy `src=... dest=...` string."""
+    arg = _module_arg(task, "template")
+    if isinstance(arg, dict):
+        return arg.get("src")
+    match = re.search(r"\bsrc=(\S+)", arg) if isinstance(arg, str) else None
+    return match.group(1) if match else None
+
+
 def _renders_unit(tasks: object) -> bool:
-    return isinstance(tasks, list) and any(
-        isinstance(t, dict)
-        and isinstance(t.get("ansible.builtin.template"), dict)
-        and t["ansible.builtin.template"].get("src") == _UNIT
-        for t in tasks
-    )
+    return any(_template_src(t) == _UNIT for t in _flat(tasks))
+
+
+def _named(root: Path) -> list[Path]:
+    """Ansible YAML files that name the unit template in CODE (a comment mentioning it does not count)."""
+    if not (root / "autobot-slm-backend" / "ansible").is_dir():
+        return []
+    return [p for p in sorted(root.glob(_ANSIBLE_YML_GLOB)) if _UNIT in code_text(p, strip_trailing=True)]
 
 
 def _renderers(root: Path) -> list[Path]:
     """Every ansible task file with a template task whose src is the backend unit."""
-    if not (root / "autobot-slm-backend" / "ansible").is_dir():
-        return []
-    named = [p for p in sorted(root.glob(_ANSIBLE_YML_GLOB)) if _UNIT in p.read_text(encoding="utf-8")]
-    return [p for p in named if _renders_unit(yaml.safe_load(p.read_text(encoding="utf-8")))]
+    return [p for p in _named(root) if _renders_unit(yaml.safe_load(p.read_text(encoding="utf-8")))]
 
 
 UNIT_RENDERERS = declare(
@@ -322,9 +350,14 @@ UNIT_RENDERERS = declare(
 
 def _resolves_before_render(tasks: list[dict]) -> bool:
     """True when a trusted_proxies.yml include precedes the first task that renders the unit."""
-    render = next((i for i, t in enumerate(tasks) if t.get("ansible.builtin.template", {}).get("src") == _UNIT), None)
+    flat = _flat(tasks)
+    render = next((i for i, t in enumerate(flat) if _template_src(t) == _UNIT), None)
     resolve = next(
-        (i for i, t in enumerate(tasks) if any(t.get(k) == "trusted_proxies.yml" for k in _RESOLVE_INCLUDES)),
+        (
+            i
+            for i, t in enumerate(flat)
+            if any(_module_arg(t, m) == "trusted_proxies.yml" for m in ("import_tasks", "include_tasks"))
+        ),
         None,
     )
     return render is not None and resolve is not None and resolve < render
@@ -333,6 +366,10 @@ def _resolves_before_render(tasks: list[dict]) -> bool:
 def test_every_renderer_of_the_unit_resolves_the_trusted_proxies_first() -> None:
     """The self-update path included: update-all-nodes.yml reaches the unit through service_units.yml (#19832)."""
     renderers = UNIT_RENDERERS.examined(repo_root())
+    unrecognised = [p.name for p in _named(repo_root()) if p not in renderers]
+    assert (
+        not unrecognised
+    ), f"named in code but no template task of the unit was recognised (vacuous pass): {unrecognised}"
     for path in renderers:
         tasks = yaml.safe_load(path.read_text(encoding="utf-8"))
         assert isinstance(tasks, list), f"{path.name} is not a task file; render the unit only from one"
@@ -361,3 +398,39 @@ def test_the_renderer_check_has_a_contrast_pair() -> None:
     assert not _resolves_before_render([_unit_task(), _include()]), "resolving after the render is too late"
     assert not _resolves_before_render([_unit_task()]), "no resolve at all"
     assert not _resolves_before_render([_include()]), "no render at all is not a pass"
+
+
+def _tpl(**extra: object) -> dict:
+    return {"name": "x", **extra}
+
+
+@pytest.mark.parametrize(
+    "tasks",
+    [
+        [_tpl(**{"ansible.builtin.template": {"src": _UNIT}})],
+        [_tpl(template={"src": _UNIT})],
+        [_tpl(template=f"src={_UNIT} dest=/etc/x")],
+        [_tpl(block=[_tpl(template={"src": _UNIT})])],
+        [_tpl(block=[_tpl()], rescue=[_tpl(**{"ansible.builtin.template": {"src": _UNIT}})])],
+        [_tpl(block=[_tpl()], always=[_tpl(block=[_tpl(template={"src": _UNIT})])])],
+    ],
+    ids=["fqcn", "short", "legacy-string", "block", "rescue", "always-nested"],
+)
+def test_every_form_of_a_unit_renderer_is_recognised(tasks: list[dict]) -> None:
+    assert _renders_unit(tasks)
+
+
+@pytest.mark.parametrize(
+    "tasks",
+    [[_tpl(template={"src": "other.j2"})], [_tpl(debug={"msg": _UNIT})], [], "not a task list"],
+    ids=["other-template", "mention-only", "empty", "not-a-list"],
+)
+def test_other_tasks_are_not_unit_renderers(tasks: object) -> None:
+    assert not _renders_unit(tasks)
+
+
+def test_a_nested_or_short_form_renderer_still_needs_the_resolve_first() -> None:
+    resolve = _tpl(import_tasks="trusted_proxies.yml")
+    assert _resolves_before_render([resolve, _tpl(block=[_tpl(template={"src": _UNIT})])])
+    assert not _resolves_before_render([_tpl(block=[_tpl(template={"src": _UNIT})]), resolve])
+    assert not _resolves_before_render([_tpl(block=[_tpl(template={"src": _UNIT})])]), "no resolve at all"

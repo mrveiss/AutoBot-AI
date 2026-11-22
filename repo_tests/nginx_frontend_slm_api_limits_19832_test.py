@@ -127,7 +127,15 @@ def test_the_tls_listen_detector_trips_on_a_literal_port(listen: str) -> None:
 
 @pytest.mark.parametrize(
     "listen",
-    ["listen {{ slm_nginx_tls_port }} ssl;", "listen [::]:{{ slm_nginx_tls_port }} ssl;", "# listen 443 ssl;"],
+    [
+        "listen {{ slm_nginx_tls_port }} ssl;",
+        "listen [::]:{{ slm_nginx_tls_port }} ssl;",
+        "# listen 443 ssl;",
+        # Only the comment stripper saves this one: unstripped, the lazy `(.+?)\\s+ssl` capture would run into
+        # the trailing `# ssl` and read `{{ slm_nginx_tls_port }};  #` as a literal port. A Jinja `{# #}` comment
+        # is not covered: the shared stripper has no Jinja support yet (#22099).
+        "listen {{ slm_nginx_tls_port }};  # ssl is set by the include",
+    ],
 )
 def test_the_tls_listen_detector_passes_the_variable_and_comments(listen: str) -> None:
     assert not _literal_tls_listens(f"    {listen}\n")
