@@ -43000,7 +43000,7 @@ export interface paths {
          *     "system:") go through the SkillApproval governance workflow (GH#8734 AC-6):
          *     admins resume immediately; non-admins receive HTTP 202 with an approval_id
          *     that an admin must approve via the SLM dashboard before the agent resumes.
-         *     User-paused agents can be resumed by any authenticated user.
+         *     User-paused agents can be resumed by an owner/admin of the agent's company (#21376).
          *     DISABLED and TERMINATED agents are not affected — use PUT /config instead.
          */
         post: operations["resume_agent_api_heartbeat__agent_id__resume_post"];
