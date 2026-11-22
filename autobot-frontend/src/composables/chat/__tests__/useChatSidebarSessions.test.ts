@@ -45,7 +45,12 @@ function setup() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // vitest.config mockReset wipes the defaults set in vi.hoisted, so every test re-applies them (#3070).
   h.confirm.mockResolvedValue(true)
+  h.call.mockResolvedValue({ files: [] })
+  h.controller.deleteChatSession.mockResolvedValue(undefined)
+  h.controller.getSessionFacts.mockResolvedValue({ facts: [{ id: 'f1' }, { id: 'f2' }] })
+  h.controller.preserveSessionFacts.mockResolvedValue({ updated_count: 1 })
   h.store.sessions = reactive([session('abcdefgh12345678', 'Alpha'), session('b', '', 'Hello there, this is a long first message'), session('c', '')])
 })
 

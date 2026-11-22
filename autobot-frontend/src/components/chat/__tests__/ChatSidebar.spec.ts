@@ -55,6 +55,10 @@ beforeEach(() => {
   h.rs.sessions = reactive([session('a', 'Fleet check'), session('b', 'NPU plan')])
   h.rs.sidebarCollapsed = false
   h.call.mockResolvedValue(null)
+  // vitest.config mockReset wipes the defaults set in vi.hoisted, so every test re-applies them (#3070).
+  h.confirm.mockResolvedValue(true)
+  h.controller.deleteChatSession.mockResolvedValue(undefined)
+  h.controller.getSessionFacts.mockResolvedValue({ facts: [] })
 })
 
 describe('ChatSidebar', () => {
