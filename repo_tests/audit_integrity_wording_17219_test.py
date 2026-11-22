@@ -12,7 +12,9 @@ own source (#17219).
 """
 
 import ast
+import io
 import re
+import tokenize
 
 import pytest
 from repo_tests._paths import repo_root
@@ -60,11 +62,17 @@ def _sentences(text: str) -> list[str]:
     return [s for s in re.split(r"(?<=[.;:])\s+|\n\s*\n", text) if s.strip()]
 
 
+def _comments(source: str) -> list[str]:
+    """Comment text only: a ``#`` inside a string literal is runtime data, not a comment."""
+    tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+    return [tok.string.lstrip("#") for tok in tokens if tok.type == tokenize.COMMENT]
+
+
 def dishonest_claims(source: str) -> list[str]:
     """Sentences of *source*'s docstrings and comments that claim an integrity property and name no mechanism."""
     scopes = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
     texts = [ast.get_docstring(n) or "" for n in ast.walk(ast.parse(source)) if isinstance(n, scopes)]
-    texts += [line.split("#", 1)[1] for line in source.splitlines() if "#" in line]
+    texts += _comments(source)
     return [s.strip() for t in texts for s in _sentences(t) if _CLAIMS.search(s) and not _NAMES_MECHANISM.search(s)]
 
 
@@ -77,6 +85,7 @@ def dishonest_claims(source: str) -> list[str]:
         ("a documented-as claim", '"""This table is documented as immutable."""\n', 1),
         ("a bare claim after a negation elsewhere", '"""Rows are not deleted. The table is immutable."""\n', 1),
         ("claim in a comment", "x = 1  # append-only table\n", 1),
+        ("claim in a string literal that holds a hash", 'message = "# immutable"\n', 0),
         ("no claim", '"""Audit rows are sealed on insert."""\n', 0),
     ],
 )
@@ -95,3 +104,21 @@ def test_no_audit_module_claims_an_integrity_property_it_lacks() -> None:
         f"#17219: {found} claim tamper-resistance/immutability with no mechanism named. Name the mechanism "
         "(autobot_shared/audit_chain.py) or say what is NOT provided."
     )
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("autobot-backend/services/audit/store.py", True),
+        ("autobot_shared/audit_chain.py", True),
+        ("autobot-backend/services/audit_logger.py", True),
+        ("autobot-backend/services/audit/store_test.py", False),
+        ("autobot-backend/services/audit/test_store.py", False),
+        ("autobot-backend/tests/audit_x.py", False),
+        ("autobot-backend/migrations/versions/20261122_122_audit_chain.py", False),
+        ("autobot-backend/services/billing.py", False),
+        ("autobot-backend/services/audit/notes.md", False),
+    ],
+)
+def test_the_audit_module_selector_accepts_audit_sources_and_rejects_the_rest(path: str, expected: bool) -> None:
+    assert _is_audit_module(path) is expected

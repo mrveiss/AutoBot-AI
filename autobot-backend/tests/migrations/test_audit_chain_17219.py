@@ -413,3 +413,29 @@ async def test_negative_zero_and_non_string_keys_keep_the_same_hash_after_jsonb(
     sessions, _ = migrated
     await _insert(sessions, 1, details={"z": -0.0, "k": {10: "a", 2: "b"}, 3: [-0.0, {7: 1.5}]})
     assert (await _verify()).ok
+
+
+async def test_a_verification_reads_one_snapshot_even_when_a_row_commits_mid_run(migrated, monkeypatch) -> None:
+    """Head and rows come from one REPEATABLE READ snapshot: a row committed after the head read is in neither."""
+    from services.audit import integrity
+
+    sessions, _ = migrated
+    await _insert(sessions, 3)
+    real = integrity._start_hash
+
+    async def _commit_a_row_then_read(*args):
+        await _insert(sessions, 1)  # committed by another session between the head read and the row scan
+        return await real(*args)
+
+    monkeypatch.setattr(integrity, "_start_hash", _commit_a_row_then_read)
+    report = await _verify()
+    assert report.ok and report.head_seq == 3 and report.rows_checked == 3, report
+    monkeypatch.setattr(integrity, "_start_hash", real)
+    assert (await _verify()).head_seq == 4
+
+
+async def test_a_row_moved_below_one_is_reported_on_postgres(migrated) -> None:
+    sessions, _ = migrated
+    await _chained(sessions, 3)
+    await _exec(sessions, "UPDATE audit_logs SET chain_seq = 0 WHERE chain_seq = 3")
+    assert ("modified_row", 0) in _found(await _verify())

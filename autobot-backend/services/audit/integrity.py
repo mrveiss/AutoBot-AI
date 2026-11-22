@@ -170,6 +170,31 @@ async def _without_genesis(session: Any) -> IntegrityReport:
     return report
 
 
+async def _invalid_sequences(session: Any) -> list[Finding]:
+    """Stored rows whose ``chain_seq`` is below 1: the scan starts above 0, so they would otherwise go unread.
+
+    Sequence 0 belongs to the genesis anchor, never to an ``audit_logs`` row. Reads stored rows only.
+    """
+    stmt = select(AuditLog.chain_seq).where(AuditLog.chain_seq < 1).order_by(AuditLog.chain_seq)
+    seqs = (await session.execute(stmt)).scalars().all()
+    return [Finding(audit_chain.MODIFIED, int(seq), "chain_seq below 1: the row is outside the chain") for seq in seqs]
+
+
+async def _snapshot(session: Any) -> None:
+    """One REPEATABLE READ snapshot for every read of a pass, so head, anchor and rows describe one state."""
+    if session.get_bind().dialect.name == "postgresql":
+        await session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+
+
+async def _run(session: Any, from_seq: int | None) -> IntegrityReport:
+    await _snapshot(session)
+    genesis = await _genesis(session)
+    report = await (_without_genesis(session) if genesis is None else _verify(session, genesis, from_seq or 1))
+    report.findings.extend(await _invalid_sequences(session))
+    report.ok = not report.findings
+    return report
+
+
 async def verify_chain(from_seq: int | None = None) -> IntegrityReport:
     """Verify the chain from *from_seq* (default: the genesis) and remember the result.
 
@@ -177,11 +202,7 @@ async def verify_chain(from_seq: int | None = None) -> IntegrityReport:
     """
     global _last_report
     async with db_session_context() as session:
-        genesis = await _genesis(session)
-        if genesis is None:
-            report = await _without_genesis(session)
-        else:
-            report = await _verify(session, genesis, from_seq or 1)
+        report = await _run(session, from_seq)
     _last_report = report
     logger.info("Audit chain verified: ok=%s rows=%d findings=%d", report.ok, report.rows_checked, len(report.findings))
     return report

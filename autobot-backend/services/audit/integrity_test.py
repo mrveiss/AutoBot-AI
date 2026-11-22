@@ -319,3 +319,20 @@ async def test_a_non_ascii_genesis_is_reported_not_raised(chained) -> None:
     sessions, _ = chained
     await _mutate(sessions, update(_ANCHORS).values(mac="é" * 64))
     assert (chain.MAC_INVALID, 0) in _found(await integrity.verify_chain())
+
+
+@pytest.mark.asyncio
+async def test_a_row_whose_sequence_was_moved_below_one_is_reported(chained) -> None:
+    sessions, _ = chained
+    await _mutate(sessions, update(_AUDIT).where(_AUDIT.c.chain_seq == 5).values(chain_seq=0))
+    report = await integrity.verify_chain()
+    assert not report.ok and (chain.MODIFIED, 0) in _found(report)
+
+
+@pytest.mark.asyncio
+async def test_the_only_chained_row_moved_to_zero_is_not_a_clean_report(chained) -> None:
+    sessions, _ = chained
+    await _mutate(sessions, delete(_AUDIT).where(_AUDIT.c.chain_seq > 1))
+    await _mutate(sessions, update(_AUDIT).where(_AUDIT.c.chain_seq == 1).values(chain_seq=-3))
+    report = await integrity.verify_chain()
+    assert not report.ok and report.rows_checked == 0 and (chain.MODIFIED, -3) in _found(report)

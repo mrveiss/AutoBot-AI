@@ -173,3 +173,17 @@ def test_non_string_dict_keys_hash_as_the_strings_jsonb_returns() -> None:
     assert chain.canonical_bytes({"d": chain.jsonb_form({10: 1, 2: 2})}) == chain.canonical_bytes(
         {"d": {"10": 1, "2": 2}}
     )
+
+
+def test_mixed_string_and_integer_keys_canonicalise_instead_of_raising() -> None:
+    form = chain.jsonb_form({2: "a", "b": 1, 10: "c"})
+    assert form == {"2": "a", "b": 1, "10": "c"}
+    assert chain.canonical_bytes({"d": form})
+
+
+def test_a_value_the_encoder_refuses_is_a_finding_and_the_scan_continues() -> None:
+    rows, genesis = _chain(4)
+    rows[1].details = {"v": float("inf")}
+    found = chain.verify_rows(rows, KEY, genesis=genesis)
+    assert (chain.MODIFIED, 2) in {(f.kind, f.seq) for f in found}
+    assert not any(f.seq == 4 and f.kind == chain.MODIFIED for f in found)

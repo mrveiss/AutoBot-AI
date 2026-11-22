@@ -194,7 +194,11 @@ class ChainVerifier:
         return found
 
     def _content(self, row: Any, seq: int) -> list[Finding]:
-        digest = row_hash(row.prev_hash, canonical_bytes(covered_values(row)))
+        try:
+            canonical = canonical_bytes(covered_values(row))
+        except (ValueError, TypeError, OverflowError):  # a stored value the encoder refuses (e.g. a non-finite number)
+            return [Finding(MODIFIED, seq, "covered columns cannot be canonicalised")]
+        digest = row_hash(row.prev_hash, canonical)
         found = []
         if not same_digest(digest, row.row_hash):
             found.append(Finding(MODIFIED, seq, "row_hash does not match the stored columns"))

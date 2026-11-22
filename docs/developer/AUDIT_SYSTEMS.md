@@ -51,11 +51,12 @@ listener on `AuditLog`) and the verifier (`services/audit/integrity.py`) both us
 | Covered columns | `id`, `chain_seq`, `created_at`, `category`, `actor`, `action`, `resource_type`, `resource_ref`, `resource_id`, `outcome`, `details`, `ip_address`, `user_agent`, `session_id`, `org_ref`. Not `user_id`/`org_id`: deleting a user or organisation sets them to NULL and must not fail verification |
 | Start | the genesis anchor (`audit_chain_anchors`) is written by the first chained insert and records how many rows predate the chain; those rows are pre-chain (`chain_seq IS NULL`), never rewritten and never reported as faults |
 
-Verification: `GET /api/audit/integrity` (admin; last result in this process plus the current head),
-`POST /api/audit/integrity/verify` (admin, human only) and `python -m services.audit.integrity`
-(exit 1 on a finding) all call `integrity.verify_chain`. It reports, with the sequence where found: a
+Verification: `POST /api/audit/integrity/verify` (admin, human only) and `python -m services.audit.integrity`
+(exit 1 on a finding) run `integrity.verify_chain`, in one REPEATABLE READ snapshot. `GET /api/audit/integrity`
+(admin) is a **status read, not a check**: it returns the current head and the last result this process
+produced, which can be older than the table, so it never replaces a run. A run reports, with the sequence where found: a
 modified row, a removed row (gap), a reordered row, a row whose MAC does not verify, and a row inserted
-without a chain entry (the count of unchained rows differs from the genesis). A failed verification is a
+without a chain entry (the count of unchained rows differs from the genesis), and a stored `chain_seq` below 1. A failed verification is a
 report; it never locks an operation out.
 
 Limits:
