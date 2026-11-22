@@ -119,12 +119,12 @@ async def test_a_quarantined_fact_the_index_missed_is_still_dropped_from_the_pag
 @pytest.mark.asyncio
 async def test_leaving_a_category_leaves_the_quarantine_index_in_one_transaction():
     kb = await _kb(servable=0, quarantined=1)
-    kb.redis().transactions.clear()
+    before = len(kb.redis().executed_batches())
 
     await kb._remove_from_old_category("q0", "cat2")
 
     assert kb.redis().sets[MEMBERS] == kb.redis().sets[INDEX] == set()
-    assert kb.redis().transactions == [[("srem", MEMBERS), ("srem", INDEX)]]
+    assert kb.redis().executed_batches()[before:] == [[("srem", MEMBERS, "q0"), ("srem", INDEX, "q0")]]
 
 
 @pytest.mark.asyncio
@@ -142,18 +142,18 @@ async def test_deleting_a_category_removes_its_quarantine_index():
 async def test_joining_a_category_and_its_index_entry_are_one_transaction():
     kb = CategoryKB()
     await kb.add_fact("q", category_id=None, **HELD)
-    kb.redis().transactions.clear()
+    before = len(kb.redis().executed_batches())
 
     await add_to_category(kb.redis(), "q", "cat1")
 
-    assert kb.redis().transactions == [[("sadd", MEMBERS), ("sadd", INDEX)]]
+    assert kb.redis().executed_batches()[before:] == [[("sadd", MEMBERS, "q"), ("sadd", INDEX, "q")]]
 
 
 @pytest.mark.asyncio
 async def test_a_crash_before_the_transaction_leaves_neither_set_changed():
     kb = CategoryKB()
     await kb.add_fact("q", category_id=None, **HELD)
-    kb.redis().fail_next_transaction = True
+    kb.redis().next_pipeline_errors = [ConnectionError("connection lost before EXEC")]
 
     with pytest.raises(ConnectionError):
         await add_to_category(kb.redis(), "q", "cat1")

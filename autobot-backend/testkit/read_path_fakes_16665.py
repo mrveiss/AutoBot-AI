@@ -15,6 +15,7 @@ from autobot_shared.ssot_config import config
 from knowledge.categories import CategoriesMixin
 from knowledge.ownership import KnowledgeOwnership
 from knowledge.quarantine import apply_quarantine, gate_response
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 PRIVATE_A = "alice private fact"
 PRIVATE_B = "bob private fact"
@@ -102,30 +103,6 @@ class QuarantineGatedKB(FakeKB):
 OPEN_META = {"owner_id": "admin", "visibility": "system"}
 
 
-class _Pipeline:
-    """Queues commands and applies them on ``execute``; a ``MULTI`` is recorded as one transaction."""
-
-    def __init__(self, redis: "SetRedis", transaction: bool):
-        self._redis, self._transaction, self._ops = redis, transaction, []
-
-    def __getattr__(self, name):
-        return lambda *args, **kwargs: self._ops.append((name, args, kwargs))
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    async def execute(self):
-        if self._transaction:
-            if self._redis.fail_next_transaction:
-                self._redis.fail_next_transaction = False
-                raise ConnectionError("connection lost before EXEC")
-            self._redis.transactions.append([(name, args[0]) for name, args, _ in self._ops])
-        return [await getattr(self._redis, name)(*args, **kwargs) for name, args, kwargs in self._ops]
-
-
 class SetRedis:
     """An in-memory Redis with the hash, set and string commands the category code uses (#16665, #21957).
 
@@ -137,8 +114,8 @@ class SetRedis:
         self.sets: dict = {}
         self.strings: dict = {}
         self.reads: list = []  # every hash read command, so a test can show a count made none
-        self.transactions: list = []  # each MULTI as [(command, key), ...]
-        self.fail_next_transaction = False
+        self.pipelines: list = []  # every pipeline handed out; each records what it executed
+        self.next_pipeline_errors: list = []  # errors the next pipeline raises on EXEC, before applying anything
         self.after_metadata_read = None  # one-shot async hook: runs right after the next ``metadata`` hget
 
     @staticmethod
@@ -146,7 +123,14 @@ class SetRedis:
         return value if isinstance(value, bytes) else str(value).encode("utf-8")
 
     def pipeline(self, transaction: bool = True):
-        return _Pipeline(self, transaction)
+        errors, self.next_pipeline_errors = self.next_pipeline_errors, []
+        pipe = FakeAsyncPipeline(self, transaction=transaction, execute_errors=errors)
+        self.pipelines.append(pipe)
+        return pipe
+
+    def executed_batches(self) -> list:
+        """Each EXEC that reached Redis, as ``[(command, key, ...), ...]``, in order."""
+        return [batch for pipe in self.pipelines for batch in pipe.executed]
 
     async def get(self, key):
         return self.strings.get(key)
