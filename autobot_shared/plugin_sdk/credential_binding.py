@@ -29,6 +29,11 @@ def _inside(path: Path, root: Path) -> bool:
     return real == base or base in real.parents
 
 
+def is_under_trusted_root(path: Path, roots: Iterable[Path]) -> bool:
+    """True when the resolved *path* lies under one of *roots*; a symlink into a root does not count (#17421)."""
+    return any(_inside(path, root) for root in roots)
+
+
 def bound_resolver(
     name: str,
     plugin_dir: Path | None,
@@ -45,7 +50,7 @@ def bound_resolver(
         return None
     if plugin_dir is None:
         reason = "plugin directory unknown"
-    elif not any(_inside(plugin_dir, root) for root in trusted_roots):
+    elif not is_under_trusted_root(plugin_dir, trusted_roots):
         reason = "plugin is not under a trusted built-in root"
     else:
         return resolver

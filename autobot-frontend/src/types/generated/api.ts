@@ -19251,7 +19251,7 @@ export interface paths {
         put?: never;
         /**
          * Enable Plugin
-         * @description Enable a plugin.
+         * @description Enable a plugin: audited, persisted across restarts, and applied to the loaded plugin (#17421).
          *
          *     Args:
          *         plugin_name: Plugin name
@@ -19277,7 +19277,7 @@ export interface paths {
         put?: never;
         /**
          * Disable Plugin
-         * @description Disable a plugin.
+         * @description Disable a plugin: audited, persisted across restarts, and applied to the loaded plugin (#17421).
          *
          *     Args:
          *         plugin_name: Plugin name
@@ -177779,7 +177779,9 @@ export interface operations {
     ingest_cost_api_llc_budget__agent_id__ingest_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 agent_id: string;
             };
