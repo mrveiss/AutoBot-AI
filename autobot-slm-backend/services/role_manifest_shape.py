@@ -13,38 +13,37 @@ claimed this); this module reads the loaded manifests and augments
 ``role_registry``'s static catalog with the manifest's values, so a future
 edit to one ``manifest.yml`` is the only place those facts have to change.
 
-Phase 1 scope (#16025). NOT derived here, and deliberately: ``display_name``,
-``sync_type``, ``auto_restart``, ``source_paths``, ``target_path``,
+Phase 1 (#16025) derived the identifier, units, health and ports. Phase 2 derives ``source_paths`` and
+``target_path`` from ``deploy.source`` / ``deploy.sync`` / ``deploy.sync_target`` (and a service's own
+``sync_target``), for every role a manifest resolves to. ``sync_target`` is what the code-sync rsyncs INTO, which
+is not the manifest's ``destination`` (the install directory); the two disagree for several roles, and that
+discrepancy is tracked separately rather than settled here -- the fields hold exactly what the registry did.
+NOT derived, and still declared only in ``role_registry.py``: ``display_name``, ``sync_type``, ``auto_restart``,
 ``post_sync_cmd``, ``required``, ``degraded_without``, ``ansible_playbook``.
-None of these has a manifest field today, and at least two roles' manifests
-were found to actively disagree with a value role_registry.py's own code
-comments prove correct (ai-stack's placeholder-README source, #14275;
-slm-agent's source/destination depth) -- deriving the rest blind would risk
-shipping a regression under the banner of removing one. Moving them into the
-manifest schema is tracked as a phase 2 follow-up (issue linked from #16025).
 """
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Mapping, Tuple
 from urllib.parse import urlparse
 
+from autobot_shared.logging_manager import get_logger
 from models.manifest import RoleManifest, ServiceType
+from services.role_manifest_errors import MANIFEST_ERRORS
+
+logger = get_logger(__name__)
 
 _DEFAULT_HTTPS_PORT = 443
 _DEFAULT_HTTP_PORT = 80
 
 # #16025: fields apply_manifest_shape never sets -- role_registry.py's static
-# dicts remain their sole declaration until a phase 2 follow-up gives each one
-# a manifest field (see the module docstring for why that is not done here).
+# dicts remain their sole declaration until each gets a manifest field.
 # Pinned so this set can only shrink as fields migrate out of it, never grow.
 REGISTRY_ONLY_FIELDS: frozenset = frozenset(
     {
         "display_name",
         "sync_type",
         "auto_restart",
-        "source_paths",
-        "target_path",
         "post_sync_cmd",
         "required",
         "degraded_without",
@@ -115,6 +114,34 @@ def systemd_units(role_name: str, manifest: RoleManifest, owns_whole_manifest: b
     return [svc.system_service or svc.name for svc in services if svc.type == ServiceType.SYSTEMD]
 
 
+def sync_from_manifest(
+    role_name: str, manifest: RoleManifest, owns_whole_manifest: bool, placeholders: Mapping[str, str]
+) -> Tuple[List[str], str]:
+    """(source_paths, target_path) the code-sync uses for role_name, per the resolved manifest.
+
+    A manifest with ``deploy.sync: false`` ships nothing. The target is the deploy-level ``sync_target`` unless a
+    service tagging role_name carries its own; ``{base_dir}`` / ``{agent_dir}`` come from ``placeholders`` so the
+    registry's AUTOBOT_BASE_DIR / SLM_AGENT_DIR override still decides them. An unknown ``{token}`` raises a
+    ``ValueError`` naming the manifest, role and token.
+    """
+    deploy = manifest.deploy
+    target = deploy.sync_target
+    if not owns_whole_manifest:
+        own = [
+            svc.sync_target for svc in manifest.services if role_name in svc.slm_roles and svc.sync_target is not None
+        ]
+        if own:
+            target = own[0]
+    try:
+        resolved = target.format_map(placeholders)
+    except KeyError as exc:
+        raise ValueError(
+            f"manifest {manifest.role!r}, role {role_name!r}: sync_target {target!r} uses the unknown placeholder "
+            f"{exc.args[0]!r}; known placeholders: {sorted(placeholders)}"
+        ) from exc
+    return ([deploy.source] if deploy.sync else []), resolved
+
+
 def health_from_manifest(manifest: RoleManifest) -> Tuple[int | None, str | None]:
     """(port, path) implied by the manifest's ``health.endpoint``, or (None, None)."""
     if manifest.health is None:
@@ -151,36 +178,77 @@ def _as_unit_list(value) -> List[str] | None:
     return [value]
 
 
-_default_roles_cache: List[Dict] | None = None
+_default_roles_cache: Dict[Tuple, List[Dict]] = {}
 
 
-def default_roles_for(static_roles: List[Dict]) -> List[Dict]:
+class RoleManifestMissingError(RuntimeError):
+    """A role that declares no ``source_paths`` / ``target_path`` of its own resolved to no loaded manifest (#16025)."""
+
+
+def default_roles_for(
+    static_roles: List[Dict],
+    placeholders: Mapping[str, str] | None = None,
+    degrade: bool = False,
+) -> List[Dict]:
     """Memoized ``role_registry.DEFAULT_ROLES``: static_roles, each manifest-augmented.
 
     A shallow ``dict(role)`` copy per entry -- ``apply_manifest_shape`` mutates
     what it is given, and the caller's static list must stay untouched.
-    Cached process-wide: manifest loading is file I/O, and there is one
-    static role list in practice, built once at ``role_registry`` import time.
+    Cached process-wide per placeholder set: manifest loading is file I/O. A build that raises
+    (a manifest-backed role with no loaded manifest) caches nothing, and nothing is cached from an
+    empty manifest set, so a failed early load is retried rather than served forever.
+
+    ``degrade`` (#22067): a role that cannot resolve is left out and logged, and its message is recorded in
+    ``MANIFEST_ERRORS`` (read by /api/health and the deploy refusals), instead of the whole build raising.
+    The caller is the import of the SLM, which must come up degraded rather than not at all.
     """
-    global _default_roles_cache
-    if _default_roles_cache is None:
-        from services.manifest_loader import get_manifest_loader
+    key = tuple(sorted((placeholders or {}).items()))
+    if key in _default_roles_cache:
+        return _default_roles_cache[key]
+    from services.manifest_loader import get_manifest_loader
 
-        manifests = get_manifest_loader().load_all()
-        _default_roles_cache = [apply_manifest_shape(dict(role), manifests) for role in static_roles]
-    return _default_roles_cache
+    manifests = get_manifest_loader().load_all()
+    errors: Dict[str, str] = {}
+    roles = []
+    for role in static_roles:
+        try:
+            roles.append(apply_manifest_shape(dict(role), manifests, placeholders))
+        except RoleManifestMissingError as exc:
+            if not degrade:
+                raise
+            logger.error("Role %s is unavailable, its manifest did not resolve: %s", role["name"], exc)
+            errors[role["name"]] = str(exc)
+    if degrade:
+        MANIFEST_ERRORS.clear()
+        MANIFEST_ERRORS.update(errors)
+    if manifests and not errors:
+        _default_roles_cache[key] = roles
+    return roles
 
 
-def apply_manifest_shape(role_data: Dict, manifests: Dict[str, RoleManifest]) -> Dict:
+def apply_manifest_shape(
+    role_data: Dict, manifests: Dict[str, RoleManifest], placeholders: Mapping[str, str] | None = None
+) -> Dict:
     """Return role_data augmented with its manifest-derived identifier/units/health/ports.
 
     Mutates and returns the same (already-copied) dict the caller passes in;
-    every registry-only field (source paths, target path, post_sync_cmd, ...)
-    is left untouched -- see the module docstring for why.
+    every registry-only field (post_sync_cmd, ansible_playbook, ...) is left
+    untouched. A role no manifest resolves to keeps its own static
+    ``source_paths`` / ``target_path``; a role that declares neither and resolves to no manifest raises
+    ``RoleManifestMissingError`` (the manifest is its only declaration, so nothing may stand in for it).
+    ``placeholders`` defaults to none: a manifest ``sync_target`` that uses one then raises, naming it.
     """
     name = role_data["name"]
     manifest, owns_whole = find_role_manifest(name, manifests)
     if manifest is None:
+        missing = [f for f in ("source_paths", "target_path") if f not in role_data]
+        if missing:
+            raise RoleManifestMissingError(
+                f"role {name!r} declares no {missing} of its own and no loaded manifest resolves to it "
+                f"(expected a manifest with role {canonical_manifest_role(name)!r}, or a service tagging "
+                f"{name!r} in slm_roles; loaded: {sorted(manifests)}); a manifest that failed to parse or an "
+                f"unresolved infrastructure directory leaves it out -- see the manifest loader's log"
+            )
         wrapped = _as_unit_list(role_data.get("systemd_service"))
         if wrapped is not None:
             role_data["systemd_service"] = wrapped
@@ -188,6 +256,9 @@ def apply_manifest_shape(role_data: Dict, manifests: Dict[str, RoleManifest]) ->
 
     role_data["canonical_name"] = manifest.role
     role_data["ports"] = manifest_ports(manifest)
+    role_data["source_paths"], role_data["target_path"] = sync_from_manifest(
+        name, manifest, owns_whole, placeholders or {}
+    )
 
     units = systemd_units(name, manifest, owns_whole)
     if units:

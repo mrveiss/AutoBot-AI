@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from knowledge.ownership import KnowledgeOwnership
-from knowledge.read_path_fakes_16665 import RESEARCH, QuarantineGatedKB, quarantined_fact
+from testkit.read_path_fakes_16665 import RESEARCH, QuarantineGatedKB, quarantined_fact
 
 
 def _make_kb(legacy_search_result: dict) -> MagicMock:

@@ -14,7 +14,7 @@ from agents.agent_orchestration.agent_execution import AgentExecutor
 from agents.agent_orchestration.reading_user import reading_user
 from agents.agent_orchestration.types import AgentType
 from agents.kb_librarian_agent import KBLibrarianAgent
-from knowledge.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, SHARED, FakeKB
+from testkit.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, SHARED, FakeKB
 
 BACKEND = Path(__file__).resolve().parents[2]
 

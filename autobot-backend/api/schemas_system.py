@@ -20,6 +20,7 @@ from api.system_health import HealthStatus
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
 from services.feature_flags import EnforcementMode
+from services.secret_names import reserved_or_validated
 from type_defs.common import Metadata
 
 # ---------------------------------------------------------------------------
@@ -3335,7 +3336,7 @@ class SecretCreateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        return _validate_secret_name(v)
+        return reserved_or_validated(v, _validate_secret_name)
 
     @model_validator(mode="after")
     def _validate_value_or_connector_bridge(self) -> "SecretCreateRequest":
@@ -3397,9 +3398,7 @@ class SecretUpdateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str | None) -> str | None:
-        if v is not None:
-            return _validate_secret_name(v)
-        return v
+        return v if v is None else reserved_or_validated(v, _validate_secret_name)
 
 
 class SecretTransferRequest(BaseModel):
