@@ -55,7 +55,8 @@ def _host_call(rel: str, ctor: str) -> ast.Call:
 
 
 def test_both_hosts_pass_the_shared_dirs_resolvers_and_trust() -> None:
-    for rel, ctor in (("initialization/lifespan.py", "PluginManager"), ("plugin_manager.py", "PluginLoader")):
+    for rel, ctor in (("plugin_enable_gate.py", "PluginManager"), ("plugin_manager.py", "PluginLoader")):
         call = _host_call(rel, ctor)
         passed = [getattr(arg.func, "id", "") for arg in call.args if isinstance(arg, ast.Call)]
-        assert passed == ["plugin_search_dirs", "plugin_credential_resolvers", "trusted_plugin_roots"], rel
+        # The startup host also passes the enable gate (#17421); the shared three come first.
+        assert passed[:3] == ["plugin_search_dirs", "plugin_credential_resolvers", "trusted_plugin_roots"], rel

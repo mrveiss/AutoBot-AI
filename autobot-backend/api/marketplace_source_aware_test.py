@@ -132,7 +132,7 @@ class TestSourceRoutingIsObservedNotGrepped:
         with patch("api.marketplace.get_async_redis_client", AsyncMock(return_value=redis)):
             result = await install_plugin(
                 body=InstallRequest(plugin_name=self.CUSTOM_ENTRY["name"], source_id=self.CUSTOM_SOURCE),
-                user={"id": "u1"},
+                admin_check=True,  # #19302: install now needs an admin
             )
 
         assert routed == [self.CUSTOM_SOURCE], f"install routed to {routed}, not the browsed source"
@@ -153,7 +153,7 @@ class TestSourceRoutingIsObservedNotGrepped:
         with pytest.raises(HTTPException) as exc_info:
             await install_plugin(
                 body=InstallRequest(plugin_name=self.CUSTOM_ENTRY["name"]),
-                user={"id": "u1"},
+                admin_check=True,  # #19302: install now needs an admin
             )
 
         assert exc_info.value.status_code == 404

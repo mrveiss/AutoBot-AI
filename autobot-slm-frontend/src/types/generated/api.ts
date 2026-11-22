@@ -10169,6 +10169,15 @@ export interface components {
              * @default unknown
              */
             frontend: string;
+            /** Manifest Errors */
+            manifest_errors?: {
+                [key: string]: string;
+            };
+            /**
+             * Manifests
+             * @default healthy
+             */
+            manifests: string;
             /** Nodes Online */
             nodes_online: number;
             /** Nodes Total */
