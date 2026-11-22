@@ -170,3 +170,26 @@ def test_a_yaml_read_failure_keeps_the_anthropic_defaults(monkeypatch):
         }
     finally:
         model_tiers._load_platform_defaults.cache_clear()
+
+
+def test_a_callers_effort_survives_when_enabled_thinking_carries_no_budget():
+    kwargs, _ = _sdk_kwargs(CLAUDE_SONNET, {"thinking": {"type": "enabled"}, "output_config": {"effort": "high"}})
+    assert kwargs["thinking"] == {"type": "adaptive"}
+    assert kwargs["output_config"] == {"effort": "high"}
+
+
+def test_an_earlier_generation_matches_its_own_price_row_before_the_current_tier():
+    from autobot_shared.ssot_constants import ANTHROPIC_CLAUDE_OPUS4
+    from services.llm_cost_tracker import LLMCostTracker
+
+    first = next(ref for pattern, ref in LLMCostTracker._FALLBACK_PATTERNS if pattern in "claude-opus-4-20990101")
+    assert first == ANTHROPIC_CLAUDE_OPUS4
+    current = next(ref for pattern, ref in LLMCostTracker._FALLBACK_PATTERNS if pattern in "claude-opus-5-9")
+    assert current == CLAUDE_OPUS
+
+
+def test_a_tier_alias_names_its_provider_for_the_hire_record():
+    from llc.services.model_tiers import ModelTierService
+
+    assert ModelTierService().detect_provider("sonnet") == "anthropic"
+    assert ModelTierService().detect_provider("not-a-model") is None

@@ -51,8 +51,10 @@ async function review(): Promise<void> {
 }
 
 async function confirm(): Promise<void> {
-  if (!selected.value) return
-  const job = await rollback.start(selected.value)
+  // the commit the operator reviewed in the modal, never the picker's current value
+  const commit = chosen.value?.commit
+  if (!commit || !allowed.value) return
+  const job = await rollback.start(commit)
   if (job) {
     showConfirm.value = false
     rollback.reset()
@@ -80,7 +82,7 @@ onMounted(() => rollback.loadCandidates())
         :options="options"
         :label="$t('codeRollback.pickerLabel')"
         :placeholder="$t('codeRollback.pickerPlaceholder')"
-        :disabled="props.disabled || rollback.loading.value"
+        :disabled="props.disabled || rollback.loading.value || rollback.checking.value"
       />
       <BaseButton
         variant="secondary"

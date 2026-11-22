@@ -54,6 +54,11 @@ async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
         engine, expire_on_commit=False, class_=AsyncSession
     )
     async with made() as session:
+        # Both companies are live: the listings show only agents of live companies (#21942).
+        session.add_all(
+            [Organization(id=COMPANY_A, name="A", slug="a"), Organization(id=COMPANY_B, name="B", slug="b")]
+        )
+        await session.flush()
         for agent_id, company, reports_to, role in [
             ("platform", None, None, "manager"),
             ("a-mgr", COMPANY_A, None, "manager"),

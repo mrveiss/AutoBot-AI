@@ -29,3 +29,14 @@ register_env_var(
         range=(1, 500),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="SLM_ROLLBACK_STATEMENT_TIMEOUT_MS",
+        type=int,
+        default=10000,
+        description="Server-side statement timeout (ms) for the rollback's migration reads (rollback_migrations.py).",
+        component="slm",
+        range=(1000, 300000),
+    )
+)

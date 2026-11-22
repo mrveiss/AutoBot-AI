@@ -26,6 +26,8 @@
       </div>
     </div>
 
+    <WaitingForYou />
+
     <StuckFileCleanupPanel />
 
     <div v-if="!companyId" class="state-msg">{{ $t('llc.approvals.selectCompany') }}</div>
@@ -57,7 +59,7 @@
         >
           <div class="card-header">
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
-            <span class="card-meta">{{ $t('llc.approvals.requestedBy', { id: item.requested_by_agent_id }) }}</span>
+            <span class="card-meta">{{ $t('llc.approvals.requestedBy', { id: requesterText(item) }) }}</span>
             <span class="card-meta">{{ formatDateTime(item.created_at) || '—' }}</span>
           </div>
 
@@ -139,6 +141,7 @@
 <script setup lang="ts">
 import { BaseButton } from '@autobot/ui'
 import StuckFileCleanupPanel from '@/components/llc/StuckFileCleanupPanel.vue'
+import WaitingForYou from '@/components/approvals/WaitingForYou.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -183,7 +186,7 @@ const filteredPending = computed(() => {
     if (filters.value.type && a.type !== filters.value.type) return false
     if (filters.value.search) {
       const q = filters.value.search.toLowerCase()
-      if (!a.type.includes(q) && !a.requested_by_agent_id.includes(q)) return false
+      if (!a.type.includes(q) && !requesterText(a).toLowerCase().includes(q)) return false
     }
     return true
   })
@@ -203,6 +206,12 @@ const filteredHistory = computed(() => {
 
 function formatType(val: string) {
   return val.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+// A request may carry a display label for its requester (#20521); the requester id itself is the verified `user:<id>`.
+function requesterText(a: Approval): string {
+  const label = a.payload?.requested_label
+  return typeof label === 'string' && label ? label : a.requested_by_agent_id
 }
 
 function formatJson(payload: Record<string, unknown>) {

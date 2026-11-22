@@ -392,7 +392,7 @@ backend_setup() {
     phase "Phase 4: Backend Setup"
 
     info "Creating Python virtual environment..."
-    remote_exec_sudo "python3 -m venv ${REMOTE_BACKEND}/venv"
+    remote_exec_sudo "$(source "$PROJECT_ROOT/scripts/lib/python_floor.sh" && python_floor_remote_venv_cmd "$PROJECT_ROOT" "${REMOTE_BACKEND}/venv")"  # floor interpreter, #20932
     success "Virtual environment created"
 
     info "Installing Python dependencies..."

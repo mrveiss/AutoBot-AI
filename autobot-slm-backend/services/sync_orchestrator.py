@@ -24,6 +24,7 @@ from models.database import Node, NodeCodeSource, NodeRole, Role, RoleStatus
 from services.database import db_service
 from services.deploy_artifacts import RSYNC_NEVER_WORLD_WRITABLE, rsync_artifact_excludes
 from services.post_sync_timeouts import POST_SYNC_TIMEOUT_S
+from services.process_group import kill_process_group
 from services.ssh_utils import _ssh_key_usable, ssh_destination_args, ssh_remote_path
 
 logger = logging.getLogger(__name__)
@@ -85,8 +86,8 @@ class SyncOrchestrator:
             if not role:
                 return False, f"Role not found: {role_name}", None
 
-            if not role.source_paths:
-                return False, f"Role has no source paths: {role_name}", None
+            if not role.source_paths or not role.target_path:  # #16025: an empty target would rsync into "/"
+                return False, f"Role has no source paths or sync target: {role_name}", None
 
             ctx = SyncNodeContext()
             ctx.node_ip = node.ip_address
@@ -454,12 +455,14 @@ class SyncOrchestrator:
         if await asyncio.wait_for(head.wait(), timeout=10) == 0:
             return
         logger.info("code_source HEAD is detached; checking out %s before the pull (#20214)", branch)
-        proc = await start_git("-C", repo_path, "checkout", branch, stderr=asyncio.subprocess.STDOUT)
+        # its own session, so a hung checkout hook that holds the pipe dies with git on a timeout (no orphan)
+        proc = await start_git(
+            "-C", repo_path, "checkout", branch, stderr=asyncio.subprocess.STDOUT, start_new_session=True
+        )
         try:
             await asyncio.wait_for(proc.communicate(), timeout=BRANCH_CHECKOUT_TIMEOUT_S)
         except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
+            await kill_process_group(proc)
             raise
 
     async def _get_local_git_commit(self, repo_path: str) -> str | None:

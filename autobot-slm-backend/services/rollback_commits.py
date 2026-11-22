@@ -81,17 +81,50 @@ async def supports_rollback(repo: str, commit: str) -> bool:
     return rc == 0
 
 
+async def _is_ancestor(repo: str, older: str, newer: str) -> bool | None:
+    """True/False for ``older`` being an ancestor of (or equal to) ``newer``; None when git cannot tell."""
+    _, rc = await run_git_capture(repo, "merge-base", "--is-ancestor", older, newer)
+    return {0: True, _NOT_AN_ANCESTOR: False}.get(rc)
+
+
+async def require_before_deployed(repo: str, commit: str, deployed: str | None) -> None:
+    """Refuse unless ``commit`` is a STRICT ancestor of the deployed commit; raises ``RollbackRefused``.
+
+    A newer commit would be a roll FORWARD, an unrelated one is not a rollback, and an unknown relationship
+    (no deployed marker, or a commit git does not have) cannot be shown to be one: all three refuse.
+    """
+    if not is_full_sha(deployed):
+        raise RollbackRefused("The commit this SLM runs is unknown, so an earlier one cannot be chosen.")
+    if commit == deployed:
+        raise RollbackRefused("This SLM already runs that commit. Choose an earlier one, or run Update Everything.")
+    older = await _is_ancestor(repo, commit, deployed)
+    if older is None:
+        raise RollbackRefused("Whether that commit is earlier than the one this SLM runs could not be determined.")
+    if not older:
+        raise RollbackRefused("That commit is not earlier than the one this SLM runs, so it is not a rollback.")
+
+
 async def list_candidates(
-    repo: str, remote: str, branch: str, limit: int = ROLLBACK_CANDIDATE_LIMIT
+    repo: str, remote: str, branch: str, deployed: str | None, limit: int = ROLLBACK_CANDIDATE_LIMIT
 ) -> list[CommitInfo]:
-    """The newest ``limit`` commits reachable from the remote head, newest first."""
+    """The newest ``limit`` commits at or before the deployed commit, that the remote head also contains.
+
+    Newer commits are never offered (#20214): the log starts at ``deployed``, not at the remote head. An
+    unknown deployed commit offers nothing.
+    """
     ref = remote_ref(remote, branch)
-    stdout, rc = await run_git_capture(repo, "log", f"--max-count={int(limit)}", f"--format={_LOG_FORMAT}", ref)
+    if not is_full_sha(deployed):
+        return []
+    stdout, rc = await run_git_capture(repo, "log", f"--max-count={int(limit)}", f"--format={_LOG_FORMAT}", deployed)
     if rc != 0:
         raise RollbackRefused("The commit history could not be read from the code source.")
     commits = _parse_log(stdout)
-    flags = await asyncio.gather(*(supports_rollback(repo, c.commit) for c in commits))
+    flags = await asyncio.gather(*(_offerable(repo, c.commit, ref) for c in commits))
     return [c for c, ok in zip(commits, flags) if ok]
+
+
+async def _offerable(repo: str, commit: str, head: str) -> bool:
+    return bool(await _is_ancestor(repo, commit, head)) and await supports_rollback(repo, commit)
 
 
 async def describe_commit(repo: str, commit: str) -> CommitInfo | None:

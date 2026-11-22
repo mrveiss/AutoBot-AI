@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET
+from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET, resolve_claude_model
 
 logger = get_logger(__name__)
 
@@ -82,7 +82,8 @@ class ModelTierService:
         """
         if not model:
             return None
-        model_lower = model.lower()
+        # A Claude tier alias (``sonnet``) is the same model the resolver pins, so it has the same provider.
+        model_lower = (resolve_claude_model(model) or model).lower()
         for prefix, provider in _MODEL_PREFIX_TO_PROVIDER:
             if model_lower.startswith(prefix.lower()):
                 return provider

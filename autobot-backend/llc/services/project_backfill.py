@@ -15,6 +15,10 @@ An item with no project takes, in order:
    from bad old data, counts as none and is reported separately);
 2. else the company's default project (``DEFAULT_PROJECT_NAME``), created if the company has none.
 
+An item whose child already sits in ANOTHER project than the one it would take is a conflict: giving it the
+project would break the rule that a child shares its parent's project. Conflicts are listed in the preview,
+skipped by apply, and reported by id in its result; a person resolves them.
+
 Both functions recount from the rows, so a preview is never trusted at apply time and a second run finds
 nothing to do.
 """
@@ -81,10 +85,26 @@ async def _default_project(session: AsyncSession, company_id: uuid.UUID) -> Opti
     return (await session.execute(stmt)).scalars().first()
 
 
-def _counts(plan: _Plan, default_exists: bool) -> Dict[str, object]:
+def _conflicting(plan: _Plan, rows: _Rows, default_id: Optional[uuid.UUID]) -> Set[uuid.UUID]:
+    """Items in *plan* with a child that already has a project other than the one the item would take."""
+    child_projects: Dict[uuid.UUID, Set[uuid.UUID]] = {}
+    for parent, project in rows.values():
+        if parent is not None and project is not None:
+            child_projects.setdefault(parent, set()).add(project)
+    return {
+        i
+        for i, (project, _) in plan.items()
+        if child_projects.get(i, set()) - {project if project is not None else default_id}
+    }
+
+
+def _counts(plan: _Plan, default_exists: bool, conflicts: Set[uuid.UUID]) -> Dict[str, object]:
+    """Counts of the items that will be filled; *conflicts* are reported apart and never filled."""
     to_default = sum(1 for project, _ in plan.values() if project is None)
     return {
-        "missing": len(plan),
+        "missing": len(plan) + len(conflicts),
+        "conflicts": len(conflicts),
+        "conflicting_item_ids": sorted(str(i) for i in conflicts),
         "from_ancestor": len(plan) - to_default,
         "to_default": to_default,
         "foreign_ancestor_project_skipped": sum(1 for _, foreign in plan.values() if foreign),
@@ -93,21 +113,28 @@ def _counts(plan: _Plan, default_exists: bool) -> Dict[str, object]:
     }
 
 
-async def _plan_for(session: AsyncSession, company_id: uuid.UUID) -> _Plan:
-    return _plan(await _company_rows(session, company_id), await _company_projects(session, company_id))
+async def _plan_for(session: AsyncSession, company_id: uuid.UUID) -> Tuple[_Plan, Set[uuid.UUID], Optional[uuid.UUID]]:
+    """(the items to fill, the conflicting items left out of it, the company's default project if it has one)."""
+    rows = await _company_rows(session, company_id)
+    full = _plan(rows, await _company_projects(session, company_id))
+    default_id = await _default_project(session, company_id)
+    conflicts = _conflicting(full, rows, default_id)
+    return {i: v for i, v in full.items() if i not in conflicts}, conflicts, default_id
 
 
 async def preview_project_backfill(session: AsyncSession, company_id: uuid.UUID) -> Dict[str, object]:
     """What the backfill would do for one company. Read-only: nothing is written or created."""
-    plan = await _plan_for(session, company_id)
-    return _counts(plan, await _default_project(session, company_id) is not None)
+    plan, conflicts, default_id = await _plan_for(session, company_id)
+    return _counts(plan, default_id is not None, conflicts)
 
 
 async def apply_project_backfill(session: AsyncSession, company_id: uuid.UUID) -> Dict[str, object]:
-    """Perform the backfill for one company, recounting first. Only the approved action calls this."""
-    plan = await _plan_for(session, company_id)
-    default_id = await _default_project(session, company_id)
-    result = _counts(plan, default_id is not None)
+    """Perform the backfill for one company, recounting first. Only the approved action calls this.
+
+    Conflicting items are skipped; their ids are in the result's ``conflicting_item_ids``.
+    """
+    plan, conflicts, default_id = await _plan_for(session, company_id)
+    result = _counts(plan, default_id is not None, conflicts)
     if result["default_project_would_be_created"]:
         default_id = uuid.uuid4()
         session.add(LLCProject(id=default_id, company_id=company_id, name=DEFAULT_PROJECT_NAME))

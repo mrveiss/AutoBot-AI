@@ -23,7 +23,7 @@ const formatTime = createRecencyFormatter({
   locale: () => locale.value,
   style: 'narrow',
   olderThanMs: 3_600_000,
-  older: createDateFormatter({ kind: 'time' }),
+  older: createDateFormatter({ locale: () => locale.value, kind: 'time' }),
 })
 
 // Get icon for secret type

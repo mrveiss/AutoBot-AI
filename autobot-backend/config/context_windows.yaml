@@ -200,10 +200,12 @@ models:
   # ---------------------------------------------------------------------------
   # Anthropic
   # ---------------------------------------------------------------------------
-  # Current IDs (#20884): autobot_shared/ssot_claude_models.py is the SSOT. max_output_tokens
-  # is left unset (not stated by the source); the manager treats a missing value as 0.
+  # Current IDs (#20884): autobot_shared/ssot_claude_models.py is the SSOT. max_output_tokens is the
+  # same default response reservation every other row without a stated ceiling carries (the provider's
+  # default max_tokens), so get_prompt_budget never hands the whole window to the prompt.
   claude-fable-5-1:
     context_window_tokens: 1000000
+    max_output_tokens: 4096
     compression_threshold: 32768
     essential_story_tokens: 800
     message_budget:
@@ -213,6 +215,7 @@ models:
 
   claude-opus-5-5:
     context_window_tokens: 1000000
+    max_output_tokens: 4096
     compression_threshold: 32768
     essential_story_tokens: 800
     message_budget:
@@ -222,6 +225,7 @@ models:
 
   claude-sonnet-5-5:
     context_window_tokens: 1000000
+    max_output_tokens: 4096
     compression_threshold: 32768
     essential_story_tokens: 800
     message_budget:
@@ -231,6 +235,7 @@ models:
 
   claude-haiku-5-5:
     context_window_tokens: 1000000
+    max_output_tokens: 4096
     compression_threshold: 32768
     essential_story_tokens: 800
     message_budget:

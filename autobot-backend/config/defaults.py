@@ -14,7 +14,9 @@ SSOT Migration (Issue #639):
 from typing import Any, Dict
 
 from autobot_shared import deployment_profile
+from autobot_shared.ollama_urls import ollama_api_url, ollama_generate_url
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_constants import PATH_OLLAMA_EMBEDDINGS
 from config.registry import ConfigRegistry
 
 
@@ -40,7 +42,7 @@ def _get_backend_config(llm_host: str, llm_port: int, bind_host: str, backend_po
                 "provider": "ollama",
                 "providers": {
                     "ollama": {
-                        "endpoint": f"{llm_base_url}/api/generate",
+                        "endpoint": ollama_generate_url(llm_base_url),
                         "host": llm_base_url,
                         "models": [],
                         "selected_model": config.llm.default_model or ModelConstants.DEFAULT_OLLAMA_MODEL,
@@ -51,7 +53,7 @@ def _get_backend_config(llm_host: str, llm_port: int, bind_host: str, backend_po
                 "provider": "ollama",
                 "providers": {
                     "ollama": {
-                        "endpoint": f"{llm_base_url}/api/embeddings",
+                        "endpoint": ollama_api_url(llm_base_url, PATH_OLLAMA_EMBEDDINGS),
                         "host": llm_base_url,
                         "models": [],
                         # #20008: the configured default, not the override. This runs while logging starts, as early as

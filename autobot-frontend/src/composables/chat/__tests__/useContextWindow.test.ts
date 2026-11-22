@@ -10,11 +10,13 @@ import { ref } from 'vue'
 import type { AvailableModel } from '../../useAvailableModels'
 
 const mockModels = ref<AvailableModel[]>([])
+const mockError = ref<string | null>(null)
 
 vi.mock('@/composables/useAvailableModels', () => ({
   useAvailableModels: () => ({
     models: mockModels,
     fetchModels: vi.fn().mockResolvedValue(undefined),
+    error: mockError,
   }),
 }))
 
@@ -25,6 +27,7 @@ const messages = ref([{ metadata: { tokens: 1000 } }] as never)
 describe('useContextWindow', () => {
   beforeEach(() => {
     mockModels.value = []
+    mockError.value = null
   })
 
   it('takes a Claude window from the live model list', () => {
@@ -44,5 +47,12 @@ describe('useContextWindow', () => {
   it('keeps the non-Claude fallback when the list is empty', () => {
     const { contextWindow } = useContextWindow(messages, ref('gpt-4o'))
     expect(contextWindow.value).toBe(128_000)
+  })
+
+  it('reports a failed model-list request apart from an unlisted model', () => {
+    const unlisted = useContextWindow(messages, ref('claude-test-model'))
+    expect(unlisted.loadError.value).toBeNull()
+    mockError.value = 'network down'
+    expect(unlisted.loadError.value).toBe('network down')
   })
 })

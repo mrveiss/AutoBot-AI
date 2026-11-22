@@ -3,7 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 import { describe, it, expect } from 'vitest'
-import { factToDocument } from '../knowledgeFactMapping'
+import { DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE, factToDocument } from '../knowledgeFactMapping'
 
 const base = { key: 'fact:1', content: 'body' }
 
@@ -29,5 +29,28 @@ describe('factToDocument', () => {
 
   it('defaults tags to [] when not an array', () => {
     expect(factToDocument('1', { ...base, metadata: { tags: 'a' } }).tags).toEqual([])
+  })
+
+  it('reads type and category from the backend like the list rows do (#21796)', () => {
+    const doc = factToDocument('1', { ...base, metadata: { type: 'webpage', category: 'Systems' } })
+    expect(doc.type).toBe('webpage')
+    expect(doc.category).toBe('Systems')
+    expect(doc.metadata?.factType).toBe('webpage')
+  })
+
+  it('falls back to the default for a fact type that is not a document class', () => {
+    const doc = factToDocument('1', { ...base, metadata: { type: 'man_page' } })
+    expect(doc.type).toBe(DEFAULT_FACT_TYPE)
+    expect(doc.metadata?.factType).toBe('man_page')
+  })
+
+  it('falls back to the list rows defaults when type or category is absent or not a string', () => {
+    for (const metadata of [undefined, {}, { type: 7, category: null }]) {
+      const doc = factToDocument('1', { ...base, metadata })
+      expect(doc.type).toBe(DEFAULT_FACT_TYPE)
+      expect(doc.category).toBe(DEFAULT_FACT_CATEGORY)
+      expect(doc.metadata?.factType).toBeUndefined()
+    }
+    expect([DEFAULT_FACT_TYPE, DEFAULT_FACT_CATEGORY]).toEqual(['document', 'General'])
   })
 })

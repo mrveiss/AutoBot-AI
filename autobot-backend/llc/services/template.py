@@ -34,6 +34,8 @@ from llc.models.template import (
 
 from .activity_log import ActorType, LLCActivityLogService
 from .base import LLCServiceBase
+from .built_in_template_path import select_built_in_template
+from .template_entity_import import import_template_entities
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +195,9 @@ class TemplateService(LLCServiceBase):
 
         resolved_json = _resolve_placeholders(dict(row["template_json"]), req.secrets)
         entities_created = _apply_template(resolved_json)
+        skipped_items = await import_template_entities(
+            self.session, resolved_json, req.target_company_id, entities_created
+        )
 
         await self.session.execute(
             sa.text("UPDATE llc_template_library SET usage_count = usage_count + 1 WHERE id = :id"),
@@ -216,6 +221,7 @@ class TemplateService(LLCServiceBase):
             target_company_id=req.target_company_id,
             activity_log_id=activity_id,
             entities_created=entities_created,
+            skipped_work_items=skipped_items,
         )
 
     # ------------------------------------------------------------------
@@ -340,12 +346,7 @@ def _find_placeholders(data: Any) -> List[str]:
 
 
 def _apply_template(template_json: Dict[str, Any]) -> Dict[str, int]:
-    """Apply resolved template JSON and return entity creation counts.
-
-    Full entity creation (agents, projects, work items) is deferred to
-    GH#8260 follow-up tasks once company creation flow is finalized.
-    Returns counts of recognized top-level entity keys for audit.
-    """
+    """Count the entity keys a template carries; projects and work items are created by ``import_template_entities``."""
     entity_keys = ("agents", "projects", "work_items", "goals", "routines")
     return {key: len(template_json[key]) for key in entity_keys if isinstance(template_json.get(key), list)}
 
@@ -624,15 +625,11 @@ def _load_built_in_template(template_key: str) -> Dict[str, Any]:
             f"numbers, hyphens, and underscores"
         )
 
-    template_path = _BUILT_IN_TEMPLATES_DIR / f"{template_key}.json"
-
-    # Verify resolved path is within the built-in templates directory
-    resolved_path = template_path.resolve()
-    base_path = _BUILT_IN_TEMPLATES_DIR.resolve()
-    if base_path not in resolved_path.parents and resolved_path != base_path:
-        raise BuiltInTemplateNotFoundError(f"Template path outside allowed directory: {template_key}")
-
-    if not resolved_path.exists():
+    try:
+        resolved_path = select_built_in_template(_BUILT_IN_TEMPLATES_DIR, template_key)
+    except ValueError as exc:
+        raise BuiltInTemplateNotFoundError(f"Template path outside allowed directory: {template_key}") from exc
+    if resolved_path is None:
         raise BuiltInTemplateNotFoundError(f"Built-in template '{template_key}' not found")
 
     try:

@@ -21,6 +21,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from autobot_shared.ssot_constants import (
+    ANTHROPIC_CLAUDE3_OPUS,
+    ANTHROPIC_CLAUDE_HAIKU4_5,
+    ANTHROPIC_CLAUDE_OPUS4,
+    ANTHROPIC_CLAUDE_SONNET4,
+)
+
 CLAUDE_OPUS = "claude-opus-5-5"
 CLAUDE_SONNET = "claude-sonnet-5-5"
 CLAUDE_HAIKU = "claude-haiku-5-5"
@@ -45,6 +52,15 @@ LEGACY_CLAUDE_KEYS: dict[str, str] = {
     "claude-haiku-4": CLAUDE_HAIKU,
     "claude-opus-4-cross": f"{CLAUDE_OPUS}-cross",
 }
+
+#: Substring -> price-row model for the earlier generations, ahead of the current-tier rows in the cost tracker's
+#: fallback, so dated Opus 4 usage is never priced at the current Opus rate (#20884).
+LEGACY_PRICE_ROWS: tuple[tuple[str, str], ...] = (
+    ("claude-3-opus", ANTHROPIC_CLAUDE3_OPUS),
+    ("claude-opus-4", ANTHROPIC_CLAUDE_OPUS4),
+    ("claude-sonnet-4", ANTHROPIC_CLAUDE_SONNET4),
+    ("claude-haiku-4", ANTHROPIC_CLAUDE_HAIKU4_5),
+)
 
 #: Every current model has a 1M-token context window.
 CLAUDE_CONTEXT_WINDOW = 1_000_000

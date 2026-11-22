@@ -24,7 +24,6 @@ from fastapi import (
     HTTPException,
     Query,
     WebSocket,
-    WebSocketDisconnect,
 )
 
 from api.analytics_controller import (
@@ -53,6 +52,7 @@ from api.schemas_analytics import (
 from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse, AnalyticsUsageStatisticsResponse
 from api.ws_security import open_authenticated_ws
 from auth_middleware import get_current_user
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.deployment_profile import try_frontend_url
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_egress_guard import assert_egress_policy
@@ -657,8 +657,8 @@ async def _realtime_loop_iteration(websocket: WebSocket) -> tuple[bool, bool]:
     try:
         should_continue = await _handle_websocket_message_or_timeout(websocket)
         return should_continue, False
-    except WebSocketDisconnect:
-        logger.info("Analytics WebSocket client disconnected")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "_realtime_loop_iteration")
         return False, True
     except Exception as e:
         logger.error("Error in analytics WebSocket: %s", e)
@@ -1076,7 +1076,7 @@ async def _live_analytics_loop_iteration(
 
         return True, last_performance_update, last_api_update, last_health_update
 
-    except WebSocketDisconnect:
+    except PEER_CLOSED_ERRORS:
         return False, last_performance_update, last_api_update, last_health_update
     except Exception as e:
         logger.error("Error in live analytics WebSocket: %s", e)

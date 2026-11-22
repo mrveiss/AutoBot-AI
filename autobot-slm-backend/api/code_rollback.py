@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api import code_sync as cs
+from autobot_shared import node_proxy
 from autobot_shared.logging_manager import get_logger
 from models.rollback_schemas import (
     RollbackCandidates,
@@ -38,13 +39,17 @@ from services.rollback_commits import CommitInfo, RollbackRefused, list_candidat
 logger = get_logger(__name__)
 
 _NOT_ENABLED = "Rollback is not enabled on this SLM (SLM_ROLLBACK_ENABLED is off)."
+#: Machine-readable marker the screen keys on: only this 403 hides the panel; any other 403 is a denial to show.
+FEATURE_DISABLED_CODE = "rollback_feature_disabled"
 _PERSON_ONLY = "A person must do this: the service key cannot roll back."
 
 
 def require_rollback_enabled() -> None:
     """Router gate: every rollback route answers 403 while the feature is off (pending a host test, #20214)."""
     if not rollback_enabled():
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_NOT_ENABLED)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail={"code": FEATURE_DISABLED_CODE, "message": _NOT_ENABLED}
+        )
 
 
 router = APIRouter(prefix="/rollback", tags=["code-sync"], dependencies=[Depends(require_rollback_enabled)])
@@ -66,7 +71,7 @@ def _actor(user: dict) -> str | None:
 def _named_person(request: Request, user: dict) -> str:
     """The person acting. The internal service key passes the router gate; it must not start a rollback."""
     actor = _actor(user)
-    if actor is None or verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
+    if actor is None or verify_internal_api_key(request.headers.get(node_proxy.INTERNAL_KEY_HEADER)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_PERSON_ONLY)
     return actor
 
@@ -87,11 +92,11 @@ async def rollback_candidates(
 ) -> RollbackCandidates:
     """The newest commits of the tracked branch, with dates and subjects, for the picker."""
     repo, remote, branch = await _source(db)
+    deployed = await cs._get_slm_deployed_commit()
     try:
-        commits = await list_candidates(repo, remote, branch)
+        commits = await list_candidates(repo, remote, branch, deployed)
     except RollbackRefused as exc:
         raise _bad_request(exc) from exc
-    deployed = await cs._get_slm_deployed_commit()
     return RollbackCandidates(
         branch=branch, deployed_commit=deployed, commits=[_commit_model(c, deployed) for c in commits]
     )

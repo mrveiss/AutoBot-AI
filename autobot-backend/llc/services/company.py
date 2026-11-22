@@ -28,6 +28,7 @@ from .authz import NotAuthorisedError, may_attach_under, require_company_admin, 
 from .base import LLCServiceBase
 from .company_ceo import CompanyCEOService
 from .company_move_lock import CompanyCycleError, CompanyMoveLockMixin, deadlock_is_contention
+from .company_os.errors import CompanyOsError
 
 logger = get_logger(__name__)
 
@@ -328,7 +329,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         )
         return list(result.scalars().all())
 
-    async def delete(self, company_id: uuid.UUID) -> None:
+    async def delete(self, company_id: uuid.UUID, actor_user_id: Optional[str] = None) -> None:
         """Soft-delete a company.
 
         Raises CompanyHasChildrenError when active child companies exist, preventing
@@ -344,7 +345,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         which is a product decision (tracked as #13998) this method should
         not make unilaterally.
         """
-        org = await self._get_or_404(company_id)
+        org = await self._get_or_404(company_id, for_update=True)  # serialises with a heartbeat enable (#15907)
         children = await self.list_children(company_id)
         if children:
             raise CompanyHasChildrenError(
@@ -352,9 +353,10 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
                 "re-parent or delete children before deleting the parent"
             )
         org.soft_delete()
+        await CompanyCEOService().stop_company_heartbeats(self.session, company_id, actor_user_id)
         await self.session.execute(sa_delete(LLCContact).where(LLCContact.company_id == company_id))
         await self.session.flush()
-        logger.info("LLC company soft-deleted: %s (id=%s), its contacts purged", org.name, org.id)
+        logger.info("LLC company soft-deleted: %s (id=%s), its contacts purged, heartbeats off", org.name, org.id)
 
     # ------------------------------------------------------------------
     # Status transitions
@@ -393,7 +395,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         """
         org = await self._get_or_404(company_id)
         if org.llc_status not in allowed_from:
-            raise ValueError(
+            raise CompanyOsError(
                 f"Cannot {verb} company in '{org.llc_status}' state "
                 f"(allowed from: {', '.join(sorted(allowed_from))})"
             )
@@ -512,6 +514,10 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         if org is None:
             raise CompanyNotFoundError(f"Company {company_id} not found")
         return org
+
+    async def get_live_for_update(self, company_id: uuid.UUID) -> Organization:
+        """Lock and return a live company, or raise :class:`CompanyNotFoundError` (#15907)."""
+        return await self._get_or_404(company_id, for_update=True)
 
     async def _assert_prefix_unique(self, prefix: Optional[str]) -> None:
         if prefix is None:

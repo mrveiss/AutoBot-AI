@@ -14,10 +14,9 @@
 
 - name: Restart PostgreSQL
   when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
-  ansible.builtin.systemd:
-    name: "{{ postgresql_service }}"
-    state: restarted
-  become: true
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: "{{ postgresql_service }}"
 
 - name: Reload systemd
   ansible.builtin.systemd:

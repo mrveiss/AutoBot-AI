@@ -31,6 +31,8 @@ import importlib.util
 from collections import Counter
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
+
 _REPO = Path(__file__).resolve().parents[2]
 _PROVIDER_METHODS = frozenset({"stream_completion", "chat_completion", "stream_chat"})
 _NOT_SCANNED = ("docs",)
@@ -51,13 +53,17 @@ _RECORDED = {
         1,
         "report_spend hook, registered at startup (#19650); asserted by _USES_SPEND_HOOK",
     ),
-    "autobot_shared/pre_action_verifier_guard.py::_call_verifier_once": (
+    "autobot_shared/verifier_model.py::resolve_and_chat": (
         1,
         "report_spend hook, registered at startup (#19650); asserted by _USES_SPEND_HOOK",
     ),
     "autobot-backend/llm_shared/model_fallback_coordinator.py::ModelFallbackCoordinator._dispatch": (
         1,
         "only the compat gateways' non-stream paths call it; both record_response_usage the result (#16845)",
+    ),
+    "autobot-backend/chat_workflow/planner_client.py::PlannerLLMClient.generate": (
+        1,
+        "record_response_usage on the response, session-attributed (#21023)",
     ),
 }
 
@@ -79,7 +85,7 @@ _KNOWN_UNRECORDED_CEILING = 4
 # source, so a site that stops calling ``report_spend`` fails (#19650).
 _USES_SPEND_HOOK = (
     "autobot-backend/llm_shared/tiered_routing/complexity_router.py::ComplexityRouter.route_with_escalation",
-    "autobot_shared/pre_action_verifier_guard.py::_call_verifier_once",
+    "autobot_shared/verifier_model.py::resolve_and_chat",
 )
 
 # Raw-HTTP inference no method-name scan can see, exempt by a stated condition.
@@ -141,8 +147,7 @@ def _tracked_python_files() -> tuple[str, ...]:
 
 
 def _is_test(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py" or "/tests/" in f"/{rel}"
+    return is_test_filename(rel, include_js=False) or "/tests/" in f"/{rel}"
 
 
 @functools.lru_cache(maxsize=1)

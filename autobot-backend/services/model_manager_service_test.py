@@ -219,3 +219,23 @@ def test_the_claude_3_opus_integration_config_reads_its_window_from_the_table() 
     assert known_context_window_tokens(ANTHROPIC_CLAUDE3_OPUS_DATED) == 200000
     assert config.metadata["context_window"] == known_context_window_tokens(ANTHROPIC_CLAUDE3_OPUS_DATED)
     assert known_context_window_tokens("claude-unlisted-9") == 0
+
+
+def test_a_claude_model_list_entry_carries_the_table_window_for_both_id_orders() -> None:
+    from services.model_manager_service import _hints_for_model
+
+    assert _hints_for_model("claude-sonnet-5-5")["context_window"] == 1_000_000
+    assert _hints_for_model("claude-3-opus-20240229")["context_window"] == 200000
+    assert _hints_for_model("claude-3-opus-20240229")["capabilities"] == ["chat", "code", "vision"]
+    assert _hints_for_model("claude-opus-9-9")["context_window"] == 0
+
+
+def test_the_context_window_lookup_ignores_a_provider_prefix_and_a_malformed_table() -> None:
+    from context_window_lookup import known_context_window_tokens
+
+    assert known_context_window_tokens("anthropic/claude-sonnet-5-5") == 1_000_000
+    with patch("context_window_lookup.get_context_window_manager") as manager:
+        manager.return_value.config = {"models": {}}
+        assert known_context_window_tokens("claude-sonnet-5-5") == 0
+        manager.return_value.config = {}
+        assert known_context_window_tokens("claude-sonnet-5-5") == 0

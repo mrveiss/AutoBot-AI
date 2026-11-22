@@ -2663,6 +2663,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/internal/first-admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get First Admin
+         * @description The earliest active admin. 404 until the SLM has one.
+         */
+        get: operations["get_first_admin_api_internal_first_admin_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/internal/nodes/{node_id}/ssh-password": {
         parameters: {
             query?: never;
@@ -2678,6 +2698,30 @@ export interface paths {
          * @description Delete the node's stored SSH password under a human's approval; ``deleted`` is False when it held none.
          */
         delete: operations["delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/person-copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update Person Copy
+         * @description Write only what differs, so the periodic pass changes nothing when the two agree.
+         *
+         *     The person's issued SLM sessions are revoked on a deactivation or a password change (#21154): the
+         *     SLM's request gate reads the epoch store, never ``is_active`` or the hash. The deactivation epoch is
+         *     recorded on every push of an inactive person, and both epochs are written before the change is committed.
+         */
+        post: operations["update_person_copy_api_internal_person_copy_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -9528,6 +9572,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * EnrollmentSkip
+         * @description One skipped node and why (the reason names the state).
+         */
+        EnrollmentSkip: {
+            /** Node Id */
+            node_id: string;
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ErrorHealthResponse
          * @description Error subsystem health status.
          */
@@ -9719,6 +9775,27 @@ export interface components {
             path: string;
             /** Verdict */
             verdict: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FirstAdminResponse
+         * @description What the main app needs to create and link this person.
+         */
+        FirstAdminResponse: {
+            /** Display Name */
+            display_name: string | null;
+            /** Email */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Password Hash */
+            password_hash: string | null;
+            /** Username */
+            username: string;
         } & {
             [key: string]: unknown;
         };
@@ -11833,6 +11910,23 @@ export interface components {
             status: string;
             /** Trace Id */
             trace_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PersonCopyRequest
+         * @description The main app's record of a linked person (#10200). It is the record after the link.
+         */
+        PersonCopyRequest: {
+            /** Is Active */
+            is_active: boolean;
+            /** Password Hash */
+            password_hash: string | null;
+            /**
+             * Slm User Id
+             * Format: uuid
+             */
+            slm_user_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -14708,6 +14802,11 @@ export interface components {
              * @default
              */
             created_at: string;
+            /**
+             * Enrollment Skipped Nodes
+             * @default []
+             */
+            enrollment_skipped_nodes: components["schemas"]["EnrollmentSkip"][];
             /**
              * Failed Fleet Nodes
              * @default 0
@@ -19920,6 +20019,37 @@ export interface operations {
             };
         };
     };
+    get_first_admin_api_internal_first_admin_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirstAdminResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete: {
         parameters: {
             query: {
@@ -19943,6 +20073,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NodeSshPasswordDeleteResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_person_copy_api_internal_person_copy_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonCopyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
