@@ -56,6 +56,20 @@ export interface RagSource {
   score: number;
   /** Knowledge-base chunk identifier. */
   chunk_id: string;
+  /** Kind of source (#21976): `knowledge_base`, `web_search`, `web_page`, `system_state`, `tool_output`, `llm_training`. */
+  type?: string;
+  /** `verified`, `high`, `medium`, `low`. */
+  reliability?: string;
+  /** Source id; for a tool step, the step id. */
+  id?: string;
+  /** Id of the tool step this source is, so the UI can scroll to the step's messages. */
+  step_id?: string;
+  /** Link to the page or first result URL of a step. */
+  url?: string;
+  /** A step's tool, arguments, origin and times; the model of an `llm_training` source. */
+  metadata?: Record<string, unknown>;
+  model?: string;
+  content?: string;
 }
 
 /**
