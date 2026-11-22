@@ -47,7 +47,7 @@ def _scanned(root: Path) -> list[Path]:
 REACH = declare(
     "slm-manager-no-literal-tls-port-19832",
     discover=_scanned,
-    floor=9,
+    floor=10,
     roots=(_ROLE_REL,),
     what="slm_manager task files plus the SLM vhost",
 )
