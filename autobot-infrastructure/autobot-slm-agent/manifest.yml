@@ -10,7 +10,7 @@ deploy:
   # top-level code_source/autobot-slm-agent/ dir.
   source: autobot-slm-backend/slm/agent/
   destination: /opt/autobot/autobot-slm-agent/slm/agent/
-  sync_target: "{agent_dir}"   # #16025: what role_registry rsyncs INTO (not `destination`)
+  sync_target: "{agent_dir}/slm/agent"   # #21974: where `-m slm.agent.agent` imports it from (= `destination`)
   shared: true
   infrastructure: true
 

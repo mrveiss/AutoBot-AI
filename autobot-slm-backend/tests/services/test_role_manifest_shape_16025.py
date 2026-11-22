@@ -278,17 +278,18 @@ _BASE = "/opt/autobot"
 _AGENT = "/opt/autobot/autobot-slm-agent"
 _PLACEHOLDERS = {"base_dir": _BASE, "agent_dir": _AGENT}
 
-#: (source_paths, target_path) every manifest-backed role declared in role_registry.py before the move, with the
-#: default AUTOBOT_BASE_DIR / SLM_AGENT_DIR. A change here is a change to what the code-sync does on a node.
+#: (source_paths, target_path) every manifest-backed role syncs, with the default AUTOBOT_BASE_DIR / SLM_AGENT_DIR.
+#: A change here is a change to what the code-sync does on a node. #21974: the six roles that synced into the install
+#: root and the agent that synced into the agent directory now sync into the directory their unit runs from.
 _BEFORE_THE_MOVE = {
-    "slm-backend": (["autobot-slm-backend/"], _BASE),
-    "slm-frontend": (["autobot-slm-frontend/"], _BASE),
+    "slm-backend": (["autobot-slm-backend/"], f"{_BASE}/autobot-slm-backend"),
+    "slm-frontend": (["autobot-slm-frontend/"], f"{_BASE}/autobot-slm-frontend"),
     "slm-database": ([], ""),
     "slm-monitoring": ([], ""),
-    "backend": (["autobot-backend/"], _BASE),
-    "celery": (["autobot-backend/"], _BASE),
-    "scheduler": (["autobot-backend/"], _BASE),
-    "frontend": (["autobot-frontend/"], _BASE),
+    "backend": (["autobot-backend/"], f"{_BASE}/autobot-backend"),
+    "celery": (["autobot-backend/"], f"{_BASE}/autobot-backend"),
+    "scheduler": (["autobot-backend/"], f"{_BASE}/autobot-backend"),
+    "frontend": (["autobot-frontend/"], f"{_BASE}/autobot-frontend"),
     "redis": ([], ""),
     "postgres": ([], "/var/lib/postgresql"),
     "chromadb": ([], ""),
@@ -298,7 +299,7 @@ _BEFORE_THE_MOVE = {
     "autobot-llm-cpu": ([], ""),
     "autobot-llm-gpu": ([], ""),
     "autobot_shared": (["autobot_shared/"], f"{_BASE}/autobot_shared"),
-    "slm-agent": (["autobot-slm-backend/slm/agent/"], _AGENT),
+    "slm-agent": (["autobot-slm-backend/slm/agent/"], f"{_AGENT}/slm/agent"),
 }
 
 
@@ -308,7 +309,7 @@ def _real_manifests():
     return ManifestLoader(infra_base=repo_root() / "autobot-infrastructure").load_all()
 
 
-def test_derived_sync_fields_equal_what_the_registry_declared_before():
+def test_derived_sync_fields_equal_the_pinned_table():
     manifests = _real_manifests()
     for role_name, expected in _BEFORE_THE_MOVE.items():
         derived = rms.apply_manifest_shape({"name": role_name}, manifests, _PLACEHOLDERS)
@@ -321,9 +322,9 @@ def test_the_environment_override_still_decides_the_roots():
     backend = rms.apply_manifest_shape({"name": "backend"}, manifests, placeholders)
     shared = rms.apply_manifest_shape({"name": "autobot_shared"}, manifests, placeholders)
     agent = rms.apply_manifest_shape({"name": "slm-agent"}, manifests, placeholders)
-    assert backend["target_path"] == "/srv/ab"
+    assert backend["target_path"] == "/srv/ab/autobot-backend"
     assert shared["target_path"] == "/srv/ab/autobot_shared"
-    assert agent["target_path"] == "/srv/agent"
+    assert agent["target_path"] == "/srv/agent/slm/agent"
 
 
 def test_every_real_manifest_declares_its_sync_fields_explicitly():
@@ -521,3 +522,29 @@ def test_the_static_unit_reader_in_repo_tests_agrees_with_the_runtime_projection
     for name, units in static.items():
         shaped = rms.apply_manifest_shape({"name": name, "source_paths": [], "target_path": "/x"}, manifests)
         assert units == (shaped.get("systemd_service") or []), name
+
+
+# ---------------------------------------------------------------------------
+# #21974 AC3 -- the sync target is the install layout: what the unit runs from, which is the manifest's destination
+# ---------------------------------------------------------------------------
+
+
+def test_every_syncing_manifest_syncs_into_its_install_directory():
+    """`deploy.sync_target` resolves to `deploy.destination`, so a code-sync updates the files the service loads.
+
+    The install directory is what every unit's WorkingDirectory/ExecStart names (ansible/roles/*/templates, the
+    SLM agent's `python -m slm.agent.agent` with PYTHONPATH on the agent directory) and where Ansible places the code.
+    Source directories are rsynced by CONTENTS, so a target one level up (the install root, or the agent directory
+    instead of its `slm/agent` package) writes files nothing loads.
+    """
+    from autobot_shared.fleet_constants import FLEET_AGENT_DIR, FLEET_INSTALL_ROOT
+
+    placeholders = {"base_dir": FLEET_INSTALL_ROOT, "agent_dir": FLEET_AGENT_DIR}
+    checked = []
+    for role, manifest in _real_manifests().items():
+        if not manifest.deploy.sync:
+            continue
+        target = manifest.deploy.sync_target.format_map(placeholders)
+        assert target == manifest.deploy.destination.rstrip("/"), role
+        checked.append(role)
+    assert len(checked) >= 9, f"only {checked} were examined"
