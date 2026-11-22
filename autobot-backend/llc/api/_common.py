@@ -23,10 +23,11 @@ from fastapi import HTTPException, Request, status
 from pydantic import AfterValidator
 
 from autobot_shared.auth.interactive_principal import is_interactive_human
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 
 from ..services.work_item_hierarchy import HierarchyViolation
-from ..services.work_item_own_task import ensure_fence_safe_agent_id
+from ..services.work_item_own_task import canonical_agent_id, ensure_fence_safe_agent_id
 
 logger = get_logger(__name__)
 
@@ -48,8 +49,11 @@ def actor_id(current_user: dict) -> uuid.UUID:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated") from exc
 
 
-#: An agent id a checkout can fence: a request carrying one that cannot is refused with 422 (#21083).
-FenceSafeAgentId = Annotated[str, AfterValidator(ensure_fence_safe_agent_id)]
+#: An agent id a checkout can fence: a request carrying one that cannot is refused with 422 (#21083). It must be an
+#: agent UUID (a ``user:<id>`` or empty value is not one) and is canonicalised, so the fence and every release name
+#: the same spelling as the stored assignee (#19631). Input validation only: WHO may check out or release as a named
+#: agent is ``_named_agent.require_may_act_as`` (#20521).
+FenceSafeAgentId = Annotated[str, AfterValidator(ensure_fence_safe_agent_id), AfterValidator(canonical_agent_id)]
 
 
 def own_task_actor(current_user: dict) -> Optional[uuid.UUID]:
@@ -59,6 +63,34 @@ def own_task_actor(current_user: dict) -> Optional[uuid.UUID]:
     created, so it gets ``None`` and keeps the normal transition rules.
     """
     return actor_id(current_user) if is_interactive_human(current_user) else None
+
+
+def moving_as(current_user: dict) -> dict[str, Any]:
+    """Who is moving a work item, as the ``acting_user`` and ``done_gate`` a status move takes (#21503).
+
+    The ONE place that decides who counts as a person for a move to done: an interactive login, or the single
+    local user when authentication is disabled (a stand-in with no user id, so it owns no task and has no
+    ``acting_user``). Any other credential -- a token that is not a login, a service key -- is no person, and a
+    done on a type that requires review is refused for it.
+    """
+    from ..services.accessors import done_gate_for
+
+    local = str(current_user.get("username") or "admin") if _is_auth_disabled_user(current_user) else None
+    return {"acting_user": own_task_actor(current_user), "done_gate": done_gate_for(local_person=local)}
+
+
+def _is_auth_disabled_user(current_user: dict) -> bool:
+    """The stand-in the auth middleware yields when authentication is turned off; no credential can claim it."""
+    return current_user.get("auth_disabled") is True and not current_user.get("service")
+
+
+def event_actor(current_user: dict) -> Optional[str]:
+    """The verified caller's id for an event: the auth-disabled stand-in has none, any other caller needs a UUID.
+
+    A credential without a usable id is refused with 401 (``actor_id``), as before; only the stand-in the
+    auth middleware yields when authentication is off may act without one (#21503).
+    """
+    return None if _is_auth_disabled_user(current_user) else str(actor_id(current_user))
 
 
 def acting_user_id(current_user: dict) -> Optional[str]:
@@ -75,11 +107,11 @@ def acting_user_id(current_user: dict) -> Optional[str]:
 
 
 def bad_request(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return http_refusal(status.HTTP_400_BAD_REQUEST, exc, scope="llc.bad_request")
 
 
 def forbidden(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    return http_refusal(status.HTTP_403_FORBIDDEN, exc, scope="llc.forbidden")
 
 
 def registry_unavailable(exc: Exception) -> HTTPException:
@@ -89,7 +121,7 @@ def registry_unavailable(exc: Exception) -> HTTPException:
     a bad request tells the caller to fix their input when there is nothing
     wrong with it.
     """
-    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    return http_refusal(status.HTTP_503_SERVICE_UNAVAILABLE, exc, scope="llc.registry_unavailable")
 
 
 async def agent_node_uuid(agent_id: str, company_id: str) -> Optional[uuid.UUID]:
@@ -245,13 +277,13 @@ async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
 
 
 def refused_transition(exc: Exception) -> HTTPException:
-    """A refused status move as 409, with the service's reason (#12740).
+    """A refused status move as 409 (#12740).
 
-    The reason names only statuses and permitted moves, so it is safe to show, and the UI can tell
-    the user what went wrong. 409, not 422: the request is well-formed but conflicts with the item's state.
+    The caller sees the exception's ``public_detail`` when it has one (the service's reason: statuses and
+    permitted moves, or why a finish needs review), else the fixed 409 text; the raw message is only ever
+    logged, redacted (#21579). 409, not 422: the request is well-formed but conflicts with the item's state.
     """
-    logger.info("Rejected illegal work-item transition: %s", exc)
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    return http_refusal(status.HTTP_409_CONFLICT, exc, scope="llc.refused_transition")
 
 
 def write_refusal(exc: ValueError) -> HTTPException:
@@ -260,4 +292,4 @@ def write_refusal(exc: ValueError) -> HTTPException:
     Any other ``ValueError`` (e.g. an unknown approval category, GH#11206) stays 400.
     """
     code = status.HTTP_422_UNPROCESSABLE_ENTITY if isinstance(exc, HierarchyViolation) else status.HTTP_400_BAD_REQUEST
-    return HTTPException(status_code=code, detail=str(exc))
+    return http_refusal(code, exc, scope="llc.write_refusal")

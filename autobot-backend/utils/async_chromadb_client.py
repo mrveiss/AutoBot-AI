@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from utils.chromadb_auth import chroma_client_auth_kwargs
+from utils.leased_chroma import delete_if_empty, lease_client
 
 if TYPE_CHECKING:
     import chromadb  # noqa: F401
@@ -466,6 +467,24 @@ class AsyncChromaClient:
         await asyncio.to_thread(self._client.delete_collection, name=name)
         self._collection_cache.pop(name, None)
 
+    async def delete_collection_if_empty(self, name: str) -> int:
+        """Delete *name* only if it holds no vectors; returns the count seen (0 = deleted).
+
+        Runs under the collection's exclusive write lease (``utils.leased_chroma``), so no write can land between
+        the count and the delete. Raises ``CollectionLeaseUnavailable`` when a writer holds it: did not run.
+        """
+        worker = asyncio.ensure_future(asyncio.to_thread(delete_if_empty, self._client, name))
+        # Evict when the worker really finishes (loop thread, success or failure), not when the caller
+        # stops waiting: a cancelled caller must not leave a handle for a collection the worker deletes.
+        worker.add_done_callback(lambda done: self._evict_after_delete(name, done))
+        return await asyncio.shield(worker)
+
+    def _evict_after_delete(self, name: str, worker: "asyncio.Future[int]") -> None:
+        """Drop the cached handle for *name*; mark the worker's outcome retrieved so none is logged unseen."""
+        self._collection_cache.pop(name, None)
+        if not worker.cancelled():
+            worker.exception()
+
     async def heartbeat(self) -> int:
         """Check if the client is alive (async)."""
         return await asyncio.to_thread(self._client.heartbeat)
@@ -527,7 +546,7 @@ async def get_async_chromadb_client(
                     **chroma_client_auth_kwargs(),
                 ),
             )
-            async_client = AsyncChromaClient(sync_client)
+            async_client = AsyncChromaClient(lease_client(sync_client))
             _async_client_cache[cache_key] = async_client
             logger.info(
                 "Async ChromaDB HTTP client connected to %s:%s",

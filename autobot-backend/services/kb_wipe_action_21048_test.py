@@ -217,8 +217,8 @@ async def test_chroma_clear_empties_only_the_named_collections_and_marks_each_co
     record: list[dict] = []
     await chroma_mod.clear_chroma(["autobot_memory", "space_b"], record, chroma_mod.default_chroma_client)
     assert record == [
-        {"name": "autobot_memory", "vectors": 7, "complete": True},
-        {"name": "space_b", "vectors": 5, "complete": True},
+        {"name": "autobot_memory", "vectors": 7, "deleted": 7, "complete": True},
+        {"name": "space_b", "vectors": 5, "deleted": 5, "complete": True},
     ]
     assert len(chroma.cols["co"].ids) == 4
 
@@ -269,7 +269,9 @@ def _wire(monkeypatch, fleet, order=None):
     audit = AsyncMock(side_effect=lambda *a, **k: (order.append("audit") if order is not None else None) or True)
     monkeypatch.setattr(action, "audit_log", audit)
     real = redis_mod.execute_redis
-    monkeypatch.setattr(action, "execute_redis", lambda record, scope: real(record, scope, _factory(fleet)))
+    monkeypatch.setattr(
+        action, "execute_redis", lambda record, scope, stop=None: real(record, scope, _factory(fleet), stop)
+    )
     return audit
 
 
@@ -361,7 +363,9 @@ async def test_a_lost_success_audit_is_raised_not_swallowed(monkeypatch, fleet, 
 def _admins(*ids):
     session = MagicMock()
     result = MagicMock()
-    result.scalars.return_value.all.return_value = list(ids)
+    result.scalars.return_value.all.return_value = [
+        types.SimpleNamespace(id=i, is_platform_admin=True, is_active=True, deleted_at=None) for i in ids
+    ]
     session.execute = AsyncMock(return_value=result)
     return session
 

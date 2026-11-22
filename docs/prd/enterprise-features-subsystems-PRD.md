@@ -276,7 +276,7 @@ As an operator I open AutoBot's enterprise status page expecting it to tell me t
 
 ### Team size
 
-- 1–2 backend engineers; reviews via code-reviewer per project workflow.
+- 1–2 backend engineers; reviews via autobot-dev-skills:reviewer (code-reviewer lens) per project workflow.
 
 ### Suggested phases (dependency-ordered task breakdown)
 

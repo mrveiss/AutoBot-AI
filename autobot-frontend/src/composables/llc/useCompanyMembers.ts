@@ -5,10 +5,10 @@
 /**
  * The member list of the company shown by MembersView (#19960, #20073).
  *
- * The view is not remounted when the route moves to another company, so everything here is scoped to
- * the company a request was sent for: the company id is captured at send time (the URL and the user id
- * always agree), a change of company drops the rows, and a response that arrives for a company no
- * longer shown is discarded. The server stays the authority on who may change what; the viewer's role
+ * The company layout remounts the view on a company switch (#21502), but a late answer can still
+ * arrive for a company no longer shown, so everything here is scoped to the company a request was
+ * sent for: the id is captured at send time (the URL and the user id always agree), a change of
+ * company drops the rows, and such an answer is discarded. The server stays the authority on who may change what; the viewer's role
  * and grantable roles it sends are only reflected, to hide what it would refuse.
  */
 import { ref, watch } from 'vue'

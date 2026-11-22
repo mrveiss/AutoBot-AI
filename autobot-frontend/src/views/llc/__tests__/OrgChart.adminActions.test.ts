@@ -49,6 +49,7 @@ const AGENT = {
 
 function respond(viewerRole: string | null | 'fail'): void {
   get.mockImplementation((url: string) => {
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
     if (url.endsWith('/members')) {
       return viewerRole === 'fail'
         ? Promise.reject(new Error('HTTP 503'))

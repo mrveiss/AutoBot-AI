@@ -366,3 +366,67 @@ async def test_enrollment_skipped_nodes_are_recorded_on_the_job(enrollment):
 
     assert result == []
     assert job.enrollment_skipped_nodes == ["worker-failed"]
+
+
+# ---------------------------------------------------------------------------
+# #21334: a failed collection is never reported as "nothing to update"
+# ---------------------------------------------------------------------------
+
+
+async def _collect_with_deps_error(exc: Exception):
+    job = _job()
+    worker = _node("worker-1", OTHER_IP, "oldsha", CodeStatus.OUTDATED.value)
+    with (
+        patch("api.code_sync.settings") as mock_settings,
+        patch("api.code_sync._compute_deps_changed", new=AsyncMock(side_effect=exc)),
+    ):
+        mock_settings.external_url = f"http://{SLM_IP}"
+        db_svc = _db_service_mock(query_results=[worker], slm_node=None)
+        return job, await _collect_outdated_node_ids(job, REMOTE_COMMIT, db_svc)
+
+
+@pytest.mark.asyncio
+async def test_programming_error_propagates_instead_of_an_empty_list():
+    """A TypeError in the collection must not become [] (which reads as "all current")."""
+    with pytest.raises(TypeError):
+        await _collect_with_deps_error(TypeError("object is not awaitable"))
+
+
+@pytest.mark.asyncio
+async def test_operational_error_fails_the_job_as_could_not_determine():
+    from api.code_sync import _StageStatus
+
+    job, result = await _collect_with_deps_error(OSError("disk"))
+
+    assert result == []
+    assert job.status == "failed"
+    assert job.failure_reason.startswith("Could not determine outdated nodes")
+    fleet = next(s for s in job.stages if s.name == "fleet_nodes")
+    assert fleet.status == _StageStatus.FAILED
+    assert fleet.message.startswith("Could not determine")
+
+
+@pytest.mark.asyncio
+async def test_db_session_error_stops_the_pipeline_before_any_stage_runs():
+    """update-all halts on a DB error: no SLM update, no 'already current' verdict."""
+    from sqlalchemy.exc import OperationalError
+
+    import api.code_sync as cs
+
+    db_svc = MagicMock()
+    db_svc.session.side_effect = OperationalError("select", {}, Exception("db down"))
+    job = _job()
+    slm = AsyncMock(return_value=False)
+    fleet = AsyncMock()
+    with (
+        patch.object(cs, "_run_github_stage", new=AsyncMock(return_value=REMOTE_COMMIT)),
+        patch.object(cs, "_run_pull_stage", new=AsyncMock(return_value=REMOTE_COMMIT)),
+        patch.object(cs, "_run_slm_stage", new=slm),
+        patch.object(cs, "_run_fleet_stage_or_already_current", new=fleet),
+    ):
+        await cs._run_update_all_orchestration(job, db_svc)
+
+    assert job.status == "failed"
+    assert job.status not in ("already_current", "completed")
+    slm.assert_not_awaited()
+    fleet.assert_not_awaited()

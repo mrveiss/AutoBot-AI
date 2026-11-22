@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
 from autobot_shared.ai_lines import DEFAULT_LINE, SCOPE_COMPANY, SCOPE_USER, AiLine, LineScope
+from autobot_shared.http_refusal import http_refusal
 from llc.deps import assert_company_access, get_session
 from llc.services.ai_lines import normalise_key
 from services.ai_line_change_action import register_ai_line_change_action
@@ -118,7 +119,7 @@ async def propose_my_change(
     try:
         key = normalise_key(payload.action_key)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="ai_lines.propose_my_change") from None
     approval = await propose_line_change(
         scope=LineScope(SCOPE_USER, user), key=key, line=payload.line, requested_by=str(user), reason=payload.reason
     )
@@ -149,7 +150,7 @@ async def propose_change(
     try:
         key = normalise_key(payload.action_key)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="ai_lines.propose_change") from None
     approval = await propose_line_change(
         scope=LineScope(SCOPE_COMPANY, company_id),
         key=key,

@@ -20,6 +20,8 @@ Detected, compared with ``unconnected_code_baseline.txt`` (a key not in it fails
              declared external prefix calls -- see ``_unconnected_routes``.
 ``queue:``   a Redis list or stream pushed and never read -- see ``_unconnected_stores``.
 ``table:``   a SQL table defined and never read or written -- see ``_unconnected_stores``.
+``frontend:`` a frontend source file no production file imports and no ``import.meta.glob`` reaches -- see
+             ``_unconnected_frontend`` (#21583).
 
 ``declared:`` entries are hand-recorded for what no detector can see; each is true only while its
 stated set of referencing files is exactly the live one.
@@ -32,18 +34,19 @@ WHAT IT CANNOT SEE (each detector's module docstring has the full list)
 * A caller that is itself dead, or that builds its path or key at runtime.
 * Loading by directory scan (plugins, ``skills/builtin``, migrations): no textual reference.
 * Redis keys held in a variable or another module's constant; non-list/stream Redis types.
-* Anything outside the trees named in the detectors. Frontend, Ansible and shell code that is
-  never called is not judged.
+* Anything outside the trees named in the detectors. Ansible and shell code that is never called is not
+  judged; frontend source files are judged only for having an importer (``_unconnected_frontend`` lists its limits).
 
 WHICH CI JOB
 ------------
 ``repo_tests`` run inside the ``python-shard`` matrix of ``.github/workflows/ci.yml`` (the shard
 ``repo_tests/stable_shard.py`` assigns this file), reported through the **required** context
 ``python-suite``, which re-asserts the matrix result. It also runs in pre-push, selected by the
-``roots=`` below. Two gaps follow from that wiring: the matrix runs only when the ``changes`` job
-sees a path in ``.github/filters/python-paths.yml``, so a frontend-only change that removes the
-last caller of a route is not judged until the next Python change; and ``roots=`` cannot name the
-frontends, so pre-push does not run this guard for a frontend-only edit either.
+``roots=`` below, which name the backends and the two frontend ``src`` trees. The matrix runs only when
+the ``changes`` job sees a path in ``.github/filters/python-paths.yml``; that filter covers
+``autobot-frontend/src/**`` and ``autobot-slm-frontend/src/**``, so a frontend source change that removes the
+last caller of a route, or the last importer of a file, is judged. A frontend file outside ``src/**`` (build
+config, ``index.html``) is neither selected by pre-push nor covered by the filter; the gate reads none of them.
 
 THE REMEDY IS WIRING, NEVER DELETION
 ------------------------------------
@@ -62,6 +65,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests import _unconnected_code as uc
+from repo_tests import _unconnected_frontend as frontend
 from repo_tests import _unconnected_modules as modules
 from repo_tests import _unconnected_routes as routes
 from repo_tests import _unconnected_stores as stores
@@ -69,13 +73,9 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_text
 from repo_tests._reach import declare
 from repo_tests._unconnected_common import Tree
+from repo_tests._unconnected_gate_fixtures import _ROUTE, _ROUTER, _WIRED, _fired, _state
 
 from tools.lint._comment_syntax import code_lines
-
-
-@functools.lru_cache(maxsize=2)
-def _state(root: Path) -> tuple[Tree, routes.Audit]:
-    return Tree.of_repo(root), routes.Audit(root, scripts_root=repo_root())
 
 
 def _module_files(root: Path) -> list[str]:
@@ -95,7 +95,7 @@ MODULES_REACH = declare(
     "unconnected-code-modules",
     discover=_module_files,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=2870,  # mid-window: population 3020, window (2720, 3020)
+    floor=2992,  # mid-window: population 3142, window (2842, 3142)
     what="non-test python modules of autobot-backend, autobot-slm-backend and autobot_shared that could have a caller",
     roots=modules.BACKEND_ROOTS,
     growth=300,
@@ -107,6 +107,22 @@ ROUTES_REACH = declare(
     what="non-test python files of autobot-backend and autobot-slm-backend that declare a route decorator",
     roots=routes.ROUTE_ROOTS,
     growth=40,
+)
+
+
+def _frontend_files(root: Path) -> list[str]:
+    return frontend.candidates(_state(root)[0])
+
+
+FRONTEND_REACH = declare(
+    "unconnected-code-frontend",
+    discover=_frontend_files,
+    # Measured 1180 candidates (2026-11-15); growth 200 makes the pin mid-window (1180 - 100). A new guard pins
+    # `floor=` until it lands on the base (#19676).
+    floor=1080,
+    what="production .ts, .js and .vue files of autobot-frontend and autobot-slm-frontend that could have an importer",
+    roots=frontend.FRONTEND_ROOTS,
+    growth=200,
 )
 STORES_REACH = declare(
     "unconnected-code-stores",
@@ -121,7 +137,7 @@ STORES_REACH = declare(
 @functools.lru_cache(maxsize=1)
 def _live() -> frozenset[str]:
     root = repo_root()
-    for reach in (MODULES_REACH, ROUTES_REACH, STORES_REACH):
+    for reach in (MODULES_REACH, ROUTES_REACH, STORES_REACH, FRONTEND_REACH):
         reach.examined(root)  # a sweep that reached implausibly little must not read as "nothing unconnected"
     tree, audit = _state(root)
     return frozenset(uc.detected(tree, audit))
@@ -178,13 +194,30 @@ def test_declared_entries_describe_the_live_references() -> None:
     )
 
 
-REMEASURE_REL = "repo_tests/unconnected_code_remeasure_20910.txt"
+#: The frozen one-time re-measures, one list per ruling (#20910, #21428, #21651, #21927): the ONLY baseline additions ever allowed
+#: against a base. Adding a list here is a decision a reviewer sees; every list is also held to "never grows".
+REMEASURE_RELS = (
+    "repo_tests/unconnected_code_remeasure_20910.txt",
+    "repo_tests/unconnected_code_remeasure_21428.txt",
+    "repo_tests/unconnected_code_remeasure_21651.txt",
+    "repo_tests/unconnected_code_remeasure_21583.txt",
+    "repo_tests/unconnected_code_remeasure_21927.txt",
+)
 
 
 def _remeasure_keys(text: str) -> set[str]:
-    """The frozen one-time re-measure (#20910): comment lines dropped."""
+    """The keys of one frozen one-time re-measure list (#20910, #21428): comment lines dropped."""
     # rstrip: a key ending in a space (a route with an empty path) loses it to the whitespace hook in this file
     return {cl.text.rstrip() for cl in code_lines(text) if cl.text}
+
+
+def _frozen_text(rel: str) -> str:
+    return (repo_root() / rel).read_text(encoding="utf-8")
+
+
+def _frozen_keys() -> set[str]:
+    """Every key named by any frozen re-measure list in the working tree."""
+    return set().union(*(_remeasure_keys(_frozen_text(rel)) for rel in REMEASURE_RELS))
 
 
 def _additions_beyond_the_base(current: dict[str, str], base: str, frozen: set[str]) -> list[str]:
@@ -197,18 +230,21 @@ def test_the_baseline_only_shrinks_against_the_base() -> None:
     base = base_text(repo_root(), uc.BASELINE_REL)
     if base is None:
         return  # this file is new at the base: the baseline is being introduced, not raised
-    frozen = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
-    added = _additions_beyond_the_base(_baseline(), base, frozen)
+    added = _additions_beyond_the_base(_baseline(), base, _frozen_keys())
     assert not added, f"#20512: baseline entries were added against the base: {added}. Wire the code in instead."
 
 
-def test_the_frozen_remeasure_never_grows_against_the_base() -> None:
-    base = base_text(repo_root(), REMEASURE_REL)
+def _frozen_additions(now: str, base: str | None) -> list[str]:
+    """Keys a frozen list names now that it did not at the base; a list new at the base is introduced, not grown."""
     if base is None:
-        return  # introduced by the change that makes the re-measure
-    now = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
-    grown = sorted(now - _remeasure_keys(base))
-    assert not grown, f"#20910: the frozen one-time re-measure gained entries: {grown}"
+        return []  # introduced by the change that makes the re-measure
+    return sorted(_remeasure_keys(now) - _remeasure_keys(base))
+
+
+@pytest.mark.parametrize("rel", REMEASURE_RELS)
+def test_the_frozen_remeasure_never_grows_against_the_base(rel: str) -> None:
+    grown = _frozen_additions(_frozen_text(rel), base_text(repo_root(), rel))
+    assert not grown, f"#20910, #21428: the frozen one-time re-measure {rel} gained entries: {grown}"
 
 
 def _stale_frozen_keys(frozen: set[str], baseline_keys) -> list[str]:
@@ -217,13 +253,11 @@ def _stale_frozen_keys(frozen: set[str], baseline_keys) -> list[str]:
     return sorted(k for k in frozen if k not in present)
 
 
-def test_every_frozen_remeasure_key_is_still_in_the_baseline() -> None:
+@pytest.mark.parametrize("rel", REMEASURE_RELS)
+def test_every_frozen_remeasure_key_is_still_in_the_baseline(rel: str) -> None:
     """The frozen list shrinks with the baseline: a stale key would let a later re-addition of it pass."""
-    frozen = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
-    stale = _stale_frozen_keys(frozen, _baseline())
-    assert (
-        not stale
-    ), f"#20910: frozen re-measure keys no longer in the baseline; delete them from {REMEASURE_REL}: {stale}"
+    stale = _stale_frozen_keys(_remeasure_keys(_frozen_text(rel)), _baseline())
+    assert not stale, f"#20910, #21428: frozen keys no longer in the baseline; delete them from {rel}: {stale}"
 
 
 def test_a_wired_route_cannot_be_re_added_through_a_stale_frozen_key() -> None:
@@ -241,6 +275,28 @@ def test_a_new_entry_linked_to_a_remeasure_issue_is_refused() -> None:
     assert _additions_beyond_the_base(planted, base, frozen={"route:new.py:GET /y"}) == []
 
 
+def test_an_addition_named_in_no_frozen_list_is_refused_whichever_list_names_the_others() -> None:
+    """Two lists excuse their own keys only: a third key, even one linked to a frozen list's issue, is an addition."""
+    base = "route:a.py:GET /x\t#10603\n"
+    planted = {
+        "route:a.py:GET /x": "#10603",
+        "route:old.py:GET /y": "#20970",
+        "route:newer.py:GET /z": "#21459",
+        "route:smuggled.py:GET /w": "#21459",
+    }
+    frozen = _remeasure_keys("# first list\nroute:old.py:GET /y\n") | _remeasure_keys("route:newer.py:GET /z\n")
+    assert _additions_beyond_the_base(planted, base, frozen) == ["route:smuggled.py:GET /w"]
+    assert _additions_beyond_the_base(planted, base, set()) == sorted(set(planted) - {"route:a.py:GET /x"})
+
+
+def test_a_frozen_list_that_gained_a_line_against_its_base_is_refused() -> None:
+    base = "# header\nroute:a.py:GET /x\nroute:b.py:GET /y\n"
+    assert _frozen_additions("# header\nroute:b.py:GET /y\n", base) == []  # shrinking is fine
+    assert _frozen_additions(base + "route:c.py:GET /z\n", base) == ["route:c.py:GET /z"]
+    # a list new at the base is introduced, not grown
+    assert _frozen_additions(base + "route:c.py:GET /z\n", None) == []
+
+
 def test_the_baseline_states_what_it_cannot_see() -> None:
     header = (repo_root() / uc.BASELINE_REL).read_text(encoding="utf-8").split("\n\n", 1)[0].lower()
     assert "cannot see" in header and "shrink" in header, "the baseline header must state its boundary (rule 1)"
@@ -254,27 +310,10 @@ def test_the_baseline_states_what_it_cannot_see() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _plant(tmp_path: Path, files: dict[str, str]) -> tuple[Tree, routes.Audit]:
-    for rel, body in files.items():
-        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_text(body, encoding="utf-8")
-    tree = Tree(list(files), lambda rel: (tmp_path / rel).read_text(encoding="utf-8"))
-    return tree, routes.Audit(tmp_path, scripts_root=repo_root())
-
-
-def _fired(tmp_path: Path, files: dict[str, str]) -> set[str]:
-    tree, audit = _plant(tmp_path, files)
-    return uc.detected(tree, audit)
-
-
-_ROUTER = 'from fastapi import APIRouter\nrouter = APIRouter(prefix="/{prefix}")\n\n\n@router.{verb}("/{path}")\nasync def h():\n    return {{}}\n'
 _MODULE = {"autobot-backend/pkg/planted.py": "VALUE = 1\n"}
-_ROUTE = {"autobot-backend/api/planted_route.py": _ROUTER.format(prefix="planted", verb="get", path="orphan")}
 _HOOK = {"autobot-backend/api/planted_hook.py": _ROUTER.format(prefix="webhooks", verb="post", path="planted")}
 _QUEUE = {"autobot-backend/services/planted_queue.py": 'async def put(r, x):\n    await r.lpush("planted:work", x)\n'}
 _TABLE = {"autobot-backend/database/schemas/planted.sql": "CREATE TABLE IF NOT EXISTS planted_jobs (id INTEGER);\n"}
-#: Imports every planted module, so the subject under test is the route, queue or table and not its file.
-_WIRED = {"scripts/wire.py": "import api.planted_route\nimport api.planted_hook\nimport services.planted_queue\n"}
 
 
 @pytest.mark.parametrize(
@@ -305,7 +344,8 @@ def test_a_planted_unconnected_case_fires(tmp_path: Path, label: str, files: dic
         (
             "route called by the frontend",
             {**_ROUTE, **_WIRED},
-            {"autobot-frontend/src/api.ts": "get('/api/planted/orphan')\n"},
+            # `main.ts` is an entry point, so the planted caller is not itself a `frontend:` candidate (#21583).
+            {"autobot-frontend/src/main.ts": "get('/api/planted/orphan')\n"},
         ),
         ("route called by a script", {**_ROUTE, **_WIRED}, {"scripts/probe.py": 'URL = "/api/planted/orphan"\n'}),
         ("route under a declared external prefix", {**_HOOK, **_WIRED}, {}),
@@ -393,53 +433,3 @@ def test_a_parenthesised_import_with_comments_keeps_every_name_20907() -> None:
     )
     refs = modules.import_refs("autobot-backend/x.py", text)
     assert {"autobot_shared.alpha", "autobot_shared.beta", "autobot_shared.gamma"} <= refs, refs
-
-
-class _NormMod:
-    @staticmethod
-    def norm_path(path: str) -> str:
-        return path
-
-
-def test_route_candidates_have_no_phantom_forms_20910() -> None:
-    """With a registration prefix and an own prefix only reg+own+raw is real; reg+raw only without an own prefix."""
-    cand = routes._candidates
-    assert cand(_NormMod, "/x", "/own", ["/api"]) == ("/api/own/x",)
-    assert cand(_NormMod, "/x", "", ["/api"]) == ("/api/x",)
-    assert cand(_NormMod, "/x", "/own", None) == ("/own/x", "/x")
-
-
-@pytest.mark.parametrize(
-    ("label", "path", "body"),
-    [
-        ("shell $VAR", "scripts/probe.sh", 'curl -s "$BACKEND_URL/api/planted/orphan"\n'),
-        ("shell quoted base", "scripts/probe.sh", 'curl -s "$BASE"/api/planted/orphan\n'),
-        ("shell ${VAR}", "scripts/probe.sh", "curl -s ${BASE}/api/planted/orphan\n"),
-        ("python f-string", "scripts/probe.py", 'URL = f"{base}/api/planted/orphan"\n'),
-        ("literal host and port", "scripts/probe.yml", "url: http://localhost:8001/api/planted/orphan\n"),
-        ("jinja variable", "scripts/probe.yml", 'url: "{{ backend_url }}/api/planted/orphan"\n'),
-    ],
-)
-def test_a_non_frontend_caller_behind_a_url_base_connects_the_route_20910(
-    tmp_path: Path, label: str, path: str, body: str
-) -> None:
-    """`$BASE/api/x`, `f"{base}/api/x"`, `host:8001/api/x` and `{{ var }}/api/x` are calls, not prose."""
-    assert _fired(tmp_path, {**_ROUTE, **_WIRED, path: body}) == set(), label
-
-
-def test_a_file_path_ending_in_api_is_not_a_caller_20910(tmp_path: Path) -> None:
-    """`autobot-backend/api/x.py` names a file; it must not read as a call to `/api/x.py`."""
-    decoy = {"scripts/note.sh": "# edit autobot-backend/api/planted/orphan\n"}
-    assert _fired(tmp_path, {**_ROUTE, **_WIRED, **decoy}) == {"route:autobot-backend/api/planted_route.py:GET /orphan"}
-
-
-def test_a_router_mounted_twice_is_judged_at_every_mount_20910() -> None:
-    """A router served at its registry mount and at a nested include has a candidate path per mount."""
-    assert routes._candidates(_NormMod, "/x", "", ["/a", "/a/sub"]) == ("/a/sub/x", "/a/x")
-    assert routes._candidates(_NormMod, "/x", "/own", ["/a", "/a/sub"]) == ("/a/own/x", "/a/sub/own/x")
-
-
-def test_the_real_nested_mount_of_a_registry_router_is_seen_20910() -> None:
-    """knowledge_debug.py is mounted by the registry AND `include_router`ed under /debug by knowledge.py."""
-    prefixes = _state(repo_root())[1].registry_prefixes("autobot-backend")["autobot-backend/api/knowledge_debug.py"]
-    assert {"/knowledge_base", "/knowledge_base/debug"} <= set(prefixes), prefixes

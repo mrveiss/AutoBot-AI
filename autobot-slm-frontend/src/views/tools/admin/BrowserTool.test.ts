@@ -50,23 +50,23 @@ describe('BrowserTool status indicator', () => {
       browser_vm: { url: 'http://browser.invalid:1', status: 'healthy' },
       security: { fleet_membership_source: 'slm_node_registry' },
     })
-    expect(indicatorClasses(wrapper)).toContain('bg-green-500')
+    expect(indicatorClasses(wrapper)).toContain('bg-autobot-dot-ok')
     expect(wrapper.text()).toContain(en.tools.admin.browserTool.status.connected)
   })
 
   it('distinguishes degraded from unavailable', async () => {
     const degraded = await mountWithStatus({ browser_vm: { status: 'degraded' } })
-    expect(indicatorClasses(degraded)).toContain('bg-amber-500')
+    expect(indicatorClasses(degraded)).toContain('bg-autobot-dot-warn')
 
     const down = await mountWithStatus({ browser_vm: { status: 'unavailable' } })
-    expect(indicatorClasses(down)).toContain('bg-red-500')
+    expect(indicatorClasses(down)).toContain('bg-autobot-dot-bad')
   })
 
   it('does not read connected from the top-level field the route never sends', async () => {
     // Exactly the body the old client believed in. If the component reverts to
     // `data.status`, this goes green and this test fails.
     const wrapper = await mountWithStatus({ status: 'connected' })
-    expect(indicatorClasses(wrapper)).not.toContain('bg-green-500')
+    expect(indicatorClasses(wrapper)).not.toContain('bg-autobot-dot-ok')
     expect(wrapper.text()).toContain(en.tools.admin.browserTool.status.unknown)
   })
 
@@ -75,7 +75,7 @@ describe('BrowserTool status indicator', () => {
     // or a renamed field would be indistinguishable from a dead VM.
     const wrapper = await mountWithStatus({ success: true, browser_vm: {} })
     expect(wrapper.text()).toContain(en.tools.admin.browserTool.status.unknown)
-    expect(indicatorClasses(wrapper)).toContain('bg-gray-400')
+    expect(indicatorClasses(wrapper)).toContain('bg-autobot-dot-idle')
   })
 
   it('flags a degraded fleet source so a stale exception set is never silent', async () => {

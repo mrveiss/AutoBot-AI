@@ -20,10 +20,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Collection
 
 from async_chat_workflow import WorkflowMessage
-from autobot_shared.ai_lines import CONVERSATION_TOOLS, VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY, resolve_scope
+from autobot_shared.ai_lines import (
+    CONVERSATION_TOOLS,
+    VERIFIED_COMPANY_KEY,
+    VERIFIED_USER_KEY,
+    declared_categories_of,
+    resolve_scope,
+)
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name, tool_effect
+from chat_workflow import limits
 from llc.agent_tools import LLC_TOOL_NAMES
+from services.verifier_audit import audit_verifier_degraded
 
 if TYPE_CHECKING:
     from .models import LLMIterationContext
@@ -197,6 +205,8 @@ async def enforce_pre_action_verifier(
     task_id = getattr(ctx, "session_id", None) if ctx is not None else None
 
     result = await PreActionVerifier().verify(tool_name, args, reason, task_id=task_id)
+    verified_user = (getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY)
+    await audit_verifier_degraded(result, task_id, user_id=verified_user)  # #21844: no reading is an audit event
     if result.verdict != VerifierVerdict.BLOCK:
         return None
 
@@ -301,6 +311,24 @@ def _call_params(tool_call: dict[str, Any]) -> dict[str, Any]:
 
 #: Set on a held ``execute_command`` call: the terminal queues it whatever its own rules say (#19951).
 COMMAND_FORCE_APPROVAL_KEY = "force_approval"
+#: Set on an ``execute_command`` call a person already said yes to in the graph's interrupt (#21959): the
+#: terminal's own hold must not ask again. Only the dispatch seam sets it; a model-supplied value is dropped.
+COMMAND_APPROVED_KEY = "person_approved"
+
+
+def _carry_person_approval(tool_call: dict[str, Any], ctx: "LLMIterationContext | None") -> None:
+    """Mark an ``execute_command`` call whose exact shown fingerprint the person approved (#21959).
+
+    The fingerprint binds the yes to the call's tool and raw params, so it never covers a different command.
+    The yes is consumed by the call it marks, so a repeat of the same call is not approved by it.
+    """
+    from services.ai_line_enforcement import shown_call_fingerprint
+
+    shown = shown_call_fingerprint(tool_call.get("name", ""), _call_params(tool_call))
+    approved = getattr(ctx, "approved_fingerprints", frozenset())
+    if shown in approved:
+        tool_call[COMMAND_APPROVED_KEY] = True
+        ctx.approved_fingerprints = approved - {shown}  # one yes, one run: a duplicate call is held again
 
 
 def is_held_message(message: Any) -> bool:
@@ -325,6 +353,7 @@ async def enforce_ai_line(
 
     tool_name = tool_call.get("name", "")
     is_command = tool_name == TERMINAL_TOOL
+    tool_call.pop(COMMAND_APPROVED_KEY, None)  # a person's yes sets it below; the model's call never does
     context = getattr(ctx, "context", None) or {}
     verdict = await enforce_line(
         tool_name=tool_name,
@@ -333,13 +362,15 @@ async def enforce_ai_line(
         user_id=context.get(VERIFIED_USER_KEY),  # the personal scope of a user with no company
         requested_by=str(getattr(ctx, "session_id", None) or "chat"),
         surface="chat_tool",
-        declared_categories=getattr(ctx, "requires_approval_before", None) or (),
+        declared_categories=declared_categories_of(ctx),
         role_requires_approval=turn_requires_approval(tool_name, ctx),  # #20195: an attachment turn gates every call
         approved_fingerprints=getattr(ctx, "approved_fingerprints", frozenset()),
         hold_in_approvals=not is_command,
         floor_waived=bool(getattr(ctx, "attachment_floor_waived", False)),  # #20195: the trail names the setting
     )
     if verdict.outcome is Outcome.RUN:
+        if is_command:
+            _carry_person_approval(tool_call, ctx)
         return None
     if is_command and verdict.outcome is Outcome.HOLD:
         # #19951: the terminal's queue is the hold that can run the command: its approval card, its
@@ -399,7 +430,10 @@ def unknown_tool_error(
     consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
     error_msg = f'Error: Tool "{tool_name}" not found. Available tools: {", ".join(known_tools)}'
     logger.warning(
-        "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d)", tool_name, consecutive
+        "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d of limit %d)",
+        tool_name,
+        consecutive,
+        limits.INVALID_CALL_LIMIT,
     )
     execution_results.append({"tool": tool_name, "status": "error", "error": error_msg})
     return WorkflowMessage(

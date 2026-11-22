@@ -39,7 +39,9 @@ def _session(pending):
 def _admins(*ids):
     session = MagicMock()
     result = MagicMock()
-    result.scalars.return_value.all.return_value = list(ids)
+    result.scalars.return_value.all.return_value = [
+        types.SimpleNamespace(id=i, is_platform_admin=True, is_active=True, deleted_at=None) for i in ids
+    ]
     session.execute = AsyncMock(return_value=result)
     return session
 
@@ -122,3 +124,12 @@ async def test_a_second_admin_who_refreshed_an_api_proposal_cannot_approve_it(mo
 def test_the_description_says_the_wipe_is_platform_wide():
     assert "Platform-wide" in action.PROPOSAL_DESCRIPTION and "every organisation" in action.PROPOSAL_DESCRIPTION
     assert action.PLATFORM_WIDE_NOTE in action.PROPOSAL_DESCRIPTION
+
+
+@pytest.mark.asyncio
+async def test_the_pending_proposal_is_selected_for_update_so_a_decision_cannot_interleave_with_a_refresh():
+    session = _session(None)
+    assert await action._pending_proposal(session) is None
+    query = session.execute.await_args.args[0]
+    assert query._for_update_arg is not None
+    assert "pending" in str(query.compile(compile_kwargs={"literal_binds": True}))

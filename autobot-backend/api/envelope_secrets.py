@@ -24,13 +24,15 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api._service_principal_refusal import validated_service
 from api.envelope_secrets_delete import delete_as_service, delete_as_user
+from api.secrets_delete_outcome import CREATE_REFUSALS, creation_status, fixed_secret_error_for, invalid_request_error
 from auth_middleware import resolve_human_user, verify_internal_api_key
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
 from models.secret import Secret
@@ -108,27 +110,22 @@ def _require_system_vault(vault: VaultRef, service_id: str) -> None:
             "service principal rejected: attempted non-system vault access",
             extra={"service_id": service_id, "vault": vault.to_str()},
         )
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            f"service identity '{service_id}' is restricted to the system vault; "
-            f"attempted vault: {vault.to_str()!r}",
-        )
+        raise fixed_refusal(status.HTTP_403_FORBIDDEN)
 
 
 def _vault(value: str) -> VaultRef:
     try:
         return VaultRef.parse(value)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"invalid vault reference: {value!r}") from exc
+        raise invalid_request_error(exc) from exc
 
 
 def _mapped(exc: Exception) -> HTTPException:
-    if isinstance(exc, SecretNotFoundError):
-        return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
-    if isinstance(exc, SecretAccessError):
-        return HTTPException(status.HTTP_403_FORBIDDEN, str(exc))
+    known = fixed_secret_error_for(exc)
+    if known is not None:
+        return known
     if isinstance(exc, ValueError):
-        return HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+        return invalid_request_error(exc)
     raise exc
 
 
@@ -242,6 +239,7 @@ class SecretDependenciesOut(BaseModel):
 @router.post("", response_model=SecretMetadata, status_code=status.HTTP_201_CREATED)
 async def create_secret(
     body: CreateSecretBody,
+    response: Response,
     who: tuple[uuid.UUID, set[str]] = Depends(principal),
     session: AsyncSession = Depends(get_session),
     coordinator: SecretsCoordinator = Depends(get_coordinator),
@@ -258,8 +256,9 @@ async def create_secret(
             plaintext=body.value.encode("utf-8"),
         )
         await session.commit()
-    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
+    except CREATE_REFUSALS as exc:
         raise _mapped(exc)
+    response.status_code = creation_status(secret)
     return SecretMetadata.of(secret)
 
 
@@ -274,17 +273,14 @@ async def list_secrets(
     return [SecretMetadata.of(s) for s in secrets]
 
 
-# ---------------------------------------------------------------------------
-# Service-auth System vault access (#10436) — registered BEFORE /{secret_id}
-# so that literal "/system" and "/system/{id}" paths take priority over the
-# parameterised UUID routes. Service principals carry valid X-Service-* HMAC
-# headers and may ONLY access secrets whose owner_vault is "system".
-# ---------------------------------------------------------------------------
+# Service-auth System vault access (#10436), registered BEFORE /{secret_id} so "/system" wins over the UUID
+# routes. Service principals carry valid X-Service-* HMAC headers and may ONLY access owner_vault "system".
 
 
 @router.post("/system", response_model=SecretMetadata, status_code=status.HTTP_201_CREATED)
 async def service_create_system_secret(
     body: CreateSecretBody,
+    response: Response,
     service_id: str = Depends(service_principal),
     session: AsyncSession = Depends(get_session),
     coordinator: SecretsCoordinator = Depends(get_coordinator),
@@ -292,7 +288,6 @@ async def service_create_system_secret(
     """Create a secret in the system vault via service identity (HMAC-authenticated)."""
     vault = _vault(body.owner_vault)
     _require_system_vault(vault, service_id)
-    logger.info("service CRUD: create system secret", extra={"service_id": service_id, "name": body.name})
     try:
         secret = await coordinator.service_create(
             session,
@@ -303,8 +298,9 @@ async def service_create_system_secret(
             service_id=service_id,
         )
         await session.commit()
-    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
+    except CREATE_REFUSALS as exc:
         raise _mapped(exc)
+    response.status_code = creation_status(secret)
     return SecretMetadata.of(secret)
 
 
@@ -351,7 +347,7 @@ async def service_rotate_system_secret(
             session, secret_id=secret_id, new_plaintext=body.value.encode("utf-8"), vault=_SYSTEM_VAULT
         )
         await session.commit()
-    except (SecretAccessError, SecretNotFoundError) as exc:
+    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
         raise _mapped(exc)
     return SecretMetadata.of(secret)
 
@@ -501,7 +497,7 @@ async def unregister_secret_dependency(
     except (SecretAccessError, SecretNotFoundError) as exc:
         raise _mapped(exc)
     if not removed:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no dependency {dependent_kind}:{dependent_id} on {secret_id}")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
 
 
 @router.put("/{secret_id}", response_model=SecretMetadata)
@@ -518,7 +514,7 @@ async def rotate_secret(
             session, user_id=user_id, permissions=perms, secret_id=secret_id, new_plaintext=body.value.encode("utf-8")
         )
         await session.commit()
-    except (SecretAccessError, SecretNotFoundError) as exc:
+    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
         raise _mapped(exc)
     return SecretMetadata.of(secret)
 
@@ -551,7 +547,7 @@ async def share_secret(
             session, user_id=user_id, permissions=perms, secret_id=secret_id, grantee=_vault(body.grantee)
         )
         await session.commit()
-    except (SecretAccessError, SecretNotFoundError) as exc:
+    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
         raise _mapped(exc)
     return {"status": "shared", "grantee": body.grantee}
 

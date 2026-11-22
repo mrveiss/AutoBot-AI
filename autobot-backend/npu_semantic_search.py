@@ -31,7 +31,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
-from config import cfg
+from config import config_manager as cfg
 
 # Import existing AutoBot components
 from knowledge.backends import get_default_client
@@ -1068,9 +1068,6 @@ class NPUSemanticSearch:
             doc_metadata: Base metadata dictionary
             doc_id: Document ID
             modality: Source modality type
-
-        Returns:
-            None
         """
         if modality == "multimodal" or not self.ai_accelerator:
             return
@@ -1084,7 +1081,8 @@ class NPUSemanticSearch:
 
             multimodal_collection = self.collections.get("multimodal")
             if multimodal_collection:
-                multimodal_collection.add(
+                await asyncio.to_thread(  # leased write waits: keep it off the event loop (#20992)
+                    multimodal_collection.add,
                     embeddings=[embedding.tolist()],
                     metadatas=[fused_metadata],
                     documents=[str(content)],
@@ -1138,7 +1136,7 @@ class NPUSemanticSearch:
             doc_metadata = self._prepare_document_metadata(content, modality, metadata)
             doc_id = self._generate_document_id(modality, doc_id)
 
-            self._store_in_collection(modality, embedding, content, doc_metadata, doc_id)
+            await asyncio.to_thread(self._store_in_collection, modality, embedding, content, doc_metadata, doc_id)
             await self._store_in_multimodal_collection(embedding, content, doc_metadata, doc_id, modality)
 
             logger.info("✅ Stored %s content with ID: %s", modality, doc_id)
@@ -1226,7 +1224,8 @@ class NPUSemanticSearch:
             )
 
             collection = self.collections["code"]
-            collection.add(
+            await asyncio.to_thread(  # leased write waits: keep it off the event loop (#20992)
+                collection.add,
                 embeddings=[embedding.tolist()],
                 metadatas=[doc_metadata],
                 documents=[code_content],

@@ -634,7 +634,6 @@
 2|ssot|autobot-frontend/src/test/utils/test-setup-helpers.ts|:3000
 2|ssot|autobot-frontend/src/test/vitest-setup.ts|:3000
 2|other|autobot-frontend/src/utils/ApiClient.ts|'user'
-1|other|autobot-frontend/src/utils/ErrorHandler.js|10
 1|other|autobot-frontend/src/utils/urlUtils.ts|https://duckduckgo.com/?q=${encodeURIComponent(input
 1|other|autobot-frontend/src/views/EvolutionView.vue|"/opt/autobot
 1|other|autobot-frontend/src/views/EvolutionView.vue|'/opt/autobot
@@ -1048,7 +1047,6 @@
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|chown --no-dereference -R autobot:autobot
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|https://github.com/mrveiss/AutoBot-AI.git
-1|ssot|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|:8001
 1|other|autobot-slm-backend/ansible/playbooks/update-node.yml|60
 1|ssot|autobot-slm-backend/ansible/playbooks/update-node.yml|:8001
 1|other|autobot-slm-backend/ansible/reboot-node.yml|300

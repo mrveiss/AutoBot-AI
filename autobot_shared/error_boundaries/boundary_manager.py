@@ -15,10 +15,10 @@ import threading
 import time
 import traceback
 from contextlib import asynccontextmanager, contextmanager
-from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.client_disconnect import propagate_client_disconnect
+from autobot_shared.log_dir import FirstWriteFileHandler, resolve_logs_dir
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
@@ -95,12 +95,8 @@ class ErrorBoundaryManager:
 
     def _setup_error_logging(self):
         """Setup error logging configuration with file handler."""
-        # Create error logs directory
-        log_dir = Path("logs/errors")
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        # Configure error file handler
-        error_handler = logging.FileHandler(log_dir / "error_boundary.log")
+        # The canonical log dir (#20894); the handler creates it at the first record
+        error_handler = FirstWriteFileHandler(str(resolve_logs_dir() / "errors" / "error_boundary.log"))
         error_handler.setLevel(logging.ERROR)
         error_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         error_handler.setFormatter(error_formatter)

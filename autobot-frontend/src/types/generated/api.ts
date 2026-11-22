@@ -1217,26 +1217,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/chat/sessions/{session_id}/share": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Share Session
-         * @description Share a conversation with other users, optionally including KB facts (#689).
-         */
-        post: operations["share_session_api_chat_sessions__session_id__share_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/chat/sessions/{session_id}/share/preview": {
         parameters: {
             query?: never;
@@ -1281,6 +1261,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/sessions/{session_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Session Participants
+         * @description Who the owner has shared this conversation with, from the system of record (#18890).
+         */
+        get: operations["list_session_participants_api_chat_sessions__session_id__share_get"];
+        put?: never;
+        /**
+         * Share Session
+         * @description Owner shares a conversation with other users, optionally including KB facts (#689, #18890).
+         */
+        post: operations["share_session_api_chat_sessions__session_id__share_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat/sessions/{session_id}/share/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unshare Session
+         * @description Owner removes a participant from a shared conversation; their access ends at once (#18890).
+         */
+        delete: operations["unshare_session_api_chat_sessions__session_id__share__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat/chats": {
         parameters: {
             query?: never;
@@ -1290,7 +1314,7 @@ export interface paths {
         };
         /**
          * List Chats
-         * @description List all available chat sessions with improved error handling (consolidated).
+         * @description List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
          *
          *     Issue #744: Requires authenticated user.
          */
@@ -1312,7 +1336,7 @@ export interface paths {
         };
         /**
          * List Chats
-         * @description List all available chat sessions with improved error handling (consolidated).
+         * @description List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
          *
          *     Issue #744: Requires authenticated user.
          */
@@ -5164,9 +5188,10 @@ export interface paths {
         put?: never;
         /**
          * Clear All Knowledge
-         * @description Clear all entries from the knowledge base - DESTRUCTIVE OPERATION.
+         * @description Request a wipe of the knowledge base - it deletes nothing (#21048, #17038).
          *
-         *     Issue #744: Requires admin authentication.
+         *     Requires an admin who is a user. Creates (or reuses) a pending wipe approval and returns its reference;
+         *     the wipe runs only after a human approves it in the Approvals inbox, and is never auto-approved.
          */
         post: operations["clear_all_knowledge_api_knowledge_base_clear_all_post"];
         delete?: never;
@@ -7041,6 +7066,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge/chroma/empty-collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Empty Collections
+         * @description Collections holding zero vectors, plus those that could not be counted (read-only).
+         */
+        get: operations["list_empty_collections_api_knowledge_chroma_empty_collections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge/chroma/empty-collections/cleanup-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Empty Collection Cleanup
+         * @description Propose deleting one zero-count collection -- a request, not a deletion.
+         *
+         *     A collection that is not currently reported empty is refused, so a reviewer is never asked to decide
+         *     on something that could not execute. The handler re-checks the count when the proposal is approved.
+         */
+        post: operations["propose_empty_collection_cleanup_api_knowledge_chroma_empty_collections_cleanup_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge/chroma/collections": {
         parameters: {
             query?: never;
@@ -8348,18 +8416,15 @@ export interface paths {
         post?: never;
         /**
          * Delete Collection
-         * @description Delete a collection.
+         * @description Propose deleting a collection. It deletes nothing (#21383, #17038).
          *
-         *     Issue #412: Collections/Folders for grouping documents.
-         *
-         *     Parameters:
-         *     - collection_id: Collection UUID to delete
-         *     - delete_facts: If True, also delete all facts in collection
+         *     Files (or reuses) a pending destructive-action approval for every caller, human or agent; the delete runs
+         *     only after a human approves it in the Approvals inbox, with a durable audit entry.
          *
          *     Returns:
-         *     - status: success or error
-         *     - facts_in_collection: Number of facts in collection
-         *     - facts_deleted: Number of facts deleted (if delete_facts=True)
+         *     - status: pending_approval
+         *     - approval_id: the pending approval's reference
+         *     - facts_in_collection: facts in the collection now (what the approver sees)
          */
         delete: operations["delete_collection_api_knowledge_base_collections__collection_id__delete"];
         options?: never;
@@ -8504,19 +8569,32 @@ export interface paths {
         put?: never;
         /**
          * Bulk Delete Collection Facts
-         * @description Delete all facts in a collection.
+         * @description Propose deleting all facts in a collection. It deletes nothing (#21383, #17038).
          *
-         *     Issue #412: Collection-level bulk operations.
-         *
-         *     Parameters:
-         *     - collection_id: Collection UUID
-         *     - confirm: Must be True to actually delete
-         *
-         *     Returns:
-         *     - status: success or error
-         *     - deleted_count: Number of facts deleted
+         *     Without ``confirm`` it is a read-only preview. With ``confirm`` it files (or reuses) a pending
+         *     destructive-action approval for every caller, human or agent; the delete runs only after a human approves it.
          */
         post: operations["bulk_delete_collection_facts_api_knowledge_base_collections__collection_id__bulk_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/facts/delete-selected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Selected Facts
+         * @description Propose deleting exactly the selected facts, from every collection they are in. Deletes nothing (#21886).
+         */
+        post: operations["delete_selected_facts_api_knowledge_base_facts_delete_selected_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9004,6 +9082,49 @@ export interface paths {
          *     Returns detailed diff information about content and metadata changes.
          */
         post: operations["compare_versions_api_knowledge_base_facts__fact_id__versions_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/connector_credentials/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan Stored Connector Credentials
+         * @description Count connector records holding a value for a sensitive field of their auth schema (no values returned).
+         */
+        get: operations["scan_stored_connector_credentials_api_knowledge_base_connector_credentials_scan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/connector_credentials/cleanup-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Connector Credential Cleanup
+         * @description Propose removing the clear-text copies from one connector record -- a request, not a rewrite.
+         *
+         *     Only a record that holds a copy AND has a secrets-store copy can be proposed: removing the only copy
+         *     would lose the credential. The handler re-checks both when the proposal is approved.
+         */
+        post: operations["propose_connector_credential_cleanup_api_knowledge_base_connector_credentials_cleanup_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13664,8 +13785,8 @@ export interface paths {
          * Mcp Redis Vector Operations
          * @description MCP tool: Direct Redis vector store operations.
          *
-         *     Issue #744: Requires authenticated user. Admin operations (flush, reindex)
-         *     should be further restricted at the application level.
+         *     Issue #744: Requires authenticated user. ``flush`` deletes nothing (#21048, #17038): it requests a knowledge
+         *     wipe, for an admin user only, and the wipe runs after a human approves it.
          */
         post: operations["mcp_redis_vector_operations_api_knowledge_mcp_redis_vector_operations_post"];
         delete?: never;
@@ -17157,8 +17278,8 @@ export interface paths {
          * Rollback To Revision
          * @description Roll back entity config to a prior revision (#1404).
          *
-         *     Creates a new revision capturing the rollback so the action is
-         *     itself part of the audit trail.
+         *     Applies the snapshot to the live config, then records a revision so the
+         *     action is part of the audit trail (#18478). Unknown entities return 400.
          */
         post: operations["rollback_to_revision_api_config_revisions__entity_type___entity_id___revision_id__rollback_post"];
         delete?: never;
@@ -17222,10 +17343,7 @@ export interface paths {
         };
         /**
          * List Specialized Agents
-         * @description List all AutoBot specialized agents from .claude/agents/ (#1794).
-         *
-         *     Returns agent definitions parsed from markdown files including
-         *     name, description, tools, color, model, and category.
+         * @description List the host's Claude Code agents from the configured agents dir (#1794).
          *
          *     Issue #744: Requires admin authentication.
          */
@@ -19685,6 +19803,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/secret-duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Secret Duplicates Status
+         * @description Read only: counts, vault references and approval ids. No secret id, name or value (#17865).
+         */
+        get: operations["secret_duplicates_status_api_admin_secret_duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/secret-duplicates/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Secret Duplicate Resolution
+         * @description Verify every duplicated group and PROPOSE its resolution -- a request, not an execution.
+         */
+        post: operations["propose_secret_duplicate_resolution_api_admin_secret_duplicates_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/ownerless-chat-sessions": {
         parameters: {
             query?: never;
@@ -19719,6 +19877,46 @@ export interface paths {
          * @description Propose an owner -- a request, not an execution. Refused unless the session is ownerless and the user exists.
          */
         post: operations["propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/knowledge-wipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Knowledge Wipe Plan
+         * @description Read only: the databases and indexes a wipe would delete.
+         */
+        get: operations["knowledge_wipe_plan_api_admin_knowledge_wipe_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/knowledge-wipe/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Knowledge Wipe
+         * @description Propose the wipe -- a request, not an execution.
+         */
+        post: operations["propose_knowledge_wipe_api_admin_knowledge_wipe_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -21254,12 +21452,16 @@ export interface paths {
         };
         /**
          * Get Current Indexing Job
-         * @description Get the status of the currently running indexing job (if any)
+         * @description Get the status of the currently running indexing job, if it belongs to ``source_id``.
+         *
+         *     One job runs at a time across all sources (#20491). A job that belongs to another
+         *     source is not reported: the answer for this source is its own request queued behind
+         *     that job (``status: "queued"``, ``task_id: null``), else idle (#20513).
          *
          *     Returns:
-         *     - has_active_job: Whether an indexing job is currently running
-         *     - task_id: The current job's task ID (if running)
-         *     - source_id: The source it indexes: one job runs at a time across all sources (#20491)
+         *     - has_active_job: Whether an indexing job of this source is running or queued
+         *     - task_id: The current job's task ID (if running or just finished)
+         *     - source_id: The source it indexes (always the requested one when a job is named)
          *     - status: Current job status
          *     - progress: Current progress details
          */
@@ -21418,6 +21620,31 @@ export interface paths {
          * @description Real code problems per source (#1710); ``file_category`` (#20493) narrows to e.g. ``code``/``test``.
          */
         get: operations["get_codebase_problems_api_analytics_codebase_problems_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analytics/codebase/index/run-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Index Run State
+         * @description Return how the source's newest indexing run ended and when the last complete one finished.
+         *
+         *     ``run`` is ``null`` (and ``partial`` false) for a source with no recorded run.
+         *     ``partial`` is true when the newest run did not complete: the findings in
+         *     storage may be from an interrupted run and must be shown labelled.
+         *     A run left ``running`` past its hard timeout is reported ``abandoned``.
+         */
+        get: operations["get_index_run_state_api_analytics_codebase_index_run_state_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -49406,9 +49633,10 @@ export interface paths {
         };
         /**
          * Export All Conversations
-         * @description Export all conversations as a bulk JSON archive (#1808).
+         * @description Export the caller's conversations as a bulk JSON archive (#1808, #21666).
          *
-         *     Returns a JSON file containing every conversation stored on this instance.
+         *     Returns only the sessions the caller owns. ``all_users=true`` exports every conversation on this
+         *     instance: administrators only, and audited as a ``SESSION_EXPORT`` of scope ``instance``.
          */
         get: operations["export_all_conversations_api_conversations_conversations_export_all_get"];
         put?: never;
@@ -52968,7 +53196,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Release Work Item */
+        /**
+         * Release Work Item
+         * @description Enforced: ``agent_id`` is an agent UUID of this company named by its owner or admin (403 otherwise, #20521),
+         *     equal to the stored assignee when there is one; an item held by a person is refused (409).
+         */
         post: operations["release_work_item_api_llc_work_items__work_item_id__release_post"];
         delete?: never;
         options?: never;
@@ -53383,7 +53615,8 @@ export interface paths {
          *     1. Branch name: ``llc/{work_item_id}`` (and variants)
          *     2. PR body: ``Closes #llc-{work_item_id}``
          *
-         *     On PR merge → transition the work item to ``in_review``.
+         *     On PR merge → hand the work item to its reviewer through the review handoff, or leave it
+         *     where it is with a comment saying why (#21591).
          *     On PR close without merge → add a comment to the work item.
          */
         post: operations["handle_github_webhook_api_llc_webhooks_github_post"];
@@ -53478,6 +53711,8 @@ export interface paths {
          *     The company check is not incidental: ``transition_status`` takes
          *     ``company_id`` and this route is reached with an agent's context, so an
          *     item belonging to another company must 404 rather than transition.
+         *
+         *     Only an item the agent holds changes (404 as if missing, #21586); one waiting on its reviewer is 409.
          */
         post: operations["update_work_item_status_api_llc_agent_work_items__item_id__status_post"];
         delete?: never;
@@ -53832,7 +54067,7 @@ export interface paths {
          * @description Manual run cancel (board only).
          *
          *     Sets run status = cancelled, calls adapter.cancel() best-effort,
-         *     and releases the Redis checkout lock when a work item was held.
+         *     and releases every work-item checkout the run made (and their Redis fences).
          */
         post: operations["cancel_run_api_llc_agents__agent_id__runs__run_id__cancel_post"];
         delete?: never;
@@ -57372,6 +57607,11 @@ export interface components {
             specialized_agents?: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Specialized Available
+             * @default true
+             */
+            specialized_available: boolean;
             /** Summary */
             summary?: {
                 [key: string]: unknown;
@@ -57579,6 +57819,8 @@ export interface components {
             model?: string | null;
             /** Category */
             category?: string | null;
+            /** Tier */
+            tier?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57600,6 +57842,11 @@ export interface components {
             categories?: {
                 [key: string]: unknown;
             };
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
             /**
              * Timestamp
              * @default
@@ -57868,7 +58115,7 @@ export interface components {
             capabilities?: string | null;
             /**
              * Model
-             * @description Model override. Supported: 'claude-sonnet-4-6' (default), 'claude-haiku-4-5-20251001'. Use Haiku for execution-only assistant agents.
+             * @description Model override. Supported: 'claude-sonnet-5-5' (default), 'claude-haiku-5-5'; the tier aliases 'sonnet' and 'haiku' name them. Use Haiku for execution-only assistant agents.
              */
             model?: string | null;
             /**
@@ -60569,11 +60816,6 @@ export interface components {
              */
             company_id: string;
             type: components["schemas"]["ApprovalType"];
-            /**
-             * Requested By Agent Id
-             * Format: uuid
-             */
-            requested_by_agent_id: string;
             /**
              * Payload
              * @default {}
@@ -65610,13 +65852,14 @@ export interface components {
          * ClearAllResponse
          * @description Shape of ``POST /api/knowledge_base/clear_all``.
          *
-         *     DESTRUCTIVE operation. ``items_removed`` counts fact rows, not
-         *     vectors — vector store is cleared as part of ``kb.clear_all()``.
+         *     The route deletes nothing (#21048, #17038): it proposes a knowledge wipe, and the wipe runs only after a
+         *     human approves it. ``approval_id`` names the pending approval; ``items_removed`` and ``items_before`` stay
+         *     for compatibility and are 0 because nothing was removed by this request.
          */
         ClearAllResponse: {
             /**
              * Status
-             * @description 'success' | 'error'
+             * @description Approval status of the wipe request, 'pending' until a human decides
              */
             status: string;
             /**
@@ -65634,6 +65877,16 @@ export interface components {
              * @default
              */
             message: string;
+            /**
+             * Approval Id
+             * @description Id of the pending wipe approval in the Approvals inbox
+             */
+            approval_id?: string | null;
+            /**
+             * Action
+             * @description The approval action the wipe runs under
+             */
+            action?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -66972,10 +67225,6 @@ export interface components {
             company_id: string;
             /** Body */
             body: string;
-            /** Author Agent Id */
-            author_agent_id?: string | null;
-            /** Author User Id */
-            author_user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -67939,6 +68188,68 @@ export interface components {
              * @default false
              */
             sync_started: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCredentialCleanupRequest
+         * @description Propose removing the clear-text copies from one connector record.
+         */
+        ConnectorCredentialCleanupRequest: {
+            /** Connector Id */
+            connector_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCredentialCleanupResponse
+         * @description The PENDING approval created; nothing has been rewritten.
+         */
+        ConnectorCredentialCleanupResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+            /** Connector Id */
+            connector_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCredentialFindingResponse
+         * @description One record holding sensitive values. ``fields`` are names, never values.
+         */
+        ConnectorCredentialFindingResponse: {
+            /** Connector Id */
+            connector_id: string;
+            /** Connector Type */
+            connector_type: string;
+            /** Fields */
+            fields: string[];
+            /** Has Secrets Store Copy */
+            has_secrets_store_copy: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCredentialScanResponse
+         * @description Counts of affected records. ``unscannable_ids`` could not be checked: never read them as clean.
+         */
+        ConnectorCredentialScanResponse: {
+            /** Scanned */
+            scanned: number;
+            /** Affected */
+            affected: number;
+            /** With Store Copy Count */
+            with_store_copy_count: number;
+            /** Without Store Copy Count */
+            without_store_copy_count: number;
+            /** Findings */
+            findings: components["schemas"]["ConnectorCredentialFindingResponse"][];
+            /** Unscannable Ids */
+            unscannable_ids: string[];
         } & {
             [key: string]: unknown;
         };
@@ -73227,6 +73538,21 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DataResponse[SessionParticipantsData] */
+        DataResponse_SessionParticipantsData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["SessionParticipantsData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** DataResponse[SessionShareData] */
         DataResponse_SessionShareData_: {
             /**
@@ -73265,6 +73591,21 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["SessionTraceData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[SessionUnshareData] */
+        DataResponse_SessionUnshareData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["SessionUnshareData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -75575,6 +75916,68 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * DuplicateGroupStatus
+         * @description One duplicated ``(owner_vault, name)``: the vault, how many copies, and its open proposal if any.
+         *
+         *     No secret id and no name leaves here (#17865): a person acts on a group from its approval, in the Approvals
+         *     inbox, not from this view.
+         */
+        DuplicateGroupStatus: {
+            /** Owner Vault */
+            owner_vault: string;
+            /** Copy Count */
+            copy_count: number;
+            /** Approval Id */
+            approval_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DuplicateProposal
+         * @description What one group produced: the approval raised, or why none was (a proposal already stands).
+         */
+        DuplicateProposal: {
+            /** Approval Id */
+            approval_id: string | null;
+            /** Reason */
+            reason: string;
+            /** Copies */
+            copies: number;
+            /** Skipped */
+            skipped: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DuplicateRequestResponse
+         * @description The proposals one request raised.
+         */
+        DuplicateRequestResponse: {
+            /** Proposals */
+            proposals: components["schemas"]["DuplicateProposal"][];
+            /**
+             * Remaining
+             * @default 0
+             */
+            remaining: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DuplicateStatus
+         * @description Every duplicated group, in counts. ``group_count == 0`` means the unique-constraint migration can apply.
+         */
+        DuplicateStatus: {
+            /** Group Count */
+            group_count: number;
+            /** Copy Count */
+            copy_count: number;
+            /** Groups */
+            groups: components["schemas"]["DuplicateGroupStatus"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** Edge */
         Edge: {
             /** From Step */
@@ -76107,6 +76510,46 @@ export interface components {
             tasks_paused: string[];
             /** Durable */
             durable: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmptyCollectionCleanupRequest
+         * @description Propose deleting one zero-count collection.
+         */
+        EmptyCollectionCleanupRequest: {
+            /** Collection */
+            collection: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmptyCollectionCleanupResponse
+         * @description The PENDING approval created; nothing has been deleted.
+         */
+        EmptyCollectionCleanupResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+            /** Collection */
+            collection: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmptyCollectionsResponse
+         * @description Zero-count collections. ``unreadable`` could not be counted: never read them as empty (#19725).
+         */
+        EmptyCollectionsResponse: {
+            /** Total */
+            total: number;
+            /** Empty */
+            empty: string[];
+            /** Unreadable */
+            unreadable: string[];
         } & {
             [key: string]: unknown;
         };
@@ -79601,10 +80044,27 @@ export interface components {
         GraphRequest: {
             /**
              * Max Facts
-             * @description Maximum facts to include
+             * @description Facts per page (page through with offset)
              * @default 50
              */
             max_facts: number;
+            /**
+             * Offset
+             * @description Facts and bucket records to skip, so a client can page to every one the caller may read (#20945)
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Cursor
+             * @description Facts only: the `cursor` of the previous response's facts section. The scan resumes there, so every readable fact is reachable however deep the listing is; `offset` then pages bucket records only (#20945)
+             */
+            cursor?: string | null;
+            /**
+             * Include Buckets
+             * @description Include one section per non-fact knowledge bucket (#20945)
+             * @default true
+             */
+            include_buckets: boolean;
             /**
              * Max Depth
              * @description Maximum relation depth
@@ -79638,12 +80098,92 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * GraphSection
+         * @description Visible total vs this page of one graph section (the facts, or one knowledge bucket).
+         */
+        GraphSection: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Total
+             * @description Records the caller may read (a lower bound when truncated)
+             */
+            total?: number | null;
+            /**
+             * Returned
+             * @description Records on this page
+             */
+            returned: number;
+            /**
+             * Limited
+             * @description True while readable records remain past this page
+             */
+            limited: boolean;
+            /**
+             * Truncated
+             * @description True when the scan cap cut the listing short
+             * @default false
+             */
+            truncated: boolean;
+            /**
+             * Budget Exhausted
+             * @description True when the per-request scan budget ended before a readable record or the end of data
+             * @default false
+             */
+            budget_exhausted: boolean;
+            /**
+             * Failed
+             * @description True when the section's source could not be read; total is unknown
+             * @default false
+             */
+            failed: boolean;
+            /**
+             * Cursor
+             * @description Facts section only: pass as `cursor` to continue the scan
+             */
+            cursor?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** GraphSpec */
         GraphSpec: {
             /** Nodes */
             nodes?: components["schemas"]["NodeSpec"][];
             /** Transitions */
             transitions?: components["schemas"]["TransitionSpec"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GraphStats
+         * @description Counts of one multi-source graph response.
+         */
+        GraphStats: {
+            /** Sections */
+            sections?: components["schemas"]["GraphSection"][];
+            /**
+             * Total Entities
+             * @default 0
+             */
+            total_entities: number;
+            /**
+             * Total Relations
+             * @default 0
+             */
+            total_relations: number;
+            /**
+             * Categories
+             * @default 0
+             */
+            categories: number;
+            /**
+             * Facts
+             * @default 0
+             */
+            facts: number;
         } & {
             [key: string]: unknown;
         };
@@ -80497,8 +81037,6 @@ export interface components {
         };
         /** HumanClaimRequest */
         HumanClaimRequest: {
-            /** User Id */
-            user_id?: string | null;
             /** Company Id */
             company_id?: string | null;
         } & {
@@ -80509,8 +81047,6 @@ export interface components {
          * @description The same accepted-and-ignored fields as a claim.
          */
         HumanUnclaimRequest: {
-            /** User Id */
-            user_id?: string | null;
             /** Company Id */
             company_id?: string | null;
         } & {
@@ -82215,26 +82751,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeCollectionBulkDeleteResponse
-         * @description Response for POST /collections/{collection_id}/bulk-delete.
-         */
-        KnowledgeCollectionBulkDeleteResponse: {
-            /** Status */
-            status: string;
-            /** Collection Id */
-            collection_id?: string | null;
-            /** Facts To Delete */
-            facts_to_delete?: number | null;
-            /** Deleted Count */
-            deleted_count: number;
-            /** Confirm Required */
-            confirm_required: boolean;
-            /** Message */
-            message?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * KnowledgeCollectionCreateResponse
          * @description Response for POST /collections.
          */
@@ -82251,20 +82767,29 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeCollectionDeleteResponse
-         * @description Response for DELETE /collections/{collection_id}.
+         * KnowledgeCollectionDeleteProposal
+         * @description Answer of the two collection delete routes: a proposal (or, without confirm, a read-only preview).
          */
-        KnowledgeCollectionDeleteResponse: {
+        KnowledgeCollectionDeleteProposal: {
             /** Status */
             status: string;
             /** Collection Id */
-            collection_id?: string | null;
+            collection_id: string;
             /** Facts In Collection */
             facts_in_collection: number;
-            /** Facts Deleted */
-            facts_deleted: number;
+            /** Approval Id */
+            approval_id?: string | null;
+            /** Approval Status */
+            approval_status?: string | null;
+            /** Action */
+            action?: string | null;
+            /**
+             * Confirm Required
+             * @default false
+             */
+            confirm_required: boolean;
             /** Message */
-            message?: string | null;
+            message: string;
         } & {
             [key: string]: unknown;
         };
@@ -83061,10 +83586,7 @@ export interface components {
             data: {
                 [key: string]: unknown;
             };
-            /** Stats */
-            stats: {
-                [key: string]: unknown;
-            };
+            stats: components["schemas"]["GraphStats"];
         } & {
             [key: string]: unknown;
         };
@@ -83432,6 +83954,26 @@ export interface components {
             reformulated_queries?: string[];
             /** Message */
             message?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeSelectedFactsDeleteProposal
+         * @description Answer of the selected-facts delete route: a proposal for approval, never a deletion (#21886).
+         */
+        KnowledgeSelectedFactsDeleteProposal: {
+            /** Status */
+            status: string;
+            /** Facts Selected */
+            facts_selected: number;
+            /** Approval Id */
+            approval_id: string;
+            /** Approval Status */
+            approval_status?: string | null;
+            /** Action */
+            action: string;
+            /** Message */
+            message: string;
         } & {
             [key: string]: unknown;
         };
@@ -84884,8 +85426,6 @@ export interface components {
         LabelAssign: {
             /** Label Ids */
             label_ids: string[];
-            /** Assigned By */
-            assigned_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -84897,8 +85437,6 @@ export interface components {
             color?: string | null;
             /** Description */
             description?: string | null;
-            /** Created By */
-            created_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -95171,7 +95709,7 @@ export interface components {
         };
         /**
          * RelationCreate
-         * @description ``company_id`` and ``created_by_*`` are accepted for compatibility and ignored.
+         * @description ``company_id`` is accepted for compatibility and ignored; the creator is the authenticated caller.
          */
         RelationCreate: {
             /** Company Id */
@@ -95179,10 +95717,6 @@ export interface components {
             /** Target Id */
             target_id: string;
             relation_type: components["schemas"]["WorkItemRelationType"];
-            /** Created By Agent Id */
-            created_by_agent_id?: string | null;
-            /** Created By User Id */
-            created_by_user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -95224,6 +95758,8 @@ export interface components {
         ReleaseRequest: {
             /** Agent Id */
             agent_id: string;
+            /** Run Id */
+            run_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -95957,8 +96493,7 @@ export interface components {
              * @default false
              */
             requires_human_review: boolean;
-            /** Reviewer Role */
-            reviewer_role?: string | null;
+            reviewer_role?: components["schemas"]["MembershipRole"] | null;
             /**
              * Requires Cross Vendor Review
              * @default false
@@ -96003,8 +96538,7 @@ export interface components {
         ReviewGatePolicyUpdate: {
             /** Requires Human Review */
             requires_human_review?: boolean | null;
-            /** Reviewer Role */
-            reviewer_role?: string | null;
+            reviewer_role?: components["schemas"]["MembershipRole"] | null;
             /** Requires Cross Vendor Review */
             requires_cross_vendor_review?: boolean | null;
         } & {
@@ -98309,11 +98843,6 @@ export interface components {
             name: string;
             /** Value */
             value: string;
-            /**
-             * Actor
-             * @description Deprecated and ignored: the actor is the authenticated caller (#20102)
-             */
-            actor?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -99559,6 +100088,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SessionParticipantsData
+         * @description data payload for GET /chat/sessions/{session_id}/share (#18890).
+         */
+        SessionParticipantsData: {
+            /** Session Id */
+            session_id: string;
+            /** Participants */
+            participants: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SessionParticipantsResponse
          * @description Session participants list.
          */
@@ -99687,6 +100228,20 @@ export interface components {
             session_id: string;
             /** Turns */
             turns: components["schemas"]["TraceTurn"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SessionUnshareData
+         * @description data payload for DELETE /chat/sessions/{session_id}/share/{user_id} (#18890).
+         */
+        SessionUnshareData: {
+            /** Session Id */
+            session_id: string;
+            /** User Id */
+            user_id: string;
+            /** Removed */
+            removed: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -100854,8 +101409,6 @@ export interface components {
              * Format: uuid
              */
             approval_id: string;
-            /** Decided By */
-            decided_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -108122,8 +108675,6 @@ export interface components {
             assignee_agent_id?: string | null;
             /** Assignee User Id */
             assignee_user_id?: string | null;
-            /** Created By Agent Id */
-            created_by_agent_id?: string | null;
             /** Labels */
             labels?: string[] | null;
             /** Requires Approval Before */
@@ -110876,41 +111427,6 @@ export interface operations {
             };
         };
     };
-    share_session_api_chat_sessions__session_id__share_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SessionShareRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_SessionShareData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_share_preview_api_chat_sessions__session_id__share_preview_get: {
         parameters: {
             query?: never;
@@ -110960,6 +111476,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_SessionCheckpointClearData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_session_participants_api_chat_sessions__session_id__share_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionParticipantsData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_session_api_chat_sessions__session_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionShareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionShareData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unshare_session_api_chat_sessions__session_id__share__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionUnshareData_"];
                 };
             };
             /** @description Validation Error */
@@ -118244,6 +118858,11 @@ export interface operations {
                 max_facts?: number;
                 /** @description Include category nodes */
                 include_categories?: boolean;
+                /** @description Facts and bucket records to skip */
+                offset?: number;
+                /** @description Resume the facts scan (see GraphRequest) */
+                cursor?: string | null;
+                include_buckets?: boolean;
             };
             header?: never;
             path?: never;
@@ -118682,6 +119301,59 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_empty_collections_api_knowledge_chroma_empty_collections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmptyCollectionsResponse"];
+                };
+            };
+        };
+    };
+    propose_empty_collection_cleanup_api_knowledge_chroma_empty_collections_cleanup_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmptyCollectionCleanupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmptyCollectionCleanupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -120242,7 +120914,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeCollectionDeleteResponse"];
+                    "application/json": components["schemas"]["KnowledgeCollectionDeleteProposal"];
                 };
             };
             /** @description Validation Error */
@@ -120439,7 +121111,7 @@ export interface operations {
     bulk_delete_collection_facts_api_knowledge_base_collections__collection_id__bulk_delete_post: {
         parameters: {
             query?: {
-                /** @description Must be True to delete */
+                /** @description Must be True to propose the deletion */
                 confirm?: boolean;
             };
             header?: never;
@@ -120457,7 +121129,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeCollectionBulkDeleteResponse"];
+                    "application/json": components["schemas"]["KnowledgeCollectionDeleteProposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_selected_facts_api_knowledge_base_facts_delete_selected_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionFactsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSelectedFactsDeleteProposal"];
                 };
             };
             /** @description Validation Error */
@@ -121020,6 +121725,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeFactVersionCompareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_stored_connector_credentials_api_knowledge_base_connector_credentials_scan_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorCredentialScanResponse"];
+                };
+            };
+        };
+    };
+    propose_connector_credential_cleanup_api_knowledge_base_connector_credentials_cleanup_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorCredentialCleanupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorCredentialCleanupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -135131,6 +135889,58 @@ export interface operations {
             };
         };
     };
+    secret_duplicates_status_api_admin_secret_duplicates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateStatus"];
+                };
+            };
+        };
+    };
+    propose_secret_duplicate_resolution_api_admin_secret_duplicates_requests_post: {
+        parameters: {
+            query?: {
+                /** @description Raise a group again after a rejected or revision-requested proposal */
+                re_raise?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get: {
         parameters: {
             query?: never;
@@ -135180,6 +135990,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    knowledge_wipe_plan_api_admin_knowledge_wipe_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    propose_knowledge_wipe_api_admin_knowledge_wipe_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -136932,7 +137786,10 @@ export interface operations {
     };
     get_current_indexing_job_api_analytics_codebase_index_current_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -136946,6 +137803,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -137082,6 +137948,38 @@ export interface operations {
                 source_id: string;
                 problem_type?: string | null;
                 file_category?: components["schemas"]["ProblemCategory"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_index_run_state_api_analytics_codebase_index_run_state_get: {
+        parameters: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -146225,6 +147123,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentTerminalApproveResponse"];
                 };
+            };
+            /** @description The approval was already decided; nothing ran again (#19951) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -174501,7 +175406,10 @@ export interface operations {
     };
     export_all_conversations_api_conversations_conversations_export_all_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Instance-wide export of every user's conversations; admin only */
+                all_users?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -174514,6 +175422,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -178895,9 +179812,7 @@ export interface operations {
     };
     revoke_secret_api_llc_secrets__company_id___name__delete: {
         parameters: {
-            query?: {
-                actor?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
                 name: string;
@@ -181989,8 +182904,6 @@ export interface operations {
         parameters: {
             query: {
                 company_id: string;
-                uploaded_by_agent_id?: string | null;
-                uploaded_by_user_id?: string | null;
             };
             header?: never;
             path: {
@@ -182170,10 +183083,6 @@ export interface operations {
             query?: {
                 /** @description Accepted for compatibility; ignored. */
                 company_id?: string | null;
-                /** @description Accepted for compatibility; ignored. */
-                actor_agent_id?: string | null;
-                /** @description Accepted for compatibility; ignored. */
-                actor_user_id?: string | null;
             };
             header?: never;
             path: {

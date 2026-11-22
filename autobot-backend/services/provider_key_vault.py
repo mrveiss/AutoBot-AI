@@ -66,12 +66,11 @@ import uuid
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Callable, Iterator
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_once import log_once
 from autobot_shared.plugin_sdk.credential_binding import CredentialUnavailableError
 from autobot_shared.secrets_vault import VaultKind, VaultRef
-from models.secret import Secret
 
 if TYPE_CHECKING:  # pragma: no cover -- annotation-only; zero runtime import cost
     from services.envelope_secrets_service import EnvelopeSecretsService
@@ -199,10 +198,6 @@ _SYSTEM_VAULT = VaultRef(VaultKind.SYSTEM)
 #: separate, pre-existing concern -- see services/execution/env_sanitizer.py).
 _hydrated_keys: dict[str, str] = {}
 
-#: Names already reported as resolving from the env fallback, so the warning is
-#: emitted once per name per process rather than on every resolution.
-_env_fallback_logged: set[str] = set()
-
 #: Names the System vault holds but whose last read failed. Distinct from "not in
 #: the vault": these are refused, never resolved from the environment (#18094).
 _unreadable_keys: set[str] = set()
@@ -234,6 +229,13 @@ def _label(name: str) -> str:
     return "".join(VAULT_RESOLVED_CREDENTIAL_NAMES & {name}) or "<unregistered name>"
 
 
+def _without_names(text: str) -> str:
+    """*text* with every registered credential name replaced, so a caller's component label never logs one (#17850)."""
+    for registered in sorted(VAULT_RESOLVED_CREDENTIAL_NAMES, key=len, reverse=True):
+        text = text.replace(registered, "<credential>")
+    return text
+
+
 def resolve_provider_key(env_var: str, config_value: str) -> str:
     """The one resolution order for vault-resolved credentials (#18094, owner decision 2026-10-12).
 
@@ -259,10 +261,10 @@ def resolve_provider_key(env_var: str, config_value: str) -> str:
         if vaulted:
             return vaulted
     if _vault_state == VAULT_UNREACHABLE:
-        logger.error("provider-key-vault: %s vault unreachable: refusing the environment fallback", _label(env_var))
+        logger.error("provider-key-vault: vault unreachable: refusing the environment fallback")
         raise VaultKeyUnavailableError(env_var, _UNREACHABLE)
     if env_var in _unreadable_keys:
-        logger.error("provider-key-vault: %s vault unreadable: refusing the environment fallback", _label(env_var))
+        logger.error("provider-key-vault: vault unreadable: refusing the environment fallback")
         raise VaultKeyUnavailableError(env_var)
     if config_value:
         _log_env_fallback(env_var)
@@ -271,10 +273,10 @@ def resolve_provider_key(env_var: str, config_value: str) -> str:
 
 def _log_env_fallback(name: str) -> None:
     """Warn once that *name* resolved from the environment, not the secrets manager."""
-    if name in _env_fallback_logged:
-        return
-    _env_fallback_logged.add(name)
-    logger.warning(
+    log_once(
+        logger,
+        logging.WARNING,
+        name,
         "provider-key-vault: %s vault has no key: using the environment (migration fallback); store it in the vault",
         _label(name),
     )
@@ -289,7 +291,7 @@ def registration_refusal(component: str) -> Iterator[None]:
     try:
         yield
     except VaultKeyUnavailableError as exc:
-        logger.error("provider-key-vault: %s not registered -- %s", component, exc)
+        logger.error("provider-key-vault: %s not registered (%s)", _without_names(component), type(exc).__name__)
 
 
 def resolve_image_provider_key(name: str) -> str:
@@ -341,15 +343,16 @@ def plugin_credential_resolvers() -> dict[str, Callable[[str], str]]:
 
 
 async def _find_system_secret_id(session: AsyncSession, name: str) -> uuid.UUID | None:
-    """Return the id of the active System-vault secret named *name*, if any."""
-    result = await session.execute(
-        select(Secret.id).where(
-            Secret.owner_vault == _SYSTEM_VAULT.to_str(),
-            Secret.name == name,
-            Secret.is_active.is_(True),
-        )
-    )
-    return result.scalars().first()
+    """Return the id of the ACTIVE System-vault secret named *name*, if any (a deactivated key is never used).
+
+    Ambiguity is judged over ALL rows first: same-name duplicates (active or not) raise ``AmbiguousSecretError`` --
+    no copy is picked by order or by status while a group is unresolved (#17850). A sole deactivated row is then
+    excluded, as the query did before the unique constraint.
+    """
+    from services.envelope_secrets_service import EnvelopeSecretsService
+
+    row = await EnvelopeSecretsService.find_by_name(session, owner_vault=_SYSTEM_VAULT.to_str(), name=name)
+    return row.id if row is not None and row.is_active else None
 
 
 async def capture_provider_key(
@@ -422,14 +425,8 @@ async def mirror_provider_key_best_effort(name: str, value: str, created_by: uui
                 await session.commit()
             return wrote
     except Exception as exc:  # noqa: BLE001 - vault is optional in dev/test; never break the caller
-        # #16444: `name` reached here only by passing the VAULT_RESOLVED_CREDENTIAL_NAMES
-        # guard above, so it is a registry label such as OPENAI_API_KEY and never a
-        # credential. Re-read from the frozenset so that holds by construction rather
-        # than by argument: api/secrets.py unpacks `name` and `value` from one request
-        # model, CodeQL taints every attribute of it alike, and a comment does not
-        # break a taint path (py/clear-text-logging-sensitive-data).
-        known = VAULT_RESOLVED_CREDENTIAL_NAMES & {name}
-        logger.warning("provider-key-vault: mirror failed name=%s: %s", "".join(known), type(exc).__name__)
+        # No credential name or value is logged (#17850): only the failure class.
+        logger.warning("provider-key-vault: mirror failed: %s", type(exc).__name__)
         return False
 
 
@@ -450,7 +447,7 @@ async def _register_credential_dependency(session: AsyncSession, *, name: str, s
             session, secret_id=secret_id, dependent_kind="service", dependent_id=consumer
         )
     except Exception as exc:  # noqa: BLE001 - metadata only; never blocks hydration
-        logger.warning("provider-key-vault: dependency registration failed name=%s: %s", name, type(exc).__name__)
+        logger.warning("provider-key-vault: dependency registration failed: %s", type(exc).__name__)
 
 
 async def _read_one_key(
@@ -462,7 +459,7 @@ async def _read_one_key(
     try:
         value = await service.read(session, secret_id=secret_id, accessible_vaults={_SYSTEM_VAULT})
     except Exception as exc:  # noqa: BLE001 - defensive, one bad row must not break the rest
-        logger.warning("provider-key-vault: hydrate failed name=%s: %s", name, type(exc).__name__)
+        logger.warning("provider-key-vault: hydrate failed: %s", type(exc).__name__)
         return None
     return value.decode("utf-8")
 
@@ -522,12 +519,18 @@ async def _staged(stage: str, awaitable):
 async def _hydrate_all(session: AsyncSession, root_key: bytes | None) -> list[str]:
     """List and read every held name into a new cache, then swap it in; any exception = held-state unknown."""
     global _hydrated_keys, _unreadable_keys
+    from services.envelope_secrets_service import AmbiguousSecretError
+
     service = _decrypting_service(root_key)
     keys: dict[str, str] = {}
     unreadable: set[str] = set()
     any_dependency_registered = False
     for name in VAULT_RESOLVED_CREDENTIAL_NAMES:
-        secret_id = await _staged(_STAGE_LIST, _find_system_secret_id(session, name))
+        try:
+            secret_id = await _staged(_STAGE_LIST, _find_system_secret_id(session, name))
+        except AmbiguousSecretError:
+            unreadable.add(name)  # several copies, none chosen by order (#17850): refuse this key only
+            continue
         if secret_id is None:
             continue  # nothing vaulted: resolution falls back to the env var
         await _staged(_STAGE_REGISTER, _register_credential_dependency(session, name=name, secret_id=secret_id))

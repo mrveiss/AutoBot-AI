@@ -33,6 +33,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from autobot_shared.regex_whitespace import NOT_WS, WS, WS_CHARS
 from tools.lint._comment_syntax import code_lines, code_text
 
 _ROOT = repo_root()
@@ -40,7 +41,7 @@ _CONF = _ROOT / "docker/apt/80-autobot-resilience"
 _HELPER = _ROOT / "docker/apt/apt-retry"
 _WORKFLOWS = [
     _ROOT / ".github/workflows" / name
-    for name in ("clean-install.yml", "docker-smoke-test.yml", "hardened-smoke-test.yml")
+    for name in ("clean-install.yml", "_gate-docker-smoke.yml", "hardened-smoke-test.yml")
 ]
 # Options before the verb are skipped one per loop turn. The three turns are disjoint on their first
 # characters after the dash, so no text can be consumed two ways under the `*` (no ReDoS):
@@ -48,7 +49,7 @@ _WORKFLOWS = [
 #   `-oX=Y` (letter, then a non-space)                  attached argument
 #   any other option, `-y`, `-qq`, `--yes`              (first character not o, c, t or whitespace)
 _APT = re.compile(
-    r"\b(?:apt-get\s+(?:-(?:[oct]\s+\S+|[oct]\S+|[^\soct]\S*)\s+)*"
+    rf"\b(?:apt-get{WS}+(?:-(?:[oct]{WS}+{NOT_WS}+|[oct]{NOT_WS}+|[^{WS_CHARS}oct]{NOT_WS}*){WS}+)*"
     r"(?:update|install|upgrade|dist-upgrade|download|source|build-dep|remove|purge)\b"
     r"|apt-add-repository\s|add-apt-repository\s)"
 )

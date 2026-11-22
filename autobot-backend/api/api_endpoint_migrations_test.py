@@ -19558,7 +19558,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("ConfigService.get_full_config", source)
 
         # Check unified config manager usage
-        self.assertIn("unified_config_manager", source)
+        self.assertIn("config_manager", source)
 
         # Check NetworkConstants usage for hosts
         self.assertIn("NetworkConstants", source)
@@ -21185,18 +21185,18 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertEqual(progress_percentage, 100.0)
 
     def test_batch_126_migration_preserves_config_manager_operations(self):
-        """Verify migration preserves unified_config_manager operations"""
+        """Verify migration preserves config_manager operations"""
         from api import embeddings
 
         # Check get_embedding_settings uses config manager
         source_get = inspect.getsource(embeddings.get_embedding_settings)
-        self.assertIn("unified_config_manager.get_nested", source_get)
+        self.assertIn("config_manager.get_nested", source_get)
         self.assertIn("backend.llm.unified.embedding", source_get)
 
         # Check update_embedding_settings uses config manager
         source_update = inspect.getsource(embeddings.update_embedding_settings)
-        self.assertIn("unified_config_manager.set_nested", source_update)
-        self.assertIn("unified_config_manager.save_settings", source_update)
+        self.assertIn("config_manager.set_nested", source_update)
+        self.assertIn("config_manager.save_settings", source_update)
         self.assertIn("ConfigService.clear_cache", source_update)
 
     def test_batch_126_migration_preserves_default_config_fallback(self):
@@ -23422,7 +23422,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import developer
 
         source = inspect.getsource(developer.get_developer_config)
-        self.assertIn("unified_config_manager.get_nested", source)
+        self.assertIn("config_manager.get_nested", source)
         self.assertIn("enabled", source)
         self.assertIn("enhanced_errors", source)
         self.assertIn("endpoint_suggestions", source)
@@ -23433,7 +23433,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import developer
 
         source = inspect.getsource(developer.update_developer_config)
-        self.assertIn("unified_config_manager.set_nested", source)
+        self.assertIn("config_manager.set_nested", source)
         self.assertIn("save_settings()", source)
         self.assertIn("ConfigService.clear_cache()", source)
         self.assertIn("Developer configuration updated", source)
@@ -23455,12 +23455,12 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check get_api_endpoints
         source_endpoints = inspect.getsource(developer.get_api_endpoints)
-        self.assertIn('unified_config_manager.get_nested("developer.enabled"', source_endpoints)
+        self.assertIn('config_manager.get_nested("developer.enabled"', source_endpoints)
         self.assertIn("HTTPException(status_code=403", source_endpoints)
 
         # Check get_system_info
         source_info = inspect.getsource(developer.get_system_info)
-        self.assertIn('unified_config_manager.get_nested("developer.enabled"', source_info)
+        self.assertIn('config_manager.get_nested("developer.enabled"', source_info)
         self.assertIn("HTTPException(status_code=403", source_info)
 
     # ==============================================
@@ -23599,7 +23599,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import services
 
         source = inspect.getsource(services.get_version)
-        self.assertIn("unified_config_manager", source)
+        self.assertIn("config_manager", source)
         self.assertIn("SystemInfo", source)
         self.assertIn("version", source)
         self.assertIn("uptime", source)
