@@ -36,6 +36,7 @@ on:
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
       - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
       - 'autobot-slm-backend/ansible/playbooks/remove-role.yml'  # #22030: its role_target_dir checks run here
+      - 'autobot-slm-backend/ansible/requirements.yml'  # #22030: the collection versions the job installs
       - 'repo_tests/remove_role_rejects_hostile_dir_22030_test.py'
       - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
       - 'autobot-slm-backend/ansible/update-all-nodes.yml'
@@ -74,6 +75,7 @@ on:
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
       - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
       - 'autobot-slm-backend/ansible/playbooks/remove-role.yml'  # #22030: its role_target_dir checks run here
+      - 'autobot-slm-backend/ansible/requirements.yml'  # #22030: the collection versions the job installs
       - 'repo_tests/remove_role_rejects_hostile_dir_22030_test.py'
       - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
       - 'autobot-slm-backend/ansible/update-all-nodes.yml'
@@ -138,6 +140,13 @@ jobs:
           "${RUNNER_TEMP}/ansible-venv/bin/python" -m pip install --quiet --upgrade pip
           "${RUNNER_TEMP}/ansible-venv/bin/pip" install --quiet -r constraints/ansible-core.txt
           echo "${RUNNER_TEMP}/ansible-venv/bin" >> "${GITHUB_PATH}"
+
+      # #22030: ansible-core routes `ansible.builtin.archive` (remove-role.yml) to community.general, which the
+      # fleet installs from requirements.yml; without it the playbook fails to load. Same version range as the fleet.
+      - name: "Install the fleet's community.general collection (#22030)"
+        run: |
+          spec=$("${RUNNER_TEMP}/ansible-venv/bin/python" -c "import yaml; c = yaml.safe_load(open('autobot-slm-backend/ansible/requirements.yml', encoding='utf-8'))['collections']; print(next(f\"{x['name']}:{x['version']}\" for x in c if x['name'] == 'community.general'))")
+          "${RUNNER_TEMP}/ansible-venv/bin/ansible-galaxy" collection install "$spec"
 
       # A pin nobody re-checks is a different kind of stale, and prepending a
       # venv to PATH is not proof that nothing shadows it. This asserts the
