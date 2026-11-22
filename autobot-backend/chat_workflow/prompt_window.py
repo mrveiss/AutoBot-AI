@@ -18,17 +18,32 @@ from typing import Any, Dict
 from autobot_shared.chat_model_context import num_ctx_for_model
 from autobot_shared.logging_manager import get_logger
 from chat_workflow import limits
+from chat_workflow.llm_provider import configured_provider
+from llm_shared.types import ProviderType
 
 logger = get_logger(__name__)
 
 
+def _sends_chat_num_ctx() -> bool:
+    """The chat request carries ``num_ctx`` only when the configured provider is Ollama."""
+    try:
+        return configured_provider() is ProviderType.OLLAMA
+    except ValueError:  # a provider name the registry does not know: not Ollama
+        return False
+
+
 def request_window_tokens(cwm: Any, model_name: str | None) -> int:
-    """``num_ctx`` the chat request sends for a chat model; the declared YAML window for any other model."""
-    return int(num_ctx_for_model(model_name) or cwm.get_adaptive_context_length(model_name))
+    """``num_ctx`` the chat request sends (Ollama chat model); the declared YAML window for anything else."""
+    sent = num_ctx_for_model(model_name) if _sends_chat_num_ctx() else None
+    return int(sent or cwm.get_adaptive_context_length(model_name))
 
 
 def output_reserve_tokens(cwm: Any, model_name: str | None) -> int:
-    """Tokens kept free for the reply, and the ``num_predict`` the chat request is to carry (2,048 at 8,192)."""
+    """Tokens the prompt budget keeps free for the reply (2,048 at 8,192).
+
+    The budget reserves it; the chat payload does not yet send it as ``num_predict`` (that is built in
+    ``manager._get_llm_request_payload``, which follows once #22012 has merged), so it is not an enforced cap yet.
+    """
     window = request_window_tokens(cwm, model_name)
     declared = int(cwm.get_model_info(model_name).get("max_output_tokens", 0) or 0)
     share = int(window * limits.OUTPUT_RESERVE_SHARE)
@@ -91,11 +106,14 @@ def warn_if_over_window(model_name: str | None, system_prompt: str | None, promp
 
 
 def note_prompt_eval(chunk: Dict[str, Any], model_name: str | None) -> bool:
-    """On a stream's final chunk, log when Ollama's ``prompt_eval_count`` reached the window (input was cut)."""
+    """Log when a final stream chunk's ``prompt_eval_count`` reached the window (input was cut).
+
+    Not called from the chat stream yet: the chunk is parsed in ``manager.py`` (follows after #22012).
+    """
     used = chunk.get("prompt_eval_count")
     if not chunk.get("done") or not isinstance(used, int):
         return False
-    window = int(num_ctx_for_model(model_name) or 0)
+    window = int(num_ctx_for_model(model_name) or 0) if _sends_chat_num_ctx() else 0
     at_window = window > 0 and used >= window
     if at_window:
         logger.warning(

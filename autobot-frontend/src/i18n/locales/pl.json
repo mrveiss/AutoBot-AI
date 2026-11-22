@@ -800,6 +800,7 @@
       "unreadable": "Nie udało się odczytać pliku \"{filename}\", więc nie został użyty.",
       "empty": "Plik \"{filename}\" nie zawiera czytelnego tekstu, więc nie został użyty.",
       "truncated": "Plik \"{filename}\" jest długi, więc użyto tylko pierwszych {used} z {total} znaków.",
+      "truncated_legacy": "Plik \"{filename}\" jest długi, więc użyto tylko jego początku.",
       "over_budget": "Załączone pliki osiągnęły limit rozmiaru, więc plik \"{filename}\" nie został użyty.",
       "over_window": "Rozmowa jest dłuższa niż okno modelu, więc część wcześniejszego tekstu może do niego nie dotrzeć."
     }

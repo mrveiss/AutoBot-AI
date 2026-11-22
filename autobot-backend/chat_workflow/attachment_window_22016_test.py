@@ -102,3 +102,24 @@ def test_a_model_that_is_not_the_chat_model_keeps_its_declared_window():
     assert prompt_window.request_window_tokens(cwm, "some-other-model") == cwm.get_adaptive_context_length(
         "some-other-model"
     )
+
+
+def test_a_cloud_provider_never_gets_the_ollama_num_ctx(chat_model, monkeypatch):
+    from llm_shared.types import ProviderType
+
+    cwm = get_context_window_manager()
+    monkeypatch.setattr(prompt_window, "configured_provider", lambda: ProviderType.OPENAI)
+    assert prompt_window.request_window_tokens(cwm, MODEL) == cwm.get_adaptive_context_length(MODEL)
+    assert prompt_window.note_prompt_eval({"done": True, "prompt_eval_count": 8192}, MODEL) is False
+
+
+def test_the_reply_share_is_clamped_to_its_documented_range(monkeypatch):
+    import importlib
+
+    from chat_workflow import limits
+
+    for raw, want in (("0.9", 0.5), ("0.001", 0.05), ("0.25", 0.25)):
+        monkeypatch.setenv("AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE", raw)
+        assert importlib.reload(limits).OUTPUT_RESERVE_SHARE == want
+    monkeypatch.delenv("AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE")
+    importlib.reload(limits)

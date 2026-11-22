@@ -148,8 +148,9 @@ register_env_var(
         default=0.25,
         range=(0.05, 0.5),
         description=(
-            "Share of the chat model's context window kept free for the reply (chat_workflow/prompt_window.py, "
-            "#22016): 0.25 of the 8192-token window is 2048 tokens, which is also the reply's num_predict. "
+            "Share of the chat model's context window the prompt budget keeps free for the reply "
+            "(chat_workflow/prompt_window.py, #22016): 0.25 of the 8192-token window is 2048 tokens. It is a "
+            "budget reservation; the chat request does not yet send it as num_predict. "
             "Between 0.05 and 0.5."
         ),
         component="backend",

@@ -800,6 +800,7 @@
       "unreadable": "Não foi possível ler \"{filename}\", por isso ele não foi usado.",
       "empty": "\"{filename}\" não tem texto legível, por isso não foi usado.",
       "truncated": "\"{filename}\" é longo, por isso apenas os primeiros {used} de {total} caracteres foram usados.",
+      "truncated_legacy": "\"{filename}\" é longo, por isso apenas o início foi usado.",
       "over_budget": "Os arquivos anexados atingiram o limite de tamanho, por isso \"{filename}\" não foi usado.",
       "over_window": "A conversa é maior que a janela do modelo, por isso parte do texto anterior pode não chegar a ele."
     }

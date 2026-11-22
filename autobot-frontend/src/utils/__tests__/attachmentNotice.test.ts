@@ -31,7 +31,7 @@ describe('attachment notices (#20195)', () => {
   beforeEach(() => showToast.mockClear())
 
   it('renders the named code with the file name and limit', () => {
-    expect(attachmentNoticeText({ code: 'truncated', filename: 'big.txt' })).toBe('chat.attachmentNotice.truncated|big.txt|||')
+    expect(attachmentNoticeText({ code: 'truncated', filename: 'big.txt' })).toBe('chat.attachmentNotice.truncated_legacy|big.txt|||')
     expect(attachmentNoticeText({ code: 'too_many', limit: 5 })).toBe('chat.attachmentNotice.too_many||5||')
   })
 
@@ -40,6 +40,11 @@ describe('attachment notices (#20195)', () => {
       'chat.attachmentNotice.truncated|big.txt||20000|90000',
     )
     expect(attachmentNoticeText({ code: 'over_window' })).toContain('chat.attachmentNotice.over_window')
+  })
+
+  it('a stored notice without counts keeps the legacy wording (#22016)', () => {
+    expect(attachmentNoticeText({ code: 'truncated', filename: 'old.txt', used: 5 })).toContain('truncated_legacy')
+    expect(attachmentNoticeText({ code: 'truncated', filename: 'a.txt', used: 0, total: 9 })).toContain('.truncated|')
   })
 
   it('an unknown or missing code is the generic unreadable text, never nothing', () => {

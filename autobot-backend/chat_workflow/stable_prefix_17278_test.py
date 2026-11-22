@@ -33,12 +33,22 @@ def _session():
     return session
 
 
-async def _system_prompt(handler, story: str) -> str:
+def _hook(seen):
+    async def hook(prompt, _session):
+        if seen is not None:
+            seen.append(prompt)
+        return prompt
+
+    return hook
+
+
+async def _system_prompt(handler, story: str, seen: list | None = None) -> str:
     gen = MagicMock()
     gen.generate = AsyncMock(return_value=story)
     with (
         patch("chat_history.layers.TIERED_CONTEXT_ENABLED", False),
         patch("memory.essential_story.EssentialStoryGenerator", return_value=gen),
+        patch("chat_workflow.llm_handler._emit_system_prompt_ready", new=_hook(seen)),
         patch("chat_workflow.llm_handler._emit_before_prompt_build", new_callable=AsyncMock),
         patch("chat_workflow.llm_handler._emit_after_prompt_build", new_callable=AsyncMock, return_value="p"),
         patch("chat_workflow.llm_handler._emit_full_prompt_ready", new_callable=AsyncMock, return_value="p"),
@@ -58,6 +68,15 @@ async def test_two_turns_with_different_memory_share_the_whole_stable_prefix():
     assert shared >= len(stable) > 0
     assert one.startswith(stable) and two.startswith(stable)
     assert one != two and one.endswith("STORY ranked one way")
+
+
+@pytest.mark.asyncio
+async def test_hook_sees_the_stable_text_only_and_the_final_prompt_starts_with_it():
+    handler, seen = _handler(), []
+    final = await _system_prompt(handler, "MEMORY BLOCK", seen)
+    stable = handler._get_system_prompt(language="en", company_id=None)
+    assert seen == [stable]  # the real call order: hook first, memory appended afterwards
+    assert final == stable + "\n\nMEMORY BLOCK"
 
 
 @pytest.mark.asyncio

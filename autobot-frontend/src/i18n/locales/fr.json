@@ -800,6 +800,7 @@
       "unreadable": "\"{filename}\" n'a pas pu être lu et n'a pas été utilisé.",
       "empty": "\"{filename}\" ne contient aucun texte lisible et n'a pas été utilisé.",
       "truncated": "\"{filename}\" est long ; seuls les {used} premiers caractères sur {total} ont été utilisés.",
+      "truncated_legacy": "\"{filename}\" est long ; seul son début a été utilisé.",
       "over_budget": "Les fichiers joints ont atteint la limite de taille ; \"{filename}\" n'a pas été utilisé.",
       "over_window": "La conversation dépasse la fenêtre du modèle ; une partie du texte précédent peut ne pas lui parvenir."
     }

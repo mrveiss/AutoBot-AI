@@ -47,7 +47,10 @@ def prefix_record(text: str, release: str = PROMPT_RELEASE) -> Dict[str, Any]:
     }
 
 
-def _changed_blocks(old: List[str], new: List[str]) -> List[int]:
+def _changed_blocks(old: Optional[List[str]], new: List[str]) -> Optional[List[int]]:
+    """Indexes of blocks that differ; ``None`` when the earlier blocks are gone (a restart)."""
+    if old is None:
+        return None
     width = max(len(old), len(new))
     return [i for i in range(width) if i >= len(old) or i >= len(new) or old[i] != new[i]]
 
@@ -64,17 +67,22 @@ def compare_records(recorded: Optional[Dict[str, Any]], current: Dict[str, Any])
         "changed": True,
         "previous": recorded["hash"],
         "current": current["hash"],
-        "changed_blocks": _changed_blocks(recorded["blocks"], current["blocks"]),
+        "changed_blocks": _changed_blocks(recorded.get("blocks"), current["blocks"]),
         "chars_delta": current["chars"] - recorded["chars"],
     }
 
 
-def record_turn_prefix(metadata: Dict[str, Any], key: str, text: str) -> Dict[str, Any]:
-    """Record this turn's prefix on the session and log a divergence from the last turn."""
+def record_turn_prefix(metadata: Dict[str, Any], key: str, text: str, blocks: Dict[str, List[str]]) -> Dict[str, Any]:
+    """Record this turn's prefix and log a divergence from the last turn.
+
+    Session metadata is persisted and API-visible, so it keeps only hash, release and chars; the per-block hashes
+    live in *blocks* (in-memory, on the session object) and are what lets the next turn name the changed blocks.
+    """
     records = metadata.setdefault(METADATA_KEY, {})
     current = prefix_record(text)
-    report = compare_records(records.get(key), current)
-    records[key] = current
+    report = compare_records({**records[key], "blocks": blocks.get(key)} if key in records else None, current)
+    records[key] = {k: current[k] for k in ("hash", "release", "chars")}
+    blocks[key] = current["blocks"]
     if report["kind"] == "drift":
         logger.warning("[#17277] Stable prompt prefix drifted within a session: %s", json.dumps(report))
     elif report["kind"] == "release_change":
@@ -82,9 +90,20 @@ def record_turn_prefix(metadata: Dict[str, Any], key: str, text: str) -> Dict[st
     return report
 
 
-def prefix_key(language: str, company_id: Optional[str], codeexec: bool) -> str:
+def active_personality_id() -> str:
+    """The active personality's id (``""`` when none): part of the key, so a switch is not drift."""
+    try:
+        from services.personality_service import get_personality_manager
+
+        profile = get_personality_manager().get_active_profile()
+        return str(getattr(profile, "id", "")) if profile is not None else ""
+    except Exception:  # noqa: BLE001 - the key must never cost the turn
+        return ""
+
+
+def prefix_key(language: str, company_id: Optional[str], codeexec: bool, personality: str = "") -> str:
     """Key the records by what the stable prefix is deterministic over."""
-    return f"{language or ''}|{'company' if company_id else '-'}|{int(bool(codeexec))}"
+    return f"{language or ''}|{'company' if company_id else '-'}|{int(bool(codeexec))}|{personality}"
 
 
 def record_session_prefix(
@@ -93,9 +112,11 @@ def record_session_prefix(
     """Non-fatal per-turn hook: a drift check must never cost the user their turn."""
     try:
         if session is not None and isinstance(getattr(session, "metadata", None), dict):
-            record_turn_prefix(session.metadata, prefix_key(language, company_id, codeexec), text)
+            key = prefix_key(language, company_id, codeexec, active_personality_id())
+            blocks = session.__dict__.setdefault("_prompt_prefix_blocks", {})
+            record_turn_prefix(session.metadata, key, text, blocks)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("[#17277] Prefix drift record failed: %s", exc)
+        logger.warning("[#17277] Prefix drift record failed: %s", type(exc).__name__)
 
 
 def main(argv: Optional[List[str]] = None) -> int:

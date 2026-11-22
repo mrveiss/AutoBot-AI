@@ -76,6 +76,6 @@ ATTACHMENT_TEXT_CACHE_SECONDS: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE
 #: Files whose extracted text the in-process cache holds at once (#20195); the oldest is dropped first.
 ATTACHMENT_TEXT_CACHE_MAX_ENTRIES: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE_MAX_ENTRIES", default=32)
 
-#: Share of the chat window kept free for the reply (#22016): the prompt budget reserves it and ``num_predict`` is
-#: set to match, so what the budget leaves for the prompt is what the model really has.
-OUTPUT_RESERVE_SHARE: float = env_float("AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE", default=0.25)
+#: Share of the chat window the prompt budget keeps free for the reply (#22016), clamped to 0.05-0.5 as documented.
+#: The budget reserves it; the chat payload does not send it as ``num_predict`` yet (follows #22012): no cap.
+OUTPUT_RESERVE_SHARE: float = min(0.5, max(0.05, env_float("AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE", default=0.25)))

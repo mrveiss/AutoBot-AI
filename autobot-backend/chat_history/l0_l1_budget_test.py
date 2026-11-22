@@ -192,3 +192,29 @@ class TestNoSecondBudgetingConcept:
         allocate.assert_called_once()
         names = [sec.name for sec in allocate.call_args.args[0]]
         assert names == ["identity", "essential_story"]
+
+
+class TestBudgetAtTheSentWindow:
+    """#22016: the budget is measured against the 8,192 window the chat request sends, not the declared 32,768."""
+
+    @pytest.mark.asyncio
+    async def test_l0_l1_still_fit_their_targets_at_8192(self, builder, monkeypatch):
+        from autobot_shared import chat_model_context
+        from autobot_shared.ssot_constants import ModelConfig
+        from chat_workflow import prompt_window
+        from llm_shared.types import ProviderType
+
+        model = "l0-l1-chat-model"
+        monkeypatch.setattr(chat_model_context, "_last_turn_model", model)
+        monkeypatch.setattr(prompt_window, "configured_provider", lambda: ProviderType.OLLAMA)
+        cwm = get_context_window_manager()
+        assert prompt_window.request_window_tokens(cwm, model) == ModelConfig.CHAT_NUM_CTX
+        l0_target, l1_target = await _targets()
+        ceiling = int(cwm.get_prompt_budget(model) * TieredContextBuilder._L0_L1_BUDGET_SHARE)
+        assert (
+            ceiling == 1206 and ceiling >= l0_target + l1_target
+        )  # was 7043 at the declared window; targets still bind
+
+        l0, l1 = await builder._fit_l0_l1(_text(5_000, "i"), _text(5_000, "s"), model)
+
+        assert cwm.estimate_tokens(l0) + cwm.estimate_tokens(l1) <= l0_target + l1_target

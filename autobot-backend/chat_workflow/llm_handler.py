@@ -38,10 +38,9 @@ logger = get_logger(__name__)
 async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
     """Emit ON_SYSTEM_PROMPT_READY to registered extensions and return result.
 
-    Issue #3405: Fires after _get_system_prompt() so extensions can inspect or
-    rewrite the system prompt before it enters prompt assembly.  If no extension
-    is registered for this hook the function is a no-op and the original prompt
-    is returned unchanged.
+    Issue #3405: Fires after _get_system_prompt() with the STABLE text only; per-turn memory is
+    appended after it (#17278), so a rewrite becomes part of the hashed, cache-reused prefix (#17277).
+    With no extension registered the original prompt is returned unchanged.
 
     Returns the (possibly rewritten) prompt; ``session`` rides in ``data["session"]``.
     """
