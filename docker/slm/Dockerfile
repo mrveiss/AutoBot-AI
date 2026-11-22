@@ -14,11 +14,12 @@ FROM python:${PYTHON_VERSION}-slim-bookworm AS deps
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+# apt retries, an index failure is fatal at `apt-get update` (#16291), and apt-retry backs off (#21325)
 COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
+COPY docker/apt/apt-retry /usr/local/bin/apt-retry
 
 # Install build deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-retry apt-get update && apt-retry apt-get install -y --no-install-recommends \
     build-essential curl \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
@@ -48,11 +49,12 @@ ARG PYTHON_VERSION=3.14
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+# apt retries, an index failure is fatal at `apt-get update` (#16291), and apt-retry backs off (#21325)
 COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
+COPY docker/apt/apt-retry /usr/local/bin/apt-retry
 
 # Install runtime deps (ansible for node provisioning)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-retry apt-get update && apt-retry apt-get install -y --no-install-recommends \
     curl git openssh-client sshpass rsync ansible \
     && rm -rf /var/lib/apt/lists/*
 

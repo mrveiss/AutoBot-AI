@@ -19,10 +19,12 @@ import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import ActivityEventType, WorkItemRelationType, WorkItemStatus
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
 from .actor import resolve_actor
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsNotFound
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ _MIRROR = {
 }
 
 
-class RelationConflict(Exception):
+class RelationConflict(PublicMessageMixin, Exception):
     """Raised when a relation already exists or would create a self-loop."""
 
 
@@ -119,7 +121,7 @@ class WorkItemRelationService(LLCServiceBase):
         )
         relation = result.scalar_one_or_none()
         if relation is None:
-            raise ValueError(f"Relation {relation_id} not found")
+            raise CompanyOsNotFound(f"Relation {relation_id} not found")
 
         source_id = str(relation.source_id)
         target_id = str(relation.target_id)

@@ -17,6 +17,7 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from llc.api.work_item_hierarchy_routes import router as hierarchy_router
 from llc.api.work_items import router as work_items_router
 from llc.deps import get_session
+from llc.services.company_os.errors import CompanyOsError
 from llc.services.work_item_hierarchy import ALLOWED_PARENT_TYPES, HierarchyViolation, ProjectRequired
 from user_management.services import TenantContext
 
@@ -72,7 +73,7 @@ def _url(client: TestClient, path: str) -> str:
     [
         (HierarchyViolation("a task cannot sit under an epic"), 422),
         (ProjectRequired("a task requires a project_id"), 422),
-        (ValueError("unknown approval category"), 400),
+        (CompanyOsError("unknown approval categories: ['x']"), 400),
     ],
 )
 def test_create_maps_a_hierarchy_breach_to_422_and_other_value_errors_to_400(error, code):
@@ -83,12 +84,22 @@ def test_create_maps_a_hierarchy_breach_to_422_and_other_value_errors_to_400(err
     assert resp.json()["detail"] == str(error)
 
 
+def test_create_answers_a_plain_value_error_with_the_fixed_text_never_its_own():
+    leak = "LEAK-MARKER postgres://db.internal:5432"
+    patch("llc.services.work_item_service.WorkItemService.create", new=AsyncMock(side_effect=ValueError(leak))).start()
+    client = _client()
+    resp = client.post(_url(client, "/work-items"), json={"company_id": ORG, "type": "task", "title": "t"})
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"] == "Invalid request"
+    assert "LEAK-MARKER" not in resp.text
+
+
 @pytest.mark.parametrize(
     "error, code",
     [
         (HierarchyViolation("a task cannot sit under an epic"), 422),
         (ProjectRequired("a task requires a project_id"), 422),
-        (ValueError("unknown approval category"), 400),
+        (CompanyOsError("unknown approval categories: ['x']"), 400),
     ],
 )
 def test_update_maps_a_hierarchy_breach_to_422_and_other_value_errors_to_400(error, code):

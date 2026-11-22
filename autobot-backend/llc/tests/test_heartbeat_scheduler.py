@@ -628,7 +628,6 @@ class TestRecordRunForReplayH1:
         """
         import os
         import tempfile
-        import time
 
         from llc.adapters.claude_code_adapter import _output_path
         from llc.adapters.subprocess_base import placeholder_run_id
@@ -646,10 +645,11 @@ class TestRecordRunForReplayH1:
                 fh.write('{"type": "result", "is_error": false}\n')
 
             # Decoy file with later mtime — mtime-glob would pick this first.
-            time.sleep(0.01)
             decoy_path = os.path.join(tmpdir, f"llc_agent_{agent_id}_99999_decoy.jsonl")
             with open(decoy_path, "w", encoding="utf-8") as fh:
                 fh.write('{"type": "decoy"}\n')
+            later = os.stat(exact_path).st_mtime + 10
+            os.utime(decoy_path, (later, later))
 
             captured: dict = {}
             mock_svc = MagicMock()

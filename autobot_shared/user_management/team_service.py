@@ -33,7 +33,7 @@ from typing import Any, List
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from autobot_shared.db_session import run_after_commit
+from autobot_shared.after_commit import defer_until_commit
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.membership_epoch import MembershipEpochBump
 from autobot_shared.time_utils import now_utc
@@ -351,7 +351,7 @@ class TeamService(TeamMembershipRequestMixin, BaseService):
             resource_id=team_id,
             details={"hard_delete": hard_delete, "name": team.name},
         )
-        run_after_commit(self.session, MembershipEpochBump(team.org_id))  # a revocation for every member
+        defer_until_commit(self.session, MembershipEpochBump(team.org_id), scope=True)  # a revocation for every member
 
         logger.info("Deleted team: %s (hard=%s)", team_id, hard_delete)
         return True
@@ -433,7 +433,7 @@ class TeamService(TeamMembershipRequestMixin, BaseService):
             resource_id=team_id,
             details={"user_id": str(user_id), "previous_role": membership.role},
         )
-        run_after_commit(self.session, MembershipEpochBump(team.org_id))
+        defer_until_commit(self.session, MembershipEpochBump(team.org_id), scope=True)
 
         logger.info("Removed user %s from team %s", user_id, team_id)
         return True

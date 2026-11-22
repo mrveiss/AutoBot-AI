@@ -17,6 +17,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint.canonical.context import Context
 from tools.lint.canonical.diagnostic import Diagnostic
 
@@ -97,7 +98,7 @@ def _does_socket_io(body: list[ast.stmt]) -> bool:
 
 
 def _in_scope(rel: str) -> bool:
-    if rel == _HOME or rel.endswith("_test.py") or "/tests/" in rel or Path(rel).name.startswith("test_"):
+    if rel == _HOME or is_test_filename(Path(rel).name) or "/tests/" in rel:
         return False
     return rel.startswith(tuple(f"{t}/" for t in TARGETS))
 

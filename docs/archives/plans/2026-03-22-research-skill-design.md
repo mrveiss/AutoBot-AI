@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-22
 **Status:** Approved
-**Skill location:** `.claude/skills/research/SKILL.md`
+**Skill location:** moved to the `autobot-dev-skills` plugin (`/autobot-dev-skills:lifecycle research`) in #21718; originally `.claude/skills/research/SKILL.md`
 
 ## Overview
 

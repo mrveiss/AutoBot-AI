@@ -496,7 +496,8 @@
     },
     "errors": {
       "withStatus": "{message} (HTTP {status})",
-      "withCause": "{message}: {cause}"
+      "withCause": "{message}: {cause}",
+      "unknown": "Erro desconhecido"
     }
   },
   "deploymentLogViewer": {
@@ -752,6 +753,9 @@
       "toConfirm": "to confirm",
       "type": "Tipo"
     },
+    "errors": {
+      "nodeNotFound": "Node {nodeId} was not found in the fleet."
+    },
     "fleetSummary": {
       "fleetHealthSummary": "Fleet health summary"
     },
@@ -891,7 +895,6 @@
     "nPUWorkerMonitor": {
       "avgUtilization": "Avg utilization:",
       "currentTask": "Current Task",
-      "metricsUnavailable": "NPU fleet metrics are unavailable",
       "noNPUWorkers": "No NPU Workers",
       "noNodesWithThe": "No nodes with the npu-worker role are registered in the fleet.",
       "online": "online",
@@ -1052,6 +1055,10 @@
     "fleetNodesAria": "Fleet nodes",
     "fleetOverview": "Fleet Overview",
     "fleetViewTabsAria": "Fleet view tabs",
+    "incompleteList": "Showing {loaded} of {total} nodes. The rest could not be loaded: {message}",
+    "incompleteTotalUnknown": "an unknown number of",
+    "loadFailed": "Could not load the node list: {message}",
+    "loadFailedUnknown": "Could not load the node list",
     "infrastructure": "Infrastructure",
     "infrastructureSetupAria": "Infrastructure setup",
     "lastSeen": "Last seen:",
@@ -2035,7 +2042,7 @@
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
     "tabFleet": "Fleet Operations",
-    "tabInfrastructure": "Visão geral",
+    "tabInfrastructure": "Infrastructure",
     "tabMigration": "Migration",
     "tabPerNode": "Per-Node Control",
     "tabReplication": "Replication",
@@ -3487,7 +3494,6 @@
       "automaticallyRefreshDataOn": "Automatically refresh data on dashboards",
       "completed": "Concluído",
       "configureNTPServersAnd": "Configure NTP servers and push time settings to all fleet nodes via Ansible.",
-      "darkMode": "Dark Mode",
       "defaultTimezone": "Default Timezone",
       "displayNameForThis": "Display name for this installation",
       "fleetTimeSynchronization": "Fleet Time Synchronization",
@@ -3510,8 +3516,13 @@
       "syncFailed": "❌ Sync failed",
       "syncing": "Syncing…",
       "systemName": "System Name",
+      "theme": "Tema",
+      "themeContrast": "Alto contraste",
+      "themeDark": "Escuro",
+      "themeHint": "Colour scheme for the console. Saved in this browser.",
+      "themeLight": "Claro",
+      "themeMono": "Monocromático",
       "timezoneForDisplayingDatesAndTimes": "Timezone for displaying dates and times ({count} zones available)",
-      "useDarkThemeFor": "Use dark theme for the interface",
       "value0Value1NodePlural": "{value0} — {value1} node | {value0} — {value1} nodes",
       "viewWizard": "View Wizard",
       "settingsSaved": "Settings saved successfully",
@@ -3911,6 +3922,13 @@
     "upgradeAllStartedOnNode": "Upgrade all started for {nodeId}"
   },
   "tools": {
+    "moved": {
+      "title": "{name} moved to the user app",
+      "description": "{name} is user work, so it now lives in the AutoBot user app, where every signed-in user can reach it.",
+      "open": "Open {name} in the user app",
+      "batch": "Batch Processing",
+      "vision": "Vision"
+    },
     "admin": {
       "advancedControlTool": {
         "title": "Controle avançado",
@@ -4064,6 +4082,8 @@
       "fileBrowserTool": {
         "actions": "Ações",
         "download": "Baixar",
+        "downloadFailed": "Failed to download file",
+        "downloadUnauthorized": "This file cannot be downloaded because your session is not accepted by the main backend. Sign in there and try again.",
         "emptyDirectory": "Empty directory",
         "go": "Go",
         "goUp": "Go Up",
@@ -4354,6 +4374,35 @@
       "subtitle": "Recent orphan-storage cleanups and orphan-resource repairs, with actor and result.",
       "timestamp": "Time",
       "title": "Audit Trail"
+    },
+    "knowledge": {
+      "credentials": {
+        "action": "Ação",
+        "connector": "Conector",
+        "empty": "No connector records hold a clear-text credential copy.",
+        "fields": "Fields",
+        "loadErrorFallback": "Failed to scan connector credentials",
+        "noStoreCopy": "No secrets-store copy; cannot be proposed",
+        "subtitle": "Connector records that keep a clear-text copy of a credential beside the secrets-store copy. Only the record's copy is ever proposed for removal; rotate the credential at the provider.",
+        "title": "Stored connector credentials",
+        "type": "Tipo",
+        "unscannable": "These records could not be checked and are not reported clean: {ids}"
+      },
+      "collections": {
+        "action": "Ação",
+        "empty": "No empty knowledge-base collections found.",
+        "loadErrorFallback": "Failed to list empty collections",
+        "name": "Coleção",
+        "subtitle": "Knowledge-base vector collections holding zero vectors. Deletion is only PROPOSED here; the collection is re-checked when the request is approved.",
+        "title": "Empty vector collections",
+        "unreadable": "These collections could not be counted and are not reported empty: {names}"
+      },
+      "loading": "Carregando…",
+      "propose": "Propose cleanup",
+      "proposeErrorFallback": "Failed to create the approval request",
+      "proposed": "Proposed (approval {id}) — decide it in the Approvals inbox",
+      "subtitle": "Read-only findings. Each row only creates an approval request; nothing is removed until a human approves it in the Approvals inbox.",
+      "title": "Knowledge cleanup"
     },
     "refresh": "Atualizar",
     "resources": {

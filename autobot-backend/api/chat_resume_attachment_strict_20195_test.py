@@ -11,12 +11,14 @@ from fastapi import HTTPException
 from autobot_shared.ai_lines import ATTACHMENT_CHAT_KEY, ATTACHMENT_TURN_KEY
 
 
-def _graph(context=None, broken=False):
+def _graph(context=None, broken=False, paused=True):
     graph = MagicMock()
     if broken:
         graph.aget_state = AsyncMock(side_effect=ConnectionError("down"))
     else:
-        graph.aget_state = AsyncMock(return_value=SimpleNamespace(values={"context": context or {}}))
+        graph.aget_state = AsyncMock(
+            return_value=SimpleNamespace(values={"context": context or {}}, next=("execute_tools",) if paused else ())
+        )  # #21939
     return graph
 
 
@@ -66,3 +68,9 @@ async def test_an_ordinary_turn_is_unchanged_for_a_non_strict_caller():
 async def test_an_unreadable_checkpoint_refuses_a_non_strict_caller():
     status, streamed = await _resume(False, _graph(broken=True))
     assert status == 404 and not streamed.called
+
+
+@pytest.mark.asyncio
+async def test_a_refused_caller_gets_404_not_the_pause_state_21939():
+    status, streamed = await _resume(False, _graph({ATTACHMENT_TURN_KEY: True}, paused=False))
+    assert status == 404 and not streamed.called  # access is settled before "nothing to resume" can answer

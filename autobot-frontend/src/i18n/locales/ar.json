@@ -577,6 +577,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "يتطلب تسجيل الدخول للعرض",
       "requireLoginHint": "يمكن للمستخدمين المسجلين فقط فتح هذا الرابط",
@@ -1124,7 +1131,6 @@
       "quality": {
         "title": "Code Quality",
         "overallScore": "Overall Score",
-        "testCoverage": "Test Coverage",
         "codeDuplicates": "Code Duplicates",
         "technicalDebt": "Technical Debt",
         "noMetrics": "No code quality metrics available."
@@ -2313,7 +2319,6 @@
       "noCommunicationData": "No communication data available",
       "codeQuality": "Code Quality",
       "overallScore": "Overall Score",
-      "testCoverage": "Test Coverage",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
       "noQualityMetrics": "No quality metrics available",
@@ -4546,6 +4551,9 @@
       "stepApproved": "تمت الموافقة على الخطوة",
       "stepSkipped": "تم تخطي الخطوة",
       "rerunNotFound": "تعذر العثور على سير العمل لإعادة تشغيله",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "جارٍ إعادة تشغيل \"{name}\"",
       "rerunFailed": "فشلت إعادة تشغيل سير العمل",
       "notificationsSaved": "تم حفظ إعدادات الإشعارات"
@@ -6007,6 +6015,7 @@
       "cleanupConfirm": "Delete Old Logs",
       "cancel": "إلغاء",
       "deleteOldLogs": "Delete Old Logs",
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data"
     },
     "browserAutomation": {
@@ -6489,16 +6498,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "noParticipants": "No participants",
-      "participants": "Participants",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "التعاون",
       "invite": "دعوة",
@@ -6957,6 +6956,7 @@
       "subtitle": "Discover and interact with UI elements on the current screen",
       "refresh": "تحديث",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "verifying": "Verifying...",
       "execute": "Execute",
       "details": "Details",

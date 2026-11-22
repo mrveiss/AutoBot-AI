@@ -63,6 +63,17 @@ export class AbsoluteEndpointError extends Error {
   }
 }
 
+/** The client's own timeout: the request outlived its budget. The message stays `Request timeout after <n>ms`. */
+export class RequestTimeoutError extends Error {
+  readonly timeoutMs: number
+
+  constructor(timeoutMs: number) {
+    super(`Request timeout after ${timeoutMs}ms`)
+    this.name = 'RequestTimeoutError'
+    this.timeoutMs = timeoutMs
+  }
+}
+
 /**
  * Throws unless `endpoint` is a path on the client's own origin. Mirrors what a browser's URL parser
  * accepts as "has its own host": tab/newline are dropped anywhere and leading control/space is trimmed
@@ -100,9 +111,9 @@ function armAbort(timeout: number, external?: AbortSignal) {
       clearTimeout(timeoutId)
       external?.removeEventListener('abort', onExternalAbort)
     },
-    /** A timeout surfaces as its own message; any other error passes through unchanged. */
+    /** A timeout surfaces as a `RequestTimeoutError`; any other error passes through unchanged. */
     translate: (error: unknown): unknown =>
-      timedOut && error instanceof Error && error.name === 'AbortError' ? new Error(`Request timeout after ${timeout}ms`) : error,
+      timedOut && error instanceof Error && error.name === 'AbortError' ? new RequestTimeoutError(timeout) : error,
   }
 }
 

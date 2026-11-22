@@ -51,6 +51,7 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 
 from ._paths import repo_root
@@ -145,8 +146,7 @@ def test_scope_matching_has_exactly_one_implementation() -> None:
 
 
 def _is_test_module(relative: Path) -> bool:
-    name = relative.name
-    return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py" or "tests" in relative.parts
+    return is_test_filename(relative.name, include_js=False) or "tests" in relative.parts
 
 
 def _production_modules(root: Path) -> list[Path]:

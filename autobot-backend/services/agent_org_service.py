@@ -12,11 +12,12 @@ direct reports, reporting-line updates with cycle detection, and role defaults.
 import uuid
 from typing import Any, Callable, Dict, List
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from models.agent_org import AgentOrgNode, OrgRole
+from services.agent_activity_feed import get_agent_feeds, with_feed
 
 logger = get_logger(__name__)
 
@@ -77,6 +78,18 @@ def _normalise_company_id(company_id: "str | uuid.UUID | None") -> "uuid.UUID | 
     return company_id if isinstance(company_id, uuid.UUID) else uuid.UUID(str(company_id))
 
 
+def live_company_agents_clause():
+    """WHERE clause keeping platform agents and agents of live companies (#21942).
+
+    A soft-deleted (``Organization.deleted_at``) or missing company's agents are hidden from
+    every cross-company listing; their rows are kept, never deleted (#15907, #21934).
+    """
+    from user_management.models.organization import Organization
+
+    live = select(Organization.id).where(Organization.deleted_at.is_(None))
+    return or_(AgentOrgNode.company_id.is_(None), AgentOrgNode.company_id.in_(live))
+
+
 class AgentOrgService:
     """Service for agent organizational hierarchy operations (#1405)."""
 
@@ -88,6 +101,11 @@ class AgentOrgService:
     async def get_all_nodes(self) -> List[AgentOrgNode]:
         """Fetch all org nodes in one query. Helper to avoid N+1 (#1405)."""
         result = await self.session.execute(select(AgentOrgNode))
+        return list(result.scalars().all())
+
+    async def get_live_nodes(self) -> List[AgentOrgNode]:
+        """Org nodes of platform agents and live companies only, for cross-company listings (#21942)."""
+        result = await self.session.execute(select(AgentOrgNode).where(live_company_agents_clause()))
         return list(result.scalars().all())
 
     async def get_node(self, agent_id: str) -> AgentOrgNode | None:
@@ -122,7 +140,7 @@ class AgentOrgService:
         visible agents are kept, and a visible agent whose manager is hidden becomes a root
         rather than disappearing.
         """
-        nodes = [n for n in await self.get_all_nodes() if can_see(n.company_id)]
+        nodes = [n for n in await self.get_live_nodes() if can_see(n.company_id)]
         visible = {n.agent_id for n in nodes}
         roots = [n for n in nodes if n.reports_to is None or n.reports_to not in visible]
         return [self._subtree(root, nodes) for root in roots]
@@ -140,21 +158,24 @@ class AgentOrgService:
         of agents. Sourced from the org registry so every registered agent
         is returned.
         """
-        nodes = [n for n in await self.get_all_nodes() if can_see(n.company_id)]  # #19246: caller's view
+        nodes = [n for n in await self.get_live_nodes() if can_see(n.company_id)]  # #19246: caller's view
         names = await self._company_names({n.company_id for n in nodes if n.company_id})
         # #17514: the registry measures no activity, so those fields are None ("not reported"),
         # never a 0 that reads as observed. The company tells two same-role agents apart.
+        # #21270: the task feeds come from the analytics history, None when it is unreadable.
+        feeds = await get_agent_feeds([n.agent_id for n in nodes])
         return [
-            {
-                "id": node.agent_id,
-                "name": node.name,
-                "type": _ROLE_TO_ACTIVITY_TYPE.get(node.org_role, "worker"),
-                "status": self._status_for_node(node),
-                "companyId": str(node.company_id) if node.company_id else None,
-                "companyName": names.get(node.company_id),
-                "recentTasks": [],
-                "activityTimeline": [],
-            }
+            with_feed(
+                {
+                    "id": node.agent_id,
+                    "name": node.name,
+                    "type": _ROLE_TO_ACTIVITY_TYPE.get(node.org_role, "worker"),
+                    "status": self._status_for_node(node),
+                    "companyId": str(node.company_id) if node.company_id else None,
+                    "companyName": names.get(node.company_id),
+                },
+                feeds[node.agent_id],
+            )
             for node in nodes
         ]
 
