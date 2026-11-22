@@ -28,6 +28,7 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.deployment import deployment_service
+from services.role_manifest_errors import manifest_errors
 from services.role_registry import DEFAULT_ROLES
 
 logger = logging.getLogger(__name__)
@@ -214,6 +215,9 @@ async def create_deployment(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> DeploymentResponse:
     """Create a new deployment."""
+    broken = {r: why for r, why in manifest_errors().items() if r in deployment_data.roles}
+    if broken:  # #22067: the role's manifest did not load; deploying it would guess its paths and units
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Role manifest unavailable: {broken}")
     role_names = {r.name for r in AVAILABLE_ROLES}
     invalid_roles = set(deployment_data.roles) - role_names
 

@@ -207,6 +207,14 @@ class Secret(Base):
         expires = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=timezone.utc)
         return now_utc() > expires
 
+    @property
+    def is_live(self) -> bool:
+        """True while the row is not deactivated -- the one rule for "this secret row is active" (#17850).
+
+        Deliberately excludes expiry (``is_expired``): callers that also need it test it separately.
+        """
+        return bool(self.is_active)
+
     def _grant_lookup(self, user_id: uuid.UUID, session_id: str | None) -> bool:
         """Secrets grant facts for ``is_visible`` (#11290).
 

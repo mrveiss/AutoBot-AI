@@ -64,7 +64,7 @@ describe('NodeServicesPanel status tally ignores prototype keys (#17497)', () =>
     async (status) => {
       const wrapper = await mountPanel([svc('a', 'running'), svc('b', status)])
       expect(wrapper.text()).not.toContain('NaN')
-      expect(badge(wrapper, 'bg-green-100')).toBe('1')
+      expect(badge(wrapper, 'bg-autobot-pill-ok-bg')).toBe('1')
     },
   )
 
@@ -76,8 +76,8 @@ describe('NodeServicesPanel status tally ignores prototype keys (#17497)', () =>
       await flushPromises()
       expect(wrapper.text()).not.toContain('NaN')
       // b's status is no longer a known one, so it drops out of the tally rather than corrupting it.
-      expect(badge(wrapper, 'bg-gray-100')).toBe('0')
-      expect(badge(wrapper, 'bg-green-100')).toBe('1')
+      expect(badge(wrapper, 'bg-autobot-bg-tertiary')).toBe('0')
+      expect(badge(wrapper, 'bg-autobot-pill-ok-bg')).toBe('1')
     },
   )
 
@@ -85,9 +85,9 @@ describe('NodeServicesPanel status tally ignores prototype keys (#17497)', () =>
     'a row with status %s gets the unknown styling, not an inherited member',
     async (status) => {
       const wrapper = await mountPanel([svc('b', status)])
-      const row = wrapper.find('div.bg-yellow-50')
+      const row = wrapper.find('div.bg-autobot-pill-warn-bg')
       expect(row.exists()).toBe(true)
-      expect(row.classes()).toContain('text-yellow-700')
+      expect(row.classes()).toContain('text-autobot-pill-warn-fg')
     },
   )
 })
