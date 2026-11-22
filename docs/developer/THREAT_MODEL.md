@@ -50,8 +50,8 @@ Two postures, one validator (#14016): the contract is the docstring of [`securit
 ## 3. Plugin loading
 
 **Boundary:** the install endpoint. Loading executes arbitrary Python by design
-([`loader.py`](../../autobot_shared/plugin_sdk/loader.py) — `import_module` (:541), then the
-`spec_from_file_location` (:610) fallback). No load-time sandbox exists or is intended.
+([`loader.py`](../../autobot_shared/plugin_sdk/loader.py) — `import_module` (:544), then the
+`spec_from_file_location` (:613) fallback). No load-time sandbox exists or is intended.
 
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
