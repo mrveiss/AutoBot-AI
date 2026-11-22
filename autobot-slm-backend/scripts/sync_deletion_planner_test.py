@@ -297,8 +297,12 @@ def test_importing_the_planner_routes_console_logs_to_stderr() -> None:
     assert _ROUTED_ON_IMPORT is True
 
 
-def test_a_kept_path_leaves_stdout_exactly_one_json_document(tmp_path, capsys, monkeypatch) -> None:
-    """#22044: a kept path logs at INFO; that line used to land on stdout ahead of the JSON (`from_json` failed at char 4)."""
+def test_a_kept_path_leaves_stdout_exactly_one_json_document(tmp_path) -> None:
+    """#22044: a kept path logs at INFO; that line used to land on stdout ahead of the JSON (`from_json` failed at char 4).
+
+    Runs the planner as production does -- a fresh interpreter, the real import order and the real
+    handlers -- so it fails if `route_console_to_stderr()` moves after the service imports.
+    """
     repo = tmp_path / "repo"
     _init_repo(repo)
     _write(repo / "comp" / "kept.log")
@@ -309,24 +313,16 @@ def test_a_kept_path_leaves_stdout_exactly_one_json_document(tmp_path, capsys, m
     (repo / "comp" / "gone.py").unlink()
     commit_b = _commit_all(repo, "ignore logs, delete both")
 
-    # Handlers are built at import, against the streams of that moment; rebuild them against this test's.
-    monkeypatch.setattr(stream_logging, "_stdout_is_machine_interface", True)
-    logger = _planner.compute_deletion_plan.__globals__["logger"]
-    monkeypatch.setattr(
-        logger,
-        "handlers",
-        [stream_logging.build_stdout_handler(), stream_logging.build_stderr_handler()],
-    )
+    cmd = [sys.executable, str(_SCRIPTS_DIR / "sync_deletion_planner.py"), "diff"]
+    cmd += ["--repo-root", str(repo), "--source-dir", str(repo / "comp")]
+    cmd += ["--previous-commit", commit_a, "--new-commit", commit_b]
+    done = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=120)
 
-    args = ["--repo-root", str(repo), "--source-dir", str(repo / "comp")]
-    exit_code = main(["diff", *args, "--previous-commit", commit_a, "--new-commit", commit_b])
-
-    captured = capsys.readouterr()
-    assert exit_code == 0
-    assert json.loads(captured.out) == {
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == {
         "delete": ["gone.py"],
         "kept": ["kept.log"],
         "error": None,
         "bootstrap_required": False,
     }
-    assert "keeping kept.log" in captured.err
+    assert "keeping kept.log" in done.stderr

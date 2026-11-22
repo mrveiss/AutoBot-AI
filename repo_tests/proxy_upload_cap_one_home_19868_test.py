@@ -5,7 +5,9 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
+import jinja2
 import pytest
 import yaml
 from repo_tests._paths import repo_root
@@ -72,15 +74,62 @@ def test_the_unread_group_var_is_gone() -> None:
     assert "client_max_body_size" not in _read(f"{_ANSIBLE}/inventory/group_vars/frontend.yml")
 
 
-def test_the_path_resolves_in_a_role_and_in_a_play() -> None:
-    """#22045: role_path is undefined when a play renders a template, so the var must not need it bare."""
-    group_vars = yaml.safe_load(_read(f"{_ANSIBLE}/inventory/group_vars/all.yml"))
-    expr = group_vars["proxy_upload_cap_file"]
-    assert "role_path is defined" in expr and "playbook_dir" in expr
-    assert (repo_root() / _ANSIBLE / "playbooks" / "../_shared/files/upload-cap.conf").resolve().is_file()
+def _render_cap_path(expr: str, **variables: str) -> str:
+    """Evaluate the group_vars expression the way ansible does: a jinja2 render with the play's variables."""
+    return jinja2.Environment(undefined=jinja2.Undefined).from_string(expr).render(**variables)
 
 
-def test_no_template_reads_role_path_bare() -> None:
+def _cap_path_problem(expr: str) -> str | None:
+    """Why the declared path expression is unsafe in a play or a role, or None when it resolves in both."""
+    ansible = repo_root() / _ANSIBLE
+    contexts = {
+        "role": {"role_path": str(ansible / "roles" / "x")},
+        "play": {"playbook_dir": str(ansible / "playbooks")},
+    }
+    for name, variables in contexts.items():
+        rendered = _render_cap_path(expr, **variables)
+        if not rendered or rendered.startswith("/upload-cap"):
+            return f"{name}: renders to a bare or empty path {rendered!r}"
+        if Path(rendered).resolve() != (ansible / "_shared/files/upload-cap.conf").resolve():
+            return f"{name}: resolves outside _shared/files: {rendered!r}"
+    return None
+
+
+def _template_problem(text: str) -> str | None:
     """A template rendered from a play (provision-fleet-roles.yml Phase 4c) has no role_path."""
-    for template in _TEMPLATES:
-        assert "role_path" not in _read(template)
+    if "role_path" in text:
+        return "reads role_path"
+    return None if _LOOKUP in text else "does not use the proxy_upload_cap_file lookup"
+
+
+_BARE_ROLE_PATH = "{{ role_path }}/../../_shared/files/upload-cap.conf"
+_OUTSIDE_FALLBACK = (
+    "{{ (role_path ~ '/../../_shared/files') if role_path is defined "
+    "else (playbook_dir ~ '/../files') }}/upload-cap.conf"
+)
+
+
+def test_the_path_detector_rejects_a_bare_role_path() -> None:
+    assert _cap_path_problem(_BARE_ROLE_PATH) is not None
+
+
+def test_the_path_detector_rejects_a_fallback_outside_the_home() -> None:
+    assert _cap_path_problem(_OUTSIDE_FALLBACK) is not None
+
+
+def test_the_path_detector_accepts_the_configured_expression() -> None:
+    group_vars = yaml.safe_load(_read(f"{_ANSIBLE}/inventory/group_vars/all.yml"))
+    assert _cap_path_problem(group_vars["proxy_upload_cap_file"]) is None
+
+
+def test_the_template_detector_rejects_role_path() -> None:
+    assert _template_problem("{{ lookup('file', role_path ~ '/x') }}") is not None
+
+
+def test_the_template_detector_accepts_the_lookup_alone() -> None:
+    assert _template_problem(f"server {{\n    {_LOOKUP}\n}}") is None
+
+
+@pytest.mark.parametrize("template", _TEMPLATES)
+def test_no_fleet_template_reads_role_path(template: str) -> None:
+    assert _template_problem(_read(template)) is None
