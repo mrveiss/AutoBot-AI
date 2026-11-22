@@ -83,7 +83,7 @@ async def _mcp_registry(n, base):
 
 async def _analytics_reporting(n, base):
     n.monkeypatch.setattr(analytics_reporting, "config", SimpleNamespace(backend_url=base))
-    await analytics_reporting.fetch_quality_health()
+    await analytics_reporting.fetch_quality_health("src-1")
 
 
 async def _vnc_mcp(n, base):

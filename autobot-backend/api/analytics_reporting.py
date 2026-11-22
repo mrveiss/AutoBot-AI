@@ -43,14 +43,15 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["analytics"], dependencies=[Depends(get_current_user)])
 
 
-async def fetch_quality_health() -> Dict[str, Any]:
-    """Fetch quality health score data via HTTP."""
+async def fetch_quality_health(source_id: str) -> Dict[str, Any]:
+    """Fetch the quality health score of ONE source via HTTP (#20513: the route requires it)."""
     try:
         backend_url = config.backend_url
         # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
         http_client = get_http_client()
         async with await http_client.get(
             f"{backend_url}/api/quality/health-score",
+            params={"source_id": source_id},
             timeout=aiohttp.ClientTimeout(total=10),
             guard_egress=EGRESS_POLICY,
         ) as response:
@@ -341,7 +342,7 @@ async def get_analytics_report(
 
     # Fetch all data sources in parallel
     quality_data, charts_data, debt_data, performance_data = await asyncio.gather(
-        fetch_quality_health(),
+        fetch_quality_health(source_id),
         fetch_codebase_charts(source_id),
         fetch_debt_summary(),
         fetch_performance_summary(),
@@ -373,7 +374,7 @@ async def get_quick_summary(
 
     # Fetch essential data
     quality_data, charts_data = await asyncio.gather(
-        fetch_quality_health(),
+        fetch_quality_health(source_id),
         fetch_codebase_charts(source_id),
     )
 
