@@ -31,6 +31,7 @@ def _state() -> SimpleNamespace:
         paused_reason=None,
         paused_at=None,
         paused_by=None,
+        control_id=None,  # the row's last control (#21376); every control reads it to restore only its own change
         error_detail=None,
         error_at=None,
         error_code=None,

@@ -47,6 +47,7 @@ def _state(agent_id: str, status: HeartbeatStatus = HeartbeatStatus.ACTIVE, paus
         paused_reason=None,
         paused_at=None,
         paused_by=paused_by,
+        control_id=None,  # the row's last control (#21376); every control reads it to restore only its own change
         error_detail=None,
         error_at=None,
         error_code=None,

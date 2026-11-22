@@ -25,6 +25,7 @@ def _state(status, paused_by=None):
     return SimpleNamespace(
         status=status.value,
         paused_by=paused_by,
+        control_id=None,  # the row's last control (#21376); every control reads it to restore only its own change
         paused_reason=None,
         paused_at=None,
         heartbeat_interval_seconds=60,
