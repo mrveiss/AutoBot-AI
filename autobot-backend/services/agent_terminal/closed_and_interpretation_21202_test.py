@@ -118,6 +118,7 @@ def _runner(redis) -> tuple[AgentTerminalService, MagicMock]:
     service = AgentTerminalService.__new__(AgentTerminalService)
     service.session_manager = _worker(redis)
     service.chat_workflow_manager = MagicMock()
+    service.chat_workflow_manager._get_last_user_message = AsyncMock(return_value="the question")
     service.chat_workflow_manager.interpret_terminal_command = AsyncMock()
     return service, service.chat_workflow_manager.interpret_terminal_command
 

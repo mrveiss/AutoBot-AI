@@ -61,6 +61,8 @@ python:
   - 'docker/nginx/nginx-locations.conf'
   - 'docker/nginx/nginx-slm-locations.conf'
   - '.github/workflows/co-located-smoke.yml'
+  # #21798: branch_cleanup_unlanded_changes_21798_test.py reads the cleanup workflow it guards.
+  - '.github/workflows/branch-cleanup.yml'
   # #21325: apt_retry_one_mechanism_21325_test.py reads the apt policy and wrapper, and the three workflows it guards.
   - 'docker/apt/*'
   - '.github/workflows/clean-install.yml'
@@ -97,6 +99,11 @@ python:
   # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
   - 'autobot-browser-worker/playwright-server.js'
   - 'autobot-browser-worker/session-store.js'
+  # #21852: browser_worker_one_manifest_21852_test.py reads every worker module for its local
+  # `require`s, the shell reader of the manifest's file list, and the root launcher.
+  - 'autobot-browser-worker/**'
+  - 'scripts/lib/browser_worker_files.sh'
+  - 'run_agent.sh'
   # #17329: frontend_path_filter_mirror_test.py PARSES this file and compares it
   # to the frontend gate's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.
@@ -504,6 +511,11 @@ python:
   # exists to avoid (owner decision, #17930 review). Same shape as the
   # `auto-fix-generated-types.yml` and `stylelint-tokens.yml` entries above.
   - '.github/workflows/docs-liquid-tags.yml'
+  # #21713: the same arrangement for the promotion-base wiring guard. `_glob_declared_uncovered.py`
+  # names this workflow by concrete literal as the dedicated route that runs the guard on every
+  # workflow change, and `glob_declared_reads_15900_test.py` parses it to verify that claim. ONE FILE,
+  # not `.github/workflows/**`, for the reason given above.
+  - '.github/workflows/actionlint.yml'
   # #19178: `user_docs_stay_consistent_19178_test.py` reads the docs index by
   # concrete literal to check the user-doc set it links stays consistent. ONE
   # FILE, not `docs/**` (the #17930 owner decision above): a change confined to

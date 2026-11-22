@@ -23,6 +23,7 @@ Architecture:
     - RLM reflection evaluates response quality before persisting
 """
 
+import uuid
 from typing import Any, Dict, List
 
 import aiohttp
@@ -39,6 +40,7 @@ from chat_workflow.graph_hooks import (
     _emit_planned_agent_complete_hook,
     _emit_planned_agent_error_hooks,
 )
+from chat_workflow.graph_parse_feedback import INITIAL_PARSE_STATE, apply_parse_feedback, inline_update
 from chat_workflow.graph_planner import NO_PLAN, advance_after_tools, create_plan, with_plan_step
 from chat_workflow.graph_routes import route_after_judge  # noqa: F401  (re-exported: graph.route_after_judge)
 from chat_workflow.graph_tool_dispatch import (
@@ -48,7 +50,15 @@ from chat_workflow.graph_tool_dispatch import (
     send_denied_message,
     split_refused,
 )
+from chat_workflow.reflection_gate import (
+    NO_ANSWER_FALLBACK,
+    evaluate_with_one_retry,
+    reflection_update,
+    wants_another_pass,
+)
+from chat_workflow.session_init_guard import missing_turn_state
 from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
+from chat_workflow.state_messages import workflow_message_from_state
 from chat_workflow.tool_call_loop import (
     _LOOP_ABORT_THRESHOLD,
     FINAL_ANSWER_INSTRUCTION,
@@ -110,6 +120,7 @@ class ChatState(TypedDict, total=False):
     iteration_count: int
     execution_history: List[Dict[str, Any]]
     all_llm_responses: List[str]
+    turn_id: str  # #21904
 
     # Knowledge / RAG
     used_knowledge: bool
@@ -122,12 +133,16 @@ class ChatState(TypedDict, total=False):
     # Command approval (interrupt-based)
     pending_approval: Dict[str, Any] | None
     approval_decision: Dict[str, Any] | None
+    parse_retries: int  # #21843: re-asks after an unparsed TOOL_CALL this turn
+    parse_retry_pending: bool  # #21843: the last reply's TOOL_CALL did not parse; generate again
+    approval_plan_id: str  # #19951: minted per planned pass; seeds the hold's card id (not the planner's plan_id)
 
     # Output messages streamed to frontend
     workflow_messages: List[Dict[str, Any]]
 
     # RLM self-reflection (#1373)
     reflection_count: int
+    reflection_max: int  # the configured max_reflections the reflect node ran under
     reflection_history: List[Dict[str, Any]]
     rlm_refinement_hint: str
 
@@ -163,6 +178,8 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
     """Initialize chat session, load history, detect exit intent."""
     manager = config["configurable"]["manager"]
     stream_cb = config["configurable"].get("stream_callback")
+    if (incomplete := missing_turn_state(state, stream_cb)) is not None:  # #21939
+        return incomplete
 
     try:
         (
@@ -187,6 +204,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
         return {
             "terminal_session_id": terminal_session_id,
             "user_wants_exit": user_wants_exit,
+            "turn_id": str(uuid.uuid4()),  # #21904: scopes the stored reply ids to this turn; survives a resume
             "iteration_count": 0,
             "all_llm_responses": [],
             "execution_history": [],
@@ -194,6 +212,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
             "tool_calls": [],
             "should_continue": False,
             # RLM state (#1373)
+            **INITIAL_PARSE_STATE,
             "reflection_count": 0,
             "reflection_history": [],
             "rlm_refinement_hint": "",
@@ -208,10 +227,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
         }
     except Exception as exc:
         logger.error("initialize_session failed: %s", exc, exc_info=True)
-        error_msg = {
-            "type": "error",
-            "content": "Session initialization failed",
-        }
+        error_msg = {"type": "error", "content": "Session initialization failed"}
         if stream_cb:
             stream_cb(error_msg)
         return {"error": "Session initialization failed", "workflow_messages": [error_msg]}
@@ -555,18 +571,23 @@ async def _generate_response_planned(
         session_id=session_id,
     )
 
-    return {
-        "llm_response": llm_response or "",
-        "should_continue": False,
-        "iteration_count": iteration,
-        "all_llm_responses": all_responses,
-        "tool_calls": tool_calls,
-        "workflow_messages": messages,
-        "tool_loop_warning": "",
-        # #18430: a yes belongs to the batch it was given for; a new plan starts with none.
-        "approval_decision": None,
-        "pending_approval": None,
-    }
+    return apply_parse_feedback(
+        state,
+        {
+            "llm_response": llm_response or "",
+            "should_continue": False,
+            "iteration_count": iteration,
+            "all_llm_responses": all_responses,
+            "tool_calls": tool_calls,
+            "workflow_messages": messages,
+            "tool_loop_warning": "",
+            # #18430: a yes belongs to the batch it was given for; a new plan starts with none.
+            "approval_decision": None,
+            "pending_approval": None,
+            "approval_plan_id": uuid.uuid4().hex,
+        },
+        stream_cb,
+    )
 
 
 def _carry_tool_results_into_prompt(manager, ctx, state: ChatState) -> None:
@@ -664,17 +685,8 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         session_id=session_id,
     )
 
-    return {
-        "llm_response": llm_response or "",
-        "should_continue": should_continue,
-        "iteration_count": iteration,
-        "all_llm_responses": all_responses,
-        "tool_calls": parsed_tool_calls,
-        "execution_history": list(ctx.execution_history),  # #19715: the next prompt is built from this
-        "workflow_messages": messages,
-        # Reset loop warning so it is only active for one cycle (#3254).
-        "tool_loop_warning": "",
-    }
+    update = inline_update(ctx, llm_response, should_continue, iteration, all_responses, parsed_tool_calls, messages)
+    return apply_parse_feedback(state, update, stream_cb)  # #21843
 
 
 async def reflect_on_response(state: ChatState, config: RunnableConfig) -> dict:
@@ -701,27 +713,21 @@ async def reflect_on_response(state: ChatState, config: RunnableConfig) -> dict:
     history = list(state.get("reflection_history", []))
 
     evaluator = ResponseQualityEvaluator(config=rlm_cfg)
-    result = await evaluator.evaluate(
-        query=state["user_message"],
-        response=llm_response,
-        iteration=reflection_count + 1,
+    result = await evaluate_with_one_retry(
+        evaluator, query=state["user_message"], response=llm_response, iteration=reflection_count + 1
     )
 
     history.append(result.to_dict())
 
     logger.info(
-        "RLM reflect: score=%.2f verdict=%s iter=%d/%d",
-        result.quality_score,
+        "RLM reflect: score=%s verdict=%s iter=%d/%d",
+        "none" if result.quality_score is None else f"{result.quality_score:.2f}",
         result.verdict.name,
         reflection_count + 1,
         rlm_cfg.max_reflections,
     )
 
-    return {
-        "reflection_count": reflection_count + 1,
-        "reflection_history": history,
-        "rlm_refinement_hint": result.refinement_hint,
-    }
+    return reflection_update(state, result, history, rlm_cfg.max_reflections)
 
 
 async def inline_judge_response(state: ChatState, config: RunnableConfig) -> dict:
@@ -806,13 +812,9 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     if not shown:
         return {"pending_approval": None, "approval_decision": None}
     pending = shown[0]
-    stream_cb = config["configurable"].get("stream_callback")
-    approval_request = approval_card(state, shown)  # emitted before the interrupt
-    if stream_cb:
-        stream_cb(approval_request)
-
-    # Interrupt — graph pauses here, resumes with Command(resume=decision)
-    decision = interrupt(approval_request)
+    # #19951: the card is emitted once, by the turn from the interrupt's value. This node re-runs from the top on
+    # resume, so emitting here would show an already-decided card a second time.
+    decision = interrupt(approval_card(state, shown))  # graph pauses here, resumes with Command(resume=decision)
 
     return {
         "pending_approval": pending,
@@ -1034,11 +1036,7 @@ async def _persist_error_turn(manager, state: ChatState) -> None:
 
     session_id = state.get("session_id", "")
     wf_messages = [
-        WorkflowMessage(
-            type=m.get("type", "response"),
-            content=m.get("content", ""),
-            metadata=m.get("metadata", {}),
-        )
+        workflow_message_from_state(m)
         for m in state.get("workflow_messages", [])
         if m.get("content")  # skip empty stream-control markers
     ]
@@ -1090,16 +1088,7 @@ def _build_workflow_messages_from_state(state: ChatState) -> List[Any]:
 
     Extracted from ``persist_conversation`` (#13303 review).
     """
-    from async_chat_workflow import WorkflowMessage
-
-    return [
-        WorkflowMessage(
-            type=msg_dict.get("type", "response"),
-            content=msg_dict.get("content", ""),
-            metadata=msg_dict.get("metadata", {}),
-        )
-        for msg_dict in state.get("workflow_messages", [])
-    ]
+    return [workflow_message_from_state(msg_dict) for msg_dict in state.get("workflow_messages", [])]
 
 
 async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict:
@@ -1144,6 +1133,7 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
             selected_model=(state.get("llm_params") or {}).get("selected_model", ""),
             rag_citations=state.get("rag_citations", []),
             used_knowledge=state.get("used_knowledge", False),
+            turn_id=state.get("turn_id", ""),
         )
 
         logger.info(
@@ -1192,6 +1182,8 @@ def route_after_generation(state: ChatState) -> str:
         return "request_approval"
     if tool_calls:
         return "execute_tools"
+    if state.get("parse_retry_pending"):  # #21843: the model is told its TOOL_CALL did not parse, then asked again
+        return "generate_response"
     # No tool calls → run RLM self-reflection before persisting
     return "reflect_on_response"
 
@@ -1206,17 +1198,13 @@ def route_after_reflection(state: ChatState) -> str:
     from rlm.types import RLMConfig
 
     history = state.get("reflection_history", [])
-    if not history:
+    if not history or not state.get("llm_response"):  # nothing was evaluated: a stale REFINE must not loop (#21843)
         return "inline_judge_response"
 
-    latest = history[-1]
-    verdict = latest.get("verdict", "ACCEPT")
-    reflection_count = state.get("reflection_count", 0)
-
     # Use default config ceiling — the actual config is in the node
-    max_reflections = RLMConfig().max_reflections
-
-    if verdict == "REFINE" and reflection_count < max_reflections:
+    budget = state.get("reflection_max")  # the limit the node ran under, zero included (#21845)
+    budget = RLMConfig().max_reflections if budget is None else budget
+    if wants_another_pass(history[-1], state.get("reflection_count", 0), budget):
         return "generate_response"
     return "inline_judge_response"
 
@@ -1240,7 +1228,7 @@ async def force_final_answer(state: ChatState, config: RunnableConfig) -> dict:
     if not llm_response:
         fallback = {
             "type": "response",
-            "content": "I ran out of steps before finishing and could not write a final answer. Please try again.",
+            "content": NO_ANSWER_FALLBACK,
             "metadata": {"iteration": iteration},
         }
         messages.append(fallback)

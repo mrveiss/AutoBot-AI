@@ -122,14 +122,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1278,  # #17677: 1293 -> 1292 -> 1284; #21033: -> 1278
     "autobot-frontend/src/config/__tests__/ssot-config.spec.ts": 626,
     "autobot-frontend/src/config/ssot-config.ts": 804,  # #19821 -15
-    "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
+    "autobot-frontend/src/models/controllers/ChatController.ts": 1085,
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
     "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 890,
     "autobot-frontend/src/router/index.ts": 1305,  # #20605 + #20631: 1385 -> 1305
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,
     "autobot-frontend/src/services/TerminalService.ts": 1137,
-    "autobot-frontend/src/stores/useChatStore.ts": 1176,
+    "autobot-frontend/src/stores/useChatStore.ts": 1159,
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
     "autobot-frontend/src/utils/RumAgent.ts": 852,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
@@ -146,7 +146,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/PluginsView.vue": 1058,
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 848,
-    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2142,  # #21043: 2166 -> 2151 -> 2142; #17677; #13421
+    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2120,  # #21520: 2142 -> 2120; #21043; #17677; #13421
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 755,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)

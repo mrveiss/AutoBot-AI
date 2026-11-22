@@ -53,7 +53,7 @@ from autobot_shared.coordination.work_claims import (
     ClaimUnavailable,
     Scope,
     ScopeError,
-    _require_holder,
+    require_holder,
 )
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
@@ -237,7 +237,7 @@ async def join(
     longest-lived waiter, never from the latest caller.
     """
     parsed = Scope.parse(scope)
-    _require_holder(agent_id, task_id)
+    require_holder(agent_id, task_id)
     ttl = WAIT_TTL_S if ttl_s is None else ttl_s
     if ttl <= 0:
         # An entry born expired is not a short wait, it is a silent no-op: the
@@ -279,7 +279,7 @@ async def leave(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
     waiter that simply dies is removed by expiry instead.
     """
     parsed = Scope.parse(scope)
-    _require_holder(agent_id, task_id)
+    require_holder(agent_id, task_id)
     client = await _redis()
     return bool(
         int(

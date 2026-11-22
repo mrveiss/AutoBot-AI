@@ -189,6 +189,8 @@ duplication". The gate measured duplication per line of code, and deleting
 unique code raises that. #16319 moved both scopes to the absolute
 duplicated-line count.
 
+The duplication-guard pins live in `.github/duplication-pins.json` (read by `.github/workflows/duplication-guard.yml` and lowered post-merge by `scripts/duplication_pin_lowering.py`).
+
 Before freezing a ratio, ask whether a change the rule should welcome can move
 it: deleting unrelated code, or splitting a file.
 
@@ -613,7 +615,8 @@ folder cannot read as a clean 0.
   measured, a floor of zero or less, or a declaration the base does not have (a new guard) raises
   `BaseUnavailable`: a new guard pins `floor=` until it lands. Such a floor never goes stale and is
   never re-pinned. A guard whose `discover` reads untracked or generated files keeps an explicit
-  `floor=` and is listed with its reason in `_reach_base.PINNED_BY_DESIGN`.
+  `floor=` and is listed with its reason in `_reach_base.PINNED_BY_DESIGN`. That mapping is empty
+  now; existing explicit pins are transitional and are retired in follow-up batches.
 
 ## Path-filter entries are declared in place, not in a table (#21205)
 

@@ -31,7 +31,9 @@ from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_api_url
 from autobot_shared.ssot_config import config, get_config
+from autobot_shared.ssot_constants import PATH_OLLAMA_EMBEDDINGS
 from services.npu_worker_routing import npu_worker_urls, worker_attempts
 
 logger = get_logger(__name__)
@@ -494,9 +496,9 @@ async def generate_embedding_with_fallback(
 
     # Fallback to Ollama - use SSOT config for defaults
     # config.port.ollama is the canonical path for the port (MVA-1454 / 6c0726ec1).
-    ollama_host = ollama_host or config.ollama_host
+    ollama_host = ollama_host or config.vm.ollama
     ollama_port = ollama_port or config.port.ollama
-    ollama_url = f"http://{ollama_host}:{ollama_port}/api/embeddings"
+    ollama_url = ollama_api_url(f"http://{ollama_host}:{ollama_port}", PATH_OLLAMA_EMBEDDINGS)
 
     last_reason = "no attempts made"
     for attempt in range(1, max_attempts + 1):

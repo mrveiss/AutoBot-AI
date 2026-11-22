@@ -12,9 +12,15 @@ Part of Issue #381 - God Class Refactoring
 
 from typing import List
 
+from autobot_shared.env_utils import env_int
+
 from ..models import AnalysisContext, SecurityEvent, ThreatEvent
 from ..types import ThreatCategory, ThreatLevel
 from .base import ThreatAnalyzer
+
+#: Agent tool calls per minute for one verified user before the volume rule fires (#18844). The config file's
+#: ``thresholds.agent_action_rate_limit_per_minute`` overrides it; neither is a number written into the rule.
+AGENT_ACTION_RATE_LIMIT_PER_MINUTE: int = env_int("AUTOBOT_THREAT_AGENT_ACTION_RATE_LIMIT_PER_MINUTE", default=120)
 
 
 class APIAbuseAnalyzer(ThreatAnalyzer):
@@ -79,12 +85,36 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
             ],
         )
 
+    def _agent_action_volume(self, event: SecurityEvent, context: AnalysisContext) -> ThreatEvent | None:
+        """Volume rule for the platform's own agent acting for a verified user (#18844).
+
+        A prompt-injected agent making thousands of tool calls is not an API request, so the request rules never see
+        it; this counts the ``agent_action`` events the AI-line gate reports, keyed on the attributed user.
+        """
+        limit = context.config.get("thresholds", {}).get(
+            "agent_action_rate_limit_per_minute", AGENT_ACTION_RATE_LIMIT_PER_MINUTE
+        )
+        recent = context.count_recent_actions(event.user_id, event.action, 1)
+        if recent <= limit:
+            return None
+        return ThreatEvent(
+            event_id=event.generate_threat_id("agent_action_volume"),
+            **event.get_threat_base_fields(),
+            threat_category=ThreatCategory.API_ABUSE,
+            threat_level=ThreatLevel.HIGH,
+            confidence_score=0.7,
+            details={"abuse_patterns": ["agent_action_rate_exceeded"], "request_rate": recent, "rate_limit": limit},
+            mitigation_actions=["pause_agent", "alert_security_team"],
+        )
+
     async def analyze(self, event: SecurityEvent, context: AnalysisContext) -> ThreatEvent | None:
         """
         Detect API abuse patterns.
 
         (Issue #398: refactored to use extracted helpers)
         """
+        if event.is_agent_action():
+            return self._agent_action_volume(event, context)
         if not event.is_api_request():
             return None
 

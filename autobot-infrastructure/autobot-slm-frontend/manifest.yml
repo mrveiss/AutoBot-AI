@@ -6,6 +6,7 @@ target_node: slm
 deploy:
   source: autobot-slm-frontend/
   destination: /opt/autobot/autobot-slm-frontend/
+  sync_target: "{base_dir}"   # #16025: what role_registry rsyncs INTO (not `destination`)
   shared: false
   infrastructure: true
 

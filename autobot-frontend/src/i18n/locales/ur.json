@@ -3950,6 +3950,9 @@
       "stepApproved": "مرحلہ منظور ہو گیا",
       "stepSkipped": "مرحلہ چھوڑ دیا گیا",
       "rerunNotFound": "دوبارہ چلانے کے لیے ورک فلو نہیں ملا",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "\"{name}\" دوبارہ چل رہا ہے",
       "rerunFailed": "ورک فلو دوبارہ چلانے میں ناکامی",
       "notificationsSaved": "اطلاع کی ترتیبات محفوظ ہو گئیں"
@@ -5117,16 +5120,6 @@
       "selectUserError": "Please select a user to invite",
       "sendFailed": "Failed to send invitation"
     },
-    "presence": {
-      "participants": "Participants",
-      "you": "You",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status",
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "noParticipants": "No participants"
-    },
     "participants": {
       "invite": "Invite",
       "collaborationOffline": "Collaboration offline",
@@ -5356,6 +5349,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "دیکھنے کے لیے لاگ ان ضروری ہے",
       "requireLoginHint": "صرف لاگ ان صارفین ہی یہ لنک کھول سکتے ہیں",
@@ -6233,6 +6233,7 @@
       "automationDetails": "Automation Details",
       "executeAction": "Execute Action",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "close": "Close",
       "refresh": "Refresh",
       "execute": "Execute"
@@ -6334,6 +6335,7 @@
   },
   "views": {
     "auditLogs": {
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data",
       "last7Days": "Last 7 Days",
       "last24Hours": "Last 24 Hours",

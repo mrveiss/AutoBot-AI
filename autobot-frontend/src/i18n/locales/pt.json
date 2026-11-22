@@ -577,6 +577,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "Exigir login para visualizar",
       "requireLoginHint": "Apenas usuários autenticados podem abrir este link",
@@ -4544,6 +4551,9 @@
       "stepApproved": "Etapa aprovada",
       "stepSkipped": "Etapa ignorada",
       "rerunNotFound": "Não foi possível encontrar o fluxo de trabalho para executar novamente",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "Executando novamente \"{name}\"",
       "rerunFailed": "Falha ao executar o fluxo de trabalho novamente",
       "notificationsSaved": "Configurações de notificação salvas"
@@ -6005,6 +6015,7 @@
       "cleanupConfirm": "Delete Old Logs",
       "cancel": "Cancel",
       "deleteOldLogs": "Delete Old Logs",
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data"
     },
     "browserAutomation": {
@@ -6487,16 +6498,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "noParticipants": "No participants",
-      "participants": "Participants",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "Colaboração",
       "invite": "Convidar",
@@ -6955,6 +6956,7 @@
       "subtitle": "Discover and interact with UI elements on the current screen",
       "refresh": "Refresh",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "verifying": "Verifying...",
       "execute": "Execute",
       "details": "Details",

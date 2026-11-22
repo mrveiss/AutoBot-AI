@@ -10,7 +10,7 @@
  * terminal route, unchanged.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 type Card = { id: string; metadata: Record<string, unknown> }
 
@@ -24,14 +24,19 @@ const fakeStore = {
     if (card) Object.assign(card.metadata, updates)
     return !!card
   }),
-  hasPendingApproval: true,
+  isPendingApproval: vi.fn(() => true),
   setPendingApproval: vi.fn(),
   setTyping: vi.fn(),
 }
 
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: (...args: unknown[]) => fetchWithAuth(...args) }))
-vi.mock('@/models/controllers', () => ({ useChatController: () => ({ handleStreamingResponse }) }))
+vi.mock('@/models/controllers', () => ({
+  useChatController: () => ({ handleStreamingResponse, withActiveStream: (_id: string, run: () => Promise<unknown>) => run() }),
+}))
 vi.mock('@/utils/debugUtils', () => ({ createLogger: () => ({ error: vi.fn(), warn: vi.fn(), debug: vi.fn() }) }))
+const showToast = vi.fn()
+vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast }) }))
+vi.mock('@/i18n', () => ({ default: { global: { t: (key: string) => key } } }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => fakeStore }))
 
 import {
@@ -76,7 +81,7 @@ describe('graph-interrupt approval cards', () => {
     expect(url).toMatch(/\/chats\/chat-1\/resume$/)
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({ approved: true, reason: '' })
-    expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true })
+    expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true }, 'chat-1', true)
     expect(terminal).not.toHaveBeenCalled()
     expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('approved')
   })
@@ -121,10 +126,48 @@ describe('graph-interrupt approval cards', () => {
 
   it('gives the approval controls back when the resume is refused (#21022)', async () => {
     const { store, id } = seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }], approval_status: 'pending' })
-    fetchWithAuth.mockResolvedValue({ ok: false, status: 409 })
+    fetchWithAuth.mockResolvedValue({ ok: false, status: 400 })
     await expect(useApprovalRouting(vi.fn())('term-1', true, 'go')).rejects.toBeInstanceOf(ResumeRejectedError)
     expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('pending')
-    expect(store.setPendingApproval.mock.calls).toEqual([[false], [true]])
+    expect(store.setPendingApproval.mock.calls).toEqual([[false, 'chat-1'], [true, 'chat-1']])
+  })
+
+  it('a 409 (nothing to resume) is shown as already handled, not as an error (#21939)', async () => {
+    const { store, id } = seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }], approval_status: 'pending' })
+    showToast.mockClear()
+    fetchWithAuth.mockResolvedValue({ ok: false, status: 409, json: async () => ({ detail: { code: 'nothing_to_resume' } }) })
+    await expect(useApprovalRouting(vi.fn())('term-1', true, 'go')).resolves.toBeUndefined()
+    expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('handled')
+    expect(showToast).toHaveBeenCalledWith('chat.interface.approvalAlreadyHandled', 'info', 3000)
+    expect(store.setPendingApproval.mock.calls).toEqual([[false, 'chat-1']])
+  })
+})
+
+describe('other 409s of the resume route are not "already handled" (#21939)', () => {
+  it('restores the card and rejects when the 409 is not the nothing-to-resume code', async () => {
+    const { store, id } = seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }], approval_status: 'pending' })
+    showToast.mockClear()
+    fetchWithAuth.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ detail: 'The request does not answer the pending question' }),
+    })
+    await expect(useApprovalRouting(vi.fn())('term-1', true, 'go')).rejects.toBeInstanceOf(ResumeRejectedError)
+    expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('pending')
+    expect(showToast).not.toHaveBeenCalled()
+  })
+})
+
+describe('an unreadable refusal body (#21939)', () => {
+  it('keeps the status and the parse failure as cause, and restores the card', async () => {
+    const { store, id } = seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }], approval_status: 'pending' })
+    const parseFailure = new SyntaxError('Unexpected end of JSON input')
+    fetchWithAuth.mockResolvedValue({ ok: false, status: 409, json: async () => Promise.reject(parseFailure) })
+    const failure = await useApprovalRouting(vi.fn())('term-1', true, 'go').catch((e: unknown) => e)
+    expect(failure).toBeInstanceOf(ResumeRejectedError)
+    expect(failure).toMatchObject({ status: 409, code: undefined })
+    expect((failure as Error).cause).toBe(parseFailure)
+    expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('pending')
   })
 })
 
@@ -173,5 +216,41 @@ describe('stall question answers (#21022)', () => {
     handleStreamingResponse.mockResolvedValue(false)
     await useStallAnswer()(fakeStore.currentMessages[0] as never, '')
     expect(JSON.parse(fetchWithAuth.mock.calls[0][1].body)).toEqual({ answer: '', question_id: 'q1' })
+  })
+})
+
+describe('a card answered after the person opened another chat (#21357)', () => {
+  beforeEach(() => {
+    fakeStore.currentSessionId = 'chat-2' // the card belongs to chat-1
+    fakeStore.updateMessageMetadata.mockClear()
+    fakeStore.setPendingApproval.mockClear()
+    fetchWithAuth.mockReset()
+    handleStreamingResponse.mockReset()
+    fetchWithAuth.mockResolvedValue({ ok: true })
+    handleStreamingResponse.mockResolvedValue(false)
+  })
+
+  afterEach(() => {
+    fakeStore.currentSessionId = 'chat-1'
+  })
+
+  it('updates the stall card in its own chat', async () => {
+    fakeStore.currentMessages = [{ id: 'q-card', metadata: { session_id: 'chat-1', question_id: 'q1' } }]
+    await useStallAnswer()(fakeStore.currentMessages[0] as never, 'go')
+    expect(fakeStore.updateMessageMetadata).toHaveBeenCalledWith('q-card', { answered: true, answer_text: 'go' }, 'chat-1')
+    expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true }, 'chat-1', true)
+  })
+
+  it('sets and restores the pending-approval flag on the card chat, not the open one', async () => {
+    seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }] })
+    await useApprovalRouting(vi.fn())('term-1', true)
+    expect(fakeStore.setPendingApproval.mock.calls).toEqual([[false, 'chat-1']])
+    fakeStore.setPendingApproval.mockClear()
+
+    seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }] })
+    handleStreamingResponse.mockRejectedValue(new Error('reader failed'))
+    await expect(useApprovalRouting(vi.fn())('term-1', true)).rejects.toThrow('reader failed')
+    expect(fakeStore.setPendingApproval.mock.calls).toEqual([[false, 'chat-1'], [true, 'chat-1']])
+    expect(fakeStore.updateMessageMetadata).toHaveBeenLastCalledWith('m1', expect.anything(), 'chat-1')
   })
 })

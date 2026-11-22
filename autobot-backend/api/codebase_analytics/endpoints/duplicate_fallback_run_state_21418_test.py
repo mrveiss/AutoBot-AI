@@ -27,7 +27,11 @@ _STORED_DUPLICATE = {"file1": "a.py", "file2": "b.py", "similarity": 91.0, "line
 @pytest.fixture
 def run_store():
     store = _RunStore()
-    with patch.object(run_status, "get_code_collection_async", AsyncMock(return_value=store)):
+    with (
+        patch.object(run_status, "get_code_collection_async", AsyncMock(return_value=store)),
+        # The run's source is not in a registry here; a record is only created for a live source (#21417).
+        patch.object(run_status, "_source_exists", AsyncMock(return_value=True)),
+    ):
         yield store
 
 

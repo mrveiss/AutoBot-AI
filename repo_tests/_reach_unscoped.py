@@ -34,8 +34,6 @@ UNSCOPED = frozenset(
         # #21048: every tracked file, since an automatic caller of the KB setup script could live in any
         # component; the population is the whole tree, so no prefix describes it.
         "kb-wipe-never-invoked",
-        # #21383: every tracked .py/.sh file, since a new index drop or database flush can land in any component.
-        "kb-destructive-paths",
         # Whole tree (#18940): every tracked test file, wherever a test lives; the population is
         # the test suite itself, so a roots= list would only go stale as tests move.
         "isolated-git-env",
@@ -51,6 +49,9 @@ UNSCOPED = frozenset(
         "glob-declared-uncovered-entries",
         # #19413: every tracked file, so a ChromaDB heartbeat path written anywhere is seen.
         "chromadb-heartbeat-one-home-sweep",
+        # #21571: every tracked non-test file whose suffix has block comments, since an unterminated comment or
+        # quote can end a file in any component; the population is the whole tree by suffix, not a set of prefixes.
+        "no-unterminated-construct-21571",
         # #20894: every tracked non-test python file, since an in-repo log path can be written in any
         # component; the population is the whole tree by suffix, not a set of prefixes.
         "no-in-repo-log-path-20894",
@@ -151,5 +152,7 @@ UNSCOPED = frozenset(
         # component; the population is the whole tree by suffix, so no prefix describes it.
         "no-sleep-in-async-21527",
         "worker-identity-one-home-21518",  # every tracked non-test .py: an identity can live anywhere (#21518)
+        # #21713: the items are parsed workflow jobs, not paths, so no prefix describes them.
+        "release-promotion-base-wiring-21713",
     }
 )

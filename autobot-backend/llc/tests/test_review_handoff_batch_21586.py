@@ -140,7 +140,7 @@ async def _seed(  # noqa: ANN202
                     company_id=_COMPANY,
                     item_type=WorkItemType.BUG,
                     requires_human_review=True,
-                    reviewer_role="admin",
+                    reviewer_role=None,  # the role is enforced now (#21588); these tests are not about it
                     requires_cross_vendor_review=False,
                 )
             )
@@ -347,7 +347,7 @@ async def test_an_approved_item_gets_the_side_effects_of_the_done_path(factory, 
 async def test_an_approval_the_transition_rules_refuse_finishes_nothing(factory, effects) -> None:  # noqa: ANN001
     await _seed(factory, agent=None, status=WorkItemStatus.BACKLOG, reviewer=_REVIEWER)
 
-    with pytest.raises(InvalidTransition, match="Cannot transition"):
+    with pytest.raises(InvalidTransition, match="not in_review"):
         await _approve(factory)
 
     assert (await _row(factory)).status == WorkItemStatus.BACKLOG
@@ -402,7 +402,7 @@ async def test_an_approval_the_item_state_refuses_is_a_409_with_its_reason(facto
     response = await _post(factory, _REVIEWER, "review/approve")
 
     assert response.status_code == 409, response.text
-    assert "Cannot transition" in response.json()["detail"]
+    assert "not in_review" in response.json()["detail"]
 
 
 @pytest.mark.parametrize(
