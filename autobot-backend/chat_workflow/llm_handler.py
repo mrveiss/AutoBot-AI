@@ -825,6 +825,8 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
         company_id = session.metadata.get("company_id") if session and session.metadata else None
         system_prompt = self._get_system_prompt(language=language, company_id=company_id)
+        # #17278: the stable text (hook-rewritten, hashed for drift) leads; volatile memory follows it.
+        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
         record_session_prefix(session, language, company_id, bool(self._get_compose_tool_prompt()), system_prompt)
         # Issue #5066: Tiered L0-L4 context wake-up.
         # #13689 turned this ON on 2026-08-08; #13866 reverted it to OFF on
@@ -842,8 +844,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         if not lightweight_mode:
             from chat_workflow import tiered_context_sources as tcs
 
-            system_prompt = await tcs.prepend_memory_context(system_prompt, session, message, selected_model)
-        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
+            system_prompt = await tcs.append_memory_context(system_prompt, session, message, selected_model)
         conversation_context = self._build_conversation_context(session, await prompt_summary(session))
 
         # Knowledge retrieval for RAG
