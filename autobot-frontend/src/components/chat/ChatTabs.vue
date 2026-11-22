@@ -81,10 +81,14 @@ const emit = defineEmits<Emits>()
 const { uiMode } = useUiMode()
 const minimal = computed(() => uiMode.value === 'minimal')
 
-// Switching to Minimal while an advanced tab is open moves to Chat, the one tab Minimal always has.
+// Switching to Minimal while an advanced tab is open moves to Chat when the list has it, else to the
+// first non-advanced tab supplied; with none, the active tab stays (a key outside the list selects nothing).
 watch(minimal, (isMinimal) => {
   const open = visibleTabs.value.find((tab) => tab.key === props.activeTab)
-  if (isMinimal && open?.adv) emit('tab-change', 'chat')
+  if (!isMinimal || !open?.adv) return
+  const shown = visibleTabs.value.filter((tab) => !tab.adv)
+  const target = shown.find((tab) => tab.key === 'chat') ?? shown[0]
+  if (target) emit('tab-change', target.key)
 })
 
 const items = computed<KitTabItem[]>(() =>

@@ -73,6 +73,16 @@ describe('ChatTabs tablist semantics (#18243)', () => {
     w.unmount()
   })
 
+  it('selects an inactive tab on a bare click, once, even when mousedown precedes it', async () => {
+    const w = mountTabs('admin')
+    ;(w.get('#tab-files').element as HTMLElement).click()
+    expect(w.emitted('tab-change')).toEqual([['files']])
+    await w.get('#tab-browser').trigger('mousedown')
+    ;(w.get('#tab-browser').element as HTMLElement).click()
+    expect(w.emitted('tab-change')).toEqual([['files'], ['browser']])
+    w.unmount()
+  })
+
   it.each([
     ['ArrowRight', 'chat', 'files'],
     ['ArrowLeft', 'chat', 'novnc'],
@@ -179,6 +189,26 @@ describe('ChatTabs tablist semantics (#18243)', () => {
       await flushPromises()
       expect(onFiles.emitted('tab-change')).toBeUndefined()
       onFiles.unmount()
+    })
+
+    it('falls back to a supplied non-advanced tab when the list has no Chat, and stays put with none', async () => {
+      useUserStore().currentUser = { role: 'admin' } as never
+      useUiMode().setMode('full')
+      const tabs = [
+        { key: 'files', label: 'Files', icon: 'folder' },
+        { key: 'terminal', label: 'Terminal', icon: 'terminal', adv: true },
+      ]
+      const w = mount(ChatTabs, { props: { activeTab: 'terminal', tabs }, attachTo: document.body, global: { plugins: [i18n] } })
+      useUiMode().setMode('minimal')
+      await flushPromises()
+      expect(w.emitted('tab-change')).toEqual([['files']])
+      w.unmount()
+      useUiMode().setMode('full')
+      const advOnly = mount(ChatTabs, { props: { activeTab: 'terminal', tabs: [tabs[1]] }, attachTo: document.body, global: { plugins: [i18n] } })
+      useUiMode().setMode('minimal')
+      await flushPromises()
+      expect(advOnly.emitted('tab-change')).toBeUndefined()
+      advOnly.unmount()
     })
   })
 })

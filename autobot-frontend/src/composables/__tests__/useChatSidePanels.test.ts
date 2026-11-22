@@ -147,4 +147,27 @@ describe('useChatSidePanels', () => {
       delete document.documentElement.dataset.ui
     }
   })
+
+  it('Minimal mode with no session: focus lands on the always-visible fallback control', async () => {
+    const p = useChatSidePanels()
+    const adv = document.createElement('div')
+    adv.className = 'adv'
+    const voice = document.createElement('button')
+    adv.append(voice)
+    const voiceOutput = document.createElement('button')
+    document.body.append(adv, voiceOutput)
+    p.voiceBtnRef.value = voice // files and collaboration buttons are not rendered without a session
+    p.fallbackBtnRef.value = voiceOutput
+    document.documentElement.dataset.ui = 'minimal'
+    try {
+      p.toggle('voice')
+      await nextTick()
+      p.toggle('voice')
+      await nextTick()
+      await nextTick()
+      expect(document.activeElement).toBe(voiceOutput)
+    } finally {
+      delete document.documentElement.dataset.ui
+    }
+  })
 })

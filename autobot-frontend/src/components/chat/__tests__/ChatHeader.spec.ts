@@ -118,3 +118,15 @@ describe('ChatHeader', () => {
     w.unmount()
   })
 })
+
+describe('ChatHeader mobile sidebar toggle (#18243)', () => {
+  it('hides on desktop through an unstyled wrapper, not the tooltip root whose own display wins', () => {
+    const w = render()
+    const wrapper = w.get('[data-testid="mobile-sidebar-toggle"]')
+    expect(wrapper.classes()).toContain('lg:hidden')
+    const button = wrapper.get(`button[aria-label="${en.chat.sidebar.expandSidebar}"]`)
+    expect(button.element.closest('.lg\\:hidden')).toBe(wrapper.element)
+    expect(wrapper.element.firstElementChild?.classList.contains('lg:hidden')).toBe(false)
+    w.unmount()
+  })
+})

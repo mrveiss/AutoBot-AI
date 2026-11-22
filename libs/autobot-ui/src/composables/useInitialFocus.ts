@@ -19,7 +19,7 @@
  */
 
 import { nextTick, type Ref } from 'vue'
-import { FOCUSABLE_SELECTOR } from './useFocusTrap'
+import { FOCUSABLE_SELECTOR, isTabbable } from './useFocusTrap'
 
 export interface UseInitialFocusReturn {
   /**
@@ -41,9 +41,12 @@ export interface UseInitialFocusReturn {
  * that puts data-* attributes on a wrapper) takes initial focus ahead of the first focusable.
  */
 function preferredTarget(container: HTMLElement): HTMLElement | null {
-  const marked = container.querySelector<HTMLElement>('[data-autofocus]')
-  if (!marked) return null
-  return marked.matches(FOCUSABLE_SELECTOR) ? marked : marked.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+  for (const marked of container.querySelectorAll<HTMLElement>('[data-autofocus]')) {
+    const target = marked.matches(FOCUSABLE_SELECTOR) ? marked : marked.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+    // A target that is not rendered (display:none) cannot take focus: skipping it keeps the fallback alive.
+    if (target && isTabbable(target)) return target
+  }
+  return null
 }
 
 export function useInitialFocus(

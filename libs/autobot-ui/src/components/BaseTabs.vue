@@ -97,6 +97,14 @@ function onSelect(value: string | number): void {
   chosen.value = String(value)
   emit('update:modelValue', chosen.value)
 }
+
+// Reka selects on mousedown, keydown and focus but not click, so an assistive-technology click
+// on an inactive tab would select nothing. A pointer or key activation has already gone through
+// onSelect (it set `chosen`), so only a click that nothing else handled emits here.
+function onTriggerClick(item: TabItem): void {
+  if (item.disabled || item.value === active.value || item.value === chosen.value) return
+  onSelect(item.value)
+}
 </script>
 
 <template>
@@ -118,6 +126,7 @@ function onSelect(value: string | number): void {
           class="aui-tabs__trigger"
           :class="item.class"
           v-bind="triggerAttrs(item)"
+          @click="onTriggerClick(item)"
         >
           <slot name="icon" :item="item" />
           {{ item.label }}

@@ -3,12 +3,14 @@
     <!-- Left: Mobile sidebar toggle + session avatar -->
     <template #leading>
       <!-- Mobile hamburger to open chat sidebar (#1804) -->
-      <ChatHeaderIconButton
-        class="lg:hidden shrink-0"
-        :label="$t('chat.sidebar.expandSidebar')"
-        icon="bars"
-        @click="$emit('toggle-mobile-sidebar')"
-      />
+      <!-- The responsive class sits on an unstyled wrapper: BaseTooltip's scoped display:inline-flex would override lg:hidden on its root. -->
+      <div class="lg:hidden shrink-0" data-testid="mobile-sidebar-toggle">
+        <ChatHeaderIconButton
+          :label="$t('chat.sidebar.expandSidebar')"
+          icon="bars"
+          @click="$emit('toggle-mobile-sidebar')"
+        />
+      </div>
 
       <div class="flex size-11 shrink-0 items-center justify-center rounded-[10px] border border-[var(--tile-b)] bg-[var(--tile)] text-[var(--stroke)]" aria-hidden="true">
         <Icon name="robot" size="lg" />

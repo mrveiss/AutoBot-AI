@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { BaseButton, BaseTooltip } from '@autobot/ui'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
 
@@ -52,4 +52,7 @@ const emit = defineEmits<{ click: []; el: [element: HTMLElement | null] }>()
 
 const button = ref<{ $el: HTMLElement } | null>(null)
 watch(button, (instance) => emit('el', instance?.$el ?? null), { flush: 'post' })
+// Vue stops this setup watcher before it unmounts the child, so the ref going null never reaches it:
+// report the removal explicitly, or the parent keeps a detached element as its focus target.
+onBeforeUnmount(() => emit('el', null))
 </script>

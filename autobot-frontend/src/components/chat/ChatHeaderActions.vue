@@ -17,6 +17,7 @@
       :icon-class="isSpeaking ? 'animate-pulse' : ''"
       :pressed="voiceOutputEnabled"
       @click="emit('toggle-voice-output')"
+      @el="emit('button-el', 'fallback', $event)"
     />
     <ChatHeaderIconButton
       adv
@@ -81,6 +82,6 @@ const emit = defineEmits<{
   'toggle-voice-conversation': []
   'toggle-panel': [panel: ChatSidePanel]
   'toggle-compare': []
-  'button-el': [panel: ChatSidePanel, element: HTMLElement | null]
+  'button-el': [panel: ChatSidePanel | 'fallback', element: HTMLElement | null]
 }>()
 </script>

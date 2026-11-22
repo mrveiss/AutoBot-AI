@@ -35,4 +35,16 @@ describe('useInitialFocus', () => {
     await useInitialFocus(ref(el)).focusFirst()
     expect(document.activeElement?.id).toBe('field')
   })
+
+  it('skips a data-autofocus input that is display:none, so the first focusable still gets focus', async () => {
+    const el = container('<button id="close"></button><div style="display:none"><input id="field" data-autofocus></div>')
+    await useInitialFocus(ref(el)).focusFirst()
+    expect(document.activeElement?.id).toBe('close')
+  })
+
+  it('keeps a visible data-autofocus input ahead of the close button', async () => {
+    const el = container('<button id="close"></button><input id="hidden" data-autofocus style="display:none"><input id="field" data-autofocus>')
+    await useInitialFocus(ref(el)).focusFirst()
+    expect(document.activeElement?.id).toBe('field')
+  })
 })

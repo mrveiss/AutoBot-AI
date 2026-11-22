@@ -92,3 +92,24 @@ describe('ChatHeaderActions', () => {
     w.unmount()
   })
 })
+
+describe('ChatHeaderActions element reports (#18243)', () => {
+  it('reports a button element, and null when the button unmounts with its session', async () => {
+    const w = render({ hasSession: true })
+    await flushPromises()
+    const files = w.emitted('button-el')!.filter(([panel]) => panel === 'files')
+    expect(files.at(-1)?.[1]).toBeInstanceOf(HTMLElement)
+    await w.setProps({ hasSession: false })
+    await flushPromises()
+    expect(w.emitted('button-el')!.filter(([panel]) => panel === 'files').at(-1)?.[1]).toBeNull()
+    w.unmount()
+  })
+
+  it('reports the voice-output toggle as the always-visible fallback', async () => {
+    const w = render()
+    await flushPromises()
+    const fallback = w.emitted('button-el')!.find(([panel]) => panel === 'fallback')
+    expect((fallback?.[1] as HTMLElement).getAttribute('aria-label')).toBe(en.chat.interface.voiceOutputOff)
+    w.unmount()
+  })
+})

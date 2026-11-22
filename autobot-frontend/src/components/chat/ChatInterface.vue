@@ -476,10 +476,10 @@ const voiceConversation = useVoiceConversation()
 const showVoiceOverlay = ref(false)
 // One right-hand panel at a time; focus handled in the composable (#18243)
 const { showFilePanel, showVoicePanel, showCollaborationPanel, fileBtnRef, voiceBtnRef,
-  collabBtnRef, voiceExpanded, voiceControlsId, toggle: togglePanel, closeAll: closeAllPanels } = useChatSidePanels(showVoiceOverlay)
+  collabBtnRef, fallbackBtnRef, voiceExpanded, voiceControlsId, toggle: togglePanel, closeAll: closeAllPanels } = useChatSidePanels(showVoiceOverlay)
 // ChatHeaderActions reports each toggle button's element, so a closing panel can return focus to it.
-const setPanelButton = (panel: ChatSidePanel, el: HTMLElement | null): void => {
-  ({ files: fileBtnRef, voice: voiceBtnRef, collaboration: collabBtnRef })[panel].value = el
+const setPanelButton = (panel: ChatSidePanel | 'fallback', el: HTMLElement | null): void => {
+  ({ files: fileBtnRef, voice: voiceBtnRef, collaboration: collabBtnRef, fallback: fallbackBtnRef })[panel].value = el
 }
 const { voiceDisplayMode, contextOverflowMode } = usePreferences()
 

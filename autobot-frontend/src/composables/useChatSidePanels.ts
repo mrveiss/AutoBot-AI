@@ -35,6 +35,8 @@ export interface UseChatSidePanels {
   fileBtnRef: Ref<HTMLElement | null>
   voiceBtnRef: Ref<HTMLElement | null>
   collabBtnRef: Ref<HTMLElement | null>
+  /** A header control that is visible in every mode: where focus lands when no panel button is shown. */
+  fallbackBtnRef: Ref<HTMLElement | null>
   /** Whether the voice header button's target (panel or overlay) is showing. */
   voiceExpanded: ComputedRef<boolean>
   /** Id of the element the voice header button actually controls. */
@@ -50,6 +52,7 @@ export function useChatSidePanels(
   const fileBtnRef = ref<HTMLElement | null>(null)
   const voiceBtnRef = ref<HTMLElement | null>(null)
   const collabBtnRef = ref<HTMLElement | null>(null)
+  const fallbackBtnRef = ref<HTMLElement | null>(null)
   const btnRefs: Record<ChatSidePanel, Ref<HTMLElement | null>> = {
     files: fileBtnRef,
     voice: voiceBtnRef,
@@ -74,7 +77,8 @@ export function useChatSidePanels(
 
   /**
    * Advanced chrome (`.adv`) is display:none in Minimal mode, and a hidden element cannot take
-   * focus; the voice button is one. Focus then goes to the first panel button that is shown.
+   * focus; the voice button is one. Focus then goes to the first panel button that is shown,
+   * else to `fallbackBtnRef` (the voice-output toggle), which no mode or session hides.
    */
   const isShown = (el: HTMLElement | null): el is HTMLElement =>
     !!el && !(document.documentElement.dataset.ui === 'minimal' && el.closest('.adv'))
@@ -82,7 +86,7 @@ export function useChatSidePanels(
   const restoreFocus = (el: HTMLElement | null): void => {
     const current = document.activeElement
     if (current && current !== document.body) return
-    const target = isShown(el) ? el : Object.values(btnRefs).map((r) => r.value).find(isShown)
+    const target = isShown(el) ? el : [...Object.values(btnRefs), fallbackBtnRef].map((r) => r.value).find(isShown)
     target?.focus()
   }
 
@@ -107,6 +111,7 @@ export function useChatSidePanels(
     fileBtnRef,
     voiceBtnRef,
     collabBtnRef,
+    fallbackBtnRef,
     voiceExpanded,
     voiceControlsId,
     toggle,

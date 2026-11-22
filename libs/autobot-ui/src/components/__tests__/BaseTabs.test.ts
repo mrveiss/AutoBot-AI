@@ -257,3 +257,21 @@ describe('BaseTabs metric tokens (#18243)', () => {
     expect(tabsSource).toMatch(/--aui-tabs-pad-x: var\(--aui-tabs-trigger-pad-x, var\(--aui-space-3\)\)/)
   })
 })
+
+describe('BaseTabs click activation (#18243)', () => {
+  it('selects an inactive tab on a bare click (assistive technology sends no mousedown or focus)', async () => {
+    await render({ modelValue: 'one' })
+    tabs()[2].click()
+    await flushPromises()
+    expect(wrapper!.emitted('update:modelValue')).toEqual([['three']])
+  })
+
+  it('emits once when mousedown is followed by its click, and not for the active tab', async () => {
+    await render({ modelValue: 'one' })
+    tabs()[2].dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }))
+    tabs()[2].click()
+    tabs()[0].click()
+    await flushPromises()
+    expect(wrapper!.emitted('update:modelValue')).toEqual([['three']])
+  })
+})
