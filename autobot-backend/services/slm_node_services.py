@@ -26,10 +26,14 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 _DEFAULT_REQUEST_TIMEOUT_S = 15.0
+_TIMEOUT_RANGE_S = (1.0, 300.0)  # the range registered for AUTOBOT_SLM_REQUEST_TIMEOUT
 
 
 def _resolve_request_timeout() -> float:
-    """Total seconds one request may take, from AUTOBOT_SLM_REQUEST_TIMEOUT; a bad or non-positive value falls back."""
+    """Total seconds one request may take, from AUTOBOT_SLM_REQUEST_TIMEOUT, clamped to its registered range.
+
+    Unset, unparsable or non-positive falls back to the default; anything else is clamped, not trusted.
+    """
     raw = os.getenv("AUTOBOT_SLM_REQUEST_TIMEOUT")
     if raw is None:
         return _DEFAULT_REQUEST_TIMEOUT_S
@@ -37,12 +41,12 @@ def _resolve_request_timeout() -> float:
         value = float(raw)
     except ValueError:
         value = 0.0
-    if value <= 0:
+    if not value > 0:  # also NaN
         logger.warning(
             "AUTOBOT_SLM_REQUEST_TIMEOUT=%r is not a positive number; using %ss", raw, _DEFAULT_REQUEST_TIMEOUT_S
         )
         return _DEFAULT_REQUEST_TIMEOUT_S
-    return value
+    return min(max(value, _TIMEOUT_RANGE_S[0]), _TIMEOUT_RANGE_S[1])
 
 
 SLM_REQUEST_TIMEOUT_S = _resolve_request_timeout()

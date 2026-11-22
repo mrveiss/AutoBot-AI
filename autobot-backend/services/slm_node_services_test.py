@@ -86,10 +86,35 @@ async def test_every_request_carries_the_total_timeout():
     assert timeout.total == slm_node_services.SLM_REQUEST_TIMEOUT_S > 0
 
 
-@pytest.mark.parametrize("raw,expected", [(None, 15.0), ("30", 30.0), ("0", 15.0), ("-2", 15.0), ("soon", 15.0)])
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        (None, 15.0),
+        ("30", 30.0),
+        ("0", 15.0),
+        ("-2", 15.0),
+        ("soon", 15.0),
+        ("nan", 15.0),
+        ("0.2", 1.0),
+        ("9999", 300.0),
+    ],
+)
 def test_the_timeout_comes_from_the_environment_with_a_safe_fallback(monkeypatch, raw, expected):
     if raw is None:
         monkeypatch.delenv("AUTOBOT_SLM_REQUEST_TIMEOUT", raising=False)
     else:
         monkeypatch.setenv("AUTOBOT_SLM_REQUEST_TIMEOUT", raw)
     assert slm_node_services._resolve_request_timeout() == expected
+
+
+@pytest.mark.parametrize(
+    "raw,expected", [(None, 60.0), ("0", 0.0), ("30", 30.0), ("-5", 0.0), ("99999", 3600.0), ("bad", 60.0)]
+)
+def test_the_node_cache_ttl_is_clamped_to_its_registered_range(monkeypatch, raw, expected):
+    from services import redis_service_errors
+
+    if raw is None:
+        monkeypatch.delenv("AUTOBOT_REDIS_NODE_CACHE_TTL", raising=False)
+    else:
+        monkeypatch.setenv("AUTOBOT_REDIS_NODE_CACHE_TTL", raw)
+    assert redis_service_errors._resolve_node_cache_ttl() == expected

@@ -19,14 +19,20 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
+_NODE_CACHE_TTL_RANGE_S = (0.0, 3600.0)  # the range registered for AUTOBOT_REDIS_NODE_CACHE_TTL
+
+
 def _resolve_node_cache_ttl() -> float:
-    """Seconds a resolved node id is reused, from AUTOBOT_REDIS_NODE_CACHE_TTL (0 disables); bad values use 60."""
+    """Seconds a resolved node id is reused, from AUTOBOT_REDIS_NODE_CACHE_TTL, clamped to 0-3600 (0 disables)."""
     raw = os.getenv("AUTOBOT_REDIS_NODE_CACHE_TTL")
     try:
-        return max(0.0, float(raw)) if raw is not None else 60.0
+        value = float(raw) if raw is not None else 60.0
     except ValueError:
         logger.warning("AUTOBOT_REDIS_NODE_CACHE_TTL=%r is not a number; using 60s", raw)
         return 60.0
+    if value != value:  # NaN
+        return 60.0
+    return min(max(value, _NODE_CACHE_TTL_RANGE_S[0]), _NODE_CACHE_TTL_RANGE_S[1])
 
 
 REDIS_NODE_CACHE_TTL_S = _resolve_node_cache_ttl()

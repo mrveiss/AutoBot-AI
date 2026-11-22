@@ -245,3 +245,56 @@ class TestRefusalsAreNotFoldedIntoResults:
         with _patched(_client(error=Exception("down"))):
             result = await manager.start_service()
         assert result.success is False
+
+
+class TestAMovedRoleIsNotHitUntilTheCacheExpires:
+    """A failure clears the cached node id, so the next call asks the SLM where the role is now (#22030)."""
+
+    @staticmethod
+    def _moving(owner_after: str):
+        client = _client(owners={"redis": ["old"]})
+        client.get_role_owners = AsyncMock(side_effect=[{"redis": ["old"]}, {"redis": [owner_after]}])
+        return client
+
+    @pytest.mark.asyncio
+    async def test_a_failed_action_clears_the_cached_node(self) -> None:
+        mgr = RedisServiceManager(slm_node_id="")
+        client = self._moving("new")
+        client.node_service_action = AsyncMock(side_effect=_http_error(404))
+        with _patched(client):
+            with pytest.raises(RedisConnectionError):
+                await mgr._slm_service_action("start")
+            client.node_service_action = AsyncMock(return_value={"success": True})
+            await mgr._slm_service_action("start")
+        client.node_service_action.assert_awaited_once_with("new", "redis-stack-server", "start")
+
+    @pytest.mark.asyncio
+    async def test_a_failed_status_query_clears_the_cached_node(self) -> None:
+        mgr = RedisServiceManager(slm_node_id="")
+        client = self._moving("new")
+        client.list_node_services = AsyncMock(side_effect=_http_error(404))
+        with _patched(client):
+            with pytest.raises(RedisConnectionError):
+                await mgr._slm_get_service_status()
+            client.list_node_services = AsyncMock(return_value={"services": []})
+            await mgr._slm_get_service_status()
+        assert client.list_node_services.await_args.args[0] == "new"
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_clears_the_cached_node(self) -> None:
+        mgr = RedisServiceManager(slm_node_id="")
+        client = self._moving("new")
+        client.list_node_services = AsyncMock(side_effect=_http_error(401))
+        with _patched(client):
+            with pytest.raises(RedisSlmAccessError):
+                await mgr.start_service()
+            assert await resolve_redis_node_id(client, "") == "new"
+
+    @pytest.mark.asyncio
+    async def test_a_success_keeps_the_cached_node(self) -> None:
+        mgr = RedisServiceManager(slm_node_id="")
+        client = _client(owners={"redis": ["old"]}, services={"services": [{"status": "running"}]})
+        with _patched(client):
+            await mgr._slm_get_service_status()
+            await mgr._slm_get_service_status()
+        assert client.get_role_owners.await_count == 1
