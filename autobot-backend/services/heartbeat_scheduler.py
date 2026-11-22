@@ -28,11 +28,11 @@ from events.event_types import HEARTBEAT_RUN_COMPLETED, HEARTBEAT_RUN_STARTED
 from models.agent import Agent
 from models.heartbeat import (
     AgentRuntimeState,
-    AgentStatus,
     AgentWakeupRequest,
     HeartbeatRun,
     HeartbeatRunEvent,
     HeartbeatRunStatus,
+    HeartbeatStatus,
     WakeupTrigger,
 )
 from services import task_workspace
@@ -67,7 +67,7 @@ class HeartbeatScheduler:
         self._running = True
         async with self._session_factory() as session:
             rows = await session.execute(
-                select(AgentRuntimeState).where(AgentRuntimeState.status == AgentStatus.ACTIVE.value)
+                select(AgentRuntimeState).where(AgentRuntimeState.status == HeartbeatStatus.ACTIVE.value)
             )
             states = rows.scalars().all()
         for state in states:
@@ -214,7 +214,7 @@ class HeartbeatScheduler:
                 select(AgentRuntimeState.status).where(AgentRuntimeState.agent_id == agent_id)
             )
             status = result.scalar_one_or_none()
-            return status == AgentStatus.PAUSED.value
+            return status == HeartbeatStatus.PAUSED.value
 
     async def _should_skip_heartbeat(self, agent_id: str) -> bool:
         """Return True if the agent's heartbeat should be suppressed (MVA-1411).
@@ -227,7 +227,7 @@ class HeartbeatScheduler:
                 select(AgentRuntimeState.status).where(AgentRuntimeState.agent_id == agent_id)
             )
             status = result.scalar_one_or_none()
-            return status in (AgentStatus.PAUSED.value, AgentStatus.ERROR.value)
+            return status in (HeartbeatStatus.PAUSED.value, HeartbeatStatus.ERROR.value)
 
     async def _start_run(
         self, agent_id: str, trigger: WakeupTrigger

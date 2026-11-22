@@ -93,12 +93,13 @@ def _verdict(
     full_repo: bool,
     floor: int,
     summary: Callable[[int], str] | None,
+    unit: str,
 ) -> int:
     """Map a completed scan to ``0``/``1``/``2``: floor, nothing-reached, then findings."""
-    if enforce_reach(reached, floor, hook=name, full_repo=full_repo):
+    if enforce_reach(reached, floor, hook=name, full_repo=full_repo, unit=unit):
         return EXIT_VACUOUS
     if full_repo and reached == 0:
-        return _vacuous(log, name, "nothing was scanned (0 files reached in a full-repo sweep)")
+        return _vacuous(log, name, f"nothing was scanned (0 {unit} reached in a full-repo sweep)")
     for finding in findings:
         log.error("%s", finding)
     if findings and summary is not None:
@@ -115,6 +116,8 @@ def run_check(
     floor: int = 0,
     logger: logging.Logger | None = None,
     summary: Callable[[int], str] | None = None,
+    full_repo_of: Callable[[Sequence[str]], bool] | None = None,
+    unit: str = "file(s)",
 ) -> int:
     """Run ``scan(argv, root) -> (reached, findings)`` and map it to ``0``/``1``/``2``.
 
@@ -123,6 +126,10 @@ def run_check(
     legitimately hands a checker zero files). *summary*, when given, is logged
     after the findings with their count. Only the named vacuity errors become
     ``2``; any other exception is a checker bug and propagates with its traceback.
+
+    A checker that takes flags as well as files passes *full_repo_of*, which maps
+    *argv* to "this is a whole-repo sweep" from the parsed file list; the default
+    reads a bare ``not argv``, which would count ``--flag`` alone as a scoped run.
     """
     log = logger or logging.getLogger(name)
     configure_logging(log)
@@ -130,7 +137,16 @@ def run_check(
         reached, findings = scan(list(argv), root)
     except (VacuousScan, EmptyEnumeration, GitEnumerationFailed, GitRepoRootUnavailable) as exc:
         return _vacuous(log, name, f"scan failed: {exc}")
-    return _verdict(log, name, reached, findings, full_repo=not argv, floor=floor, summary=summary)
+    return _verdict(
+        log,
+        name,
+        reached,
+        findings,
+        full_repo=(full_repo_of(argv) if full_repo_of else not argv),
+        floor=floor,
+        summary=summary,
+        unit=unit,
+    )
 
 
 def run_anchored(
@@ -142,6 +158,8 @@ def run_anchored(
     floor: int = 0,
     logger: logging.Logger | None = None,
     summary: Callable[[int], str] | None = None,
+    full_repo_of: Callable[[Sequence[str]], bool] | None = None,
+    unit: str = "file(s)",
 ) -> int:
     """:func:`run_check` with the root resolved from *anchor* by :func:`resolve_root`.
 
@@ -154,4 +172,6 @@ def run_anchored(
         root = resolve_root(anchor)
     except VacuousScan as exc:
         return _vacuous(log, name, f"cannot anchor the scan: {exc}")
-    return run_check(name, scan, argv, root=root, floor=floor, logger=log, summary=summary)
+    return run_check(
+        name, scan, argv, root=root, floor=floor, logger=log, summary=summary, full_repo_of=full_repo_of, unit=unit
+    )

@@ -28,10 +28,10 @@ from api.analytics_shared import (  # noqa: F401 – used by history/metrics/sum
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from api.schemas_analytics import (
     CodeReviewCategoryItem,
+    CodeReviewComment,
     CodeReviewPatternItem,
     PatternToggleRequest,
     ReviewCategory,
-    ReviewComment,
     ReviewSeverity,
 )
 from api.schemas_code import (
@@ -270,7 +270,7 @@ def parse_diff(diff_content: str) -> list[dict[str, Any]]:
     return files
 
 
-def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
+def analyze_code(content: str, file_path: str) -> list[CodeReviewComment]:
     """Analyze code content for pattern violations."""
     comments = []
     lines = content.split("\n")
@@ -287,7 +287,7 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
                     code_snippet = lines[line_num - 1] if line_num <= len(lines) else ""
 
                     comments.append(
-                        ReviewComment(
+                        CodeReviewComment(
                             id=f"{pattern_id}-{line_num}",
                             file_path=file_path,
                             line_number=line_num,
@@ -318,7 +318,7 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
                 func_name = match.group(2)
                 message = f"Function '{func_name}' is {func_length} lines long. Consider refactoring."
                 comments.append(
-                    ReviewComment(
+                    CodeReviewComment(
                         id=f"STYLE002-{func_start}",
                         file_path=file_path,
                         line_number=func_start,
@@ -333,7 +333,7 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
     return comments
 
 
-def calculate_review_score(comments: list[ReviewComment]) -> float:
+def calculate_review_score(comments: list[CodeReviewComment]) -> float:
     """Calculate overall code quality score based on findings."""
     if not comments:
         return 100.0
@@ -351,7 +351,7 @@ def calculate_review_score(comments: list[ReviewComment]) -> float:
     return round(score, 1)
 
 
-def generate_summary(comments: list[ReviewComment]) -> dict[str, Any]:
+def generate_summary(comments: list[CodeReviewComment]) -> dict[str, Any]:
     """Generate review summary statistics."""
     by_severity = {}
     by_category = {}

@@ -14,6 +14,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SLMNode } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
+import { BaseAlert, createRecencyFormatter } from '@autobot/ui'
 
 const props = defineProps<{
   node: SLMNode
@@ -23,20 +24,21 @@ const emit = defineEmits<{
   (e: 'action', action: string, nodeId: string): void
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formatHeartbeatAge = createRecencyFormatter({ locale: () => locale.value, style: 'narrow', maxUnit: 'hour' })
 const fleetStore = useFleetStore()
 const showMenu = ref(false)
 
 const statusClass = computed(() => {
   switch (props.node.status) {
-    case 'online': return 'bg-green-500'
-    case 'degraded': return 'bg-yellow-500'
-    case 'offline': return 'bg-gray-400'
-    case 'error': return 'bg-red-500'
-    case 'enrolling': return 'bg-blue-500 animate-pulse'
-    case 'pending': return 'bg-gray-400'
-    case 'decommissioned': return 'bg-gray-300'
-    default: return 'bg-gray-400'
+    case 'online': return 'bg-autobot-dot-ok'
+    case 'degraded': return 'bg-autobot-dot-warn'
+    case 'offline': return 'bg-autobot-dot-idle'
+    case 'error': return 'bg-autobot-dot-bad'
+    case 'enrolling': return 'bg-autobot-primary animate-pulse'
+    case 'pending': return 'bg-autobot-dot-idle'
+    case 'decommissioned': return 'bg-autobot-border-strong'
+    default: return 'bg-autobot-dot-idle'
   }
 })
 
@@ -48,15 +50,7 @@ const lastSeen = computed(() => {
   // Issue #989: online nodes are actively connected — last_heartbeat can be stale
   if (props.node.status === 'online') return t('fleet.nodeCard.justNow')
   if (!props.node.health?.last_heartbeat) return t('fleet.nodeCard.never')
-  const date = new Date(props.node.health.last_heartbeat)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffSec = Math.floor(diffMs / 1000)
-  if (diffSec < 60) return t('fleet.nodeCard.secondsAgo', { seconds: diffSec })
-  const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return t('fleet.nodeCard.minutesAgo', { minutes: diffMin })
-  const diffHr = Math.floor(diffMin / 60)
-  return t('fleet.nodeCard.hoursAgo', { hours: diffHr })
+  return formatHeartbeatAge(props.node.health.last_heartbeat)
 })
 
 const canEnroll = computed(() => {
@@ -89,11 +83,11 @@ const authMethodBadge = computed(() => {
   const method = props.node.auth_method || 'password'
   switch (method) {
     case 'key':
-      return { label: t('fleet.nodeCard.authMethodKey'), class: 'bg-green-100 text-green-700' }
+      return { label: t('fleet.nodeCard.authMethodKey'), class: 'bg-autobot-illus-1-tint text-autobot-text-primary' }
     case 'pki':
-      return { label: t('fleet.nodeCard.authMethodPki'), class: 'bg-blue-100 text-blue-700' }
+      return { label: t('fleet.nodeCard.authMethodPki'), class: 'bg-autobot-illus-2-tint text-autobot-text-primary' }
     default:
-      return { label: t('fleet.nodeCard.authMethodPassword'), class: 'bg-yellow-100 text-yellow-700' }
+      return { label: t('fleet.nodeCard.authMethodPassword'), class: 'bg-autobot-illus-3-tint text-autobot-text-primary' }
   }
 })
 
@@ -153,15 +147,15 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
           role="img"
           :aria-label="$t('fleet.nodeCard.statusAria', { status: statusText })"
         ></div>
-        <span class="font-medium text-gray-900 truncate">{{ node.hostname }}</span>
+        <span class="font-medium text-autobot-text-primary truncate">{{ node.hostname }}</span>
       </div>
       <div class="flex items-center gap-2">
-        <span class="text-xs text-gray-500 whitespace-nowrap">{{ statusText }}</span>
+        <span class="text-xs text-autobot-text-tertiary whitespace-nowrap">{{ statusText }}</span>
         <!-- Actions Menu Button -->
         <div class="relative">
           <button
             @click.stop="toggleMenu"
-            class="p-1 text-gray-400 hover:text-gray-600 transition-colors rounded-sm hover:bg-gray-100"
+            class="p-1 text-autobot-text-tertiary hover:text-autobot-text-secondary transition-colors rounded-sm hover:bg-autobot-bg-hover"
             :aria-label="$t('fleet.nodeCard.actionsForNodeAria', { hostname: node.hostname })"
             :aria-expanded="showMenu"
             aria-haspopup="true"
@@ -173,48 +167,48 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
           <!-- Dropdown Menu -->
           <div
             v-if="showMenu"
-            class="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+            class="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-autobot-border py-1 z-50"
             role="menu"
             :aria-label="$t('fleet.nodeCard.actionsForNodeAria', { hostname: node.hostname })"
             @keydown="handleMenuKeydown"
           >
-            <button @click="handleAction('edit')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+            <button @click="handleAction('edit')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-autobot-text-secondary hover:bg-autobot-bg-hover flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               {{ $t('fleet.nodeCard.editNode') }}
             </button>
-            <button @click="handleAction('roles')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+            <button @click="handleAction('roles')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-autobot-text-secondary hover:bg-autobot-bg-hover flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
               {{ $t('fleet.nodeCard.manageRoles') }}
             </button>
-            <button v-if="canEnroll || canRecover" @click="handleAction('enroll')" :disabled="isEnrolling" role="menuitem" data-test="enroll-action" :class="['w-full px-4 py-2 text-left text-sm flex items-center gap-2 disabled:opacity-50', canRecover ? 'text-green-600 hover:bg-green-50' : 'text-gray-700 hover:bg-gray-100']">
+            <button v-if="canEnroll || canRecover" @click="handleAction('enroll')" :disabled="isEnrolling" role="menuitem" data-test="enroll-action" :class="['w-full px-4 py-2 text-left text-sm flex items-center gap-2 disabled:opacity-50', canRecover ? 'text-autobot-success hover:bg-autobot-success-bg' : 'text-autobot-text-secondary hover:bg-autobot-bg-hover']">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               {{ isEnrolling ? $t('fleet.nodeCard.enrolling') : canRecover ? $t('fleet.nodeCard.recoverConnection') : $t('fleet.nodeCard.enrollNode') }}
             </button>
-            <button @click="handleAction('test')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+            <button @click="handleAction('test')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-autobot-text-secondary hover:bg-autobot-bg-hover flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
               </svg>
               {{ $t('fleet.nodeCard.testConnection') }}
             </button>
-            <button @click="handleAction('certificate')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+            <button @click="handleAction('certificate')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-autobot-text-secondary hover:bg-autobot-bg-hover flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
               {{ $t('fleet.nodeCard.certificate') }}
             </button>
-            <button @click="handleAction('events')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+            <button @click="handleAction('events')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-autobot-text-secondary hover:bg-autobot-bg-hover flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               {{ $t('fleet.nodeCard.viewEvents') }}
             </button>
-            <button @click="handleAction('services')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+            <button @click="handleAction('services')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-autobot-text-secondary hover:bg-autobot-bg-hover flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
               </svg>
@@ -225,26 +219,26 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
               v-if="isDecommissioned"
               @click="handleAction('reenroll')"
               role="menuitem"
-              class="w-full px-4 py-2 text-left text-sm text-green-600 hover:bg-green-50 flex items-center gap-2"
+              class="w-full px-4 py-2 text-left text-sm text-autobot-success hover:bg-autobot-success-bg flex items-center gap-2"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               {{ $t('fleet.nodeCard.reEnrollNode') }}
             </button>
-            <hr class="my-1 border-gray-200" role="separator" />
+            <hr class="my-1 border-autobot-border" role="separator" />
             <button
               v-if="!isDecommissioned && !node.node_id.startsWith('00-')"
               @click="handleAction('decommission')"
               role="menuitem"
-              class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+              class="w-full px-4 py-2 text-left text-sm text-autobot-error hover:bg-autobot-error-bg flex items-center gap-2"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
               </svg>
               {{ $t('fleet.nodeCard.decommission') }}
             </button>
-            <button @click="handleAction('delete')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+            <button @click="handleAction('delete')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-autobot-error hover:bg-autobot-error-bg flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
@@ -257,9 +251,9 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
 
     <!-- IP Address & Auth Method -->
     <div class="flex items-center justify-between mb-3">
-      <div class="text-sm text-gray-500">
+      <div class="text-sm text-autobot-text-tertiary">
         {{ node.ip_address }}
-        <span v-if="node.ssh_port && node.ssh_port !== 22" class="text-gray-400">:{{ node.ssh_port }}</span>
+        <span v-if="node.ssh_port && node.ssh_port !== 22" class="text-autobot-text-tertiary">:{{ node.ssh_port }}</span>
       </div>
       <span
         :class="['px-2 py-0.5 text-xs font-medium rounded-sm', authMethodBadge.class]"
@@ -270,18 +264,21 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     </div>
 
     <!-- Enrolling Transition Indicator -->
-    <div
+    <BaseAlert
       v-if="isEnrolling"
-      class="flex items-center gap-2 px-2 py-1.5 mb-3 bg-blue-50 border border-blue-200 rounded-sm text-xs text-blue-700"
-      role="status"
+      variant="info"
+      size="compact"
+      class="mb-3"
+      :message="$t('fleet.nodeCard.transitioningToSSHKey')"
       :aria-label="$t('fleet.nodeCard.nodeIsBeingEnrolledAria')"
     >
-      <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-      <span>{{ $t('fleet.nodeCard.transitioningToSSHKey') }}</span>
-    </div>
+      <template #icon>
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </template>
+    </BaseAlert>
 
     <!-- Roles -->
     <div class="flex flex-wrap gap-1 mb-3" :aria-label="$t('fleet.nodeCard.assignedRolesAria')">
@@ -292,7 +289,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
       >
         {{ role }}
       </span>
-      <span v-if="node.roles.length === 0" class="text-xs text-gray-400 italic">
+      <span v-if="node.roles.length === 0" class="text-xs text-autobot-text-tertiary italic">
         {{ $t('fleet.nodeCard.noRolesAssigned') }}
       </span>
     </div>
@@ -300,7 +297,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     <!-- A2A Agent Card badge (Issue #962) -->
     <div v-if="a2aSkillCount !== null" class="flex items-center gap-1.5 mb-2">
       <span
-        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-sm bg-indigo-50 text-indigo-700 border border-indigo-200"
+        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-sm bg-autobot-illus-1-tint text-autobot-text-primary border border-autobot-border-strong"
         :title="$t('fleet.nodeCard.a2aAgentCardAria', { count: a2aSkillCount, plural: a2aSkillCount !== 1 ? 's' : '' })"
       >
         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -315,7 +312,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
       <button
         @click="handleAction('updates')"
         :aria-label="$t('fleet.nodeCard.updatesAvailableForNodeAria', { count: updateSummary?.total_updates, hostname: node.hostname })"
-        class="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors w-full"
+        class="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md bg-autobot-warning-bg border border-autobot-warning-light text-autobot-pill-warn-fg hover:bg-autobot-pill-warn-bg transition-colors w-full"
       >
         <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -323,7 +320,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
         <span v-if="updateSummary?.system_updates" class="whitespace-nowrap">
           {{ $t('fleet.nodeCard.packagesCount', { count: updateSummary.system_updates, plural: updateSummary.system_updates !== 1 ? 's' : '' }) }}
         </span>
-        <span v-if="updateSummary?.system_updates && updateSummary?.code_update_available" class="text-amber-400" aria-hidden="true">+</span>
+        <span v-if="updateSummary?.system_updates && updateSummary?.code_update_available" class="text-autobot-warning" aria-hidden="true">+</span>
         <span v-if="updateSummary?.code_update_available" class="whitespace-nowrap">{{ $t('fleet.nodeCard.codeUpdateLabel') }}</span>
       </button>
     </div>
@@ -332,43 +329,43 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     <div v-if="node.health" class="space-y-2 mb-3" :aria-label="$t('fleet.nodeCard.healthMetricsAria')">
       <!-- CPU -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500" :id="`cpu-label-${node.node_id}`">{{ $t('fleet.nodeCard.cpu') }}</span>
-        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.cpu_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`cpu-label-${node.node_id}`">
+        <span class="w-12 text-autobot-text-tertiary" :id="`cpu-label-${node.node_id}`">{{ $t('fleet.nodeCard.cpu') }}</span>
+        <div class="flex-1 h-2 bg-autobot-bg-active rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.cpu_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`cpu-label-${node.node_id}`">
           <div
-            :class="['h-full rounded-full transition-all', node.health.cpu_percent > 80 ? 'bg-red-500' : node.health.cpu_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
+            :class="['h-full rounded-full transition-all', node.health.cpu_percent > 80 ? 'bg-autobot-dot-bad' : node.health.cpu_percent > 60 ? 'bg-autobot-dot-warn' : 'bg-autobot-dot-ok']"
             :style="{ width: `${node.health.cpu_percent}%` }"
           ></div>
         </div>
-        <span class="w-8 text-right text-gray-600">{{ node.health.cpu_percent?.toFixed(0) || 0 }}%</span>
+        <span class="w-8 text-right text-autobot-text-secondary">{{ node.health.cpu_percent?.toFixed(0) || 0 }}%</span>
       </div>
 
       <!-- Memory -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500" :id="`mem-label-${node.node_id}`">{{ $t('fleet.nodeCard.memory') }}</span>
-        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.memory_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`mem-label-${node.node_id}`">
+        <span class="w-12 text-autobot-text-tertiary" :id="`mem-label-${node.node_id}`">{{ $t('fleet.nodeCard.memory') }}</span>
+        <div class="flex-1 h-2 bg-autobot-bg-active rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.memory_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`mem-label-${node.node_id}`">
           <div
-            :class="['h-full rounded-full transition-all', node.health.memory_percent > 80 ? 'bg-red-500' : node.health.memory_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
+            :class="['h-full rounded-full transition-all', node.health.memory_percent > 80 ? 'bg-autobot-dot-bad' : node.health.memory_percent > 60 ? 'bg-autobot-dot-warn' : 'bg-autobot-dot-ok']"
             :style="{ width: `${node.health.memory_percent}%` }"
           ></div>
         </div>
-        <span class="w-8 text-right text-gray-600">{{ node.health.memory_percent?.toFixed(0) || 0 }}%</span>
+        <span class="w-8 text-right text-autobot-text-secondary">{{ node.health.memory_percent?.toFixed(0) || 0 }}%</span>
       </div>
 
       <!-- Disk -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500" :id="`disk-label-${node.node_id}`">{{ $t('fleet.nodeCard.disk') }}</span>
-        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.disk_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`disk-label-${node.node_id}`">
+        <span class="w-12 text-autobot-text-tertiary" :id="`disk-label-${node.node_id}`">{{ $t('fleet.nodeCard.disk') }}</span>
+        <div class="flex-1 h-2 bg-autobot-bg-active rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.disk_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`disk-label-${node.node_id}`">
           <div
-            :class="['h-full rounded-full transition-all', node.health.disk_percent > 80 ? 'bg-red-500' : node.health.disk_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
+            :class="['h-full rounded-full transition-all', node.health.disk_percent > 80 ? 'bg-autobot-dot-bad' : node.health.disk_percent > 60 ? 'bg-autobot-dot-warn' : 'bg-autobot-dot-ok']"
             :style="{ width: `${node.health.disk_percent}%` }"
           ></div>
         </div>
-        <span class="w-8 text-right text-gray-600">{{ node.health.disk_percent?.toFixed(0) || 0 }}%</span>
+        <span class="w-8 text-right text-autobot-text-secondary">{{ node.health.disk_percent?.toFixed(0) || 0 }}%</span>
       </div>
     </div>
 
     <!-- No Health Data -->
-    <div v-else class="text-xs text-gray-400 italic mb-3 py-4 text-center">
+    <div v-else class="text-xs text-autobot-text-tertiary italic mb-3 py-4 text-center">
       {{ $t('fleet.nodeCard.noHealthDataAvailable') }}
     </div>
 
@@ -378,25 +375,25 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
       class="flex items-center gap-2 mb-3 text-xs"
       :aria-label="$t('fleet.nodeCard.serviceHealthSummaryAria')"
     >
-      <span class="text-gray-500">{{ $t('fleet.nodeCard.services1') }}</span>
-      <span v-if="serviceSummary.running > 0" class="inline-flex items-center gap-1 text-green-600">
-        <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>{{ serviceSummary.running }}
+      <span class="text-autobot-text-tertiary">{{ $t('fleet.nodeCard.services1') }}</span>
+      <span v-if="serviceSummary.running > 0" class="inline-flex items-center gap-1 text-autobot-success">
+        <span class="w-1.5 h-1.5 rounded-full bg-autobot-dot-ok"></span>{{ serviceSummary.running }}
       </span>
-      <span v-if="serviceSummary.stopped > 0" class="inline-flex items-center gap-1 text-gray-500">
-        <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>{{ serviceSummary.stopped }}
+      <span v-if="serviceSummary.stopped > 0" class="inline-flex items-center gap-1 text-autobot-text-tertiary">
+        <span class="w-1.5 h-1.5 rounded-full bg-autobot-dot-idle"></span>{{ serviceSummary.stopped }}
       </span>
-      <span v-if="hasFailedServices" class="inline-flex items-center gap-1 text-red-600 font-medium">
-        <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>{{ serviceSummary.failed }}
+      <span v-if="hasFailedServices" class="inline-flex items-center gap-1 text-autobot-error font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-autobot-dot-bad"></span>{{ serviceSummary.failed }}
       </span>
     </div>
 
     <!-- Footer -->
-    <div class="flex items-center justify-between pt-3 border-t border-gray-100">
-      <span class="text-xs text-gray-400">{{ $t('fleet.nodeCard.lastSeen', { time: lastSeen }) }}</span>
+    <div class="flex items-center justify-between pt-3 border-t border-autobot-border-subtle">
+      <span class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nodeCard.lastSeen', { time: lastSeen }) }}</span>
       <div class="flex gap-1">
         <button
           @click="handleAction('view')"
-          class="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors rounded-sm"
+          class="p-1.5 text-autobot-text-tertiary hover:text-primary-600 hover:bg-primary-50 transition-colors rounded-sm"
           :aria-label="$t('fleet.nodeCard.viewDetailsForNodeAria', { hostname: node.hostname })"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -406,7 +403,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
         </button>
         <button
           @click="handleAction('restart')"
-          class="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors rounded-sm"
+          class="p-1.5 text-autobot-text-tertiary hover:text-autobot-warning hover:bg-autobot-warning-bg transition-colors rounded-sm"
           :aria-label="$t('fleet.nodeCard.restartNodeAria', { hostname: node.hostname })"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

@@ -46,6 +46,14 @@ async def test_a_failing_callback_neither_rolls_back_nor_stops_the_rest() -> Non
     assert [type(e) for e in caught.value.errors] == [ValueError]
 
 
+async def test_a_plain_callback_runs_after_the_commit_without_failing_the_scope() -> None:
+    session, ran = _session(), []
+    async with async_session_scope(_maker(session)) as s:
+        s.info[POST_COMMIT_CALLBACKS].append(lambda: ran.append(1))
+    assert ran == [1]
+    session.rollback.assert_not_called()
+
+
 async def test_a_failing_rollback_does_not_mask_the_original_error() -> None:
     session = _session()
     session.rollback = AsyncMock(side_effect=RuntimeError("rollback failed"))

@@ -34,7 +34,7 @@ local small-model path through ``services.llm_service`` with
 ``LLMType.CLASSIFICATION``, which AutoBot already routes to a local Ollama
 model (``agents/gemma_classification_agent.py`` is the existing in-house
 answer to this shape). No new outbound dependency is needed to use the seam,
-and none is added by it. ``register_backend`` exists so a different backend
+and none is added by it. ``register_decision_backend`` exists so a different backend
 can be measured against the default with ``scripts/benchmark_decision_backends.py``
 before anything changes.
 
@@ -322,7 +322,7 @@ class LocalModelBackend(DecisionBackend):
 _BACKENDS: dict[str, DecisionBackend] = {}
 
 
-def register_backend(backend: DecisionBackend) -> None:
+def register_decision_backend(backend: DecisionBackend) -> None:
     """Register *backend* under its ``name`` so a caller can select it.
 
     Registration does not make a backend the default -- #17308 requires a
@@ -343,7 +343,7 @@ def get_backend(name: str) -> DecisionBackend:
     return _BACKENDS[name]
 
 
-def registered_backends() -> list[str]:
+def registered_decision_backends() -> list[str]:
     """Return the names of every registered backend, local path included."""
     return sorted({LocalModelBackend.name, *_BACKENDS})
 
@@ -401,6 +401,6 @@ __all__ = [
     "ScoreQuestion",
     "decide",
     "get_backend",
-    "register_backend",
-    "registered_backends",
+    "register_decision_backend",
+    "registered_decision_backends",
 ]

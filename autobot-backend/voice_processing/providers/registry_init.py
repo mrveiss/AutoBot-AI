@@ -14,8 +14,12 @@ from voice_processing.providers import get_speech_provider_registry
 from voice_processing.providers.generic_provider import GenericProvider
 from voice_processing.providers.lv.late_provider import LateProvider
 from voice_processing.providers.lv.tilde_provider import TildeProvider
+from voice_processing.providers.whisper_provider import WhisperProvider
 
 logger = get_logger(__name__)
+
+#: Above Generic (0), below every cloud provider (15/20) and LATE (10).
+WHISPER_PRIORITY = 5
 
 
 def initialize_providers():
@@ -25,6 +29,7 @@ def initialize_providers():
     - Higher priority = tried first
     - Cloud providers (priority 20) override local when selected + configured
     - LATE (priority 10) > Tilde (priority 5) for Latvian
+    - Local pinned Whisper (priority 5) is the default for the Generic languages
     - Generic provider is fallback for all languages (priority 0)
 
     Cloud providers are credential-gated: only registered when API key present.
@@ -34,9 +39,9 @@ def initialize_providers():
 
     # ── Cloud providers (Issue #10147) ────────────────────────────────────────
     # Import selection module to discover which provider (if any) is active.
-    from voice_processing.providers.selection import _PROVIDER_MAP, get_active_provider_id
+    from voice_processing.providers.selection import _PROVIDER_MAP, get_active_asr_provider_id
 
-    active_cloud_id = get_active_provider_id()
+    active_cloud_id = get_active_asr_provider_id()
 
     for provider_id, provider_cls in _PROVIDER_MAP.items():
         try:
@@ -68,6 +73,17 @@ def initialize_providers():
     tilde = TildeProvider()
     registry.register("lv", tilde, priority=5)  # Fallback for Latvian
     registry.register("lat", tilde, priority=5)
+    # Owner decision (#17778): Tilde is Latvian's primary external provider, allowed after LATE fails.
+    registry.declare_primary_external("lv", tilde)
+    registry.declare_primary_external("lat", tilde)
+
+    # ── Local pinned Whisper (Issue #17778) ───────────────────────────────────
+    # The default transcriber when no cloud key is set. Priority 5 sits above
+    # Generic (0) and below cloud (15/20). It is registered only for the languages
+    # Generic covers, so Latvian (LATE 10 > Tilde 5) is never reordered.
+    whisper = WhisperProvider()
+    for lang in whisper.supported_languages:
+        registry.register(lang, whisper, priority=WHISPER_PRIORITY)
 
     # ── Generic fallback ──────────────────────────────────────────────────────
     generic = GenericProvider()

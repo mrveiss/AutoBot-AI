@@ -19,6 +19,7 @@ from autobot_shared.ssot_config import config
 sys.path.insert(0, config.project_root)
 
 from utils.semantic_chunker import AutoBotSemanticChunker
+from utils.semantic_chunker_base import SENTENCE_EMBEDDING_MODEL
 
 # Sample text for performance testing
 TEST_TEXT = """
@@ -105,7 +106,7 @@ async def performance_test():
     # Initialize semantic chunker
     print("Initializing Semantic Chunker...")  # noqa: print
     chunker = AutoBotSemanticChunker(
-        embedding_model="all-MiniLM-L6-v2",
+        embedding_model=SENTENCE_EMBEDDING_MODEL,
         percentile_threshold=95.0,
         min_chunk_size=100,
         max_chunk_size=1000,

@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
 
 import pytest
 
 from autobot_shared.coordination.shared_runtime_bag import SharedRuntimeBag
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 # ---------------------------------------------------------------------------
 # Shared in-memory Redis (same instance = same data store)
@@ -39,9 +39,10 @@ class _FakeRedis:
         v = self._store.get(key)
         return v.encode() if v is not None else None
 
-    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+    async def set(self, key: str, value: str, ex: int | None = None) -> bool:
         self._store[key] = value
         self._ttls[key] = ex
+        return True
 
     async def delete(self, key: str) -> None:
         self._store.pop(key, None)
@@ -54,46 +55,11 @@ class _FakeRedis:
     async def publish(self, channel: str, message: str) -> None:
         self._published.append((channel, message))
 
-    def pipeline(self, transaction: bool = True) -> "_FakePipeline":
-        return _FakePipeline(self._store)
+    def pipeline(self, transaction: bool = True) -> FakeAsyncPipeline:
+        return FakeAsyncPipeline(self, transaction=transaction)
 
     def pubsub(self) -> "_FakePubSub":
         return _FakePubSub(self._published)
-
-
-class _FakePipeline:
-    def __init__(self, store: dict[str, str]) -> None:
-        self._store = store
-        self._commands: list[tuple[Any, ...]] = []
-
-    async def __aenter__(self) -> "_FakePipeline":
-        return self
-
-    async def __aexit__(self, *args: Any) -> None:
-        pass
-
-    async def watch(self, *keys: str) -> None:
-        pass
-
-    async def get(self, key: str) -> bytes | None:
-        v = self._store.get(key)
-        return v.encode() if v is not None else None
-
-    def multi(self) -> None:
-        pass
-
-    def set(self, key: str, value: str, ex: int | None = None) -> None:
-        self._commands.append(("set", key, value, ex))
-
-    async def execute(self) -> list[Any]:
-        for cmd in self._commands:
-            if cmd[0] == "set":
-                self._store[cmd[1]] = cmd[2]
-        self._commands.clear()
-        return [True]
-
-    async def reset(self) -> None:
-        self._commands.clear()
 
 
 class _FakePubSub:
@@ -132,7 +98,9 @@ def _make_worker(shared_redis: _FakeRedis, namespace: str = "integration_ns") ->
         return shared_redis
 
     bag.get = lambda key: _patched_get(bag, shared_redis, key)  # type: ignore[method-assign]
-    bag.set = lambda key, value, ttl_s=None: _patched_set(bag, shared_redis, key, value, ttl_s)  # type: ignore[method-assign]
+    bag.set = lambda key, value, ttl_s=None: _patched_set(  # type: ignore[method-assign]
+        bag, shared_redis, key, value, ttl_s
+    )
     return bag
 
 

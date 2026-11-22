@@ -18,13 +18,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _check_harness as harness  # noqa: E402
 from _scan_helpers import EmptyEnumeration, GitEnumerationFailed, tracked_modes  # noqa: E402
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from autobot_shared.isolated_git import isolated_git_env  # noqa: E402
 
 _NAME = "probe"
 
 
 def _git(repo: Path, *args: str) -> None:
-    env = {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+    env = isolated_git_env()
     subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, env=env)  # nosec B603 B607
 
 
@@ -99,6 +99,17 @@ def test_a_floor_applies_to_a_full_repo_sweep_only(repo: Path) -> None:
     assert harness.run_check(_NAME, _ok(3, []), [], root=repo, floor=10) == 2
     assert harness.run_check(_NAME, _ok(3, []), ["f.py"], root=repo, floor=10) == 0
     assert harness.run_check(_NAME, _ok(10, []), [], root=repo, floor=10) == 0
+
+
+def test_flags_alone_are_still_a_full_repo_sweep_when_the_checker_says_so(repo: Path) -> None:
+    flags_only = ["--changed-lines-only"]
+    # the bare default reads a non-empty argv as scoped and skips the floor ...
+    assert harness.run_check(_NAME, _ok(3, []), flags_only, root=repo, floor=10) == 0
+    # ... a checker that keys off its parsed file list enforces it.
+    sweep = lambda argv: not [a for a in argv if not a.startswith("--")]  # noqa: E731
+    assert harness.run_check(_NAME, _ok(3, []), flags_only, root=repo, floor=10, full_repo_of=sweep) == 2
+    assert harness.run_check(_NAME, _ok(0, []), flags_only, root=repo, full_repo_of=sweep) == 2
+    assert harness.run_check(_NAME, _ok(3, []), [*flags_only, "f.py"], root=repo, floor=10, full_repo_of=sweep) == 0
 
 
 def test_findings_are_logged_and_exit_one(repo: Path, caplog: pytest.LogCaptureFixture) -> None:

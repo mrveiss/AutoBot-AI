@@ -76,6 +76,11 @@ def _assistant_turns(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [m for m in messages if m.get("sender") == "assistant"]
 
 
+def _turn_ctx() -> SimpleNamespace:
+    """The fields the iteration reads off its context; no attachments requested, so the prompt is unchanged (#20195)."""
+    return SimpleNamespace(initial_prompt="hello", session_id="s1", context={}, selected_model=None)
+
+
 class TestStreamingDropsEveryChunk:
     """Establishes the precondition: streamed chunks never reach workflow_messages."""
 
@@ -101,7 +106,7 @@ class TestStreamingDropsEveryChunk:
                     yield streaming_msg.to_workflow_message()
                 yield (REPLY, False)
 
-        ctx = SimpleNamespace(initial_prompt="hello")
+        ctx = _turn_ctx()
         messages, llm_response, should_continue = await graph_mod._run_llm_iteration(_FakeManager(), ctx, 1, [], None)
 
         assert messages == []  # every chunk dropped — nothing left to persist
@@ -139,11 +144,11 @@ class TestStreamedReplyIsReadableAfterReload:
                     yield streaming_msg.to_workflow_message()
                 yield (REPLY, False)
 
-        messages, llm_response, _ = await graph_mod._run_llm_iteration(
-            _FakeManager(), SimpleNamespace(initial_prompt="hello"), 1, [], None
-        )
+        messages, llm_response, _ = await graph_mod._run_llm_iteration(_FakeManager(), _turn_ctx(), 1, [], None)
         wf_messages = [
-            SimpleNamespace(type=m.get("type", "response"), content=m.get("content", ""), metadata=m.get("metadata"))
+            WorkflowMessage(
+                type=m.get("type", "response"), content=m.get("content", ""), metadata=m.get("metadata") or {}
+            )
             for m in messages
         ]
 
@@ -169,7 +174,7 @@ class TestStreamedReplyIsReadableAfterReload:
         place it after the prose that introduced it.
         """
         wf_messages = [
-            SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={"iteration": 1}),
+            WorkflowMessage(type="terminal_output", content="uptime: 3 days", metadata={"iteration": 1}),
         ]
 
         await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, [REPLY])
@@ -194,7 +199,7 @@ class TestStreamedReplyIsReadableAfterReload:
         using each message's iteration tag.
         """
         wf_messages = [
-            SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={"iteration": 1}),
+            WorkflowMessage(type="terminal_output", content="uptime: 3 days", metadata={"iteration": 1}),
         ]
         all_llm_responses = ["Let me check.", "Uptime is 3 days."]
 
@@ -287,7 +292,7 @@ class TestNoDuplicateOrEmptyTurns:
         persisted AFTER the prose entry in the corrected order.
         """
         wf_messages = [
-            SimpleNamespace(type="response", content=REPLY, metadata={"message_type": "respond_tool", "iteration": 1})
+            WorkflowMessage(type="response", content=REPLY, metadata={"message_type": "respond_tool", "iteration": 1})
         ]
 
         await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, [REPLY])
@@ -304,7 +309,7 @@ class TestNoDuplicateOrEmptyTurns:
         workflow_messages entry is appended via the leftover fallback exactly
         as the pre-#13295 code did.
         """
-        wf_messages = [SimpleNamespace(type="error", content="The assistant could not respond.", metadata={})]
+        wf_messages = [WorkflowMessage(type="error", content="The assistant could not respond.", metadata={})]
 
         await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, [])
 

@@ -288,7 +288,7 @@
             {{ $t('common.delete') }}
           </BaseButton>
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             size="xs"
             class="py-1.5 px-2"
             @click="controller.loadChatSessions()"
@@ -416,13 +416,13 @@ import type { ChatSession } from '@/stores/useChatStore'
 import DeleteConversationDialog from './DeleteConversationDialog.vue'
 import ShareConversationDialog from './ShareConversationDialog.vue'
 import type { FileStats } from '@/composables/useConversationFiles'
+import { mapFileList, type BackendFileList } from '@/utils/conversationFileList'
 import type { SessionFact } from '@/models/repositories/ChatRepository'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 
@@ -601,11 +601,10 @@ const deleteSession = async (sessionId: string) => {
 
   // Fetch file stats and KB facts in parallel (Issue #547)
   const [fileStatsResult, kbFactsResult] = await Promise.allSettled([
-    // Fetch file stats
-    (async () => {
-      const data = await ApiClient.get<{ stats?: FileStats }>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
-      return data?.stats || null
-    })(),
+    // Fetch file stats (#20195: the list response is adapted to the dialog's stats shape)
+    ApiClient.get<BackendFileList>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`).then(
+      (data) => (data ? mapFileList(data, '').stats : null),
+    ),
     // Fetch KB facts (Issue #547)
     controller.getSessionFacts(sessionId)
   ])

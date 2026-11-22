@@ -31,10 +31,13 @@ from autobot_shared.time_utils import utc_timestamp
 from config import settings
 from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
 from models.schemas import BlueGreenCreate, BlueGreenResponse, EligibleNodeResponse
+from services.ansible_utils import run_single_host_playbook
+from services.purge_playbook import PURGE_PLAYBOOK_TEMPLATE as _PURGE_PLAYBOOK_TEMPLATE
 
 # The purge playbook lives in its own module because this file is at its
 # grandfathered size ceiling (#14236) and may not grow (#16071).
-from services.purge_playbook import PURGE_PLAYBOOK_TEMPLATE as _PURGE_PLAYBOOK_TEMPLATE
+from services.service_restart import run_systemctl_over_ssh
+from services.ssh_utils import ssh_destination_args, ssh_options
 
 logger = logging.getLogger(__name__)
 
@@ -1065,41 +1068,20 @@ class BlueGreenService:
                 logger.error("Deploy playbook not found: %s", playbook_path)
                 return False
 
-            # Validate roles before using in command
             self._validate_roles(roles)
             roles_str = ",".join(roles)
 
-            cmd = [
-                "ansible-playbook",
-                str(playbook_path),
-                "-i",
-                f"{node.ip_address},",
-                "-e",
-                f"target_roles={shlex.quote(roles_str)}",
-                "-e",
-                f"target_host={node.ip_address}",
-                "-e",
-                f"ansible_user={node.ssh_user or 'autobot'}",
-                "-e",
-                f"ansible_port={node.ssh_port or 22}",
-                "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
-            ]
-
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=str(self.ansible_dir),
+            failure = await run_single_host_playbook(
+                self.ansible_dir,
+                playbook_path,
+                node.ip_address,
+                node.ssh_user or "autobot",
+                node.ssh_port or 22,
+                extra_vars=(f"target_roles={shlex.quote(roles_str)}", f"target_host={node.ip_address}"),
+                timeout=600.0,
             )
-
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=600.0)
-
-            if process.returncode != 0:
-                logger.error(
-                    "Ansible deployment failed: %s",
-                    stdout.decode("utf-8", errors="replace"),
-                )
+            if failure:
+                logger.error("Ansible deployment failed: %s", failure)
                 return False
 
             logger.info("Deployed roles %s to node %s", roles, node.node_id)
@@ -1132,28 +1114,21 @@ class BlueGreenService:
             return False
 
         try:
-            cmd = [
+            ssh_base_cmd = [
                 "ssh",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                "-o",
-                "ConnectTimeout=10",
-                "-o",
-                "BatchMode=yes",
+                *ssh_options("StrictHostKeyChecking=accept-new", "ConnectTimeout=10", "BatchMode=yes"),
                 "-p",
                 str(ssh_port),
-                f"{ssh_user}@{ip_address}",
-                f"sudo systemctl stop {shlex.quote(service)}",
+                *ssh_destination_args(ssh_user, ip_address),
             ]
-
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            done = await run_systemctl_over_ssh(
+                ssh_base_cmd,
+                "stop",
+                [service],  # the executor validates and quotes each unit; quoting here double-quoted it (#18352)
+                use_noninteractive_sudo=False,
+                timeout=30.0,
             )
-
-            await asyncio.wait_for(process.communicate(), timeout=30.0)
-            return process.returncode == 0
+            return done.returncode == 0
 
         except Exception as e:
             logger.warning("Failed to stop service %s: %s", service, e)
@@ -1214,39 +1189,20 @@ class BlueGreenService:
             if not playbook_path.exists():
                 await self._create_purge_playbook(playbook_path)
 
-            # Validate roles before using in command
             self._validate_roles(roles)
             roles_str = ",".join(roles)
 
-            cmd = [
-                "ansible-playbook",
-                str(playbook_path),
-                "-i",
-                f"{ip_address},",
-                "-e",
-                f"purge_roles={shlex.quote(roles_str)}",
-                "-e",
-                f"ansible_user={ssh_user}",
-                "-e",
-                f"ansible_port={ssh_port}",
-                "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
-            ]
-
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=str(self.ansible_dir),
+            failure = await run_single_host_playbook(
+                self.ansible_dir,
+                playbook_path,
+                ip_address,
+                ssh_user,
+                ssh_port,
+                extra_vars=(f"purge_roles={shlex.quote(roles_str)}",),
+                timeout=300.0,
             )
-
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=300.0)
-
-            if process.returncode != 0:
-                logger.error(
-                    "Purge playbook failed: %s",
-                    stdout.decode("utf-8", errors="replace"),
-                )
+            if failure:
+                logger.error("Purge playbook failed: %s", failure)
                 return False
 
             return True
@@ -1262,7 +1218,7 @@ class BlueGreenService:
 
         Related to: Issue #665 (function length reduction via template extraction)
         """
-        path.write_text(_PURGE_PLAYBOOK_TEMPLATE, encoding="utf-8")
+        await asyncio.to_thread(path.write_text, _PURGE_PLAYBOOK_TEMPLATE, encoding="utf-8")
         logger.info("Created purge playbook: %s", path)
 
     async def _broadcast_deployment_event(self, bg_deployment_id: str, event_type: str, message: str) -> None:

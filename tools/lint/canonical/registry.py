@@ -10,7 +10,6 @@ function. Anything else in the package is ignored.
 
 from __future__ import annotations
 
-import ast
 import importlib
 import pkgutil
 from collections.abc import Iterable

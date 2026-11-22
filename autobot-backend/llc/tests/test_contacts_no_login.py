@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # Importing the harness registers the SQLite compile shims for
 # postgresql.JSONB / postgresql.UUID (module-level side effect).
 from autobot_shared.user_management.models.role import Role, UserRole
+from llc.models.activity import LLCActivityLog
 from llc.models.contact import LLCContact
 from llc.services.contact import ContactService
 from llc.tests import _e2e_harness as harness
@@ -66,8 +67,8 @@ _SQLITE_MEMORY_URL = "sqlite+aiosqlite:///:memory:"
 
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator:
-    eng = create_async_engine(_SQLITE_MEMORY_URL)
-    tables = [User.__table__, UserRole.__table__, Role.__table__, LLCContact.__table__]
+    eng = create_async_engine(_SQLITE_MEMORY_URL)  # canonical: ignore py-adhoc-db-engine (test-local)
+    tables = [LLCActivityLog.__table__, User.__table__, UserRole.__table__, Role.__table__, LLCContact.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._rebind_enums_by_value(table)
@@ -80,8 +81,9 @@ async def engine() -> AsyncIterator:
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    # canonical: ignore py-adhoc-db-engine (test-local session factory)
-    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    return async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+        engine, expire_on_commit=False, class_=AsyncSession
+    )
 
 
 @pytest.mark.asyncio

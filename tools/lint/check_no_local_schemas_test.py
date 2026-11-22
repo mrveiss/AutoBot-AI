@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 _HOOK_PATH = Path(__file__).parent / "check_no_local_schemas.py"
 _spec = importlib.util.spec_from_file_location("_hook_under_test", _HOOK_PATH)
@@ -290,7 +290,7 @@ def test_main_returns_0_for_empty_argv(tmp_path: Path) -> None:
 # pass whatever the hunk parser did.
 # ---------------------------------------------------------------------------
 
-E = scrubbed_git_env()  # #15246: an ambient GIT_DIR would point these git calls at the live repo
+E = isolated_git_env()  # #15246: an ambient GIT_DIR would point these git calls at the live repo
 
 LEGACY = """\
 from pydantic import BaseModel
@@ -522,3 +522,17 @@ def test_main_scopes_to_the_staged_diff_an_unrelated_edit_passes(
     _git(repo, "add", str(path))
 
     assert _main_rooted_at(monkeypatch, repo, "--changed-lines-only", str(path)) == 0
+
+
+def test_mode_follows_the_named_files_not_the_argv_length() -> None:
+    """A named file scopes the run; no file is a sweep -- whatever else is on argv (#14896)."""
+    assert hook._is_full_repo([]) is True
+    assert hook._is_full_repo(["a.py"]) is False
+    assert hook._is_full_repo(["--changed-lines-only", "a.py"]) is False
+
+
+def test_changed_lines_only_with_no_files_is_refused_not_scoped() -> None:
+    """The call shape never reaches the harness as a scoped run: the parser rejects it with exit 2."""
+    with pytest.raises(SystemExit) as exc:
+        hook._collect(["--changed-lines-only"], Path("."))
+    assert exc.value.code == 2

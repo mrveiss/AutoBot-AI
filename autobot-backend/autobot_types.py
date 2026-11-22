@@ -26,7 +26,7 @@ class TaskComplexity(Enum):
     Collapsing rather than giving them distinct values is the recorded owner
     decision on #13806 (2026-09-06): nothing in the tree ever distinguished
     the three, and the thing they were standing in for -- *what kind of
-    workflow is this* -- is carried by ``TemplateCategory`` on
+    workflow is this* -- is carried by ``WorkflowTemplateCategory`` on
     ``WorkflowTemplate``, a separate enum whose members do not collide.
 
     Adding a third member with a duplicate value re-lays the same trap and is

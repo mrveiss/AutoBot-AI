@@ -1,6 +1,6 @@
 # tools/git-hooks
 
-Git hooks that enforce the `batch-implement` skill's Phase 0c (verification
+Git hooks that enforce the `/autobot-dev-skills:lifecycle batch-implement` skill's Phase 0c (verification
 mandate + pre-push duplicate check) automatically. Without these, the skill
 rules are advisory text — easy to skip when you're in a hurry. With them,
 git won't let you push something that fails the rules.
@@ -70,23 +70,38 @@ Commits on any other branch pass straight through.
 
 ## What the pre-push hook does
 
-For each ref you're pushing, the hook walks the changed files and runs:
+For each ref you're pushing, the hook runs the **fast gate** by default. Owner decision
+2026-10-25 (#19472): the full vue-tsc / vitest / pytest suites duplicate the work GitHub's
+runners do on every PR, so they no longer run locally unless you opt in.
 
 | Check | When | What |
 |---|---|---|
-| **Open-PR cap** (#17006) | a `refs/heads/*` ref that does not yet exist on the remote (a new branch; a new tag is exempt) | refuse the push once open PRs (excluding forks/bots) are `>= AUTOBOT_OPEN_PR_CAP` (default 40); pushes to an existing branch are never blocked |
 | **Phase 6 issue check** | branch matches `issue-NNNN` | warn if issue is CLOSED on GitHub OR if `origin/main` already has a commit citing `#NNNN` |
-| **Phase 0c type check** | any `.ts` or `.vue` file changed | `vue-tsc --noEmit -p tsconfig.app.json` (90s timeout); only **errors in changed files** block — pre-existing project errors warn |
-| **Phase 0c test run** | any test file or composable changed | `vitest run <relevant test files>` (120s timeout); failures block |
-| **Phase 0c backend tests** | any `.py` file changed | `pytest <co-located *_test.py>` (120s timeout); failures block |
+| **Phase 7 PR body** | the branch has an open PR | `scripts/validate_pr_body.py --pr <branch>`; a failing body blocks |
+| **Hardcoded-values baseline** | any file changed | scoped `detect-hardcoded-values.sh --audit-baseline` over the changed paths (seconds) |
+| **Fast guards** | any file changed | the guard set listed in `tools/git-hooks/fast_guard_tests.txt`, read from the pushed commit (working-tree copy only if that commit lacks it; a listed path absent from the commit fails) — record / equivalence / ratchet tests, whole tree — + `scripts/repin_reach_floors.py --check`; a pass is cached per tree |
+| **Full suites** | only with `AUTOBOT_PREPUSH_FULL=1` | Phase 0c: vue-tsc and vitest per frontend app, the kit's `vitest related`, and the selected pytest run, in parallel. The sys.modules leak probe (#13337) runs with these, so by default it runs in CI only |
+
+The commit-msg checks (trailers) and the pre-commit protected-branch refusal live in
+their own hooks and are unaffected.
 
 Time-boxed: a slow check warns and skips rather than blocking forever. Real
 failures block the push with a clear "fix this" message.
 
-**The open-PR cap has no bypass** — `git push --no-verify` skips the whole
-hook (see "Bypass" below, and don't), but there is no flag or env var that
-disables just this check while leaving the others active. The only
-configurable input is `AUTOBOT_OPEN_PR_CAP` itself.
+There is no open-PR cap (#19397, which retired #17006's): a new branch
+pushes at any number of open PRs.
+
+## Which Python the hooks run (#21163)
+
+Every hook that runs Python gets its interpreter from one resolver,
+`scripts/lib/hook-python.sh` (`resolve_repo_python`), never from whichever `python3`
+is first on `PATH`. The required version is read from `.python-version`. Order: the
+repo venv (`$VIRTUAL_ENV`, `venv/`, `.venv/`, also the main checkout's from a
+worktree), then `python<version>`, then `python3`/`python` only when it verifiably
+meets the version. Each candidate must also import any module the caller requires
+(the pre-push gate requires `pytest`). When none qualifies the hook stops and names
+the required version; it does not fall back to an older interpreter.
+`repo_tests/hook_interpreter_resolver_21163_test.py` fails on a hook that bypasses it.
 
 ## Bypass
 
@@ -128,3 +143,24 @@ git update-index --chmod=+x tools/git-hooks/<name>
 
 `repo_tests/git_hooks_executable_test.py` asserts the index mode of every
 tracked hook and installer, so a hook cannot go inert this way again (#14909).
+
+## Remote test node (#20935)
+
+The pre-push fast guards run on a dedicated remote test node when one is configured, and fall back to the local
+machine slot (#20518) when it is not configured, not provisioned or not reachable. The hook says which, on stderr.
+A failing remote test is a failure, never a fallback. A train's suite uses the same entry point:
+`python tools/remote_test_node/run.py --sha <sha> -- <command>` (exit 75 means "run it locally").
+
+Settings are `AUTOBOT_TEST_NODE_*` (see `docs/developer/ENV_VARS.md`): host, user, SSH key path, port, slots, workers,
+timeout. Set them in your own environment; they are never committed. Prepare or repair a node with
+`python tools/remote_test_node/run.py --provision` (idempotent; takes a fresh Debian-family or Fedora-family install
+to ready, reads the Python floor from `.python-version`, installs a matching interpreter through `uv` when the base
+has none, and verifies the result). Each run pushes only the commits the branch adds into a mirror on the node,
+checks them out into a private directory and removes it, and the commit ref, on success, failure, timeout and
+signal; a stale-directory sweep covers a hard kill. The node's mirror is garbage-collected weekly.
+Host-key trust is trust-on-first-use (`StrictHostKeyChecking=accept-new`) unless `AUTOBOT_TEST_NODE_KNOWN_HOSTS` pins a
+known_hosts file; `--provision` needs passwordless `sudo -n` on the node when packages are missing. Not remote: `repin_reach_floors.py --check` still runs locally.
+
+Measured concurrency (12-core, 14 GB node; fast-guard suite, 1,383 tests; wall per job / peak load / lowest free memory):
+1 job at `-n 1/2/4/8`: 104/89/114/136 s. At `-n 4`: 2 jobs 200 s (load 13.7, 5.5 GB), 3 jobs 261 s (19.4, 2.8 GB),
+4 jobs 345 s (26.3, 0.85 GB). At `-n 2`: 3 jobs 209 s (8.6, 6.0 GB), 6 jobs 403 s (17.0, 4.5 GB). Defaults: 3 slots, 2 workers.

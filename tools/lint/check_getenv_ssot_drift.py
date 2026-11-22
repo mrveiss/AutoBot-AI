@@ -50,7 +50,7 @@ assertions):
   for ``MemoryPool``, ``WeakCache`` and the ``memory_efficient_cache``
   decorator in the same module. 0 collapses each to zero capacity.
   Pre-#7437: 100 / 128 / 128.
-- ``memory_threshold_mb``/``memory_log_threshold_mb``: ``MemoryMonitor``'s
+- ``memory_threshold_mb``/``memory_log_threshold_mb``: ``ProcessMemoryMonitor``'s
   warning threshold, same module. 0 makes ``abs(diff) > threshold`` true for
   almost every allocation. Pre-#7437: 500 / 1.
 - ``chat_timeout``: ``api/chat.py`` reads it unguarded; 0 timed out every
@@ -117,12 +117,13 @@ commit's pre-image), not carried over from the issue table unchecked; see
   ``ssot_config.py``; they are deliberately not repeated here, because a
   literal URL in prose is both a second place to update and a hardcoded-value
   violation on this file's own lines.
-- ``openrouter_default_model``/``vllm_dtype``/``vllm_gpu_memory_utilization``/
-  ``vllm_tensor_parallel_size``: ``llm_shared/provider_registry.py`` (moved
-  from the pre-#7437 ``llm_interface_pkg/provider_registry.py``) reads all
-  four unguarded; ``vllm_gpu_memory_utilization=""`` raises on
-  ``float("")``, ``vllm_tensor_parallel_size=0`` silently zeroes the vLLM
-  tensor-parallel degree. Pre-#7437: "gpt-3.5-turbo" / "auto" / "0.9" / 1.
+- ``vllm_dtype``/``vllm_gpu_memory_utilization``/``vllm_tensor_parallel_size``:
+  ``llm_shared/provider_registry.py`` (moved from the pre-#7437
+  ``llm_interface_pkg/provider_registry.py``) reads all three unguarded
+  (``openrouter_default_model`` moved to ``autobot_shared/ssot_hosted_models``,
+  #15501); ``vllm_gpu_memory_utilization=""`` raises on ``float("")``,
+  ``vllm_tensor_parallel_size=0`` silently zeroes the vLLM tensor-parallel
+  degree. Pre-#7437: "auto" / "0.9" / 1.
 """
 
 from __future__ import annotations
@@ -152,6 +153,8 @@ from _scan_helpers import (  # noqa: E402
     scan_python_files,
 )
 
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+
 #: Name this guard reports under, in messages and in its floor failures.
 HOOK_ID = "getenv-ssot-drift"
 
@@ -175,7 +178,14 @@ FIELD_DEFAULT_FLOOR = 300
 #: floor is set just below that, not at the much larger raw call-site count.
 #: An empty offender list from a sweep that matched zero pairs asserts
 #: nothing.
-GETENV_CALL_FLOOR = 8
+#: 8 until #19232 moved the Redis env reads into one resolver (6 matched after);
+#: #19317 routed the AUTOBOT_TLS_CERT_DIR reads through ssot_tls (5 matched after).
+GETENV_CALL_FLOOR = 5
+
+#: SSOT settings modules split out of ``ssot_config.py`` for its size ceiling; their
+#: ``Field`` aliases are SSOT config exactly like ``ssot_config.py``'s (#17312: ``TLSConfig``
+#: moved to ``ssot_tls.py``, which took the TLS getenv-pair sites out of the sweep).
+SSOT_FIELD_SOURCES = ("ssot_config.py", "ssot_tls.py")
 
 
 def _call_name(node: ast.Call) -> str | None:
@@ -305,7 +315,7 @@ def _in_scope(path: Path, repo_root: Path) -> bool:
         return False
     if "tests" in parts:
         return False
-    if path.name in ("ssot_config.py",) or path.name.endswith("_test.py"):
+    if path.name in SSOT_FIELD_SOURCES or is_test_filename(path.name, include_js=False, include_conftest=False):
         return False
     return True
 
@@ -328,8 +338,10 @@ def _swept_files(repo_root: Path) -> list[Path]:
 
 def find_drift(repo_root: Path) -> tuple[list[str], int]:
     """Offender strings, and the number of in-scope call sites examined."""
-    ssot_source = (repo_root / "autobot_shared" / "ssot_config.py").read_text(encoding="utf-8")
-    field_defaults = extract_field_defaults(ssot_source)
+    field_defaults: dict[str, Any] = {}
+    for name in SSOT_FIELD_SOURCES:
+        source = (repo_root / "autobot_shared" / name).read_text(encoding="utf-8")
+        field_defaults.update(extract_field_defaults(source))
     if len(field_defaults) < FIELD_DEFAULT_FLOOR:
         raise VacuousScan(f"only {len(field_defaults)} ssot_config field defaults reached — the sweep broke")
 
@@ -364,8 +376,10 @@ def _summary(n: int) -> str:
 def _collect(argv: list[str], repo_root: Path) -> tuple[int, list[str]]:
     """``(comparable getenv/ssot_config pairs examined, finding lines)``; *argv* is unused."""
     del argv  # full-repo only, by construction
-    if not (repo_root / "autobot_shared" / "ssot_config.py").is_file():
-        raise VacuousScan(f"autobot_shared/ssot_config.py is not in {repo_root} -- there are no defaults to compare")
+    for name in SSOT_FIELD_SOURCES:
+        # Every SSOT field source must be present: a missing one is a refusal (exit 2), never a skip.
+        if not (repo_root / "autobot_shared" / name).is_file():
+            raise VacuousScan(f"autobot_shared/{name} is not in {repo_root} -- there are no defaults to compare")
     offenders, calls_examined = find_drift(repo_root)
     return calls_examined, [f"[{HOOK_ID}] {offender}" for offender in offenders]
 

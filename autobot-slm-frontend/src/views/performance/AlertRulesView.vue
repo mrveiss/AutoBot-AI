@@ -12,8 +12,9 @@
 
 import { ref, onMounted } from 'vue'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import type { AlertRule } from '@/composables/usePerformanceMonitoring'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
 const {
   alertRules,
@@ -91,10 +92,10 @@ function resetForm(): void {
  */
 function severityBadgeClass(severity: string): string {
   switch (severity) {
-    case 'info': return 'bg-blue-100 text-blue-700'
-    case 'warning': return 'bg-amber-100 text-amber-700'
-    case 'critical': return 'bg-red-100 text-red-700'
-    default: return 'bg-gray-100 text-gray-700'
+    case 'info': return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
+    case 'warning': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
+    case 'critical': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
   }
 }
 
@@ -113,7 +114,7 @@ function formatCondition(condition: string): string {
 }
 
 function formatLastTriggered(dateStr: string | null): string {
-  return formatDateTime(dateStr)
+  return formatFleetDateTime(dateStr)
 }
 
 /**
@@ -218,18 +219,13 @@ async function handleDelete(): Promise<void> {
 <template>
   <div class="p-6">
     <!-- Error Banner -->
-    <div
-      v-if="error"
-      class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">{{ $t('performance.alertRulesView.alertRules') }}</h2>
-        <p class="text-sm text-gray-500">{{ $t('performance.alertRulesView.countRulePluralConfigured', { count: alertRules.length, plural: alertRules.length !== 1 ? 's' : '' }) }}</p>
+        <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('performance.alertRulesView.alertRules') }}</h2>
+        <p class="text-sm text-autobot-text-tertiary">{{ $t('performance.alertRulesView.countRulePluralConfigured', { count: alertRules.length, plural: alertRules.length !== 1 ? 's' : '' }) }}</p>
       </div>
       <button
         @click="openCreateModal"
@@ -243,37 +239,37 @@ async function handleDelete(): Promise<void> {
     </div>
 
     <!-- Rules Table -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200">
-      <div v-if="alertRules.length === 0 && !loading" class="p-8 text-center text-gray-400">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+      <div v-if="alertRules.length === 0 && !loading" class="p-8 text-center text-autobot-text-tertiary">
         {{ $t('performance.alertRulesView.noAlertRulesConfigured') }}
       </div>
       <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+        <table class="min-w-full divide-y divide-autobot-border">
+          <thead class="bg-autobot-bg-secondary">
             <tr>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.alertRulesView.name') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.alertRulesView.metric') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.alertRulesView.condition') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.alertRulesView.severity') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.alertRulesView.enabled') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.alertRulesView.lastTriggered') }}</th>
-              <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{{ $t('performance.alertRulesView.actions') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.alertRulesView.name') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.alertRulesView.metric') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.alertRulesView.condition') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.alertRulesView.severity') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.alertRulesView.enabled') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.alertRulesView.lastTriggered') }}</th>
+              <th class="px-4 py-2 text-right text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.alertRulesView.actions') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200">
-            <tr v-for="rule in alertRules" :key="rule.rule_id" class="hover:bg-gray-50">
+          <tbody class="divide-y divide-autobot-border">
+            <tr v-for="rule in alertRules" :key="rule.rule_id" class="hover:bg-autobot-bg-hover">
               <td class="px-4 py-3">
-                <div class="text-sm font-medium text-gray-900">{{ rule.name }}</div>
-                <div v-if="rule.description" class="text-xs text-gray-500">
+                <div class="text-sm font-medium text-autobot-text-primary">{{ rule.name }}</div>
+                <div v-if="rule.description" class="text-xs text-autobot-text-tertiary">
                   {{ rule.description }}
                 </div>
               </td>
-              <td class="px-4 py-3 text-sm text-gray-600 capitalize">
+              <td class="px-4 py-3 text-sm text-autobot-text-secondary capitalize">
                 {{ rule.metric_type.replaceAll('_', ' ') }}
               </td>
-              <td class="px-4 py-3 text-sm font-mono text-gray-700">
+              <td class="px-4 py-3 text-sm font-mono text-autobot-text-secondary">
                 {{ formatCondition(rule.condition) }} {{ rule.threshold }}
-                <span class="text-gray-400 text-xs">
+                <span class="text-autobot-text-tertiary text-xs">
                   ({{ rule.duration_seconds }}s)
                 </span>
               </td>
@@ -292,7 +288,7 @@ async function handleDelete(): Promise<void> {
                   @click="toggleEnabled(rule)"
                   :class="[
                     'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                    rule.enabled ? 'bg-green-500' : 'bg-gray-300'
+                    rule.enabled ? 'bg-autobot-dot-ok' : 'bg-autobot-border-strong'
                   ]"
                   :title="rule.enabled ? 'Disable' : 'Enable'"
                 >
@@ -304,7 +300,7 @@ async function handleDelete(): Promise<void> {
                   ></span>
                 </button>
               </td>
-              <td class="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+              <td class="px-4 py-3 text-sm text-autobot-text-tertiary whitespace-nowrap">
                 {{ formatLastTriggered(rule.last_triggered) }}
               </td>
               <td class="px-4 py-3 text-right">
@@ -317,7 +313,7 @@ async function handleDelete(): Promise<void> {
                   </button>
                   <button
                     @click="confirmDelete(rule)"
-                    class="text-xs text-red-600 hover:text-red-800 transition-colors"
+                    class="text-xs text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg transition-colors"
                   >
                     {{ $t('performance.alertRulesView.delete') }}
                   </button>
@@ -330,179 +326,160 @@ async function handleDelete(): Promise<void> {
     </div>
 
     <!-- Create/Edit Rule Modal -->
-    <transition
-      enter-active-class="transition ease-out duration-200"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition ease-in duration-150"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
+    <BaseModal
+      :model-value="showCreateModal || showEditModal"
+      :title="showEditModal ? $t('performance.alertRulesView.editAlertRule') : $t('performance.alertRulesView.createAlertRule')"
+      width="32rem"
+      :close-label="$t('ui.modal.closeDialog')"
+      @close="showCreateModal = false; showEditModal = false"
     >
-      <div
-        v-if="showCreateModal || showEditModal"
-        class="fixed inset-0 z-50 flex items-center justify-center"
+      <form
+        id="alert-rule-form"
+        @submit.prevent="showEditModal ? handleEdit() : handleCreate()"
+        class="space-y-4"
       >
-        <div
-          class="fixed inset-0 bg-black/50"
-          @click="showCreateModal = false; showEditModal = false"
-        ></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            {{ showEditModal ? $t('performance.alertRulesView.editAlertRule') : $t('performance.alertRulesView.createAlertRule') }}
-          </h3>
-          <form
-            @submit.prevent="showEditModal ? handleEdit() : handleCreate()"
-            class="space-y-4"
-          >
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.name') }}</label>
-              <input
-                v-model="form.name"
-                type="text"
-                required
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                :placeholder="$t('performance.alertRulesView.highLatencyAlert')"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.description') }}</label>
-              <input
-                v-model="form.description"
-                type="text"
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                :placeholder="$t('performance.alertRulesView.optionalDescription')"
-              />
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.metricType') }}</label>
-                <select
-                  v-model="form.metric_type"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                >
-                  <option v-for="opt in metricTypeOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.condition') }}</label>
-                <select
-                  v-model="form.condition"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                >
-                  <option v-for="opt in conditionOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-            </div>
-            <div class="grid grid-cols-3 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.threshold') }}</label>
-                <input
-                  v-model.number="form.threshold"
-                  type="number"
-                  step="any"
-                  required
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.durationS') }}</label>
-                <input
-                  v-model.number="form.duration_seconds"
-                  type="number"
-                  min="1"
-                  required
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.severity') }}</label>
-                <select
-                  v-model="form.severity"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                >
-                  <option v-for="opt in severityOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.alertRulesView.nodeIDOptional') }}</label>
-              <input
-                v-model="form.node_id"
-                type="text"
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                :placeholder="$t('performance.alertRulesView.leaveEmptyForAllNodes')"
-              />
-            </div>
-            <div class="flex items-center gap-2">
-              <input
-                v-model="form.enabled"
-                type="checkbox"
-                id="rule-enabled"
-                class="rounded-sm border-gray-300"
-              />
-              <label for="rule-enabled" class="text-sm text-gray-700">{{ $t('performance.alertRulesView.enabled') }}</label>
-            </div>
-            <div class="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                @click="showCreateModal = false; showEditModal = false"
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                {{ $t('performance.alertRulesView.cancel') }}
-              </button>
-              <button
-                type="submit"
-                :disabled="!form.name || loading"
-                class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
-              >
-                {{ showEditModal ? $t('performance.alertRulesView.save') : $t('performance.alertRulesView.create') }}
-              </button>
-            </div>
-          </form>
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('performance.alertRulesView.name') }}</label>
+          <input
+            v-model="form.name"
+            type="text"
+            required
+            class="w-full border border-autobot-border-strong rounded-lg px-3 py-2 text-sm"
+            :placeholder="$t('performance.alertRulesView.highLatencyAlert')"
+          />
         </div>
-      </div>
-    </transition>
-
-    <!-- Delete Confirmation Modal -->
-    <transition
-      enter-active-class="transition ease-out duration-200"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition ease-in duration-150"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
-      <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="fixed inset-0 bg-black/50" @click="showDeleteConfirm = false"></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('performance.alertRulesView.deleteAlertRule') }}</h3>
-          <p class="text-sm text-gray-600 mb-4">
-            {{ $t('performance.alertRulesView.areYouSureYou') }}
-            <span class="font-medium">"{{ deleteTarget?.name }}"</span>{{ $t('performance.alertRulesView.thisActionCannotBe') }}
-          </p>
-          <div class="flex justify-end gap-3">
-            <button
-              @click="showDeleteConfirm = false"
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('performance.alertRulesView.description') }}</label>
+          <input
+            v-model="form.description"
+            type="text"
+            class="w-full border border-autobot-border-strong rounded-lg px-3 py-2 text-sm"
+            :placeholder="$t('performance.alertRulesView.optionalDescription')"
+          />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('performance.alertRulesView.metricType') }}</label>
+            <select
+              v-model="form.metric_type"
+              class="w-full border border-autobot-border-strong rounded-lg px-3 py-2 text-sm"
             >
-              {{ $t('performance.alertRulesView.cancel') }}
-            </button>
-            <button
-              @click="handleDelete"
-              :disabled="loading"
-              class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+              <option v-for="opt in metricTypeOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('performance.alertRulesView.condition') }}</label>
+            <select
+              v-model="form.condition"
+              class="w-full border border-autobot-border-strong rounded-lg px-3 py-2 text-sm"
             >
-              {{ $t('performance.alertRulesView.delete') }}
-            </button>
+              <option v-for="opt in conditionOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
           </div>
         </div>
-      </div>
-    </transition>
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('performance.alertRulesView.threshold') }}</label>
+            <input
+              v-model.number="form.threshold"
+              type="number"
+              step="any"
+              required
+              class="w-full border border-autobot-border-strong rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('performance.alertRulesView.durationS') }}</label>
+            <input
+              v-model.number="form.duration_seconds"
+              type="number"
+              min="1"
+              required
+              class="w-full border border-autobot-border-strong rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('performance.alertRulesView.severity') }}</label>
+            <select
+              v-model="form.severity"
+              class="w-full border border-autobot-border-strong rounded-lg px-3 py-2 text-sm"
+            >
+              <option v-for="opt in severityOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('performance.alertRulesView.nodeIDOptional') }}</label>
+          <input
+            v-model="form.node_id"
+            type="text"
+            class="w-full border border-autobot-border-strong rounded-lg px-3 py-2 text-sm"
+            :placeholder="$t('performance.alertRulesView.leaveEmptyForAllNodes')"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <input
+            v-model="form.enabled"
+            type="checkbox"
+            id="rule-enabled"
+            class="rounded-sm border-autobot-border-strong"
+          />
+          <label for="rule-enabled" class="text-sm text-autobot-text-secondary">{{ $t('performance.alertRulesView.enabled') }}</label>
+        </div>
+      </form>
+      <template #actions>
+        <div class="flex justify-end gap-3">
+          <button
+            type="button"
+            @click="showCreateModal = false; showEditModal = false"
+            class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover"
+          >
+            {{ $t('performance.alertRulesView.cancel') }}
+          </button>
+          <button
+            type="submit"
+            form="alert-rule-form"
+            :disabled="!form.name || loading"
+            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+          >
+            {{ showEditModal ? $t('performance.alertRulesView.save') : $t('performance.alertRulesView.create') }}
+          </button>
+        </div>
+      </template>
+    </BaseModal>
+
+    <!-- Delete Confirmation Modal -->
+    <BaseModal
+      v-model="showDeleteConfirm"
+      :title="$t('performance.alertRulesView.deleteAlertRule')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <p class="text-sm text-autobot-text-secondary">
+        {{ $t('performance.alertRulesView.areYouSureYou') }}
+        <span class="font-medium">"{{ deleteTarget?.name }}"</span>{{ $t('performance.alertRulesView.thisActionCannotBe') }}
+      </p>
+      <template #actions>
+        <button
+          @click="showDeleteConfirm = false"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover"
+        >
+          {{ $t('performance.alertRulesView.cancel') }}
+        </button>
+        <button
+          @click="handleDelete"
+          :disabled="loading"
+          class="px-4 py-2 text-sm font-medium text-(--text-on-error) bg-autobot-error-solid rounded-lg hover:bg-(--color-error-solid-hover) disabled:opacity-50"
+        >
+          {{ $t('performance.alertRulesView.delete') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

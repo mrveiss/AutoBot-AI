@@ -36,9 +36,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
 from code_intelligence.precommit_analyzer import BUILTIN_CHECKS as _ENGINE_BUILTIN_CHECKS
-from code_intelligence.precommit_analyzer import CheckDefinition as _EngineCheckDefinition
-from code_intelligence.precommit_analyzer import CheckResult as _EngineCheckResult
 from code_intelligence.precommit_analyzer import PrecommitAnalyzer
+from code_intelligence.precommit_analyzer import PrecommitCheckDefinition as _EngineCheckDefinition
+from code_intelligence.precommit_analyzer import PrecommitCheckResult as _EngineCheckResult
 from constants.network_constants import NetworkConstants
 
 logger = get_logger(__name__)

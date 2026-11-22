@@ -119,10 +119,10 @@ class EntityResolver:
         if self.embedding_model is None and self.enable_semantic_similarity:
             try:
                 # Import only when needed to avoid startup delay
-                from sentence_transformers import SentenceTransformer
+                from utils.semantic_chunker_base import SENTENCE_EMBEDDING_MODEL, load_sentence_transformer
 
-                model_name = config_manager.get("entity_resolution.embedding_model", "all-MiniLM-L6-v2")
-                self.embedding_model = SentenceTransformer(model_name)
+                model_name = SENTENCE_EMBEDDING_MODEL  # code-pinned, no config override (#19430)
+                self.embedding_model = load_sentence_transformer(model_name)
                 logger.info("Loaded embedding model: %s", model_name)
             except Exception as e:
                 logger.warning("Failed to load embedding model: %s", e)

@@ -220,7 +220,7 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
 
-    host = os.getenv("NPU_WORKER_HOST", "0.0.0.0")
+    host = os.getenv("NPU_WORKER_BIND_HOST") or os.getenv("NPU_WORKER_HOST", "0.0.0.0")
     port = int(os.getenv("NPU_WORKER_PORT", 8081))
     workers = int(os.getenv("NPU_WORKER_WORKERS", 1))
 
@@ -230,7 +230,9 @@ if __name__ == "__main__":
     ssl_certfile = None
 
     if tls_enabled:
-        cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "/etc/autobot/certs")
+        # The node's flat cert dir. This image has no autobot_shared, so the default is a copy of
+        # env_registry_tls.DEFAULT_TLS_REMOTE_CERT_DIR pinned by the env-forks guard and #19317's test.
+        cert_dir = os.getenv("AUTOBOT_TLS_REMOTE_CERT_DIR", "/etc/autobot/certs")
         ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
         ssl_certfile = os.path.join(cert_dir, "server-cert.pem")
         port = int(os.getenv("NPU_WORKER_TLS_PORT", "8444"))
