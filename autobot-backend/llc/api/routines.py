@@ -43,6 +43,7 @@ from user_management.services import TenantContext
 from ..models.enums import RoutineProduces, RoutineStatus
 from ..scheduler.routine_scheduler import _SCHEDULE_KEY
 from ..services.routine_service import RoutineService
+from ._named_agent import require_member_targets
 
 router = APIRouter(tags=["llc-routines"])
 _service = service_dep(RoutineService)
@@ -166,6 +167,7 @@ async def create_routine(
     ctx: TenantContext = Depends(require_org_context),
 ) -> RoutineRead:
     assert_company_access(ctx, company_id)
+    await require_member_targets(session, company_id, None, body.assignee_agent_id)
     if croniter is None:
         raise HTTPException(status_code=503, detail="Routine scheduling unavailable — croniter not installed")
     if not croniter.is_valid(body.cron_schedule):
@@ -220,8 +222,9 @@ async def update_routine(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> RoutineRead:
-    await _load_owned_routine(session, routine_id, ctx)
+    owned = await _load_owned_routine(session, routine_id, ctx)
     updates = body.model_dump(exclude_unset=True)
+    await require_member_targets(session, owned.company_id, None, updates.get("assignee_agent_id"))
     new_cron = updates.get("cron_schedule")
     if croniter is None and new_cron is not None:
         raise HTTPException(status_code=503, detail="Routine scheduling unavailable — croniter not installed")

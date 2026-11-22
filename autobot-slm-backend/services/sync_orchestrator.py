@@ -86,8 +86,8 @@ class SyncOrchestrator:
             if not role:
                 return False, f"Role not found: {role_name}", None
 
-            if not role.source_paths:
-                return False, f"Role has no source paths: {role_name}", None
+            if not role.source_paths or not role.target_path:  # #16025: an empty target would rsync into "/"
+                return False, f"Role has no source paths or sync target: {role_name}", None
 
             ctx = SyncNodeContext()
             ctx.node_ip = node.ip_address

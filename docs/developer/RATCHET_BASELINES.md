@@ -189,6 +189,8 @@ duplication". The gate measured duplication per line of code, and deleting
 unique code raises that. #16319 moved both scopes to the absolute
 duplicated-line count.
 
+The duplication-guard pins live in `.github/duplication-pins.json` (read by `.github/workflows/duplication-guard.yml` and lowered post-merge by `scripts/duplication_pin_lowering.py`).
+
 Before freezing a ratio, ask whether a change the rule should welcome can move
 it: deleting unrelated code, or splitting a file.
 

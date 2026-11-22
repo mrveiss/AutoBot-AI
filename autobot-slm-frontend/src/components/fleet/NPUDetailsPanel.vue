@@ -93,10 +93,10 @@ const memoryPercent = computed(() => {
 
 const tempColor = computed(() => {
   const t = liveMetrics.value?.temperature_celsius
-  if (t == null) return 'text-gray-500'
-  if (t >= 75) return 'text-red-600'
-  if (t >= 60) return 'text-yellow-600'
-  return 'text-green-600'
+  if (t == null) return 'text-autobot-text-tertiary'
+  if (t >= 75) return 'text-autobot-error'
+  if (t >= 60) return 'text-autobot-pill-warn-fg'
+  return 'text-autobot-success'
 })
 
 async function loadWorkerConfig(token: number): Promise<void> {
@@ -197,132 +197,132 @@ watch(
       <BaseAlert v-if="success" variant="success" size="compact" :message="success" />
 
       <!-- Device Info -->
-      <div class="bg-gray-50 rounded-lg p-4">
-        <h3 class="text-sm font-medium text-gray-700 mb-3">{{ $t('fleet.nPUDetailsPanel.deviceInformation') }}</h3>
+      <div class="bg-autobot-bg-secondary rounded-lg p-4">
+        <h3 class="text-sm font-medium text-autobot-text-secondary mb-3">{{ $t('fleet.nPUDetailsPanel.deviceInformation') }}</h3>
         <dl class="space-y-2">
           <div class="flex justify-between">
-            <dt class="text-sm text-gray-500">{{ $t('fleet.nPUDetailsPanel.deviceType') }}</dt>
-            <dd class="text-sm font-medium text-gray-900">{{ deviceTypeLabel }}</dd>
+            <dt class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.deviceType') }}</dt>
+            <dd class="text-sm font-medium text-autobot-text-primary">{{ deviceTypeLabel }}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-sm text-gray-500">{{ $t('fleet.nPUDetailsPanel.memory') }}</dt>
-            <dd class="text-sm font-medium text-gray-900">
+            <dt class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.memory') }}</dt>
+            <dd class="text-sm font-medium text-autobot-text-primary">
               {{ npuStatus?.capabilities?.memoryGB ?? $t('fleet.nPUDetailsPanel.notAvailable') }} GB
             </dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-sm text-gray-500">{{ $t('fleet.nPUDetailsPanel.maxConcurrent') }}</dt>
-            <dd class="text-sm font-medium text-gray-900">
+            <dt class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.maxConcurrent') }}</dt>
+            <dd class="text-sm font-medium text-autobot-text-primary">
               {{ npuStatus?.capabilities?.maxConcurrent ?? $t('fleet.nPUDetailsPanel.notAvailable') }}
             </dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-sm text-gray-500">{{ $t('fleet.nPUDetailsPanel.lastHealthCheck') }}</dt>
-            <dd class="text-sm font-medium text-gray-900">{{ lastHealthCheck }}</dd>
+            <dt class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.lastHealthCheck') }}</dt>
+            <dd class="text-sm font-medium text-autobot-text-primary">{{ lastHealthCheck }}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-sm text-gray-500">{{ $t('fleet.nPUDetailsPanel.detectionStatus') }}</dt>
+            <dt class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.detectionStatus') }}</dt>
             <dd class="text-sm font-medium">
-              <span v-if="npuStatus?.detectionStatus === 'detected'" class="text-green-600">{{ $t('fleet.nPUDetailsPanel.detected') }}</span>
-              <span v-else-if="npuStatus?.detectionStatus === 'pending'" class="text-yellow-600">{{ $t('fleet.nPUDetailsPanel.pending') }}</span>
-              <span v-else-if="npuStatus?.detectionStatus === 'failed'" class="text-red-600">{{ $t('fleet.nPUDetailsPanel.failed') }}</span>
-              <span v-else class="text-gray-600">{{ $t('fleet.nPUDetailsPanel.unknown') }}</span>
+              <span v-if="npuStatus?.detectionStatus === 'detected'" class="text-autobot-success">{{ $t('fleet.nPUDetailsPanel.detected') }}</span>
+              <span v-else-if="npuStatus?.detectionStatus === 'pending'" class="text-autobot-pill-warn-fg">{{ $t('fleet.nPUDetailsPanel.pending') }}</span>
+              <span v-else-if="npuStatus?.detectionStatus === 'failed'" class="text-autobot-error">{{ $t('fleet.nPUDetailsPanel.failed') }}</span>
+              <span v-else class="text-autobot-text-secondary">{{ $t('fleet.nPUDetailsPanel.unknown') }}</span>
             </dd>
           </div>
         </dl>
       </div>
 
       <!-- Live Metrics (Issue #590) -->
-      <div v-if="liveMetrics" class="bg-gray-50 rounded-lg p-4">
-        <h3 class="text-sm font-medium text-gray-700 mb-3">{{ $t('fleet.nPUDetailsPanel.liveMetrics') }}</h3>
+      <div v-if="liveMetrics" class="bg-autobot-bg-secondary rounded-lg p-4">
+        <h3 class="text-sm font-medium text-autobot-text-secondary mb-3">{{ $t('fleet.nPUDetailsPanel.liveMetrics') }}</h3>
         <div class="grid grid-cols-2 gap-3">
-          <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
-            <p class="text-lg font-semibold text-gray-900">{{ liveMetrics.inference_count }}</p>
-            <p class="text-xs text-gray-500">{{ $t('fleet.nPUDetailsPanel.inferences') }}</p>
+          <div class="text-center p-2 bg-white rounded-sm border border-autobot-border-subtle">
+            <p class="text-lg font-semibold text-autobot-text-primary">{{ liveMetrics.inference_count }}</p>
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.inferences') }}</p>
           </div>
-          <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
-            <p class="text-lg font-semibold text-gray-900">{{ liveMetrics.avg_latency_ms.toFixed(1) }}ms</p>
-            <p class="text-xs text-gray-500">{{ $t('fleet.nPUDetailsPanel.avgLatency') }}</p>
+          <div class="text-center p-2 bg-white rounded-sm border border-autobot-border-subtle">
+            <p class="text-lg font-semibold text-autobot-text-primary">{{ liveMetrics.avg_latency_ms.toFixed(1) }}ms</p>
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.avgLatency') }}</p>
           </div>
-          <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
-            <p class="text-lg font-semibold text-gray-900">{{ liveMetrics.throughput_rps.toFixed(1) }}</p>
-            <p class="text-xs text-gray-500">{{ $t('fleet.nPUDetailsPanel.throughputReqS') }}</p>
+          <div class="text-center p-2 bg-white rounded-sm border border-autobot-border-subtle">
+            <p class="text-lg font-semibold text-autobot-text-primary">{{ liveMetrics.throughput_rps.toFixed(1) }}</p>
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.throughputReqS') }}</p>
           </div>
-          <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
+          <div class="text-center p-2 bg-white rounded-sm border border-autobot-border-subtle">
             <p class="text-lg font-semibold" :class="tempColor">
               {{ liveMetrics.temperature_celsius != null ? `${liveMetrics.temperature_celsius}°C` : $t('fleet.nPUDetailsPanel.notAvailable') }}
             </p>
-            <p class="text-xs text-gray-500">{{ $t('fleet.nPUDetailsPanel.temperature') }}</p>
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.temperature') }}</p>
           </div>
         </div>
 
         <!-- Memory bar -->
         <div class="mt-3">
-          <div class="flex justify-between text-xs text-gray-500 mb-1">
+          <div class="flex justify-between text-xs text-autobot-text-tertiary mb-1">
             <span>{{ $t('fleet.nPUDetailsPanel.memory') }}</span>
             <span>{{ liveMetrics.memory_used_gb.toFixed(1) }} / {{ liveMetrics.memory_total_gb.toFixed(1) }} GB</span>
           </div>
-          <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div class="w-full h-2 bg-autobot-bg-active rounded-full overflow-hidden">
             <div
-              class="h-full bg-blue-500 transition-all"
+              class="h-full bg-autobot-primary transition-all"
               :style="{ width: `${memoryPercent}%` }"
             />
           </div>
         </div>
 
         <!-- Error count -->
-        <div v-if="liveMetrics.error_count > 0" class="mt-3 text-xs text-red-600">{{ $t('fleet.nPUDetailsPanel.value0ErrorsRecorded', { value0: liveMetrics.error_count }) }}</div>
+        <div v-if="liveMetrics.error_count > 0" class="mt-3 text-xs text-autobot-error">{{ $t('fleet.nPUDetailsPanel.value0ErrorsRecorded', { value0: liveMetrics.error_count }) }}</div>
       </div>
 
       <!-- Utilization -->
       <div>
-        <h3 class="text-sm font-medium text-gray-700 mb-3">{{ $t('fleet.nPUDetailsPanel.currentUtilization') }}</h3>
+        <h3 class="text-sm font-medium text-autobot-text-secondary mb-3">{{ $t('fleet.nPUDetailsPanel.currentUtilization') }}</h3>
         <div class="flex items-center gap-4">
           <div class="flex-1">
-            <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div class="w-full h-4 bg-autobot-bg-active rounded-full overflow-hidden">
               <div
                 class="h-full bg-primary-500 transition-all"
                 :style="{ width: `${npuStatus?.capabilities?.utilization ?? 0}%` }"
               />
             </div>
           </div>
-          <span class="text-lg font-semibold text-gray-900">
+          <span class="text-lg font-semibold text-autobot-text-primary">
             {{ npuStatus?.capabilities?.utilization ?? 0 }}%
           </span>
         </div>
-        <p class="text-xs text-gray-500 mt-2">{{ $t('fleet.nPUDetailsPanel.queueDepthValue0Requests', { value0: npuStatus?.queueDepth ?? 0 }) }}</p>
+        <p class="text-xs text-autobot-text-tertiary mt-2">{{ $t('fleet.nPUDetailsPanel.queueDepthValue0Requests', { value0: npuStatus?.queueDepth ?? 0 }) }}</p>
       </div>
 
       <!-- Available Models with Assignment (Issue #590) -->
       <div>
-        <h3 class="text-sm font-medium text-gray-700 mb-3">{{ $t('fleet.nPUDetailsPanel.modelsCount', { count: availableModels.length }) }}</h3>
-        <div v-if="availableModels.length === 0" class="text-sm text-gray-500">
+        <h3 class="text-sm font-medium text-autobot-text-secondary mb-3">{{ $t('fleet.nPUDetailsPanel.modelsCount', { count: availableModels.length }) }}</h3>
+        <div v-if="availableModels.length === 0" class="text-sm text-autobot-text-tertiary">
           {{ $t('fleet.nPUDetailsPanel.noModelsDetected') }}
         </div>
         <ul v-else class="space-y-2">
           <li
             v-for="model in availableModels"
             :key="model"
-            class="flex items-center justify-between p-2 bg-gray-50 rounded-sm"
+            class="flex items-center justify-between p-2 bg-autobot-bg-secondary rounded-sm"
           >
             <div class="flex items-center gap-2">
               <input
                 type="checkbox"
                 :checked="workerConfig.assigned_models.includes(model)"
                 @change="toggleModel(model)"
-                class="rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500"
+                class="rounded-sm border-autobot-border-strong text-primary-600 focus:ring-primary-500"
               />
-              <span class="text-sm text-gray-900">{{ model }}</span>
+              <span class="text-sm text-autobot-text-primary">{{ model }}</span>
             </div>
             <span
               v-if="loadedModels.includes(model)"
-              class="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-sm"
+              class="px-2 py-0.5 bg-autobot-pill-ok-bg text-autobot-pill-ok-fg text-xs rounded-sm"
             >
               {{ $t('fleet.nPUDetailsPanel.loaded') }}
             </span>
             <span
               v-else
-              class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-sm"
+              class="px-2 py-0.5 bg-autobot-bg-tertiary text-autobot-text-secondary text-xs rounded-sm"
             >
               {{ $t('fleet.nPUDetailsPanel.available') }}
             </span>
@@ -334,7 +334,7 @@ watch(
       <div>
         <button
           @click="showConfigSection = !showConfigSection"
-          class="flex items-center justify-between w-full text-sm font-medium text-gray-700 hover:text-gray-900"
+          class="flex items-center justify-between w-full text-sm font-medium text-autobot-text-secondary hover:text-autobot-text-primary"
         >
           <span>{{ $t('fleet.nPUDetailsPanel.workerConfiguration') }}</span>
           <svg
@@ -347,50 +347,50 @@ watch(
           </svg>
         </button>
 
-        <div v-if="showConfigSection" class="mt-3 space-y-4 bg-gray-50 rounded-lg p-4">
+        <div v-if="showConfigSection" class="mt-3 space-y-4 bg-autobot-bg-secondary rounded-lg p-4">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('fleet.nPUDetailsPanel.priority110') }}</label>
+              <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('fleet.nPUDetailsPanel.priority110') }}</label>
               <input
                 v-model.number="workerConfig.priority"
                 type="number" min="1" max="10"
-                class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
+                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-primary-500"
               />
             </div>
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('fleet.nPUDetailsPanel.weight1100') }}</label>
+              <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('fleet.nPUDetailsPanel.weight1100') }}</label>
               <input
                 v-model.number="workerConfig.weight"
                 type="number" min="1" max="100"
-                class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
+                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-primary-500"
               />
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('fleet.nPUDetailsPanel.maxConcurrent') }}</label>
+              <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('fleet.nPUDetailsPanel.maxConcurrent') }}</label>
               <input
                 v-model.number="workerConfig.max_concurrent"
                 type="number" min="1"
-                class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
+                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-primary-500"
               />
             </div>
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('fleet.nPUDetailsPanel.maxRetries') }}</label>
+              <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('fleet.nPUDetailsPanel.maxRetries') }}</label>
               <input
                 v-model.number="workerConfig.max_retries"
                 type="number" min="0" max="10"
-                class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
+                class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-primary-500"
               />
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('fleet.nPUDetailsPanel.failureAction') }}</label>
+            <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('fleet.nPUDetailsPanel.failureAction') }}</label>
             <select
               v-model="workerConfig.failure_action"
-              class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
+              class="w-full px-2 py-1.5 text-sm border border-autobot-border-strong rounded-sm focus:ring-1 focus:ring-primary-500"
             >
               <option value="retry">{{ $t('fleet.nPUDetailsPanel.retryOnSameWorker') }}</option>
               <option value="failover">{{ $t('fleet.nPUDetailsPanel.failoverToAnotherWorker') }}</option>
@@ -428,7 +428,7 @@ watch(
         <button
           @click="removeNpuRole"
           :disabled="loading"
-          class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+          class="px-4 py-2 text-autobot-error hover:bg-autobot-error-bg rounded-lg transition-colors disabled:opacity-50"
         >
           {{ $t('fleet.nPUDetailsPanel.removeNPURole') }}
         </button>
