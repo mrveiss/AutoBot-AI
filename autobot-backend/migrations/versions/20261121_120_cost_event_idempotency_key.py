@@ -5,7 +5,7 @@
 """A cost event can carry the idempotency key it was charged under (#21972, part of #21332).
 
 Revision ID: 20261121_120
-Revises: 20261121_118
+Revises: 20261121_119
 Create Date: 2026-11-21 00:00:01.000000
 
 ``NO DATA LOSS``: adds one nullable column and one partial unique index over (company_id, agent_id,
@@ -16,8 +16,7 @@ transaction that inserted the row may charge; a repeat replays the stored cost.
 ``downgrade`` drops the index only. The nullable column stays: dropping it would delete the recorded keys, and
 a column nothing constrains is harmless.
 
-Re-parented onto 20261121_118 (#21835) once it landed. An open PR still claims
-20261121_119 and re-parents onto this one if it lands later.
+Re-parented onto 20261121_119 (#21935) once it landed.
 """
 
 from typing import Sequence, Union
