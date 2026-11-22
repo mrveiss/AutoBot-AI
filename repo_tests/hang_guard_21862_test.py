@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -89,6 +90,46 @@ def test_a_child_reaped_between_reads_is_counted_once(tmp_path: Path, monkeypatc
     assert round(ticks) == 6  # parent utime 1 + the child's 5 once, never 11
 
 
+def _patch_fake_proc(monkeypatch: pytest.MonkeyPatch, fake: _FakeProc, stat_fields) -> None:
+    monkeypatch.setattr(
+        _hang_guard, "_PROC", type("P", (), {"is_dir": lambda s: True, "glob": lambda s, _p: fake.entries})()
+    )
+    monkeypatch.setattr(_hang_guard, "_stat_fields", stat_fields)
+
+
+def test_a_child_reaped_before_the_parent_reaps_it_counts_only_the_parents_own_ticks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Realistic race: child exits between the passes, the parent's pass-1 cutime is still 0."""
+    fake = _FakeProc(tmp_path, {100: [_stat(100, 1, 0, 0, 0)], 101: [_stat(100, 5, 0, 0, 0)]})
+    seen = {"child": 0}
+
+    def stat_fields(entry: Path) -> list[str] | None:
+        if entry.name == "101":
+            seen["child"] += 1
+            return _stat(100, 5, 0, 0, 0) if seen["child"] <= 2 else None  # live in listing + pass 1, gone by pass 2
+        return fake.stat_fields(entry)
+
+    _patch_fake_proc(monkeypatch, fake, stat_fields)
+    assert round(_hang_guard.cpu_seconds(100) * _hang_guard._CLOCK_TICKS) == 1
+
+
+def test_a_member_that_left_the_session_before_pass_one_adds_no_reaped_ticks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = _FakeProc(tmp_path, {100: [_stat(100, 1, 0, 0, 0)], 101: [_stat(100, 0, 0, 7, 0)]})
+    seen = {"child": 0}
+
+    def stat_fields(entry: Path) -> list[str] | None:
+        if entry.name == "101":
+            seen["child"] += 1
+            return _stat(100 if seen["child"] == 1 else 999, 0, 0, 7, 0)  # member when listed, elsewhere after
+        return fake.stat_fields(entry)
+
+    _patch_fake_proc(monkeypatch, fake, stat_fields)
+    assert round(_hang_guard.cpu_seconds(100) * _hang_guard._CLOCK_TICKS) == 1
+
+
 def _group_gone(pgid: int) -> bool:
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
@@ -115,11 +156,70 @@ def test_an_exception_while_monitoring_kills_the_group_and_reaps(monkeypatch: py
     assert _group_gone(proc.pid)
 
 
-def test_a_descendant_escaping_the_group_with_the_pipe_cannot_hang_the_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+def _kill_escaped_sleeper(pidfile: Path) -> None:
+    """Kill the sleeper this test started, found by the pid it wrote, only if it is still a ``sleep``."""
+    try:
+        pid = int(pidfile.read_text(encoding="utf-8").strip())
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")[0]
+    except (OSError, ValueError):
+        return  # never started, or already gone
+    if os.path.basename(cmdline) == b"sleep":
+        os.kill(pid, signal.SIGKILL)
+
+
+def test_a_descendant_escaping_the_group_with_the_pipe_cannot_hang_the_guard(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(_hang_guard, "STALL_SECONDS", 2.0)
     monkeypatch.setattr(_hang_guard, "DRAIN_SECONDS", 1.0)
+    pidfile = tmp_path / "escaped.pid"
+    script = f"setsid sleep 40 & echo $! > {pidfile}; sleep 60"
     began = time.monotonic()
+    try:
+        with pytest.raises(subprocess.TimeoutExpired) as caught:
+            _hang_guard.run_guarded(["bash", "-c", script], cwd=repo_root())
+        assert time.monotonic() - began < 25  # the escaped sleep holds the pipe for 40 s
+        assert "no CPU progress" in str(caught.value.output)
+    finally:
+        _kill_escaped_sleeper(pidfile)
+
+
+def test_a_cleanup_failure_does_not_replace_the_original_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(proc: subprocess.Popen, state, now):
+        raise KeyboardInterrupt
+
+    def bad_reap(proc: subprocess.Popen) -> None:
+        proc.kill()
+        proc.wait()
+        raise RuntimeError("reap failed")
+
+    monkeypatch.setattr(_hang_guard, "_poll", boom)
+    monkeypatch.setattr(_hang_guard, "_close_and_reap", bad_reap)
+    with pytest.raises(KeyboardInterrupt) as caught:
+        _hang_guard.run_guarded(["bash", "-c", "sleep 60"], cwd=repo_root())
+    assert any("reap failed" in note for note in caught.value.__notes__)
+
+
+def test_an_unreapable_child_raises_instead_of_hanging(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Stuck:
+        pid = 1
+        stdout = stderr = None
+
+        def kill(self) -> None:
+            pass
+
+        def wait(self, timeout: float | None = None) -> int:
+            assert timeout is not None, "unbounded wait would hang forever"
+            raise subprocess.TimeoutExpired("x", timeout)
+
+    monkeypatch.setattr(_hang_guard, "DRAIN_SECONDS", 1.0)
+    with pytest.raises(RuntimeError, match="could not reap"):
+        _hang_guard._close_and_reap(_Stuck())
+
+
+def test_partial_output_and_stderr_survive_a_drain_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    exc = subprocess.TimeoutExpired("x", 1.0, output=b"partial-out", stderr=b"partial-err")
+    monkeypatch.setattr(_hang_guard, "_kill_and_drain", lambda proc: (_ for _ in ()).throw(exc))
     with pytest.raises(subprocess.TimeoutExpired) as caught:
-        _hang_guard.run_guarded(["bash", "-c", "setsid sleep 20 & sleep 60"], cwd=repo_root())
-    assert time.monotonic() - began < 15  # the escaped sleep holds the pipe for 20 s
-    assert "no CPU progress" in str(caught.value.output)
+        _hang_guard._raise_killed(None, ["x"], "stalled", time.monotonic())  # type: ignore[arg-type]
+    assert "partial-out" in caught.value.output and caught.value.stderr == "partial-err"

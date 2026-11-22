@@ -28,6 +28,9 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from autobot_shared.env_utils import env_float_clamped
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 STALL_SECONDS = env_float_clamped("AUTOBOT_TEST_STALL_SECONDS", 120.0, 5.0, 3600.0, positive_finite=True)
 CPU_BUDGET_SECONDS = env_float_clamped("AUTOBOT_TEST_CPU_BUDGET_SECONDS", 900.0, 10.0, 7200.0, positive_finite=True)
@@ -69,9 +72,9 @@ def cpu_seconds(root_pid: int) -> float:
         raise RuntimeError("hang guard needs /proc (Linux only); it cannot tell a stall from no data")
     members = _session_members(root_pid)
     ticks = 0
-    for entry, _ in members:  # pass 1: reaped children's CPU
+    for entry, sid in members:  # pass 1: reaped children's CPU
         fields = _stat_fields(entry)
-        if fields is not None:
+        if fields is not None and int(fields[3]) == sid:
             ticks += int(fields[13]) + int(fields[14])  # cutime cstime
     for entry, sid in members:  # pass 2: own CPU of whoever is still alive
         fields = _stat_fields(entry)
@@ -99,7 +102,10 @@ def _close_and_reap(proc: subprocess.Popen) -> None:
         proc.kill()
     except ProcessLookupError:
         pass
-    proc.wait()
+    try:
+        proc.wait(timeout=DRAIN_SECONDS)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"hang guard could not reap pid {proc.pid} within {DRAIN_SECONDS:.0f}s of SIGKILL") from exc
 
 
 def _kill_and_drain(proc: subprocess.Popen) -> tuple[str, str]:
@@ -163,10 +169,19 @@ def run_guarded(
         _raise_killed(proc, argv, done, started)
     except subprocess.TimeoutExpired:
         raise  # already killed, drained and reaped
-    except BaseException:  # incl. KeyboardInterrupt: never leave the group running or the pipes open
+    except BaseException as original:  # incl. KeyboardInterrupt: never leave the group running or the pipes open
+        _cleanup_keeping(original, proc)
+        raise
+
+
+def _cleanup_keeping(original: BaseException, proc: subprocess.Popen) -> None:
+    """Kill and reap *proc*; a cleanup failure is logged and noted on *original*, never replaces it."""
+    try:
         _kill_group(proc)
         _close_and_reap(proc)
-        raise
+    except Exception as cleanup_error:  # noqa: BLE001 - must not mask the original exception
+        logger.error("hang guard cleanup failed for pid %s: %r", proc.pid, cleanup_error)
+        original.add_note(f"hang guard cleanup also failed: {cleanup_error!r}")
 
 
 def _monitor(proc: subprocess.Popen, argv: Sequence[str], started: float):
@@ -183,11 +198,21 @@ def _monitor(proc: subprocess.Popen, argv: Sequence[str], started: float):
             return reason
 
 
+def _as_text(data: str | bytes | None) -> str:
+    """TimeoutExpired from ``communicate`` carries bytes or None even for a text-mode Popen."""
+    if isinstance(data, bytes):
+        return data.decode("utf-8", errors="replace")
+    return data or ""
+
+
 def _raise_killed(proc: subprocess.Popen, argv: Sequence[str], reason: str, started: float) -> None:
     elapsed = time.monotonic() - started
     try:
         out, err = _kill_and_drain(proc)
     except subprocess.TimeoutExpired as exc:
         note = f"{reason}\n(a descendant outside the process group kept the pipes open; output is partial)"
-        raise subprocess.TimeoutExpired(list(argv), elapsed, output=note, stderr=exc.stderr) from exc
+        partial = _as_text(exc.output)
+        if partial:
+            note = f"{note}\n{partial}"
+        raise subprocess.TimeoutExpired(list(argv), elapsed, output=note, stderr=_as_text(exc.stderr)) from exc
     raise subprocess.TimeoutExpired(list(argv), elapsed, output=f"{reason}\n{out}", stderr=err)
