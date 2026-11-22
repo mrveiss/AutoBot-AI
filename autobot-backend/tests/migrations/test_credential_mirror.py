@@ -144,7 +144,11 @@ async def test_duplicate_same_name_rows_raise_and_write_nothing(session):
 
     first = await _seed(session, value=b"one")
     await session.execute(text(f'ALTER TABLE secrets DROP CONSTRAINT "{SECRET_OWNER_VAULT_NAME_UNIQUE}"'))
-    second = await _seed(session, value=b"two")
+    # Rows written before #21897 (constraint absent): the service now refuses a same-name row, so seed under
+    # another name and rename it at SQL level, the state an install with a pending duplicate cleanup is in.
+    second = await _seed(session, value=b"two", name=f"{_NAME}:pending")
+    await session.execute(text("UPDATE secrets SET name = :n WHERE id = :i"), {"n": _NAME, "i": second})
+    await session.commit()
     with pytest.raises(AmbiguousSecretError):
         await _mirror(session)
     await session.rollback()
