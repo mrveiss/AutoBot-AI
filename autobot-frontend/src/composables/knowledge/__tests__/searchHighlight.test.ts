@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 /** Query highlighting for knowledge search results (#3296 / #18244): safe for v-html. */
 import { describe, it, expect } from 'vitest'
-import { buildHighlightRegex, escapeHtml, highlightSnippet, highlightText, scoreVariant } from '../searchHighlight'
+import { buildHighlightRegex, highlightSnippet, highlightText, scoreVariant } from '../searchHighlight'
 
 describe('searchHighlight', () => {
   it('escapes HTML before marking, so a result cannot inject markup', () => {
-    expect(escapeHtml('<b>&')).toBe('&lt;b&gt;&amp;')
     expect(highlightText('<script>alert(1)</script> rag', 'rag')).toBe(
       '&lt;script&gt;alert(1)&lt;/script&gt; <mark class="kb-highlight">rag</mark>',
     )

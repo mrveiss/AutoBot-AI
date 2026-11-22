@@ -159,9 +159,8 @@ describe('KnowledgeHealthSummary', () => {
 })
 
 describe('TreeNodeComponent — tree roles', () => {
-  const props = (node: object, extra: object = {}) => ({
-    node, expandedNodes: new Set<string>(), selectedDocuments: new Set<string>(), vectorizationStates: new Map(), ...extra,
-  })
+  const props = (node: object, extra: object = {}) =>
+    ({ node, expandedNodes: new Set<string>(), selectedDocuments: new Set<string>(), vectorizationStates: new Map(), ...extra }) as never
   const folder = { id: 'd', name: 'projects', type: 'folder', path: '/projects', children: [{ id: 'f', name: 'a.md', type: 'file', path: '/projects/a.md' }] }
 
   it('a folder is a treeitem with aria-expanded; its children sit in a group one level deeper', () => {
@@ -231,7 +230,7 @@ describe('KnowledgeTreePane', () => {
   })
 
   it('renders a tree with Load More only while more pages exist, and the AI documents branch under it', async () => {
-    const nodes = [{ id: 'f', name: 'a.md', type: 'file', path: '/a.md' }]
+    const nodes = [{ id: 'f', name: 'a.md', type: 'file' as const, path: '/a.md' }]
     const w = mount(KnowledgeTreePane, { props: { ...base, nodes, hasMore: true }, global })
     expect(w.get('[role="tree"]').attributes('aria-label')).toBe(en.knowledge.browser.treeLabel)
     expect(w.findAll('[role="treeitem"]')).toHaveLength(1)

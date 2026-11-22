@@ -5,16 +5,12 @@
  * KBSearchResultPanel.vue in #18244). Text is HTML-escaped first, then the matched
  * terms are wrapped in `<mark class="kb-highlight">`, so the result is safe for v-html.
  */
-import type { SemanticVariant } from '@autobot/ui'
+import { escapeHtml, type SemanticVariant } from '@autobot/ui'
 
 const MIN_TERM_LENGTH = 2
 const SNIPPET_LENGTH = 200
 const SCORE_HIGH = 0.8
 const SCORE_MEDIUM = 0.6
-
-export function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
 
 function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

@@ -7,17 +7,17 @@
   query terms marked, and Copy.
 -->
 <template>
-  <div class="doc-viewer" role="complementary" :aria-label="$t('knowledge.searchPanel.viewerLabel')">
-    <div v-if="!result" class="viewer-empty">
+  <div class="flex min-h-0 min-w-0 flex-col" role="complementary" :aria-label="$t('knowledge.searchPanel.viewerLabel')">
+    <div v-if="!result" class="viewer-empty flex flex-col items-center justify-center gap-2 px-4 py-8 text-center text-[var(--muted)]">
       <Icon name="hand-paper" aria-hidden="true" />
-      <p>{{ $t('knowledge.searchPanel.selectResult') }}</p>
-      <p class="viewer-hint">{{ $t('knowledge.searchPanel.keyboardHint') }}</p>
+      <p class="m-0">{{ $t('knowledge.searchPanel.selectResult') }}</p>
+      <p class="viewer-hint text-xs">{{ $t('knowledge.searchPanel.keyboardHint') }}</p>
     </div>
 
     <template v-else>
-      <header class="viewer-header">
-        <h4 class="viewer-title">{{ title }}</h4>
-        <div class="viewer-meta">
+      <header class="viewer-header flex flex-col gap-1 border-b border-[var(--line)] px-4 py-3">
+        <h4 class="viewer-title m-0 text-base font-semibold break-words text-[var(--text)]">{{ title }}</h4>
+        <div class="viewer-meta flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
           <span v-if="result.document?.category"><Icon name="folder" aria-hidden="true" /> {{ result.document.category }}</span>
           <span v-if="result.document?.type"><Icon name="tag" aria-hidden="true" /> {{ result.document.type }}</span>
           <span v-if="result.document?.updatedAt"><Icon name="clock" aria-hidden="true" /> {{ formatDate(result.document.updatedAt) }}</span>
@@ -27,19 +27,19 @@
         </div>
       </header>
 
-      <div v-if="loading" class="viewer-loading" role="status">
+      <div v-if="loading" class="viewer-loading flex items-center gap-2 p-4 text-[var(--muted)]" role="status">
         <BaseSpinner size="sm" />
         {{ $t('knowledge.searchPanel.loadingDocument') }}
       </div>
-      <div v-else class="viewer-body">
-        <pre class="viewer-content" v-html="highlightText(content, query)"></pre>
+      <div v-else class="viewer-body min-h-0 flex-1 overflow-auto px-4 py-3">
+        <pre class="viewer-content m-0 font-sans text-sm leading-relaxed break-words whitespace-pre-wrap text-[var(--text)]" v-html="highlightText(content, query)"></pre>
       </div>
 
-      <footer class="viewer-footer">
+      <footer class="viewer-footer flex items-center gap-3 border-t border-[var(--line)] px-4 py-3">
         <BaseButton variant="outline" size="sm" :disabled="!content" @click="copyContent">
           <Icon name="copy" aria-hidden="true" /> {{ $t('knowledge.searchPanel.copy') }}
         </BaseButton>
-        <span v-if="copied" class="copy-success" role="status"><Icon name="check" aria-hidden="true" /> {{ $t('knowledge.searchPanel.copied') }}</span>
+        <span v-if="copied" class="copy-success inline-flex items-center gap-1 text-sm text-[var(--ok-fg)]" role="status"><Icon name="check" aria-hidden="true" /> {{ $t('knowledge.searchPanel.copied') }}</span>
       </footer>
     </template>
   </div>
@@ -88,108 +88,3 @@ async function copyContent(): Promise<void> {
   }
 }
 </script>
-
-<style scoped>
-.doc-viewer {
-  display: flex;
-  flex-direction: column;
-  min-inline-size: 0;
-  min-block-size: 0;
-}
-
-.viewer-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-8) var(--spacing-4);
-  color: var(--muted);
-  text-align: center;
-}
-
-.viewer-empty p {
-  margin: 0;
-}
-
-.viewer-hint {
-  font-size: var(--text-xs);
-}
-
-.viewer-header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1);
-  padding: var(--spacing-3) var(--spacing-4);
-  border-block-end: var(--bw) solid var(--line);
-}
-
-.viewer-title {
-  margin: 0;
-  font-size: var(--text-base);
-  font-weight: 600;
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-
-.viewer-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-3);
-  font-size: var(--text-xs);
-  color: var(--muted);
-}
-
-.viewer-loading {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-4);
-  color: var(--muted);
-}
-
-.viewer-body {
-  flex: 1;
-  min-block-size: 0;
-  overflow: auto;
-  padding: var(--spacing-3) var(--spacing-4);
-}
-
-.viewer-content {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: 1.6;
-  color: var(--text);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.viewer-footer {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-  padding: var(--spacing-3) var(--spacing-4);
-  border-block-start: var(--bw) solid var(--line);
-}
-
-.copy-success {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  font-size: var(--text-sm);
-  color: var(--ok-fg);
-}
-</style>
-
-<!-- The mark sits inside v-html content, which a scoped style cannot reach. -->
-<style>
-.kb-highlight {
-  background-color: var(--kbsearch-highlight-bg);
-  color: var(--kbsearch-highlight-text);
-  border-radius: var(--radius-xs);
-  padding: var(--spacing-0) var(--spacing-px);
-  font-weight: 600;
-}
-</style>

@@ -8,9 +8,9 @@
   and carries the eligible-count note of the unmounted BatchSelectionToolbar. Advanced-only.
 -->
 <template>
-  <div v-if="hasSelection" class="batch-toolbar adv" role="toolbar" :aria-label="$t('knowledge.batchToolbar.label')">
-    <strong class="batch-count">{{ $t('knowledge.batchToolbar.documentsSelected', { count: selectionCount }) }}</strong>
-    <span v-if="eligibleCount !== undefined && eligibleCount < selectionCount" class="batch-eligible">
+  <div v-if="hasSelection" class="batch-toolbar adv flex flex-wrap items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-3 text-sm text-[var(--text)]" role="toolbar" :aria-label="$t('knowledge.batchToolbar.label')">
+    <strong class="batch-count font-semibold">{{ $t('knowledge.batchToolbar.documentsSelected', { count: selectionCount }) }}</strong>
+    <span v-if="eligibleCount !== undefined && eligibleCount < selectionCount" class="batch-eligible text-[var(--muted)]">
       {{ $t('knowledge.batchSelection.eligible', { count: eligibleCount }) }}
     </span>
     <BaseTooltip :text="$t('knowledge.batchToolbar.vectorizeTip')" placement="top">
@@ -18,7 +18,7 @@
         <BaseButton
           variant="primary"
           size="sm"
-          class="batch-vectorize"
+          class="batch-vectorize ms-auto"
           :disabled="!canVectorize || isVectorizing"
           :loading="isVectorizing"
           :aria-describedby="describedby"
@@ -54,30 +54,3 @@ defineEmits<{
   'deselect-all': []
 }>()
 </script>
-
-<style scoped>
-.batch-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-3);
-  padding: var(--spacing-3);
-  border-radius: var(--radius-lg);
-  background: var(--surface2);
-  border: var(--bw) solid var(--border);
-  font-size: var(--text-sm);
-  color: var(--text);
-}
-
-.batch-count {
-  font-weight: 600;
-}
-
-.batch-eligible {
-  color: var(--muted);
-}
-
-.batch-vectorize {
-  margin-inline-start: auto;
-}
-</style>

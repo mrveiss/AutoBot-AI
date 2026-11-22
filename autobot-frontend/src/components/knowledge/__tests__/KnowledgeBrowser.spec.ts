@@ -113,7 +113,7 @@ describe('KnowledgeBrowser', () => {
   it('choosing a card filters the tree and shows one filter chip that removes it', async () => {
     const w = await mountBrowser()
     expect(w.find('.kb-filter-chip').exists()).toBe(false)
-    await w.findAll('.card-select')[1].trigger('click') // User Knowledge -> cooking only
+    await w.findAll('.cat-select')[1].trigger('click') // User Knowledge -> cooking only
     expect(w.get('[role="tree"]').findAll('[role="treeitem"]')).toHaveLength(1)
     expect(w.findAll('.kb-filter-chip')).toHaveLength(1)
     expect(w.get('.kb-filter-chip').text()).toContain('User Knowledge')

@@ -7,13 +7,13 @@
   that refreshes every document's vectorization status.
 -->
 <template>
-  <div class="kb-filter-bar">
+  <div class="flex flex-wrap items-center gap-2">
     <BaseTooltip v-if="filterLabel" :text="$t('knowledge.browserFilter.removeFilter')" placement="top">
       <template #default="{ describedby }">
         <BaseButton
           variant="outline"
           size="sm"
-          class="kb-filter-chip"
+          class="kb-filter-chip bg-[var(--surface2)]"
           :aria-label="$t('knowledge.browserFilter.removeFilterNamed', { category: filterLabel })"
           :aria-describedby="describedby"
           @click="$emit('clear-filter')"
@@ -28,7 +28,7 @@
         <BaseButton
           variant="outline"
           size="sm"
-          class="kb-filter-status"
+          class="kb-filter-status ms-auto"
           :loading="refreshing"
           :disabled="refreshing"
           :aria-describedby="describedby"
@@ -56,20 +56,3 @@ defineEmits<{
   refresh: []
 }>()
 </script>
-
-<style scoped>
-.kb-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.kb-filter-chip {
-  background: var(--surface2);
-}
-
-.kb-filter-status {
-  margin-inline-start: auto;
-}
-</style>

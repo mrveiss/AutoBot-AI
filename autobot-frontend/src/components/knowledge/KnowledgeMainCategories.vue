@@ -43,15 +43,15 @@
         class="main-category-card"
         :class="{ 'is-selected': mainCat.id === selectedId }"
       >
-        <div class="card-top">
+        <div class="cat-top">
           <button
             type="button"
-            class="card-select"
+            class="cat-select"
             :aria-pressed="mainCat.id === selectedId"
             :aria-label="$t('knowledge.browser.showCategory', { name: mainCat.name })"
             @click="$emit('select', mainCat.id)"
           >
-            <span class="tile"><Icon :name="categoryIcon(mainCat)" /></span>
+            <span class="cat-tile"><Icon :name="categoryIcon(mainCat)" /></span>
           </button>
           <BaseTooltip :text="$t('knowledge.browser.editCategory')" placement="left">
             <template #default="{ describedby }">
@@ -68,21 +68,21 @@
           </BaseTooltip>
         </div>
 
-        <div class="card-text">
-          <h2 class="card-name">{{ mainCat.name }}</h2>
-          <p class="card-desc">{{ mainCat.description }}</p>
+        <div class="cat-text">
+          <h2 class="cat-name">{{ mainCat.name }}</h2>
+          <p class="cat-desc">{{ mainCat.description }}</p>
         </div>
 
-        <p class="card-count">
+        <p class="cat-count">
           {{ formatCount(mainCat.count) }}
           <BaseTooltip :text="$t('knowledge.browser.factsTip')" placement="top">
             <template #default="{ describedby }">
-              <span class="card-count__unit" tabindex="0" :aria-describedby="describedby">{{ $t('knowledge.browser.facts') }}</span>
+              <span class="cat-unit" tabindex="0" :aria-describedby="describedby">{{ $t('knowledge.browser.facts') }}</span>
             </template>
           </BaseTooltip>
         </p>
 
-        <div class="card-actions">
+        <div class="cat-actions">
           <BaseTooltip v-if="canPopulate(mainCat.id)" :text="$t('knowledge.browser.populateTip')" placement="top">
             <template #default="{ describedby }">
               <BaseButton
@@ -198,13 +198,13 @@ const showEmptyStateHint = computed(
   border-color: var(--primary);
 }
 
-.card-top {
+.cat-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
 }
 
-.card-select {
+.cat-select {
   padding: 0;
   border: 0;
   background: transparent;
@@ -212,12 +212,12 @@ const showEmptyStateHint = computed(
   border-radius: var(--radius-lg);
 }
 
-.card-select:focus-visible {
+.cat-select:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
-.tile {
+.cat-tile {
   display: grid;
   place-items: center;
   inline-size: 44px;
@@ -228,40 +228,40 @@ const showEmptyStateHint = computed(
   color: var(--stroke);
 }
 
-.card-text {
+.cat-text {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-1);
 }
 
-.card-name {
+.cat-name {
   margin: 0;
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text);
 }
 
-.card-desc {
+.cat-desc {
   margin: 0;
   font-size: var(--text-sm);
   line-height: 1.45;
   color: var(--text2);
 }
 
-.card-count {
+.cat-count {
   margin: 0;
   font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text);
 }
 
-.card-count__unit {
+.cat-unit {
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--muted);
 }
 
-.card-actions {
+.cat-actions {
   display: flex;
   gap: var(--spacing-2);
 }

@@ -13,7 +13,7 @@
         @keyup.enter="commitTitle"
         @keyup.escape="cancelTitle"
       />
-      <BaseTooltip v-else :text="$t('documents.editor.editTitleTip')" placement="bottom" class="title-wrap">
+      <BaseTooltip v-else :text="$t('documents.editor.editTitleTip')" placement="bottom" class="doc-heading">
         <template #default="{ describedby }">
           <h2
             class="document-title"
@@ -267,7 +267,7 @@ const formattedUpdatedAt = computed(() => {
   border-block-end: var(--bw) solid var(--line);
 }
 
-.title-wrap {
+.doc-heading {
   flex: 1;
   min-inline-size: 0;
 }

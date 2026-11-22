@@ -70,7 +70,7 @@ describe('KBSearchResultPanel', () => {
 
   it('shows the loading skeleton while searching', () => {
     const { w } = mountPanel({ loading: true })
-    expect(w.get('[aria-busy="true"]').exists()).toBe(true)
+    expect(w.find('[aria-busy="true"]').exists()).toBe(true)
     expect(w.text()).toContain('Searching…')
   })
 })

@@ -11,7 +11,7 @@
   <BaseTooltip :text="tooltipText" placement="left">
     <template #default="{ describedby }">
       <BaseBadge
-        class="vectorization-badge"
+        class="vectorization-badge cursor-default gap-1"
         :class="`status-${status}`"
         :variant="VARIANT[status] ?? 'neutral'"
         :size="compact ? 'xs' : 'sm'"
@@ -75,10 +75,3 @@ const tooltipText = computed(() => {
   }
 })
 </script>
-
-<style scoped>
-.vectorization-badge {
-  gap: var(--spacing-1);
-  cursor: default;
-}
-</style>

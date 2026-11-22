@@ -191,7 +191,7 @@ describe('KnowledgeMainCategories — the cards (#18244)', () => {
 
   it('choosing a card selects its category and marks it pressed', async () => {
     const w = cards({ selectedId: 'system-knowledge' })
-    const picks = w.findAll('.card-select')
+    const picks = w.findAll('.cat-select')
     expect(picks.map((p) => p.attributes('aria-pressed'))).toEqual(['false', 'true', 'false'])
     await picks[2].trigger('click')
     expect(w.emitted('select')?.[0]).toEqual(['user-knowledge'])

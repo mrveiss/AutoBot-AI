@@ -325,3 +325,14 @@ function scrollListItemIntoView(index: number): void {
   font-size: var(--text-sm);
 }
 </style>
+
+<!-- The mark sits inside v-html content, which a scoped style cannot reach. -->
+<style>
+.kb-highlight {
+  background-color: var(--kbsearch-highlight-bg);
+  color: var(--kbsearch-highlight-text);
+  border-radius: var(--radius-xs);
+  padding: var(--spacing-0) var(--spacing-px);
+  font-weight: 600;
+}
+</style>

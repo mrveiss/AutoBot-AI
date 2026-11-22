@@ -8,13 +8,13 @@
   passes the tree and listens to the events.
 -->
 <template>
-  <div class="kb-tree-pane">
-    <div v-if="isLoading" class="kb-tree-state" role="status">
+  <div class="flex min-h-0 flex-col gap-2 overflow-y-auto">
+    <div v-if="isLoading" class="flex flex-col items-center gap-3 p-6 text-[var(--muted)]" role="status">
       <BaseSpinner />
       <p>{{ $t('knowledge.browser.loadingFileTree') }}</p>
     </div>
 
-    <div v-else-if="error" class="kb-tree-state">
+    <div v-else-if="error" class="flex flex-col items-center gap-3 p-6 text-[var(--muted)]">
       <BaseAlert variant="error" :message="error.message" />
       <BaseButton variant="primary" size="sm" @click="$emit('retry')">{{ $t('knowledge.browser.retryBtn') }}</BaseButton>
     </div>
@@ -23,7 +23,7 @@
       <EmptyState v-if="nodes.length === 0" :description="$t('knowledge.browser.noItemsFound')">
         <template #icon><Icon name="folder-open" size="xl" aria-hidden="true" /></template>
       </EmptyState>
-      <div v-else role="tree" class="kb-tree" :aria-label="$t('knowledge.browser.treeLabel')">
+      <div v-else role="tree" class="flex flex-col" :aria-label="$t('knowledge.browser.treeLabel')">
         <TreeNodeComponent
           v-for="node in nodes"
           :key="node.id"
@@ -40,10 +40,10 @@
         />
       </div>
 
-      <div v-if="hasMore && !isLoadingMore" class="kb-tree-more">
+      <div v-if="hasMore && !isLoadingMore" class="flex justify-center">
         <BaseButton variant="outline" size="sm" @click="$emit('load-more')">{{ $t('knowledge.browser.loadMore') }}</BaseButton>
       </div>
-      <div v-if="isLoadingMore" class="kb-tree-state" role="status">
+      <div v-if="isLoadingMore" class="flex flex-col items-center gap-3 p-6 text-[var(--muted)]" role="status">
         <BaseSpinner size="sm" />
         <span>{{ $t('knowledge.browser.loadingMoreEntries') }}</span>
       </div>
@@ -91,32 +91,3 @@ defineEmits<{
   'doc-error': [message: string]
 }>()
 </script>
-
-<style scoped>
-.kb-tree-pane {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
-  min-block-size: 0;
-  overflow-y: auto;
-}
-
-.kb-tree {
-  display: flex;
-  flex-direction: column;
-}
-
-.kb-tree-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-3);
-  padding: var(--spacing-6);
-  color: var(--muted);
-}
-
-.kb-tree-more {
-  display: flex;
-  justify-content: center;
-}
-</style>
