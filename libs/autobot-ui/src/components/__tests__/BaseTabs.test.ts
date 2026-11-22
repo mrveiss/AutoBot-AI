@@ -274,4 +274,14 @@ describe('BaseTabs click activation (#18243)', () => {
     await flushPromises()
     expect(wrapper!.emitted('update:modelValue')).toEqual([['three']])
   })
+
+  it('still selects a previously picked tab by bare click after the parent moved the value itself', async () => {
+    await render({ modelValue: 'one' })
+    tabs()[2].dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }))
+    await flushPromises()
+    await wrapper!.setProps({ modelValue: 'four' })
+    tabs()[2].click()
+    await flushPromises()
+    expect(wrapper!.emitted('update:modelValue')).toEqual([['three'], ['three']])
+  })
 })

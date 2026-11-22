@@ -24,7 +24,7 @@
              `--aui-tabs-font-size` and `--aui-tabs-trigger-pad-x` on the tabs; unset, the kit sizes apply
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { resolveDirection, type KitDirection } from '../utils/direction'
 
@@ -76,6 +76,11 @@ const direction = computed(() => resolveDirection(props.dir))
 // Uncontrolled use keeps the chosen tab here, so items that arrive after mount still get a
 // selection and a default never lands on a disabled first item (#20382).
 const chosen = ref(props.defaultValue)
+// A controlled value that changes from outside (the parent moved the selection itself) supersedes
+// whatever a pick left in `chosen`, or the click guard below would swallow a click on that old pick.
+watch(() => props.modelValue, (value) => {
+  if (value !== undefined) chosen.value = value
+})
 const active = computed(() => {
   if (props.modelValue !== undefined) return props.modelValue
   const kept = props.items.some((item) => item.value === chosen.value)
