@@ -120,7 +120,7 @@ const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', mes
 
 async function mountView() {
   get.mockImplementation((url: string) => {
-    if (url.endsWith('/items')) return Promise.resolve(BOARD_ITEMS_RESPONSE)
+    if (url.endsWith('/items')) return Promise.resolve(structuredClone(BOARD_ITEMS_RESPONSE)) // a copy: a test that moves a card must not edit the next test's fixture
     return Promise.resolve(BOARD_RESPONSE)
   })
   const wrapper = mount(KanbanBoardView, {
@@ -228,5 +228,57 @@ describe('KanbanBoardView items wiring (GH#13993)', () => {
     settle(new Error('refused'))
     await move
     expect(card.column_id).toBe('col-done')
+  })
+
+  it('rolls back the CURRENT card when onItemUpdated replaced the object that was dragged (#21032)', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      items: WorkItemLike[]
+      onDragStart(item: WorkItemLike): void
+      onDrop(col: string): Promise<void>
+      onItemUpdated(updated: { id: string; title: string; type: string; status: string; priority: string }): void
+    }
+    let settle: (err?: Error) => void = () => {}
+    post.mockImplementation(() => new Promise((_, reject) => { settle = reject }))
+    const dragged = vm.items.find(i => i.id === 'wi-1') as WorkItemLike
+    vm.onDragStart(dragged)
+    const move = vm.onDrop('col-progress')
+    // The detail panel saved the card while the move was pending: the list now holds a NEW object for it.
+    vm.onItemUpdated({ id: 'wi-1', title: 'Renamed', type: 'task', status: 'ready', priority: 'medium' })
+    const replacement = vm.items.find(i => i.id === 'wi-1') as WorkItemLike
+    expect(replacement).not.toBe(dragged)
+    expect(replacement.column_id).toBe('col-progress')
+
+    settle(new Error('refused'))
+    await move
+    await flushPromises()
+
+    expect(vm.items.find(i => i.id === 'wi-1')?.column_id).toBe('col-ready')
+  })
+
+  const wipDetail = { detail: { code: 'WIP_LIMIT_EXCEEDED', column: 'Done', wip_limit: 1, current_count: 1 } }
+  const validationDetail = { detail: [{ loc: ['body', 'column_id'], msg: 'bad', type: 'value_error' }] }
+  it.each([
+    [409, null, en.llc.board.moveRefusedStatus],
+    [422, wipDetail, en.llc.board.moveRefusedWipFull],
+    [422, validationDetail, en.llc.board.moveFailed],
+    [403, null, en.llc.board.moveRefusedForbidden],
+    [500, null, en.llc.board.moveFailed],
+  ])('shows the localised reason when the server refuses a move with %i (#20508)', async (status, details, reason) => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      items: WorkItemLike[]
+      onDragStart(item: WorkItemLike): void
+      onDrop(col: string): Promise<void>
+    }
+    post.mockRejectedValue(Object.assign(new Error('server wording that must not be shown'), { status, details }))
+    vm.onDragStart(vm.items.find(i => i.id === 'wi-1') as WorkItemLike)
+    await vm.onDrop('col-progress')
+    await flushPromises()
+
+    const alert = wrapper.find('.board-load-error[role="alert"]')
+    expect(alert.find('.board-load-error-text').text()).toBe(en.llc.board.moveFailed)
+    expect(alert.find('.board-load-error-detail').text()).toBe(reason)
+    expect(alert.text()).not.toContain('server wording')
   })
 })

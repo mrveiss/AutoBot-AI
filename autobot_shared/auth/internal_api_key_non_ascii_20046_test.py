@@ -24,3 +24,8 @@ async def test_contrast_the_right_key_passes() -> None:
     with patch.object(mod.node_proxy, "internal_api_key", return_value=_KEY):
         assert mod.verify_internal_api_key(_KEY) is True
         assert await mod.require_internal_api_key(_KEY) is None
+
+
+def test_ascii_mismatch_is_refused() -> None:
+    with patch.object(mod.node_proxy, "internal_api_key", return_value=_KEY):
+        assert mod.verify_internal_api_key("x" * 32) is False

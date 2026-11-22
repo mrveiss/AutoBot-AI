@@ -29,6 +29,18 @@ from autobot_shared.env_utils import env_int
 #: literal cannot be changed without a deploy, and this one is a safety limit.
 MAX_CONTINUATION_ITERATIONS: int = env_int("AUTOBOT_MAX_CONTINUATION_ITERATIONS", default=5)
 
+#: Deprecated name of ``AUTOBOT_CHAT_INVALID_CALL_LIMIT`` (shipped in #21749, one release): read as its default so an
+#: install that set it keeps its value. Remove after the next release.
+_DEPRECATED_PARSE_RETRY_BUDGET: int = env_int("AUTOBOT_CHAT_PARSE_RETRY_BUDGET", default=2)
+
+#: Invalid tool calls one turn tolerates before it stops with an honest failure (#20848, #21843). ONE bound: a reply
+#: whose TOOL_CALL did not parse is re-asked this many times on both the graph path and the legacy loop, and the
+#: unknown-tool counter (#20848) is to read the same constant. Past it the user gets ``NO_ANSWER_FALLBACK``.
+INVALID_CALL_LIMIT: int = env_int("AUTOBOT_CHAT_INVALID_CALL_LIMIT", default=_DEPRECATED_PARSE_RETRY_BUDGET)
+
+#: Seconds the chat planner may take to write a plan (#21023). Past it the turn runs with no plan, never blocked.
+PLANNER_TIMEOUT_SECONDS: int = env_int("AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS", default=30)
+
 #: Files attached to one chat message that are read into the prompt (#20195). Env-backed: a bound written as a
 #: bare literal cannot be changed without a deploy. Files past the count are reported to the user, not dropped.
 ATTACHMENT_MAX_FILES: int = env_int("AUTOBOT_CHAT_ATTACHMENT_MAX_FILES", default=5)

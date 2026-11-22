@@ -10,6 +10,7 @@
  * Backend fully implemented; composable at src/composables/useSsoApi.ts.
  */
 
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { autobotApiErrorMessage } from '@/composables/useAutobotApi'
@@ -25,7 +26,6 @@ import { BaseAlert, BaseModal } from '@autobot/ui'
 
 const { t } = useI18n()
 const api = useSsoApi()
-
 const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
@@ -394,12 +394,12 @@ onMounted(fetchProviders)
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.sSOSettings.sSOOIDCConfiguration') }}</h2>
-        <p class="text-sm text-gray-500 mt-1">{{ $t('settings.admin.sSOSettings.manageSingleSignOnProvidersFor') }}</p>
+        <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('settings.admin.sSOSettings.sSOOIDCConfiguration') }}</h2>
+        <p class="text-sm text-autobot-text-tertiary mt-1">{{ $t('settings.admin.sSOSettings.manageSingleSignOnProvidersFor') }}</p>
       </div>
       <button
         @click="openCreateForm"
-        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+        class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors flex items-center gap-2"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -408,18 +408,18 @@ onMounted(fetchProviders)
 
     <!-- Provider List -->
     <div v-if="loading" class="text-center py-12">
-      <div class="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <div class="inline-block w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full animate-spin"></div>
     </div>
 
     <div v-else-if="providers.length === 0" class="text-center py-12">
-      <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-16 h-16 mx-auto text-autobot-text-tertiary mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
           d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
       </svg>
-      <p class="text-gray-500">{{ $t('settings.admin.sSOSettings.noSSOProvidersConfigured') }}</p>
+      <p class="text-autobot-text-tertiary">{{ $t('settings.admin.sSOSettings.noSSOProvidersConfigured') }}</p>
       <button
         @click="openCreateForm"
-        class="mt-4 text-blue-600 hover:text-blue-700"
+        class="mt-4 text-autobot-text-link hover:bg-autobot-pill-info-bg hover:text-autobot-pill-info-fg"
       >{{ $t('settings.admin.sSOSettings.addYourFirstProvider') }}</button>
     </div>
 
@@ -427,17 +427,17 @@ onMounted(fetchProviders)
       <div
         v-for="provider in providers"
         :key="provider.id"
-        class="bg-white border border-gray-200 rounded-lg p-4"
+        class="bg-white border border-autobot-border rounded-lg p-4"
       >
         <div class="flex items-start justify-between">
           <div class="flex-1">
             <div class="flex items-center gap-3">
-              <h3 class="font-medium text-gray-900">{{ provider.name }}</h3>
+              <h3 class="font-medium text-autobot-text-primary">{{ provider.name }}</h3>
               <span
                 class="px-2 py-1 text-xs font-medium rounded-full"
                 :class="provider.is_active
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-gray-100 text-gray-600'"
+                  ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
+                  : 'bg-autobot-bg-tertiary text-autobot-text-secondary'"
               >
                 {{ provider.is_active ? $t('settings.admin.sSOSettings.enabled') : $t('settings.admin.sSOSettings.disabled') }}
               </span>
@@ -449,18 +449,18 @@ onMounted(fetchProviders)
               >
                 {{ getStatusLabel(providerHealth(provider.id)!.health_status) }}
               </span>
-              <span class="text-xs text-gray-500 uppercase tracking-wide">
+              <span class="text-xs text-autobot-text-tertiary uppercase tracking-wide">
                 {{ PROVIDER_TYPES.find(t => t.value === provider.provider_type)?.label || provider.provider_type }}
               </span>
             </div>
-            <div class="mt-2 text-sm text-gray-600 space-y-1">
+            <div class="mt-2 text-sm text-autobot-text-secondary space-y-1">
               <p>{{ $t('settings.admin.sSOSettings.defaultRole') }}<span class="font-medium">{{ provider.default_role || $t('settings.admin.sSOSettings.user2') }}</span></p>
               <p>{{ $t('settings.admin.sSOSettings.allowUserCreation') }}<span class="font-medium">{{ provider.allow_user_creation ? $t('settings.admin.sSOSettings.yes') : $t('settings.admin.sSOSettings.no') }}</span></p>
               <template v-if="providerHealth(provider.id)">
-                <p class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.recentLoginsValue0SuccessValue1Failed', { value0: providerHealth(provider.id)!.success_count, value1: providerHealth(provider.id)!.failure_count }) }}</p>
-                <p v-if="providerHealth(provider.id)!.last_success_at" class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.lastSuccessValue0', { value0: new Date(providerHealth(provider.id)!.last_success_at!).toLocaleString() }) }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ $t('settings.admin.sSOSettings.recentLoginsValue0SuccessValue1Failed', { value0: providerHealth(provider.id)!.success_count, value1: providerHealth(provider.id)!.failure_count }) }}</p>
+                <p v-if="providerHealth(provider.id)!.last_success_at" class="text-xs text-autobot-text-tertiary">{{ $t('settings.admin.sSOSettings.lastSuccessValue0', { value0: formatFleetDateTime(providerHealth(provider.id)!.last_success_at) }) }}</p>
               </template>
-              <p v-if="provider.last_sync_at" class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.lastSyncValue0', { value0: new Date(provider.last_sync_at).toLocaleString() }) }}</p>
+              <p v-if="provider.last_sync_at" class="text-xs text-autobot-text-tertiary">{{ $t('settings.admin.sSOSettings.lastSyncValue0', { value0: formatFleetDateTime(provider.last_sync_at) }) }}</p>
             </div>
           </div>
 
@@ -470,7 +470,7 @@ onMounted(fetchProviders)
               v-if="provider.provider_type === 'ldap'"
               @click="testConnection(provider)"
               :disabled="testing"
-              class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              class="px-3 py-1.5 text-sm border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover transition-colors disabled:opacity-50"
             >
               {{ testing ? $t('settings.admin.sSOSettings.testing') : $t('settings.admin.sSOSettings.test') }}
             </button>
@@ -478,7 +478,7 @@ onMounted(fetchProviders)
             <!-- Toggle Enable/Disable -->
             <button
               @click="toggleProvider(provider)"
-              class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              class="px-3 py-1.5 text-sm border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover transition-colors"
             >
               {{ provider.is_active ? $t('settings.admin.sSOSettings.disable') : $t('settings.admin.sSOSettings.enable') }}
             </button>
@@ -486,13 +486,13 @@ onMounted(fetchProviders)
             <!-- Edit -->
             <button
               @click="editProvider(provider)"
-              class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              class="px-3 py-1.5 text-sm border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover transition-colors"
             >{{ $t('settings.admin.sSOSettings.edit') }}</button>
 
             <!-- Delete -->
             <button
               @click="deleteProvider(provider)"
-              class="px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+              class="px-3 py-1.5 text-sm text-autobot-error border border-autobot-error-light rounded-lg hover:bg-autobot-error-bg transition-colors"
             >{{ $t('settings.admin.sSOSettings.delete') }}</button>
           </div>
         </div>
@@ -511,21 +511,21 @@ onMounted(fetchProviders)
         <!-- Basic Info -->
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.providerName') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.providerName') }}</label>
             <input
               v-model="formData.name"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.eGCompanyOkta')"
             />
           </div>
 
           <div v-if="!editingProvider">
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.providerType') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.providerType') }}</label>
             <select
               v-model="formData.provider_type"
               @change="autofillEndpoints"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
             >
               <option v-for="type in PROVIDER_TYPES" :key="type.value" :value="type.value">
                 {{ type.label }}
@@ -538,26 +538,26 @@ onMounted(fetchProviders)
               <input
                 v-model="formData.is_active"
                 type="checkbox"
-                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                class="w-4 h-4 text-autobot-text-link border-autobot-border-strong rounded focus:ring-2 focus:ring-autobot-focus"
               />
-              <span class="text-sm text-gray-700">{{ $t('settings.admin.sSOSettings.enabled') }}</span>
+              <span class="text-sm text-autobot-text-secondary">{{ $t('settings.admin.sSOSettings.enabled') }}</span>
             </label>
 
             <label class="flex items-center gap-2">
               <input
                 v-model="formData.allow_user_creation"
                 type="checkbox"
-                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                class="w-4 h-4 text-autobot-text-link border-autobot-border-strong rounded focus:ring-2 focus:ring-autobot-focus"
               />
-              <span class="text-sm text-gray-700">{{ $t('settings.admin.sSOSettings.allowUserCreation2') }}</span>
+              <span class="text-sm text-autobot-text-secondary">{{ $t('settings.admin.sSOSettings.allowUserCreation2') }}</span>
             </label>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.defaultRole2') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.defaultRole2') }}</label>
             <select
               v-model="formData.default_role"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
             >
               <option value="user">{{ $t('settings.admin.sSOSettings.user') }}</option>
               <option value="admin">{{ $t('settings.admin.sSOSettings.admin') }}</option>
@@ -566,32 +566,32 @@ onMounted(fetchProviders)
         </div>
 
         <!-- OAuth2/OIDC Fields -->
-        <div v-if="isOAuth2Provider" class="space-y-4 border-t border-gray-200 pt-6">
-          <h4 class="font-medium text-gray-900">{{ $t('settings.admin.sSOSettings.oAuth2OIDCConfiguration') }}</h4>
+        <div v-if="isOAuth2Provider" class="space-y-4 border-t border-autobot-border pt-6">
+          <h4 class="font-medium text-autobot-text-primary">{{ $t('settings.admin.sSOSettings.oAuth2OIDCConfiguration') }}</h4>
 
           <!-- Provider-specific templates -->
           <div v-if="formData.provider_type === 'okta'">
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.oktaDomain') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.oktaDomain') }}</label>
             <input
               v-model="formData.okta_domain"
               @blur="autofillEndpoints"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.eGCompanyOktaCom')"
             />
-            <p class="mt-1 text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.endpointsWillBeAutoFilledBased') }}</p>
+            <p class="mt-1 text-xs text-autobot-text-tertiary">{{ $t('settings.admin.sSOSettings.endpointsWillBeAutoFilledBased') }}</p>
           </div>
 
           <div v-if="formData.provider_type === 'azure_ad'">
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.tenantID') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.tenantID') }}</label>
             <input
               v-model="formData.azure_tenant_id"
               @blur="autofillEndpoints"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.egClientIdUuid')"
             />
-            <p class="mt-1 text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.endpointsWillBeAutoFilledBased2') }}</p>
+            <p class="mt-1 text-xs text-autobot-text-tertiary">{{ $t('settings.admin.sSOSettings.endpointsWillBeAutoFilledBased2') }}</p>
           </div>
 
           <div v-if="formData.provider_type === 'google'">
@@ -599,205 +599,205 @@ onMounted(fetchProviders)
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.clientID') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.clientID') }}</label>
             <input
               v-model="formData.client_id"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.clientSecret') }}<span v-if="editingProvider" class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.leaveBlankToKeepCurrent') }}</span>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.clientSecret') }}<span v-if="editingProvider" class="text-xs text-autobot-text-tertiary">{{ $t('settings.admin.sSOSettings.leaveBlankToKeepCurrent') }}</span>
             </label>
             <input
               v-model="formData.client_secret"
               @input="formData.client_secret_changed = true"
               type="password"
               :placeholder="editingProvider ? '••••••••' : ''"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.authorizationURL') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.authorizationURL') }}</label>
             <input
               v-model="formData.authorize_url"
               type="url"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.tokenURL') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.tokenURL') }}</label>
             <input
               v-model="formData.token_url"
               type="url"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.userInfoURL') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.userInfoURL') }}</label>
             <input
               v-model="formData.userinfo_url"
               type="url"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.scope') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.scope') }}</label>
             <input
               v-model="formData.scope"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.openidEmailProfile')"
             />
           </div>
         </div>
 
         <!-- LDAP Fields -->
-        <div v-if="isLDAPProvider" class="space-y-4 border-t border-gray-200 pt-6">
-          <h4 class="font-medium text-gray-900">{{ $t('settings.admin.sSOSettings.lDAPConfiguration') }}</h4>
+        <div v-if="isLDAPProvider" class="space-y-4 border-t border-autobot-border pt-6">
+          <h4 class="font-medium text-autobot-text-primary">{{ $t('settings.admin.sSOSettings.lDAPConfiguration') }}</h4>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.serverURI') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.serverURI') }}</label>
             <input
               v-model="formData.server_uri"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.ldapLdapCompanyCom389')"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.bindDN') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.bindDN') }}</label>
             <input
               v-model="formData.bind_dn"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.cnAdminDcCompanyDcCom')"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.bindPassword') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.bindPassword') }}</label>
             <input
               v-model="formData.bind_password"
               type="password"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.baseDN') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.baseDN') }}</label>
             <input
               v-model="formData.base_dn"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.ouUsersDcCompanyDcCom')"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.searchFilter') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.searchFilter') }}</label>
             <input
               v-model="formData.search_filter"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.searchFilterExample', { username: 'username' })"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.userDNTemplate') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.userDNTemplate') }}</label>
             <input
               v-model="formData.user_dn_template"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.userDnTemplateExample', { username: 'username' })"
             />
           </div>
         </div>
 
         <!-- SAML Fields -->
-        <div v-if="isSAMLProvider" class="space-y-4 border-t border-gray-200 pt-6">
-          <h4 class="font-medium text-gray-900">{{ $t('settings.admin.sSOSettings.sAMLConfiguration') }}</h4>
+        <div v-if="isSAMLProvider" class="space-y-4 border-t border-autobot-border pt-6">
+          <h4 class="font-medium text-autobot-text-primary">{{ $t('settings.admin.sSOSettings.sAMLConfiguration') }}</h4>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.sPEntityID') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.sPEntityID') }}</label>
             <input
               v-model="formData.sp_entity_id"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.httpsYourAutobotComSaml')"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.aCSURLAssertionConsumerService') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.aCSURLAssertionConsumerService') }}</label>
             <input
               v-model="formData.acs_url"
               type="url"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.httpsYourAutobotComSamlAcs')"
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.idPMetadataURL') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.idPMetadataURL') }}</label>
             <input
               v-model="formData.idp_metadata_url"
               type="url"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
               :placeholder="$t('settings.admin.sSOSettings.httpsIdpCompanyComMetadata')"
             />
           </div>
         </div>
 
         <!-- Claim Mapping -->
-        <div class="space-y-4 border-t border-gray-200 pt-6">
-          <h4 class="font-medium text-gray-900">{{ $t('settings.admin.sSOSettings.claimMapping') }}</h4>
-          <p class="text-sm text-gray-600">{{ $t('settings.admin.sSOSettings.mapIdPClaimsToAutoBotUser') }}</p>
+        <div class="space-y-4 border-t border-autobot-border pt-6">
+          <h4 class="font-medium text-autobot-text-primary">{{ $t('settings.admin.sSOSettings.claimMapping') }}</h4>
+          <p class="text-sm text-autobot-text-secondary">{{ $t('settings.admin.sSOSettings.mapIdPClaimsToAutoBotUser') }}</p>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.emailClaim') }}</label>
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.emailClaim') }}</label>
               <input
                 v-model="formData.claim_email"
                 type="text"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
                 :placeholder="$t('settings.admin.sSOSettings.email')"
               />
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.displayNameClaim') }}</label>
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.displayNameClaim') }}</label>
               <input
                 v-model="formData.claim_display_name"
                 type="text"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
                 :placeholder="$t('settings.admin.sSOSettings.name')"
               />
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.usernameClaim') }}</label>
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.usernameClaim') }}</label>
               <input
                 v-model="formData.claim_username"
                 type="text"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
                 :placeholder="$t('settings.admin.sSOSettings.preferredUsername')"
               />
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.sSOSettings.groupsClaim') }}</label>
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.sSOSettings.groupsClaim') }}</label>
               <input
                 v-model="formData.claim_groups"
                 type="text"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-focus focus:border-transparent"
                 :placeholder="$t('settings.admin.sSOSettings.groups')"
               />
             </div>
@@ -807,12 +807,12 @@ onMounted(fetchProviders)
       <template #actions>
         <button
           @click="closeForm"
-          class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+          class="px-4 py-2 border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover transition-colors"
         >{{ $t('settings.admin.sSOSettings.cancel') }}</button>
         <button
           @click="saveProvider"
           :disabled="saving || !formData.name"
-          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {{ saving ? $t('settings.admin.sSOSettings.saving') : (editingProvider ? $t('settings.admin.sSOSettings.updateProvider') : $t('settings.admin.sSOSettings.createProvider')) }}
         </button>

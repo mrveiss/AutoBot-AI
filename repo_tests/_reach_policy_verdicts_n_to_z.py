@@ -19,6 +19,13 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "Non-test Python under three of the source trees (#18221); no tracked count moves with that "
         "subset, because the test share and the other trees grow at their own rate.",
     ),
+    "no-unterminated-construct-21571": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked non-test file with a block-comment suffix, so a file ending inside a construct in any "
+        "component is seen (#21571); the share of the tree that has those suffixes drifts, so an exact floor "
+        "would fail any new file.",
+    ),
     "node-major-literals": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -66,6 +73,11 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
     ),
+    "single-constant-time-compare": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
+    ),
     "one-content-digest-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -89,7 +101,7 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
     "single-attribute-writer-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
-        "Non-test .ts/.vue/.js source is a subset of tracked files under the user frontend; test share drifts.",
+        "Non-test .ts/.vue/.js source is a subset of tracked files under the frontends and kit; test share drifts.",
     ),
     "one-playwright-server-scan": (
         ABSOLUTE,
@@ -122,10 +134,10 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "Tracked scripts (.py, .sh, .bash, .js) under one scripts root, a subset of all tracked files; "
         "the count drifts as scripts are added.",
     ),
-    "post-commit-seed-scan": (
+    "provider-tool-schema-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
-        "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
+        "Non-test source under the LLM package plus three named builders; the test-file share of that tree drifts.",
     ),
     "slm-backend-embedded-playbook-scan": (
         ABSOLUTE,
@@ -338,5 +350,11 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Tracked Python under five code roots, a subset of tracked Python; the other trees grow at their "
         "own rate, so a share of all Python would sink with nothing wrong.",
+    ),
+    "one-after-commit-queue-21107": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .py under the backend and shared roots, against all tracked .py there; the test-file share "
+        "drifts on its own.",
     ),
 }

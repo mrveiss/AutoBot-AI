@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from autobot_shared.test_file_names import is_test_filename
+from autobot_shared.testfile_names import is_test_filename
 
 __all__ = ["OrderedRoute", "RouteOrder", "shadowed_literals"]
 

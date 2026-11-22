@@ -22,6 +22,7 @@ import type {
 } from '@/types/api-responses'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import { getTimezoneOption } from '@/composables/useTimezone'
+import i18n from '@/i18n'
 
 const logger = createLogger('ErrorMonitor')
 const api = useSlmApi()
@@ -62,7 +63,6 @@ const {
   onPageChange: async () => { await fetchData() },
 })
 
-
 // Filtered errors (client-side search only, API handles severity/resolved)
 const filteredErrors = computed(() => {
   if (!searchQuery.value) return errors.value
@@ -81,19 +81,19 @@ const topErrors = computed(() => {
 })
 
 function getStatusClass(resolved: boolean): string {
-  return resolved ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+  return resolved ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg' : 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
 }
 
 function getSeverityColor(severity: string): string {
   switch (severity.toLowerCase()) {
     case 'critical':
-      return 'text-red-600'
+      return 'text-autobot-error'
     case 'error':
-      return 'text-orange-600'
+      return 'text-autobot-warning'
     case 'warning':
-      return 'text-yellow-600'
+      return 'text-autobot-warning'
     default:
-      return 'text-gray-600'
+      return 'text-autobot-text-secondary'
   }
 }
 
@@ -111,16 +111,16 @@ function getTrendIcon(trend: string): string {
 function getTrendColor(trend: string): string {
   switch (trend) {
     case 'increasing':
-      return 'text-red-600'
+      return 'text-autobot-error'
     case 'decreasing':
-      return 'text-green-600'
+      return 'text-autobot-success'
     default:
-      return 'text-gray-600'
+      return 'text-autobot-text-secondary'
   }
 }
 
 const formatTimestamp = createDateFormatter({
-  locale: 'en-US',
+  locale: () => String(i18n.global.locale),
   intl: () => ({ month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', ...getTimezoneOption() }),
 })
 
@@ -222,24 +222,24 @@ onMounted(() => dataPoller.start(''))
     <PollingPausedAlert :poller="dataPoller" :message="$t('common.polling.paused')" :retry-label="$t('common.polling.retry')" class="mb-6" @retry="dataPoller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.errorMonitor.errorMonitoring') }}</h2>
+      <h2 class="text-xl font-bold text-autobot-text-primary">{{ $t('monitoring.errorMonitor.errorMonitoring') }}</h2>
       <div class="flex items-center gap-2">
         <button
           @click="clearOldErrors"
-          class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          class="px-3 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('monitoring.errorMonitor.clearOld') }}
         </button>
         <button
           @click="createTestError"
-          class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          class="px-3 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('monitoring.errorMonitor.testError') }}
         </button>
         <button
           @click="dataPoller.start('')"
           :disabled="isLoading"
-          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50 flex items-center gap-2"
         >
           <svg
             class="w-4 h-4"
@@ -262,28 +262,28 @@ onMounted(() => dataPoller.start(''))
 
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500">{{ $t('monitoring.errorMonitor.totalErrors') }}</p>
-        <p class="text-2xl font-bold text-gray-900">{{ stats.total_errors }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+        <p class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.errorMonitor.totalErrors') }}</p>
+        <p class="text-2xl font-bold text-autobot-text-primary">{{ stats.total_errors }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-xs border border-red-200 p-4">
-        <p class="text-sm text-red-600">{{ $t('monitoring.errorMonitor.last24Hours') }}</p>
-        <p class="text-2xl font-bold text-red-700">{{ stats.errors_24h }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-error-light p-4">
+        <p class="text-sm text-autobot-error">{{ $t('monitoring.errorMonitor.last24Hours') }}</p>
+        <p class="bg-autobot-pill-bad-bg px-2 rounded-sm w-fit text-2xl font-bold text-autobot-pill-bad-fg">{{ stats.errors_24h }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-xs border border-orange-200 p-4">
-        <p class="text-sm text-orange-600">{{ $t('monitoring.errorMonitor.unresolved') }}</p>
-        <p class="text-2xl font-bold text-orange-700">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-warning-light p-4">
+        <p class="text-sm text-autobot-warning">{{ $t('monitoring.errorMonitor.unresolved') }}</p>
+        <p class="bg-autobot-pill-warn-bg px-2 rounded-sm w-fit text-2xl font-bold text-autobot-pill-warn-fg">
           {{ stats.unresolved_count }}
         </p>
       </div>
-      <div class="bg-white rounded-lg shadow-xs border border-green-200 p-4">
-        <p class="text-sm text-green-600">{{ $t('monitoring.errorMonitor.resolved') }}</p>
-        <p class="text-2xl font-bold text-green-700">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-success-light p-4">
+        <p class="text-sm text-autobot-success">{{ $t('monitoring.errorMonitor.resolved') }}</p>
+        <p class="bg-autobot-pill-ok-bg px-2 rounded-sm w-fit text-2xl font-bold text-autobot-pill-ok-fg">
           {{ stats.resolved_count }}
         </p>
       </div>
-      <div class="bg-white rounded-lg shadow-xs border border-blue-200 p-4">
-        <p class="text-sm text-blue-600">{{ $t('monitoring.errorMonitor.trend') }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-primary-light p-4">
+        <p class="text-sm text-autobot-text-link">{{ $t('monitoring.errorMonitor.trend') }}</p>
         <p class="text-2xl font-bold" :class="getTrendColor(stats.trend)">
           {{ getTrendIcon(stats.trend) }}
           {{ stats.error_rate_per_hour.toFixed(1) }}/hr
@@ -295,20 +295,20 @@ onMounted(() => dataPoller.start(''))
       <!-- Main Error List -->
       <div class="lg:col-span-2 space-y-4">
         <!-- Filters -->
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
           <div class="flex flex-wrap items-center gap-4">
             <div class="flex-1 min-w-[200px]">
               <input
                 v-model="searchQuery"
                 type="text"
                 :placeholder="$t('monitoring.errorMonitor.searchErrors')"
-                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                class="w-full px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
             <select
               v-model="filterSeverity"
               @change="onFilterChange"
-              class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             >
               <option value="all">{{ $t('monitoring.errorMonitor.allSeverities') }}</option>
               <option value="critical">{{ $t('monitoring.errorMonitor.critical') }}</option>
@@ -317,7 +317,7 @@ onMounted(() => dataPoller.start(''))
             <select
               v-model="filterResolved"
               @change="onFilterChange"
-              class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             >
               <option value="all">{{ $t('monitoring.errorMonitor.allStatus') }}</option>
               <option value="unresolved">{{ $t('monitoring.errorMonitor.unresolved') }}</option>
@@ -328,14 +328,14 @@ onMounted(() => dataPoller.start(''))
 
         <!-- Error List -->
         <div
-          class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden"
+          class="bg-white rounded-lg shadow-xs border border-autobot-border overflow-hidden"
         >
-          <div class="max-h-[500px] overflow-y-auto divide-y divide-gray-200">
+          <div class="max-h-[500px] overflow-y-auto divide-y divide-autobot-border">
             <div
               v-for="error in filteredErrors"
               :key="error.event_id"
               @click="selectError(error)"
-              class="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+              class="p-4 hover:bg-autobot-bg-hover cursor-pointer transition-colors"
             >
               <div class="flex items-start justify-between">
                 <div class="flex-1 min-w-0">
@@ -356,14 +356,14 @@ onMounted(() => dataPoller.start(''))
                     >
                       {{ error.severity }}
                     </span>
-                    <span class="text-xs text-gray-400">{{
+                    <span class="text-xs text-autobot-text-tertiary">{{
                       error.hostname
                     }}</span>
                   </div>
-                  <p class="text-sm font-medium text-gray-900 truncate">
+                  <p class="text-sm font-medium text-autobot-text-primary truncate">
                     {{ error.message }}
                   </p>
-                  <p class="text-xs text-gray-500 mt-1">
+                  <p class="text-xs text-autobot-text-tertiary mt-1">
                     {{ error.event_type }} ·
                     {{ formatCompactRelativeTime(error.timestamp) }}
                   </p>
@@ -373,10 +373,10 @@ onMounted(() => dataPoller.start(''))
 
             <div
               v-if="filteredErrors.length === 0"
-              class="p-8 text-center text-gray-500"
+              class="p-8 text-center text-autobot-text-tertiary"
             >
               <svg
-                class="w-12 h-12 mx-auto mb-3 text-gray-300"
+                class="w-12 h-12 mx-auto mb-3 text-autobot-text-tertiary"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -395,7 +395,7 @@ onMounted(() => dataPoller.start(''))
           <!-- Pagination -->
           <div
             v-if="totalErrors > perPage"
-            class="px-4 py-3 border-t border-gray-200 flex items-center justify-between"
+            class="px-4 py-3 border-t border-autobot-border flex items-center justify-between"
           >
             <BasePagination
               class="flex-1"
@@ -414,8 +414,8 @@ onMounted(() => dataPoller.start(''))
       <!-- Sidebar -->
       <div class="space-y-4">
         <!-- Top Errors -->
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <h3 class="text-sm font-semibold text-gray-900 mb-3">
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+          <h3 class="text-sm font-semibold text-autobot-text-primary mb-3">
             {{ $t('monitoring.errorMonitor.recentUnresolved') }}
           </h3>
           <div class="space-y-3">
@@ -425,10 +425,10 @@ onMounted(() => dataPoller.start(''))
               class="flex items-center justify-between"
             >
               <div class="flex-1 min-w-0">
-                <p class="text-sm text-gray-900 truncate">
+                <p class="text-sm text-autobot-text-primary truncate">
                   {{ error.message }}
                 </p>
-                <p class="text-xs text-gray-500">{{ error.hostname }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ error.hostname }}</p>
               </div>
               <span
                 :class="[
@@ -441,7 +441,7 @@ onMounted(() => dataPoller.start(''))
             </div>
             <div
               v-if="topErrors.length === 0"
-              class="text-sm text-gray-500 text-center py-2"
+              class="text-sm text-autobot-text-tertiary text-center py-2"
             >
               {{ $t('monitoring.errorMonitor.noUnresolvedErrors') }}
             </div>
@@ -449,22 +449,22 @@ onMounted(() => dataPoller.start(''))
         </div>
 
         <!-- Errors by Category -->
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <h3 class="text-sm font-semibold text-gray-900 mb-3">{{ $t('monitoring.errorMonitor.byCategory') }}</h3>
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+          <h3 class="text-sm font-semibold text-autobot-text-primary mb-3">{{ $t('monitoring.errorMonitor.byCategory') }}</h3>
           <div class="space-y-2">
             <div
               v-for="cat in categories"
               :key="cat.category"
               class="flex items-center justify-between"
             >
-              <span class="text-sm text-gray-600">{{ cat.category }}</span>
-              <span class="text-sm font-medium text-gray-900"
+              <span class="text-sm text-autobot-text-secondary">{{ cat.category }}</span>
+              <span class="text-sm font-medium text-autobot-text-primary"
                 >{{ cat.count }} ({{ cat.percentage }}%)</span
               >
             </div>
             <div
               v-if="categories.length === 0"
-              class="text-sm text-gray-500 text-center py-2"
+              class="text-sm text-autobot-text-tertiary text-center py-2"
             >
               {{ $t('monitoring.errorMonitor.noCategories') }}
             </div>
@@ -472,22 +472,22 @@ onMounted(() => dataPoller.start(''))
         </div>
 
         <!-- Errors by Component -->
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <h3 class="text-sm font-semibold text-gray-900 mb-3">{{ $t('monitoring.errorMonitor.byNode') }}</h3>
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+          <h3 class="text-sm font-semibold text-autobot-text-primary mb-3">{{ $t('monitoring.errorMonitor.byNode') }}</h3>
           <div class="space-y-2">
             <div
               v-for="comp in components"
               :key="comp.node_id"
               class="flex items-center justify-between"
             >
-              <span class="text-sm text-gray-600">{{ comp.hostname }}</span>
-              <span class="text-sm font-medium text-gray-900"
+              <span class="text-sm text-autobot-text-secondary">{{ comp.hostname }}</span>
+              <span class="text-sm font-medium text-autobot-text-primary"
                 >{{ comp.count }} ({{ comp.percentage }}%)</span
               >
             </div>
             <div
               v-if="components.length === 0"
-              class="text-sm text-gray-500 text-center py-2"
+              class="text-sm text-autobot-text-tertiary text-center py-2"
             >
               {{ $t('monitoring.errorMonitor.noComponents') }}
             </div>
@@ -526,51 +526,51 @@ onMounted(() => dataPoller.start(''))
         </div>
 
         <div>
-          <label class="text-xs font-medium text-gray-500 uppercase"
+          <label class="text-xs font-medium text-autobot-text-tertiary uppercase"
             >{{ $t('monitoring.errorMonitor.eventID') }}</label
           >
-          <p class="text-sm text-gray-900 font-mono">
+          <p class="text-sm text-autobot-text-primary font-mono">
             {{ selectedError.event_id }}
           </p>
         </div>
 
         <div>
-          <label class="text-xs font-medium text-gray-500 uppercase"
+          <label class="text-xs font-medium text-autobot-text-tertiary uppercase"
             >{{ $t('monitoring.errorMonitor.node') }}</label
           >
-          <p class="text-sm text-gray-900">
+          <p class="text-sm text-autobot-text-primary">
             {{ selectedError.hostname }} ({{ selectedError.node_id }})
           </p>
         </div>
 
         <div>
-          <label class="text-xs font-medium text-gray-500 uppercase"
+          <label class="text-xs font-medium text-autobot-text-tertiary uppercase"
             >{{ $t('monitoring.errorMonitor.type') }}</label
           >
-          <p class="text-sm text-gray-900">{{ selectedError.event_type }}</p>
+          <p class="text-sm text-autobot-text-primary">{{ selectedError.event_type }}</p>
         </div>
 
         <div>
-          <label class="text-xs font-medium text-gray-500 uppercase"
+          <label class="text-xs font-medium text-autobot-text-tertiary uppercase"
             >{{ $t('monitoring.errorMonitor.message') }}</label
           >
-          <p class="text-sm text-gray-900">{{ selectedError.message }}</p>
+          <p class="text-sm text-autobot-text-primary">{{ selectedError.message }}</p>
         </div>
 
         <div>
-          <label class="text-xs font-medium text-gray-500 uppercase"
+          <label class="text-xs font-medium text-autobot-text-tertiary uppercase"
             >{{ $t('monitoring.errorMonitor.timestamp') }}</label
           >
-          <p class="text-sm text-gray-900">
+          <p class="text-sm text-autobot-text-primary">
             {{ formatTimestamp(selectedError.timestamp) }}
           </p>
         </div>
 
         <div v-if="selectedError.resolved">
-          <label class="text-xs font-medium text-gray-500 uppercase"
+          <label class="text-xs font-medium text-autobot-text-tertiary uppercase"
             >{{ $t('monitoring.errorMonitor.resolved') }}</label
           >
-          <p class="text-sm text-gray-900">
+          <p class="text-sm text-autobot-text-primary">
             {{
               $t('monitoring.errorMonitor.resolvedByAt', {
                 by: selectedError.resolved_by,
@@ -584,13 +584,13 @@ onMounted(() => dataPoller.start(''))
         <button
           v-if="!selectedError.resolved"
           @click="resolveError(selectedError.event_id)"
-          class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-lg hover:bg-autobot-primary-hover"
         >
           {{ $t('monitoring.errorMonitor.markResolved') }}
         </button>
         <button
           @click="closeDetail"
-          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('monitoring.errorMonitor.close') }}
         </button>

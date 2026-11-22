@@ -38,18 +38,29 @@ import MembersView from '../MembersView.vue'
 const ALL_ROLES = ['owner', 'admin', 'member', 'guest', 'lead']
 const NO_OWNER = ['admin', 'member', 'guest', 'lead']
 
-// The server stamps the viewer's own standing on every row (#20073).
-function membersFor(viewerRole: string | null, grantable: string[]) {
-  return [
-    { user_id: 'u1', display_name: 'Alice', role: 'owner' },
-    { user_id: 'u2', display_name: 'Bob', role: 'member' },
-  ].map((m) => ({ ...m, viewer_role: viewerRole, viewer_grantable_roles: grantable }))
+// The server sends the viewer's own standing once, beside the rows (#20073, #21096).
+function membersFor(viewerRole: string | null, grantable: string[], rows = ROWS) {
+  return {
+    members: rows,
+    viewer_role: viewerRole,
+    viewer_can_manage: grantable.length > 0,
+    viewer_grantable_roles: grantable,
+  }
 }
+const ROWS = [
+  { user_id: 'u1', display_name: 'Alice', role: 'owner' },
+  { user_id: 'u2', display_name: 'Bob', role: 'member' },
+]
+type Reply = ReturnType<typeof membersFor>
+const reply = (r: Reply, edit: (m: Reply['members'][number]) => Reply['members'][number] = (m) => m): Reply => ({
+  ...r,
+  members: r.members.map((m) => edit({ ...m })),
+})
 let members = membersFor('owner', ALL_ROLES)
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 async function mountView() {
-  get.mockResolvedValue(members.map((m) => ({ ...m })))
+  get.mockResolvedValue(reply(members))
   const wrapper = mount(MembersView, { global: { plugins: [i18n] } })
   await flushPromises()
   return wrapper
@@ -82,7 +93,7 @@ describe('MembersView role change (#19960)', () => {
   it('PATCHes the new role and updates the row', async () => {
     patch.mockResolvedValue({})
     const wrapper = await mountView()
-    get.mockResolvedValue(members.map((m) => (m.user_id === 'u2' ? { ...m, role: 'admin' } : { ...m })))
+    get.mockResolvedValue(reply(members, (m) => (m.user_id === 'u2' ? { ...m, role: 'admin' } : m)))
     await choose(wrapper, 'admin')
     expect(patch).toHaveBeenCalledWith('/api/llc/companies/co1/members/u2', { role: 'admin' })
     expect(badgeOf(wrapper, 'Bob')).toBe('Admin')
@@ -142,17 +153,11 @@ describe('MembersView role change (#19960)', () => {
     expect(alice.attributes('disabled')).toBeDefined()
   })
 
-  it('treats a server that sends no standing as one that grants nothing', async () => {
-    members = members.map(({ viewer_role: _role, viewer_grantable_roles: _grantable, ...m }) => m) as typeof members
-    const wrapper = await mountView()
-    expect(bobSelect(wrapper).attributes('disabled')).toBeDefined()
-  })
-
   it('reloads after a change, so an owner demoting themselves loses the controls at once', async () => {
     patch.mockResolvedValue({})
     const wrapper = await mountView()
-    const demoted = members.map((m) => ({ ...m, viewer_role: 'member', viewer_grantable_roles: [] }))
-    demoted[0].role = 'member'
+    const demoted = membersFor('member', [])
+    demoted.members = demoted.members.map((m) => (m.user_id === 'u1' ? { ...m, role: 'member' } : m))
     get.mockResolvedValue(demoted)
     await wrapper.find('select[aria-label="Change role for Alice"]').setValue('member')
     await flushPromises()
@@ -171,6 +176,38 @@ describe('MembersView role change (#19960)', () => {
   })
 })
 
+describe('MembersView failed reload (#21096)', () => {
+  beforeEach(() => {
+    get.mockReset()
+    patch.mockReset()
+    document.body.innerHTML = ''
+  })
+
+  it('keeps the rows after a role change whose reload fails, withholds controls, and says they are stale', async () => {
+    patch.mockResolvedValue({})
+    const wrapper = await mountView()
+    get.mockRejectedValue(new Error('HTTP 503'))
+    await choose(wrapper, 'admin')
+    expect(wrapper.text()).toContain('Bob')
+    expect(wrapper.text()).not.toContain(en.llcMembers.empty)
+    expect(wrapper.find('[data-testid="members-stale"]').text()).toBe(en.llcMembers.staleRows)
+    expect(wrapper.text()).toContain(en.llcMembers.loadError)
+    expect(wrapper.findAll('select.members-role-select').every((s) => s.attributes('disabled') !== undefined)).toBe(true)
+    const removes = wrapper.findAll('tbody button').filter((b) => b.text() === en.llcMembers.remove)
+    expect(removes.length).toBe(2)
+    expect(removes.every((b) => b.attributes('disabled') !== undefined)).toBe(true)
+  })
+
+  it('shows no stale note and no rows after a failed first load', async () => {
+    get.mockRejectedValue(new Error('HTTP 503'))
+    const wrapper = mount(MembersView, { global: { plugins: [i18n] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.llcMembers.loadError)
+    expect(wrapper.find('[data-testid="members-stale"]').exists()).toBe(false)
+    expect(wrapper.find('tbody').exists()).toBe(false)
+  })
+})
+
 describe('MembersView add form (#20073)', () => {
   beforeEach(() => {
     get.mockReset()
@@ -181,7 +218,7 @@ describe('MembersView add form (#20073)', () => {
 
   async function openAdd(viewerRole: string | null, grantable: string[]) {
     members = membersFor(viewerRole, grantable)
-    get.mockResolvedValue(members.map((m) => ({ ...m })))
+    get.mockResolvedValue(reply(members))
     const wrapper = mount(MembersView, { global: { plugins: [i18n] }, attachTo: document.body })
     await flushPromises()
     await wrapper.find('button.base-button, header button').trigger('click')
@@ -206,15 +243,63 @@ describe('MembersView add form (#20073)', () => {
     expect(document.body.textContent).toContain(en.llcMembers.addNotAllowed)
   })
 
-  it('does not read an empty company as a refusal: it offers every role and leaves the server to decide', async () => {
-    members = []
-    get.mockResolvedValue([])
+  it('offers an empty company the roles the server says the viewer may grant (#21096)', async () => {
+    get.mockResolvedValue(membersFor(null, ALL_ROLES, []))
     const wrapper = mount(MembersView, { global: { plugins: [i18n] }, attachTo: document.body })
     await flushPromises()
     await wrapper.find('header button').trigger('click')
     await flushPromises()
     expect(roleOptions()).toEqual(['owner', 'admin', 'member', 'guest', 'lead'])
     expect(document.body.textContent).not.toContain(en.llcMembers.addNotAllowed)
+  })
+
+  it('offers no role and blocks Add when the standing could not be read', async () => {
+    get.mockRejectedValue(new Error('HTTP 503'))
+    const wrapper = mount(MembersView, { global: { plugins: [i18n] }, attachTo: document.body })
+    await flushPromises()
+    await wrapper.find('header button').trigger('click')
+    await flushPromises()
+    expect(roleOptions()).toEqual([])
+    expect(addButton().disabled).toBe(true)
+    expect(document.body.textContent).toContain(en.llcMembers.accessUnconfirmed)
+    expect(document.body.textContent).not.toContain(en.llcMembers.addNotAllowed)
+  })
+
+  it('recovers after a failed load: Retry re-runs it and the standing becomes known (#21096)', async () => {
+    get.mockRejectedValueOnce(new Error('HTTP 503'))
+    const wrapper = mount(MembersView, { global: { plugins: [i18n] }, attachTo: document.body })
+    await flushPromises()
+    await wrapper.find('[data-testid="members-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="members-retry"]').exists()).toBe(true)
+    get.mockResolvedValue(membersFor('admin', NO_OWNER))
+    await wrapper.find('[data-testid="members-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="members-retry"]').exists()).toBe(false)
+    await wrapper.find('header button').trigger('click')
+    await flushPromises()
+    expect(roleOptions()).toEqual(NO_OWNER)
+    expect(document.body.textContent).not.toContain(en.llcMembers.accessUnconfirmed)
+    expect(document.body.textContent).not.toContain(en.llcMembers.addNotAllowed)
+  })
+
+  it('the modal hint retry re-runs the load and Add becomes enabled (#21096)', async () => {
+    get.mockRejectedValueOnce(new Error('HTTP 503'))
+    const wrapper = mount(MembersView, { global: { plugins: [i18n] }, attachTo: document.body })
+    await flushPromises()
+    await wrapper.find('header button').trigger('click')
+    await flushPromises()
+    expect(addButton().disabled).toBe(true)
+    get.mockClear()
+    get.mockResolvedValue(membersFor('admin', NO_OWNER))
+    const retry = document.body.querySelector<HTMLElement>('[data-testid="members-add-retry"]')!
+    retry.click()
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(document.body.querySelector('[data-testid="members-add-retry"]')).toBeNull()
+    expect(roleOptions()).toEqual(NO_OWNER)
+    // Add needs a chosen user as well; the standing no longer blocks it.
+    expect(document.body.textContent).not.toContain(en.llcMembers.accessUnconfirmed)
   })
 
   it('maps a 403 on add to the refusal message', async () => {

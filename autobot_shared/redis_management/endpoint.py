@@ -35,6 +35,7 @@ from threading import Lock
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
+from autobot_shared.logging_once import log_once
 from autobot_shared.network_constants import NetworkConstants
 
 if TYPE_CHECKING:
@@ -122,15 +123,6 @@ def _first_env(*names: str) -> str | None:
 
 #: The highest TCP port; an env port outside 1.._MAX_PORT is refused, not passed to the client.
 _MAX_PORT = 65535
-#: Port warnings already given (by env var name), so each is logged once per process, not per client.
-_warned_env_ports: set[str] = set()
-
-
-def _warn_once(name: str, message: str, *args: Any) -> None:
-    """Log *message* at WARNING the first time *name* is reported in this process."""
-    if name not in _warned_env_ports:
-        _warned_env_ports.add(name)
-        logger.warning(message, *args)
 
 
 def _env_port(name: str) -> int | None:
@@ -144,7 +136,15 @@ def _env_port(name: str) -> int | None:
         return None
     if raw.isascii() and raw.isdigit() and 1 <= int(raw) <= _MAX_PORT:
         return int(raw)
-    _warn_once(name, "Ignoring %s=%r: not a TCP port (1-%d); the next tier answers", name, raw, _MAX_PORT)
+    log_once(
+        logger,
+        logging.WARNING,
+        name,
+        "Ignoring %s=%r: not a TCP port (1-%d); the next tier answers",
+        name,
+        raw,
+        _MAX_PORT,
+    )
     return None
 
 
@@ -196,7 +196,9 @@ def redis_tls_port(ssot: AutoBotConfig | None = None) -> int | None:
     cfg = _ssot(ssot)
     if cfg is None:
         default = _default_tls_port()
-        _warn_once(
+        log_once(
+            logger,
+            logging.WARNING,
             "tls-port-default",  # its own key: a refused AUTOBOT_REDIS_TLS_PORT has already warned
             "Redis TLS is on but no usable AUTOBOT_REDIS_TLS_PORT and no SSOT config; using %d",
             default,

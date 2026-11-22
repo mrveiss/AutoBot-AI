@@ -4,13 +4,21 @@
 # Author: mrveiss
 """The knowledge MCP read routes return only what the caller may read (#16665)."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
 
 from api import knowledge_mcp
-from knowledge.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, FakeKB, text_of
+from knowledge.read_path_fakes_16665 import (
+    PRIVATE_A,
+    PRIVATE_B,
+    RESEARCH,
+    FakeKB,
+    QuarantineGatedKB,
+    quarantined_fact,
+    text_of,
+)
 from knowledge.schemas.mcp import KnowledgeSearchRequest
 
 ALICE = {"user_id": "alice"}
@@ -81,3 +89,38 @@ async def test_read_resource_withholds_another_users_private_fact():
     assert PRIVATE_A in text_of(await read(ALICE))
     with pytest.raises(HTTPException):
         await read({})
+
+
+ADMIN = {"user_id": "root", "role": "admin"}
+USERS = [ALICE, BOB, ADMIN]
+
+
+async def _read_doc(user):
+    return await knowledge_mcp.read_kb_resource({"uri": "kb://doc/f-q"}, user)
+
+
+async def _read_chunk(user):
+    return await knowledge_mcp.read_kb_resource({"uri": "kb://chunk/f-q"}, user)
+
+
+QUARANTINE_ROUTES = [_search, _summarize, _vector, _qa, _read_doc, _read_chunk]
+
+
+async def _as(route, user, kb):
+    with (
+        patch.object(knowledge_mcp, "get_knowledge_base", return_value=kb),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
+    ):
+        return text_of(await route(user))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("user", USERS)
+@pytest.mark.parametrize("route", QUARANTINE_ROUTES)
+async def test_mcp_tool_never_returns_a_research_quarantined_fact(route, user):
+    """AC3 (#16665): the quarantined fact is the only fact held; the ungated twin proves it would be returned."""
+    ungated = QuarantineGatedKB(only_quarantined=True)
+    ungated.search = AsyncMock(return_value=[quarantined_fact()])
+
+    assert RESEARCH in await _as(route, user, ungated), "control: ungated, the fact is returned"
+    assert RESEARCH not in await _as(route, user, QuarantineGatedKB(only_quarantined=True))

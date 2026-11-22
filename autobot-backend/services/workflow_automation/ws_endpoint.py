@@ -19,10 +19,11 @@ it ran ``automation_control`` (pause, resume, cancel, approve_step, skip_step) o
 
 import json
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 
 from api.ws_security import open_authenticated_ws
 from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
 
 from .models import WorkflowControlRequest
@@ -53,8 +54,8 @@ async def serve_workflow_socket(websocket: WebSocket, session_id: str, manager) 
             message = json.loads(await websocket.receive_text())
             if message.get("type") == "automation_control":
                 await _control(websocket, manager, message, user)
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected for session %s", session_id)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "serve_workflow_socket")
     except Exception as e:
         logger.error("WebSocket error for session %s: %s", session_id, e)
     finally:

@@ -38,7 +38,7 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table
+from repo_tests._ratchet_base import base_file_present, base_table, raised_known_entries
 from repo_tests._reach import declare
 
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
@@ -156,8 +156,8 @@ def test_the_apps_do_not_hand_roll_more_formatters_than_pinned() -> None:
 
 
 def test_the_pin_was_not_raised_against_the_base() -> None:
-    base = base_table(repo_root(), ("repo_tests/frontend_local_formatter_ratchet_19680_test.py",), "PINS")
-    if not base:
+    this = ("repo_tests/frontend_local_formatter_ratchet_19680_test.py",)
+    if not base_file_present(repo_root(), this):
         return  # the guard is new at this base; nothing to compare against yet
-    key = "local_formatter_declarations"
-    assert PINS[key] <= base[key], f"PINS rose from {base[key]} to {PINS[key]} (#19680); the pin only goes down."
+    raised = raised_known_entries(PINS, base_table(repo_root(), this, "PINS"))
+    assert not raised, f"PINS rose against the base (#19680): {raised}; the pin only goes down."

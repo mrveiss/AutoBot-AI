@@ -112,7 +112,7 @@ withDefaults(
   align-items: center;
   justify-content: space-between;
   gap: var(--aui-space-3);
-  padding: var(--aui-space-4) var(--aui-space-5);
+  padding: calc(var(--aui-card-padding) * 0.8) var(--aui-card-padding);
   border-bottom: 1px solid var(--aui-color-border);
   font-weight: var(--aui-font-weight-semibold);
 }
@@ -138,7 +138,7 @@ withDefaults(
 }
 
 .aui-card__body {
-  padding: var(--aui-space-5);
+  padding: var(--aui-card-padding);
 }
 .aui-card__body--flush {
   padding: 0;
@@ -148,7 +148,7 @@ withDefaults(
 }
 
 .aui-card__footer {
-  padding: var(--aui-space-4) var(--aui-space-5);
+  padding: calc(var(--aui-card-padding) * 0.8) var(--aui-card-padding);
   border-top: 1px solid var(--aui-color-border);
 }
 </style>

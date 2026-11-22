@@ -11,8 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.models.enums import WorkItemStatus
-from llc.services import work_item_own_task
+from llc.models.enums import WorkItemStatus, WorkItemType
+from llc.services import after_commit
+from llc.services.work_item_gated_done import DoneGate
 from llc.services.work_item_service import InvalidTransition, WorkItemService
 from testkit.fake_async_session import FakeAsyncSession
 
@@ -28,7 +29,7 @@ def _no_redis():
 
 def _item(status: WorkItemStatus, *, created_by=None, assignee=None, reviewer=None) -> MagicMock:
     return MagicMock(
-        id=uuid.uuid4(), company_id=uuid.uuid4(), status=status, created_by_user_id=created_by,
+        id=uuid.uuid4(), company_id=uuid.uuid4(), type=WorkItemType.TASK, status=status, created_by_user_id=created_by,
         assignee_user_id=assignee, reviewer_user_id=reviewer, completed_at=_NOW, cancelled_at=None, started_at=_NOW,
         checkout_run_id=uuid.uuid4(), checkout_locked_at=_NOW, version=1,
     )  # fmt: skip
@@ -36,13 +37,14 @@ def _item(status: WorkItemStatus, *, created_by=None, assignee=None, reviewer=No
 
 async def _settle() -> None:
     """Let the fence release run: it is sent after the commit, as a task (a session with no commit sends it at once)."""
-    await asyncio.gather(*work_item_own_task._release_tasks)
+    await asyncio.gather(*after_commit.after_commit_tasks)
 
 
 async def _move(item: MagicMock, new_status: WorkItemStatus, acting_user) -> MagicMock:
     session = FakeAsyncSession(results=[[item]])
-    moved = await WorkItemService(activity_log=MagicMock()).transition_status(
-        session, str(item.id), new_status, acting_user=acting_user
+    ungated = DoneGate(review_gate_svc=MagicMock(requires_review=AsyncMock(return_value=(False, None))))
+    moved = await WorkItemService(activity_log=MagicMock(record=AsyncMock())).transition_status(
+        session, str(item.id), new_status, acting_user=acting_user, done_gate=ungated
     )
     await _settle()
     return moved
@@ -62,14 +64,14 @@ async def test_a_person_moves_their_own_done_task_back_to_ready(field: str) -> N
 async def test_anyone_else_keeps_the_transition_rules(acting_user) -> None:
     done = _item(WorkItemStatus.DONE, created_by=_ME, assignee=_ME)
     with pytest.raises(InvalidTransition):
-        await _move(done, WorkItemStatus.READY, acting_user)
+        await _move(done, WorkItemStatus.BLOCKED, acting_user)  # done only reopens to ready or in_progress (#20508)
     assert done.status == WorkItemStatus.DONE
 
 
 @pytest.mark.asyncio
 async def test_a_task_with_no_owner_is_nobodys_own() -> None:
     with pytest.raises(InvalidTransition):
-        await _move(_item(WorkItemStatus.DONE), WorkItemStatus.READY, _ME)
+        await _move(_item(WorkItemStatus.DONE), WorkItemStatus.BLOCKED, _ME)
 
 
 def test_past_its_reviewer_is_not_an_own_task_move() -> None:

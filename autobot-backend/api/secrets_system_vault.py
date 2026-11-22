@@ -23,11 +23,13 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from api.schemas_system import SecretCreateRequest, SecretUpdateRequest
+from api.secrets_delete_outcome import error_for
+from api.secrets_guarded_delete import guarded_delete
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
-from services.envelope_secrets_service import SecretAccessError
+from services.envelope_secrets_service import AmbiguousSecretError, SecretAccessError, SecretConflictError
 
 logger = get_logger(__name__)
 
@@ -107,17 +109,20 @@ async def create_system_vault_secret(request: SecretCreateRequest, owner_id: str
     user_id, permissions = await _principal(owner_id)
     coordinator = get_coordinator()
     async for session in get_session():
-        secret = await coordinator.create(
-            session,
-            user_id=user_id,
-            permissions=permissions,
-            owner_vault=_SYSTEM_VAULT,
-            name=request.name,
-            secret_type=request.type.value,
-            plaintext=request.value.encode("utf-8"),
-        )
+        try:
+            secret = await coordinator.create(
+                session,
+                user_id=user_id,
+                permissions=permissions,
+                owner_vault=_SYSTEM_VAULT,
+                name=request.name,
+                secret_type=request.type.value,
+                plaintext=request.value.encode("utf-8"),
+            )
+        except (AmbiguousSecretError, SecretConflictError) as exc:
+            raise error_for(exc) from None  # the fixed 409 (#17850); the route re-raises an HTTPException as is
         await session.commit()
-        return _summary(secret)
+        return {**_summary(secret), "already_existed": True} if secret.already_existed else _summary(secret)
     raise RuntimeError("get_session() yielded no session")  # pragma: no cover -- defensive, generator always yields
 
 
@@ -166,33 +171,37 @@ async def rotate_system_vault_secret(
     return None  # pragma: no cover -- defensive, generator always yields
 
 
-async def _refuse_unconfirmed_dependents(coordinator, session, user_id, permissions, vault_id: uuid.UUID) -> None:
-    """409 with the dependents listed when anything still consumes the secret (#20557).
+async def _guarded_vault_delete(
+    coordinator, session, vault_id: uuid.UUID, owner_id: str, confirmed_digest: str | None
+) -> None:
+    """The main route's delete: the ONE guarded delete, with the manage-authority listing (`describe_dependencies`).
 
-    The listing comes from `describe_dependencies` (manage-authority gated). The
-    caller repeats the delete with `confirm_dependents` once a human has seen it.
+    The caller repeats the delete with the 409's `dependents_digest` once a human has seen the listing.
     """
-    deps = await coordinator.describe_dependencies(
-        session, user_id=user_id, permissions=permissions, secret_id=vault_id
-    )
-    if deps:
-        dependents = [{"dependent_kind": d.dependent_kind, "dependent_id": d.dependent_id} for d in deps]
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "secret_has_dependents", "message": "Dependents use this secret", "dependents": dependents},
+    user_id, permissions = await _principal(owner_id)
+
+    async def delete() -> None:
+        await coordinator.delete(session, user_id=user_id, permissions=permissions, secret_id=vault_id)
+
+    async def dependents() -> list:
+        return await coordinator.describe_dependencies(
+            session, user_id=user_id, permissions=permissions, secret_id=vault_id
         )
+
+    await guarded_delete(session, vault_id, dependents=dependents, delete=delete, confirmed_digest=confirmed_digest)
 
 
 async def delete_system_vault_secret(
     secret_id: str,
     owner_id: str,
     headers: Mapping[str, str] | None = None,
-    confirm_dependents: bool = False,
+    confirmed_digest: str | None = None,
 ) -> bool:
     """Delete a SYSTEM-vault secret; False when `secret_id` is not one.
 
-    Refused (409) while dependents exist unless `confirm_dependents` is set. The
-    internal API key is refused before any of this, so it cannot confirm.
+    Refused (409) while dependents exist unless `confirmed_digest` is the digest of the
+    listed set (see `secrets_guarded_delete`). The internal API key is refused before any
+    of this, so it cannot confirm.
     """
     from llc.deps import get_session
 
@@ -206,10 +215,7 @@ async def delete_system_vault_secret(
         if not await _is_system_secret(session, vault_id):
             return False
         _refuse_internal_key(headers, "delete")
-        user_id, permissions = await _principal(owner_id)
-        if not confirm_dependents:
-            await _refuse_unconfirmed_dependents(coordinator, session, user_id, permissions, vault_id)
-        await coordinator.delete(session, user_id=user_id, permissions=permissions, secret_id=vault_id)
+        await _guarded_vault_delete(coordinator, session, vault_id, owner_id, confirmed_digest)
         await session.commit()
         return True
     return False  # pragma: no cover -- defensive, generator always yields
