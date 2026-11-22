@@ -146,15 +146,13 @@ _CANONICAL_DEFINER = (_REPO / "autobot_shared" / "error_boundaries" / "decorator
 # moving the floor much, so the floor alone would not catch it.
 _TREES_THAT_MUST_BE_SCANNED = ("autobot_shared", "autobot-slm-backend", "scripts", "tools")
 
-#: Population floor for the tracked scan. Measured at 3,199 sources after
-#: #15258 narrowed the `tests` exclusion to file name (was 3,099 with the
-#: directory pruned wholesale); the floor sits 149 below that, same margin as
-#: before. For scale, the largest number of `.py` files deleted by any single
-#: merge in the last 300 first-parent commits is 3, so ordinary churn has
-#: ~50x headroom, while losing any one of the four trees above (217, 175, 55,
-#: 22 files) or any comparable subtree fails. RATCHET: raise it when the
-#: population genuinely grows; lower it only with a stated reason.
-_SOURCE_FLOOR = 3050
+#: Population floor for the tracked scan. Measured at 4,574 sources on
+#: 2026-11-22 (#22103); the floor sits 149 below that, at 4,425, and the
+#: ceiling the test below enforces is 6,637 (1.5x slack). Losing any one of
+#: the four trees above or any comparable subtree fails the floor, while
+#: ordinary churn does not. RATCHET: raise it when the population genuinely
+#: grows; lower it only with a stated reason.
+_SOURCE_FLOOR = 4425
 
 #: How far the population may outgrow the floor before the floor is stale. The
 #: floor started at 100 against 2,308 files -- 23x slack -- which is how it
