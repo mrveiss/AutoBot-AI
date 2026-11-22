@@ -73,11 +73,16 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
     label: 'Communication patterns',
   })
 
-  const qualityHealthEndpoint = useFetchEndpoint<Raw, Raw>({
-    path: '/api/quality/health-score',
-    pickData: (r) => r,
-    label: 'Quality health score',
-  })
+  const qualityHealthEndpoint = useFetchEndpoint<Raw, Raw>(
+    {
+      path: '/api/quality/health-score',
+      scopeToSource: true,
+      requireSource: true,
+      pickData: (r) => r,
+      label: 'Quality health score',
+    },
+    { withSourceId: deps.withSourceId },
+  )
 
   const duplicatesEndpoint = useFetchEndpoint<Raw, Raw>(
     {

@@ -17,11 +17,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import JSONResponse
 
+from api.analytics_quality_export import build_quality_export_report
 from api.analytics_shared import no_data_response
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
+from api.codebase_analytics.endpoints.shared import authorize_source_access, require_source_access
+from api.codebase_analytics.problem_query import problem_where
 from api.schemas_analytics import (
     AnalyticsQualityExportData,
     HealthScore,
@@ -36,6 +39,7 @@ from api.schemas_analytics import (
     QualityTrendsResponse,
 )
 from api.schemas_common import DataResponse
+from api.source_scope import SourceIdQuery, require_source_id
 from api.ws_security import open_authenticated_ws
 from auth_middleware import check_admin_permission
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS
@@ -64,7 +68,10 @@ _DELTA_HISTORY_KEY = "remediation:delta:history"
 # Maximum remediation delta rows to surface on the read endpoint.
 _DELTA_READ_LIMIT: int = 100
 
-router = APIRouter(tags=["code-quality", "analytics"])  # Prefix set in router_registry
+router = APIRouter(
+    tags=["code-quality", "analytics"],
+    dependencies=[Depends(require_source_access)],
+)  # Prefix set in router_registry
 
 # Single source of truth for quality dimension weights (must sum to 1.0).
 # runtime_risk funded by -0.05 maintainability and -0.05 testability (#11184).
@@ -128,30 +135,23 @@ def calculate_health_score(metrics: dict[str, float]) -> HealthScore:
 
 
 async def get_quality_data_from_storage(
-    source_root: "Path" | None = None,
-    source_id: str | None = None,
+    source_root: "Path",
+    source_id: str,
 ) -> dict[str, Any]:
     """Retrieve quality data from Redis or ChromaDB.
 
     Issue #541: Now calculates real quality metrics from actual analysis data
     instead of returning static demo values.
-    Issue #3441: Accepts optional source_root to scope results to a project
-    directory.  When provided, all problem file paths are checked to confirm
-    they reside under source_root before contributing to metrics.  The Redis
-    cache key is namespaced by the resolved path so per-project results are
-    stored independently.
-    Issue #6670: Accepts optional source_id used to look up per-source
-    codebase_stats from ChromaDB; without it, per-source dashboards always
-    fell back to the global stats document and returned no_data.
+    Issue #3441: All problem file paths are checked to confirm they reside under
+    source_root before contributing to metrics. #20513: both arguments are
+    required; there are no global (unscoped) results, and the Redis cache key is
+    namespaced by the source id.
 
     Args:
-        source_root: Absolute path to the project clone directory, or None
-                     for global (unscoped) results.
-        source_id:   Project source ID for per-source ChromaDB stats lookup.
+        source_root: Absolute path to the project clone directory.
+        source_id:   Project source ID for the ChromaDB problem and stats lookup.
     """
-    # Derive a stable cache key suffix from the resolved path (if scoped)
-    cache_suffix = f":{source_root}" if source_root else ""
-    cache_key = f"code_quality:latest{cache_suffix}"
+    cache_key = f"code_quality:latest:{require_source_id(source_id, 'quality cache key')}"
 
     # First try Redis cache for pre-calculated metrics
     try:
@@ -199,8 +199,8 @@ async def get_quality_data_from_storage(
 
 
 async def _get_problems_from_chromadb(
-    source_root: "Path" | None = None,
-    source_id: str | None = None,
+    source_root: "Path",
+    source_id: str,
 ) -> tuple[list[dict], dict[str, Any]]:
     """Fetch problems and stats from ChromaDB.
 
@@ -214,14 +214,13 @@ async def _get_problems_from_chromadb(
     never the global document's, which describes another tree (#20513).
 
     Args:
-        source_root: Absolute path used to filter problem file paths.  Pass
-                     None to return all problems regardless of location.
-        source_id:   Optional project source ID used to look up per-source
-                     codebase_stats.  Pass None for the global stats key.
+        source_root: Absolute path used to filter problem file paths.
+        source_id:   Project source ID: selects its problems and its codebase_stats.
 
     Returns:
         Tuple of (problems list, codebase stats dict)
     """
+    source_id = require_source_id(source_id, "quality problem query")
     problems = []
     stats = {}
 
@@ -234,14 +233,14 @@ async def _get_problems_from_chromadb(
 
         # Fetch all problems
         results = await collection.get(
-            where={"type": "problem"},
+            where=problem_where(source_id, None, None),
             include=["metadatas"],
         )
         if results and results.get("metadatas"):
             for metadata in results["metadatas"]:
                 file_path = metadata.get("file_path", "")
                 # Issue #3441: filter to source_root when provided
-                if source_root is not None and file_path:
+                if file_path:
                     candidate = (source_root / file_path).resolve()
                     try:
                         candidate.relative_to(source_root.resolve())
@@ -256,7 +255,7 @@ async def _get_problems_from_chromadb(
                     }
                 )
 
-        stats_id = f"codebase_stats_{source_id}" if source_id else "codebase_stats"
+        stats_id = f"codebase_stats_{source_id}"
         stats_results = await collection.get(ids=[stats_id], include=["metadatas"])
         if stats_results and stats_results.get("metadatas"):
             stats = stats_results["metadatas"][0]
@@ -580,7 +579,12 @@ def _calculate_complexity_metrics(
     }
 
 
-async def _persist_health_snapshot(score: float, metrics: dict[str, float]) -> None:
+def _health_history_key(source_id: str) -> str:
+    """The health-history sorted set of ONE source (#20513)."""
+    return f"{_HEALTH_HISTORY_KEY}:{require_source_id(source_id, 'quality history key')}"
+
+
+async def _persist_health_snapshot(score: float, metrics: dict[str, float], source_id: str) -> None:
     """Write one health-score point to the analytics Redis sorted set.
 
     Mirrors the zadd/zremrangebyrank pattern from
@@ -590,6 +594,7 @@ async def _persist_health_snapshot(score: float, metrics: dict[str, float]) -> N
     Args:
         score:   Weighted health score (0-100).
         metrics: Per-dimension metric scores used to compute *score*.
+        source_id: The source the point belongs to.
     """
     try:
         from autobot_shared.redis_client import get_async_redis_client
@@ -598,14 +603,15 @@ async def _persist_health_snapshot(score: float, metrics: dict[str, float]) -> N
         ts = now_utc()
         ts_ms = int(ts.timestamp() * 1000)
         payload = json.dumps({"ts": ts.isoformat(), "score": round(score, 2), "metrics": metrics})
-        await redis.zadd(_HEALTH_HISTORY_KEY, {payload: ts_ms})
-        await redis.zremrangebyrank(_HEALTH_HISTORY_KEY, 0, -(QUALITY_HISTORY_MAX_POINTS + 1))
+        history_key = _health_history_key(source_id)
+        await redis.zadd(history_key, {payload: ts_ms})
+        await redis.zremrangebyrank(history_key, 0, -(QUALITY_HISTORY_MAX_POINTS + 1))
         logger.debug("quality health snapshot persisted (score=%.2f, ts_ms=%d)", score, ts_ms)
     except Exception as exc:
         logger.warning("quality health snapshot: Redis unavailable, skipping persist: %s", exc)
 
 
-async def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> list[dict]:
+async def _build_quality_trends(metrics: dict[str, float], source_id: str, days: int = 30) -> list[dict]:
     """Return quality trend data points for the last *days* days.
 
     Issue #620: Extracted from calculate_real_quality_metrics.
@@ -616,6 +622,7 @@ async def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> li
 
     Args:
         metrics: Current metric scores used for the flat fallback only.
+        source_id: The source whose history is read.
         days:    Maximum age of points to return.
 
     Returns:
@@ -627,7 +634,7 @@ async def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> li
         redis = await get_async_redis_client(database="analytics")
         cutoff_ms = int((now_utc() - timedelta(days=days)).timestamp() * 1000)
         now_ms = int(now_utc().timestamp() * 1000)
-        raw_entries = await redis.zrangebyscore(_HEALTH_HISTORY_KEY, cutoff_ms, now_ms)
+        raw_entries = await redis.zrangebyscore(_health_history_key(source_id), cutoff_ms, now_ms)
         if raw_entries:
             points = []
             for entry in raw_entries:
@@ -697,8 +704,8 @@ def _calculate_all_quality_scores(
 
 
 async def calculate_real_quality_metrics(
-    source_root: "Path" | None = None,
-    source_id: str | None = None,
+    source_root: "Path",
+    source_id: str,
 ) -> dict[str, Any] | None:
     """Calculate real quality metrics from ChromaDB analysis data.
 
@@ -711,7 +718,7 @@ async def calculate_real_quality_metrics(
     so per-source codebase_stats documents are read.
 
     Args:
-        source_root: Absolute path used to filter problems.  None means global.
+        source_root: Absolute path used to filter problems.
         source_id:   Project source ID for per-source stats lookup.
 
     Returns:
@@ -740,8 +747,8 @@ async def calculate_real_quality_metrics(
     weighted_score = sum(metrics.get(c, 0) * w for c, w in _QUALITY_WEIGHTS.items())
 
     # Issue #11203: Persist real health snapshot + build real trend series.
-    await _persist_health_snapshot(weighted_score, metrics)
-    trends = await _build_quality_trends(metrics)
+    await _persist_health_snapshot(weighted_score, metrics, source_id)
+    trends = await _build_quality_trends(metrics, source_id)
 
     return {
         "metrics": {k: round(v, 1) for k, v in metrics.items()},
@@ -847,37 +854,6 @@ def _build_drill_down_file_results(file_issues: dict[str, list[dict]]) -> list[d
 
     result_files.sort(key=lambda x: x["issues"], reverse=True)
     return result_files
-
-
-def _build_quality_export_report(format_type: str, health: Any, metrics: dict, data: dict) -> dict:
-    """
-    Build quality export report dictionary.
-
-    Issue #665: Extracted from export_quality_report for clarity.
-
-    Args:
-        format_type: Export format (json, csv, pdf)
-        health: HealthScore object with overall score and recommendations
-        metrics: Quality metrics dictionary
-        data: Full data dictionary with patterns, complexity, stats
-
-    Returns:
-        Report dictionary with all quality data
-    """
-    return {
-        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-        "format": format_type,
-        "health_score": {
-            "overall": health.overall,
-            "grade": health.grade.value,
-            "breakdown": health.breakdown,
-        },
-        "metrics": metrics,
-        "patterns": data.get("patterns", []),
-        "complexity": data.get("complexity", {}),
-        "stats": data.get("stats", {}),
-        "recommendations": health.recommendations,
-    }
 
 
 async def _read_remediation_deltas(limit: int) -> list[dict]:
@@ -1029,8 +1005,8 @@ manager = QualityWebSocketHub()
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def get_health_score(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get current codebase health score with breakdown.
@@ -1086,9 +1062,9 @@ async def get_health_score(
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def get_quality_metrics(
+    source_id: SourceIdQuery,
     category: MetricCategory | None = Query(None, description="Filter by category"),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get all quality metrics or filter by category.
@@ -1157,10 +1133,10 @@ async def get_quality_metrics(
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def get_pattern_distribution(
+    source_id: SourceIdQuery,
     severity: str | None = Query(None, description="Filter by severity"),
     limit: int = Query(20, ge=1, le=100),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get distribution of code patterns detected in the codebase.
@@ -1222,9 +1198,9 @@ async def get_pattern_distribution(
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def get_complexity_metrics(
+    source_id: SourceIdQuery,
     top_n: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get code complexity analysis with hotspots.
@@ -1349,10 +1325,10 @@ def _calculate_trend_statistics(scores: list) -> dict:
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def get_quality_trends(
+    source_id: SourceIdQuery,
     period: str = Query("30d", pattern=r"^(7d|14d|30d|90d)\z"),
     metric: str | None = Query(None, description="Specific metric to trend"),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get quality score trends over time.
@@ -1396,8 +1372,8 @@ async def get_quality_trends(
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def get_quality_snapshot(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get complete quality snapshot for the current state.
@@ -1507,12 +1483,12 @@ async def _drill_down_runtime_risk(limit: int = 50) -> dict[str, Any]:
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def drill_down_category(
+    source_id: SourceIdQuery,
     category: str,
     file_filter: str | None = Query(None, description="Filter by file path"),
     severity: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Drill down into a specific quality category.
@@ -1530,7 +1506,7 @@ async def drill_down_category(
     if category.lower() == "runtime_risk":
         return await _drill_down_runtime_risk(limit=limit)
 
-    problems, stats = await _get_problems_from_chromadb(source_root=source_root)
+    problems, stats = await _get_problems_from_chromadb(source_root=source_root, source_id=source_id)
 
     if not problems:
         return no_data_response(
@@ -1569,6 +1545,7 @@ async def drill_down_category(
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def export_quality_report(
+    source_id: SourceIdQuery,
     format: str = Query("json", pattern=r"^(json|csv|pdf)\z"),
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:
@@ -1580,7 +1557,8 @@ async def export_quality_report(
     Issue #665: Refactored using helper functions for clarity.
     Issue #744: Requires admin authentication.
     """
-    data = await get_quality_data_from_storage()
+    source_root = await _resolve_source_root_or_404(source_id)
+    data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     if data is None:
         return JSONResponse(
@@ -1611,7 +1589,7 @@ async def export_quality_report(
 
     # Issue #665: Use extracted helper functions
     if format == "json":
-        report = _build_quality_export_report(format, health, metrics, data)
+        report = build_quality_export_report(format, health, metrics, data)
         return JSONResponse(content=report)
     elif format == "csv":
         csv_content = _export_quality_as_csv(health, metrics)
@@ -1637,14 +1615,27 @@ async def _handle_ws_subscribe(websocket: WebSocket, data: dict) -> None:
 
 
 async def _handle_ws_refresh(websocket: WebSocket, data: dict) -> None:
-    """Handle WebSocket refresh message (Issue #315: extracted)."""
-    snapshot = await get_quality_snapshot()
+    """Handle WebSocket refresh message for the source the socket was opened for (Issue #315, #20513)."""
+    snapshot = await get_quality_snapshot(source_id=data["_source_id"])
     await websocket.send_json({"type": "snapshot", "data": snapshot})
 
 
 async def _handle_ws_ping(websocket: WebSocket, data: dict) -> None:
     """Handle WebSocket ping message (Issue #315: extracted)."""
     await websocket.send_json({"type": "pong"})
+
+
+def _may_see_source(source_id: str):
+    """The ``allow`` check of a quality socket: the caller may see this source (#20513)."""
+
+    async def allow(user: dict) -> bool:
+        try:
+            await authorize_source_access(source_id, user)
+        except HTTPException:
+            return False
+        return True
+
+    return allow
 
 
 # WebSocket message handlers (Issue #315: dictionary dispatch pattern)
@@ -1661,19 +1652,20 @@ _WS_MESSAGE_HANDLERS = {
     operation="websocket_quality_updates",
     error_code_prefix="ANALYTICS_QUALITY",
 )
-async def websocket_quality_updates(websocket: WebSocket):
+async def websocket_quality_updates(websocket: WebSocket, source_id: SourceIdQuery):
     """
     WebSocket endpoint for real-time quality updates.
 
     Clients receive updates when quality metrics change.
     Issue #315: Refactored to use dictionary dispatch for message handling.
     """
-    if not await open_authenticated_ws(websocket, admin=True):  # #17009: admin, like GET /snapshot
+    # #17009: admin, like GET /snapshot; #20513: and allowed to see the source it asks about
+    if not await open_authenticated_ws(websocket, admin=True, allow=_may_see_source(source_id)):
         return
     await manager.connect(websocket)
 
     try:
-        snapshot = await get_quality_snapshot()
+        snapshot = await get_quality_snapshot(source_id=source_id)
         await websocket.send_json({"type": "snapshot", "data": snapshot})
 
         # Keep connection alive and handle incoming messages
@@ -1686,7 +1678,7 @@ async def websocket_quality_updates(websocket: WebSocket):
                 msg_type = data.get("type")
                 handler = _WS_MESSAGE_HANDLERS.get(msg_type)
                 if handler:
-                    await handler(websocket, data)
+                    await handler(websocket, {**data, "_source_id": source_id})
 
             except json.JSONDecodeError:
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})

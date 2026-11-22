@@ -56,7 +56,7 @@ def _routers():
     return {
         "analytics realtime": (analytics, "/ws/realtime", False),
         "analytics live": (analytics, "/ws/analytics/live", False),
-        "quality": (analytics_quality, "/ws", True),
+        "quality": (analytics_quality, "/ws?source_id=s1", True),
         "knowledge research": (knowledge_research_ws, "/ws/knowledge/research", False),
         "log tail": (logs, "/tail/backend.log", True),
         "monitoring": (monitoring, "/realtime", False),
@@ -75,7 +75,10 @@ def test_an_unauthenticated_client_is_refused_before_accept(name):
 @pytest.mark.parametrize("name", CASES)
 def test_the_right_caller_is_accepted(name):
     module, path, admin = _routers()[name]
-    with patch("api.analytics_quality.get_quality_snapshot", new=AsyncMock(return_value={})):  # no scan in a test
+    with (
+        patch("api.analytics_quality.get_quality_snapshot", new=AsyncMock(return_value={})),  # no scan in a test
+        patch("api.analytics_quality.authorize_source_access", new=AsyncMock()),  # access is tested in its own file
+    ):
         assert _connect(module, path, ADMIN if admin else USER) == "accepted"
 
 

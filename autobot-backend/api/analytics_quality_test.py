@@ -231,7 +231,7 @@ class TestPerSourceStatsLookup:
             "api.codebase_analytics.storage.get_code_collection_async",
             new=fake_get_collection,
         ):
-            problems, stats = await aq._get_problems_from_chromadb(source_id="abc123")
+            problems, stats = await aq._get_problems_from_chromadb(source_root=Path("/tmp/p"), source_id="abc123")
 
         # Per-source key must be queried; global key must NOT be queried (returned data first)
         id_queries = [c.get("ids") for c in calls if "ids" in c]
@@ -256,7 +256,7 @@ class TestPerSourceStatsLookup:
             "api.codebase_analytics.storage.get_code_collection_async",
             new=fake_get_collection,
         ):
-            problems, stats = await aq._get_problems_from_chromadb(source_id="missing-id")
+            problems, stats = await aq._get_problems_from_chromadb(source_root=Path("/tmp/p"), source_id="missing-id")
 
         id_queries = [c.get("ids") for c in calls if "ids" in c]
         assert ["codebase_stats_missing-id"] in id_queries
@@ -264,28 +264,15 @@ class TestPerSourceStatsLookup:
         assert "total_files" not in stats
 
     @pytest.mark.asyncio
-    async def test_global_path_when_no_source_id(self):
-        """When source_id is None, only the global codebase_stats doc is queried."""
+    async def test_no_global_path_a_missing_source_id_is_refused(self):
+        """There is no global stats or problem query: an empty id raises before ChromaDB is touched (#20513)."""
         from api import analytics_quality as aq
 
-        collection, calls = self._fake_collection(
-            problems_metadatas=[],
-            stats_by_id={"codebase_stats": {"total_files": 99}},
-        )
-
-        async def fake_get_collection():
-            return collection
-
-        with patch(
-            "api.codebase_analytics.storage.get_code_collection_async",
-            new=fake_get_collection,
-        ):
-            problems, stats = await aq._get_problems_from_chromadb()
-
-        id_queries = [c.get("ids") for c in calls if "ids" in c]
-        assert ["codebase_stats"] in id_queries
-        assert all(q != ["codebase_stats_None"] for q in id_queries)
-        assert stats["total_files"] == 99
+        with patch("api.codebase_analytics.storage.get_code_collection_async", new=AsyncMock()) as storage:
+            for empty in ("", None):
+                with pytest.raises(ValueError):
+                    await aq._get_problems_from_chromadb(source_root=Path("/tmp/p"), source_id=empty)
+        storage.assert_not_called()
 
 
 # ============================================================================

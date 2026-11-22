@@ -587,7 +587,7 @@ const drillDownData = ref<QualityDrillDown>({ total_files: 0, total_issues: 0, a
 // WebSocket managed via useWebSocket composable
 const _qualityWsUrl = (() => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/api/quality/ws`;
+  return withSourceId(`${protocol}//${window.location.host}/api/quality/ws`); // #20513: the socket is of one source
 })();
 const {
   connect: wsConnect,
