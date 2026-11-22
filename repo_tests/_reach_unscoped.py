@@ -49,6 +49,9 @@ UNSCOPED = frozenset(
         "glob-declared-uncovered-entries",
         # #19413: every tracked file, so a ChromaDB heartbeat path written anywhere is seen.
         "chromadb-heartbeat-one-home-sweep",
+        # #21571: every tracked non-test file whose suffix has block comments, since an unterminated comment or
+        # quote can end a file in any component; the population is the whole tree by suffix, not a set of prefixes.
+        "no-unterminated-construct-21571",
         # #20894: every tracked non-test python file, since an in-repo log path can be written in any
         # component; the population is the whole tree by suffix, not a set of prefixes.
         "no-in-repo-log-path-20894",
