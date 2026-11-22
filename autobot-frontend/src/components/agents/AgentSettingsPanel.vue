@@ -9,6 +9,7 @@ Provides controls for concurrency, timeouts, memory, logging, retry, and executi
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
+import { BaseSwitch } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
@@ -244,23 +245,7 @@ onMounted(() => {
               <p class="text-sm text-primary">{{ t('agent.settings.memory.enableLabel') }}</p>
               <p class="text-xs text-tertiary mt-0.5">{{ t('agent.settings.memory.enableHint') }}</p>
             </div>
-            <button
-              type="button"
-              :class="[
-                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-autobot-info focus:ring-offset-2',
-                settings.memory.enabled ? 'bg-autobot-primary' : 'bg-autobot-bg-tertiary'
-              ]"
-              role="switch"
-              :aria-checked="settings.memory.enabled"
-              @click="settings.memory.enabled = !settings.memory.enabled; markChanged()"
-            >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-autobot-bg-card shadow ring-0 transition duration-200 ease-in-out',
-                  settings.memory.enabled ? 'translate-x-5' : 'translate-x-0'
-                ]"
-              />
-            </button>
+            <BaseSwitch v-model="settings.memory.enabled" :label="t('agent.settings.memory.enableLabel')" @change="markChanged" />
           </div>
         </div>
 
@@ -347,46 +332,14 @@ onMounted(() => {
                 <p class="text-sm text-primary">{{ t('agent.settings.execution.parallelLabel') }}</p>
                 <p class="text-xs text-tertiary mt-0.5">{{ t('agent.settings.execution.parallelHint') }}</p>
               </div>
-              <button
-                type="button"
-                :class="[
-                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-autobot-info focus:ring-offset-2',
-                  settings.execution.parallelExecution ? 'bg-autobot-primary' : 'bg-autobot-bg-tertiary'
-                ]"
-                role="switch"
-                :aria-checked="settings.execution.parallelExecution"
-                @click="settings.execution.parallelExecution = !settings.execution.parallelExecution; markChanged()"
-              >
-                <span
-                  :class="[
-                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-autobot-bg-card shadow ring-0 transition duration-200 ease-in-out',
-                    settings.execution.parallelExecution ? 'translate-x-5' : 'translate-x-0'
-                  ]"
-                />
-              </button>
+              <BaseSwitch v-model="settings.execution.parallelExecution" :label="t('agent.settings.execution.parallelLabel')" @change="markChanged" />
             </div>
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm text-primary">{{ t('agent.settings.execution.priorityLabel') }}</p>
                 <p class="text-xs text-tertiary mt-0.5">{{ t('agent.settings.execution.priorityHint') }}</p>
               </div>
-              <button
-                type="button"
-                :class="[
-                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-autobot-info focus:ring-offset-2',
-                  settings.execution.priorityQueue ? 'bg-autobot-primary' : 'bg-autobot-bg-tertiary'
-                ]"
-                role="switch"
-                :aria-checked="settings.execution.priorityQueue"
-                @click="settings.execution.priorityQueue = !settings.execution.priorityQueue; markChanged()"
-              >
-                <span
-                  :class="[
-                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-autobot-bg-card shadow ring-0 transition duration-200 ease-in-out',
-                    settings.execution.priorityQueue ? 'translate-x-5' : 'translate-x-0'
-                  ]"
-                />
-              </button>
+              <BaseSwitch v-model="settings.execution.priorityQueue" :label="t('agent.settings.execution.priorityLabel')" @change="markChanged" />
             </div>
           </div>
         </div>
@@ -408,7 +361,7 @@ onMounted(() => {
           <button
             type="button"
             :disabled="!hasChanges || !isValid || isSaving"
-            class="px-5 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+            class="px-5 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
             @click="saveSettings"
           >
             <svg

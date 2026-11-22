@@ -50,6 +50,7 @@ from knowledge.source_liveness import (
     sweep_source_liveness,
 )
 from models.knowledge_fact import KnowledgeFact
+from testkit.fake_async_session import FakeAsyncSession
 
 
 class TestTheProbeNeverBlocksTheEventLoop:
@@ -119,21 +120,16 @@ class TestTheProbeNeverBlocksTheEventLoop:
         assert ticks == 5
 
 
-class _FakeResult:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def all(self):
-        return self._rows
-
-
-class _FakeSession:
+class _TrackedSession(FakeAsyncSession):
     """Just enough session to observe WHEN work happens, not what SQL says."""
 
     def __init__(self, tracker, rows):
         self._tracker = tracker
         self._rows = rows
-        self.committed = False
+        super().__init__(
+            default_result=lambda stmt: [(fact.id, fact.metadata_json) for fact in self._rows],
+            on_get=lambda entity, fact_id: next((fact for fact in self._rows if fact.id == fact_id), None),
+        )
 
     async def __aenter__(self):
         self._tracker["open"] += 1
@@ -144,19 +140,23 @@ class _FakeSession:
         self._tracker["open"] -= 1
         return False
 
-    async def execute(self, query):
-        return _FakeResult([(fact.id, fact.metadata_json) for fact in self._rows])
-
-    async def get(self, model, fact_id, with_for_update=False):
+    async def get(
+        self,
+        entity,
+        ident,
+        *,
+        options=None,
+        populate_existing=False,
+        with_for_update=None,
+        identity_token=None,
+        execution_options=None,
+    ):
         hook = self._tracker.get("on_get")
         if hook is not None:
-            hook(fact_id)
+            hook(ident)
         self._tracker["locked_gets"] += int(bool(with_for_update))
         self._tracker["gets"] += 1
-        return next((fact for fact in self._rows if fact.id == fact_id), None)
-
-    async def commit(self):
-        self.committed = True
+        return await super().get(entity, ident, with_for_update=with_for_update)
 
 
 class TestTheSweepHoldsNoTransactionWhileProbing:
@@ -187,7 +187,7 @@ class TestTheSweepHoldsNoTransactionWhileProbing:
         sessions = []
 
         def _factory():
-            session = _FakeSession(tracker, facts)
+            session = _TrackedSession(tracker, facts)
             sessions.append(session)
             return session
 

@@ -65,7 +65,7 @@ from __future__ import annotations
 #: import inertly, and this list only shrinks.
 HAS_IMPORT_EFFECT: frozenset[tuple[str, str]] = frozenset()
 
-#: 1 -- a facade doing ``from utils.error_boundaries import ...``. That ``utils`` is the
-#: backend's top-level package, so the module imports only with ``autobot-backend`` on
-#: ``sys.path``; from its own tree it raises ModuleNotFoundError. Not side-effect debt.
-DOES_NOT_IMPORT: frozenset[tuple[str, str]] = frozenset({(".", "autobot_shared.error_boundaries")})
+#: Emptied by #18554: the one entry, ``autobot_shared.error_boundaries``, was a facade over the
+#: backend's ``utils.error_boundaries``. The package now lives in ``autobot_shared`` and reaches
+#: the backend only through registration hooks. This list only shrinks.
+DOES_NOT_IMPORT: frozenset[tuple[str, str]] = frozenset()

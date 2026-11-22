@@ -24,7 +24,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_BACKEND_HOST",
         type=str,
-        default="10.0.0.1",
+        default="127.0.0.1",
         description="Hostname or IP address of the AutoBot backend service.",
         component="backend",
     )
@@ -445,7 +445,7 @@ register_env_var(
             "Grace period between SIGTERM and SIGKILL when killing a timed-out playbook "
             "subprocess's whole process group. Long enough for ansible-playbook / a forked ssh "
             "child to unwind cleanly; short enough that a wedged process does not itself become "
-            "an unbounded second wait (services/playbook_executor.py, #14524)."
+            "an unbounded second wait (services/process_group.py, #14524, #19475)."
         ),
         component="backend",
     )

@@ -20,7 +20,7 @@ from llm_shared.torch_loader import lazy_torch
 from memory import OwnerScopeError, TaskPriority, get_memory_manager
 from utils.multimodal_performance_monitor import performance_monitor
 
-from .models import MultiModalInput, ProcessingResult
+from .models import MultiModalInput, MultimodalResult
 from .processors import ContextProcessor, VisionProcessor, VoiceProcessor
 from .types import EMBEDDING_FIELDS, VISUAL_MODALITY_TYPES, ModalityType, PersistenceOutcome
 
@@ -100,7 +100,7 @@ class MultiModalProcessor:
         self.attention_layer = None
         self._initialize_fusion_components()
 
-    async def _route_to_processor(self, input_data: MultiModalInput) -> ProcessingResult:
+    async def _route_to_processor(self, input_data: MultiModalInput) -> MultimodalResult:
         """Route input to appropriate processor (Issue #315 - extracted method)"""
         # Use dict-based routing to reduce if-elif chain nesting
         if input_data.modality_type in VISUAL_MODALITY_TYPES:
@@ -119,9 +119,9 @@ class MultiModalProcessor:
         processing_time: float,
         error: Exception,
         prefix: str = "unified",
-    ) -> ProcessingResult:
+    ) -> MultimodalResult:
         """Create error result for failed processing (Issue #315 - extracted method)"""
-        return ProcessingResult(
+        return MultimodalResult(
             result_id=f"{prefix}_{input_data.input_id}",
             input_id=input_data.input_id,
             modality_type=input_data.modality_type,
@@ -133,7 +133,7 @@ class MultiModalProcessor:
             error_message=str(error),
         )
 
-    async def process(self, input_data: MultiModalInput) -> ProcessingResult:
+    async def process(self, input_data: MultiModalInput) -> MultimodalResult:
         """
         Main processing method that routes input to appropriate processor
         """
@@ -159,7 +159,7 @@ class MultiModalProcessor:
             self._update_stats(result)
 
             # #13688: stamp the owner from the input in one place, so the memory write is tenant-scoped without
-            # touching every ProcessingResult construction site.
+            # touching every MultimodalResult construction site.
             if result.user_id is None:
                 result.user_id = input_data.user_id
 
@@ -211,13 +211,13 @@ class MultiModalProcessor:
 
     def _build_combined_result(
         self, input_data: MultiModalInput, combined_result: Dict, processing_time: float
-    ) -> ProcessingResult:
+    ) -> MultimodalResult:
         """
         Build successful processing result for combined input.
 
         Issue #620.
         """
-        return ProcessingResult(
+        return MultimodalResult(
             result_id=f"combined_{input_data.input_id}",
             input_id=input_data.input_id,
             modality_type=input_data.modality_type,
@@ -230,13 +230,13 @@ class MultiModalProcessor:
 
     def _build_error_result(
         self, input_data: MultiModalInput, processing_time: float, error: Exception
-    ) -> ProcessingResult:
+    ) -> MultimodalResult:
         """
         Build error processing result for combined input.
 
         Issue #620.
         """
-        return ProcessingResult(
+        return MultimodalResult(
             result_id=f"combined_{input_data.input_id}",
             input_id=input_data.input_id,
             modality_type=input_data.modality_type,
@@ -248,7 +248,7 @@ class MultiModalProcessor:
             error_message=str(error),
         )
 
-    async def _process_combined(self, input_data: MultiModalInput) -> ProcessingResult:
+    async def _process_combined(self, input_data: MultiModalInput) -> MultimodalResult:
         """Process combined multi-modal input."""
         start_time = time.time()
 
@@ -295,7 +295,7 @@ class MultiModalProcessor:
         except Exception as e:
             self.logger.error("Failed to initialize fusion components: %s", e)
 
-    def _extract_embedding_from_result(self, result: ProcessingResult) -> Any | None:
+    def _extract_embedding_from_result(self, result: MultimodalResult) -> Any | None:
         """Extract embedding from a processing result (Issue #315 - extracted method)"""
         if not result.result_data:
             return None
@@ -307,7 +307,7 @@ class MultiModalProcessor:
 
         return None
 
-    def _collect_embeddings_from_results(self, results: List[ProcessingResult]) -> tuple:
+    def _collect_embeddings_from_results(self, results: List[MultimodalResult]) -> tuple:
         """Collect and filter embeddings from results (Issue #315 - extracted method)"""
         torch = _get_torch()
 
@@ -318,7 +318,7 @@ class MultiModalProcessor:
 
         for result in results:
             # Guard clause: Skip unsuccessful or invalid results
-            if not isinstance(result, ProcessingResult) or not result.success:
+            if not isinstance(result, MultimodalResult) or not result.success:
                 continue
 
             # Extract embedding using helper method
@@ -403,7 +403,7 @@ class MultiModalProcessor:
         modality_contributions: Dict[str, float],
         modalities: List[str],
         embeddings: list,
-        results: List[ProcessingResult],
+        results: List[MultimodalResult],
         result_data: List[Any],
     ) -> Dict[str, Any]:
         """Build the final fusion result dictionary. Issue #620."""
@@ -424,7 +424,7 @@ class MultiModalProcessor:
         modalities: List[str],
         confidences: List[float],
         result_data: List[Any],
-        results: List[ProcessingResult],
+        results: List[MultimodalResult],
     ) -> Dict[str, Any]:
         """Perform attention-based fusion on embeddings. Issue #620."""
         torch = _get_torch()
@@ -453,7 +453,7 @@ class MultiModalProcessor:
             result_data,
         )
 
-    def _combine_results(self, results: List[ProcessingResult]) -> Dict[str, Any]:
+    def _combine_results(self, results: List[MultimodalResult]) -> Dict[str, Any]:
         """Combine results from multiple processors with attention-based fusion."""
         if self.fusion_network is None or self.attention_layer is None:
             return self._simple_combination(results)
@@ -474,7 +474,7 @@ class MultiModalProcessor:
             self.logger.error("Attention fusion failed: %s", e)
             return self._simple_combination(results)
 
-    def _simple_combination(self, results: List[ProcessingResult]) -> Dict[str, Any]:
+    def _simple_combination(self, results: List[MultimodalResult]) -> Dict[str, Any]:
         """Simple fallback combination without attention fusion."""
         combined = {
             "fusion_type": "simple_average",
@@ -486,7 +486,7 @@ class MultiModalProcessor:
 
         confidence_sum = 0.0
         for result in results:
-            if isinstance(result, ProcessingResult):
+            if isinstance(result, MultimodalResult):
                 combined["results"].append(
                     {
                         "modality": result.modality_type.value,
@@ -505,7 +505,7 @@ class MultiModalProcessor:
 
         return combined
 
-    def _update_stats(self, result: ProcessingResult):
+    def _update_stats(self, result: MultimodalResult):
         """Update processing statistics"""
         self.stats["total_processed"] += 1
 
@@ -521,7 +521,7 @@ class MultiModalProcessor:
         total_time = self.stats["avg_processing_time"] * (self.stats["total_processed"] - 1) + result.processing_time
         self.stats["avg_processing_time"] = total_time / self.stats["total_processed"]
 
-    async def _store_result(self, result: ProcessingResult) -> PersistenceOutcome:
+    async def _store_result(self, result: MultimodalResult) -> PersistenceOutcome:
         """Store processing result in memory. Returns which of four outcomes happened (#15234, #16926)."""
         task_data = {
             "result_id": result.result_id,
@@ -577,7 +577,7 @@ class MultiModalProcessor:
             modality_groups[modality].append(inp)
         return modality_groups
 
-    async def _process_single_batch(self, batch: List[MultiModalInput], modality: str) -> List[ProcessingResult]:
+    async def _process_single_batch(self, batch: List[MultiModalInput], modality: str) -> List[MultimodalResult]:
         """Process a single batch of inputs (Issue #315 - extracted method)"""
         # Memory optimization before processing
         if self.performance_monitor.should_optimize():
@@ -594,7 +594,7 @@ class MultiModalProcessor:
 
     async def _process_modality_group(
         self, modality: str, group_inputs: List[MultiModalInput]
-    ) -> List[ProcessingResult]:
+    ) -> List[MultimodalResult]:
         """Process all batches for a single modality (Issue #315 - extracted method)"""
         results = []
         batch_size = self.performance_monitor.get_optimal_batch_size(modality)
@@ -607,7 +607,7 @@ class MultiModalProcessor:
 
         return results
 
-    async def _fallback_individual_processing(self, inputs: List[MultiModalInput]) -> List[ProcessingResult]:
+    async def _fallback_individual_processing(self, inputs: List[MultiModalInput]) -> List[MultimodalResult]:
         """Fallback to individual processing on batch failure (Issue #315 - extracted)"""
         results = []
         for inp in inputs:
@@ -615,7 +615,7 @@ class MultiModalProcessor:
             results.append(result)
         return results
 
-    async def _process_input_with_fallback(self, inp: MultiModalInput) -> ProcessingResult:
+    async def _process_input_with_fallback(self, inp: MultiModalInput) -> MultimodalResult:
         """Process single input with error handling (Issue #315 - extracted method)"""
         try:
             return await self.process(inp)
@@ -623,7 +623,7 @@ class MultiModalProcessor:
             self.logger.error(f"Individual processing failed for {inp.input_id}: {individual_error}")
             return self._create_error_result(inp, 0.0, individual_error, "batch_error")
 
-    async def process_batch(self, inputs: List[MultiModalInput]) -> List[ProcessingResult]:
+    async def process_batch(self, inputs: List[MultiModalInput]) -> List[MultimodalResult]:
         """
         Process multiple inputs efficiently using optimized batching
         """
@@ -661,7 +661,7 @@ class MultiModalProcessor:
             self.logger.error("Batch processing failed: %s", e)
             return await self._fallback_individual_processing(inputs)
 
-    async def _process_image_batch(self, batch: List[MultiModalInput]) -> List[ProcessingResult]:
+    async def _process_image_batch(self, batch: List[MultiModalInput]) -> List[MultimodalResult]:
         """Process a batch of images efficiently"""
         torch = _get_torch()
         results = []
@@ -686,7 +686,7 @@ class MultiModalProcessor:
                     result = await self.vision_processor.process(inp)
                     results.append(result)
                 except Exception as individual_error:
-                    error_result = ProcessingResult(
+                    error_result = MultimodalResult(
                         result_id=f"image_batch_error_{inp.input_id}",
                         input_id=inp.input_id,
                         modality_type=inp.modality_type,
@@ -701,7 +701,7 @@ class MultiModalProcessor:
 
         return results
 
-    async def _process_audio_batch(self, batch: List[MultiModalInput]) -> List[ProcessingResult]:
+    async def _process_audio_batch(self, batch: List[MultiModalInput]) -> List[MultimodalResult]:
         """Process a batch of audio inputs efficiently"""
         torch = _get_torch()
         results = []
@@ -726,7 +726,7 @@ class MultiModalProcessor:
                     result = await self.voice_processor.process(inp)
                     results.append(result)
                 except Exception as individual_error:
-                    error_result = ProcessingResult(
+                    error_result = MultimodalResult(
                         result_id=f"audio_batch_error_{inp.input_id}",
                         input_id=inp.input_id,
                         modality_type=inp.modality_type,

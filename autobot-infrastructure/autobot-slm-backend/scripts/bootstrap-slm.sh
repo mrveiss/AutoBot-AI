@@ -180,7 +180,7 @@ build_ssh_cmd() {
 }
 
 build_rsync_cmd() {
-    local cmd="rsync -avz --delete"
+    local cmd="rsync -avz --chmod=o-w --delete"
     if [[ -n "$SSH_KEY" ]]; then
         cmd="$cmd -e 'ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new'"
     else
@@ -357,7 +357,7 @@ code_deployment() {
     fi
 
     info "Deploying autobot-slm-backend..."
-    rsync -avz --delete \
+    rsync -avz --chmod=o-w --delete \
         -e "ssh -o StrictHostKeyChecking=accept-new ${SSH_KEY:+-i $SSH_KEY}" \
         "${PROJECT_ROOT}/autobot-slm-backend/" \
         "${SSH_USER}@${TARGET_HOST}:${REMOTE_BACKEND}/" \
@@ -365,7 +365,7 @@ code_deployment() {
     success "Backend deployed"
 
     info "Deploying autobot-slm-frontend..."
-    rsync -avz --delete \
+    rsync -avz --chmod=o-w --delete \
         -e "ssh -o StrictHostKeyChecking=accept-new ${SSH_KEY:+-i $SSH_KEY}" \
         "${PROJECT_ROOT}/autobot-slm-frontend/" \
         "${SSH_USER}@${TARGET_HOST}:${REMOTE_FRONTEND}/" \
@@ -373,7 +373,7 @@ code_deployment() {
     success "Frontend deployed"
 
     info "Deploying autobot_shared..."
-    rsync -avz --delete \
+    rsync -avz --chmod=o-w --delete \
         -e "ssh -o StrictHostKeyChecking=accept-new ${SSH_KEY:+-i $SSH_KEY}" \
         "${PROJECT_ROOT}/autobot_shared/" \
         "${SSH_USER}@${TARGET_HOST}:${REMOTE_SHARED}/" \
@@ -392,7 +392,7 @@ backend_setup() {
     phase "Phase 4: Backend Setup"
 
     info "Creating Python virtual environment..."
-    remote_exec_sudo "python3 -m venv ${REMOTE_BACKEND}/venv"
+    remote_exec_sudo "$(source "$PROJECT_ROOT/scripts/lib/python_floor.sh" && python_floor_remote_venv_cmd "$PROJECT_ROOT" "${REMOTE_BACKEND}/venv")"  # floor interpreter, #20932
     success "Virtual environment created"
 
     info "Installing Python dependencies..."
@@ -418,7 +418,6 @@ SLM_DATABASE_URL=postgresql+asyncpg://slm_app@127.0.0.1:5432/slm
 # AUTOBOT_REDIS_HOST must be set in the deployment environment (#2224)
 REDIS_HOST=${_OPERATOR_REDIS_HOST:?AUTOBOT_REDIS_HOST is required -- set it in your environment}
 REDIS_PORT=6379
-REDIS_DB=0
 
 # Security
 SECRET_KEY=${SECRET_KEY}
@@ -565,7 +564,7 @@ frontend_setup() {
 
 service_installation() {
     phase "Phase 6: Service Installation"
-
+    source "${INFRA_ROOT}/autobot-slm-backend/scripts/install-slm-watchdog.sh"
     info "Installing systemd service..."
     cat "${INFRA_ROOT}/autobot-slm-backend/templates/autobot-slm-backend.service" | \
         remote_exec_sudo "cat > /etc/systemd/system/autobot-slm-backend.service"
@@ -575,8 +574,8 @@ service_installation() {
     info "Enabling and starting backend service..."
     remote_exec_sudo "systemctl enable autobot-slm-backend"
     remote_exec_sudo "systemctl restart autobot-slm-backend"
+    install_slm_watchdog  # #20620
     success "Backend service started"
-
     info "Enabling and starting nginx..."
     remote_exec_sudo "systemctl enable nginx"
     remote_exec_sudo "systemctl restart nginx"

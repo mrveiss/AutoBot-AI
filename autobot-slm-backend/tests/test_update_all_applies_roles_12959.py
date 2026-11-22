@@ -65,6 +65,8 @@ MANAGED_COMPONENT_ROLES = {
     # no play that reached it at all — `infrastructure` (Play 2's host list) does
     # not contain `database`.
     "database": "redis",
+    # #18994: the monitoring role owns prometheus.yml and the #16375 scrape-token file.
+    "monitoring": "monitoring",
 }
 
 #: Components with a delivery path today. Each entry is a regression guard: the
@@ -78,6 +80,7 @@ DELIVERED = {
     "frontend": {"code_only"},  # #13460
     "browser": {"code_only"},  # #13460
     "database": {"code_only"},  # #13535
+    "monitoring": {"prometheus_config"},  # #18994
 }
 
 #: Task-name substrings that mean provisioning. None may appear in a task file

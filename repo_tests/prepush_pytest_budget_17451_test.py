@@ -18,6 +18,8 @@ import subprocess
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 HOOK = repo_root() / "tools" / "git-hooks" / "pre-push"
 _BASH = shutil.which("bash")
 pytestmark = pytest.mark.skipif(_BASH is None, reason="bash not found -- did not look, not a pass")
@@ -99,7 +101,7 @@ def test_budget_constants_defined_once_and_cap_not_duplicated():
     src = HOOK.read_text(encoding="utf-8")
     for const in ("MAX_BUDGET=600", "PYTEST_COST_SERIAL=6", "PYTEST_COST_PARALLEL=3"):
         assert src.count(f"\n{const}\n") == 1
-    code = "\n".join(ln for ln in src.splitlines() if not ln.lstrip().startswith("#"))
+    code = code_text(src, name="pre-push.sh", strip_trailing=True)
     assert not re.search(r"-gt 600\b|=600\b(?!\s*$)", code.replace("MAX_BUDGET=600", ""))
 
 

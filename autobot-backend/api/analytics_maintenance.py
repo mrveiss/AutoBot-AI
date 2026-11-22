@@ -36,6 +36,7 @@ from api.system_health import register_singleton_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from services.analytics_service import (
     MaintenancePriority,
@@ -46,6 +47,9 @@ from services.analytics_service import (
 logger = get_logger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
 router = APIRouter(tags=["analytics", "advanced"])
+
+# Worst-first rank of each maintenance priority word (CRITICAL, HIGH, MEDIUM, LOW), derived from Severity (#19336)
+_PRIORITY_ORDER = {s.value: i for i, s in enumerate((Severity.CRITICAL, *reversed(Severity.triage_ladder())))}
 
 
 # ============================================================================
@@ -169,7 +173,7 @@ async def get_maintenance_summary(
                 "count": len(items),
                 "highest_priority": min(
                     items,
-                    key=lambda x: ["critical", "high", "medium", "low"].index(x.priority.value),
+                    key=lambda x: _PRIORITY_ORDER[x.priority.value],
                 ).priority.value,
             }
             for cat, items in by_category.items()
@@ -444,8 +448,7 @@ async def get_insights(
             )
 
     # Sort by priority
-    priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    insights.sort(key=lambda x: priority_order.get(x["priority"], 4))
+    insights.sort(key=lambda x: _PRIORITY_ORDER.get(x["priority"], len(_PRIORITY_ORDER)))
 
     return {
         "timestamp": utc_timestamp(),

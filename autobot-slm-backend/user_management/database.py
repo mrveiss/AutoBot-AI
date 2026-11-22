@@ -168,6 +168,12 @@ async def get_autobot_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+async def get_autobot_db() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency yielding an AutoBot database session."""
+    async with get_autobot_session() as session:
+        yield session
+
+
 async def health_check_slm() -> bool:
     """Check SLM database connection health."""
     try:

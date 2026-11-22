@@ -20,7 +20,14 @@ from services.audit import audit, store
 from services.audit.projection import UNIFIED_KEY, category_key
 from services.audit.purge import purge_expired
 from services.audit.retention import RETENTION_DAYS, ttl_seconds
-from services.audit.taxonomy import AuditAction, AuditCategory, AuditEvent, AuditFilter, EventType
+from services.audit.taxonomy import (
+    AuditAction,
+    AuditCategory,
+    AuditEvent,
+    AuditFilter,
+    ComplianceEventType,
+    action_name,
+)
 
 _DAY = 24 * 3600
 
@@ -53,7 +60,7 @@ async def _record_of(emit_call) -> AuditEvent:
 class TestEveryProducerRecordsItsOwnEvent:
     @pytest.mark.asyncio
     async def test_emit_of_an_audit_event_keeps_its_category_and_action(self) -> None:
-        """#17225 regression: `emit` was shadowed by an EventType bridge, so this was COMPLIANCE/repr."""
+        """#17225 regression: `emit` was shadowed by a ComplianceEventType bridge, so this was COMPLIANCE/repr."""
         ev = _event(category=AuditCategory.GOVERNANCE, action="task.claim")
         got = await _record_of(lambda: audit.emit(ev))
         assert got is ev
@@ -61,8 +68,17 @@ class TestEveryProducerRecordsItsOwnEvent:
 
     @pytest.mark.asyncio
     async def test_emit_compliance_takes_an_event_type(self) -> None:
-        got = await _record_of(lambda: audit.emit_compliance(EventType.USER_LOGIN, "bob", ip_address="ip"))
-        assert (got.category, got.action, got.actor_id) == (AuditCategory.COMPLIANCE, "user.login", "bob")
+        got = await _record_of(lambda: audit.emit_compliance(ComplianceEventType.USER_LOGIN, "bob", ip_address="ip"))
+        assert (got.category, got.action, got.actor_id) == (
+            AuditCategory.COMPLIANCE,
+            "auth.login",
+            "bob",
+        )  # #18716: stored canonical
+
+    @pytest.mark.asyncio
+    async def test_a_legacy_spelling_is_recorded_in_its_canonical_form(self) -> None:
+        got = await _record_of(lambda: audit.emit_compliance("config.changed", "bob"))
+        assert got.action == "config.update"  # #18716
 
     @pytest.mark.asyncio
     async def test_emit_compliance_without_an_actor_is_the_system(self) -> None:
@@ -178,6 +194,33 @@ class TestReadPath:
         assert AuditFilter(actions=frozenset({"x", "y"})).matches(ev)
         assert not AuditFilter(actions=frozenset({"y"})).matches(ev)
 
+    def test_an_action_filter_also_matches_the_spellings_stored_before_18716(self) -> None:
+        old = _event(AuditCategory.SECURITY, "login_successful", "alice").to_dict()
+        assert AuditFilter(action="auth.login").matches(old)
+        assert AuditFilter(actions=frozenset({"auth.login", "x"})).matches(old)
+        assert AuditFilter(action="login_successful").matches(old)  # asking in the old spelling still works
+        assert not AuditFilter(action="auth.logout").matches(old)
+
+    def test_the_action_filter_reaches_sql_with_every_stored_spelling(self) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        from services.audit import store
+
+        sql = str(store.where_clauses(AuditFilter(action="auth.login"))[0].compile(dialect=postgresql.dialect()))
+        assert "audit_logs.action IN" in sql
+
+    def test_a_stored_legacy_row_is_found_by_the_canonical_filter_in_sql(self) -> None:
+        """The SQL path (not only ``matches``) must expand the filter to the spellings rows were stored under."""
+        from sqlalchemy.dialects import postgresql
+
+        clauses = store.where_clauses(AuditFilter(action="auth.login"))
+        sql = " AND ".join(
+            str(c.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})) for c in clauses
+        )
+        for stored in ("auth.login", "login_success", "login_failed", "user.login", "login"):
+            assert f"'{stored}'" in sql
+        assert "'auth.logout'" not in sql
+
     def test_one_query_answers_user_in_window_across_categories(self) -> None:
         """ "Everything for user U in window W" is one statement on audit_logs, any category."""
         from sqlalchemy.dialects import postgresql
@@ -204,10 +247,11 @@ class TestReadPath:
         ev = _event(AuditCategory.COMPLIANCE, "user.login", "alice", at=1_700_000_000.0, resource_id="/api/x")
         row = store._row_for(ev)
         got = store.row_to_event(row)
+        assert row.action == "auth.login"  # pinned literally so the expected value above cannot drift with the mapping
         assert {k: got[k] for k in ("id", "category", "action", "actor_id", "resource_id", "occurred_at")} == {
             "id": ev.id,
             "category": "compliance",
-            "action": "user.login",
+            "action": action_name(ev.action),  # the write is canonical (#18716): "user.login" is stored as "auth.login"
             "actor_id": "alice",
             "resource_id": "/api/x",
             "occurred_at": 1_700_000_000.0,
