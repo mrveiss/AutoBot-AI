@@ -33,6 +33,11 @@ REFUSAL_TEXT: dict[int, str] = {
 _REFUSAL_DEFAULT = "Request refused"
 
 
+def refusal_text(status_code: int) -> str:
+    """The one client wording for a refusal with *status_code* (#21943): ``REFUSAL_TEXT``, else the default."""
+    return REFUSAL_TEXT.get(status_code, _REFUSAL_DEFAULT)
+
+
 def http_refusal(status_code: int, exc: BaseException, *, scope: str) -> HTTPException:
     """The refusal for *exc*: its ``public_detail`` when it has one, else a fixed text by status (#21579).
 
@@ -58,9 +63,9 @@ def http_refusal(status_code: int, exc: BaseException, *, scope: str) -> HTTPExc
         type(exc).__name__,
         safe_log_text(exc),
     )
-    return HTTPException(status_code=status_code, detail=REFUSAL_TEXT.get(status_code, _REFUSAL_DEFAULT))
+    return HTTPException(status_code=status_code, detail=refusal_text(status_code))
 
 
 def fixed_refusal(status_code: int) -> HTTPException:
     """The refusal for *status_code* with its fixed text and nothing from any exception (#21559)."""
-    return HTTPException(status_code=status_code, detail=REFUSAL_TEXT.get(status_code, _REFUSAL_DEFAULT))
+    return HTTPException(status_code=status_code, detail=refusal_text(status_code))
