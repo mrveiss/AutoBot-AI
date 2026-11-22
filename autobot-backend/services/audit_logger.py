@@ -110,6 +110,7 @@ class AuditEntry:
     session_id: str | None = None
     user_role: str | None = None
     resource: str | None = None
+    resource_type: str | None = None
     vm_source: str | None = None
     vm_name: str | None = None
     details: Metadata = field(default_factory=dict)
@@ -135,6 +136,7 @@ class AuditEntry:
             actor_id=self.user_id or SYSTEM_ACTOR,
             id=self.id,
             resource_id=self.resource,
+            resource_type=self.resource_type,
             metadata=meta,
             occurred_at=self.timestamp,
             ip_address=self.ip_address,
@@ -158,6 +160,7 @@ class AuditEntry:
             ip_address=event.get("ip_address"),
             session_id=event.get("session_id"),
             resource=event.get("resource_id"),
+            resource_type=event.get("resource_type"),
             details=meta.pop("details", meta),
             **extra,
         )
@@ -225,6 +228,7 @@ class AuditLogger:
         session_id: str | None = None,
         ip_address: str | None = None,
         resource: str | None = None,
+        resource_type: str | None = None,
         user_role: str | None = None,
         details: Metadata | None = None,
         performance_ms: float | None = None,
@@ -236,7 +240,7 @@ class AuditLogger:
         committed, for a caller that must not act without one (#19860, as #20026).
         """
         fields = dict(user_id=user_id, session_id=session_id, ip_address=ip_address, resource=resource)
-        fields.update(user_role=user_role, details=details, performance_ms=performance_ms)
+        fields.update(resource_type=resource_type, user_role=user_role, details=details, performance_ms=performance_ms)
         try:
             event = self._entry(operation, result, **fields).to_event()
             if durable:

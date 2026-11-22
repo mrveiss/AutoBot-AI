@@ -9433,6 +9433,9 @@
     "board": {
       "loadFailed": "Could not load this board",
       "moveFailed": "Could not move this task",
+      "moveRefusedStatus": "This task cannot move to that column from its current status.",
+      "moveRefusedWipFull": "That column is full: it has reached its work-in-progress limit.",
+      "moveRefusedForbidden": "You are not allowed to move this task.",
       "retry": "Retry",
       "loadingItem": "Loading work item…",
       "itemLoadFailed": "Could not load this work item"

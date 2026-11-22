@@ -49,6 +49,9 @@ def _post_coworker(error: Exception):
     existing = SimpleNamespace(company_id=ORG)
     patch("llc.services.work_item_service.WorkItemService.get", new=AsyncMock(return_value=existing)).start()
     patch("llc.api.work_items.resolve_actor_role", new=AsyncMock(return_value="member")).start()
+    patch(
+        "llc.api.work_items.require_member_targets", new=AsyncMock()
+    ).start()  # membership: test_named_targets_*_20521
     patch("llc.services.work_item_service.WorkItemService.enable_coworking", new=AsyncMock(side_effect=error)).start()
     body = {"co_worker_type": "agent", "co_worker_agent_id": str(uuid.uuid4())}
     return _client().post(f"/work-items/{uuid.uuid4()}/coworker", json=body)

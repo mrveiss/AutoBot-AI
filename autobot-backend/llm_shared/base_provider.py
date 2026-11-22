@@ -195,8 +195,9 @@ class BaseProvider(ABC):
         only once both are held, so a long queue never reads as a slow provider.
         The wait travels on the same observation as ``response.metadata["queue_wait_ms"]``.
 
-        #14211: the request-started notify already fired, so every exit -- including
-        a failure or cancellation while still queued -- yields one notify_error.
+        #14211: the request-started notify already fired, so every exit yields exactly one terminal
+        event: notify_response on success, notify_error on a failure, a rate limit (#21929) or a
+        cancellation while still queued.
         """
         try:
             # GH#16527: bound in-flight requests per provider before the rate-limit token.
@@ -208,9 +209,10 @@ class BaseProvider(ABC):
                     latency_ms = (time.monotonic() - start) * 1000
                     response.metadata.setdefault("request_type", self._request_type_label(request))
                     response.metadata["queue_wait_ms"] = (start - entered) * 1000
-                    self._notify_response(response, latency_ms)
-                    # GH#8502: raise so the backoff handler can retry.
+                    # GH#8502: raise so the backoff handler can retry. Checked before notify_response so a
+                    # rate-limited attempt ends in ONE terminal event, the notify_error below (#21929).
                     raise_if_rate_limited(response)
+                    self._notify_response(response, latency_ms)
                     return response
         except (Exception, asyncio.CancelledError) as exc:
             self._notify_error(exc, request)
