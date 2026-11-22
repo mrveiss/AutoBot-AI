@@ -130,7 +130,7 @@ SLM_HARDCODED_COLOUR_LITERALS: dict[str, int] = {}
 IMPORTANT_DECLARATIONS: dict[str, int] = {
     "components/audit/AuditLogTable.vue": 1,
     "components/charts/FunctionCallGraph.vue": 12,
-    "components/chat/ChatInterface.vue": 3,
+    "components/chat/ChatInterface.vue": 2,
     "components/knowledge/KnowledgeGraph.vue": 10,
     "components/knowledge/pipeline/PipelineRunner.vue": 1,
     "components/operations/OperationsList.vue": 1,

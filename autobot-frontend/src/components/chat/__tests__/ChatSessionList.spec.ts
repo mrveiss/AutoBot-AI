@@ -62,7 +62,9 @@ describe('ChatSessionList', () => {
     const w = render({ selectionMode: true })
     await rows(w)[2].trigger('click')
     expect(w.emitted('open')).toBeUndefined()
-    expect((w.emitted('toggle-select')?.[0][0] as ChatSession).id).toBe('c')
+    const toggled = w.emitted('toggle-select')
+    expect(toggled).toHaveLength(1)
+    expect((toggled![0][0] as ChatSession).id).toBe('c')
     w.unmount()
   })
 

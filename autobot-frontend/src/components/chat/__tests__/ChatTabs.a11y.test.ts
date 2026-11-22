@@ -126,12 +126,13 @@ describe('ChatTabs tablist semantics (#18243)', () => {
     onTerminal.unmount()
   })
 
-  it('sets the mockup tab metrics: 44px high, 13.5px type, 17px icons', () => {
+  it('sets the mockup tab metrics: 44px high, 13.5px type, 12px side padding, 17px icons', () => {
     const w = mountTabs('admin')
     expect(w.get('.chat-tabs').classes()).toEqual(
-      expect.arrayContaining(['[--aui-tabs-trigger-height:2.75rem]', '[--aui-tabs-font-size:0.84375rem]']),
+      expect.arrayContaining(['[--aui-tabs-trigger-height:2.75rem]', '[--aui-tabs-font-size:0.84375rem]', '[--aui-tabs-trigger-pad-x:0.75rem]']),
     )
-    expect(w.get('[role="tab"] svg').attributes('style')).toContain('1.0625rem')
+    expect(w.get('[role="tab"] svg').classes()).toContain('size-[1.0625rem]!')
+    expect(w.get('[role="tab"] svg').attributes('style')).toBeUndefined()
     w.unmount()
   })
 

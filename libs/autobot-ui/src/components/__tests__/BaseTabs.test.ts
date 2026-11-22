@@ -253,5 +253,7 @@ describe('BaseTabs metric tokens (#18243)', () => {
   it('reads the trigger height and font size from overridable tokens, with the kit sizes as defaults', () => {
     expect(tabsSource).toMatch(/min-block-size: var\(--aui-tabs-trigger-height, auto\)/)
     expect(tabsSource).toMatch(/font-size: var\(--aui-tabs-font-size, var\(--aui-text-sm\)\)/)
+    expect(tabsSource).toMatch(/--aui-tabs-pad-x: var\(--aui-tabs-trigger-pad-x, var\(--aui-space-4\)\)/)
+    expect(tabsSource).toMatch(/--aui-tabs-pad-x: var\(--aui-tabs-trigger-pad-x, var\(--aui-space-3\)\)/)
   })
 })

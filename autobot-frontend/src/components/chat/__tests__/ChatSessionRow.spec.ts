@@ -78,7 +78,7 @@ describe('ChatSessionRow', () => {
     const w = render({ current: true })
     const row = w.get('[role="button"]')
     expect(row.classes()).toEqual(
-      expect.arrayContaining(['border-s-[3px]', 'border-[var(--aui-color-primary)]', 'bg-[var(--surface2)]', 'font-semibold']),
+      expect.arrayContaining(['border-s-[3px]', 'border-[var(--primary)]', 'bg-[var(--surface2)]', 'font-semibold']),
     )
     expect(row.classes()).not.toContain('border')
     expect(w.get('[aria-hidden="true"]').classes()).toContain('bg-[var(--accent)]')

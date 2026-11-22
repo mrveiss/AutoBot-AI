@@ -1,7 +1,7 @@
 <template>
   <!-- List-only: ChatTabContent owns the tabpanel, so the kit renders none (#18243). -->
   <BaseTabs
-    class="chat-tabs [--aui-tabs-trigger-height:2.75rem] [--aui-tabs-font-size:0.84375rem]"
+    class="chat-tabs [--aui-tabs-trigger-height:2.75rem] [--aui-tabs-font-size:0.84375rem] [--aui-tabs-trigger-pad-x:0.75rem]"
     list-only
     :items="items"
     :label="t('chat.tabs.ariaLabel')"
@@ -9,7 +9,7 @@
     @update:model-value="emit('tab-change', $event)"
   >
     <template #icon="{ item }">
-      <Icon :name="iconFor(item.value)" style="width: 1.0625rem; height: 1.0625rem" />
+      <Icon :name="iconFor(item.value)" class="size-[1.0625rem]!" />
     </template>
   </BaseTabs>
 </template>

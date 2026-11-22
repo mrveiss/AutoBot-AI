@@ -1372,7 +1372,6 @@ watch(
   /* Width comes from the w-12 / w-[16.25rem] classes on the element (mockup: ~260px); only the height is forced. */
   height: 100% !important; /* Force full height */
   flex-shrink: 0 !important;
-  min-width: 320px !important;
 }
 
 .workflow-progress-widget {

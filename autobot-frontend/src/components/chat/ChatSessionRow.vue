@@ -13,7 +13,7 @@
     class="chat-session-row group flex min-h-6 cursor-pointer items-center gap-2.5 rounded-md border-s-[3px] px-2.5 py-[7px] text-[0.84375rem] hover:bg-[var(--surface2)] hover:text-[var(--aui-color-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--aui-color-focus-ring)]"
     :class="[
       current
-        ? 'border-[var(--aui-color-primary)] bg-[var(--surface2)] font-semibold text-[var(--aui-color-text)]'
+        ? 'border-[var(--primary)] bg-[var(--surface2)] font-semibold text-[var(--aui-color-text)]'
         : 'border-transparent text-[var(--text2)]',
       selected && 'bg-[var(--surface2)]',
     ]"
