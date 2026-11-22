@@ -68,6 +68,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _check_harness import format_finding, run_anchored  # noqa: E402
 from _scan_helpers import PY_FLOOR, scan_python_files  # noqa: E402
 
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+
 
 class _ResolutionCache(NamedTuple):
     """Cache key for module resolution results: (file_path, mtime)."""
@@ -92,8 +94,7 @@ _RESOLUTION_CACHE: dict[str, tuple[bool, str | None]] = {}
 
 def _is_test_file(rel_path: str) -> bool:
     """Return True if path matches the test naming convention."""
-    name = Path(rel_path).name
-    return name.endswith("_test.py") or name.startswith("test_")
+    return is_test_filename(rel_path, include_js=False, include_conftest=False)
 
 
 def _is_patch_call(node: ast.Call) -> bool:

@@ -25,6 +25,8 @@ import logging
 import re
 from typing import Any
 
+from autobot_shared.secret_redaction import LEGACY_PLACEHOLDERS, LOG_MASK, REDACTED_PLACEHOLDER
+
 logger = logging.getLogger(__name__)
 
 # The only sensitive field in an LLM provider config entry.
@@ -205,6 +207,10 @@ _SECRET_REF_FIELDS = (_SENSITIVE_FIELD, _VAULT_ID_KEY, "api_key_ref")
 # A tab loaded before #17826 still holds these in its state, and saving it must
 # not write one into the vault as if it were a key.
 _DISPLAY_MASK = re.compile(r"^(\*{4}|.{4}\.\.\..{4})$")
+# ...and the canonical placeholder any redactor now emits (#19337): a client that round-trips a
+# redacted value must not save it as the key either.
+# The legacy spellings stay refused too: a client loaded before #19337 may still hold one.
+_REDACTED_VALUES = frozenset({REDACTED_PLACEHOLDER, LOG_MASK, *LEGACY_PLACEHOLDERS})
 
 
 class MaskedKeySubmitted(ValueError):
@@ -235,7 +241,7 @@ async def merge_provider_secret(
     new_key = incoming.get(_SENSITIVE_FIELD) or ""
     if not new_key:
         return {**merged, **prior}
-    if _DISPLAY_MASK.fullmatch(new_key):
+    if _DISPLAY_MASK.fullmatch(new_key) or new_key in _REDACTED_VALUES:
         raise MaskedKeySubmitted(f"api_key for provider {provider_name!r} is a display mask; reload and re-enter it")
     from user_management.services.vault_client import is_configured
 

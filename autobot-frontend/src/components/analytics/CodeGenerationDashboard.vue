@@ -658,7 +658,7 @@ onMounted(() => {
 }
 
 .mode-btn.active {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border-color: var(--color-info);
   color: var(--text-on-primary);
 }
@@ -725,7 +725,7 @@ onMounted(() => {
 .submit-btn {
   width: 100%;
   padding: var(--spacing-3) var(--spacing-4);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border: none;
   border-radius: var(--radius-md);
   color: var(--text-on-primary);

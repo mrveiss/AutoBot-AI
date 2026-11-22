@@ -17,11 +17,17 @@ USER/SYSTEM discriminator be whatever the caller typed (#13969 review M1).
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import HTTPException, Request, status
+from pydantic import AfterValidator
 
+from autobot_shared.auth.interactive_principal import is_interactive_human
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
+
+from ..services.work_item_hierarchy import HierarchyViolation
+from ..services.work_item_own_task import canonical_agent_id, ensure_fence_safe_agent_id
 
 logger = get_logger(__name__)
 
@@ -43,12 +49,69 @@ def actor_id(current_user: dict) -> uuid.UUID:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated") from exc
 
 
+#: An agent id a checkout can fence: a request carrying one that cannot is refused with 422 (#21083). It must be an
+#: agent UUID (a ``user:<id>`` or empty value is not one) and is canonicalised, so the fence and every release name
+#: the same spelling as the stored assignee (#19631). Input validation only: WHO may check out or release as a named
+#: agent is ``_named_agent.require_may_act_as`` (#20521).
+FenceSafeAgentId = Annotated[str, AfterValidator(ensure_fence_safe_agent_id), AfterValidator(canonical_agent_id)]
+
+
+def own_task_actor(current_user: dict) -> Optional[uuid.UUID]:
+    """The caller as the owner of tasks they move (#20508): only an interactive person.
+
+    A service or agent credential resolves to a user-shaped dict too, but it must not own what it
+    created, so it gets ``None`` and keeps the normal transition rules.
+    """
+    return actor_id(current_user) if is_interactive_human(current_user) else None
+
+
+def moving_as(current_user: dict) -> dict[str, Any]:
+    """Who is moving a work item, as the ``acting_user`` and ``done_gate`` a status move takes (#21503).
+
+    The ONE place that decides who counts as a person for a move to done: an interactive login, or the single
+    local user when authentication is disabled (a stand-in with no user id, so it owns no task and has no
+    ``acting_user``). Any other credential -- a token that is not a login, a service key -- is no person, and a
+    done on a type that requires review is refused for it.
+    """
+    from ..services.accessors import done_gate_for
+
+    local = str(current_user.get("username") or "admin") if _is_auth_disabled_user(current_user) else None
+    return {"acting_user": own_task_actor(current_user), "done_gate": done_gate_for(local_person=local)}
+
+
+def _is_auth_disabled_user(current_user: dict) -> bool:
+    """The stand-in the auth middleware yields when authentication is turned off; no credential can claim it."""
+    return current_user.get("auth_disabled") is True and not current_user.get("service")
+
+
+def event_actor(current_user: dict) -> Optional[str]:
+    """The verified caller's id for an event: the auth-disabled stand-in has none, any other caller needs a UUID.
+
+    A credential without a usable id is refused with 401 (``actor_id``), as before; only the stand-in the
+    auth middleware yields when authentication is off may act without one (#21503).
+    """
+    return None if _is_auth_disabled_user(current_user) else str(actor_id(current_user))
+
+
+def acting_user_id(current_user: dict) -> Optional[str]:
+    """The acting user's id for the activity log, or None for a principal that is not a user.
+
+    A service principal, or one whose id is not a UUID, cannot be recorded as a user: its act
+    is recorded as the system's rather than refused (``actor_id`` refuses, for routes where an
+    unattributed write is the error).
+    """
+    try:
+        return str(uuid.UUID(str(current_user.get("id") or current_user.get("user_id"))))
+    except ValueError:
+        return None
+
+
 def bad_request(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return http_refusal(status.HTTP_400_BAD_REQUEST, exc, scope="llc.bad_request")
 
 
 def forbidden(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    return http_refusal(status.HTTP_403_FORBIDDEN, exc, scope="llc.forbidden")
 
 
 def registry_unavailable(exc: Exception) -> HTTPException:
@@ -58,7 +121,7 @@ def registry_unavailable(exc: Exception) -> HTTPException:
     a bad request tells the caller to fix their input when there is nothing
     wrong with it.
     """
-    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    return http_refusal(status.HTTP_503_SERVICE_UNAVAILABLE, exc, scope="llc.registry_unavailable")
 
 
 async def agent_node_uuid(agent_id: str, company_id: str) -> Optional[uuid.UUID]:
@@ -152,6 +215,27 @@ def agent_context(request: Request) -> tuple[str, str]:
     return agent_id, company_id
 
 
+def parse_work_item_id(raw: Any) -> uuid.UUID:
+    """The id as a UUID; 404 when it cannot be one, since such an id names no work item (#20120)."""
+    try:
+        return uuid.UUID(str(raw))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found") from exc
+
+
+def require_work_item_id(request: Request) -> None:
+    """Router dependency: 404 when the ``work_item_id`` path segment is not a UUID (#20120).
+
+    ``WorkItemService`` parses the id with ``uuid.UUID`` and a malformed one is a
+    ``ValueError`` -> 500. Only the path segment is parsed -- a ``ValueError`` from a
+    handler's own logic is not caught. This runs before each handler's auth, so an
+    unauthenticated caller with a malformed id gets 404 too; it says nothing about any row.
+    """
+    raw = request.path_params.get("work_item_id")
+    if raw is not None:
+        parse_work_item_id(raw)
+
+
 async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
     """GH#12156: 404 unless the work item belongs to the caller's company.
 
@@ -165,10 +249,9 @@ async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
     function. Returning the value removes the ordering dependency instead of
     documenting it.
     """
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..services.work_item_service import WorkItemService
+    from ..services.accessors import get_work_item_service
 
     # `WorkItemService.get` does `uuid.UUID(str(work_item_id))` unguarded, and
     # `item_id` is a client-supplied body field on both callers. Without this a
@@ -186,8 +269,27 @@ async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
 
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = lazy_singleton(WorkItemService)()
+        svc = get_work_item_service()
         item = await svc.get(session, item_id)
     if item is None or str(item.company_id) != str(company_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     return parsed
+
+
+def refused_transition(exc: Exception) -> HTTPException:
+    """A refused status move as 409 (#12740).
+
+    The caller sees the exception's ``public_detail`` when it has one (the service's reason: statuses and
+    permitted moves, or why a finish needs review), else the fixed 409 text; the raw message is only ever
+    logged, redacted (#21579). 409, not 422: the request is well-formed but conflicts with the item's state.
+    """
+    return http_refusal(status.HTTP_409_CONFLICT, exc, scope="llc.refused_transition")
+
+
+def write_refusal(exc: ValueError) -> HTTPException:
+    """A refused work-item create/update: a hierarchy-rule breach (incl. ``ProjectRequired``) is 422 (#20936).
+
+    Any other ``ValueError`` (e.g. an unknown approval category, GH#11206) stays 400.
+    """
+    code = status.HTTP_422_UNPROCESSABLE_ENTITY if isinstance(exc, HierarchyViolation) else status.HTTP_400_BAD_REQUEST
+    return http_refusal(code, exc, scope="llc.write_refusal")

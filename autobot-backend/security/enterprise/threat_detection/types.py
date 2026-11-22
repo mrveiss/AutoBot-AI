@@ -19,7 +19,10 @@ SENSITIVE_RESOURCE_KEYWORDS = frozenset({"admin", "config", "secret", "key", "pa
 FILE_OPERATION_ACTIONS = frozenset({"file_read", "file_write", "file_delete", "file_upload"})
 
 # Issue #315 - Severity priority ordering for comparison
-SEVERITY_PRIORITY = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+SEVERITY_PRIORITY = {
+    level.value: priority
+    for priority, level in enumerate((Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL), start=1)
+}
 
 
 # #18098: this was a four-rung fork of the canonical ladder with identical values.

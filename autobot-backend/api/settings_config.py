@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_system import ClearCacheResponse
 from api.user_management.dependencies import get_db_session
-from auth_middleware import check_admin_permission, get_current_user, verify_internal_api_key
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.config_revision_service import ConfigRevisionService
@@ -44,12 +44,10 @@ async def require_settings_admin(request: Request, _: bool = Depends(check_admin
     """Admin gate for every route here; returns who a config revision records.
 
     ``check_admin_permission`` refuses anonymous (401) and non-admin (403)
-    callers before this body runs. What reaches it is either an admin session
-    or the internal-service key, and the revision names whichever it was
-    instead of the literal ``"admin"`` every write used to record.
+    callers before this body runs, and since #16333 the internal service key is
+    not an admin, so what reaches it is always an admin session. The revision
+    names that admin, even when the SLM proxy sent the key beside the session.
     """
-    if verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
-        return INTERNAL_SERVICE_ACTOR
     user = await get_current_user(request)
     return user.get("username") or INTERNAL_SERVICE_ACTOR
 

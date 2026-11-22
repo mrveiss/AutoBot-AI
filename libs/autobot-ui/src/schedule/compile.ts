@@ -30,7 +30,7 @@ function hm(time: string): [number, number] {
 function cronHours(window: { from: string; to: string } | undefined): string {
   if (!window) return '*'
   const from = hm(window.from)[0]
-  const toExclusive = hm(window.to)[0] || 24
+  const toExclusive = (splitTime(window.to, true) ?? [0])[0] || 24
   const last = Math.min(23, Math.max(from, toExclusive - 1))
   return from === 0 && last === 23 ? '*' : `${from}-${last}`
 }

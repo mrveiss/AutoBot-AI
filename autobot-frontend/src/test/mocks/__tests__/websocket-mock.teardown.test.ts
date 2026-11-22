@@ -44,6 +44,7 @@ describe('MockWebSocket open timer (#17638)', () => {
     vi.advanceTimersByTime(20)
     expect(onopen).not.toHaveBeenCalled()
     expect(ws.close).toHaveBeenCalledTimes(1)
+    expect(ws.readyState).toBe(MockWebSocket.CLOSED)
   })
 
   it('clearInstances() cancels every pending open', () => {

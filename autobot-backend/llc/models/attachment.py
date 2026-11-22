@@ -38,6 +38,9 @@ class LLCWorkItemAttachment(Base):
     content_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
     size_bytes: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     storage_path: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    #: Lower-case hex SHA-256 of the stored bytes (#19756). NULL on rows uploaded before
+    #: the column existed -- there is no backfill (it would mean reading every stored file).
+    sha256: Mapped[Optional[str]] = mapped_column(sa.String(64), nullable=True)
     text_extracted: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default=sa.text("false"))
     extracted_text: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

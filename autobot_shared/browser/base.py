@@ -218,7 +218,7 @@ class BrowserResult:
     title: str | None = None
     content: str | None = None
     #: Structured extraction (headings, links, metadata) where the backend
-    #: produces it. `content_reach` maps this onto `ContentResult.structured`,
+    #: produces it. `content_reach` maps this onto `ContentReachResult.structured`,
     #: and it had no home in this result until #13236.
     structured: dict[str, Any] = field(default_factory=dict)
     image_path: str | None = None

@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-PipelineDispatcher — cross-worker forward-pass coordinator.
+ShardStreamDispatcher — cross-worker forward-pass coordinator.
 
 Streams a prompt through the shard pipeline:
   1. POST hidden state to worker[0] with its layer range
@@ -46,12 +46,12 @@ class PipelinePlan:
     peer_map: Dict[str, List[str]] = field(default_factory=dict)
 
 
-class PipelineDispatcher:
+class ShardStreamDispatcher:
     """Coordinate a forward pass across NPU workers.
 
     Usage::
 
-        async with PipelineDispatcher(worker_urls) as d:
+        async with ShardStreamDispatcher(worker_urls) as d:
             async for token in d.run_pipeline(plan, prompt_tokens):
                 emit(token)
     """
@@ -69,7 +69,7 @@ class PipelineDispatcher:
     # Async context manager
     # ------------------------------------------------------------------
 
-    async def __aenter__(self) -> "PipelineDispatcher":
+    async def __aenter__(self) -> "ShardStreamDispatcher":
         # RAW carve-out (#12979, long-lived): this session is held for the
         # instance's full async-with lifetime and reused across every worker
         # in the pipeline plan, including the token-streaming leg where the
@@ -80,14 +80,14 @@ class PipelineDispatcher:
         # not change per-call behaviour but replacing the client's private
         # session model is a judgment call, not a mechanical per-site swap.
         self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self._timeout))
-        logger.debug("PipelineDispatcher: session opened")
+        logger.debug("ShardStreamDispatcher: session opened")
         return self
 
     async def __aexit__(self, *_: object) -> None:
         if self._session:
             await self._session.close()
             self._session = None
-        logger.debug("PipelineDispatcher: session closed")
+        logger.debug("ShardStreamDispatcher: session closed")
 
     # ------------------------------------------------------------------
     # Public API
@@ -112,7 +112,7 @@ class PipelineDispatcher:
             RuntimeError: When called outside an async context manager.
         """
         if self._session is None:
-            raise RuntimeError("PipelineDispatcher must be used as an async context manager")
+            raise RuntimeError("ShardStreamDispatcher must be used as an async context manager")
 
         assignments = plan.assignments
         if not assignments:

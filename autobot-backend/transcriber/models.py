@@ -25,12 +25,12 @@ class RecordingStatus(str, Enum):
     ERROR = "error"
 
 
-class ProjectCreate(BaseModel):
+class TranscriberProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=1000)
 
 
-class ProjectUpdate(BaseModel):
+class TranscriberProjectUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=1000)
 
@@ -117,7 +117,7 @@ class TranscriptOut(BaseModel):
     segments: list[SegmentOut]
 
 
-class ExportRequest(BaseModel):
+class TranscriberExportRequest(BaseModel):
     format: Literal["docx", "pdf", "srt", "vtt"]
     include_timestamps: bool = True
     include_notes: bool = True

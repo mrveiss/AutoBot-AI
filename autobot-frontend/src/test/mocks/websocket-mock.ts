@@ -14,8 +14,11 @@ export class MockWebSocket {
   public onerror: ((event: Event) => void) | null = null
   public send: Mock = vi.fn()
   // #17638: closing cancels the pending simulated `open`, as a real socket
-  // closed while CONNECTING never opens.
-  public close: Mock = vi.fn(() => this.cancelPendingOpen())
+  // closed while CONNECTING never opens -- and it ends CLOSED, not stuck CONNECTING.
+  public close: Mock = vi.fn(() => {
+    if (this._openTimer !== null) this.readyState = MockWebSocket.CLOSED
+    this.cancelPendingOpen()
+  })
 
   // #17638: handle of the simulated `open`, so teardown can cancel it.
   private _openTimer: ReturnType<typeof setTimeout> | null = null

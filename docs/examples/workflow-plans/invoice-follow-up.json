@@ -1,0 +1,232 @@
+{
+  "schema_version": "0.2.0",
+  "key": "invoice-follow-up",
+  "revision": 1,
+  "name": "AutoBot LLC invoice follow-up",
+  "industry": "services",
+  "headcount": 4,
+  "entry_point": "workflow_area",
+  "starts_at": "An invoice passes its due date",
+  "ends_at": "The invoice is paid or written off",
+  "status": "labeled",
+  "lanes": [
+    {
+      "key": "finance",
+      "name": "Finance",
+      "holder_kind": "user",
+      "role_id": "00000000-0000-4000-8000-000000000001",
+      "position": 0
+    },
+    {
+      "key": "client",
+      "name": "Client",
+      "holder_kind": "customer",
+      "position": 1
+    },
+    {
+      "key": "bank",
+      "name": "Bank",
+      "holder_kind": "external",
+      "position": 2
+    }
+  ],
+  "steps": [
+    {
+      "key": "spot",
+      "lane_key": "finance",
+      "label": "Spot the overdue invoice",
+      "position": 0
+    },
+    {
+      "key": "remind",
+      "lane_key": "finance",
+      "label": "Write the reminder",
+      "position": 1
+    },
+    {
+      "key": "pay",
+      "lane_key": "client",
+      "label": "Pay the invoice",
+      "position": 2
+    },
+    {
+      "key": "settle",
+      "lane_key": "bank",
+      "label": "Settle the payment",
+      "position": 3
+    },
+    {
+      "key": "record",
+      "lane_key": "finance",
+      "label": "Record the payment",
+      "position": 4
+    }
+  ],
+  "edges": [
+    {
+      "from_step": "spot",
+      "to_step": "remind"
+    },
+    {
+      "from_step": "remind",
+      "to_step": "pay"
+    },
+    {
+      "from_step": "pay",
+      "to_step": "settle"
+    },
+    {
+      "from_step": "settle",
+      "to_step": "record"
+    }
+  ],
+  "handoffs": [
+    {
+      "key": "remind->pay",
+      "from_step": "remind",
+      "to_step": "pay",
+      "from_lane": "finance",
+      "to_lane": "client",
+      "wait_note": null
+    },
+    {
+      "key": "pay->settle",
+      "from_step": "pay",
+      "to_step": "settle",
+      "from_lane": "client",
+      "to_lane": "bank",
+      "wait_note": null
+    },
+    {
+      "key": "settle->record",
+      "from_step": "settle",
+      "to_step": "record",
+      "from_lane": "bank",
+      "to_lane": "finance",
+      "wait_note": null
+    }
+  ],
+  "step_metrics": [
+    {
+      "step_key": "spot",
+      "frequency": {
+        "value": 10,
+        "unit": "per_week",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      },
+      "duration": {
+        "value": 20,
+        "unit": "minutes",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      }
+    },
+    {
+      "step_key": "remind",
+      "frequency": {
+        "value": 10,
+        "unit": "per_week",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      },
+      "duration": {
+        "value": 15,
+        "unit": "minutes",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      }
+    },
+    {
+      "step_key": "pay",
+      "frequency": {
+        "value": 10,
+        "unit": "per_week",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      },
+      "duration": {
+        "value": 5,
+        "unit": "days",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      }
+    },
+    {
+      "step_key": "settle",
+      "frequency": {
+        "value": 10,
+        "unit": "per_week",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      },
+      "duration": {
+        "value": 2,
+        "unit": "days",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      }
+    },
+    {
+      "step_key": "record",
+      "frequency": {
+        "value": 10,
+        "unit": "per_week",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      },
+      "duration": {
+        "value": 10,
+        "unit": "minutes",
+        "source": "self_reported",
+        "recorded_at": "2026-01-15T09:00:00Z"
+      }
+    }
+  ],
+  "one_number": {
+    "title": "Days from due date to payment",
+    "step_key": "pay",
+    "return_kind": "money_sooner",
+    "direction": "down",
+    "unit": "days",
+    "baseline": {
+      "value": 5,
+      "unit": "days",
+      "source": "self_reported",
+      "recorded_at": "2026-01-15T09:00:00Z"
+    },
+    "why_this_one": "Waiting on the client is the longest delay."
+  },
+  "sub_steps": [
+    {
+      "key": "pay-wait",
+      "step_key": "pay",
+      "label": "Wait for the client to notice",
+      "position": 0,
+      "lane_key": "client",
+      "state": "current"
+    },
+    {
+      "key": "pay-link",
+      "step_key": "pay",
+      "label": "Include a payment link in the reminder",
+      "position": 0,
+      "lane_key": "client",
+      "state": "proposed",
+      "classification": "automation",
+      "replaces": [
+        "pay-wait"
+      ],
+      "tool_action": "attach_payment_link"
+    }
+  ],
+  "edge_cases": [
+    {
+      "key": "disputed",
+      "step_key": "pay",
+      "description": "The client disputes the amount",
+      "classification": "by_hand",
+      "handling": "Pause reminders and call the client"
+    }
+  ]
+}

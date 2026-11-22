@@ -91,6 +91,23 @@ async def _sync_once() -> None:
             except Exception as company_error:
                 logger.warning("Presence sync failed for company %s: %s", company_id, company_error)
 
+    await _publish_projection(registry)
+
+
+async def _publish_projection(registry) -> None:  # noqa: ANN001
+    """Hand this sweep's live state to the SLM ledger (#18632). A failure is logged, never fatal:
+    the snapshot then expires and the SLM reads "couldn't read", which is the truth."""
+    from autobot_shared.redis_client import get_async_redis_client
+    from protocols.ledger_projection_feed import publish_live_state
+    from protocols.peer_inbox import get_peer_inbox_directory
+
+    try:
+        client = await get_async_redis_client(database="main")
+        if client is not None:
+            await publish_live_state(client, registry, get_peer_inbox_directory())
+    except Exception as publish_error:
+        logger.warning("Ledger projection publish failed: %s", publish_error)
+
 
 async def _loop() -> None:
     interval = sync_interval_seconds()
