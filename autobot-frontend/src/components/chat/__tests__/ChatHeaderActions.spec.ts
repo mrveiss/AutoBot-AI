@@ -69,7 +69,7 @@ describe('ChatHeaderActions', () => {
     await flushPromises()
     // 'fallback' is the voice-output toggle, which stays visible in every mode (#18243).
     const reported = (w.emitted('button-el') ?? []).map((e) => e[0])
-    expect([...new Set(reported)].sort()).toEqual(['collaboration', 'fallback', 'files', 'voice'])
+    expect([...reported].sort()).toEqual(['collaboration', 'fallback', 'files', 'voice'])
     w.unmount()
   })
 
