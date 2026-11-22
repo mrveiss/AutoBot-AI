@@ -223,10 +223,45 @@ async def test_a_stale_dependency_result_is_marked_stale_on_the_node(analytics):
     assert nodes[0]["metadata"]["dependencies"]["stale"] is False
 
 
+RECORDS = [("r1", {"k": "v"}), ("r2", {"k": "v"}), ("r3", {"k": "v"})]
+
+
+async def _code_total(offset, admin=True):
+    kb = ListingKB([], await client_with({"autobot_code": RECORDS}))
+    _, _, sections, _ = await _graph(kb, offset=offset, admin=admin)
+    return next(s["total"] for s in sections if s["key"] == "code")
+
+
 @pytest.mark.asyncio
-async def test_the_code_section_total_is_the_same_on_every_page(analytics):
-    records = [("r1", {"k": "v"}), ("r2", {"k": "v"}), ("r3", {"k": "v"})]
-    kb = ListingKB([], await client_with({"autobot_code": records}))
-    _, _, first, _ = await _graph(kb, offset=0)
-    _, _, later, _ = await _graph(kb, offset=1)
-    assert first[0]["total"] == later[0]["total"] == 5  # 3 records + 2 codebases, whatever the page
+@pytest.mark.parametrize("offset", (1, 50))
+async def test_the_code_section_total_is_the_same_on_every_page(analytics, offset):
+    assert await _code_total(0) == await _code_total(offset) == 5  # 3 records + 2 codebases, whatever the page
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("offset", (0, 1))
+async def test_a_non_admin_total_is_the_records_only_on_every_page(analytics, offset):
+    assert await _code_total(offset, admin=False) == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("offset", (0, 1))
+async def test_an_unavailable_registry_total_is_the_records_only_on_every_page(analytics, monkeypatch, offset):
+    async def down(owner):
+        raise cb.RegistryUnavailable("down")
+
+    monkeypatch.setattr(cb, "list_sources", down)
+    assert await _code_total(offset) == 3
+
+
+@pytest.mark.asyncio
+async def test_a_codebase_count_fault_on_a_later_page_leaves_the_sections_reporting(analytics, monkeypatch, caplog):
+    async def boom(user):
+        raise RuntimeError("count exploded")
+
+    monkeypatch.setattr(cb, "indexed_codebases", boom)
+    kb = ListingKB([], await client_with({"autobot_code": RECORDS}))
+    with caplog.at_level("WARNING"):
+        _, _, sections, _ = await _graph(kb, offset=1)
+    assert sections and not any(s.get("failed") for s in sections), sections
+    assert "Codebase nodes omitted" in caplog.text
