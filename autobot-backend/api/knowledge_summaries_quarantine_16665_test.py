@@ -18,7 +18,7 @@ from api import knowledge_graph_routes
 from auth_middleware import get_current_user
 from autobot_shared.ssot_config import config
 from knowledge.backends.memory_adapter import InMemoryCollection
-from knowledge.read_path_fakes_16665 import FakeKB
+from testkit.read_path_fakes_16665 import FakeKB
 
 DOC_OK, DOC_Q = "44444444-4444-4444-8444-444444444444", "55555555-5555-4555-8555-555555555555"
 USERS = [{"user_id": "alice", "role": "user"}, {"user_id": "bob", "role": "user"}, {"user_id": "root", "role": "admin"}]
