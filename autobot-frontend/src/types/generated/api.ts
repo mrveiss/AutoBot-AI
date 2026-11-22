@@ -177779,7 +177779,9 @@ export interface operations {
     ingest_cost_api_llc_budget__agent_id__ingest_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 agent_id: string;
             };
