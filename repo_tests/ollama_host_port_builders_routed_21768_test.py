@@ -18,10 +18,12 @@ import ast
 from repo_tests._paths import repo_root
 
 ROUTED_FILES = (
+    "autobot-backend/api/monitoring.py",
     "autobot-backend/code_analysis/src/env_analyzer.py",
     "autobot-backend/config/defaults.py",
     "autobot-backend/config/model_config.py",
     "autobot-backend/config/service_config.py",
+    "autobot-slm-backend/monitoring/performance_monitor.py",
 )
 OLLAMA_NAMES = ("ollama", "OLLAMA", "llm_host", "llm_port")
 

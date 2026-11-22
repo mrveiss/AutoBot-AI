@@ -101,7 +101,7 @@ class ModelConfigMixin:
         # Lazy import to avoid circular dependency
         from constants.network_constants import NetworkConstants
 
-        local_host = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+        local_host = ollama_base_url(f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}")
         return {
             "provider_type": "local",
             "local": {
@@ -171,7 +171,7 @@ class ModelConfigMixin:
         if not ollama_endpoint:
             ollama_host = self.get_host("ollama")
             ollama_port = self.get_port("ollama")
-            ollama_endpoint = f"http://{ollama_host}:{ollama_port}"
+            ollama_endpoint = ollama_base_url(f"http://{ollama_host}:{ollama_port}")
 
         return ollama_endpoint
 
