@@ -190,6 +190,10 @@ class EnvelopeSecretsService:
         rows = await session.execute(select(SecretGrant).where(SecretGrant.secret_id == secret_id))
         return list(rows.scalars())
 
+    async def grantees(self, session: AsyncSession, secret_id: uuid.UUID) -> set[str]:
+        """The vault strings holding a grant on *secret_id*."""
+        return {g.grantee for g in await self._grants(session, secret_id)}
+
     def _recover_dek(self, secret: Secret, grant: SecretGrant) -> bytes:
         return unwrap_dek(WrappedDek.from_dict(grant.wrapped_dek), self._kek(grant.grantee), secret_id=str(secret.id))
 

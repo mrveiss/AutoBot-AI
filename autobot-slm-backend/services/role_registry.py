@@ -394,10 +394,10 @@ _INFRA_ROLES = [
         "ansible_playbook": "playbooks/deploy-slm-agent.yml",
     },
 ]
-
 DEFAULT_ROLES: List[Dict] = default_roles_for(  # #16025: manifest-augmented, see role_manifest_shape.py
     _SLM_ROLES + _BACKEND_ROLES + _FRONTEND_ROLES + _DATABASE_ROLES + _AI_STACK_ROLES + _OPTIONAL_ROLES + _INFRA_ROLES,
     {"base_dir": _BASE_DIR, "agent_dir": _SLM_AGENT_DIR},
+    degrade=True,  # #22067: a role without a manifest is left out and reported, never an import-time crash
 )
 # ---------------------------------------------------------------------------
 # Role → Ansible inventory group mapping  (#1346)
