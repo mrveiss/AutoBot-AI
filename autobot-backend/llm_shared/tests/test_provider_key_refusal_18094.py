@@ -35,4 +35,4 @@ def test_the_refused_provider_is_skipped_and_its_siblings_register(refusing_open
     registered = [call.args[0].provider_name for call in registry.register.call_args_list]
     assert "anthropic" in registered
     assert "openai" not in registered
-    assert "OPENAI_API_KEY provider not registered -- vault unavailable" in caplog.text
+    assert "<credential> provider not registered" in caplog.text and "OPENAI_API_KEY" not in caplog.text

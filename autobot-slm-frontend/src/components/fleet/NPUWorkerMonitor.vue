@@ -55,11 +55,11 @@ function nodeMetrics(nodeId: string): NPUWorkerMetrics | undefined {
 function nodeStatusIndicator(node: SLMNode): string {
   switch (node.status) {
     case 'online':
-      return 'bg-green-500'
+      return 'bg-autobot-dot-ok'
     case 'degraded':
-      return 'bg-yellow-500'
+      return 'bg-autobot-dot-warn'
     default:
-      return 'bg-red-500'
+      return 'bg-autobot-dot-bad'
   }
 }
 
@@ -79,9 +79,9 @@ function nodeStatusLabel(node: SLMNode): string {
 }
 
 function utilizationBarColor(utilization: number): string {
-  if (utilization >= 80) return 'bg-red-500'
-  if (utilization >= 60) return 'bg-yellow-500'
-  return 'bg-green-500'
+  if (utilization >= 80) return 'bg-autobot-dot-bad'
+  if (utilization >= 60) return 'bg-autobot-dot-warn'
+  return 'bg-autobot-dot-ok'
 }
 
 function deviceTypeLabel(nodeId: string): string {
@@ -113,10 +113,10 @@ function connectionStatus(node: SLMNode): string {
 
 function connectionColor(node: SLMNode): string {
   if (node.status === 'online') {
-    return 'text-green-600'
+    return 'text-autobot-success'
   }
-  if (node.status === 'degraded') return 'text-yellow-600'
-  return 'text-red-600'
+  if (node.status === 'degraded') return 'text-autobot-pill-warn-fg'
+  return 'text-autobot-error'
 }
 
 const formatTimestamp = createDateFormatter({ kind: 'time', emptyText: 'Never' })
@@ -125,10 +125,9 @@ const formatTimestamp = createDateFormatter({ kind: 'time', emptyText: 'Never' }
 
 const { t } = useI18n()
 
-/** The store reports a failed read as null; throw it, so refresh() shows it and the poller counts it. */
+/** The store rethrows a failed read, so refresh() shows it and the poller counts it. */
 async function fetchMetrics(): Promise<void> {
   const fleetMetrics = await fleetStore.fetchNpuFleetMetrics()
-  if (fleetMetrics === null) throw new Error(fleetStore.error ?? t('fleet.nPUWorkerMonitor.metricsUnavailable'))
   if (fleetMetrics.node_metrics) {
     const newMap = new Map<string, NPUWorkerMetrics>()
     for (const m of fleetMetrics.node_metrics) {
@@ -175,31 +174,31 @@ onMounted(() => refresh())
       @retry="metricsPoller.start('')"
     />
     <!-- Fleet Summary Bar -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 mb-6">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-6">
           <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
             </svg>
-            <span class="text-sm font-medium text-gray-700">
-              <span class="text-green-600 font-semibold">{{ onlineCount }}</span>
-              <span class="text-gray-400"> / </span>
+            <span class="text-sm font-medium text-autobot-text-secondary">
+              <span class="text-autobot-success font-semibold">{{ onlineCount }}</span>
+              <span class="text-autobot-text-tertiary"> / </span>
               <span class="font-semibold">{{ npuNodes.length }}</span>
-              <span class="text-gray-500 ml-1">{{ $t('fleet.nPUWorkerMonitor.online') }}</span>
+              <span class="text-autobot-text-tertiary ml-1">{{ $t('fleet.nPUWorkerMonitor.online') }}</span>
             </span>
           </div>
           <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            <span class="text-sm text-gray-700">{{ $t('fleet.nPUWorkerMonitor.avgUtilization') }} <span class="font-semibold">{{ avgUtilization }}%</span></span>
-            <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+            <span class="text-sm text-autobot-text-secondary">{{ $t('fleet.nPUWorkerMonitor.avgUtilization') }} <span class="font-semibold">{{ avgUtilization }}%</span></span>
+            <div class="w-24 h-2 bg-autobot-bg-active rounded-full overflow-hidden">
               <div :class="['h-full transition-all', utilizationBarColor(avgUtilization)]" :style="{ width: `${avgUtilization}%` }" />
             </div>
           </div>
         </div>
-        <button @click="refresh" :disabled="loading" class="p-2 text-gray-400 hover:text-gray-600 transition-colors" :title="$t('fleet.nPUWorkerMonitor.refreshNow')" :aria-label="$t('fleet.nPUWorkerMonitor.refreshNow')">
+        <button @click="refresh" :disabled="loading" class="p-2 text-autobot-text-tertiary hover:text-autobot-text-secondary transition-colors" :title="$t('fleet.nPUWorkerMonitor.refreshNow')" :aria-label="$t('fleet.nPUWorkerMonitor.refreshNow')">
           <svg :class="['w-5 h-5', loading ? 'animate-spin' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
@@ -211,12 +210,12 @@ onMounted(() => refresh())
     <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Empty State -->
-    <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-xs border border-gray-200 p-12 text-center">
-      <svg class="mx-auto w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-xs border border-autobot-border p-12 text-center">
+      <svg class="mx-auto w-12 h-12 text-autobot-text-tertiary mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
       </svg>
-      <h3 class="text-lg font-medium text-gray-900 mb-1">{{ $t('fleet.nPUWorkerMonitor.noNPUWorkers') }}</h3>
-      <p class="text-sm text-gray-500">{{ $t('fleet.nPUWorkerMonitor.noNodesWithThe') }}</p>
+      <h3 class="text-lg font-medium text-autobot-text-primary mb-1">{{ $t('fleet.nPUWorkerMonitor.noNPUWorkers') }}</h3>
+      <p class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUWorkerMonitor.noNodesWithThe') }}</p>
     </div>
 
     <!-- Worker Cards Grid -->
@@ -225,32 +224,32 @@ onMounted(() => refresh())
         v-for="node in npuNodes"
         :key="node.node_id"
         @click="emit('select-node', node)"
-        class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
+        class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
       >
         <!-- Header: hostname, IP, status dot -->
         <div class="flex items-start justify-between mb-3">
           <div class="min-w-0">
-            <h3 class="font-medium text-gray-900 truncate">{{ node.hostname }}</h3>
-            <p class="text-xs text-gray-500">{{ node.ip_address }}</p>
+            <h3 class="font-medium text-autobot-text-primary truncate">{{ node.hostname }}</h3>
+            <p class="text-xs text-autobot-text-tertiary">{{ node.ip_address }}</p>
           </div>
           <div class="flex items-center gap-1.5 shrink-0 ml-2">
             <span :class="['w-2.5 h-2.5 rounded-full', nodeStatusIndicator(node)]" />
-            <span class="text-xs text-gray-500">{{ nodeStatusLabel(node) }}</span>
+            <span class="text-xs text-autobot-text-tertiary">{{ nodeStatusLabel(node) }}</span>
           </div>
         </div>
 
         <!-- Device Type Badge -->
         <div class="mb-3">
-          <span class="px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-700">{{ deviceTypeLabel(node.node_id) }}</span>
+          <span class="px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary">{{ deviceTypeLabel(node.node_id) }}</span>
         </div>
 
         <!-- Utilization Bar -->
         <div class="mb-3">
-          <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+          <div class="flex items-center justify-between text-xs text-autobot-text-tertiary mb-1">
             <span>{{ $t('fleet.nPUWorkerMonitor.utilization') }}</span>
             <span>{{ nodeMetrics(node.node_id)?.utilization ?? 0 }}%</span>
           </div>
-          <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div class="w-full h-2 bg-autobot-bg-active rounded-full overflow-hidden">
             <div
               :class="['h-full transition-all', utilizationBarColor(nodeMetrics(node.node_id)?.utilization ?? 0)]"
               :style="{ width: `${nodeMetrics(node.node_id)?.utilization ?? 0}%` }"
@@ -260,25 +259,25 @@ onMounted(() => refresh())
 
         <!-- Queue Depth + Current Task -->
         <div class="grid grid-cols-2 gap-2 mb-3">
-          <div class="bg-gray-50 rounded-sm p-2">
-            <p class="text-xs text-gray-500">{{ $t('fleet.nPUWorkerMonitor.queueDepth') }}</p>
-            <p class="text-sm font-semibold text-gray-900">{{ nodeMetrics(node.node_id)?.queue_depth ?? 0 }}</p>
+          <div class="bg-autobot-bg-secondary rounded-sm p-2">
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUWorkerMonitor.queueDepth') }}</p>
+            <p class="text-sm font-semibold text-autobot-text-primary">{{ nodeMetrics(node.node_id)?.queue_depth ?? 0 }}</p>
           </div>
-          <div class="bg-gray-50 rounded-sm p-2">
-            <p class="text-xs text-gray-500">{{ $t('fleet.nPUWorkerMonitor.currentTask') }}</p>
-            <p class="text-sm font-semibold text-gray-900 truncate" :title="currentTask(node.node_id)">{{ currentTask(node.node_id) }}</p>
+          <div class="bg-autobot-bg-secondary rounded-sm p-2">
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUWorkerMonitor.currentTask') }}</p>
+            <p class="text-sm font-semibold text-autobot-text-primary truncate" :title="currentTask(node.node_id)">{{ currentTask(node.node_id) }}</p>
           </div>
         </div>
 
         <!-- Footer: connection status + last health check -->
-        <div class="flex items-center justify-between text-xs border-t border-gray-100 pt-2">
+        <div class="flex items-center justify-between text-xs border-t border-autobot-border-subtle pt-2">
           <div class="flex items-center gap-1">
             <svg :class="['w-3.5 h-3.5', connectionColor(node)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.858 15.355-5.858 21.213 0" />
             </svg>
             <span :class="connectionColor(node)">{{ connectionStatus(node) }}</span>
           </div>
-          <span class="text-gray-400" :title="nodeMetrics(node.node_id)?.timestamp ?? ''">{{ formatTimestamp(nodeMetrics(node.node_id)?.timestamp) }}</span>
+          <span class="text-autobot-text-tertiary" :title="nodeMetrics(node.node_id)?.timestamp ?? ''">{{ formatTimestamp(nodeMetrics(node.node_id)?.timestamp) }}</span>
         </div>
       </div>
     </div>

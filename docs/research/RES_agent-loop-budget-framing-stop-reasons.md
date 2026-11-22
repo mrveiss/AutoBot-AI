@@ -6,7 +6,7 @@
 
 ### What it is
 
-A self-hosted, LLM-driven autonomous agent platform shipped as one compiled binary with an embedded web UI. PostgreSQL is its only external dependency, and it supports Anthropic, OpenAI-compatible and Ollama models. The inner agent loop comes from a separate harness library; the platform is the orchestration, policy and persistence layer around that loop.
+A self-hosted, LLM-driven autonomous agent platform shipped as one compiled binary with an embedded web UI. A single relational database is its only external dependency, and it supports hosted, API-compatible and locally served language models. The inner agent loop comes from a separate harness library; the platform is the orchestration, policy and persistence layer around that loop.
 
 Method: read-only inspection of public file contents. Nothing was cloned or run. For the agent, guard, provider-pool, recorder and evidence files only doc comments, signatures and prompt constants were read, not function bodies, so behaviour claims below are "as documented in code comments", not verified logic. Not read: the changelog, the largest tool-definition file, the database, server and web layers, the skill files.
 
@@ -35,7 +35,7 @@ Method: read-only inspection of public file contents. Nothing was cloned or run.
 - **Projection-only tool retrieval:** BM25 over tool name, description and parameter names, queried with the goal plus the current intent. It can only remove tools, never add them; core tools are always kept. It falls back to the full list on an empty query, a small catalog or a scorer error. Off by default.
 - **Untrusted-data defence, three layers:**
   1. The harness frames tool results with nonce tags.
-  2. Every agent- or externally-derived field is wrapped in a per-message cryptographically random nonce frame. A neutraliser rewrites the marker stem inside the data, so content cannot open or close a frame. Operator-authored content stays outside.
+  2. Every agent- or externally-derived field is wrapped in a per-message cryptographically random nonce frame. A neutralizer rewrites the marker stem inside the data, so content cannot open or close a frame. Operator-authored content stays outside.
   3. Code-owned prompt tails tell the agent to quote the payload as evidence, record it as a possible injection, and never act on instructions the data contains. The compactor gets the same rule.
 
   A code comment admits the framing is advisory: it cannot stop a model from following the text.
@@ -84,11 +84,11 @@ None was found in the files read. The only injection-style phrases are the proje
 
 | # | Pattern | AutoBot today | Missing piece | Visible win / hidden cost | Verdict | Effort |
 |---|---|---|---|---|---|---|
-| 1 | Nested budgets with a wrap-up round | Flat budget checks only: `llm_shared/token_budget.py:149` `TokenBudgetGate` (off by default), `services/chat_budget_gate.py:171`, `services/budget_policy.py:228`, `llc/scheduler/dispatch_gate.py`; caps at `agent_loop/loop.py:998` and `chat_workflow/delegation.py:72`. #18134 (open): the per-turn cap resets in every child. | Child budget = min(own, parent remaining minus a reserve); one forced round where only persist tools run | Work is no longer lost at the cap, and #18134 gets fixed / a 4th budget mechanism, unless we extend `TokenBudgetGate` | Adopt with conditions: extend the existing gate; skip the rolling-average dispatch check until delegation is enabled | moderate |
-| 3 | Provider failover deltas | Mostly there: `llm_shared/fallback_chain.py`, `failover_policy.py:46-116`, `provider_degradation.py`, `chat_workflow/llm_failover.py` (no failover once text has been emitted). The hop filter `_next_usable_hop` (`llm_shared/model_fallback_coordinator.py:365`) has no size check. The window table is `context_window_lookup.py:20` `known_context_window_tokens` (`autobot-backend/context_window_lookup.py`). | (a) skip providers whose context window can't fit the request; (b) escalating cooldowns; (c) breaker state that survives restarts | Avoids hops that are certain to fail / small | Adopt: (a) as its own change (#21864); (b) and (c) inside #20380. Do not build mid-stream resume | trivial–moderate |
-| 4 | Random-nonce untrusted-data frames | `autobot_shared/prompt_rules.py:85` `frame_untrusted_block` uses a static marker; `:71` neutraliser; about a dozen non-test call sites. #16364 (open): lookalike-bracket bypass | Per-message `secrets` nonce in the frame marker; audit that the safety tail is code-owned on every path | A forged marker becomes impossible, closing the bypass class instead of chasing spellings / about a dozen call sites and golden-string tests change; a nonce in a cached prefix breaks prompt caching, so frames must stay in the uncached tail | Adopt | moderate |
-| 5 | Typed stop reasons | `llm_shared/models.py:131` `finish_reason` is set by providers (`autobot-backend/llm_shared/providers/anthropic.py:431`) but only the compat APIs read it; agent loops ignore it. `modern_ai_integration.py:44,112,1122` also reads it with its own `_ERROR_FINISH_REASONS` (out of scope for #21865). | Shared enum (end_turn / refusal / content_filter / length / tool_use / cancelled); each loop branches on refusal and length | A refused or empty turn stops looking like success / mapping strings across about 6 provider adapters | Adopt | trivial–moderate |
-| 7 | Retrieval-based tool narrowing | Already filed as #20849 (open, under #20842); BM25 exists at `knowledge/search_components/bm25.py` | Add a "core tools always kept" criterion to #20849 | Smaller prompts / a retrieval miss hides a needed tool; a per-turn tool list invalidates the prompt cache | Already decided: amend #20849 only | — |
+| 1 | Nested budgets with a wrap-up round | Flat budget checks only: `autobot-backend/llm_shared/token_budget.py:149` `TokenBudgetGate` (off by default), `autobot-backend/services/chat_budget_gate.py:171`, `autobot-backend/services/budget_policy.py:228`, `autobot-backend/llc/scheduler/dispatch_gate.py`; caps at `autobot-backend/agent_loop/loop.py:998` and `autobot-backend/chat_workflow/delegation.py:72`. #18134 (open): the per-turn cap resets in every child. | Child budget = min(own, parent remaining minus a reserve); one forced round where only persist tools run | Work is no longer lost at the cap, and the token side of #18134 gets fixed (its delegation-count budget and internal-engine timeout remain outstanding) / a 4th budget mechanism, unless we extend `TokenBudgetGate` | Adopt with conditions: extend the existing gate; skip the rolling-average dispatch check until delegation is enabled | moderate |
+| 3 | Provider failover deltas | Mostly there: `autobot-backend/llm_shared/fallback_chain.py`, `autobot-backend/llm_shared/failover_policy.py:46-116`, `autobot-backend/llm_shared/provider_degradation.py`, `autobot-backend/chat_workflow/llm_failover.py` (no failover once text has been emitted). The hop filter `_next_usable_hop` (`autobot-backend/llm_shared/model_fallback_coordinator.py:365`) has no size check. The window table is `autobot-backend/context_window_lookup.py:20` `known_context_window_tokens` (`autobot-backend/context_window_lookup.py`). | (a) skip providers whose context window can't fit the request; (b) escalating cooldowns; (c) breaker state that survives restarts | Avoids hops that are certain to fail / small | Adopt: (a) as its own change (#21864); (b) and (c) inside #20380. Do not build mid-stream resume | trivial–moderate |
+| 4 | Random-nonce untrusted-data frames | `autobot_shared/prompt_rules.py:85` `frame_untrusted_block` uses a static marker; `:71` neutralizer; about a dozen non-test call sites. #16364 (open): lookalike-bracket bypass | Per-message `secrets` nonce in the frame marker; audit that the safety tail is code-owned on every path | An exact forged marker becomes hard to guess; a model can still be fooled by a marker-shaped lookalike, so this is defence in depth and the advisory-boundary caveat of #16364 stays, not a closed bypass class / about a dozen call sites and golden-string tests change; a nonce in a cached prefix breaks prompt caching, so frames must stay in the uncached tail | Adopt | moderate |
+| 5 | Typed stop reasons | `autobot-backend/llm_shared/models.py:131` `finish_reason` is set by providers (the first-party adapter under `autobot-backend/llm_shared/providers/`, line 431) but only the compat APIs read it; agent loops ignore it. `autobot-backend/modern_ai_integration.py:44,112,1122` also reads it with its own `_ERROR_FINISH_REASONS` (out of scope for #21865). | Shared enum (end_turn / refusal / content_filter / length / tool_use / cancelled); each loop branches on refusal and length | A refused or empty turn stops looking like success / mapping strings across about 6 provider adapters | Adopt | trivial–moderate |
+| 7 | Retrieval-based tool narrowing | Already filed as #20849 (open, under #20842); BM25 exists at `autobot-backend/knowledge/search_components/bm25.py` | Add a "core tools always kept" criterion to #20849 | Smaller prompts / a retrieval miss hides a needed tool; a per-turn tool list invalidates the prompt cache | Already decided: amend #20849 only | — |
 
 ### Rejected or deferred (hidden metrics win)
 
@@ -102,10 +102,10 @@ None was found in the files read. The only injection-style phrases are the proje
 
 ### Specific code/files affected
 
-- `autobot-backend/llm_shared/token_budget.py`, `chat_workflow/delegation.py` (#1)
-- `autobot-backend/llm_shared/failover_policy.py`, `fallback_chain.py`, `model_fallback_coordinator.py`, `autobot-backend/context_window_lookup.py` (#3)
+- `autobot-backend/llm_shared/token_budget.py`, `autobot-backend/chat_workflow/delegation.py` (#1)
+- `autobot-backend/llm_shared/failover_policy.py`, `autobot-backend/llm_shared/fallback_chain.py`, `autobot-backend/llm_shared/model_fallback_coordinator.py`, `autobot-backend/context_window_lookup.py` (#3)
 - `autobot_shared/prompt_rules.py` and its callers (#4)
-- `autobot-backend/llm_shared/models.py`, the provider adapters, `agent_loop/loop.py`, `chat_workflow/llm_handler.py` (#5)
+- `autobot-backend/llm_shared/models.py`, the provider adapters, `autobot-backend/agent_loop/loop.py`, `autobot-backend/chat_workflow/llm_handler.py` (#5)
 
 ### Not checked
 
@@ -115,5 +115,5 @@ The frontend beyond one grep for #6, the SLM backend, the full LLM registry and 
 
 - #21863 feat(budget): nested agent budgets — a child's allowance is capped by its parent's remainder, with one wrap-up round on exhaustion
 - #21864 feat(llm): failover hops to models whose context window cannot hold the request — skip them before dispatch
-- #21865 feat(llm): typed stop reasons — agent loops treat refusal, content filter and length cut-off as a normal end
+- #21865 feat(llm): typed stop reasons — agent loops distinguish refusal, content filter and length cut-off from success
 - #16364 (comment: per-message nonce frames), #20380 (comment: breaker ladder + persistence), #20849 (comment: core tools always kept)

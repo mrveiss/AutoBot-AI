@@ -10,6 +10,7 @@
 # they were added once, each linked to a grouped wiring issue under #20512 (frozen in the gate test).
 # A second, #21428: following a router included through a package router unmasked twelve routes, added once and frozen.
 # A third, #21651 (2026-11-15/16): judging SLM routes at their real mount unmasked seven routes, added once and frozen.
+# A fourth, #21927 (owner ruling 2026-11-21, recorded on #10603): the collection-wide bulk-delete route, added once and frozen.
 #
 # What it cannot see: a function nobody calls inside a module somebody imports; a module imported
 # only by another unused module; callers that build a path or key at runtime; plugins and
@@ -1502,3 +1503,6 @@ frontend:autobot-slm-frontend/src/components/DeploymentWizard.vue	#21629
 frontend:autobot-slm-frontend/src/components/fleet/FleetToolsTab.vue	#21629
 frontend:autobot-slm-frontend/src/composables/useFleetHealth.ts	#21629
 frontend:autobot-slm-frontend/src/composables/useNodeHealth.ts	#21629
+# The one-time addition of #21927 (frozen in unconnected_code_remeasure_21927.txt; owner ruling 2026-11-21 on #10603): the approval-gated
+# collection-wide delete from #21885 has no frontend caller because no collections UI exists yet. It is wired in when that UI is built (#10603).
+route:autobot-backend/api/knowledge_collections.py:POST /collections/{collection_id}/bulk-delete	#10603

@@ -73,7 +73,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
     "autobot-backend/api/chat.py": 2624,  # #20195, #20852; #21664: 2625 -> 2624
-    "autobot-backend/api/chat_sessions.py": 1794,  # #21664: 1859 -> 1794
+    "autobot-backend/api/chat_sessions.py": 1712,  # #21664: 1859 -> 1794; #18890: -> 1714; #21898: -> 1712
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 786,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
@@ -99,7 +99,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_api_integration_test.py": 623,
     "autobot-backend/api/knowledge_categories.py": 674,
     "autobot-backend/api/knowledge_collections.py": 726,
-    "autobot-backend/api/knowledge_connectors.py": 917,
+    "autobot-backend/api/knowledge_connectors.py": 912,
     "autobot-backend/api/knowledge_maintenance.py": 1960,
     "autobot-backend/api/knowledge_mcp.py": 1440,
     "autobot-backend/api/knowledge_population.py": 1238,
@@ -204,7 +204,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/integrations/microsoft365_integration.py": 632,
     "autobot-backend/integrations/project_management_integration.py": 743,
     "autobot-backend/integrations/slack_integration.py": 739,
-    "autobot-backend/integrations/whatsapp_integration.py": 754,
+    "autobot-backend/integrations/whatsapp_integration.py": 749,
     "autobot-backend/intelligence/goal_processor.py": 609,
     "autobot-backend/intelligence/intelligent_agent.py": 848,
     "autobot-backend/intelligence/streaming_executor.py": 648,
@@ -285,7 +285,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/prompt_manager.py": 1462,
     "autobot-backend/protocols/agent_communication.py": 654,
     "autobot-backend/research_browser_manager.py": 704,
-    "autobot-backend/secure_command_executor.py": 1087,
+    "autobot-backend/secure_command_executor.py": 1083,
     "autobot-backend/secure_sandbox_executor.py": 1017,
     "autobot-backend/security/command_patterns.py": 609,
     "autobot-backend/security/domain_security.py": 715,
@@ -334,7 +334,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/llm_service.py": 1147,  # #16845: usage recording and budget gate moved out
     "autobot-backend/services/load_balancer.py": 677,
     "autobot-backend/services/nl_database_service.py": 772,
-    "autobot-backend/services/notification_service.py": 614,
+    "autobot-backend/services/notification_service.py": 602,
     "autobot-backend/services/npu_worker_manager.py": 1419,
     "autobot-backend/services/rag_service.py": 772,
     "autobot-backend/services/redis_service_manager_test.py": 839,
@@ -446,7 +446,7 @@ KNOWN_LARGE: dict[str, int] = {
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,
     "autobot-slm-backend/services/replication.py": 785,
-    "autobot-slm-backend/services/role_registry.py": 690,
+    "autobot-slm-backend/services/role_registry.py": 654,
     "autobot-slm-backend/services/service_orchestrator.py": 913,
     "autobot-slm-backend/slm/agent/agent.py": 630,
     "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 1990,  # #18052: resolver test moved out

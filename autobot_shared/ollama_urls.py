@@ -26,12 +26,18 @@ from autobot_shared.ssot_constants import (
 
 _API_ROOT_SUFFIXES = ("/api", "/v1")
 
+# Model-details endpoint; lives here because ssot_constants.py is size-frozen (859 lines).
+PATH_OLLAMA_SHOW = "/api/show"
+PATH_OLLAMA_PS = "/api/ps"
+
 _OLLAMA_API_PATHS = (
     PATH_OLLAMA_GENERATE,
     PATH_OLLAMA_CHAT,
     PATH_OLLAMA_TAGS,
     PATH_OLLAMA_PULL,
     PATH_OLLAMA_EMBEDDINGS,
+    PATH_OLLAMA_SHOW,
+    PATH_OLLAMA_PS,
 )
 
 
@@ -81,3 +87,13 @@ def ollama_pull_url(base_url: str) -> str:
 def ollama_embeddings_url(base_url: str) -> str:
     """``base_url`` -> its single ``/api/embeddings`` URL."""
     return ollama_api_url(base_url, PATH_OLLAMA_EMBEDDINGS)
+
+
+def ollama_show_url(base_url: str) -> str:
+    """``base_url`` -> its single ``/api/show`` URL."""
+    return ollama_api_url(base_url, PATH_OLLAMA_SHOW)
+
+
+def ollama_ps_url(base_url: str) -> str:
+    """``base_url`` -> its single ``/api/ps`` URL (the models currently loaded)."""
+    return ollama_api_url(base_url, PATH_OLLAMA_PS)

@@ -112,18 +112,16 @@ class TelegramBotService:
         real approver is registered (#14068), can carry raw exception text
         from whatever the approver touched (#14539).
         """
-        verdict = await egress_governor.evaluate(
+        verdict = await egress_governor.gate(
             platform="telegram",
             channel_id=str(chat_id),
             message_id=str(reply_to_message_id or ""),
+            subject=f"Telegram send to chat {chat_id}",
             require_approval=require_approval,
         )
         if verdict.allowed:
             return None
-        logger.warning(
-            "Telegram send to chat %s blocked by egress governance (%s): %s", chat_id, verdict.rule, verdict.reason
-        )
-        return {"ok": False, "error": "egress_denied", "reason": verdict.safe_reason}
+        return egress_governor.denial_payload(verdict)
 
     async def send_message(
         self,

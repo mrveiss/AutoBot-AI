@@ -68,6 +68,29 @@ _EVAL_SCHEMA: dict = {
 }
 
 
+#: Asked of the model when the evaluator could not read its answer (#21845).
+EVALUATOR_FAILED_HINT = "Your answer could not be verified. Re-check it and answer directly in plain text."
+
+
+def _unparsed_tool_call_result(response: str, iteration: int) -> ReflectionResult | None:
+    """REFINE verdict when *response* is raw TOOL_CALL markup that never ran, else None. (#21845)
+
+    Such a reply is a non-answer; it must never reach the user because the
+    evaluator timed out or scored the markup as prose.
+    """
+    from chat_workflow.tool_call_args import tool_call_parse_error
+
+    if tool_call_parse_error(response) is None:
+        return None
+    return ReflectionResult(
+        verdict=ReflectionVerdict.REFINE,
+        quality_score=0.0,
+        critique="Response contains an unexecuted TOOL_CALL instead of an answer",
+        refinement_hint="Answer in plain text, or re-issue the tool call with params as strict JSON.",
+        iteration=iteration,
+    )
+
+
 class ResponseQualityEvaluator:
     """Evaluates LLM responses and decides whether to recurse.
 
@@ -104,6 +127,9 @@ class ResponseQualityEvaluator:
                 iteration=iteration,
             )
 
+        if (unanswered := _unparsed_tool_call_result(response, iteration)) is not None:
+            return unanswered
+
         prompt = _EVAL_PROMPT.format(query=query, response=response)
 
         try:
@@ -120,19 +146,23 @@ class ResponseQualityEvaluator:
             # verdict=FAIL with empty exception text when exc.__str__ was
             # empty (e.g. ConnectionError()). Now log type+repr+traceback and
             # use INDETERMINATE so callers can tell evaluator-broke from a
-            # genuine FAIL. Routing semantics unchanged (graph only branches
-            # on REFINE; INDETERMINATE falls through to accept like ACCEPT).
+            # genuine FAIL. The graph does not accept it (#21845): `evaluator_failed`
+            # asks the evaluator once more, then keeps a plain-text reply unverified (reflection_gate).
             logger.warning(
-                "RLM evaluator failed (%s: %r) — passing through with INDETERMINATE verdict",
+                "RLM evaluator failed (%s: %r) — verdict INDETERMINATE, no reading, response is not accepted",
                 type(exc).__name__,
                 exc,
                 exc_info=True,
             )
             return ReflectionResult(
                 verdict=ReflectionVerdict.INDETERMINATE,
-                quality_score=0.7,
+                # #21845: a failed evaluation (timeout, transport, unreadable reply) is NO reading: it carries
+                # no score at all (a made-up 0.7 cleared the threshold; a made-up 0.0 reads as a real failing grade).
+                quality_score=None,
                 critique=f"Evaluation error ({type(exc).__name__}): {exc!r}",
+                refinement_hint=EVALUATOR_FAILED_HINT,
                 iteration=iteration,
+                evaluator_failed=True,
             )
 
     # ------------------------------------------------------------------
