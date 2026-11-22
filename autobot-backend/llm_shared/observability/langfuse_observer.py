@@ -16,6 +16,7 @@ from typing import Any
 from autobot_shared.logging_manager import get_logger
 
 from .tracing_config import LangFuseTracingConfig
+from .tracing_policy import trace_ident, trace_messages, trace_text
 
 logger = get_logger(__name__)
 
@@ -39,13 +40,13 @@ class LangFuseObserver:
     async def on_request(self, request, metadata: dict) -> None:
         self._evict_overflow()
         gen = self._client.generation(
-            trace_id=request.metadata.get("run_id", request.request_id),
+            trace_id=trace_ident(request.metadata.get("run_id")) or request.request_id,
             name="llm.inference",
             model=request.model_name or "",
-            input=request.messages,
+            input=trace_messages(request.messages),
             metadata={
-                "agent_id": request.metadata.get("agent_id"),
-                "run_id": request.metadata.get("run_id"),
+                "agent_id": trace_ident(request.metadata.get("agent_id")),
+                "run_id": trace_ident(request.metadata.get("run_id")),
                 # llm_type may be an LLMType(str, Enum) member or a plain str;
                 # use the enum value ('extraction'), not str(member) which yields
                 # 'LLMType.EXTRACTION' on Python <3.11 (#11091).
@@ -59,7 +60,7 @@ class LangFuseObserver:
         if gen is None:
             return
         gen.end(
-            output=response.content,
+            output=trace_text(response.content),
             usage={
                 "input": response.usage.get("prompt_tokens", 0),
                 "output": response.usage.get("completion_tokens", 0),
@@ -76,7 +77,7 @@ class LangFuseObserver:
     async def on_error(self, exc: Exception, request) -> None:
         gen = self._pending.pop(request.request_id, None)
         if gen is not None:
-            gen.end(level="ERROR", status_message=str(exc))
+            gen.end(level="ERROR", status_message=trace_text(str(exc)))
 
     def flush(self) -> None:
         self._client.flush()

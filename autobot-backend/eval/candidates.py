@@ -18,23 +18,24 @@ the concrete candidates the CLI and CI use.
   is what makes a comparison mean anything, and it is the one the baseline
   lacks at any corpus size (#16157).  A golden with no recording raises
   ``RecordingMissing``: unmeasured is not the same as passing.
-- ``live_replay_candidate`` — the wiring hook for a real candidate: dispatch
-  the golden's inputs through the LLC replay path and read back the produced
-  tool sequence + output.  Left as a thin, clearly-marked seam because a
-  full live-agent dispatch needs a DB session + scheduler (see
-  ``llc/api/replay.py``); the CLI accepts an injected runner so the
-  provider-swap path can supply one without touching this module.
+- ``live_replay_candidate`` — a live model: each golden's prompt is run through the real chat graph headless
+  and the produced tool sequence, answer and failure categories are read back (``eval.live``, #20843).
+  The turn is injectable, so an LLC replay runner can be measured by the same report.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from eval.runner import CandidateResult, CandidateRunner, RecordingUnusable
 from eval.store import GoldenTrajectory
+
+if TYPE_CHECKING:
+    from eval.live import LiveChatCandidate, TurnRunner
+    from eval.live_judge import Judge
 
 logger = get_logger(__name__)
 
@@ -173,17 +174,22 @@ def recorded_replay_candidate(recorded_dir: Path) -> CandidateRunner:
     return _candidate
 
 
-async def live_replay_candidate(golden: GoldenTrajectory) -> CandidateResult:  # pragma: no cover - wiring seam
-    """Dispatch the golden's inputs through the live LLC replay path.
+def live_replay_candidate(
+    models: List[str],
+    provider: str,
+    turn_runner: "TurnRunner | None" = None,
+    judge: "Judge | None" = None,
+    allow_remote: bool = False,
+    **options: Any,
+) -> "LiveChatCandidate":
+    """A live candidate: each golden is run through the chat graph against the configured local model(s).
 
-    Wiring seam: a full implementation opens an async session, calls
-    ``RunReplayService.replay_run`` + the heartbeat scheduler
-    (``llc/api/replay.py``), polls the new run to terminal status, then reads
-    back ``recorded_events`` / ``output_text`` from the replay log.  It is
-    intentionally not run in unit tests (needs DB + scheduler); the CLI
-    injects a runner so callers wire this without editing the harness.
+    Returns a ``LiveChatCandidate``; ``await candidate.prepare()`` runs the local-only guard, and
+    ``candidate.runner_for(model)`` is the ``CandidateRunner`` for one model. Imported lazily because the live
+    path pulls in the whole chat workflow, which the baseline and recorded candidates do not need.
     """
-    raise NotImplementedError(
-        "live_replay_candidate requires a DB session + heartbeat scheduler; "
-        "inject a runner via eval.run(runner=...) to wire the live path."
+    from eval.live import LiveChatCandidate
+
+    return LiveChatCandidate(
+        models, provider, turn_runner=turn_runner, judge=judge, allow_remote=allow_remote, **options
     )

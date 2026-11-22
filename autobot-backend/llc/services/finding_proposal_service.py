@@ -20,6 +20,7 @@ import uuid
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import ApprovalType, FindingProposalStatus, WorkItemPriority, WorkItemType
 from ..models.finding_proposal import LLCFindingProposal
 from .findings_gather import gather_findings
@@ -32,11 +33,11 @@ logger = logging.getLogger(__name__)
 _BUG_TYPES = frozenset({"bug", "race_condition", "security", "vulnerability", "null_dereference"})
 
 
-class FindingsDisabledError(Exception):
+class FindingsDisabledError(PublicMessageMixin, Exception):
     """Raised when scan/promote is called but the feature flag is OFF."""
 
 
-class ProposalStateError(Exception):
+class ProposalStateError(PublicMessageMixin, Exception):
     """Raised when a proposal is in the wrong state for the requested action."""
 
 
@@ -47,9 +48,9 @@ class ProposalStateError(Exception):
 
 async def _work_item_service_create(session: AsyncSession, company_id: str, type, title: str, **kwargs):
     """Thin wrapper around WorkItemService.create so tests can patch at module level."""
-    from llc.services.work_item_service import WorkItemService  # noqa: PLC0415
+    from llc.services.accessors import get_work_item_service
 
-    return await WorkItemService().create(session, company_id=company_id, type=type, title=title, **kwargs)
+    return await get_work_item_service().create(session, company_id=company_id, type=type, title=title, **kwargs)
 
 
 async def _approval_service_request(session: AsyncSession, *, company_id, gate_type, payload, requested_by):
@@ -77,9 +78,9 @@ async def _get_clone_path(project) -> str:
 
 async def _requires_cross_vendor_review(session: AsyncSession, company_id, item_type: WorkItemType) -> bool:
     """Thin wrapper around ReviewGatePolicyService so tests can patch at module level (#12618)."""
-    from llc.services.review_gate import ReviewGatePolicyService  # noqa: PLC0415
+    from llc.services.accessors import get_review_gate_service  # noqa: PLC0415
 
-    return await ReviewGatePolicyService().requires_cross_vendor_review(session, str(company_id), item_type)
+    return await get_review_gate_service().requires_cross_vendor_review(session, str(company_id), item_type)
 
 
 # ---------------------------------------------------------------------------

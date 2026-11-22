@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Meta, StoryObj } from '@storybook/vue3';
 import ErrorBoundary from './ErrorBoundary.vue';
+import { useToast } from '@/composables/useToast';
 
 const meta = {
   title: 'Components/Common/ErrorBoundary',
@@ -55,10 +56,11 @@ export const Retryable: Story = {
   render: (args: Record<string, unknown>) => ({
     components: { ErrorBoundary },
     setup() {
-      return { args };
+      const { showToast } = useToast();
+      return { args, showToast };
     },
     template: `
-      <ErrorBoundary v-bind="args" @retry="() => alert('Retry clicked')">
+      <ErrorBoundary v-bind="args" @retry="() => showToast('Retry clicked', 'info')">
         <div class="p-4 bg-green-100 text-green-800">
           Protected content area
         </div>

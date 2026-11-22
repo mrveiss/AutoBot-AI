@@ -42,6 +42,7 @@ except ImportError:
         """Stub raised when docker SDK is not installed."""
 
 
+from autobot_shared.container_hardening import CPU_PERIOD_US, hardening_kwargs
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -740,15 +741,12 @@ class SecureSandboxExecutor:
             "name": f"{self.container_prefix}{uuid.uuid4().hex[:8]}",
             "detach": True,
             "remove": False,
-            "network_mode": "none" if not config.enable_network else "bridge",
-            "read_only": True,
-            "security_opt": ["no-new-privileges"],
-            "cap_drop": ["ALL"],
-            "cap_add": [],
-            "mem_limit": config.memory_limit,
-            "memswap_limit": config.memory_limit,
-            "cpu_quota": int(config.cpu_limit * 100000),
-            "cpu_period": 100000,
+            **hardening_kwargs(
+                network_mode="none" if not config.enable_network else "bridge",
+                read_only=True,
+                memory_limit=config.memory_limit,
+                cpu_quota=int(config.cpu_limit * CPU_PERIOD_US),
+            ),
             "environment": config.environment or {},
             "labels": {
                 "com.autobot.sandbox": "true",

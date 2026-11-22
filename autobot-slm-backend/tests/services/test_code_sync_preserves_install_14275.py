@@ -25,6 +25,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _ORCHESTRATOR = _REPO_ROOT / "autobot-slm-backend" / "services" / "sync_orchestrator.py"
 _REGISTRY = _REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py"
 
+_MANIFESTS: dict | None = None  # loaded once: the manifests are read from the checkout, not per entry
+
 _RELATIVE_INCLUDE = re.compile(r"^\s*-(c|r)\s+(\.\./)+", re.MULTILINE)
 
 
@@ -194,7 +196,7 @@ def _registry_entries() -> list[dict]:
         if not isinstance(node, ast.Dict):
             continue
         keys = {k.value for k in node.keys if isinstance(k, ast.Constant)}
-        if {"name", "source_paths"} <= keys:
+        if {"name", "display_name"} <= keys:
             entry = {}
             for key, value in zip(node.keys, node.values):
                 if not isinstance(key, ast.Constant):
@@ -214,8 +216,28 @@ def _registry_entries() -> list[dict]:
                         entry[key.value] = ast.unparse(value)
                 else:
                     entry[key.value] = ast.unparse(value)
-            entries.append(entry)
+            entries.append(_with_manifest_shape(entry))
     return entries
+
+
+def _with_manifest_shape(entry: dict) -> dict:
+    """The entry as DEFAULT_ROLES holds it: `source_paths`/`target_path` come from the manifests (#16025).
+
+    The registry no longer declares them for the roles a manifest resolves to, so a scan of its
+    source alone sees no `source_paths` and (before this) found 3 roles of 13. The manifests are
+    read from the checkout and run through the same `apply_manifest_shape` the registry itself uses,
+    so this checks what the code-sync actually receives, placeholders included.
+    """
+    from services.manifest_loader import ManifestLoader
+    from services.role_manifest_shape import apply_manifest_shape
+
+    global _MANIFESTS
+    if _MANIFESTS is None:
+        _MANIFESTS = ManifestLoader(infra_base=_REPO_ROOT / "autobot-infrastructure").load_all()
+    shaped = apply_manifest_shape(dict(entry), _MANIFESTS, {"base_dir": "<BASE>", "agent_dir": "<AGENTDIR>"})
+    # Only the two sync fields move: the rest stays as the registry source declares it (the shaping
+    # also rewrites `systemd_service` into a list, which the venv rule below reads as one unit name).
+    return {**entry, "source_paths": shaped["source_paths"], "target_path": shaped["target_path"]}
 
 
 def test_the_registry_scan_found_roles():
@@ -374,10 +396,12 @@ def test_the_venv_rule_examined_something():
 # ---------------------------------------------------------------------------
 
 
-def _post_sync_source() -> str:
-    source = _ORCHESTRATOR.read_text(encoding="utf-8")
-    start = source.index("async def _run_post_sync_command")
-    return source[start : source.index("\n    async def ", start + 10)]
+_RUNNER = _ORCHESTRATOR.parent / "post_sync_runner.py"
+
+
+def _runner_function(name: str) -> ast.AsyncFunctionDef:
+    tree = ast.parse(_RUNNER.read_text(encoding="utf-8"))
+    return next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == name)
 
 
 def test_the_post_sync_runner_branches_on_the_return_code():
@@ -385,44 +409,61 @@ def test_the_post_sync_runner_branches_on_the_return_code():
 
     Three earlier attempts in this file checked that the module text contained
     the right identifiers, and each survived a mutation that kept the words and
-    removed the behaviour — `if proc.returncode != 0:` → `if False:` leaves both
-    "returncode" and "return False" in the source. Executing the function is not
-    an option here: this suite's conftest stubs `services.*`, so the class is a
-    MagicMock and cannot be awaited.
+    removed the behaviour. Executing the function is not an option here: this
+    suite's conftest stubs `services.*`, so the class is a MagicMock.
 
-    So: find the `if` whose test actually reads `.returncode`, and require it to
-    return a falsy first element.
+    #17455 moved the runner out of `sync_orchestrator.py` into
+    `services/post_sync_runner.py`: `_spawn_and_wait` must hand back
+    `proc.returncode`, and `_post_sync_outcome` must branch on it and return a
+    failed outcome (`_failed(...)`, success False) -- not fall through to success.
     """
-    tree = ast.parse(_ORCHESTRATOR.read_text(encoding="utf-8"))
-    func = next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == "_run_post_sync_command")
+    spawn = _runner_function("_spawn_and_wait")
+    assert any(
+        isinstance(n, ast.Return)
+        and any(isinstance(sub, ast.Attribute) and sub.attr == "returncode" for sub in ast.walk(n))
+        for n in ast.walk(spawn)
+    ), "_spawn_and_wait does not return proc.returncode"
 
-    guards = [
-        node
-        for node in ast.walk(func)
-        if isinstance(node, ast.If)
-        and any(isinstance(sub, ast.Attribute) and sub.attr == "returncode" for sub in ast.walk(node.test))
-    ]
-    assert guards, "nothing in _run_post_sync_command branches on proc.returncode"
+    func = _runner_function("_post_sync_outcome")
 
-    returns_false = [
+    def _is_code_not_zero(test: ast.AST) -> bool:
+        return (
+            isinstance(test, ast.Compare)
+            and isinstance(test.left, ast.Name)
+            and test.left.id == "code"
+            and isinstance(test.ops[0], ast.NotEq)
+            and isinstance(test.comparators[0], ast.Constant)
+            and test.comparators[0].value == 0
+        )
+
+    guards = [node for node in ast.walk(func) if isinstance(node, ast.If) and _is_code_not_zero(node.test)]
+    assert guards, "_post_sync_outcome has no `if code != 0:` branch"
+
+    reports_failure = [
         node
         for guard in guards
         for node in ast.walk(guard)
         if isinstance(node, ast.Return)
-        and isinstance(node.value, ast.Tuple)
-        and isinstance(node.value.elts[0], ast.Constant)
-        and node.value.elts[0].value is False
+        and isinstance(node.value, ast.Call)
+        and getattr(node.value.func, "id", None) == "_failed"
     ]
-    assert returns_false, "the returncode guard does not report failure"
+    assert reports_failure, "the exit-code guard does not report failure"
 
 
 def test_a_failed_post_sync_stops_before_restart_and_before_marking_synced():
     """Restarting into a half-installed dependency set is worse than leaving the
     running process alone, and recording the commit as synced would claim an
-    update that did not happen."""
-    source = _ORCHESTRATOR.read_text(encoding="utf-8")
-    call = source.index("await self._run_post_sync_command(ctx)")
-    restart = source.index("_restart_systemd_service(ctx, node_id, restart)", call)
-    between = source[call:restart]
+    update that did not happen.
 
-    assert "return False" in between, "a failed post-sync does not stop the sync"
+    #17455 moved this decision: `execute_plan` stops at the first failed non-restart
+    action (so no restart follows), and `sync_node_roles` returns before
+    `record_role_synced` when the plan aborted.
+    """
+    runner = (_ORCHESTRATOR.parent / "post_sync_plan_runner.py").read_text(encoding="utf-8")
+    failure = runner.index("result.aborted, result.deferred = True, []")
+    assert "break" in runner[failure : failure + 200], "a failed non-restart action does not stop the plan"
+
+    node = (_ORCHESTRATOR.parents[1] / "api" / "node_post_sync.py").read_text(encoding="utf-8")
+    guard = node.index("if outcome.plan.aborted:")
+    marked = node.index("record_role_synced", guard)
+    assert "return outcome" in node[guard:marked], "an aborted plan still marks the roles synced"

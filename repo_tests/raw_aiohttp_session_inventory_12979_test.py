@@ -71,6 +71,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._raw_aiohttp_session import Site, client_session_sites, scan_paths
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 #: Owners allowed to construct a session: the pooled client itself, and the
@@ -94,7 +96,7 @@ SIBLING_GUARD = "autobot-backend/tests/test_raw_client_session_ceiling_12992.py"
 #: needs no argument. Raising one, or adding a key, must also satisfy
 #: ``CATEGORY`` below — the inventory alone cannot authorise it.
 INVENTORY: dict[str, int] = {
-    "autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py": 3,
+    "autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py": 1,
     "autobot-infrastructure/shared/scripts/analysis/npu_performance_measurement.py": 2,
     "autobot-infrastructure/shared/scripts/automated_testing_procedure.py": 1,
     "autobot-infrastructure/shared/scripts/comprehensive_log_aggregator.py": 1,
@@ -108,7 +110,6 @@ INVENTORY: dict[str, int] = {
     "autobot-infrastructure/shared/scripts/zero_downtime_deploy.py": 2,
     "autobot-npu-worker/resources/windows-npu-worker/app/utils/backend_telemetry.py": 1,
     "autobot-npu-worker/resources/windows-npu-worker/app/utils/http_retry.py": 1,
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,
     "autobot-slm-backend/monitoring/performance_benchmark.py": 2,
     "autobot-slm-backend/monitoring/performance_monitor.py": 1,
     "autobot-slm-backend/scripts/remove_orphaned_node.py": 3,
@@ -158,8 +159,7 @@ def _is_test_or_archive(path: str) -> bool:
     for part in path.split("/")[:-1]:
         if part in _sibling().EXCLUDED_DIR_NAMES or _sibling().EXCLUDED_DIR_SUBSTRING in part:
             return True
-    name = path.rsplit("/", 1)[-1]
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+    return is_test_filename(path, include_js=False)
 
 
 _SIBLING_MODULE = None
@@ -285,7 +285,7 @@ def _is_name_eq_main(test: ast.Compare) -> bool:
 )
 def test_main_guard_requires_eq_and_the_main_constant(source: str, expected: bool) -> None:
     """Contrast fixtures: a lookalike comparison must not satisfy the ``entrypoint`` category."""
-    assert _module_has_main_guard(ast.parse(source)) is expected
+    assert _module_has_main_guard(parse_cache.parse(source)) is expected
 
 
 def _category_holds(path: str, category: str, source: str, sites: tuple[Site, ...]) -> bool:
@@ -300,7 +300,7 @@ def _category_holds(path: str, category: str, source: str, sites: tuple[Site, ..
         # stored session outlives the request it was opened for.
         return bool(sites) and all(site.bound for site in sites)
     if category == "entrypoint":
-        return _module_has_main_guard(ast.parse(source))
+        return _module_has_main_guard(parse_cache.parse(source))
     return False
 
 

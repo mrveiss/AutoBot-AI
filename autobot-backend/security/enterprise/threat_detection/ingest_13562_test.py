@@ -124,6 +124,51 @@ def test_file_actions_land_inside_the_set_the_engine_matches_on(bus_action: str,
     assert SecurityEvent(raw_event={"action": translated}).is_file_operation()
 
 
+@pytest.mark.parametrize(
+    "stored_action,expected",
+    [
+        ("login_successful", "authentication"),  # rows stored before #18716 still count
+        ("user.login", "authentication"),
+        ("sso_login", "authentication"),
+        ("api_key_created", "authentication"),
+        ("password_changed", "authentication"),
+        ("conversation_file_delete", "file_delete"),
+        ("file_delete", "file_delete"),
+        ("config.update", "system_configuration_change"),
+        ("config.changed", "system_configuration_change"),
+        ("something.unrelated", "api_request"),
+    ],
+)
+def test_old_spellings_in_stored_rows_are_read_through_the_canonical_mapping(stored_action: str, expected: str) -> None:
+    assert engine_action(stored_action) == expected
+
+
+def test_every_login_literal_a_writer_passes_is_an_authentication_event() -> None:
+    """The bare ``login`` prefix was dropped from the prefixes, so each ``login*`` spelling must be aliased.
+
+    A future unaliased ``login_failure`` fails here instead of silently becoming ``api_request``.
+    """
+    from repo_tests._audit_action_scan import read_enums, scan_source
+    from repo_tests._audit_action_vocabulary_scope import scoped_sources
+    from repo_tests._paths import repo_root
+
+    root = repo_root()
+    enums = read_enums(root)
+    seen = set()
+    for rel in scoped_sources(root):
+        found = scan_source(rel, (root / rel).read_text(encoding="utf-8"), enums)
+        seen.update(w.value for w in found if w.kind == "literal" and w.value.startswith("login"))
+    assert {"login_success", "login_failed"} <= seen, f"control: the scan did not find the login writers: {seen}"
+    assert {v: engine_action(v) for v in seen if engine_action(v) != "authentication"} == {}
+
+
+def test_the_insider_high_risk_action_is_reachable_from_a_bus_event() -> None:
+    """``_HIGH_RISK_ACTIONS`` compares against the translated action; a name nothing produces never matches."""
+    from security.enterprise.threat_detection.analyzers.insider_threat import InsiderThreatAnalyzer
+
+    assert engine_action("config.update") in InsiderThreatAnalyzer._HIGH_RISK_ACTIONS
+
+
 def test_an_unrecognised_outcome_is_a_failure_not_a_success() -> None:
     """An unknown value scoring as success is how a detector reports clean."""
     assert engine_outcome("success") == "success"
@@ -262,27 +307,17 @@ def test_every_bus_producer_reaches_that_write_path() -> None:
     """One call site covers the bus only if the producers really funnel through it."""
     tree = _parse(AUDIT_BUS_PATH)
 
-    # Both halves of this assertion used to read `emit`, so the second was dead
-    # (CodeRabbit). Chasing that turned up the larger problem: `audit.py`
-    # defines `emit` TWICE and the pin was reading the shadowed one.
-    shadowed_emit = _function(tree, "emit")
-    effective_emit = _effective_function(tree, "emit")
-    assert shadowed_emit is not effective_emit, (
-        "audit.py no longer defines `emit` twice — simplify this test rather "
-        "than leaving an override check that no longer describes the module"
-    )
-
-    # The first definition writes directly; the override delegates to
-    # `emit_compliance`, which reaches `_emit_real` below. Both are asserted
-    # because either one changing would break the bus for a different caller.
-    assert "record" in _called_names(shadowed_emit)
-    assert "emit_compliance" in _called_names(
-        effective_emit
-    ), "the `emit` callers actually get must still funnel into the bus"
+    # #17225: `audit.py` used to define `emit` twice, and the override (an
+    # EventType bridge) shadowed the real one -- so `emit(AuditEvent(...))`
+    # recorded the event's repr as a COMPLIANCE action. One definition now,
+    # and it is the one every producer reaches.
+    emit = _function(tree, "emit")
+    assert emit is _effective_function(tree, "emit"), "audit.py defines `emit` twice again (#17225)"
+    assert "record" in _called_names(emit)
 
     assert "record" in _called_names(_function(tree, "emit_knowledge"))
     for shim in ("emit_security", "emit_compliance"):
-        assert "_emit_real" in _called_names(_function(tree, shim)), shim
+        assert "emit" in _called_names(_function(tree, shim)), shim
 
     # `audit_record` is a producer too, and nothing asserted its path.
     assert "emit_security" in _called_names(_function(tree, "audit_record"))

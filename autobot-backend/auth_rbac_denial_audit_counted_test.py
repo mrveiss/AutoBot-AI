@@ -2,35 +2,32 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""A permission denial whose audit write fails must be counted (#14843).
+"""A permission denial whose audit record is lost must be counted (#14843).
 
 #14750 instrumented the DB-backed denial audit in both backends' RBAC
-middleware, and its guard proves both use the same counter. It could not see a
-second denial path: ``auth_rbac._deny_permission_access`` and
-``_deny_any_permission_access`` audit through ``SecurityLayer.audit_log``, which
-appends a JSON line to a file and swallowed any write failure. A full disk, a
-permissions change or a rotated-away directory dropped every record on that path
-while requests kept returning correct 403s.
+middleware. #18263 retired ``auth_rbac._deny_permission_access`` and
+``_deny_any_permission_access``: a permission denial now goes through the shared
+gate and the shared RBAC audit writer, whose loss counter is #14750's.
+``require_role``'s ``_deny_role_access`` is the path left here, and it audits
+through ``SecurityLayer.audit_log``. That
+used to append to a file and swallow the failure; since #17225 D6 it records
+through the canonical audit service, and the loss it can still suffer is a
+record that could not be scheduled at all (a thread with no event loop, before
+any loop was seen). That loss is counted under ``NotScheduled``.
 
-These drive the real denial path with a real write failure and assert the
-counter moved. Deliberately not "the audit call was made" and not "nothing
-raised" — the unfixed code satisfied both.
+These drive the real denial path down to the real ``services.audit.audit.emit``
+and assert the counter moved -- deliberately not "the audit call was made" and
+not "nothing raised"; code that dropped the record silently satisfied both.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 _COUNTER = "autobot_audit_write_failures_total"
-
-# Appending to a path that is a DIRECTORY raises IsADirectoryError. Pinning the
-# error type rather than accepting any failure asserts WHICH branch ran: a test
-# that accepts any label would pass if the write failed for a reason the test
-# did not arrange.
-_EXPECTED_ERROR = "IsADirectoryError"
+_EXPECTED_ERROR = "NotScheduled"
 
 
 def _counter_value(action: str, error_type: str) -> float:
@@ -40,18 +37,11 @@ def _counter_value(action: str, error_type: str) -> float:
     return 0.0 if value is None else value
 
 
-def _layer_writing_to(path: Path):
-    """A SecurityLayer whose audit file is unwritable.
-
-    Built without ``__init__`` on purpose: ``audit_log`` reads exactly one
-    attribute, and constructing the real thing would drag in config loading that
-    has nothing to do with what is under test.
-    """
+def _layer():
+    """A SecurityLayer built without ``__init__``: ``audit_log`` reads no attribute."""
     from security_layer import SecurityLayer
 
-    layer = SecurityLayer.__new__(SecurityLayer)
-    layer.audit_log_file = str(path)
-    return layer
+    return SecurityLayer.__new__(SecurityLayer)
 
 
 def _request(path: str = "/api/analytics/report"):
@@ -60,81 +50,50 @@ def _request(path: str = "/api/analytics/report"):
     return request
 
 
-@pytest.mark.parametrize(
-    "deny,args",
-    [
-        ("_deny_permission_access", ("analytics:view",)),
-        ("_deny_any_permission_access", (["analytics:view", "analytics:export"],)),
-    ],
-)
-def test_a_failed_denial_audit_write_increments_the_counter(tmp_path, deny, args):
-    """Both file-backed denial entry points, since only instrumenting one is the bug."""
+def _no_loop_anywhere():
+    """The real loss condition: no running loop here and none captured to hand off to."""
+    from services.audit import audit
+
+    return patch.object(audit, "_LOOP", None)
+
+
+def test_a_scheduled_denial_audit_records_the_event_and_counts_nothing():
+    """Negative control: the counter must measure loss, not denials."""
     from fastapi import HTTPException
 
     import auth_rbac
+    from services.audit import audit
 
-    unwritable = tmp_path / "audit-log-is-a-directory"
-    unwritable.mkdir()
+    handed_over = []
 
-    before = _counter_value("permission_denied", _EXPECTED_ERROR)
+    def capture(coro, *, name, loop):
+        handed_over.append(coro.cr_frame.f_locals["event"])
+        coro.close()
+        return object()  # a scheduled future
 
-    with patch.object(auth_rbac, "_get_security_layer", return_value=_layer_writing_to(unwritable)):
-        with pytest.raises(HTTPException) as raised:
-            getattr(auth_rbac, deny)({"username": "someone", "role": "viewer"}, *args, _request())
-
-    # The denial itself must still be a clean 403 — counting the loss must not
-    # turn an audit problem into a request failure.
-    assert raised.value.status_code == 403
-
-    after = _counter_value("permission_denied", _EXPECTED_ERROR)
-    assert after == before + 1, (
-        "the denial audit write failed and nothing counted it — the record is "
-        f"lost and indistinguishable from one that was written ({_COUNTER} did "
-        f"not move: {before} -> {after}) (#14843)"
-    )
-
-
-def test_a_successful_denial_audit_writes_the_record_and_counts_nothing(tmp_path):
-    """Negative control: the counter must measure loss, not denials.
-
-    A counter that also moved on success would read as loss during normal
-    operation, which is the same defect pointing the other way.
-    """
-    from fastapi import HTTPException
-
-    import auth_rbac
-
-    audit_file = tmp_path / "audit.log"
-    before = _counter_value("permission_denied", _EXPECTED_ERROR)
-
-    with patch.object(auth_rbac, "_get_security_layer", return_value=_layer_writing_to(audit_file)):
+    before = _counter_value("role_denied", _EXPECTED_ERROR)
+    with (
+        patch.object(audit, "fire_and_forget_threadsafe", side_effect=capture),
+        patch.object(auth_rbac, "_get_security_layer", return_value=_layer()),
+    ):
         with pytest.raises(HTTPException):
-            auth_rbac._deny_permission_access({"username": "someone", "role": "viewer"}, "analytics:view", _request())
+            auth_rbac._deny_role_access({"username": "someone", "role": "viewer"}, ["admin"], "viewer", _request())
 
-    written = audit_file.read_text(encoding="utf-8")
-    assert "permission_denied" in written, "the record was not written at all"
-    assert "analytics:view" in written
-
-    after = _counter_value("permission_denied", _EXPECTED_ERROR)
-    assert after == before, "a record that WAS written must not be counted as lost"
+    assert [e.action for e in handed_over] == ["role_denied"], "the record was not handed to the service"
+    assert "admin" in str(handed_over[0].metadata)
+    after = _counter_value("role_denied", _EXPECTED_ERROR)
+    assert after == before, "a record that WAS scheduled must not be counted as lost"
 
 
-def test_a_role_denial_write_failure_is_counted_under_its_own_action(tmp_path):
-    """The third entry point in the same file audits ``role_denied``.
-
-    Its records go down the identical swallow, so a counter keyed only to
-    ``permission_denied`` would leave that loss invisible.
-    """
+def test_a_role_denial_loss_is_counted_under_its_own_action():
+    """A lost ``role_denied`` record is counted under its own action, not ``permission_denied``."""
     from fastapi import HTTPException
 
     import auth_rbac
-
-    unwritable = tmp_path / "audit-log-is-a-directory"
-    unwritable.mkdir()
 
     before = _counter_value("role_denied", _EXPECTED_ERROR)
 
-    with patch.object(auth_rbac, "_get_security_layer", return_value=_layer_writing_to(unwritable)):
+    with _no_loop_anywhere(), patch.object(auth_rbac, "_get_security_layer", return_value=_layer()):
         with pytest.raises(HTTPException):
             auth_rbac._deny_role_access({"username": "someone", "role": "viewer"}, ["admin"], "viewer", _request())
 

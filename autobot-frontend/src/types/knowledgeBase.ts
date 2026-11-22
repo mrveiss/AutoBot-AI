@@ -26,6 +26,9 @@ export interface KnowledgeStats {
   index_name?: string | null
   initialized?: boolean
   rag_available?: boolean
+  // #15502: served by GET /knowledge_base/stats; the frontend holds no model name.
+  embedding_model?: string
+  embedding_dimensions?: number
 }
 
 // ============================================================================
@@ -415,7 +418,8 @@ export interface ConnectorJobState {
   connector_id: string
   job_id: string
   started_at: string
-  status: 'running' | 'success' | 'failed' | 'partial'
+  /** 'starting' while the claimed sync detects changes (#20755); then 'running'; then the result. */
+  status: 'starting' | 'running' | 'success' | 'failed' | 'partial'
   sources_total: number
   sources_done: number
   sources_failed: number

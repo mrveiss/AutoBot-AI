@@ -8,11 +8,11 @@
 # Python configuration
 python_version: "3.14"
 use_pyenv: false
-venv_dir: "/opt/autobot/venv"
+venv_dir: "{{ autobot.base_dir }}/venv"
 requirements_file: "requirements.txt"
 
 # Project directories
-project_root: "/opt/autobot"
+project_root: "{{ autobot.base_dir }}"
 config_dir: "{{ project_root }}/config"
 logs_dir: "{{ project_root }}/logs"
 docs_dir: "{{ project_root }}/docs"
@@ -23,6 +23,8 @@ models_dir: "/var/lib/autobot/models"
 install_openvino: true
 openvino_version: "2023.3.0"
 install_ollama: true
+# The embedding role's model, named so the kind check (#19736) knows which entry must embed.
+ollama_embedding_model: "nomic-embed-text:latest"
 # Required Ollama models — 6-tier agent mapping (#2553)
 ollama_models:
   - "llama3.2:1b"           # Routing tier (orchestrator)
@@ -31,11 +33,11 @@ ollama_models:
   - "mistral:7b-instruct"   # Instruction following tier
   - "dolphin-llama3:8b"     # System/uncensored tier
   - "qwen3.5:9b"            # Quality/tools tier (all tool-using agents)
-  - "nomic-embed-text"      # Embeddings
+  - "{{ ollama_embedding_model }}"  # Embeddings
 
 # Node.js configuration
 install_nodejs: true
-nodejs_version: "20"
+nodejs_version: "{{ node_major }}"
 use_nvm: false  # Use apt repository instead
 
 # Playwright configuration

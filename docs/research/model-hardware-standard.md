@@ -340,3 +340,9 @@ screen, where pixels are slow but self-correcting.
 The most useful thing the source did was not supply a pattern at all. It independently confirms
 the cost of an approval nobody can answer — a problem AutoBot has already diagnosed, half-built
 and tracked in #14068. External corroboration of a known priority, rather than a new import.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+None filed yet.

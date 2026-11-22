@@ -141,7 +141,7 @@ KAG_KNOWLEDGE_PIPELINE = {
 }
 
 
-def get_default_config() -> Dict[str, Any]:
+def get_default_pipeline_config() -> Dict[str, Any]:
     """
     Get the default knowledge enrichment pipeline configuration.
 
@@ -186,4 +186,4 @@ def select_pipeline_config(kag_enabled: bool = False) -> Dict[str, Any]:
     Returns:
         Pipeline configuration dict (deep copy).
     """
-    return get_kag_pipeline_config() if kag_enabled else get_default_config()
+    return get_kag_pipeline_config() if kag_enabled else get_default_pipeline_config()

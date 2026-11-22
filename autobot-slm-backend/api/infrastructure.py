@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-SLM Infrastructure API Routes
+"""SLM Infrastructure API Routes
 
 Issue #786: Provides endpoints for running infrastructure setup playbooks
 such as database deployment, monitoring setup, and other infrastructure tasks.
@@ -22,15 +21,15 @@ from pydantic import BaseModel, Field
 from typing_extensions import Annotated
 
 from autobot_shared.async_compat import fire_and_forget
-from services.ansible_utils import _extract_failure_summary
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+from autobot_shared.ssot_config import config
+from services.ansible_utils import _extract_failure_summary, ansible_run_failure
 from services.auth import get_current_user
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])
-
-# Directory where infrastructure playbooks are stored
-PLAYBOOKS_DIR = os.getenv("SLM_INFRASTRUCTURE_PLAYBOOKS_DIR", "/opt/autobot/autobot-slm-backend/ansible")
+# Playbooks resolve through _ansible_dir() (the executor's directory, #14351); #18094 retired PLAYBOOKS_DIR.
 
 
 class PlaybookCategory(str, Enum):
@@ -124,8 +123,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         id="redis-stack",
         name="Redis Stack Deployment",
         description="Deploy Redis Stack server with RediSearch, RedisJSON, "
-        "RedisGraph, and RedisTimeSeries modules for high-performance "
-        "data operations.",
+        "RedisGraph, and RedisTimeSeries modules for high-performance data operations.",
         category=PlaybookCategory.DATABASE,
         # #12095: deploy-redis-stack.yml never existed; setup-redis-stack.yml is the
         # real Redis Stack provisioning playbook (same file the setup-redis-stack entry uses).
@@ -279,7 +277,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         category=PlaybookCategory.NETWORKING,
         playbook_file="setup-user-frontend.yml",
         target_hosts=["frontend"],
-        variables={"frontend_port": 443},
+        variables={"frontend_tls_port": 443},
         estimated_duration="5 minutes",
         requires_confirmation=True,
     ),
@@ -291,7 +289,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         category=PlaybookCategory.NETWORKING,
         playbook_file="setup-browser-worker.yml",
         target_hosts=["browser_worker"],
-        variables={"browser_port": 3000},
+        variables={"browser_port": config.port.browser},  # #19324: was Grafana's 3000
         estimated_duration="7 minutes",
         requires_confirmation=True,
     ),
@@ -315,7 +313,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         category=PlaybookCategory.DATABASE,
         playbook_file="setup-ai-stack.yml",
         target_hosts=["ai_stack"],
-        variables={"chromadb_port": 8080},
+        variables={"chromadb_port": config.port.chromadb},  # #19321: was 8080, the AI-stack port
         estimated_duration="4 minutes",
         requires_confirmation=True,
     ),
@@ -368,7 +366,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         playbook_file="backup-node-data.yml",
         target_hosts=["all"],
         variables={
-            "backup_dir": "/opt/autobot/backups",
+            "backup_dir": f"{FLEET_INSTALL_ROOT}/backups",
             "include_models": True,
         },
         estimated_duration="10-30 minutes (depends on data size)",
@@ -607,8 +605,8 @@ def _get_ansible_environment():
     env.update(
         {
             "ANSIBLE_CONFIG": str(_ansible_dir() / "ansible.cfg"),
-            "ANSIBLE_HOME": "/opt/autobot/.ansible",
-            "ANSIBLE_LOCAL_TEMP": "/opt/autobot/.ansible/tmp",
+            "ANSIBLE_HOME": f"{FLEET_INSTALL_ROOT}/.ansible",
+            "ANSIBLE_LOCAL_TEMP": f"{FLEET_INSTALL_ROOT}/.ansible/tmp",
         }
     )
     return env
@@ -652,7 +650,6 @@ async def _run_playbook(
         # `playbook_path = self.ansible_dir / playbook_name`.
         playbook_path = str(_ansible_dir() / playbook.playbook_file)
 
-        # Check if playbook exists
         if not os.path.exists(playbook_path):
             execution.status = PlaybookStatus.FAILED
             execution.completed_at = datetime.now(timezone.utc)
@@ -705,13 +702,14 @@ async def _run_playbook(
 
         await process.wait()
 
-        if process.returncode == 0:
+        text = "\n".join(execution.output)
+        failure = ansible_run_failure(text, None, process.returncode)
+        if not failure:
             execution.status = PlaybookStatus.COMPLETED
             execution.output.append("[SUCCESS] Playbook completed successfully")
         else:
             execution.status = PlaybookStatus.FAILED
-            _summary = _extract_failure_summary("\n".join(execution.output))
-            execution.error = _summary or f"Playbook failed with exit code {process.returncode}"
+            execution.error = _extract_failure_summary(text) or f"Playbook failed: {failure[-300:]}"
             execution.output.append(f"[FAILED] Exit code: {process.returncode}")
 
     except Exception:

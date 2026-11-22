@@ -10,6 +10,7 @@ Used in issue #5799 to decompose the 3,748-line monolith into 7 domain modules.
 |------|---------|
 | `split_schemas.py` | Parses schemas_common.py, classifies 375+ classes by domain, writes domain files |
 | `update_imports.py` | Rewrites all `api/*.py` imports to use domain-specific modules |
+| `schema_rules.py` | Shared `DOMAIN_RULES` and `classify_class` used by both scripts above |
 | `README.md` | This file |
 
 ## Domain files managed

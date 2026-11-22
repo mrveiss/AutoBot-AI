@@ -19,8 +19,8 @@ import logging
 import pytest
 from fastapi import HTTPException
 
-from utils.error_boundaries.decorators import with_error_handling
-from utils.error_boundaries.types import APIErrorResponse, ErrorCategory
+from autobot_shared.error_boundaries.decorators import with_error_handling
+from autobot_shared.error_boundaries.types import APIErrorResponse, ErrorCategory
 
 # A message shaped like the ones that actually leak here.
 _LEAKY = "could not connect to /opt/autobot/run/redis.sock db=4 user=autobot_admin"

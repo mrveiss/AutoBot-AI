@@ -27,12 +27,12 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from user_management.models.role import Role
-
 from ..models.activity import ActorType
 from ..models.role_tool import LLCRoleTool
+from ._role_guard import ensure_role_in_company
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError
 from .tool_registry_ref import ToolRegistryUnavailable, require_registered_tool
 
 #: Re-exported. ``llc/api/roles.py`` imports ``ToolRegistryUnavailable`` from
@@ -52,8 +52,6 @@ class RoleToolService(LLCServiceBase):
         actor: Optional[uuid.UUID],
         after: Optional[Dict[str, Any]],
     ) -> None:
-        if not self.activity_log:
-            return
         await self.activity_log.record(
             session=session,
             company_id=str(attachment.company_id),
@@ -66,9 +64,8 @@ class RoleToolService(LLCServiceBase):
         )
 
     async def _require_role(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> None:
-        result = await session.execute(select(Role.id).where(Role.id == role_id, Role.org_id == company_id))
-        if result.scalar_one_or_none() is None:
-            raise ValueError(f"role {role_id} does not exist in company {company_id}")
+        """Delegates to :func:`._role_guard.ensure_role_in_company` (#18557)."""
+        await ensure_role_in_company(session, company_id, role_id)
 
     @staticmethod
     def _require_registered_tool(tool_name: str) -> str:
@@ -91,14 +88,14 @@ class RoleToolService(LLCServiceBase):
         actor_user_id: uuid.UUID,
     ) -> LLCRoleTool:
         if company_id is None or role_id is None:
-            raise ValueError("company_id and role_id are both required")
+            raise CompanyOsError("company_id and role_id are both required")
 
         await require_company_admin(session, company_id, actor_user_id)
         await self._require_role(session, company_id, role_id)
         cleaned = self._require_registered_tool(tool_name)
 
         if await self.get(session, company_id, role_id, cleaned) is not None:
-            raise ValueError(f"tool {cleaned!r} is already attached to role {role_id}")
+            raise CompanyOsError(f"tool {cleaned!r} is already attached to role {role_id}")
 
         attachment = LLCRoleTool(company_id=company_id, role_id=role_id, tool_name=cleaned)
         session.add(attachment)

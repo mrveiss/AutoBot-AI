@@ -34,25 +34,44 @@ precedent).
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from autobot_shared.env_utils import env_float, env_int
+from autobot_shared.env_utils import env_float, env_int, env_registered
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.time_utils import now_utc
+from autobot_shared.tool_catalogue import (
+    CODE_EXEC_TOOLS,
+    CONTAINER_ORCH_TOOLS,
+    DEPLOY_TOOLS,
+    FILE_DELETE_TOOLS,
+    FILE_WRITE_TOOLS,
+    GIT_PUSH_TOOLS,
+    GIT_RESET_TOOLS,
+    HTTP_WRITE_TOOLS,
+    SHELL_EXEC_TOOLS,
+    SYSTEM_EXEC_TOOLS,
+    TERMINAL_TOOLS,
+)
 from autobot_shared.verifier_degradation import (
     VerifierDegradation,
     VerifierObservation,
     degraded_response_blocks,
+    failure_observation,
     parse_probability,
     parse_rationale,
+)
+from autobot_shared.verifier_model import (  # noqa: F401 - VERIFIER_SPEND_SITE is re-exported
+    VERIFIER_SPEND_SITE,
+    configured_verifier_model,
+    resolve_and_chat,
 )
 from autobot_shared.verifier_prompt import _build_verifier_prompt  # noqa: F401  (re-export, #17306)
 
 logger = get_logger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Module-level threshold constants (all env-configurable, never hardcoded)
@@ -82,38 +101,24 @@ PANEL_QUORUM: int = env_int("VERIFIER_PANEL_QUORUM", 1)
 VERIFIER_ENABLED: bool = os.environ.get("VERIFIER_ENABLED", "1") != "0"
 
 #: Token budget for the verifier LLM call.
-VERIFIER_MAX_TOKENS: int = env_int("VERIFIER_MAX_TOKENS", 512)
+VERIFIER_MAX_TOKENS: int = env_registered("VERIFIER_MAX_TOKENS")
 
-#: Timeout in seconds for the verifier LLM call.
-VERIFIER_TIMEOUT_S: float = env_float("VERIFIER_TIMEOUT_S", 30.0)
+#: Timeout in seconds for the verifier LLM call. Kept well below the chat stream's own
+#: timeout (#21844): the verifier runs on its own small model (``AUTOBOT_VERIFIER_MODEL``),
+#: and a slow verifier must give up (fail-open, logged) rather than stall the turn.
+VERIFIER_TIMEOUT_S: float = env_registered("VERIFIER_TIMEOUT_S", positive_finite=True)
 
 
 # ---------------------------------------------------------------------------
 # Action class mapping (tool name -> threshold) — pure
 # ---------------------------------------------------------------------------
 
-_DEPLOY_TOOLS = frozenset({"deploy", "ansible", "docker", "kubectl", "helm", "terraform"})
-_MUTATE_TOOLS = frozenset(
-    {
-        "write_file",
-        "edit_file",
-        "delete_file",
-        "move_file",
-        "copy_file",
-        "create_directory",
-        "remove_directory",
-        "git_push",
-        "git_commit",
-        "git_merge",
-        "git_rebase",
-        "git_reset",
-        "git_force_push",
-    }
-)
-_NETWORK_TOOLS = frozenset({"http_post", "http_put", "http_patch", "http_delete", "send_request"})
-_EXEC_TOOLS = frozenset(
-    {"bash", "shell", "execute_command", "run_command", "terminal", "system_exec", "code_interpreter"}
-)
+# Risk classes are the catalogue's atoms (#18294) -- one declaration of which tools deploy,
+# mutate, reach the network or execute; this module keeps only the thresholds.
+_DEPLOY_TOOLS = frozenset(DEPLOY_TOOLS + CONTAINER_ORCH_TOOLS)
+_MUTATE_TOOLS = frozenset(FILE_WRITE_TOOLS + FILE_DELETE_TOOLS + GIT_PUSH_TOOLS + GIT_RESET_TOOLS)
+_NETWORK_TOOLS = frozenset(HTTP_WRITE_TOOLS)
+_EXEC_TOOLS = frozenset(SHELL_EXEC_TOOLS + TERMINAL_TOOLS + SYSTEM_EXEC_TOOLS + CODE_EXEC_TOOLS)
 
 
 def _threshold_for_tool(tool_name: str) -> float:
@@ -297,6 +302,9 @@ async def _select_verifier_provider(actor_provider: str | None) -> Any:
 # ---------------------------------------------------------------------------
 
 
+_verifier_model_for = configured_verifier_model  # the sync, config-only half; the call resolves availability
+
+
 async def _call_verifier_once(
     tool_name: str,
     args: dict[str, Any],
@@ -310,38 +318,43 @@ async def _call_verifier_once(
     switches it -- but the caller now resolves it through policy instead of
     comparing ``0.0`` to a threshold, and the result says which happened.
     """
-    from llm_shared.models import LLMRequest
-
     provider = await _select_verifier_provider(actor_provider)
     if provider is None:
         logger.warning("pre_action_verifier: no provider available — degraded (no_provider)")
         return VerifierObservation.failed(VerifierDegradation.NO_PROVIDER, "No verifier provider available.")
 
     system_prompt, user_prompt = _build_verifier_prompt(tool_name, args, reason)
-    request = LLMRequest(
-        messages=[
-            {"role": CategoryDefaults.ROLE_SYSTEM, "content": system_prompt},
-            {"role": CategoryDefaults.ROLE_USER, "content": user_prompt},
-        ],
-        max_tokens=VERIFIER_MAX_TOKENS,
-        temperature=0.1,  # Low temperature for adversarial consistency
-        metadata={"purpose": "pre_action_verifier", "tool": tool_name},
-    )
+    attempt: dict[str, Any] = {}
     try:
         import asyncio as _asyncio
 
-        response = await _asyncio.wait_for(
-            provider.chat_completion(request),
+        # One deadline covers the model lookup (a cache miss lists models over the network) and the chat call.
+        _request, response = await _asyncio.wait_for(
+            resolve_and_chat(provider, system_prompt, user_prompt, tool_name, VERIFIER_MAX_TOKENS, attempt),
             timeout=VERIFIER_TIMEOUT_S,
         )
     except Exception as exc:
+        if "response" in attempt:  # the deadline hit during accounting: the reply is complete, so it decides (#21844)
+            return VerifierObservation.from_reply(
+                attempt["response"].content or "",
+                provider_used=provider.provider_name,
+                model_used=getattr(attempt["response"], "model", None),
+            )
+        observation = replace(
+            failure_observation(exc),
+            provider_used=provider.provider_name,
+            model_used=(
+                attempt["model"] if "model" in attempt else configured_verifier_model(provider)
+            ),  # None = default
+        )
         logger.warning(
-            "pre_action_verifier: LLM call failed (%s: %r) — degraded (call_failed), fail_closed=%s",
+            "pre_action_verifier: LLM call failed (%s: %r) — degraded (%s), fail_closed=%s",
             type(exc).__name__,
             exc,
-            degraded_response_blocks(VerifierDegradation.CALL_FAILED),
+            observation.degradation.value,
+            degraded_response_blocks(observation.degradation),
         )
-        return VerifierObservation.failed(VerifierDegradation.CALL_FAILED, f"Verifier LLM error: {exc!r}")
+        return observation
 
     return VerifierObservation.from_reply(
         response.content or "",

@@ -164,10 +164,9 @@ const logger = createLogger('ComponentName')
 
 No `console.*` or `print()` — pre-commit blocks these.
 
-Bare `logging.getLogger(__name__)` is the **exception, not the pattern**: it is permitted
-only where a config-mocking test harness cannot tolerate the manager's import-time config
-read (see `autobot_shared/user_management/password_epoch.py`). New backend code uses
-`get_logger`.
+Backend code uses `get_logger`. A config-mocking test harness is not a reason for a bare
+`logging.getLogger(__name__)`: `get_logger` validates every config value it reads and falls
+back to its defaults (#19288).
 
 > Violation: Hardcoding a value that belongs in SSOT config, or writing a private helper that duplicates a public one.
 
@@ -357,7 +356,7 @@ $ <same grep>
 
 **Rule of thumb:** Match the pattern body (e.g. `key === 'Tab'` and `shiftKey &&` for focus-trap code), cast wider than the issue's enumeration, and run **twice** — once loose, once tight — to catch the delta.
 
-Full Phase 0d specification and concrete examples: the `batch-implement` skill, Phase 0d.
+Full Phase 0d specification and concrete examples: `/autobot-dev-skills:lifecycle batch-implement`, Phase 0d.
 
 > Violation: Filing a follow-up issue #5410 for 2 dialogs that the original #5371 grep should have surfaced, because #5371 grepped for `handleKeydown` (symbol) instead of `key === 'Tab'` (behavior).
 
@@ -396,6 +395,10 @@ A self-hosted Confluence/GitLab/Nextcloud instance legitimately lives on an RFC-
 2. Config-store-time validation is still the goal (**#13625 item 3, not yet built**). Today the check is per-request, which costs a DNS lookup per call and does not close the rebind race between the check and the connect — `pinned_connector` is what closes that, and it does not yet thread the private-network opt-in. Do not read this rule as claiming the race is handled.
 
 **When adding a connector:** if you are typing `aiohttp.ClientSession(` and the URL contains a value read from config, stop. And if you are calling `tracked_request` without `guard_egress`, that is the same mistake with fewer characters.
+
+**What enforces this rule, and what does not (#17576).** `knowledge/connectors/egress_policy_test.py` enumerates the connectors directory and fails any `tracked_request` call whose arguments carry no `guard_egress`, per call rather than per file, plus any bare `aiohttp.ClientSession` outside the one exception the #12992 ceiling records. It carries two floors so a glob matching nothing fails instead of passing.
+
+Its population is that **one directory**. Repo-wide, about fifty non-test modules call `tracked_request` and nothing classifies the rest — whether each needs a policy is open (#17576 AC4, blocked on a decision about service-to-service calls whose host comes from SSOT). So outside `knowledge/connectors/`, this rule is a rule and not a gate: breaking it there costs nothing automatic. Four connectors sat unguarded for as long as the guard's population was a hand-written list of five filenames.
 
 **`urljoin` does not pin a host.** `urljoin(base, path)` returns `https://evil.example.com/x` for a path of `//evil.example.com/x`, and the caller's credentials go with it. If a path segment can come from stored data or a server response, assert the result still starts with the base.
 

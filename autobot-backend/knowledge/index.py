@@ -159,6 +159,10 @@ class IndexMixin:
         if not self.initialized:
             return {"status": "error", "message": "Knowledge base not initialized"}
 
+        target_name = new_collection_name or "%s_optimized" % self.chromadb_collection
+        if target_name == self.chromadb_collection:  # the target is deleted first: never the live collection (#21383)
+            return {"status": "error", "message": "The target collection must not be the live collection"}
+
         try:
             from knowledge.backends import get_default_client as create_chromadb_client
 
@@ -177,26 +181,20 @@ class IndexMixin:
                     "old_count": 0,
                 }
 
-            target_name = new_collection_name or "%s_optimized" % self.chromadb_collection
             return await self._execute_index_migration(chroma_client, target_name, old_collection, old_count)
 
         except Exception as e:
             logger.error("ChromaDB index rebuild failed: %s", e)
             return {"status": "error", "message": "Index operation failed"}
 
-    def _build_index_info_result(self, chroma_path: Path, vector_count: int, metadata: Dict) -> Dict[str, Any]:
+    def _build_index_info_result(self, chroma_path: Path, vector_count: int, hnsw: Dict) -> Dict[str, Any]:
         """Build index info result dictionary (Issue #398: extracted)."""
         return {
             "status": "success",
             "collection_name": self.chromadb_collection,
             "vector_count": vector_count,
             "chromadb_path": str(chroma_path),
-            "hnsw_params": {
-                "space": metadata.get("hnsw:space", "unknown"),
-                "construction_ef": metadata.get("hnsw:construction_ef", "default"),
-                "search_ef": metadata.get("hnsw:search_ef", "default"),
-                "M": metadata.get("hnsw:M", "default"),
-            },
+            "hnsw_params": dict(hnsw),
             "configured_params": {
                 "space": self.hnsw_space,
                 "construction_ef": self.hnsw_construction_ef,
@@ -221,9 +219,9 @@ class IndexMixin:
             collection = await asyncio.to_thread(chroma_client.get_collection, name=self.chromadb_collection)
             vector_count = await asyncio.to_thread(collection.count)
 
-            # ChromaDBCollection wraps the raw collection; access metadata via ._raw
-            raw_col = getattr(collection, "_raw", collection)
-            return self._build_index_info_result(chroma_path, vector_count, getattr(raw_col, "metadata", None) or {})
+            from knowledge.backends.hnsw_params import hnsw_params
+
+            return self._build_index_info_result(chroma_path, vector_count, hnsw_params(collection))
 
         except Exception as e:
             logger.error("Failed to get ChromaDB index info: %s", e)

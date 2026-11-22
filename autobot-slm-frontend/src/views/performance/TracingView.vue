@@ -11,11 +11,11 @@
  * Issue #752 - Comprehensive performance monitoring.
  */
 
-import { ref, onMounted, watch } from 'vue'
-import { formatDuration } from '@/utils/formatHelpers'
-import { usePagination } from '@autobot/ui'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, usePagination, BasePagination, formatDuration } from '@autobot/ui'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import type {
   TraceItem,
   TraceDetail,
@@ -57,12 +57,14 @@ const expandedTraceId = ref<string | null>(null)
 const expandedDetail = ref<TraceDetail | null>(null)
 const detailLoading = ref(false)
 
-const timeRangeOptions = [
-  { label: '1h', value: '1' },
-  { label: '6h', value: '6' },
-  { label: '24h', value: '24' },
-  { label: '7d', value: '168' },
-]
+const { t } = useI18n()
+
+const timeRangeOptions = computed(() => [
+  { label: t('performance.tracingView.range.1h'), value: '1' },
+  { label: t('performance.tracingView.range.6h'), value: '6' },
+  { label: t('performance.tracingView.range.24h'), value: '24' },
+  { label: t('performance.tracingView.range.7d'), value: '168' },
+])
 
 const statusOptions = [
   { label: 'All', value: 'all' },
@@ -179,10 +181,10 @@ function spanWidthPercent(span: TraceSpan, totalMs: number): number {
  */
 function statusBadgeClass(status: string): string {
   switch (status) {
-    case 'ok': return 'bg-green-100 text-green-700'
-    case 'error': return 'bg-red-100 text-red-700'
-    case 'timeout': return 'bg-amber-100 text-amber-700'
-    default: return 'bg-gray-100 text-gray-700'
+    case 'ok': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
+    case 'error': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
+    case 'timeout': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
   }
 }
 
@@ -191,20 +193,16 @@ function statusBadgeClass(status: string): string {
  */
 function spanBarColor(status: string): string {
   switch (status) {
-    case 'ok': return 'bg-green-500'
-    case 'error': return 'bg-red-500'
-    case 'timeout': return 'bg-amber-500'
-    default: return 'bg-gray-400'
+    case 'ok': return 'bg-autobot-dot-ok'
+    case 'error': return 'bg-autobot-dot-bad'
+    case 'timeout': return 'bg-autobot-dot-warn'
+    default: return 'bg-autobot-dot-idle'
   }
 }
 
 /**
  * Format duration for display.
  */
-
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
 
 // Watch for filter changes that require immediate reload
 watch([timeRange, statusFilter], () => {
@@ -219,19 +217,14 @@ onMounted(() => {
 <template>
   <div class="p-6">
     <!-- Error Banner -->
-    <div
-      v-if="error"
-      class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
     <!-- Filter Bar -->
     <div class="flex flex-wrap items-center gap-3 mb-4">
       <!-- Time Range -->
       <div class="flex items-center gap-1">
-        <span class="text-sm text-gray-500">{{ $t('performance.tracingView.time') }}</span>
-        <div class="flex rounded-lg border border-gray-300 overflow-hidden">
+        <span class="text-sm text-autobot-text-tertiary">{{ $t('performance.tracingView.time') }}</span>
+        <div class="flex rounded-lg border border-autobot-border-strong overflow-hidden">
           <button
             v-for="opt in timeRangeOptions"
             :key="opt.value"
@@ -240,7 +233,7 @@ onMounted(() => {
               'px-3 py-1.5 text-xs font-medium transition-colors',
               timeRange === opt.value
                 ? 'bg-primary-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
+                : 'bg-white text-autobot-text-secondary hover:bg-autobot-bg-hover'
             ]"
           >
             {{ opt.label }}
@@ -250,10 +243,10 @@ onMounted(() => {
 
       <!-- Status Filter -->
       <div class="flex items-center gap-1">
-        <span class="text-sm text-gray-500">{{ $t('performance.tracingView.status') }}</span>
+        <span class="text-sm text-autobot-text-tertiary">{{ $t('performance.tracingView.status') }}</span>
         <select
           v-model="statusFilter"
-          class="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white"
+          class="text-sm border border-autobot-border-strong rounded-lg px-2 py-1.5 bg-white"
         >
           <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
             {{ opt.label }}
@@ -263,66 +256,66 @@ onMounted(() => {
 
       <!-- Node Filter -->
       <div class="flex items-center gap-1">
-        <span class="text-sm text-gray-500">{{ $t('performance.tracingView.node') }}</span>
+        <span class="text-sm text-autobot-text-tertiary">{{ $t('performance.tracingView.node') }}</span>
         <input
           v-model="nodeFilter"
           type="text"
           :placeholder="$t('performance.tracingView.nodeID')"
-          class="text-sm border border-gray-300 rounded-lg px-2 py-1.5 w-36"
+          class="text-sm border border-autobot-border-strong rounded-lg px-2 py-1.5 w-36"
           @keyup.enter="onFilterChange"
         />
       </div>
 
       <button
         @click="onFilterChange"
-        class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+        class="px-3 py-1.5 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover"
       >
         {{ $t('performance.tracingView.apply') }}
       </button>
 
       <div class="flex-1"></div>
 
-      <span class="text-sm text-gray-400">{{ $t('performance.tracingView.value0TracePlural', { value0: traceTotal.toLocaleString(), plural: traceTotal !== 1 ? 's' : '' }) }}</span>
+      <span class="text-sm text-autobot-text-tertiary">{{ $t('performance.tracingView.value0TracePlural', { value0: traceTotal.toLocaleString(), plural: traceTotal !== 1 ? 's' : '' }) }}</span>
     </div>
 
     <!-- Traces Table -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 mb-4">
-      <div v-if="traces.length === 0 && !loading" class="p-8 text-center text-gray-400">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border mb-4">
+      <div v-if="traces.length === 0 && !loading" class="p-8 text-center text-autobot-text-tertiary">
         {{ $t('performance.tracingView.noTracesFoundFor') }}
       </div>
       <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+        <table class="min-w-full divide-y divide-autobot-border">
+          <thead class="bg-autobot-bg-secondary">
             <tr>
               <th class="w-8 px-2 py-2"></th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">
                 {{ $t('performance.tracingView.name') }}
               </th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">
                 {{ $t('performance.tracingView.duration') }}
               </th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">
                 {{ $t('performance.tracingView.spans') }}
               </th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">
                 {{ $t('performance.tracingView.status1') }}
               </th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">
                 {{ $t('performance.tracingView.node1') }}
               </th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">
                 {{ $t('performance.tracingView.time1') }}
               </th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200">
+          <tbody class="divide-y divide-autobot-border">
             <template v-for="trace in traces" :key="trace.trace_id">
               <!-- Trace Row -->
               <tr
-                class="hover:bg-gray-50 cursor-pointer"
+                class="hover:bg-autobot-bg-hover cursor-pointer"
                 @click="toggleExpand(trace)"
               >
-                <td class="px-2 py-2 text-center text-gray-400">
+                <td class="px-2 py-2 text-center text-autobot-text-tertiary">
                   <svg
                     :class="[
                       'w-4 h-4 transition-transform',
@@ -340,13 +333,13 @@ onMounted(() => {
                     />
                   </svg>
                 </td>
-                <td class="px-4 py-2 text-sm text-gray-900 font-medium max-w-xs truncate">
+                <td class="px-4 py-2 text-sm text-autobot-text-primary font-medium max-w-xs truncate">
                   {{ trace.name }}
                 </td>
                 <td class="px-4 py-2 text-sm font-mono">
                   {{ formatDuration(trace.duration_ms, { style: 'msSeconds2dp' }) }}
                 </td>
-                <td class="px-4 py-2 text-sm text-gray-600">{{ trace.span_count }}</td>
+                <td class="px-4 py-2 text-sm text-autobot-text-secondary">{{ trace.span_count }}</td>
                 <td class="px-4 py-2">
                   <span
                     :class="[
@@ -357,41 +350,41 @@ onMounted(() => {
                     {{ trace.status }}
                   </span>
                 </td>
-                <td class="px-4 py-2 text-sm text-gray-500">
+                <td class="px-4 py-2 text-sm text-autobot-text-tertiary">
                   {{ trace.source_node_id ?? '-' }}
                 </td>
-                <td class="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">
-                  {{ formatDate(trace.created_at) }}
+                <td class="px-4 py-2 text-sm text-autobot-text-tertiary whitespace-nowrap">
+                  {{ formatFleetDateTime(trace.created_at) }}
                 </td>
               </tr>
 
               <!-- Expanded Span Waterfall -->
               <tr v-if="expandedTraceId === trace.trace_id">
-                <td colspan="7" class="px-4 py-4 bg-gray-50">
-                  <div v-if="detailLoading" class="text-center text-gray-400 py-4">
+                <td colspan="7" class="px-4 py-4 bg-autobot-bg-secondary">
+                  <div v-if="detailLoading" class="text-center text-autobot-text-tertiary py-4">
                     {{ $t('performance.tracingView.loadingSpanDetails') }}
                   </div>
                   <div v-else-if="expandedDetail" class="space-y-1">
-                    <div class="text-xs font-medium text-gray-500 mb-2">{{ $t('performance.tracingView.spanWaterfallCountSpanPlural', { count: expandedDetail.spans.length, plural: expandedDetail.spans.length !== 1 ? 's' : '' }) }}</div>
+                    <div class="text-xs font-medium text-autobot-text-tertiary mb-2">{{ $t('performance.tracingView.spanWaterfallCountSpanPlural', { count: expandedDetail.spans.length, plural: expandedDetail.spans.length !== 1 ? 's' : '' }) }}</div>
                     <div
                       v-for="span in buildSpanTree(expandedDetail.spans)"
                       :key="span.span_id"
                       class="flex items-center gap-2"
                       :style="{ paddingLeft: `${span.depth * 20}px` }"
                     >
-                      <span class="text-xs text-gray-500 w-32 truncate shrink-0">
+                      <span class="text-xs text-autobot-text-tertiary w-32 truncate shrink-0">
                         {{ span.service_name }}
                       </span>
-                      <span class="text-xs text-gray-700 w-40 truncate shrink-0">
+                      <span class="text-xs text-autobot-text-secondary w-40 truncate shrink-0">
                         {{ span.name }}
                       </span>
-                      <div class="flex-1 h-5 bg-gray-200 rounded-sm relative">
+                      <div class="flex-1 h-5 bg-autobot-bg-active rounded-sm relative">
                         <div
                           :class="['h-full rounded-sm', spanBarColor(span.status)]"
                           :style="{ width: `${spanWidthPercent(span, expandedDetail!.duration_ms)}%` }"
                         ></div>
                       </div>
-                      <span class="text-xs font-mono text-gray-600 w-16 text-right shrink-0">
+                      <span class="text-xs font-mono text-autobot-text-secondary w-16 text-right shrink-0">
                         {{ formatDuration(span.duration_ms, { style: 'msSeconds2dp' }) }}
                       </span>
                       <span
@@ -404,7 +397,7 @@ onMounted(() => {
                       </span>
                     </div>
                   </div>
-                  <div v-else class="text-center text-gray-400 py-4">
+                  <div v-else class="text-center text-autobot-text-tertiary py-4">
                     {{ $t('performance.tracingView.failedToLoadSpan') }}
                   </div>
                 </td>
@@ -416,30 +409,16 @@ onMounted(() => {
     </div>
 
     <!-- Pagination -->
-    <div v-if="totalPages > 1" class="flex items-center justify-between">
-      <span class="text-sm text-gray-500">{{ $t('performance.tracingView.pageValue0OfValue1', { value0: page, value1: totalPages }) }}</span>
-      <div class="flex items-center gap-1">
-        <button
-          @click="goToPage(1)"
-          :disabled="page === 1"
-          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >{{ $t('performance.tracingView.first') }}</button>
-        <button
-          @click="goToPage(page - 1)"
-          :disabled="page === 1"
-          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >{{ $t('performance.tracingView.prev') }}</button>
-        <button
-          @click="goToPage(page + 1)"
-          :disabled="page >= totalPages"
-          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >{{ $t('performance.tracingView.next') }}</button>
-        <button
-          @click="goToPage(totalPages)"
-          :disabled="page >= totalPages"
-          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >{{ $t('performance.tracingView.last') }}</button>
-      </div>
-    </div>
+    <BasePagination
+      v-if="totalPages > 1"
+      :page="page"
+      :total-pages="totalPages"
+      show-first-last
+      :labels="{ previous: $t('performance.tracingView.prev'), next: $t('performance.tracingView.next'), first: $t('performance.tracingView.first'), last: $t('performance.tracingView.last') }"
+      :label="$t('performance.tracingView.paginationAria')"
+      @update:page="goToPage"
+    >
+      <template #summary>{{ $t('performance.tracingView.pageValue0OfValue1', { value0: page, value1: totalPages }) }}</template>
+    </BasePagination>
   </div>
 </template>

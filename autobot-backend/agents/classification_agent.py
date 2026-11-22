@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 
 
 @dataclass
-class ClassificationResult:
+class TaskClassificationResult:
     """Result of classification analysis."""
 
     complexity: TaskComplexity
@@ -97,7 +97,7 @@ class ClassificationAgent(StandardizedAgent):
         user_message = request.payload.get("message", "")
         result = await self.classify_request(user_message)
 
-        # Convert ClassificationResult to dict for serialization
+        # Convert TaskClassificationResult to dict for serialization
         return {
             "complexity": result.complexity.value,
             "confidence": result.confidence,
@@ -213,7 +213,7 @@ workflow complexity."""
 {context_analysis}
 """
 
-    async def classify_request(self, user_message: str) -> ClassificationResult:
+    async def classify_request(self, user_message: str) -> TaskClassificationResult:
         """
         Intelligently classify a user request using LLM reasoning.
         Falls back to keyword-based classification if LLM fails.
@@ -297,7 +297,7 @@ workflow complexity."""
         llm_result: Dict[str, Any],
         keyword_result: TaskComplexity,
         user_message: str,
-    ) -> ClassificationResult:
+    ) -> TaskClassificationResult:
         """Combine LLM and keyword-based classifications intelligently."""
         if not llm_result:
             # LLM failed, use keyword result
@@ -333,9 +333,9 @@ workflow complexity."""
         complexity: TaskComplexity,
         confidence: float,
         keyword_result: TaskComplexity,
-    ) -> ClassificationResult:
-        """Build the ClassificationResult from LLM data. Issue #620."""
-        return ClassificationResult(
+    ) -> TaskClassificationResult:
+        """Build the TaskClassificationResult from LLM data. Issue #620."""
+        return TaskClassificationResult(
             complexity=complexity,
             confidence=confidence,
             reasoning=llm_result.get("reasoning", "LLM-based analysis"),
@@ -389,9 +389,9 @@ workflow complexity."""
 
         return agents or ["orchestrator"]  # Default to orchestrator
 
-    def _create_fallback_result(self, user_message: str, keyword_result: TaskComplexity) -> ClassificationResult:
+    def _create_fallback_result(self, user_message: str, keyword_result: TaskComplexity) -> TaskClassificationResult:
         """Create a fallback result using keyword classification."""
-        return ClassificationResult(
+        return TaskClassificationResult(
             complexity=keyword_result,
             confidence=0.5,  # Lower confidence for fallback
             reasoning=f"Keyword-based classification: {keyword_result.value}",
@@ -422,7 +422,7 @@ workflow complexity."""
             TaskComplexity.COMPLEX: 5,
         }.get(complexity, 1)
 
-    async def _log_classification(self, user_message: str, result: ClassificationResult):
+    async def _log_classification(self, user_message: str, result: TaskClassificationResult):
         """Log classification results for analysis and improvement."""
         try:
             log_data = {

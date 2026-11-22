@@ -50,7 +50,7 @@ yaml = pytest.importorskip("yaml")
 jinja2 = pytest.importorskip("jinja2")
 
 _SLM_ROOT = Path(__file__).resolve().parent.parent
-_FACTS_FILE = _SLM_ROOT / "ansible" / "playbooks" / "vars" / "role_active_facts.yml"
+_FACTS_FILE = _SLM_ROOT / "ansible" / "inventory" / "group_vars" / "all.yml"
 _PROVISION_PLAYBOOK = _SLM_ROOT / "ansible" / "playbooks" / "provision-fleet-roles.yml"
 
 # Facts the #9965 comment on inventory_builder._build_hostvars names as

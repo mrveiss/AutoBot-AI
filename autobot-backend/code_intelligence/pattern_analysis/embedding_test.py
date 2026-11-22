@@ -100,8 +100,8 @@ class TestGenerateEmbeddingUsesCanonicalHelper:
         ) as mocked:
             result = await analyzer._generate_embedding(code)
 
-        mocked.assert_awaited_once_with(code, model_name=pa.analyzer.EMBEDDING_MODEL)
-        assert pa.analyzer.EMBEDDING_MODEL == "nomic-embed-text"
+        mocked.assert_awaited_once_with(code, model_name="nomic-embed-text")
+        assert pa.analyzer.PATTERN_INDEX == "code_patterns"
         assert result == FAKE_EMBEDDING
 
     async def test_does_not_fall_through_to_hash_embedding_on_success(self, pa, analyzer):
@@ -137,8 +137,8 @@ class TestGenerateEmbeddingReusesCache:
         ):
             result = await analyzer._generate_embedding(code)
 
-        mock_get.assert_awaited_once_with(code, model=pa.analyzer.EMBEDDING_MODEL)
-        mock_put.assert_awaited_once_with(code, FAKE_EMBEDDING, model=pa.analyzer.EMBEDDING_MODEL)
+        mock_get.assert_awaited_once_with(code, model="nomic-embed-text/768")
+        mock_put.assert_awaited_once_with(code, FAKE_EMBEDDING, model="nomic-embed-text/768")
         assert result == FAKE_EMBEDDING
 
     async def test_cache_hit_skips_generation_call(self, pa, analyzer):
@@ -244,3 +244,30 @@ class TestCacheWriteFailureDoesNotDiscardTheEmbedding:
             result = await analyzer._generate_embedding(code)
 
         assert len(result) == 768
+
+
+class TestIndexBoundSpace18143:
+    """``code_patterns`` holds stored vectors: a changed active model must not move its query space."""
+
+    async def test_a_changed_active_model_does_not_move_the_query_space(self, pa, analyzer):
+        cache = analyzer._embedding_cache
+        with (
+            patch("autobot_shared.embedding_model.active_embedding_model", return_value="some-other-model"),
+            patch.object(cache, "get", new=AsyncMock(return_value=None)) as mock_get,
+            patch.object(cache, "put", new=AsyncMock()),
+            patch.object(
+                npu_client_module, "generate_embedding_with_fallback", new=AsyncMock(return_value=FAKE_EMBEDDING)
+            ) as gen,
+        ):
+            await analyzer._generate_embedding("def f(): pass")
+
+        gen.assert_awaited_once_with("def f(): pass", model_name="nomic-embed-text")
+        mock_get.assert_awaited_once_with("def f(): pass", model="nomic-embed-text/768")
+
+    def test_cache_key_carries_the_space_id(self, pa):
+        from knowledge.embedding_cache import EmbeddingCache
+        from knowledge.index_embedding_space import index_embedding_space
+
+        space = index_embedding_space(pa.analyzer.PATTERN_INDEX)
+        assert space.space_id == "nomic-embed-text/768"
+        assert EmbeddingCache.make_key(space.space_id, "x") != EmbeddingCache.make_key("some-other-model/768", "x")

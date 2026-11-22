@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from eval.report_live import live_fields, outcome_state, per_model, render_live_markdown
+
 # A candidate score this far *below* baseline counts as a regression; within
 # this band is treated as noise-equivalent (unchanged).
 DEFAULT_SCORE_EPSILON = 0.05
@@ -39,7 +41,7 @@ class TrajectoryOutcome:
     trajectory_id: str
     task_class: str
     baseline_score: float
-    candidate_score: float
+    candidate_score: float | None
     #: True/False are comparison results; None means the comparison never
     #: happened, because the candidate supplied no actual side for it. The
     #: third state is load-bearing: recording a not-compared field as True
@@ -49,9 +51,22 @@ class TrajectoryOutcome:
     candidate_tools: List[str] = field(default_factory=list)
     detail: str = ""
     #: The scorer could not produce a verdict (evaluator infrastructure failure,
-    #: `ReflectionVerdict.INDETERMINATE`). Its `candidate_score` is a
-    #: pass-through default, not a measurement of this trajectory.
+    #: `ReflectionVerdict.INDETERMINATE`). Its `candidate_score` is None: there is
+    #: no measurement of this trajectory, and the report says so (#21845).
     score_indeterminate: bool = False
+    #: Live-mode fields (#20843); None/empty for baseline and recorded replays, which leave them alone.
+    model: str | None = None
+    provider: str | None = None
+    failure_categories: List[str] = field(default_factory=list)
+    passed: bool | None = None
+    criteria_detail: str = ""
+    tokens: int | None = None
+    repeat: int = 0
+
+    @property
+    def is_live(self) -> bool:
+        """True when a live candidate produced (or failed to produce) this outcome."""
+        return self.model is not None or self.passed is not None
 
     def classify(self, epsilon: float = DEFAULT_SCORE_EPSILON) -> str:
         """Return 'regression', 'improvement', 'unchanged', or 'unmeasured'.
@@ -73,8 +88,10 @@ class TrajectoryOutcome:
         """
         if self.tools_ok is False or self.status_ok is False:
             return "regression"
-        if self.tools_ok is None or self.status_ok is None or self.score_indeterminate:
+        if self.tools_ok is None or self.status_ok is None or self.score_indeterminate or self.candidate_score is None:
             return "unmeasured"
+        if self.passed is not None:
+            return "unchanged" if self.passed else "regression"
         delta = self.candidate_score - self.baseline_score
         if delta < -epsilon:
             return "regression"
@@ -104,6 +121,8 @@ class RegressionReport:
 
     outcomes: List[TrajectoryOutcome]
     epsilon: float = DEFAULT_SCORE_EPSILON
+    #: The pins of a live run (model, provider, budgets, ...), stamped so two reports can be checked comparable.
+    run: Dict[str, Any] | None = None
 
     @property
     def has_regressions(self) -> bool:
@@ -140,6 +159,13 @@ class RegressionReport:
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the report for JSON output / CI artifacts."""
+        data = self._base_dict()
+        if self.run or any(o.is_live for o in self.outcomes):
+            data["run"] = self.run
+            data["per_model"] = per_model(self.outcomes)
+        return data
+
+    def _base_dict(self) -> Dict[str, Any]:
         return {
             "summary": {
                 "trajectories": len(self.outcomes),
@@ -157,20 +183,32 @@ class RegressionReport:
                 }
                 for name, d in self.per_class().items()
             },
-            "trajectories": [
-                {
-                    "trajectory_id": o.trajectory_id,
-                    "task_class": o.task_class,
-                    "verdict": o.classify(self.epsilon),
-                    "baseline_score": round(o.baseline_score, 3),
-                    "candidate_score": round(o.candidate_score, 3),
-                    "tools_ok": o.tools_ok,
-                    "status_ok": o.status_ok,
-                    "detail": o.detail,
-                }
-                for o in self.outcomes
-            ],
+            "trajectories": [self._trajectory_dict(o) for o in self.outcomes],
         }
+
+    def _trajectory_dict(self, o: TrajectoryOutcome) -> Dict[str, Any]:
+        return {
+            "trajectory_id": o.trajectory_id,
+            "task_class": o.task_class,
+            "verdict": o.classify(self.epsilon),
+            "baseline_score": round(o.baseline_score, 3),
+            "candidate_score": None if o.candidate_score is None else round(o.candidate_score, 3),
+            "tools_ok": o.tools_ok,
+            "status_ok": o.status_ok,
+            "detail": o.detail,
+            **live_fields(o),
+        }
+
+    def _outcome_line(self, outcome: TrajectoryOutcome) -> str:
+        """One bullet for *outcome*; a live outcome shows its pass/fail state and model, not score drift."""
+        detail = f" — {_md_escape(outcome.detail)}" if outcome.detail else ""
+        head = f"`{_md_escape(outcome.trajectory_id)}` ({_md_escape(outcome.task_class)})"
+        if outcome.is_live:
+            return f"- [{outcome_state(outcome).upper()}] {head} model={_md_escape(outcome.model)}{detail}"
+        verdict = outcome.classify(self.epsilon).upper()
+        candidate = "n/a" if outcome.candidate_score is None else f"{outcome.candidate_score:.2f}"
+        scores = f"baseline={outcome.baseline_score:.2f} candidate={candidate}"
+        return f"- [{verdict}] {head} {scores}{detail}"
 
     def render_markdown(self) -> str:
         """Render a human-readable pass/regress report."""
@@ -198,10 +236,6 @@ class RegressionReport:
             )
         lines.append("")
         for outcome in self.outcomes:
-            verdict = outcome.classify(self.epsilon).upper()
-            lines.append(
-                f"- [{verdict}] `{_md_escape(outcome.trajectory_id)}` ({_md_escape(outcome.task_class)}) "
-                f"baseline={outcome.baseline_score:.2f} candidate={outcome.candidate_score:.2f}"
-                + (f" — {_md_escape(outcome.detail)}" if outcome.detail else "")
-            )
+            lines.append(self._outcome_line(outcome))
+        lines.extend(render_live_markdown(self.run, self.outcomes))
         return "\n".join(lines)

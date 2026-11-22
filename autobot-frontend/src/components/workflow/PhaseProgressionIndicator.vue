@@ -28,14 +28,22 @@
         </button>
         <div v-if="phases.length > 0" class="overall-maturity">
           <span class="maturity-label">{{ $t('workflow.phaseProgression.systemMaturity') }}:</span>
-          <div class="maturity-bar" role="progressbar" :aria-valuenow="systemMaturity" aria-valuemin="0" aria-valuemax="100">
+          <div
+            class="maturity-bar"
+            role="progressbar"
+            :aria-valuenow="systemMaturity ?? undefined"
+            :aria-valuetext="systemMaturity === null ? $t('workflow.phaseProgression.noneScored') : undefined"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
             <div
+              v-if="systemMaturity !== null"
               class="maturity-fill"
               :style="{ width: `${systemMaturity}%` }"
               :class="getMaturityClass(systemMaturity)"
             ></div>
           </div>
-          <span class="maturity-percentage">{{ systemMaturity }}%</span>
+          <span class="maturity-percentage">{{ maturityLabel }}</span>
         </div>
       </div>
     </div>
@@ -81,11 +89,11 @@
           <div class="phase-info">
             <h3 class="phase-name">{{ phase.name }}</h3>
             <span class="phase-status" :class="getStatusClass(phase.status)">
-              {{ formatStatus(phase.status) }}
+              {{ phaseStatusLabel(phase) }}
             </span>
           </div>
           <div class="phase-completion">
-            {{ phase.completion_percentage }}%
+            {{ completionLabel(phase) }}
           </div>
         </div>
 
@@ -94,11 +102,13 @@
           <div
             class="progress-bar"
             role="progressbar"
-            :aria-valuenow="phase.completion_percentage"
+            :aria-valuenow="phase.completion_percentage ?? undefined"
+            :aria-valuetext="phase.completion_percentage === null ? $t('workflow.phaseProgression.notScored') : undefined"
             aria-valuemin="0"
             aria-valuemax="100"
           >
             <div
+              v-if="phase.completion_percentage !== null"
               class="progress-fill"
               :style="{ width: `${phase.completion_percentage}%` }"
               :class="getProgressClass(phase.completion_percentage)"
@@ -140,13 +150,22 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ApiClient } from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import {
+  averageScored,
+  deriveStatus,
+  formatStatus,
+  getMaturityClass,
+  getPhaseCardClass,
+  getProgressClass,
+  getStatusClass,
+} from './phaseScoring'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const logger = createLogger('PhaseProgressionIndicator')
 const api = new ApiClient()
 
@@ -154,7 +173,8 @@ const api = new ApiClient()
 
 interface PhaseEntry {
   name: string
-  completion_percentage: number
+  /** null = unscored (the API omits the field); never a measured 0 */
+  completion_percentage: number | null
   status: string
   description?: string
   capabilities_unlocked?: string[]
@@ -177,9 +197,26 @@ interface ValidationReport {
 // ── State ──────────────────────────────────────────────────────────────────
 
 const phases = ref<PhaseEntry[]>([])
-const systemMaturity = ref(0)
+const systemMaturity = ref<number | null>(null)
+const maturityLabel = computed(() =>
+  systemMaturity.value === null
+    ? t('workflow.phaseProgression.noneScored')
+    : `${systemMaturity.value}%`,
+)
 const loading = ref(false)
 const hasLoadError = ref(false)
+
+function completionLabel(phase: PhaseEntry): string {
+  return phase.completion_percentage === null
+    ? t('workflow.phaseProgression.notScored')
+    : `${phase.completion_percentage}%`
+}
+
+function phaseStatusLabel(phase: PhaseEntry): string {
+  if (phase.status === 'not_scored') return t('workflow.phaseProgression.notScored')
+  const key = `workflow.phaseProgression.status.${phase.status}`
+  return te(key) ? t(key) : formatStatus(phase.status)
+}
 
 // ── API ────────────────────────────────────────────────────────────────────
 
@@ -198,38 +235,28 @@ async function loadValidationData(): Promise<void> {
 
     if (data.status === 'success' && data.report) {
       const overview = data.report.system_overview
-      systemMaturity.value = overview?.overall_maturity ?? 0
+      systemMaturity.value = overview?.overall_maturity ?? null
 
       type PhaseDetail = NonNullable<NonNullable<typeof data.report>['phase_details']>[number]
       phases.value = (data.report.phase_details ?? []).map((p: PhaseDetail) => ({
         name: p.display_name ?? p.name ?? t('workflow.phaseProgression.unknownPhase'),
-        completion_percentage: p.completion_percentage ?? 0,
-        status:
-          (p.completion_percentage ?? 0) >= 95
-            ? 'complete'
-            : (p.completion_percentage ?? 0) >= 75
-              ? 'mostly_complete'
-              : (p.completion_percentage ?? 0) >= 50
-                ? 'in_progress'
-                : 'incomplete',
+        completion_percentage: p.completion_percentage ?? null,
+        status: deriveStatus(p.completion_percentage ?? null),
         description: p.description,
         capabilities_unlocked: [],
       }))
 
-      if (phases.value.length > 0) {
-        const total = phases.value.reduce((sum, p) => sum + p.completion_percentage, 0)
-        systemMaturity.value = Math.round(total / phases.value.length)
-      }
+      systemMaturity.value = averageScored(phases.value)
     } else {
       phases.value = []
-      systemMaturity.value = 0
+      systemMaturity.value = null
       hasLoadError.value = true
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     logger.error('Failed to load validation report:', message)
     phases.value = []
-    systemMaturity.value = 0
+    systemMaturity.value = null
     hasLoadError.value = true
   } finally {
     loading.value = false
@@ -263,49 +290,6 @@ function getPhaseIcon(name: string): IconName {
   return 'cog'
 }
 
-function getPhaseCardClass(phase: PhaseEntry): string[] {
-  return [
-    'phase-card-status',
-    phase.status === 'complete'
-      ? 'phase-complete'
-      : phase.status === 'mostly_complete'
-        ? 'phase-mostly-complete'
-        : phase.status === 'in_progress'
-          ? 'phase-in-progress'
-          : 'phase-incomplete',
-  ]
-}
-
-function getStatusClass(status: string): string {
-  const map: Record<string, string> = {
-    complete: 'status-complete',
-    mostly_complete: 'status-mostly-complete',
-    in_progress: 'status-in-progress',
-    incomplete: 'status-incomplete',
-    promoted: 'status-complete',
-    eligible: 'status-in-progress',
-    blocked: 'status-incomplete',
-  }
-  return map[status] ?? 'status-unknown'
-}
-
-function getProgressClass(pct: number): string {
-  if (pct >= 95) return 'progress-complete'
-  if (pct >= 75) return 'progress-mostly-complete'
-  if (pct >= 50) return 'progress-in-progress'
-  return 'progress-incomplete'
-}
-
-function getMaturityClass(maturity: number): string {
-  if (maturity >= 95) return 'maturity-production'
-  if (maturity >= 80) return 'maturity-beta'
-  if (maturity >= 50) return 'maturity-alpha'
-  return 'maturity-pre-alpha'
-}
-
-function formatStatus(status: string): string {
-  return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
 </script>
 
 <style scoped>
@@ -350,7 +334,7 @@ function formatStatus(status: string): string {
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
   background: var(--color-primary);
-  color: var(--color-primary-fg, #fff);
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -405,7 +389,7 @@ function formatStatus(status: string): string {
 
 /* Error state */
 .error-notice {
-  border: 1px solid var(--color-error-border, #f87171);
+  border: 1px solid var(--color-error-border);
   border-radius: var(--radius-md);
   background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
   padding: var(--spacing-5);
@@ -435,8 +419,8 @@ function formatStatus(status: string): string {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-error);
-  color: #fff;
+  background: var(--color-error-solid);
+  color: var(--text-on-error);
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -457,8 +441,8 @@ function formatStatus(status: string): string {
   gap: var(--spacing-3);
 }
 
-.no-data-content i {
-  font-size: var(--text-3xl);
+.no-data-content .icon {
+  width: var(--text-3xl); height: var(--text-3xl);
   color: var(--color-info);
 }
 
@@ -611,7 +595,7 @@ function formatStatus(status: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: var(--z-10);
 }
 
 .loading-spinner {
@@ -619,12 +603,12 @@ function formatStatus(status: string): string {
   flex-direction: column;
   align-items: center;
   gap: var(--spacing-3);
-  color: #fff;
+  color: var(--text-on-primary);
   font-size: var(--text-sm);
 }
 
-.loading-spinner i {
-  font-size: var(--text-3xl);
+.loading-spinner .icon {
+  width: var(--text-3xl); height: var(--text-3xl);
 }
 
 @media (max-width: 640px) {

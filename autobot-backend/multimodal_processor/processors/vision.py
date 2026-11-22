@@ -22,7 +22,7 @@ from config import get_config_section
 from llm_shared.torch_loader import lazy_torch
 
 from ..base import BaseModalProcessor
-from ..models import MultiModalInput, ProcessingResult
+from ..models import MultiModalInput, MultimodalResult
 from ..types import ModalityType
 
 if TYPE_CHECKING:
@@ -176,20 +176,20 @@ class VisionProcessor(BaseModalProcessor):
         except Exception as e:
             self.logger.debug("GPU cleanup skipped: %s", e)
 
-    async def process(self, input_data: MultiModalInput) -> ProcessingResult:
+    async def process(self, input_data: MultiModalInput) -> MultimodalResult:
         """Process visual input (images, screenshots, video).
 
         #6755 LSP exception contract: parent ``BaseModalProcessor.process``
         only declares ``NotImplementedError``; subclasses must NOT raise
         arbitrary exceptions to callers. Unsupported modality is now
-        returned as a failure ``ProcessingResult`` (the same shape the
+        returned as a failure ``MultimodalResult`` (the same shape the
         outer ``except`` clause already produces), which keeps the
         return-type contract intact and matches the #6658 fix pattern.
         """
         start_time = time.time()
 
         if input_data.modality_type not in (ModalityType.IMAGE, ModalityType.VIDEO):
-            return ProcessingResult(
+            return MultimodalResult(
                 result_id=f"vision_{input_data.input_id}",
                 input_id=input_data.input_id,
                 modality_type=input_data.modality_type,
@@ -210,7 +210,7 @@ class VisionProcessor(BaseModalProcessor):
             processing_time = time.time() - start_time
             confidence = self.calculate_confidence(result)
 
-            return ProcessingResult(
+            return MultimodalResult(
                 result_id=f"vision_{input_data.input_id}",
                 input_id=input_data.input_id,
                 modality_type=input_data.modality_type,
@@ -225,7 +225,7 @@ class VisionProcessor(BaseModalProcessor):
             processing_time = time.time() - start_time
             self.logger.error("Vision processing failed: %s", e)
 
-            return ProcessingResult(
+            return MultimodalResult(
                 result_id=f"vision_{input_data.input_id}",
                 input_id=input_data.input_id,
                 modality_type=input_data.modality_type,
