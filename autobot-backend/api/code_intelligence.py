@@ -24,6 +24,8 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.code_intelligence_paths import validate_path_exists, validate_path_is_directory
+from api.codebase_analytics.endpoints.shared import require_source_access, resolve_scan_root
 from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.schemas_code import (
     CachedSecurityScoreResponse,
@@ -64,6 +66,7 @@ from api.schemas_code import (
     SuggestionsResponse,
 )
 from api.schemas_common import DataResponse
+from api.source_scope import SourceIdQuery
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -93,7 +96,7 @@ from utils.celery_task_status import celery_result_to_status, get_latest_task_re
 logger = get_logger(__name__)
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_source_access)])
 
 _REDIS_PREFIX = "sec_task:"
 
@@ -479,42 +482,6 @@ def _filter_results_by_severity(results: list, min_severity: str | None) -> list
 # =============================================================================
 
 
-async def _validate_path_exists(path: str) -> None:
-    """
-    Validate that a path exists on the filesystem.
-
-    Raises HTTPException with 400 status if path does not exist.
-    Issue #620.
-
-    Args:
-        path: Filesystem path to validate
-
-    Raises:
-        HTTPException: If path does not exist
-    """
-    path_exists = await asyncio.to_thread(os.path.exists, path)
-    if not path_exists:
-        raise_invalid_input("path", f"does not exist: {path}")
-
-
-async def _validate_path_is_directory(path: str) -> None:
-    """
-    Validate that a path is a directory.
-
-    Raises HTTPException with 400 status if path is not a directory.
-    Issue #620.
-
-    Args:
-        path: Filesystem path to validate
-
-    Raises:
-        HTTPException: If path is not a directory
-    """
-    is_dir = await asyncio.to_thread(os.path.isdir, path)
-    if not is_dir:
-        raise_invalid_input("path", f"not a directory: {path}")
-
-
 def _filter_antipatterns_by_severity(
     anti_patterns: list,
     min_severity: str | None,
@@ -699,8 +666,8 @@ async def analyze_code_anti_patterns(
     # Directory-based analysis (original behavior)
     if not request.path:
         raise_invalid_input("path", "either 'path' or 'code' must be provided")
-    await _validate_path_exists(request.path)
-    await _validate_path_is_directory(request.path)
+    await validate_path_exists(request.path)
+    await validate_path_is_directory(request.path)
 
     try:
         # #12771: analyze_directory and exclude_dirs are the suite analyzer's, not the canonical detector's.
@@ -976,7 +943,7 @@ async def analyze_redis_usage_endpoint(
 
     Part of Issue #220 - Redis Operation Optimizer
     """
-    await _validate_path_exists(request.path)
+    await validate_path_exists(request.path)
 
     try:
         results = await _run_redis_analysis(
@@ -1414,7 +1381,7 @@ async def get_security_report(
     all findings with remediation advice, OWASP Top 10 mapping, and
     top recommendations.
     """
-    await _validate_path_exists(path)
+    await validate_path_exists(path)
 
     try:
         analyzer = SecurityAnalyzer(project_root=path)
@@ -1665,7 +1632,7 @@ async def get_performance_report(
     score and grade, all findings with optimization recommendations,
     complexity analysis, and top recommendations.
     """
-    await _validate_path_exists(path)
+    await validate_path_exists(path)
 
     try:
         analyzer = PerformanceAnalyzer(project_root=path)
@@ -1689,7 +1656,7 @@ from code_intelligence.code_evolution_miner import CodeEvolutionMiner
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def analyze_code_evolution(
-    path: str = Query(..., description="Repository path to analyze"),
+    source_id: SourceIdQuery,
     start_date: str | None = Query(None, description="Start date (ISO format)"),
     end_date: str | None = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1704,14 +1671,14 @@ async def analyze_code_evolution(
     and refactoring events. Returns comprehensive evolution report.
 
     Args:
-        path: Repository path to analyze
+        source_id: The code source whose checkout is analyzed
         start_date: Optional start date for analysis period (ISO format)
         end_date: Optional end date for analysis period (ISO format)
 
     Returns:
         Evolution report with emerging/declining patterns and refactorings
     """
-    await _validate_path_exists(path)
+    path = str(await resolve_scan_root(source_id))  # the selected source's checkout (#20513)
 
     try:
         # Parse dates if provided
@@ -1745,7 +1712,7 @@ async def analyze_code_evolution(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_pattern_evolution(
-    path: str = Query(..., description="Repository path to analyze"),
+    source_id: SourceIdQuery,
     pattern_type: str | None = Query(None, description="Filter by pattern type"),
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1759,13 +1726,13 @@ async def get_pattern_evolution(
     adoption rates, trends (emerging/stable/declining), and first/last seen dates.
 
     Args:
-        path: Repository path to analyze
+        source_id: The code source whose checkout is analyzed
         pattern_type: Optional filter for specific pattern type
 
     Returns:
         Pattern evolution metrics
     """
-    await _validate_path_exists(path)
+    path = str(await resolve_scan_root(source_id))  # the selected source's checkout (#20513)
 
     try:
         miner = CodeEvolutionMiner(path)
@@ -1784,7 +1751,7 @@ async def get_pattern_evolution(
             content={
                 "status": "success",
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                "path": path,
+                "source_id": source_id,
                 "pattern_metrics": metrics,
             },
         )
@@ -1801,7 +1768,7 @@ async def get_pattern_evolution(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def detect_refactorings(
-    path: str = Query(..., description="Repository path to analyze"),
+    source_id: SourceIdQuery,
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results to return"),
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1815,13 +1782,13 @@ async def detect_refactorings(
     messages and file change patterns.
 
     Args:
-        path: Repository path to analyze
+        source_id: The code source whose checkout is analyzed
         limit: Maximum number of refactorings to return
 
     Returns:
         List of detected refactoring commits
     """
-    await _validate_path_exists(path)
+    path = str(await resolve_scan_root(source_id))  # the selected source's checkout (#20513)
 
     try:
         miner = CodeEvolutionMiner(path)
@@ -1835,7 +1802,7 @@ async def detect_refactorings(
             content={
                 "status": "success",
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                "path": path,
+                "source_id": source_id,
                 "refactorings": refactorings,
                 "total": len(refactorings),
             },
@@ -1853,7 +1820,7 @@ async def detect_refactorings(
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_evolution_timeline(
-    path: str = Query(..., description="Repository path to analyze"),
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -1866,12 +1833,12 @@ async def get_evolution_timeline(
     visualization in charts/graphs.
 
     Args:
-        path: Repository path to analyze
+        source_id: The code source whose checkout is analyzed
 
     Returns:
         Timeline data with monthly pattern counts
     """
-    await _validate_path_exists(path)
+    path = str(await resolve_scan_root(source_id))  # the selected source's checkout (#20513)
 
     try:
         miner = CodeEvolutionMiner(path)
@@ -1886,7 +1853,7 @@ async def get_evolution_timeline(
             content={
                 "status": "success",
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                "path": path,
+                "source_id": source_id,
                 "timeline": timeline_data["timeline"],
             },
         )
@@ -1921,7 +1888,7 @@ def _build_evolution_summary(evolution_report: dict) -> dict:
     error_code_prefix="CODE_INTELLIGENCE",
 )
 async def get_full_evolution_report(
-    path: str = Query(..., description="Repository path to analyze"),
+    source_id: SourceIdQuery,
     start_date: str | None = Query(None, description="Start date (ISO format)"),
     end_date: str | None = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
@@ -1936,14 +1903,14 @@ async def get_full_evolution_report(
     into a single comprehensive report.
 
     Args:
-        path: Repository path to analyze
+        source_id: The code source whose checkout is analyzed
         start_date: Optional start date for analysis period
         end_date: Optional end date for analysis period
 
     Returns:
         Comprehensive evolution report
     """
-    await _validate_path_exists(path)
+    path = str(await resolve_scan_root(source_id))  # the selected source's checkout (#20513)
 
     try:
         # Parse dates if provided
@@ -1962,7 +1929,7 @@ async def get_full_evolution_report(
             content={
                 "status": "success",
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                "path": path,
+                "source_id": source_id,
                 "evolution": evolution_report,
                 "pattern_metrics": pattern_metrics,
                 "timeline": timeline_data["timeline"],

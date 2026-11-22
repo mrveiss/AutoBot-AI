@@ -40242,7 +40242,7 @@ export interface paths {
          *     and refactoring events. Returns comprehensive evolution report.
          *
          *     Args:
-         *         path: Repository path to analyze
+         *         source_id: The code source whose checkout is analyzed
          *         start_date: Optional start date for analysis period (ISO format)
          *         end_date: Optional end date for analysis period (ISO format)
          *
@@ -40274,7 +40274,7 @@ export interface paths {
          *     adoption rates, trends (emerging/stable/declining), and first/last seen dates.
          *
          *     Args:
-         *         path: Repository path to analyze
+         *         source_id: The code source whose checkout is analyzed
          *         pattern_type: Optional filter for specific pattern type
          *
          *     Returns:
@@ -40307,7 +40307,7 @@ export interface paths {
          *     messages and file change patterns.
          *
          *     Args:
-         *         path: Repository path to analyze
+         *         source_id: The code source whose checkout is analyzed
          *         limit: Maximum number of refactorings to return
          *
          *     Returns:
@@ -40340,7 +40340,7 @@ export interface paths {
          *     visualization in charts/graphs.
          *
          *     Args:
-         *         path: Repository path to analyze
+         *         source_id: The code source whose checkout is analyzed
          *
          *     Returns:
          *         Timeline data with monthly pattern counts
@@ -40372,7 +40372,7 @@ export interface paths {
          *     into a single comprehensive report.
          *
          *     Args:
-         *         path: Repository path to analyze
+         *         source_id: The code source whose checkout is analyzed
          *         start_date: Optional start date for analysis period
          *         end_date: Optional end date for analysis period
          *
@@ -77156,8 +77156,8 @@ export interface components {
             status: string;
             /** Timestamp */
             timestamp: string;
-            /** Path */
-            path: string;
+            /** Source Id */
+            source_id: string;
             /** Pattern Metrics */
             pattern_metrics: {
                 [key: string]: unknown;
@@ -77228,8 +77228,8 @@ export interface components {
             status: string;
             /** Timestamp */
             timestamp: string;
-            /** Path */
-            path: string;
+            /** Source Id */
+            source_id: string;
             /** Refactorings */
             refactorings: unknown[];
             /** Total */
@@ -77246,8 +77246,8 @@ export interface components {
             status: string;
             /** Timestamp */
             timestamp: string;
-            /** Path */
-            path: string;
+            /** Source Id */
+            source_id: string;
             /** Evolution */
             evolution: {
                 [key: string]: unknown;
@@ -77274,8 +77274,8 @@ export interface components {
             status: string;
             /** Timestamp */
             timestamp: string;
-            /** Path */
-            path: string;
+            /** Source Id */
+            source_id: string;
             /** Timeline */
             timeline: unknown[];
         } & {
@@ -163091,8 +163091,8 @@ export interface operations {
     analyze_code_evolution_api_code_intelligence_evolution_analyze_post: {
         parameters: {
             query: {
-                /** @description Repository path to analyze */
-                path: string;
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Start date (ISO format) */
                 start_date?: string | null;
                 /** @description End date (ISO format) */
@@ -163127,8 +163127,8 @@ export interface operations {
     get_pattern_evolution_api_code_intelligence_evolution_patterns_get: {
         parameters: {
             query: {
-                /** @description Repository path to analyze */
-                path: string;
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Filter by pattern type */
                 pattern_type?: string | null;
             };
@@ -163161,8 +163161,8 @@ export interface operations {
     detect_refactorings_api_code_intelligence_evolution_refactorings_get: {
         parameters: {
             query: {
-                /** @description Repository path to analyze */
-                path: string;
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Maximum results to return */
                 limit?: number;
             };
@@ -163195,8 +163195,8 @@ export interface operations {
     get_evolution_timeline_api_code_intelligence_evolution_timeline_get: {
         parameters: {
             query: {
-                /** @description Repository path to analyze */
-                path: string;
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -163227,8 +163227,8 @@ export interface operations {
     get_full_evolution_report_api_code_intelligence_evolution_report_get: {
         parameters: {
             query: {
-                /** @description Repository path to analyze */
-                path: string;
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Start date (ISO format) */
                 start_date?: string | null;
                 /** @description End date (ISO format) */

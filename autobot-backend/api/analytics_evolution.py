@@ -1119,8 +1119,10 @@ async def _evolution_repo_path(source_id: str):
 
     Returns (repo_path, error_response); error_response is None when the checkout is a git repository.
     """
-    repo_path = await resolve_scan_root(source_id)
-    if not (repo_path / ".git").exists():
+    repo_path = (await resolve_scan_root(source_id)).resolve()
+    git_dir = repo_path / ".git"
+    # The real path, and a repository of its own: a `.git` that is a link could point the miner at another tree.
+    if git_dir.is_symlink() or not git_dir.is_dir():
         return None, EvolutionAnalysisResponse(status="error", message="The source checkout is not a git repository")
     return repo_path, None
 

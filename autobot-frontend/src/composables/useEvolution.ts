@@ -98,16 +98,24 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
    * Accepts a plain string or ComputedRef so callers pass a reactive route
    * param without freezing the value at setup time.
    */
+  function currentSourceId(): string | undefined {
+    return isRef(sourceId) ? sourceId.value : sourceId
+  }
+
   function withSourceId(params: Record<string, string> = {}): Record<string, string> {
-    const id = isRef(sourceId) ? sourceId.value : sourceId
+    const id = currentSourceId()
     if (!id) return params
     return { ...params, source_id: id }
   }
+
+  /** #20513: every evolution route requires a source; with none selected no request is made. */
+  const hasSource = (): boolean => !!currentSourceId()
 
   /**
    * Trigger code evolution analysis
    */
   async function analyzeEvolution(request: EvolutionAnalysisRequest): Promise<boolean> {
+    if (!hasSource()) return false
     error.value = null
     try {
       const data = await wrap(() =>
@@ -142,6 +150,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
     granularity: string = 'daily',
     metrics: string = 'overall_score,complexity,maintainability'
   ): Promise<void> {
+    if (!hasSource()) return
     error.value = null
     try {
       const params: Record<string, string> = { granularity, metrics }
@@ -176,6 +185,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
     start_date?: string,
     end_date?: string
   ): Promise<void> {
+    if (!hasSource()) return
     error.value = null
     try {
       const params: Record<string, string> = {}
@@ -207,6 +217,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
    * Fetch quality trend analysis (Issue #247)
    */
   async function fetchTrends(days: number = 30): Promise<void> {
+    if (!hasSource()) return
     try {
       // Issue #3436: scope to project when sourceId is provided
       const qs = new URLSearchParams(withSourceId({ days: String(days) })).toString()
@@ -226,6 +237,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
    * Fetch evolution summary stats (Issue #247)
    */
   async function fetchSummary(): Promise<void> {
+    if (!hasSource()) return
     try {
       // Issue #3436: scope to project when sourceId is provided
       const params = withSourceId()
@@ -249,6 +261,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
     start_date?: string,
     end_date?: string
   ): Promise<void> {
+    if (!hasSource()) return
     try {
       const params: Record<string, string> = { format }
       if (start_date) params.start_date = start_date

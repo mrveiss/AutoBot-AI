@@ -64,6 +64,31 @@ class _FakeRedis:
     def zrangebyscore(self, key, low, high):
         return [k for k, score in self.zsets.get(key, {}).items() if low <= score <= high]
 
+    def get(self, key):
+        return self.values.get(key)
+
+    def zcard(self, key):
+        return len(self.zsets.get(key, {}))
+
+    def zrange(self, key, start, stop):
+        ordered = sorted(self.zsets.get(key, {}), key=self.zsets.get(key, {}).get)
+        return ordered[start : (None if stop == -1 else stop + 1)]
+
+    def pipeline(self):
+        fake = self
+
+        class _Pipe:
+            def __init__(self):
+                self.keys = []
+
+            def get(self, key):
+                self.keys.append(key)
+
+            def execute(self):
+                return [fake.values.get(k) for k in self.keys]
+
+        return _Pipe()
+
 
 @pytest.mark.asyncio
 async def test_a_snapshot_stored_for_source_a_is_not_in_source_b():
@@ -79,7 +104,7 @@ async def test_a_snapshot_stored_for_source_a_is_not_in_source_b():
     assert all(key.startswith(a_prefix) for key in [*fake.values, *fake.zsets])
 
 
-def _client():
+def _client(real_access: bool = False):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -88,7 +113,8 @@ def _client():
     app = FastAPI()
     app.include_router(mod.router)
     app.dependency_overrides[check_admin_permission] = lambda: True
-    app.dependency_overrides[shared.require_source_access] = lambda: None
+    if not real_access:
+        app.dependency_overrides[shared.require_source_access] = lambda: None
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -121,10 +147,84 @@ def test_analyze_mines_the_sources_checkout_and_nothing_else(tmp_path):
     ):
         response = _client().post("/analyze", params={"source_id": "src-1"}, json={})
     assert response.status_code == 200
-    miner.assert_called_once_with(str(clone))
+    miner.assert_called_once_with(str(clone.resolve()))
 
 
 def test_analyze_refuses_a_checkout_that_is_not_a_git_repository(tmp_path):
     with patch.object(shared, "resolve_source_root", AsyncMock(return_value=tmp_path)):
+        body = _client().post("/analyze", params={"source_id": "src-1"}, json={}).json()
+    assert body["status"] == "error"
+
+
+# --- review (#22089): isolation through the routes, and access enforcement that is not stubbed ---------
+
+
+def _snapshot(ts="2026-01-01T00:00:00+00:00"):
+    return {**_SNAPSHOT, "timestamp": ts}
+
+
+def test_source_a_writes_and_source_b_reads_nothing_through_the_routes(tmp_path):
+    fake = _FakeRedis()
+    with (
+        patch.object(shared, "resolve_source_root", AsyncMock(return_value=tmp_path)),
+        patch.object(mod, "get_evolution_redis", return_value=fake),
+    ):
+        client = _client()
+        assert client.post("/snapshot", params={"source_id": "a"}, json=_snapshot()).status_code == 200
+        assert client.get("/summary", params={"source_id": "a"}).json()["summary"]["total_snapshots"] == 1
+        assert client.get("/summary", params={"source_id": "b"}).json()["summary"]["total_snapshots"] == 0
+        assert client.get("/export", params={"source_id": "a"}).json()["status"] != "no_data"
+        assert client.get("/export", params={"source_id": "b"}).json()["status"] == "no_data"
+
+
+def _private_source():
+    from api.codebase_analytics.source_models import CodeSource, SourceAccess
+
+    return CodeSource(name="proj", clone_path="/tmp/proj", owner_id="alice", access=SourceAccess.PRIVATE)
+
+
+_READS = ("timeline", "patterns", "trends", "summary", "export")
+
+
+@pytest.mark.parametrize("route", _READS)
+def test_a_foreign_private_source_is_a_404_with_access_enforcement_left_real(route, tmp_path):
+    with (
+        patch("auth_middleware.get_current_user", AsyncMock(return_value={"id": "mallory"})),
+        patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=_private_source())),
+        patch.object(shared, "resolve_source_root", AsyncMock(return_value=tmp_path)),
+        patch.object(mod, "get_evolution_redis", return_value=None),
+    ):
+        response = _client(real_access=True).get(f"/{route}", params={"source_id": "x"})
+    assert response.status_code == 404
+
+
+def test_the_same_requests_succeed_for_the_owner(tmp_path):
+    with (
+        patch("auth_middleware.get_current_user", AsyncMock(return_value={"id": "alice"})),
+        patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=_private_source())),
+        patch.object(shared, "resolve_source_root", AsyncMock(return_value=tmp_path)),
+        patch.object(mod, "get_evolution_redis", return_value=None),
+    ):
+        client = _client(real_access=True)
+        assert client.get("/summary", params={"source_id": "x"}).status_code == 200
+
+
+def test_a_foreign_source_cannot_be_written_or_mined_either(tmp_path):
+    with (
+        patch("auth_middleware.get_current_user", AsyncMock(return_value={"id": "mallory"})),
+        patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=_private_source())),
+        patch.object(shared, "resolve_source_root", AsyncMock(return_value=tmp_path)),
+    ):
+        client = _client(real_access=True)
+        assert client.post("/snapshot", params={"source_id": "x"}, json=_snapshot()).status_code == 404
+        assert client.post("/analyze", params={"source_id": "x"}, json={}).status_code == 404
+
+
+def test_a_git_directory_that_is_a_link_is_refused(tmp_path):
+    clone, elsewhere = tmp_path / "clone", tmp_path / "elsewhere"
+    (elsewhere / ".git").mkdir(parents=True)
+    clone.mkdir()
+    (clone / ".git").symlink_to(elsewhere / ".git", target_is_directory=True)
+    with patch.object(shared, "resolve_source_root", AsyncMock(return_value=clone)):
         body = _client().post("/analyze", params={"source_id": "src-1"}, json={}).json()
     assert body["status"] == "error"
