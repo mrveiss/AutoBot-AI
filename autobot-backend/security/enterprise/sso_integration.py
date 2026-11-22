@@ -58,7 +58,7 @@ class AuthenticationStatus(Enum):
 
 
 @dataclass
-class SSOProvider:
+class SSOProviderConfig:
     """SSO provider configuration"""
 
     provider_id: str
@@ -106,7 +106,7 @@ class SSOIntegrationFramework:
         self.providers_path.mkdir(parents=True, exist_ok=True)
 
         # Active providers and sessions
-        self.providers: Dict[str, SSOProvider] = {}
+        self.providers: Dict[str, SSOProviderConfig] = {}
         self.active_sessions: Dict[str, SSOSession] = {}
         self._load_providers()
 
@@ -236,7 +236,7 @@ class SSOIntegrationFramework:
                 provider_data["updated_at"] = parse_utc_iso(provider_data["updated_at"])
                 provider_data["protocol"] = SSOProtocol(provider_data["protocol"])
 
-                provider = SSOProvider(**provider_data)
+                provider = SSOProviderConfig(**provider_data)
                 self.providers[provider.provider_id] = provider
 
             self._update_provider_statistics()
@@ -245,7 +245,7 @@ class SSOIntegrationFramework:
         except Exception as e:
             logger.error("Failed to load SSO providers: %s", e)
 
-    def _save_provider(self, provider: SSOProvider):
+    def _save_provider(self, provider: SSOProviderConfig):
         """Save SSO provider to storage (thread-safe, Issue #378)"""
         with self._file_lock:
             try:
@@ -351,7 +351,7 @@ class SSOIntegrationFramework:
 
         provider_id = str(uuid4())
 
-        provider = SSOProvider(
+        provider = SSOProviderConfig(
             provider_id=provider_id,
             name=name,
             protocol=protocol,
@@ -423,7 +423,7 @@ class SSOIntegrationFramework:
         else:
             return {"error": "Unsupported protocol"}
 
-    async def _initiate_saml_auth(self, provider: SSOProvider, redirect_uri: str, state: str | None) -> Dict:
+    async def _initiate_saml_auth(self, provider: SSOProviderConfig, redirect_uri: str, state: str | None) -> Dict:
         """Initiate SAML authentication"""
         try:
             # Generate SAML AuthnRequest
@@ -471,7 +471,7 @@ class SSOIntegrationFramework:
             logger.error("SAML auth initiation failed: %s", e)
             return {"error": "Failed to initiate SAML authentication"}
 
-    async def _initiate_oauth_auth(self, provider: SSOProvider, redirect_uri: str, state: str | None) -> Dict:
+    async def _initiate_oauth_auth(self, provider: SSOProviderConfig, redirect_uri: str, state: str | None) -> Dict:
         """Initiate OAuth2/OpenID Connect authentication"""
         try:
             # Generate state for security
@@ -532,7 +532,7 @@ class SSOIntegrationFramework:
             self.stats["failed_authentications"] += 1
             return {"error": "Authentication failed"}
 
-    async def _handle_saml_callback(self, provider: SSOProvider, callback_data: Dict) -> Dict:
+    async def _handle_saml_callback(self, provider: SSOProviderConfig, callback_data: Dict) -> Dict:
         """Handle SAML authentication callback"""
         try:
             saml_response = callback_data.get("SAMLResponse", "")
@@ -557,7 +557,7 @@ class SSOIntegrationFramework:
             logger.error("SAML callback failed: %s", e)
             return {"error": "SAML authentication failed"}
 
-    async def _handle_oauth_callback(self, provider: SSOProvider, callback_data: Dict) -> Dict:
+    async def _handle_oauth_callback(self, provider: SSOProviderConfig, callback_data: Dict) -> Dict:
         """Handle OAuth2/OpenID Connect callback"""
         try:
             code = callback_data.get("code")
@@ -597,7 +597,7 @@ class SSOIntegrationFramework:
             logger.error("OAuth callback failed: %s", e)
             return {"error": "OAuth authentication failed"}
 
-    async def _exchange_oauth_code(self, provider: SSOProvider, code: str, redirect_uri: str) -> Dict:
+    async def _exchange_oauth_code(self, provider: SSOProviderConfig, code: str, redirect_uri: str) -> Dict:
         """Exchange OAuth authorization code for tokens"""
         try:
             oauth_config = self.config.get("oauth2", {})
@@ -627,7 +627,7 @@ class SSOIntegrationFramework:
             logger.error("OAuth code exchange failed: %s", e)
             return {"error": "Token exchange failed"}
 
-    async def _get_oauth_user_info(self, provider: SSOProvider, access_token: str) -> Dict | None:
+    async def _get_oauth_user_info(self, provider: SSOProviderConfig, access_token: str) -> Dict | None:
         """Get user information using OAuth access token"""
         try:
             headers = {"Authorization": f"Bearer {access_token}"}
@@ -644,7 +644,7 @@ class SSOIntegrationFramework:
             logger.error("OAuth user info failed: %s", e)
             return None
 
-    def _parse_saml_assertion(self, saml_response: str, provider: SSOProvider) -> Dict | None:
+    def _parse_saml_assertion(self, saml_response: str, provider: SSOProviderConfig) -> Dict | None:
         """Parse SAML assertion and extract user attributes"""
         # This is a simplified parser - production should use proper SAML library
         try:
@@ -665,7 +665,7 @@ class SSOIntegrationFramework:
             logger.error("SAML assertion parsing failed: %s", e)
             return None
 
-    async def _create_sso_session(self, provider: SSOProvider, user_attributes: Dict, state: str | None) -> Dict:
+    async def _create_sso_session(self, provider: SSOProviderConfig, user_attributes: Dict, state: str | None) -> Dict:
         """Create SSO session from successful authentication"""
         try:
             # Map attributes to internal user format
@@ -712,7 +712,7 @@ class SSOIntegrationFramework:
             logger.error("SSO session creation failed: %s", e)
             return {"error": "Session creation failed"}
 
-    def _map_user_attributes(self, provider: SSOProvider, attributes: Dict) -> Dict:
+    def _map_user_attributes(self, provider: SSOProviderConfig, attributes: Dict) -> Dict:
         """Map provider attributes to internal user format"""
 
         # Get attribute mapping from config
@@ -821,7 +821,7 @@ class SSOIntegrationFramework:
             logger.error("LDAP authentication failed: %s", e)
             return {"error": "LDAP authentication failed"}
 
-    def list_providers(self, enabled_only: bool = False) -> List[SSOProvider]:
+    def list_providers(self, enabled_only: bool = False) -> List[SSOProviderConfig]:
         """List SSO providers"""
         providers = list(self.providers.values())
 
@@ -830,7 +830,7 @@ class SSOIntegrationFramework:
 
         return providers
 
-    def get_provider(self, provider_id: str) -> SSOProvider | None:
+    def get_provider(self, provider_id: str) -> SSOProviderConfig | None:
         """Get SSO provider by ID"""
         return self.providers.get(provider_id)
 

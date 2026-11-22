@@ -22,6 +22,8 @@ import operator
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _CLIENT = "autobot-backend/services/tts_client.py"
 _PROVIDER = "autobot-backend/voice_processing/providers/generic_provider.py"
 
@@ -69,7 +71,7 @@ def _ordering_problems(source: str) -> list[str]:
     """
     problems: list[str] = []
     instrumented = 0
-    for block in _loop_bodies(ast.parse(source)):
+    for block in _loop_bodies(parse_cache.parse(source)):
         observes = [i for i, s in enumerate(block) if _is_clock_call(s, "observe")]
         yields = [i for i, s in enumerate(block) if isinstance(s, ast.Expr) and isinstance(s.value, ast.Yield)]
         if not observes or not yields:
@@ -207,7 +209,7 @@ def test_both_wav_duration_sites_use_the_shared_helper() -> None:
     surviving call.
     """
     for rel in (_CLIENT, _PROVIDER):
-        tree = ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((repo_root() / rel).read_text(encoding="utf-8"))
         assert _calls_named(tree, "wav_duration_seconds") >= 1, (
             f"{rel} mentions wav_duration_seconds but never CALLS it; the duration "
             "arithmetic has forked again, and a substring check would not have seen it"
@@ -267,7 +269,15 @@ _SYMBOL = {ast.Lt: "<", ast.LtE: "<=", ast.Eq: "==", ast.NotEq: "!=", ast.Gt: ">
 _MUST_REFUSE = (0, -1, -48000)
 
 
-def refusal_problems(source: str, *, loader: str = "_load_audio_input") -> list[str]:
+def _names_the_rate(node: ast.expr) -> bool:
+    """True for ``sample_rate`` and for ``<header>.sample_rate`` -- the loader on #17778 reads
+    the rate off a parsed WAV header, and the refusal there is the same predicate."""
+    if isinstance(node, ast.Name):
+        return node.id == "sample_rate"
+    return isinstance(node, ast.Attribute) and node.attr == "sample_rate"
+
+
+def refusal_problems(source: str, *, loader: str = "_wav_audio_input") -> list[str]:
     """Why *source*'s loader does not provably refuse a non-positive frame rate.
 
     A detector over source so fixtures can drive it, because the first version asserted only
@@ -276,7 +286,7 @@ def refusal_problems(source: str, *, loader: str = "_load_audio_input") -> list[
     accepts a refusal placed AFTER the ``AudioInput(...)`` it is meant to protect. Both were
     raised independently by two reviewers on #17887.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     fns = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == loader]
     if not fns:
         return [f"no function named {loader} -- the detector is looking at nothing"]
@@ -291,7 +301,7 @@ def refusal_problems(source: str, *, loader: str = "_load_audio_input") -> list[
         if not (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)):
             continue
         left, ops, comps = node.test.left, node.test.ops, node.test.comparators
-        if not (isinstance(left, ast.Name) and left.id == "sample_rate" and len(ops) == 1):
+        if not (_names_the_rate(left) and len(ops) == 1):
             continue
         if not any(isinstance(stmt, ast.Raise) for stmt in node.body):
             continue
@@ -333,7 +343,7 @@ def test_a_corrupt_frame_rate_is_still_a_load_error() -> None:
 
 
 _LOADER = """
-def _load_audio_input(path):
+def _wav_audio_input(path):
 {body}
 """
 _REFUSE = "    if sample_rate <= 0:\n        raise ValueError('bad rate')"
@@ -343,6 +353,12 @@ _BUILD = "    return AudioInput(sample_rate=sample_rate)"
 def test_a_correct_refusal_is_accepted() -> None:
     """The positive control: without it a detector that always complains passes the rest."""
     assert refusal_problems(_LOADER.format(body=f"{_REFUSE}\n{_BUILD}")) == []
+
+
+def test_a_refusal_on_a_header_attribute_is_accepted() -> None:
+    """`fmt.sample_rate <= 0` is the same refusal, read off a parsed header."""
+    body = "    if fmt.sample_rate <= 0:\n        raise ValueError('bad rate')\n" + _BUILD
+    assert refusal_problems(_LOADER.format(body=body)) == []
 
 
 def test_a_refusal_that_permits_zero_is_reported() -> None:
@@ -379,26 +395,26 @@ _LOCAL_WRAPPER = _IMPORT_ONLY.replace("    return 0.0", "    return _wav_duratio
 
 
 def test_a_real_call_satisfies_the_detector() -> None:
-    assert _calls_named(ast.parse(_REAL_CALL), "wav_duration_seconds") == 1
+    assert _calls_named(parse_cache.parse(_REAL_CALL), "wav_duration_seconds") == 1
 
 
 def test_an_import_only_mention_does_not() -> None:
     """The whole reason this is an ast.Call count: a `def`, an import or a comment cannot pass."""
-    assert _calls_named(ast.parse(_IMPORT_ONLY), "wav_duration_seconds") == 0
+    assert _calls_named(parse_cache.parse(_IMPORT_ONLY), "wav_duration_seconds") == 0
 
 
 def test_the_underscored_local_wrapper_is_a_different_name() -> None:
     """`_wav_duration_seconds` is the route's own adapter; calling it is not reaching the helper."""
-    assert _calls_named(ast.parse(_LOCAL_WRAPPER), "wav_duration_seconds") == 0
+    assert _calls_named(parse_cache.parse(_LOCAL_WRAPPER), "wav_duration_seconds") == 0
 
 
 def test_the_division_detector_flags_an_inlined_arithmetic() -> None:
-    assert _divides_frames(ast.parse("def f(wav, rate):\n    return wav.getnframes() / float(rate)\n"))
+    assert _divides_frames(parse_cache.parse("def f(wav, rate):\n    return wav.getnframes() / float(rate)\n"))
 
 
 def test_the_division_detector_passes_a_delegating_caller() -> None:
     """Positive control for the second net: delegation must not read as re-inlining."""
-    assert not _divides_frames(ast.parse(_REAL_CALL))
+    assert not _divides_frames(parse_cache.parse(_REAL_CALL))
 
 
 def test_the_division_detector_does_not_claim_to_catch_a_bound_intermediate() -> None:
@@ -408,7 +424,7 @@ def test_the_division_detector_does_not_claim_to_catch_a_bound_intermediate() ->
     rather than leaving it in prose means a future widening has to change this test on purpose.
     """
     bound = "def f(wav, rate):\n    n = wav.getnframes()\n    return n / float(rate)\n"
-    assert not _divides_frames(ast.parse(bound))
+    assert not _divides_frames(parse_cache.parse(bound))
 
 
 # --- the table itself, checked by meaning rather than by eye ---------------

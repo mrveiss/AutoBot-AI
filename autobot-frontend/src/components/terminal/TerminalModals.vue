@@ -242,8 +242,7 @@
 import { onBeforeUnmount, ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { withTimeout } from '@/utils/withTimeout'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('TerminalModals')
@@ -667,7 +666,7 @@ const handleTakeManualControl = () =>
 }
 
 .step-counter {
-  background-color: var(--color-info);
+  background-color: var(--color-info-solid);
   color: var(--text-on-primary);
   padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-full);

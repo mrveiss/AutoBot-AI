@@ -16,13 +16,15 @@
  * (-> /api/llm-providers/fallback-status).
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, PollingPausedAlert, createLogger, createDateFormatter, createRecencyFormatter } from '@autobot/ui'
+import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import {
   useAutobotApi,
   type LLMFallbackChain,
   type LLMActiveFallback,
 } from '@/composables/useAutobotApi'
-import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LLMFallbacksView')
 const api = useAutobotApi()
@@ -34,7 +36,6 @@ const configuredChains = ref<LLMFallbackChain[]>([])
 const activeFallbacks = ref<LLMActiveFallback[]>([])
 const loading = ref(false)
 const error = ref('')
-let refreshTimer: number | null = null
 
 async function fetchFallbackStatus(): Promise<void> {
   loading.value = true
@@ -52,46 +53,44 @@ async function fetchFallbackStatus(): Promise<void> {
   }
 }
 
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp * 1000)
-  const now = new Date()
-  const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-  if (diffSeconds < 60) {
-    return `${diffSeconds}s ago`
-  } else if (diffSeconds < 3600) {
-    return `${Math.floor(diffSeconds / 60)}m ago`
-  }
-  return date.toLocaleTimeString()
-}
+const { t, locale } = useI18n()
 
-onMounted(() => {
-  fetchFallbackStatus()
-  refreshTimer = window.setInterval(fetchFallbackStatus, REFRESH_INTERVAL_MS)
+// The API reports epoch seconds, the formatter takes milliseconds: call sites pass `seconds * 1000`.
+const formatRecent = createRecencyFormatter({
+  locale: () => locale.value,
+  style: 'narrow',
+  maxUnit: 'day',
+  olderThanMs: 3_600_000,
+  older: createDateFormatter({ locale: () => locale.value, kind: 'time' }),
 })
 
-onUnmounted(() => {
-  if (refreshTimer !== null) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-})
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const statusPoller = useDashboardPoller(throwIfFailed(fetchFallbackStatus, error), REFRESH_INTERVAL_MS)
+
+onMounted(() => statusPoller.start(''))
 </script>
 
 <template>
   <div class="p-6 max-w-7xl mx-auto">
+    <PollingPausedAlert
+      :poller="statusPoller"
+      :message="t('common.polling.paused')"
+      :retry-label="t('common.polling.retry')"
+      @retry="statusPoller.start('')"
+    />
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">
+        <h1 class="text-2xl font-bold text-autobot-text-primary">
           {{ $t('llmFallbacks.title') }}
         </h1>
-        <p class="text-sm text-gray-500 mt-1">
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('llmFallbacks.subtitle') }}
         </p>
       </div>
       <button
         class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         :disabled="loading"
-        @click="fetchFallbackStatus"
+        @click="statusPoller.start('')"
       >
         <svg
           class="w-4 h-4"
@@ -113,49 +112,43 @@ onUnmounted(() => {
     </div>
 
     <!-- Error display -->
-    <div
-      v-if="error"
-      class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg"
-      role="alert"
-    >
-      <p class="text-sm font-semibold text-red-700">{{ error }}</p>
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
     <!-- Configured Fallback Chains Section -->
     <div class="mb-8">
-      <h2 class="text-xl font-semibold text-gray-900 mb-4">
+      <h2 class="text-xl font-semibold text-autobot-text-primary mb-4">
         {{ $t('llmFallbacks.configuredChains') }}
       </h2>
       <div class="bg-white rounded-lg shadow overflow-x-auto">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+          <thead class="bg-autobot-bg-secondary text-autobot-text-tertiary uppercase text-xs">
             <tr>
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.primaryModel') }}</th>
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.fallbackChain') }}</th>
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.provider') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y divide-autobot-border-subtle">
             <tr v-if="loading && configuredChains.length === 0">
-              <td colspan="3" class="px-4 py-8 text-center text-gray-400">
+              <td colspan="3" class="px-4 py-8 text-center text-autobot-text-tertiary">
                 {{ $t('llmFallbacks.loading') }}
               </td>
             </tr>
             <tr v-else-if="configuredChains.length === 0">
-              <td colspan="3" class="px-4 py-8 text-center text-gray-400">
+              <td colspan="3" class="px-4 py-8 text-center text-autobot-text-tertiary">
                 {{ $t('llmFallbacks.noChains') }}
               </td>
             </tr>
             <tr
               v-for="chain in configuredChains"
               :key="chain.primary_model"
-              class="hover:bg-gray-50"
+              class="hover:bg-autobot-bg-hover"
             >
               <td class="px-4 py-3 font-mono text-xs">{{ chain.primary_model }}</td>
-              <td class="px-4 py-3 text-gray-600">{{ chain.fallback_chain }}</td>
+              <td class="px-4 py-3 text-autobot-text-secondary">{{ chain.fallback_chain }}</td>
               <td class="px-4 py-3">
                 <span
-                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"
+                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary"
                 >
                   {{ chain.provider }}
                 </span>
@@ -169,16 +162,16 @@ onUnmounted(() => {
     <!-- Active Fallbacks Section -->
     <div>
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-semibold text-gray-900">
+        <h2 class="text-xl font-semibold text-autobot-text-primary">
           {{ $t('llmFallbacks.activeFallbacks') }}
         </h2>
-        <span class="text-sm text-gray-500">
+        <span class="text-sm text-autobot-text-tertiary">
           {{ $t('llmFallbacks.autoRefresh') }}
         </span>
       </div>
       <div class="bg-white rounded-lg shadow overflow-x-auto">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+          <thead class="bg-autobot-bg-secondary text-autobot-text-tertiary uppercase text-xs">
             <tr>
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.conversationId') }}</th>
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.primaryModel') }}</th>
@@ -188,45 +181,45 @@ onUnmounted(() => {
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.time') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y divide-autobot-border-subtle">
             <tr v-if="loading && activeFallbacks.length === 0">
-              <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+              <td colspan="6" class="px-4 py-8 text-center text-autobot-text-tertiary">
                 {{ $t('llmFallbacks.loading') }}
               </td>
             </tr>
             <tr v-else-if="activeFallbacks.length === 0">
-              <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+              <td colspan="6" class="px-4 py-8 text-center text-autobot-text-tertiary">
                 {{ $t('llmFallbacks.noActiveFallbacks') }}
               </td>
             </tr>
             <tr
               v-for="(fallback, index) in activeFallbacks"
               :key="`${fallback.conversation_id}-${fallback.timestamp}-${index}`"
-              class="hover:bg-gray-50"
+              class="hover:bg-autobot-bg-hover"
             >
               <td class="px-4 py-3 font-mono text-xs">{{ fallback.conversation_id }}</td>
-              <td class="px-4 py-3 font-mono text-xs text-red-600">
+              <td class="px-4 py-3 font-mono text-xs text-autobot-error">
                 {{ fallback.primary_model }}
               </td>
-              <td class="px-4 py-3 font-mono text-xs text-green-600">
+              <td class="px-4 py-3 font-mono text-xs text-autobot-success">
                 {{ fallback.fallback_model }}
               </td>
               <td class="px-4 py-3">
                 <span
-                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700"
+                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-bg-tertiary text-autobot-text-secondary"
                 >
                   {{ fallback.primary_provider }}
                 </span>
               </td>
               <td class="px-4 py-3">
                 <span
-                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"
+                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary"
                 >
                   {{ fallback.fallback_provider }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-xs text-gray-500">
-                {{ formatTime(fallback.timestamp) }}
+              <td class="px-4 py-3 text-xs text-autobot-text-tertiary">
+                {{ formatRecent(fallback.timestamp * 1000) }}
               </td>
             </tr>
           </tbody>

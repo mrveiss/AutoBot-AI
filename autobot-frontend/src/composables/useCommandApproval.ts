@@ -17,6 +17,7 @@
  */
 
 import { ref } from 'vue'
+import { isAlreadyDecided, NO_PENDING_APPROVAL } from '@/utils/approvalResult'
 import appConfig from '@/config/AppConfig.js'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient'
@@ -239,6 +240,7 @@ export function useCommandApproval() {
     }
 
     processingApproval.value = true
+    const approvalChatId = chatStore.currentSessionId ?? undefined // #21357: the card's chat, fixed before any await
     logger.debug(
       `${approved ? 'Approving' : 'Denying'} command for session:`,
       terminal_session_id
@@ -328,7 +330,7 @@ export function useCommandApproval() {
         autoApproveFuture.value = false
         rememberForProject.value = false
         // Issue #680: Clear pending approval flag to allow polling to resume
-        chatStore.setPendingApproval(false)
+        chatStore.setPendingApproval(false, approvalChatId)
       } else if (result.status === 'completed_with_errors') {
         // #15073: the command RAN. Its output is real and already in `result`;
         // only the bookkeeping after it is incomplete, so there is nothing to
@@ -338,21 +340,28 @@ export function useCommandApproval() {
         if (onMessageUpdate) {
           onMessageUpdate(terminal_session_id, 'approved', comment || result.comment)
         }
-        chatStore.setPendingApproval(false)
+        chatStore.setPendingApproval(false, approvalChatId)
       } else if (result.status === 'error') {
         logger.error('Approval error:', result.error)
         notify(translateApprovalOutcome(result.error_code, result.error), 'error')
         // Issue #680: Clear pending approval flag on error too
-        chatStore.setPendingApproval(false)
+        chatStore.setPendingApproval(false, approvalChatId)
       }
 
       processingApproval.value = false
     } catch (error) {
+      if (isAlreadyDecided(error)) {
+        // #19951: already decided - nothing ran again; this card is stale, not failed.
+        logger.warn('Approval already decided:', terminal_session_id)
+        processingApproval.value = false
+        chatStore.setPendingApproval(false, approvalChatId)
+        return
+      }
       logger.error('Error sending approval:', error)
       notify('Failed to process command approval', 'error')
       processingApproval.value = false
       // Issue #680: Clear pending approval flag on exception
-      chatStore.setPendingApproval(false)
+      chatStore.setPendingApproval(false, approvalChatId)
     }
   }
 
@@ -433,11 +442,15 @@ export function useCommandApproval() {
     terminalSessionId: string,
     approved: boolean
   ): Promise<ApprovalResponse> => {
-    const result = await apiClient.post<ApprovalResponse>(
-      `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
-      { approved }
-    )
-    return result
+    try {
+      return await apiClient.post<ApprovalResponse>(
+        `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
+        { approved }
+      )
+    } catch (err) {
+      if (isAlreadyDecided(err)) return { status: 'error', error: NO_PENDING_APPROVAL } as ApprovalResponse // #19951
+      throw err
+    }
   }
 
   /**

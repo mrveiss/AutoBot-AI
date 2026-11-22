@@ -17,6 +17,9 @@
  * @see src/__tests__/nav-items-coverage.test.ts
  */
 
+import { getSLMAdminUrl } from '@/config/ssot-config';
+import { ICONS } from '@/components/ui/Icon.vue';
+
 // iconRule is typed as a literal union to satisfy SVG fill-rule / clip-rule prop types (#4699)
 export type SvgFillRule = 'evenodd' | 'nonzero' | 'inherit';
 
@@ -56,6 +59,33 @@ export interface NavItem {
    * even though the label never says it.
    */
   keywords?: string[];
+  /**
+   * Advanced-only (#18240): hidden in the Minimal interface mode, shown in Full.
+   * Top-nav links are filtered in script (the overflow measurement counts
+   * DOM items, so a CSS-hidden link would be counted but invisible); other
+   * chrome carries the `.adv` class (assets/css/components.css).
+   */
+  adv?: boolean;
+  /** Always lives in the header's "More" menu, never on the link rail (#18240). */
+  overflow?: boolean;
+}
+
+/**
+ * An icon-only control in the header's right-hand cluster (#18240). The
+ * accessible name (`ariaKey`) and the tooltip (`tipKey`) are i18n keys; an
+ * entry with `href` is an external destination opened in a new tab instead of
+ * a router route. `requires` gates it on what the user store says of the role.
+ */
+export interface NavIconItem extends Omit<NavItem, 'to'> {
+  to?: string;
+  href?: () => string;
+  ariaKey: string;
+  tipKey: string;
+  requires?: 'admin';
+  /** Renders after the Minimal/Full toggle rather than before it. */
+  afterToggle?: boolean;
+  /** A count shown on the icon while above zero; the cluster maps the source to its number (#20917). */
+  badgeSource?: 'approvals';
 }
 
 /**
@@ -81,7 +111,7 @@ export function filterByFeatureFlag(
 // ─── Primary nav (≤7 items for non-admin users at 1440 px) ───────────────────
 // Data-driven navigation items: single source of truth for desktop + mobile nav
 export const navItems: NavItem[] = [
-  { to: '/home', labelKey: 'nav.home', icon: 'M10.707 2.293a1 1 0 00-1.414 0l-7 7v11a1 1 0 001 1h2a1 1 0 001-1v-5a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 001 1h2a1 1 0 001-1v-7l7-7a1 1 0 000-1.414z', iconViewBox: '0 0 24 24', iconRule: 'evenodd' },
+  { to: '/home', labelKey: 'nav.home', iconPaths: [ICONS.home], iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/chat', labelKey: 'nav.chat', icon: 'M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z', iconRule: 'evenodd' },
   // GH#8757: AI Documents and the Transcriber moved into the Knowledge sidebar
   // (BROWSE group) — see KnowledgeView.vue. Routes live under /knowledge/* now;
@@ -90,8 +120,8 @@ export const navItems: NavItem[] = [
   // Company OS (LLC) — kept high in the order so it stays in the primary nav rail,
   // not pushed into the overflow menu (a major feature must be directly reachable).
   { to: '/llc/select-company', labelKey: 'nav.companyOs', keywords: ['nav.keywords.companyOs'], icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', iconViewBox: '0 0 24 24', iconStroke: true },
-  { to: '/automation', labelKey: 'nav.automation', keywords: ['nav.keywords.automation'], icon: 'M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z', iconRule: 'evenodd' },
-  { to: '/analytics', labelKey: 'nav.analytics', keywords: ['nav.keywords.analytics'], iconPaths: ['M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z', 'M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z'] },
+  { to: '/automation', labelKey: 'nav.automation', adv: true, overflow: true, keywords: ['nav.keywords.automation'], icon: 'M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z', iconRule: 'evenodd' },
+  { to: '/analytics', labelKey: 'nav.analytics', adv: true, keywords: ['nav.keywords.analytics'], iconPaths: ['M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z', 'M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z'] },
   // Agents nav entry removed (TASK 1c): /agents/registry duplicates SLM Admin's
   // /slm/agents/local-agents. Route is kept in router/index.ts for deep links.
   // GH#8748: LLC views consolidated to one "Company OS" entry (was 5 separate items)
@@ -110,10 +140,27 @@ export const profileMenuItems: NavItem[] = [
   // MVA-360: Live Canvas — experimental, gated by VITE_FEATURE_CANVAS (GH#8758).
   // Fails CLOSED (hidden) unless the env var is explicitly 'true'.
   { to: '/canvas', labelKey: 'nav.canvas', icon: 'M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z', iconViewBox: '0 0 24 24', iconStroke: true, featureFlag: 'canvas' },
-  // Issue #929: Plugin Manager
-  { to: '/plugins', labelKey: 'nav.plugins', icon: 'M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z', iconStroke: true },
-  { to: '/secrets', labelKey: 'nav.secrets', keywords: ['nav.keywords.vault'], icon: 'M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z', iconRule: 'evenodd' },
-  { to: '/preferences', labelKey: 'nav.preferences', keywords: ['nav.keywords.preferences'], icon: 'M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z', iconRule: 'evenodd' },
+  // #20644: Batch Processing and Vision moved here from the SLM console; any signed-in user's work.
+  { to: '/batch', labelKey: 'nav.batchJobs', keywords: ['nav.keywords.batchJobs'], icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10', iconViewBox: '0 0 24 24', iconStroke: true },
+  { to: '/vision', labelKey: 'nav.vision', keywords: ['nav.keywords.vision'], iconPaths: ['M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'], iconViewBox: '0 0 24 24', iconStroke: true },
+];
+
+// ─── Header icon cluster (#18240) ────────────────────────────────────────────
+// Icon-only controls right of the primary links: Secrets and Preferences moved
+// here from the profile menu, Platform admin replaces the SLM text link.
+// Preferences draws Icon.vue's cog -- the one icon for every settings control;
+// the old rays read as a light/dark switch (design doc #18238). The
+// Plugins entry is gone on purpose -- plugins live in the SLM console's own
+// nav (see INTENTIONALLY_HIDDEN in nav-items-coverage.test.ts). Routes of the
+// internal entries must carry hideInNav: true in router/index.ts.
+export const navIconItems: NavIconItem[] = [
+  // #20917: what is waiting for the person to decide, from any page; the badge is the count.
+  { to: '/approvals', labelKey: 'nav.approvals.aria', ariaKey: 'nav.approvals.aria', tipKey: 'nav.approvals.tip', badgeSource: 'approvals', keywords: ['nav.keywords.approvals'], iconPaths: ['M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'], iconViewBox: '0 0 24 24', iconStroke: true },
+  { to: '/secrets', labelKey: 'nav.secrets', ariaKey: 'nav.secrets', tipKey: 'nav.vaultTip', adv: true, keywords: ['nav.keywords.vault'], iconPaths: ['M4 12a4 4 0 108 0 4 4 0 00-8 0z', 'M12 12h9M18 12v3M21 12v2'], iconViewBox: '0 0 24 24', iconStroke: true },
+  { to: '/preferences', labelKey: 'nav.preferences', ariaKey: 'nav.preferences', tipKey: 'nav.preferencesTip', keywords: ['nav.keywords.preferences'], iconPaths: [ICONS.cog], iconViewBox: '0 0 24 24', iconStroke: true },
+  // Platform admin: the SLM console, in a new tab. Admins only, as the SLM itself is (#20631);
+  // the operator role holds service.management and is still refused there.
+  { href: getSLMAdminUrl, labelKey: 'nav.platformAdmin', ariaKey: 'nav.platformAdminAria', tipKey: 'nav.platformAdminTip', adv: true, requires: 'admin', afterToggle: true, iconPaths: ['M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z', 'M9 12l2 2 4-4'], iconViewBox: '0 0 24 24', iconStroke: true },
 ];
 
 // ─── Admin-only menu items (GH#8748) ─────────────────────────────────────────
@@ -143,6 +190,10 @@ export const adminMenuItems: NavItem[] = [
   { to: '/admin/mcp-servers', labelKey: 'nav.adminMcpServers', icon: 'M21.75 17.25v-.228a4.5 4.5 0 00-.12-1.03l-2.268-9.64a3.375 3.375 0 00-3.285-2.602H7.923a3.375 3.375 0 00-3.285 2.602l-2.268 9.64a4.5 4.5 0 00-.12 1.03v.228m19.5 0a3 3 0 01-3 3H5.25a3 3 0 01-3-3m19.5 0a3 3 0 00-3-3H5.25a3 3 0 00-3 3', iconViewBox: '0 0 24 24', iconStroke: true },
   // Issue #16825: permission scopes -- a "coming in a later release" panel, not a working
   // feature yet, unlike the two entries above.
+  // Issue #17832: org conversation review -- the server gates and audits; this entry is presentation only.
+  { to: '/admin/conversations', labelKey: 'nav.adminConversations', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z', iconViewBox: '0 0 24 24', iconStroke: true },
+  // Issue #20567: propose the decided install cleanups -- the server gates and audits; this entry is presentation only.
+  { to: '/admin/cleanup-proposals', labelKey: 'nav.adminCleanupProposals', icon: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16', iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/admin/permission-scopes', labelKey: 'nav.adminPermissionScopes', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', iconViewBox: '0 0 24 24', iconStroke: true },
 ];
 
@@ -155,6 +206,7 @@ export function paletteNavItems(
   isAdmin: boolean,
   env: Record<string, string | boolean | undefined> = import.meta.env,
 ): NavItem[] {
-  const items = [...navItems, ...profileMenuItems, ...(isAdmin ? adminMenuItems : [])];
+  const iconRoutes = navIconItems.filter((item): item is NavIconItem & { to: string } => !!item.to);
+  const items = [...navItems, ...iconRoutes, ...profileMenuItems, ...(isAdmin ? adminMenuItems : [])];
   return filterByFeatureFlag(items, env);
 }

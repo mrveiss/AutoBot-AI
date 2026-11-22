@@ -57,14 +57,14 @@ try:
 except ImportError:  # pragma: no cover
     from typing import Any as Page  # type: ignore[assignment, misc]
 
+from autobot_shared.captcha_types import HUMAN_ONLY_TYPES
 from constants.threshold_constants import TimingConstants
 from events.bus import PersistStrategy, publish_event
-from services.captcha_types import HUMAN_ONLY_TYPES, CaptchaType
 
 logger = get_logger(__name__)
 
-# Issue #380: Module-level tuple for unsupported CAPTCHA types (require human intervention)
-_UNSUPPORTED_CAPTCHA_TYPES = tuple(t.value for t in HUMAN_ONLY_TYPES)
+# Issue #380: human-only wire values, derived from the one definition (#18131).
+_UNSUPPORTED_CAPTCHA_TYPES = frozenset(t.value for t in HUMAN_ONLY_TYPES)
 
 
 class CaptchaResolutionStatus(Enum):
@@ -567,7 +567,12 @@ class CaptchaHumanLoop:
             return None
 
         try:
-            captcha_type_enum = CaptchaType.parse(captcha_type)
+            from autobot_shared.captcha_types import CaptchaType
+
+            try:
+                captcha_type_enum = CaptchaType(captcha_type)
+            except ValueError:
+                captcha_type_enum = CaptchaType.UNKNOWN
 
             result = await solver.attempt_solve(
                 image_data=screenshot,
@@ -578,7 +583,7 @@ class CaptchaHumanLoop:
                 return {
                     "success": True,
                     "solution": result.solution,
-                    "confidence": result.confidence_level.value,
+                    "confidence": result.confidence.value,
                     "type": result.captcha_type.value,
                 }
 

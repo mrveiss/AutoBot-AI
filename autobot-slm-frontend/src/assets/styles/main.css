@@ -5,6 +5,9 @@
 
 @import 'tailwindcss';
 
+/* Refined SLM scheme: teal identity, shared token names (#18223, #17566) */
+@import './slm-scheme.css';
+
 @theme {
   --color-primary-50: #f0f9ff;
   --color-primary-100: #e0f2fe;
@@ -23,8 +26,9 @@
   --color-warning-500: #eab308;
   --color-warning-600: #ca8a04;
 
-  --color-danger-500: #ef4444;
-  --color-danger-600: #dc2626;
+  --color-error-500: #ef4444;
+  --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
 }
 
 /*
@@ -54,19 +58,19 @@
 }
 
 @utility btn-primary {
-  @apply bg-primary-600 text-white hover:bg-primary-700;
+  @apply bg-primary-600 text-white enabled:hover:bg-primary-700;
 }
 
 @utility btn-secondary {
-  @apply bg-gray-200 text-gray-700 hover:bg-gray-300;
+  @apply bg-gray-200 text-gray-700 enabled:hover:bg-gray-300;
 }
 
 @utility btn-success {
-  @apply bg-success-500 text-white hover:bg-success-600;
+  @apply bg-success-500 text-(--text-on-success) enabled:hover:bg-success-600;
 }
 
-@utility btn-danger {
-  @apply bg-danger-500 text-white hover:bg-danger-600;
+@utility btn-error {
+  @apply bg-(--color-error-solid) text-(--text-on-error) enabled:hover:bg-(--color-error-solid-hover);
 }
 
 @utility card {
@@ -94,7 +98,7 @@
 }
 
 @utility health-unhealthy {
-  @apply bg-danger-500;
+  @apply bg-error-500;
 }
 
 @utility health-unknown {
@@ -123,7 +127,7 @@
  * that were never defined here, so every `var(--text-primary, #fallback)`
  * silently used its hardcoded fallback and ignored the theme. Map those
  * names onto the real SLM tokens: the theme-adaptive --a11y-* set (redefined
- * per :root / [data-theme='dark'] / [data-theme='high-contrast']) for
+ * per :root / [data-theme='dark'] / [data-theme='contrast']) for
  * surface/text/border, and the --color-*-500 scale for brand/status. var() is
  * resolved at use-time, so these resolve to the ACTIVE theme's values. */
 :root {
@@ -139,7 +143,10 @@
   /* Border */
   --border-color: var(--a11y-border);
   /* Brand / accent */
-  --color-primary: var(--color-primary-500);
+  /* #21567: the fill utilities paint the active scheme's --primary (slm-scheme.css
+   * redefines --primary / --primary-h / --on-primary per scheme); the sky below is
+   * only the base state when no scheme applies. */
+  --color-primary: var(--primary);
   --primary-color: var(--color-primary-500);
   --primary: var(--color-primary-500);
   --color-accent: var(--color-primary-500);
@@ -148,15 +155,15 @@
   --success-color: var(--color-success-500);
   --color-warning: var(--color-warning-500);
   --warning-color: var(--color-warning-500);
-  --color-danger: var(--color-danger-500);
-  --danger-color: var(--color-danger-500);
+  --color-error: var(--color-error-500);
+  --error-color: var(--color-error-500);
   --color-info: var(--color-primary-500);
   --info-color: var(--color-primary-500);
   /* Status backgrounds — tint the status hue over the active surface so they
    * stay theme-aware (dark themes get a dark-tinted chip, not a light one). */
   --success-bg: color-mix(in srgb, var(--color-success-500) 14%, var(--a11y-bg));
   --warning-bg: color-mix(in srgb, var(--color-warning-500) 14%, var(--a11y-bg));
-  --danger-bg: color-mix(in srgb, var(--color-danger-500) 14%, var(--a11y-bg));
+  --error-bg: color-mix(in srgb, var(--color-error-500) 14%, var(--a11y-bg));
   --info-bg: color-mix(in srgb, var(--color-primary-500) 14%, var(--a11y-bg));
 }
 
@@ -214,6 +221,9 @@
   --z-popover: 1100;
   --z-tooltip: 1200;
   --z-toast: 1300;
+  --z-raised: 1;
+  --z-10: 10;
+  --z-maximum: 10000;
 }
 
 /* ─── Component literal captures (#11858 / #11896 / #11515 Task 4) ─────
@@ -226,6 +236,8 @@
 :root {
   /* Neutral constant (white text on coloured surfaces). */
   --color-white: #ffffff;
+  /* Ink for text on a light status fill (#19872). */
+  --color-black: #000000;
   /* Blue action shades used by the setup wizard's buttons/badges — distinct
    * from the sky --color-primary; captured verbatim pending palette
    * consolidation (#11515). */
@@ -251,6 +263,7 @@
   --slm-gray-300: #d1d5db;
   --slm-gray-500: #6b7280;
   --slm-gray-700: #374151;
+  --slm-gray-800: #1f2937;
   --slm-red-100: #fee2e2;
   --slm-red-700: #b91c1c;
   --slm-blue-100: #dbeafe;
@@ -265,6 +278,8 @@
   --slm-emerald-500: #10b981;
   --slm-emerald-600: #059669;
   --slm-orange-100: #ffedd5;
+  /* Sidebar update badge: system updates pending (amber-500 is code sync only). */
+  --slm-orange-500: #f97316;
   --slm-orange-600: #ea580c;
   /* Amber action shades + slate terminal-panel shades (ProcessMonitorTab #11899, ConfigHistoryTab #11900). */
   --slm-amber-500: #f59e0b;
@@ -273,97 +288,86 @@
   --slm-slate-800: #1e293b;
 }
 
-/* ─── High Contrast Mode (Issue #754) ────────────────────────── */
+/* ─── High contrast (#754, folded into the Refined `contrast` theme, #18239) ───
+ * The legacy yellow-on-black `high-contrast` palette is gone: `contrast` is the one
+ * high-contrast theme and its palette lives in slm-scheme.css. What stays here maps the
+ * theme-adaptive --a11y-* set, and the raw palette classes that views still use, onto
+ * the Refined tokens of that theme. */
 
-:root[data-theme='high-contrast'] {
-  --a11y-focus-ring: #facc15;
+:root[data-theme='contrast'] {
+  --a11y-focus-ring: var(--focus);
   --a11y-focus-width: 3px;
-  --a11y-bg: #000000;
-  --a11y-bg-surface: #1a1a1a;
-  --a11y-bg-muted: #262626;
-  --a11y-text: #ffffff;
-  --a11y-text-muted: #d4d4d4;
-  --a11y-border: #737373;
-  --a11y-sidebar-bg: #000000;
-  --a11y-sidebar-text: #ffffff;
-  --a11y-sidebar-active: #facc15;
+  --a11y-bg: var(--bg);
+  --a11y-bg-surface: var(--surface);
+  --a11y-bg-muted: var(--surface2);
+  --a11y-text: var(--text);
+  --a11y-text-muted: var(--muted);
+  --a11y-border: var(--border);
+  --a11y-sidebar-bg: var(--slm-bar);
+  --a11y-sidebar-text: var(--slm-bar-fg);
+  --a11y-sidebar-active: var(--slm-bar-on);
 }
 
-:root[data-theme='high-contrast'] body {
+:root[data-theme='contrast'] body {
   background-color: var(--a11y-bg);
   color: var(--a11y-text);
 }
 
-:root[data-theme='high-contrast'] .card {
+:root[data-theme='contrast'] .card {
   background-color: var(--a11y-bg-surface);
   border-color: var(--a11y-border);
   color: var(--a11y-text);
 }
 
-:root[data-theme='high-contrast'] .bg-gray-100,
-:root[data-theme='high-contrast'] .bg-gray-50 {
+:root[data-theme='contrast'] .bg-gray-100,
+:root[data-theme='contrast'] .bg-gray-50 {
   background-color: var(--a11y-bg-muted) !important;
 }
 
-:root[data-theme='high-contrast'] .bg-gray-900 {
+:root[data-theme='contrast'] .bg-gray-900 {
   background-color: var(--a11y-sidebar-bg) !important;
 }
 
-:root[data-theme='high-contrast'] .bg-white {
+:root[data-theme='contrast'] .bg-white {
   background-color: var(--a11y-bg-surface) !important;
 }
 
-:root[data-theme='high-contrast'] .text-gray-900,
-:root[data-theme='high-contrast'] .text-gray-800,
-:root[data-theme='high-contrast'] .text-gray-700 {
+:root[data-theme='contrast'] .text-gray-900,
+:root[data-theme='contrast'] .text-gray-800,
+:root[data-theme='contrast'] .text-gray-700 {
   color: var(--a11y-text) !important;
 }
 
-:root[data-theme='high-contrast'] .text-gray-600,
-:root[data-theme='high-contrast'] .text-gray-500,
-:root[data-theme='high-contrast'] .text-gray-400 {
+:root[data-theme='contrast'] .text-gray-600,
+:root[data-theme='contrast'] .text-gray-500,
+:root[data-theme='contrast'] .text-gray-400 {
   color: var(--a11y-text-muted) !important;
 }
 
-:root[data-theme='high-contrast'] .border-gray-200,
-:root[data-theme='high-contrast'] .border-gray-300,
-:root[data-theme='high-contrast'] .border-gray-100 {
+:root[data-theme='contrast'] .border-gray-200,
+:root[data-theme='contrast'] .border-gray-300,
+:root[data-theme='contrast'] .border-gray-100 {
   border-color: var(--a11y-border) !important;
 }
 
-:root[data-theme='high-contrast'] .btn-primary {
-  background-color: #facc15 !important;
-  color: #000000 !important;
-}
-
-:root[data-theme='high-contrast'] .btn-primary:hover {
-  background-color: #eab308 !important;
-}
-
-:root[data-theme='high-contrast'] .btn-secondary {
-  background-color: #404040 !important;
-  color: #ffffff !important;
-  border: 1px solid #737373;
-}
-
-:root[data-theme='high-contrast'] .input {
+:root[data-theme='contrast'] .input {
   background-color: var(--a11y-bg-surface);
   border-color: var(--a11y-border);
   color: var(--a11y-text);
 }
 
-:root[data-theme='high-contrast'] select {
+:root[data-theme='contrast'] select {
   background-color: var(--a11y-bg-surface);
   border-color: var(--a11y-border);
   color: var(--a11y-text);
 }
 
-:root[data-theme='high-contrast'] table thead {
+:root[data-theme='contrast'] table thead {
   background-color: var(--a11y-bg-muted) !important;
 }
 
-:root[data-theme='high-contrast'] table th,
-:root[data-theme='high-contrast'] table td {
+:root[data-theme='contrast'] table th,
+:root[data-theme='contrast'] table td {
   color: var(--a11y-text) !important;
   border-color: var(--a11y-border) !important;
 }
@@ -573,4 +577,18 @@ p {
 .view-nav-link.is-active {
   color: var(--color-primary-500);
   border-bottom-color: var(--color-primary-500);
+}
+
+/* Links in body text carry a cue that is not colour (WCAG 1.4.1, #18223): the link
+ * colour can equal the text colour, so an underline at rest tells a link from a
+ * word. Anchors that carry a class (nav, buttons, cards) style themselves. */
+a:not([class]),
+.prose a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+a:not([class]):hover,
+.prose a:hover {
+  color: var(--text-link-hover);
 }

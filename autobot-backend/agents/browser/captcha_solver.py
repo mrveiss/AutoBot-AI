@@ -8,12 +8,11 @@ Local ML-based CAPTCHA Solving via NPU
 Provides detection, image extraction, local ML inference (ONNX on NPU/CPU),
 and a layered pipeline that falls back from local ML to human-in-the-loop.
 
-The CAPTCHA kinds, the result type and the math evaluator are shared with the OCR
-solver: ``services.captcha_types`` and ``services.captcha_math`` (#18131).
-
 Classes:
+    CaptchaType          — imported from autobot_shared.captcha_types (the one taxonomy)
     CaptchaDetector      — keyword/selector detection + element screenshot extraction
     LocalCaptchaSolver   — ONNX-based OCR running on NPU/CPU; math expression eval
+    CaptchaSolveResult   — shared result dataclass (autobot_shared.captcha_types)
     CaptchaSolverPipeline — orchestrates the full solve attempt
 
 Design decisions:
@@ -40,10 +39,10 @@ import io
 import time
 from typing import TYPE_CHECKING, Any, Dict, Tuple
 
+from autobot_shared.captcha_types import CaptchaSolveResult, CaptchaType
 from autobot_shared.logging_manager import get_logger
 from services.captcha_human_loop import get_captcha_human_loop
 from services.captcha_math import MATH_EXPR_RE, solve_math_expression
-from services.captcha_types import CaptchaSolveResult, CaptchaType
 
 if TYPE_CHECKING:
     pass  # Playwright Page — only needed for type annotations, imported lazily
@@ -71,6 +70,11 @@ _HTML_CAPTCHA_KEYWORDS = frozenset(
 _RECAPTCHA_PATTERNS = frozenset({"g-recaptcha", "recaptcha", "grecaptcha", "recaptcha/api.js"})
 _HCAPTCHA_PATTERNS = frozenset({"h-captcha", "hcaptcha", "hcaptcha.com"})
 _SLIDER_PATTERNS = frozenset({"slider", "slide-verify", "slidercaptcha", "drag"})
+
+# ---------------------------------------------------------------------------
+# Enumerations and result types
+# ---------------------------------------------------------------------------
+
 
 # ---------------------------------------------------------------------------
 # CAPTCHA detection
@@ -244,7 +248,7 @@ class LocalCaptchaSolver:
             captcha_type: The type of CAPTCHA to check.
 
         Returns:
-            True for TEXT and MATH; False for every human-only kind.
+            True for TEXT and MATH; False for reCAPTCHA, hCaptcha, SLIDER.
         """
         return captcha_type in (CaptchaType.TEXT, CaptchaType.MATH)
 
@@ -292,7 +296,8 @@ class LocalCaptchaSolver:
     def solve_math(self, expression: str) -> str | None:
         """Evaluate a simple arithmetic expression extracted from a CAPTCHA.
 
-        Delegates to the shared evaluator in ``services.captcha_math``.
+        Supports +, -, *, /, ×, ÷.  Division yields integer (floor) result.
+        ``eval()`` is never used; parsing is done via regex.
 
         Args:
             expression: Raw string that may contain the math expression.
@@ -303,7 +308,7 @@ class LocalCaptchaSolver:
         """
         result = solve_math_expression(expression)
         if result is None:
-            logger.debug("solve_math: no valid expression found in %r", expression)
+            logger.debug("solve_math: no solvable expression found in %r", expression)
             return None
         return str(result)
 
@@ -505,9 +510,10 @@ class CaptchaSolverPipeline:
                     logger.info("CaptchaSolverPipeline: cache hit for image hash")
                     return CaptchaSolveResult(
                         success=True,
+                        requires_human=False,
                         solution=cached,
                         method_used="cache",
-                        confidence=1.0,
+                        confidence_score=1.0,
                         captcha_type=captcha_type,
                     )
 
@@ -534,9 +540,10 @@ class CaptchaSolverPipeline:
             if answer is not None:
                 return CaptchaSolveResult(
                     success=True,
+                    requires_human=False,
                     solution=answer,
                     method_used="math",
-                    confidence=1.0,
+                    confidence_score=1.0,
                     captcha_type=captcha_type,
                 )
         except Exception as exc:
@@ -545,7 +552,7 @@ class CaptchaSolverPipeline:
             success=False,
             solution=None,
             method_used="math",
-            confidence=0.0,
+            confidence_score=0.0,
             captcha_type=captcha_type,
             error_message="Math expression not found in page content",
         )
@@ -598,16 +605,17 @@ class CaptchaSolverPipeline:
             _answer_cache[_image_hash(image_bytes)] = answer
             return CaptchaSolveResult(
                 success=True,
+                requires_human=False,
                 solution=answer,
                 method_used="local_ml",
-                confidence=_MIN_CONFIDENCE,
+                confidence_score=_MIN_CONFIDENCE,
                 captcha_type=captcha_type,
             )
         return CaptchaSolveResult(
             success=False,
             solution=None,
             method_used="local_ml",
-            confidence=0.0,
+            confidence_score=0.0,
             captcha_type=captcha_type,
             error_message="ONNX inference returned no answer",
         )
@@ -636,9 +644,10 @@ class CaptchaSolverPipeline:
             )
             return CaptchaSolveResult(
                 success=resolution.success,
+                requires_human=False,
                 solution=None,  # Human solves in-browser; no answer text returned
                 method_used="human_loop",
-                confidence=1.0 if resolution.success else 0.0,
+                confidence_score=1.0 if resolution.success else 0.0,
                 captcha_type=captcha_type,
                 error_message=resolution.error_message if not resolution.success else None,
             )
@@ -648,7 +657,7 @@ class CaptchaSolverPipeline:
                 success=False,
                 solution=None,
                 method_used="human_loop",
-                confidence=0.0,
+                confidence_score=0.0,
                 captcha_type=captcha_type,
                 error_message=str(exc),
             )

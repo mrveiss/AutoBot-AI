@@ -14,7 +14,7 @@ from autobot_shared.ssot_constants import (  # noqa: F401,F403
     AgentThresholds,
     AnalyticsConfig,
     BatchConfig,
-    CacheConfig,
+    CacheSizeDefaults,
     CategoryDefaults,
     CircuitBreakerDefaults,
     ComputerVisionThresholds,

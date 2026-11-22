@@ -1,5 +1,7 @@
 # AutoBot Settings Panel Guide
 
+> **Retired (#19532, 2026-10-27).** The main GUI's `SettingsPanel.vue` was unmounted after `/settings` began redirecting to the SLM admin (#926), and has been removed. Settings live in the SLM admin views under `autobot-slm-frontend/src/views/settings/admin/` (for example `CacheSettings.vue` and `PromptsSettings.vue`). This guide is kept as a record of the old panel.
+
 ## Overview
 
 The SettingsPanel component (`autobot-frontend/src/components/SettingsPanel.vue`) is the central configuration interface for AutoBot, providing comprehensive access to all system settings through a tabbed interface. This component handles both frontend UI settings and backend system configuration.

@@ -22,12 +22,13 @@ import pytest
 
 from agents.browser.captcha_solver import (
     CaptchaDetector,
+    CaptchaSolveResult,
     CaptchaSolverPipeline,
+    CaptchaType,
     LocalCaptchaSolver,
     _answer_cache,
     _image_hash,
 )
-from services.captcha_types import CaptchaSolveResult, CaptchaType
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -297,7 +298,7 @@ class TestCaptchaSolverPipeline:
         assert result.success is True
         assert result.solution == "7"
         assert result.method_used == "math"
-        assert result.confidence == 1.0
+        assert result.confidence_score == 1.0
 
     @pytest.mark.asyncio
     async def test_local_ml_success_path(self):
@@ -341,7 +342,7 @@ class TestCaptchaSolverPipeline:
         assert result.success is True
         assert result.solution == "CACHED"
         assert result.method_used == "cache"
-        assert result.confidence == 1.0
+        assert result.confidence_score == 1.0
 
     @pytest.mark.asyncio
     async def test_human_fallback_when_ml_and_cache_fail(self):
@@ -452,12 +453,12 @@ class TestCaptchaSolverPipeline:
             success=True,
             solution="TEST",
             method_used="local_ml",
-            confidence=0.95,
+            confidence_score=0.95,
             captcha_type=CaptchaType.TEXT,
         )
         assert r.success is True
         assert r.solution == "TEST"
         assert r.method_used == "local_ml"
-        assert r.confidence == 0.95
+        assert r.confidence_score == 0.95
         assert r.captcha_type == CaptchaType.TEXT
         assert r.error_message is None

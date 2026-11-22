@@ -17,7 +17,7 @@ SubWorkflowStep
 
 SubWorkflowExecutor
     Resolves input mappings, executes the child workflow through a provided
-    WorkflowExecutor instance (recursive composition), captures outputs, and
+    LegacyWorkflowExecutor instance (recursive composition), captures outputs, and
     enforces a nesting depth limit to prevent infinite recursion.
 
 Module-level helpers
@@ -38,8 +38,8 @@ from constants.status_enums import TaskStatus
 from .variable_resolver import StepOutput, VariableResolver
 
 if TYPE_CHECKING:
-    # Avoid a circular import at runtime — WorkflowExecutor imports this module.
-    from .workflow_executor import WorkflowExecutor
+    # Avoid a circular import at runtime — LegacyWorkflowExecutor imports this module.
+    from .workflow_executor import LegacyWorkflowExecutor
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -102,14 +102,14 @@ class SubWorkflowExecutor:
        or accidentally cyclic compositions fail loudly rather than overflowing.
     2. Apply ``input_mapping`` — resolve parent variable expressions and build
        the child workflow's input context dict.
-    3. Delegate execution to the parent ``WorkflowExecutor`` instance (which
+    3. Delegate execution to the parent ``LegacyWorkflowExecutor`` instance (which
        already holds all agent callbacks and supporting infrastructure).
     4. Wrap the child execution context in a ``StepOutput`` keyed under
        ``output_key`` so parent steps can reference child results via the
        standard ``${steps.<id>.output.*}`` syntax.
 
     Args:
-        workflow_executor:  The parent ``WorkflowExecutor`` instance.  Reused
+        workflow_executor:  The parent ``LegacyWorkflowExecutor`` instance.  Reused
                             for child execution so circuit breaker, retry, and
                             checkpoint machinery applies uniformly.
         workflow_fetcher:   Callable ``(workflow_id: str) → workflow_dict | None``.
@@ -119,7 +119,7 @@ class SubWorkflowExecutor:
 
     def __init__(
         self,
-        workflow_executor: "WorkflowExecutor",
+        workflow_executor: "LegacyWorkflowExecutor",
         workflow_fetcher: WorkflowFetcher,
     ) -> None:
         self._executor = workflow_executor

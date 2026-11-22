@@ -1,6 +1,6 @@
 # Runbook: System Package Update
 
-**Issue #926 Phase 8** | Last updated: 2026-02-18
+**Issue #926 Phase 8** | Last updated: 2026-10-31
 
 ---
 
@@ -10,34 +10,10 @@ This runbook describes how to apply OS package updates (`apt upgrade`) to fleet 
 
 ---
 
-## Prerequisites
+## The rule
 
-- SLM server (`.19`) is running and healthy
-- SSH access from dev machine to target nodes
-- `autobot-slm-backend/ansible/` is the working directory
-
----
-
-## Quick Reference
-
-```bash
-# Check pending updates across all nodes
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/system-update.yml --tags check -i inventory/slm-nodes.yml
-
-# Apply updates (respects per-node policy)
-ansible-playbook playbooks/system-update.yml -i inventory/slm-nodes.yml
-
-# Single node
-ansible-playbook playbooks/system-update.yml \
-  -i inventory/slm-nodes.yml \
-  --limit 02-Frontend
-
-# Force full update (override policy — emergency patching)
-ansible-playbook playbooks/system-update.yml \
-  -e "force_full=true" \
-  -i inventory/slm-nodes.yml
-```
+Apply OS updates through the SLM web UI, not with a hand-run `ansible-playbook` or `apt`. If the UI
+cannot do something, that is a gap to fix in the SLM.
 
 ---
 
@@ -51,95 +27,35 @@ Each role declares its update policy in `autobot-infrastructure/autobot-<role>/m
 | `security` | `.19` (SLM), `.20` (backend), `.22` (NPU), `.24` (AI stack) | Security packages only | Scheduled reboot (maintenance window) |
 | `manual` | `.23` (database) | None — manual only | Manual with pre-approved downtime |
 
-The `manual` policy means Ansible **will not** apply updates automatically. An operator must explicitly run with `--limit 04-Database` after scheduling downtime.
+The `manual` policy means updates are not applied automatically. Schedule downtime, then apply them to that node from the System Updates tab.
 
 ---
 
 ## Step-by-Step Procedure
 
-### 1. Check Pending Updates
+### 1. Check pending updates
+
+In the SLM web UI, open **Maintenance > Updates**, then the **System Updates** tab, and choose
+**Check for Updates**. It lists the upgradable packages per node, with their severity.
+
+### 2. Apply updates
+
+Select packages and apply them, or use **Upgrade All**. Each run appears under
+**Update Jobs**, where it can be followed or cancelled.
+
+### 3. Handle reboots
+
+Applying updates through this tab does not reboot a node, and nothing in the tab shows which nodes need a reboot. Reboot from **Fleet Overview**, one node
+at a time, and wait for each to come back before the next. The reboot action does not check
+maintenance windows (#17661), so choosing the time is up to you.
+
+**Backend `.20` reboot note:** the backend takes about 6 minutes to fully initialize after a restart.
+
+### 4. Verify
+
+Run **Check for Updates** again; nothing applied should still be listed.
 
 ```bash
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/system-update.yml --tags check -i inventory/slm-nodes.yml
-```
-
-Output shows for each node:
-- Number of pending updates
-- Whether security updates are pending
-- Whether a reboot is required (`/var/run/reboot-required`)
-
-### 2. Review SLM Dashboard Alerts
-
-Navigate to SLM → **System Updates** page.
-
-Alerts are shown for:
-- Nodes with pending security updates (critical)
-- Nodes with pending full updates (warning)
-- Nodes with reboot-required flag (warning)
-
-### 3. Apply Updates
-
-**Standard run (all eligible nodes, respects policy):**
-
-```bash
-ansible-playbook playbooks/system-update.yml -i inventory/slm-nodes.yml
-```
-
-**Security-only run (explicit):**
-
-```bash
-ansible-playbook playbooks/system-update.yml \
-  -e "update_type=security" \
-  -i inventory/slm-nodes.yml
-```
-
-**Database node (manual policy — schedule downtime first):**
-
-```bash
-# After scheduling downtime window
-ansible-playbook playbooks/system-update.yml \
-  -i inventory/slm-nodes.yml \
-  --limit 04-Database \
-  -e "force_full=true"
-
-# Reboot if needed
-ansible 04-Database -i inventory/slm-nodes.yml -m reboot --become
-```
-
-### 4. Handle Reboots
-
-**`policy: full` nodes** (stateless, immediate reboot):
-
-The playbook automatically reboots these nodes if `/var/run/reboot-required` exists, then waits for them to come back up.
-
-**`policy: security` nodes** (stateful, scheduled reboot):
-
-The playbook does NOT reboot automatically. Schedule reboot during a maintenance window:
-
-```bash
-# Check if reboot is needed
-ansible slm_nodes -i inventory/slm-nodes.yml -m stat \
-  -a "path=/var/run/reboot-required" \
-  --become \
-  | grep -v "stat": | grep "exists"
-
-# Manual reboot (schedule one node at a time)
-ansible 00-SLM-Manager -i inventory/slm-nodes.yml -m reboot --become
-# → Wait for SLM to come back up before rebooting .20
-ansible 01-Backend -i inventory/slm-nodes.yml -m reboot --become
-# → Wait for backend to come back up (6 min startup)
-```
-
-**Backend `.20` reboot note:** The backend takes ~6 minutes to fully initialize after restart (loads GPUSemanticChunker, RAG optimizer, ChromaDB). Plan accordingly.
-
-### 5. Verify
-
-```bash
-# Check no pending updates remain
-ansible-playbook playbooks/system-update.yml --tags check -i inventory/slm-nodes.yml
-
-# Check services are healthy
 ssh autobot@<slm-manager-ip> "systemctl is-active autobot-slm-backend"
 ssh autobot@<slm-manager-ip> 'curl --insecure https://<backend-ip>:8443/api/health | jq .status'
 ```
@@ -159,18 +75,10 @@ After rebooting `.19`:
 
 ---
 
-## Unattended Security Updates (Optional)
+## Unattended Security Updates
 
-For nodes where `policy: security` is declared, unattended-upgrades can be enabled:
-
-```bash
-ansible-playbook playbooks/system-update.yml \
-  --tags enable_unattended \
-  -i inventory/slm-nodes.yml \
-  --limit 00-SLM-Manager,01-Backend
-```
-
-This installs and configures `unattended-upgrades` for security-only packages. Full updates and reboots still require manual operator action.
+Update modes and schedules in the UI are tracked in #18488. The earlier command for this used a tag
+that does not exist in the playbook.
 
 ---
 
@@ -201,7 +109,7 @@ Recommended maintenance window: **Tuesday 02:00–04:00** (weekly).
 
 ## Related
 
-- `system-update.yml` — apt update playbook
+- `system-update.yml` — apt update playbook; not for running by hand
 - `docs/architecture/UPDATE_FLOWS.md` — update flow diagrams
 - `docs/runbooks/CODE_UPDATE.md` — deploying application code (separate from OS updates)
 - `docs/runbooks/EMERGENCY_RECOVERY.md` — if a node fails to come back after reboot

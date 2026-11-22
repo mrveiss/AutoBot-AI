@@ -170,9 +170,8 @@ def test_every_unit_writer_in_the_tree_is_gated():
 
 
 def test_the_combined_host_owner_is_derived_where_both_roles_can_run():
-    """Both places that carry the role_*_active facts must agree, or a run that
-    loads one and not the other resolves differently."""
-    for rel in ("inventory/group_vars/all.yml", "playbooks/vars/role_active_facts.yml"):
+    """The single definition of the role_*_active facts derives the owner (#14678)."""
+    for rel in ("inventory/group_vars/all.yml",):
         text = (_ANSIBLE / rel).read_text(encoding="utf-8")
         assert "chromadb_service_owner" in text, f"{rel} does not derive the owner"
         assert (
@@ -257,7 +256,7 @@ def test_the_database_stack_owns_the_database():
     does not exist, and the unit reached NRestarts=4399 while reporting
     `activating`.
     """
-    for rel in ("inventory/group_vars/all.yml", "playbooks/vars/role_active_facts.yml"):
+    for rel in ("inventory/group_vars/all.yml",):
         line = next(
             ln
             for ln in (_ANSIBLE / rel).read_text(encoding="utf-8").splitlines()
@@ -269,15 +268,15 @@ def test_the_database_stack_owns_the_database():
 
     # #14289: deploy.yml no longer re-derives the owner itself -- a play `vars:`
     # override outranks the correct facts and was the bug. It must instead load
-    # the shared derivation via vars_files, which is asserted identical to the
-    # other two copies above.
+    # the shared derivation via vars_files, which is the single
+    # definition asserted above.
     deploy = yaml.safe_load((_ANSIBLE / "deploy.yml").read_text(encoding="utf-8"))[0]
     assert "chromadb_service_owner" not in (deploy.get("vars") or {}), (
         "deploy.yml re-derives chromadb_service_owner in its own vars: block again -- "
         "that always outranks the host-derived facts loaded below (#14289)"
     )
     vars_files = [str(v) for v in deploy.get("vars_files") or []]
-    assert any(v.endswith("role_active_facts.yml") for v in vars_files), (
+    assert any(v.endswith("group_vars/all.yml") for v in vars_files), (
         "deploy.yml does not load the shared role_*_active facts -- a caller with no "
         "group_vars sibling (services/deployment.py's bare `-i host,` invocation) would "
         "see chromadb_service_owner resolve to nothing or to the wrong value"

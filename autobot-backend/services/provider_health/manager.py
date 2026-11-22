@@ -12,7 +12,7 @@ from typing import Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .base import ProviderHealthResult, ProviderStatus
+from .base import ProviderHealthResult, ProviderHealthStatus
 from .providers import (
     AnthropicHealth,
     GoogleHealth,
@@ -99,7 +99,7 @@ class ProviderHealthManager:
         # Validate provider exists
         if provider not in providers:
             return ProviderHealthResult(
-                status=ProviderStatus.UNKNOWN,
+                status=ProviderHealthStatus.UNKNOWN,
                 available=False,
                 message=f"Unknown provider: {provider}",
                 response_time=0.0,
@@ -131,7 +131,7 @@ class ProviderHealthManager:
         except Exception as e:
             logger.error("Error checking %s health: %s", provider, str(e))
             return ProviderHealthResult(
-                status=ProviderStatus.UNKNOWN,
+                status=ProviderHealthStatus.UNKNOWN,
                 available=False,
                 message="Health check failed",
                 response_time=0.0,
@@ -169,7 +169,7 @@ class ProviderHealthManager:
             if isinstance(result, Exception):
                 logger.error(f"Provider {provider} health check raised exception: {str(result)}")
                 health_status[provider] = ProviderHealthResult(
-                    status=ProviderStatus.UNKNOWN,
+                    status=ProviderHealthStatus.UNKNOWN,
                     available=False,
                     message=f"Health check exception: {str(result)}",
                     response_time=0.0,

@@ -46,20 +46,19 @@ from api.schemas_system import (
     VncStatusMcpResponse,
     VNCStatusRequest,
 )
-from auth_middleware import check_admin_permission
+from auth_rbac import check_admin_mcp_tool_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.temp_files import temporary_file_path
 from autobot_shared.time_utils import parse_utc_iso
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
-router = APIRouter(
-    tags=["vnc_mcp", "mcp", "vnc"],
-    dependencies=[Depends(check_admin_permission)],
-)
+router = APIRouter(tags=["vnc_mcp", "mcp", "vnc"], dependencies=[Depends(check_admin_mcp_tool_permission)])
 
 # Lock for thread-safe access to vnc_observations
 _vnc_observations_lock = asyncio.Lock()
@@ -288,13 +287,12 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
     Check if specified VNC connection is active and accessible
     """
     vnc_type = request.vnc_type
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-
     try:
         http_client = get_http_client()
         async with await http_client.get(
-            f"{backend_url}/api/vnc-proxy/{vnc_type}/status",
+            f"{config.backend_url}/api/vnc-proxy/{vnc_type}/status",
             timeout=aiohttp.ClientTimeout(total=5),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             status_data = await response.json()
 
@@ -376,8 +374,6 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
 )
 async def get_browser_vnc_context_mcp() -> Metadata:
     """Get comprehensive browser VNC context: Playwright state + VNC activity. Ref: #1088."""
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    browser_vm_url = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
     context = {
         "success": True,
@@ -390,7 +386,7 @@ async def get_browser_vnc_context_mcp() -> Metadata:
     http_client = get_http_client()
     try:
         async with await http_client.get(
-            f"{browser_vm_url}/health", timeout=aiohttp.ClientTimeout(total=3)
+            f"{config.browser_service_url}/health", timeout=aiohttp.ClientTimeout(total=3), guard_egress=EGRESS_POLICY
         ) as response:
             if response.status == 200:
                 playwright_data = await response.json()
@@ -408,8 +404,9 @@ async def get_browser_vnc_context_mcp() -> Metadata:
     # Get VNC state using singleton HTTP client
     try:
         async with await http_client.get(
-            f"{backend_url}/api/vnc-proxy/browser/status",
+            f"{config.backend_url}/api/vnc-proxy/browser/status",
             timeout=aiohttp.ClientTimeout(total=3),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             if response.status == 200:
                 vnc_data = await response.json()

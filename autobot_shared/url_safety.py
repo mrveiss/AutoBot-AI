@@ -211,6 +211,62 @@ async def is_public_url_async(url: str, *, allow_private: bool = False) -> bool:
     return await loop.run_in_executor(None, functools.partial(is_public_url, url, allow_private=True))
 
 
+LOOPBACK, PRIVATE, PUBLIC = "loopback", "private", "public"
+
+
+def ip_locality(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
+    """``loopback`` / ``private`` / ``public`` for one address, by this module's own range rules.
+
+    Private is RFC 1918, ULA, CGNAT and link-local (``fe80::/10`` included). Multicast, reserved and unspecified
+    addresses are never a place a prompt is kept on the operator's network, so they classify as ``public``.
+    """
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
+    if ip.is_loopback:
+        return LOOPBACK
+    if ip.is_link_local or _ip_is_private(ip):
+        return PRIVATE
+    return PUBLIC
+
+
+async def url_locality_async(url: str, *, timeout: float = _DNS_TIMEOUT_SECONDS) -> str:
+    """The locality class of *url*'s host, resolved to addresses and failing closed.
+
+    A hostname is ``loopback`` or ``private`` only when it resolves and EVERY address does; an unresolvable or
+    empty host, or any public address among the answers, makes it ``public``.
+    """
+    host = (urlparse(url).hostname or "").strip("[]").split("%", 1)[0].lower()
+    if not host:
+        return PUBLIC
+    try:
+        addresses = [ipaddress.ip_address(host)]
+    except ValueError:
+        addresses = await _resolve_addresses(host, timeout)
+    classes = {ip_locality(ip) for ip in addresses}
+    if not classes or PUBLIC in classes:
+        return PUBLIC
+    return LOOPBACK if classes == {LOOPBACK} else PRIVATE
+
+
+async def _resolve_addresses(host: str, timeout: float) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Every address *host* resolves to; empty when it does not resolve in time."""
+    try:
+        infos = await asyncio.wait_for(
+            asyncio.get_running_loop().getaddrinfo(host, None, type=socket.SOCK_STREAM), timeout=timeout
+        )
+    except (TimeoutError, OSError):
+        return []
+    found = []
+    for info in infos:
+        text = info[4][0]
+        try:
+            found.append(ipaddress.ip_address(text.split("%", 1)[0] if isinstance(text, str) else ""))
+        except ValueError:
+            continue
+    return found
+
+
 async def resolve_safe_ip_async(
     host: str, *, timeout: float = _DNS_TIMEOUT_SECONDS, allow_private: bool = False
 ) -> str:
@@ -227,11 +283,13 @@ async def resolve_safe_ip_async(
     host:
         Raw hostname or IP literal — not a full URL.
     timeout:
-        DNS resolution timeout in seconds (default 2.0).
+        DNS resolution timeout in seconds (default 2.0); past it, ``ValueError``.
     """
     loop = asyncio.get_running_loop()
     try:
-        infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        infos = await asyncio.wait_for(loop.getaddrinfo(host, None, type=socket.SOCK_STREAM), timeout=timeout)
+    except TimeoutError as exc:  # before OSError, its base class
+        raise ValueError(f"DNS resolution timeout for {host}") from exc
     except (socket.gaierror, OSError) as exc:
         raise ValueError(f"Could not resolve host '{host}': {exc}") from exc
 

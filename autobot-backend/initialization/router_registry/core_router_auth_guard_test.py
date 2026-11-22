@@ -81,7 +81,8 @@ Reused from #15737's own working example
    ``authenticate_websocket``, or -- one hop only, and only into a function
    defined in the *same module* as the endpoint, matching the actual pattern
    above -- for a reference to a helper whose own code references
-   ``get_auth_middleware``/``get_user_from_request``. This is a structural
+   ``get_auth_middleware``/``get_user_from_request``/``resolve_human_user``
+   (#18688). This is a structural
    reading of the real call graph, not a name guess: it is why ``files``
    (gated, via ``_check_file_permission``) and ``transcriber`` (NOT gated --
    its ``request.state.user`` is never populated, so every caller resolves to
@@ -131,8 +132,11 @@ back to ten.
 
 from __future__ import annotations
 
+import dis
 import inspect
 from typing import Any, Callable
+
+import pytest
 
 from api.user_management.dependencies import get_current_user as _um_get_current_user
 from api.user_management.dependencies import require_platform_admin as _um_require_platform_admin
@@ -161,7 +165,17 @@ _PERMISSION_FACTORY_QUALNAME_PREFIXES = ("require_permission.<locals>", "require
 # ``api/files.py`` each use instead of ``Depends(...)`` (4 in the module
 # docstring). Referencing one of these by name is what makes a helper an
 # auth check rather than an unrelated ``Request``-taking function.
-_AUTH_PRIMITIVE_NAMES = ("get_auth_middleware", "get_user_from_request")
+# resolve_human_user: the canonical async resolution (JWT revocation included) the gates call (#18688).
+_AUTH_PRIMITIVE_NAMES = ("get_auth_middleware", "get_user_from_request", "resolve_human_user")
+# Each primitive above answers ``None`` for an anonymous caller, so naming one is a gate only when the
+# same code also rejects: a ``raise <exc>`` (not a bare re-raise) or the shared ``raise_auth_error``.
+# A handler that resolves the user and carries on with ``None`` (#18688's ``create_session``) is not one.
+_REJECTION_HELPER_NAMES = ("raise_auth_error",)
+# A dependency that looks the canonical gate up at call time (``auth_middleware.get_current_user(request)``,
+# so a test can patch the module attribute) holds no identity to compare; the attribute pair in its
+# own code is the gate (#18811's ``canonical_caller`` / ``claims_principal``).
+_LATE_BOUND_GATE_MODULE = "auth_middleware"
+_LATE_BOUND_GATE_NAMES = ("get_current_user", "check_admin_permission")
 
 _WEBSOCKET_AUTH_NAME = "authenticate_websocket"
 
@@ -246,6 +260,18 @@ def _is_permission_factory_product(call: Any) -> bool:
     return module in _PERMISSION_FACTORY_MODULES and qualname.startswith(_PERMISSION_FACTORY_QUALNAME_PREFIXES)
 
 
+def _rejects(code: Any) -> bool:
+    """True if *code* raises an exception of its own (``raise X``, not a bare re-raise) or a rejection helper."""
+    if any(name in code.co_names for name in _REJECTION_HELPER_NAMES):
+        return True
+    return any(ins.opname == "RAISE_VARARGS" and ins.arg for ins in dis.get_instructions(code))
+
+
+def _resolves_and_rejects(code: Any) -> bool:
+    """True if *code* names an auth primitive AND rejects -- the in-body gate shape (4)."""
+    return any(p in code.co_names for p in _AUTH_PRIMITIVE_NAMES) and _rejects(code)
+
+
 def _references_auth_primitive(call: Any) -> bool:
     """True if *call*'s own code references a low-level auth primitive.
 
@@ -256,7 +282,9 @@ def _references_auth_primitive(call: Any) -> bool:
     code = getattr(call, "__code__", None)
     if code is None:
         return False
-    return any(primitive in code.co_names for primitive in _AUTH_PRIMITIVE_NAMES)
+    if _resolves_and_rejects(code):
+        return True
+    return _LATE_BOUND_GATE_MODULE in code.co_names and any(n in code.co_names for n in _LATE_BOUND_GATE_NAMES)
 
 
 def _dependant_tree_is_gated(dependant: Any) -> bool:
@@ -305,7 +333,7 @@ def _endpoint_body_is_gated(endpoint: Any) -> bool:
     code = getattr(func, "__code__", None)
     if code is None:
         return False
-    if _WEBSOCKET_AUTH_NAME in code.co_names or any(p in code.co_names for p in _AUTH_PRIMITIVE_NAMES):
+    if _WEBSOCKET_AUTH_NAME in code.co_names or _resolves_and_rejects(code):
         return True
     return _same_module_helper_is_gated(func, code)
 
@@ -401,14 +429,39 @@ def _open_endpoint() -> None:
 
 
 def _gated_endpoint() -> None:
-    """References a recognised auth primitive directly -- the must-NOT-fire half."""
-    get_auth_middleware()
+    """Resolves through a recognised auth primitive and rejects a missing user -- the must-NOT-fire half."""
+    if get_auth_middleware() is None:
+        raise PermissionError("authentication required")
     return None
+
+
+def _resolve_only_endpoint() -> None:
+    """Resolves through the primitive but carries on with ``None`` (#18688's ``create_session``) -- must fire."""
+    user = get_auth_middleware()
+    return user
+
+
+def _reraise_only_endpoint() -> None:
+    """Resolves, and its only ``raise`` is a bare re-raise -- not a rejection, must fire."""
+    try:
+        return get_auth_middleware()
+    except ValueError:
+        raise
 
 
 def get_auth_middleware() -> None:  # noqa: D401 - contrast-pair stand-in, not the real one
     """Stand-in with the primitive's exact name, so ``co_names`` matches it."""
     return None
+
+
+async def _late_bound_gate(request: Any) -> Any:
+    """Looks the canonical gate up at call time, the #18811 shape -- must count as gated."""
+    return await auth_middleware.get_current_user(request)  # noqa: F821 - never executed, co_names only
+
+
+async def _late_bound_lookalike(request: Any) -> Any:
+    """Same attribute name on another module -- must NOT count as gated."""
+    return await session_store.get_current_user(request)  # noqa: F821 - never executed, co_names only
 
 
 class TestContrastPair:
@@ -436,6 +489,14 @@ class TestContrastPair:
         router.get("/gated")(_gated_endpoint)
         assert _router_is_gated(router) is True
 
+    @pytest.mark.parametrize("endpoint", [_resolve_only_endpoint, _reraise_only_endpoint])
+    def test_resolving_the_user_without_rejecting_none_is_not_a_gate(self, endpoint):
+        from fastapi import APIRouter
+
+        router = APIRouter()
+        router.get("/resolves")(endpoint)
+        assert _router_is_gated(router) is False
+
     def test_classify_helpers_agree_on_a_synthetic_dependant_tree(self):
         """Unit-level pair mirroring #15737's own ``TestClassifyHelperContrastPair``."""
         open_dependant = _FakeDependant(call=lambda: None)
@@ -445,3 +506,12 @@ class TestContrastPair:
         middle = _FakeDependant(call=lambda: None, dependencies=[inner])
         gated_dependant = _FakeDependant(call=lambda: None, dependencies=[middle])
         assert _dependant_tree_is_gated(gated_dependant) is True
+
+    def test_a_late_bound_canonical_gate_counts_and_a_lookalike_does_not(self):
+        """``auth_middleware.get_current_user(...)`` resolved at call time is a gate; another module's is not."""
+        assert _dependant_tree_is_gated(
+            _FakeDependant(call=lambda: None, dependencies=[_FakeDependant(_late_bound_gate)])
+        )
+        assert not _dependant_tree_is_gated(
+            _FakeDependant(call=lambda: None, dependencies=[_FakeDependant(_late_bound_lookalike)])
+        )

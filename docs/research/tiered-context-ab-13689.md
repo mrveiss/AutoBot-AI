@@ -165,3 +165,13 @@ default is explained where it is defined, not only here.
 PYTHONPATH=".:autobot-backend" python3 autobot-backend/scripts/tiered_context_ab.py
 PYTHONPATH=".:autobot-backend" python3 autobot-backend/scripts/tiered_context_ab.py --json
 ```
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #13685 — umbrella: the tiered L0–L4 context stack was built and never ran — 2 of 5 layers cannot render
+- #13689 — test(memory): run the #5066 A/B with all five layers live and record the result (closed)
+- #13742 — fix(memory): L3 DeepSearch duplicates the RAG retrieval the chat path already performs (closed)
+- #13866 — fix(context): revert tiered_context_enabled to off — the A/B it was flipped on measured mocks, and 3 of 5 layers cannot render (closed)
+- #14349 — The tiered context stack is still shipped dark — re-run the A/B against a live backend and settle the flag

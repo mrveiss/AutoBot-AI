@@ -33,6 +33,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
@@ -55,7 +56,7 @@ def _org_hash_key(org_id: str) -> str:
 def _is_org_admin(current_user: dict) -> bool:
     """Check if user has org admin privileges."""
     role = current_user.get("role", "").lower()
-    return role in ["admin", "org_admin", "owner"]
+    return is_admin_role(role) or role in ("org_admin", "owner")
 
 
 class PresetCreate(BaseModel):

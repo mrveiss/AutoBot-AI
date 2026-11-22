@@ -75,13 +75,12 @@ class TestLinkPipelineHtmlParsing:
         return BeautifulSoup(html, "html.parser")
 
     def test_extract_title_from_title_tag(self):
-        soup = self._soup("<html><head><title>My Title</title></head></html>")
-        assert self.pipe._extract_title(soup) == "My Title"
+        html = "<html><head><title>My Title</title></head></html>"
+        assert self.pipe._parse_html(html, "https://test.com/", "text/html", {})["title"] == "My Title"
 
     def test_extract_title_prefers_og(self):
         html = '<html><head><meta property="og:title" content="OG Title"><title>Regular</title></head></html>'
-        soup = self._soup(html)
-        assert self.pipe._extract_title(soup) == "OG Title"
+        assert self.pipe._parse_html(html, "https://test.com/", "text/html", {})["title"] == "OG Title"
 
     def test_extract_description_meta(self):
         html = '<html><head><meta name="description" content="Meta desc"></head></html>'
@@ -99,8 +98,7 @@ class TestLinkPipelineHtmlParsing:
         assert self.pipe._extract_description(soup) == "OG desc"
 
     def test_extract_main_text_removes_boilerplate(self):
-        soup = self._soup(SAMPLE_HTML)
-        text = self.pipe._extract_main_text(soup)
+        text = self.pipe._extract_document(SAMPLE_HTML, "https://test.com/page").text
         assert "Main content" in text
         assert "Navigation junk" not in text
         assert "Footer junk" not in text
@@ -884,12 +882,12 @@ class TestJinaPooledSession:
 
         manager = get_http_client()
         sentinel_session = MagicMock(closed=False)
-
+        before = manager._active_requests  # relative: an earlier test can leave the singleton raised (#18912)
         with patch.object(manager, "get_session", new=AsyncMock(return_value=sentinel_session)):
             async with pl._get_jina_session() as session:
                 assert session is sentinel_session
-
-        assert manager._active_requests == 0, "counter must be back to 0 after the CM exits"
+                assert manager._active_requests == before + 1, "the CM must count its request"
+        assert manager._active_requests == before, "counter must return to its start after the CM exits"
 
     @pytest.mark.asyncio
     async def test_shared_session_reused_across_calls(self, _reset_jina_state):

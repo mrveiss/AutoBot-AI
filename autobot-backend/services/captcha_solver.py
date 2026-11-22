@@ -35,13 +35,13 @@ Related: Issue #206
 from __future__ import annotations
 
 import io
-import re
 from typing import TYPE_CHECKING
 
+from autobot_shared.captcha_types import HUMAN_ONLY_TYPES, CaptchaSolveResult, CaptchaType, SolverConfidence
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.slug import sanitize_token
 from services.captcha_math import solve_math_expression
-from services.captcha_types import HUMAN_ONLY_TYPES, CaptchaSolveResult, CaptchaType
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -50,9 +50,6 @@ logger = get_logger(__name__)
 
 # Issue #380: Module-level frozensets for CAPTCHA type detection
 _MATH_OPERATORS = frozenset({"+", "-", "=", "\u00d7", "\u00f7", "*"})
-
-# Issue #380: Pre-compiled regex patterns for CAPTCHA processing
-_NON_ALNUM_RE = re.compile(r"[^A-Za-z0-9]")
 
 
 class CaptchaSolver:
@@ -133,8 +130,9 @@ class CaptchaSolver:
             return CaptchaSolveResult(
                 success=False,
                 captcha_type=captcha_type,
-                method_used="ocr",
+                confidence=SolverConfidence.NONE,
                 error_message=f"{captcha_type.value} requires human intervention",
+                requires_human=True,
             )
         # Default: try text solver
         return await self._solve_text_captcha(image, expected_length, char_set)
@@ -179,8 +177,8 @@ class CaptchaSolver:
             return CaptchaSolveResult(
                 success=False,
                 captcha_type=captcha_type,
-                method_used="ocr",
                 error_message=str(e),
+                requires_human=True,
                 processing_time_ms=(time.time() - start_time) * 1000,
             )
 
@@ -267,16 +265,26 @@ class CaptchaSolver:
             logger.debug("OCR attempt failed: %s", e)
             return None, 0.0
 
-    def _build_text_captcha_failure(self, best_confidence: float) -> CaptchaSolveResult:
+    def _get_confidence_level(self, confidence: float) -> SolverConfidence:
+        """
+        Determine confidence level from numeric confidence score. Issue #620.
+        """
+        if confidence >= 0.9:
+            return SolverConfidence.HIGH
+        elif confidence >= 0.7:
+            return SolverConfidence.MEDIUM
+        return SolverConfidence.LOW
+
+    def _build_text_captcha_failure(self, best_result: str | None) -> CaptchaSolveResult:
         """
         Build failure result for text CAPTCHA solving. Issue #620.
         """
         return CaptchaSolveResult(
             success=False,
             captcha_type=CaptchaType.TEXT,
-            confidence=best_confidence,
-            method_used="ocr",
+            confidence=SolverConfidence.LOW if best_result else SolverConfidence.NONE,
             error_message="OCR confidence too low",
+            requires_human=True,
         )
 
     async def _solve_text_captcha(
@@ -301,6 +309,7 @@ class CaptchaSolver:
                 success=False,
                 captcha_type=CaptchaType.TEXT,
                 error_message="Tesseract OCR not available",
+                requires_human=True,
             )
 
         processed_images = await self._preprocess_for_ocr(image)
@@ -318,11 +327,11 @@ class CaptchaSolver:
                 success=True,
                 captcha_type=CaptchaType.TEXT,
                 solution=best_result,
-                confidence=best_confidence,
-                method_used="ocr",
+                confidence=self._get_confidence_level(best_confidence),
+                requires_human=False,
             )
 
-        return self._build_text_captcha_failure(best_confidence if best_result else 0.0)
+        return self._build_text_captcha_failure(best_result)
 
     async def _solve_math_captcha(self, image: Image.Image) -> CaptchaSolveResult:
         """
@@ -339,6 +348,7 @@ class CaptchaSolver:
                 success=False,
                 captcha_type=CaptchaType.MATH,
                 error_message="Tesseract OCR not available",
+                requires_human=True,
             )
 
         try:
@@ -353,8 +363,8 @@ class CaptchaSolver:
                     success=True,
                     captcha_type=CaptchaType.MATH,
                     solution=str(solution),
-                    confidence=1.0,
-                    method_used="ocr",
+                    confidence=SolverConfidence.HIGH,
+                    requires_human=False,
                 )
 
         except Exception as e:
@@ -364,6 +374,7 @@ class CaptchaSolver:
             success=False,
             captcha_type=CaptchaType.MATH,
             error_message="Could not parse math expression",
+            requires_human=True,
         )
 
     async def _preprocess_for_ocr(self, image: Image.Image) -> list:
@@ -440,7 +451,7 @@ class CaptchaSolver:
             Cleaned text
         """
         # Remove spaces and special characters (Issue #380: use pre-compiled pattern)
-        text = _NON_ALNUM_RE.sub("", text)
+        text = sanitize_token(text, allowed="A-Za-z0-9", replacement="", collapse=False)
 
         # Common OCR mistakes
         replacements = {

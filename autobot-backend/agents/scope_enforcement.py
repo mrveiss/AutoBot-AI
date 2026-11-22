@@ -43,7 +43,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
-import re
 import time
 from dataclasses import dataclass
 from typing import AsyncIterator, Sequence
@@ -60,6 +59,7 @@ from autobot_shared.coordination.work_claims import (
 )
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import sanitize_token
 from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
@@ -245,9 +245,9 @@ def scope_segment(text: str) -> str:
     it is stable, unique, and it still collides for two agents writing the same
     title, which is the collision that matters.
     """
-    cleaned = re.sub(r"[^A-Za-z0-9._@+-]+", "-", text).strip("-")
+    cleaned = sanitize_token(text, allowed="A-Za-z0-9._@+-", strip_edges="-", max_length=_MAX_SEGMENT)
     if cleaned:
-        return cleaned[:_MAX_SEGMENT]
+        return cleaned
     return "x-" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
@@ -261,12 +261,12 @@ def refused_response(request, conflict: ClaimConflict, *, agent_type: str):
     lossy summary of it. The metadata is the shared refusal shape (#16208).
 
     Imported lazily to keep this module importable from `base_agent`, which is
-    where `AgentResponse` lives.
+    where `StandardizedAgentResponse` lives.
     """
-    from agents.base_agent_types import AgentResponse
+    from agents.base_agent_types import StandardizedAgentResponse
 
     logger.info("Agent %s refused: %s", agent_type, conflict)
-    return AgentResponse(
+    return StandardizedAgentResponse(
         request_id=request.request_id,
         agent_type=agent_type,
         status="refused",
