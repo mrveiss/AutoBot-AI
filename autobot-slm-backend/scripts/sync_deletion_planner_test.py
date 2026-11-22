@@ -23,6 +23,7 @@ import sys
 import types
 from pathlib import Path
 
+from autobot_shared import stream_logging
 from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 _SCRIPTS_DIR = Path(__file__).parent
@@ -90,6 +91,11 @@ finally:
             sys.modules[_name] = _prev
 
 main = _planner.main
+
+# #22044: importing the planner switches the process's stdout log handlers to stderr. That is
+# process-wide state, so note it and clear it: every other test in the session keeps stdout handlers.
+_ROUTED_ON_IMPORT = stream_logging._stdout_is_machine_interface
+stream_logging._stdout_is_machine_interface = False
 
 
 _GIT_ENV = isolated_git_env()
@@ -284,3 +290,39 @@ def test_ensure_full_history_mode_exits_nonzero_when_the_unshallow_fails(tmp_pat
     payload = json.loads(capsys.readouterr().out)
     assert payload["error"] is not None
     assert "unshallow" in payload["error"].lower()
+
+
+def test_importing_the_planner_routes_console_logs_to_stderr() -> None:
+    """#22044: stdout is the planner's interface, so the import must move the log handlers off it."""
+    assert _ROUTED_ON_IMPORT is True
+
+
+def test_a_kept_path_leaves_stdout_exactly_one_json_document(tmp_path) -> None:
+    """#22044: a kept path logs at INFO; that line used to land on stdout ahead of the JSON (`from_json` failed at char 4).
+
+    Runs the planner as production does -- a fresh interpreter, the real import order and the real
+    handlers -- so it fails if `route_console_to_stderr()` moves after the service imports.
+    """
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "kept.log")
+    _write(repo / "comp" / "gone.py")
+    commit_a = _commit_all(repo, "seed")
+    _write(repo / ".gitignore", "*.log\n")
+    (repo / "comp" / "kept.log").unlink()
+    (repo / "comp" / "gone.py").unlink()
+    commit_b = _commit_all(repo, "ignore logs, delete both")
+
+    cmd = [sys.executable, str(_SCRIPTS_DIR / "sync_deletion_planner.py"), "diff"]
+    cmd += ["--repo-root", str(repo), "--source-dir", str(repo / "comp")]
+    cmd += ["--previous-commit", commit_a, "--new-commit", commit_b]
+    done = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=120)
+
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == {
+        "delete": ["gone.py"],
+        "kept": ["kept.log"],
+        "error": None,
+        "bootstrap_required": False,
+    }
+    assert "keeping kept.log" in done.stderr

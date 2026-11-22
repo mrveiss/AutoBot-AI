@@ -203,7 +203,7 @@ server {
         # #10565: transcriber/knowledge media uploads (audio/video) exceed
         # nginx's 1m default and were rejected with 413. The app enforces its
         # own per-file limit; allow large bodies here for the user backend.
-        {{ lookup('file', role_path ~ '/../../_shared/files/upload-cap.conf') }}
+        {{ lookup('file', proxy_upload_cap_file) }}
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
