@@ -23,4 +23,5 @@ xrdp_register_credentials: true
 # backend on co-located hosts, so SLM auth there returns 401.
 slm_api_url: "https://{{ slm_host | default('127.0.0.1') }}/slm"
 slm_admin_user: "admin"
-slm_admin_password: "{{ lookup('env', 'SLM_ADMIN_PASSWORD') | default('admin', true) }}"
+# slm_admin_password has no default: tasks/register-credentials.yml resolves it through
+# _shared/tasks/read_slm_admin_password.yml, the one reader (#19318).

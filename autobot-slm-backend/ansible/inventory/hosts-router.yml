@@ -13,8 +13,8 @@ all:
     autobot_cluster:
       vars:
         # Network config read from install-time secrets (no hardcoded IPs — #3266)
-        network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') | default('0.0.0.0/0', true) }}"
-        network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') | default('0.0.0.0', true) }}"
+        network_subnet: "{{ (lookup('env', 'NETWORK_SUBNET') | trim) or undef(hint='network_subnet is unset: set NETWORK_SUBNET in the environment or in /etc/autobot/slm-secrets.env. It is a firewall source, so it never falls back to an open range (#17642)') }}"
+        network_gateway: "{{ (lookup('env', 'NETWORK_GATEWAY') | trim) or undef(hint='network_gateway is unset: set NETWORK_GATEWAY in the environment or in /etc/autobot/slm-secrets.env (#17642)') }}"
         dns_servers:
           - "{{ dns_nameservers[0] }}"
           - "{{ dns_nameservers[1] }}"

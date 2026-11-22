@@ -68,6 +68,14 @@ def _fake_redis_store() -> MagicMock:
     return mock
 
 
+@pytest.fixture(autouse=True)
+def _working_encryption(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Webhook secrets fail closed without encryption (#19759); give these tests a key."""
+    from encryption_service import EncryptionService
+
+    monkeypatch.setattr("services.trigger_secrets._encryption_service", EncryptionService(master_key="k" * 48))
+
+
 # ---------------------------------------------------------------------------
 # Condition evaluation
 # ---------------------------------------------------------------------------

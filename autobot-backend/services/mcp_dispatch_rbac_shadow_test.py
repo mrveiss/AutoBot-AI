@@ -104,9 +104,8 @@ def test_administrative_roles_are_not_reported_as_unknown(role):
     *unrecognised string*. That was the defect: an administrative role and a typo
     produced the same verdict.
 
-    It is a ``Role`` member now, so it resolves — and what it resolves to is a role
-    holding no granular permission. The verdict is therefore about a missing
-    grant, never about an unknown role. That distinction is the one this test
+    It is a ``Role`` member now, so it resolves — and since #19125 it resolves to
+    admin's permissions. The verdict is therefore never about an unknown role. That distinction is the one this test
     exists to protect, and it is asserted directly below rather than inferred from
     ``is None``.
     """
@@ -129,17 +128,15 @@ def test_admin_is_permitted_every_declared_tool(role):
 
 
 @pytest.mark.parametrize("role", ["superadmin", "SUPERADMIN"])
-def test_superadmin_is_refused_a_tool_whose_permission_it_does_not_hold(role):
-    """#13854: this gate stopped short-circuiting on the administrative predicate.
+def test_superadmin_is_permitted_every_declared_tool_through_its_grants(role):
+    """#19125: superadmin holds admin's set, so it is never denied a declared tool.
 
-    Before, ``is_admin_role`` waved superadmin through every tool while the
-    canonical mapping said it held nothing — ``ADMIN_ROLES`` acting as a
-    permission source. The refusal names the missing grant, so the reason is
-    actionable rather than a bare denial.
+    The gate still does not short-circuit on the administrative predicate
+    (#13854): it is admitted because the canonical mapping grants the permission.
     """
     d = _dispatcher({"click": _tool("click", "mcp.browser.control")})
 
-    assert d._would_deny("click", role) == "missing:mcp.browser.control"
+    assert d._would_deny("click", role) is None
 
 
 def test_a_known_role_in_the_wrong_case_still_resolves():

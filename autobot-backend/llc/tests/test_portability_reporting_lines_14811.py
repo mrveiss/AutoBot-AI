@@ -33,40 +33,25 @@ rather than written as a pointer to nothing.
 from __future__ import annotations
 
 import uuid
-from types import SimpleNamespace
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from llc.services.portability import PortabilityService
-
-
-class _FakeSession:
-    """Captures executed statements; enough of AsyncSession for execute_import."""
-
-    def __init__(self) -> None:
-        self.statements: List[Any] = []
-
-    async def execute(self, statement, *args, **kwargs):
-        self.statements.append(statement)
-        return SimpleNamespace(mappings=lambda: SimpleNamespace(first=lambda: None))
-
-    async def begin_nested(self):
-        return SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
-
+from testkit.fake_async_session import FakeAsyncSession
 
 COMPANY = "co-under-test"
 
 
-def _update_params(session: _FakeSession) -> List[Dict[str, Any]]:
+def _update_params(session: FakeAsyncSession) -> List[Dict[str, Any]]:
     """Bound params of every reporting-line UPDATE the linker issued."""
     return [
         stmt.compile().params for stmt in session.statements if "UPDATE agent_org_nodes SET reports_to" in str(stmt)
     ]
 
 
-def _updates(session: _FakeSession) -> Dict[str, str]:
+def _updates(session: FakeAsyncSession) -> Dict[str, str]:
     """agent_id -> reports_to, for every UPDATE the linker issued."""
     out: Dict[str, str] = {}
     for stmt in session.statements:
@@ -85,7 +70,7 @@ class TestALandedManagerGetsItsReportingLine:
     @pytest.mark.asyncio
     async def test_the_line_uses_the_destination_id_not_the_source_id(self):
         """The remap still has to happen — it just has to happen against reality."""
-        session = _FakeSession()
+        session = FakeAsyncSession()
         svc = PortabilityService(session)
         agents = [_agent("src-mgr", "CEO"), _agent("src-sub", "Engineer", reports_to="src-mgr")]
         landed = {"src-mgr": "dst-mgr", "src-sub": "dst-sub"}
@@ -107,7 +92,7 @@ class TestASkippedManagerLeavesNoDanglingPointer:
         care which gate declined the manager; what matters is that it is not in
         `landed`.
         """
-        session = _FakeSession()
+        session = FakeAsyncSession()
         svc = PortabilityService(session)
         agents = [_agent("src-mgr", "CEO"), _agent("src-sub", "Engineer", reports_to="src-mgr")]
         landed = {"src-sub": "dst-sub"}  # the manager did not land, for `reason`
@@ -128,7 +113,7 @@ class TestASkippedManagerLeavesNoDanglingPointer:
     @pytest.mark.asyncio
     async def test_a_manager_absent_from_the_template_entirely_is_also_reported(self):
         """A hand-authored template can name an id that was never in the file."""
-        session = _FakeSession()
+        session = FakeAsyncSession()
         svc = PortabilityService(session)
         agents = [_agent("src-sub", "Engineer", reports_to="never-existed")]
         dropped: List[Dict[str, str]] = []
@@ -143,7 +128,7 @@ class TestASkippedManagerLeavesNoDanglingPointer:
     @pytest.mark.asyncio
     async def test_a_skipped_subordinate_is_not_reported_as_a_dropped_line(self):
         """It has no reporting line to lose — it was never created."""
-        session = _FakeSession()
+        session = FakeAsyncSession()
         svc = PortabilityService(session)
         agents = [_agent("src-mgr", "CEO"), _agent("src-sub", "Engineer", reports_to="src-mgr")]
         dropped: List[Dict[str, str]] = []
@@ -158,7 +143,7 @@ class TestNothingIsLostWhenNothingIsSkipped:
     @pytest.mark.asyncio
     async def test_every_declared_reporting_line_survives_a_clean_import(self):
         """The no-data-loss invariant, asserted rather than assumed."""
-        session = _FakeSession()
+        session = FakeAsyncSession()
         svc = PortabilityService(session)
         agents = [
             _agent("a", "CEO"),
@@ -186,7 +171,7 @@ class TestTheImportActuallyRunsPassThree:
 
     @pytest.mark.asyncio
     async def test_execute_import_links_landed_agents_and_reports_the_rest(self):
-        session = _FakeSession()
+        session = FakeAsyncSession()
         svc = PortabilityService(session)
         template = {
             "agents": [_agent("src-mgr", "CEO"), _agent("src-sub", "Engineer", reports_to="src-mgr")],
@@ -200,6 +185,8 @@ class TestTheImportActuallyRunsPassThree:
         with (
             patch.object(PortabilityService, "_validate_schema", return_value=None),
             patch.object(PortabilityService, "_resolve_or_create_company", AsyncMock(return_value=company_id)),
+            # The CEO step has its own SQLite tests (#19588); this mock session cannot run it.
+            patch("llc.services.portability.settle_imported_ceo", AsyncMock()),
             patch.object(PortabilityService, "_import_agent", side_effect=_import_agent),
         ):
             result = await svc.execute_import(template)
@@ -229,7 +216,7 @@ class TestTheUpdateCannotReachAnotherCompany:
         parameter keeps that safety visible at this call site rather than
         inferred from a distant schema.
         """
-        session = _FakeSession()
+        session = FakeAsyncSession()
         svc = PortabilityService(session)
         agents = [_agent("src-mgr", "CEO"), _agent("src-sub", "Engineer", reports_to="src-mgr")]
 

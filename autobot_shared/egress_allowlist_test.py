@@ -97,7 +97,7 @@ def test_cdp_and_websocket_origins_are_dropped_with_distinct_ports(monkeypatch):
         aistack_url="http://10.0.0.1:8080",
         npu_worker_url="http://10.0.0.1:8081",
         tts_worker_url="http://10.0.0.1:8083",
-        browser_service_url="http://10.0.0.1:3000",
+        browser_service_url="http://10.0.0.1:9001",
         slm_url="http://10.0.0.1:8000",
         chrome_cdp_url="http://10.0.0.1:9222",
         vnc_url="http://10.0.0.1:6080/vnc.html",
@@ -180,7 +180,10 @@ def manager(monkeypatch):
     mgr = HTTPClientManager()
     session = MagicMock()
     session.request = AsyncMock(return_value="response")
-    monkeypatch.setattr(mgr, "get_session", AsyncMock(return_value=session))
+    # On the CLASS, not the instance (#19527): HTTPClientManager() is the process
+    # singleton, and undoing an instance setattr leaves the old bound method in its
+    # __dict__, where it shadows every later class-level patch in the same worker.
+    monkeypatch.setattr(HTTPClientManager, "get_session", AsyncMock(return_value=session))
     # request() hands the active-request slot to the caller; restore the counters so a shared
     # manager instance does not leak this module's in-flight count into later tests.
     for attr in ("_active_requests", "_request_count", "_error_count"):

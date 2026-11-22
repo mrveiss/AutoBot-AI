@@ -25,12 +25,16 @@ from typing import Any, Dict, List, Tuple
 
 import aiohttp
 
+from autobot_shared.egress_allowlist import normalize_origin
 from autobot_shared.embedding_model import active_embedding_model, npu_worker_model_name
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_api_url
 from autobot_shared.ssot_config import config, get_config
+from autobot_shared.ssot_constants import PATH_OLLAMA_EMBEDDINGS
+from services.npu_worker_routing import npu_worker_urls, worker_attempts
 
 logger = get_logger(__name__)
 
@@ -175,27 +179,39 @@ class NPUClient:
 
         # Perform health check
         async with self._lock:
-            try:
-                session = await self._get_session()
-                url = f"{self.base_url}/health"
-                await assert_egress_policy(url)
-                async with session.get(
-                    url,
-                    timeout=aiohttp.ClientTimeout(total=HEALTH_CHECK_TIMEOUT),
-                    allow_redirects=False,
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        self._is_available = data.get("status") == "healthy"
-                        self._last_health_check = current_time
-                        logger.info(f"NPU worker available: {self._is_available}")
-                        return self._is_available
-            except Exception as e:
-                logger.debug(f"NPU worker not available: {e}")
+            for base_url in await self._worker_urls():
+                if await self._worker_is_healthy(base_url):
+                    self._is_available = True
+                    self._last_health_check = current_time
+                    logger.info("NPU worker available: %s", base_url)
+                    return True
 
             self._is_available = False
             self._last_health_check = current_time
             return False
+
+    async def _worker_urls(self) -> List[str]:
+        """Workers to try in order (#19706). A client built for one URL stays on that URL."""
+        if self.base_url != NPU_WORKER_URL:
+            return [self.base_url]
+        return await npu_worker_urls(self.base_url)
+
+    async def _worker_is_healthy(self, base_url: str) -> bool:
+        """Whether one worker answers its health check as healthy."""
+        try:
+            session = await self._get_session()
+            url = f"{base_url}/health"
+            await assert_egress_policy(url)
+            async with session.get(
+                url,
+                timeout=aiohttp.ClientTimeout(total=HEALTH_CHECK_TIMEOUT),
+                allow_redirects=False,
+            ) as response:
+                if response.status == 200:
+                    return (await response.json()).get("status") == "healthy"
+        except Exception as e:
+            logger.debug(f"NPU worker not available: {e}")
+        return False
 
     async def get_device_info(self) -> NPUDeviceInfo | None:
         """Get information about the NPU worker's device"""
@@ -247,19 +263,35 @@ class NPUClient:
             return None
         model_name = model_name or active_embedding_model()
 
+        for base_url, left in worker_attempts(await self._worker_urls(), BATCH_TIMEOUT):
+            result = await self._embed_on_worker(base_url, texts, model_name, use_cache, left)
+            if result is not None:
+                return result
+        return None
+
+    async def _embed_on_worker(
+        self, base_url: str, texts: List[str], model_name: str, use_cache: bool, timeout: float
+    ) -> EmbeddingResult | None:
+        """Generate embeddings on one worker; None if it fails."""
         try:
             session = await self._get_session()
-            url = f"{self.base_url}/embedding/generate"
+            url = f"{base_url}/embedding/generate"
             await assert_egress_policy(url)
             async with session.post(
                 url,
                 json=texts,
                 params={"model_name": npu_worker_model_name(model_name), "use_cache": str(use_cache).lower()},
-                timeout=aiohttp.ClientTimeout(total=BATCH_TIMEOUT),
+                timeout=aiohttp.ClientTimeout(total=timeout),
                 allow_redirects=False,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
+                    if data.get("mock") is not False:
+                        logger.warning(
+                            "NPU worker %s did not confirm real embeddings; rejecting response",
+                            normalize_origin(base_url) or "<invalid origin>",
+                        )
+                        return None
                     return EmbeddingResult(
                         embeddings=data.get("embeddings", []),
                         model_used=data.get("model_used", model_name),
@@ -314,12 +346,22 @@ class NPUClient:
             Transcribed text string, or None if the worker is unavailable / returns
             an error (caller should fall back to local CPU Whisper).
         """
+        for base_url, left in worker_attempts(await self._worker_urls(), timeout):
+            transcript = await self._transcribe_on_worker(base_url, audio_path, model, language, left)
+            if transcript is not None:
+                return transcript
+        return None
+
+    async def _transcribe_on_worker(
+        self, base_url: str, audio_path: str, model: str, language: str | None, timeout: float
+    ) -> str | None:
+        """Transcribe on one worker; None if it fails."""
         try:
             session = await self._get_session()
             payload: Dict[str, Any] = {"audio_path": audio_path, "model": model}
             if language:
                 payload["language"] = language
-            url = f"{self.base_url}/whisper/transcribe"
+            url = f"{base_url}/whisper/transcribe"
             await assert_egress_policy(url)
             async with session.post(
                 url,
@@ -454,9 +496,9 @@ async def generate_embedding_with_fallback(
 
     # Fallback to Ollama - use SSOT config for defaults
     # config.port.ollama is the canonical path for the port (MVA-1454 / 6c0726ec1).
-    ollama_host = ollama_host or config.ollama_host
+    ollama_host = ollama_host or config.vm.ollama
     ollama_port = ollama_port or config.port.ollama
-    ollama_url = f"http://{ollama_host}:{ollama_port}/api/embeddings"
+    ollama_url = ollama_api_url(f"http://{ollama_host}:{ollama_port}", PATH_OLLAMA_EMBEDDINGS)
 
     last_reason = "no attempts made"
     for attempt in range(1, max_attempts + 1):

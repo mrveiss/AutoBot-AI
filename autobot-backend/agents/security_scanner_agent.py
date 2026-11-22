@@ -17,7 +17,7 @@ from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from utils.agent_command_helpers import run_agent_command
 
-from .base_agent import DeploymentMode
+from .base_agent import AgentDeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -49,7 +49,7 @@ class SecurityScannerAgent(StandardizedAgent):
 
     def __init__(self):
         """Initialize security scanner agent (#3387: migrated to StandardizedAgent)."""
-        super().__init__("security_scanner", DeploymentMode.LOCAL)
+        super().__init__("security_scanner", AgentDeploymentMode.LOCAL)
         self.name = "security_scanner"
         self.description = "Performs defensive security scans and vulnerability assessments"
         self.supported_scan_types = _SUPPORTED_SCAN_TYPES
@@ -503,12 +503,12 @@ class SecurityScannerAgent(StandardizedAgent):
         """Use research agent to find appropriate scanning tools"""
         try:
             # Import research agent
-            from agents.web_researcher import ResearchRequest, WebResearcher
+            from agents.web_researcher import WebResearcher, WebResearchRequest
 
             research_agent = WebResearcher()
             query = f"{scan_type} tools for security assessment Kali Linux 2024"
 
-            request = ResearchRequest(query=query, focus="tools")
+            request = WebResearchRequest(query=query, focus="tools")
 
             # Perform research
             research_result = await research_agent.research_specific_tools(request)

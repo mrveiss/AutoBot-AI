@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -132,7 +133,9 @@ class _FakeChromaCollection:
 # ---------------------------------------------------------------------------
 class TestBuildChromaDBWhereFilter:
     def test_always_includes_source_id(self):
-        assert _build_chromadb_where_filter(None, None) == {"source_id": "default"}
+        # #20513: no "default" sentinel -- a missing source is refused, not answered.
+        with pytest.raises(ValueError):
+            _build_chromadb_where_filter(None, None, source_id=None)
         assert _build_chromadb_where_filter(None, None, source_id="A") == {"source_id": "A"}
 
     def test_folds_extra_conditions_with_and(self):
@@ -144,15 +147,23 @@ class TestBuildChromaDBWhereFilter:
 # Analyzer-level write-side tagging
 # ---------------------------------------------------------------------------
 class TestCodePatternAnalyzerSourceTagging:
-    def test_default_source_tag_when_unset(self, pa):
+    def test_no_source_tag_when_unset(self, pa):
+        """#20513: no "default" sentinel -- an analysis that names no source carries no tag."""
         analyzer = pa.analyzer.CodePatternAnalyzer(enable_embedding_storage=False)
         assert analyzer.source_id is None
-        assert analyzer._source_tag == "default"
+        assert analyzer._source_tag is None
+
+    async def test_a_source_less_analysis_stores_nothing(self, pa):
+        """The scheduler path: no source -> skipped, never written under "default"."""
+        analyzer = pa.analyzer.CodePatternAnalyzer(enable_embedding_storage=True)
+        with patch.object(pa.analyzer, "store_patterns_batch", new=AsyncMock()) as store:
+            await analyzer._store_patterns(MagicMock())
+        store.assert_not_called()
 
     async def test_duplicate_pattern_metadata_tagged_with_source(self, pa):
         analyzer = pa.analyzer.CodePatternAnalyzer(enable_embedding_storage=False, source_id="A")
         dup = pa.types.DuplicatePattern(
-            pattern_type=pa.types.PatternType.DUPLICATE_CODE,
+            pattern_type=pa.types.CodePatternType.DUPLICATE_CODE,
             severity=pa.types.PatternSeverity.HIGH,
             description="clone",
             locations=[pa.types.CodeLocation(file_path="a.py", start_line=1, end_line=5)],
@@ -167,7 +178,7 @@ class TestCodePatternAnalyzerSourceTagging:
     async def test_regex_pattern_metadata_tagged_with_source(self, pa):
         analyzer = pa.analyzer.CodePatternAnalyzer(enable_embedding_storage=False, source_id="A")
         regex_opp = pa.types.RegexOpportunity(
-            pattern_type=pa.types.PatternType.REGEX_OPPORTUNITY,
+            pattern_type=pa.types.CodePatternType.REGEX_OPPORTUNITY,
             severity=pa.types.PatternSeverity.LOW,
             description="use regex",
             locations=[pa.types.CodeLocation(file_path="b.py", start_line=1, end_line=1)],
@@ -179,19 +190,22 @@ class TestCodePatternAnalyzerSourceTagging:
         pattern = await analyzer._prepare_regex_pattern_for_storage(regex_opp)
         assert pattern["metadata"]["source_id"] == "A"
 
-    def test_default_tag_never_leaks_another_sources_tag(self, pa):
+    def test_a_source_less_analysis_never_carries_another_sources_tag(self, pa):
         analyzer_a = pa.analyzer.CodePatternAnalyzer(enable_embedding_storage=False, source_id="A")
-        analyzer_default = pa.analyzer.CodePatternAnalyzer(enable_embedding_storage=False)
-        assert analyzer_a._source_tag != analyzer_default._source_tag
-        assert analyzer_default._source_tag == "default"
+        analyzer_none = pa.analyzer.CodePatternAnalyzer(enable_embedding_storage=False)
+        assert analyzer_a._source_tag == "A"
+        assert analyzer_none._source_tag is None
 
 
 # ---------------------------------------------------------------------------
 # Storage-level query scoping + end-to-end isolation
 # ---------------------------------------------------------------------------
 class TestStorageSourceScoping:
-    def test_build_source_scoped_where_default_sentinel(self, pa):
-        assert pa.storage.build_source_scoped_where(None) == {"source_id": "default"}
+    def test_build_source_scoped_where_refuses_missing_source(self, pa):
+        # #20513: the read-side "default" sentinel is gone; no source is an error.
+        for missing in (None, ""):
+            with pytest.raises(ValueError):
+                pa.storage.build_source_scoped_where(missing)
         assert pa.storage.build_source_scoped_where("A") == {"source_id": "A"}
 
     def test_build_source_scoped_where_folds_extra(self, pa):
@@ -236,7 +250,8 @@ class TestStorageSourceScoping:
 
         await pa.storage.store_patterns_batch(patterns_a, collection=collection)
         await pa.storage.store_patterns_batch(patterns_b, collection=collection)
-        await pa.storage.store_patterns_batch(legacy_pattern, collection=collection)
+        # #20513: a write naming no source is refused outright, not filed under "default".
+        assert await pa.storage.store_patterns_batch(legacy_pattern, collection=collection) == 0
 
         assert all(m.get("source_id") == "A" for m in collection.metadatas[:1])
 

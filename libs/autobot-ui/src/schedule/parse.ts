@@ -7,7 +7,7 @@
 
 import { parseCron5, type CronFields } from './cronFields'
 import { parseByDay, parseRruleParts, type RruleParts } from './rrule'
-import { cronToWeekday, joinTime, sortDays } from './time'
+import { cronToWeekday, joinTime, sortDays, splitTime } from './time'
 import { MINUTE_STEPS, type MinuteStep, type Nth, type PickerRule, type ScheduleSpec } from './types'
 
 const only = (s: Set<number>): number | null => (s.size === 1 ? [...s][0] : null)
@@ -94,7 +94,8 @@ function parseCalendarRule(rrule: string): PickerRule | null {
 
 function parseOnce(at: string): PickerRule | null {
   const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(at)
-  return m ? { repeat: 'once', date: m[1], time: m[2] } : null
+  // A one-off runs at a time of day: "T24:00" is not one (only a window may end at 24:00).
+  return m && splitTime(m[2]) ? { repeat: 'once', date: m[1], time: m[2] } : null
 }
 
 export function parseSpecToRule(spec: ScheduleSpec): PickerRule | null {

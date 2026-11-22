@@ -21,6 +21,7 @@ import aiohttp
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY, EgressBlockedError
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_tags_url
 from autobot_shared.ssot_config import config
 from autobot_shared.status_enums import ConnectionStatus
 from autobot_shared.time_utils import utc_timestamp
@@ -326,12 +327,11 @@ class AIStackClient:
     def _ollama_tags(self):
         """Open the Ollama model listing under ``EGRESS_POLICY`` (the SSOT Ollama origin is internal).
 
-        #12979: pooled + ``suppress_error_log`` -- Ollama is an optional backing service and an unreachable
-        (or refused) probe is an expected, routine condition that falls through to the AI Stack fallback.
+        #12979: pooled + ``suppress_error_log`` -- an unreachable Ollama is routine; falls through to the AI Stack.
         """
         return get_http_client().tracked_request(
             "GET",
-            f"{self._ollama_url}/api/tags",
+            ollama_tags_url(self._ollama_url),
             timeout=aiohttp.ClientTimeout(total=10),
             suppress_error_log=True,
             guard_egress=EGRESS_POLICY,

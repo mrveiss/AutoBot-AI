@@ -31,7 +31,7 @@ CONTROL_FLOW_TYPES = (ast.If, ast.While, ast.For, ast.ExceptHandler)
 # =============================================================================
 
 
-class RefactoringType(Enum):
+class CodeRefactoringType(Enum):
     """Types of refactoring operations."""
 
     EXTRACT_FUNCTION = "extract_function"
@@ -95,10 +95,10 @@ class CodeContext:
 
 
 @dataclass
-class RefactoringRequest:
-    """Request for code refactoring."""
+class CodeRefactoringRequest:
+    """Which refactoring the code generator should apply, and to what code context (#17312)."""
 
-    refactoring_type: RefactoringType
+    refactoring_type: CodeRefactoringType
     context: CodeContext
     description: str = ""
     target_name: str | None = None
@@ -133,7 +133,7 @@ class GeneratedCode:
     """Generated code with metadata."""
 
     code: str
-    refactoring_type: RefactoringType
+    refactoring_type: CodeRefactoringType
     validation: ValidationResult
     original_code: str = ""
     diff: str = ""
@@ -152,7 +152,7 @@ class RefactoringResult:
 
     request_id: str
     status: GenerationStatus
-    request: RefactoringRequest
+    request: CodeRefactoringRequest
     generated_code: GeneratedCode | None = None
     rollback_code: str | None = None
     applied: bool = False
@@ -162,12 +162,12 @@ class RefactoringResult:
 
 
 @dataclass
-class PromptTemplate:
+class RefactoringPromptTemplate:
     """Template for LLM prompts."""
 
     name: str
     system_prompt: str
     user_prompt_template: str
-    refactoring_types: List[RefactoringType]
+    refactoring_types: List[CodeRefactoringType]
     variables: List[str] = field(default_factory=list)
     examples: List[Dict[str, str]] = field(default_factory=list)

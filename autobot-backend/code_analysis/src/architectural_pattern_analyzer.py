@@ -16,6 +16,8 @@ Refactoring History:
 
 import json
 import time
+from functools import partial
+from pathlib import Path
 from typing import Any, Dict, List
 
 # Issue #394: Import from architectural_analysis package.
@@ -121,7 +123,7 @@ class ArchitecturalPatternAnalyzer:
         # Detect design patterns
         logger.info("Detecting design patterns")
         detected_patterns = await self._pattern_detector.detect_patterns(
-            root_path, patterns, self._component_discovery._should_skip_file
+            root_path, patterns, partial(self._component_discovery._should_skip_file, root=Path(root_path))
         )
 
         # Identify architectural issues

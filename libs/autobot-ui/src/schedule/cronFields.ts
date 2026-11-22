@@ -75,5 +75,7 @@ export function parseCron5(cron: string): CronFields | null {
   const month = parseCronField(raw[3], 1, 12, MONTH_NAMES, 1)
   const dow = parseDow(raw[4])
   if (!minute || !hour || !dom || !month || !dow) return null
-  return { minute, hour, dom, month, dow, domStar: raw[2].startsWith('*'), dowStar: raw[4].startsWith('*'), raw }
+  // Only a literal `*` is unrestricted: croniter (the backend scheduler) ORs a stepped `*/2`
+  // with the weekday like any other restricted day field.
+  return { minute, hour, dom, month, dow, domStar: raw[2] === '*', dowStar: raw[4] === '*', raw }
 }

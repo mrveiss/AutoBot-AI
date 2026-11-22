@@ -13,6 +13,7 @@
 -->
 <script setup lang="ts">
 import { computed, useId, watch } from 'vue'
+import { createDateFormatter } from '../utils/format'
 import { summaryText, weekdayName } from '../schedule/summary'
 import { listZones } from '../schedule/zone'
 import { joinTime } from '../schedule/time'
@@ -34,6 +35,8 @@ const props = withDefaults(
     defaultTimezone?: string
     /** The company's zone, when known: labelled "company time" in summaries. */
     companyTimezone?: string
+    /** Restrict the zones offered, when the consumer can only run some; default every IANA zone. */
+    timezones?: readonly string[]
     preview?: SchedulePreviewFn
     debounceMs?: number
   }>(),
@@ -58,7 +61,9 @@ const REPEATS: RepeatKind[] = ['minutes', 'hourly', 'daily', 'weekly', 'monthly'
 const NTHS = [1, 2, 3, 4, -1] as const
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
 const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, i) => i + 1)
-const zones = computed(() => listZones(props.defaultTimezone, props.companyTimezone ?? '', timezone.value))
+const zones = computed(() =>
+  props.timezones?.length ? [...props.timezones] : listZones(props.defaultTimezone, props.companyTimezone ?? '', timezone.value),
+)
 const { minutes, hourly, daily, weekly, monthly, once, windowOn, hourOf, setHour, onMinuteDay, onWeekDay, monthlyMode, onDay, onNth } = useScheduleFields(rule)
 const nthKey = (n: number) => (n === -1 ? 'last' : String(n))
 
@@ -79,8 +84,10 @@ const gated = computed(() => pv.available.value !== true)
 watch(() => pv.available.value === true, (v) => emit('update:previewAvailable', v), { immediate: true })
 
 const dayName = (d: Weekday, style: 'long' | 'short') => weekdayName(d, props.locale, style)
-const fmtRun = (d: Date) =>
-  new Intl.DateTimeFormat(props.locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: timezone.value }).format(d)
+const fmtRun = createDateFormatter({
+  locale: () => props.locale,
+  intl: () => ({ weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: timezone.value }),
+})
 </script>
 
 <template>

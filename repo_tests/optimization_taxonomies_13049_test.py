@@ -21,6 +21,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _PKG = "autobot-backend/llm_shared/optimization/"
@@ -37,7 +38,7 @@ def _str_consts(nodes: list[ast.expr | None]) -> set[str]:
 def _forks(source: str) -> tuple[bool, bool, bool]:
     """(second dtype table, second compression set, second layout set) in `source`."""
     dtype = comp = layout = False
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Dict) and len(_str_consts(node.keys) & _DTYPE_NAMES) >= 2:
             dtype = True
         elements = node.elts if isinstance(node, (ast.Set, ast.List, ast.Tuple)) else None
@@ -64,8 +65,6 @@ def _population(root) -> list[str]:
 REACH = declare(
     "optimization-taxonomy-scan",
     discover=_population,
-    # Mid-window, from REACH.window().
-    floor=18,
     what="non-test python source",
     roots=("autobot-backend/llm_shared/optimization",),
     growth=4,
@@ -102,7 +101,7 @@ def test_only_the_taxonomy_module_defines_them() -> None:
 
 
 def test_the_canonical_module_defines_both_enums() -> None:
-    tree = ast.parse((repo_root() / _CANONICAL).read_text(encoding="utf-8"))
+    tree = parse_cache.parse((repo_root() / _CANONICAL).read_text(encoding="utf-8"))
     classes = {n.name for n in ast.walk(tree) if isinstance(n, ast.ClassDef)}
     assert {"Dtype", "Compression"} <= classes
 
@@ -116,7 +115,9 @@ _FAMILY_HOME = "autobot_shared/model_taxonomy.py"
 
 def _defines_architecture_family(source: str) -> bool:
     """True when `source` has a class statement named ArchitectureFamily."""
-    return any(isinstance(n, ast.ClassDef) and n.name == "ArchitectureFamily" for n in ast.walk(ast.parse(source)))
+    return any(
+        isinstance(n, ast.ClassDef) and n.name == "ArchitectureFamily" for n in ast.walk(parse_cache.parse(source))
+    )
 
 
 @pytest.mark.parametrize(
@@ -145,7 +146,6 @@ def _family_population(root) -> list[str]:
 FAMILY_REACH = declare(
     "architecture-family-definition-scan",
     discover=_family_population,
-    floor=3084,
     what="non-test python source",
     roots=_FAMILY_ROOTS,
     growth=300,

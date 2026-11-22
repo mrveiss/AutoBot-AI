@@ -199,7 +199,7 @@ class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
     def _completion_breaker_is_rejecting(name: str) -> bool:
         """True when *name*'s ``{name}_service`` completion breaker is OPEN and
         cooling (#11498). Read-only lookup — never creates a breaker."""
-        from circuit_breaker import get_circuit_breaker_manager
+        from autobot_shared.circuit_breaker import get_circuit_breaker_manager
 
         breaker = get_circuit_breaker_manager().circuit_breakers.get(f"{name}_service")
         return breaker is not None and breaker.is_rejecting
@@ -262,7 +262,7 @@ class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
         """
         if self._npu_pipeline_dispatcher is None:
             return 0.0
-        from services.npu_pipeline.pipeline_dispatcher import WorkerState as WS
+        from services.npu_pipeline.pipeline_dispatcher import PipelineWorkerState as WS
 
         online = [w for w in self._npu_pipeline_dispatcher.workers if w.state == WS.ONLINE]
         if len(online) < 2:
@@ -298,7 +298,7 @@ class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
         if model_bytes <= 0:
             return False
 
-        from services.npu_pipeline.pipeline_dispatcher import WorkerState as WS
+        from services.npu_pipeline.pipeline_dispatcher import PipelineWorkerState as WS
 
         online = [w for w in self._npu_pipeline_dispatcher.workers if w.state == WS.ONLINE]
         if not online:
