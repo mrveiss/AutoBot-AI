@@ -10,7 +10,7 @@ LLM and model configuration management.
 import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from typing import Any, Dict, Tuple
 
-from autobot_shared.ollama_urls import ollama_generate_url
+from autobot_shared.ollama_urls import ollama_base_url, ollama_generate_url
 from autobot_shared.ssot_config import config
 from services.config_write_lock import locked_config_write
 
@@ -136,7 +136,7 @@ class ModelConfigMixin:
         if gpu_endpoint and gpu_models:
             gpu_set = {m.strip().lower() for m in gpu_models}
             if model_name.strip().lower() in gpu_set:
-                return gpu_endpoint
+                return ollama_base_url(gpu_endpoint)
         # Fall back to default endpoint
         return self._resolve_default_ollama_endpoint()
 
@@ -144,10 +144,10 @@ class ModelConfigMixin:
         """Get the default (CPU) Ollama endpoint URL."""
         endpoint = self.get_nested("backend.llm.ollama.endpoint")
         if endpoint:
-            return endpoint
+            return ollama_base_url(endpoint)
         ollama_host = self.get_host("ollama")
         ollama_port = self.get_port("ollama")
-        return f"http://{ollama_host}:{ollama_port}"
+        return ollama_base_url(f"http://{ollama_host}:{ollama_port}")
 
     def _resolve_ollama_endpoint(self, backend_llm: Dict[str, Any]) -> str:
         """
