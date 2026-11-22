@@ -2,188 +2,162 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Integration tests for RedisServiceManager SLM API proxying (Issue #933)."""
+"""RedisServiceManager's SLM calls: node resolution, credential and failure reporting (Issues #933, #16346)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 
 import services.redis_service_manager as redis_service_manager_module
-from services.redis_service_manager import RedisConnectionError, RedisServiceManager
+from services.redis_service_errors import resolve_redis_node_id
+from services.redis_service_manager import (
+    RedisConnectionError,
+    RedisNodeUnresolvedError,
+    RedisServiceManager,
+    RedisSlmAccessError,
+)
 
 
 @pytest.fixture()
 def manager():
-    """Create a RedisServiceManager wired to a fake SLM URL."""
-    return RedisServiceManager(
-        slm_url="https://slm.example.com",
-        slm_node_id="04-Databases",
-        service_name="redis-stack-server",
-    )
+    """A RedisServiceManager with a configured node id."""
+    return RedisServiceManager(slm_node_id="04-Databases", service_name="redis-stack-server")
 
 
-def _make_response(data: dict, status: int = 200):
-    """Build a mock aiohttp response context manager."""
-    resp = MagicMock()
-    resp.status = status
-    resp.json = AsyncMock(return_value=data)
-    cm = MagicMock()
-    cm.__aenter__ = AsyncMock(return_value=resp)
-    cm.__aexit__ = AsyncMock(return_value=False)
-    return cm
-
-
-def _make_http_client(response_cm=None, side_effect=None):
-    """Build a mock pooled HTTP client whose ``tracked_request()`` returns
-    *response_cm* (or raises *side_effect*).
-
-    #12979: RedisServiceManager now issues requests via
-    ``get_http_client().tracked_request(...)`` instead of a raw
-    ``aiohttp.ClientSession()`` — mock that entry point instead.
-    """
+def _client(owners=None, services=None, action=None, error=None):
+    """A fake SLMClient; *error* is raised by every call."""
     client = MagicMock()
-    if side_effect is not None:
-        client.tracked_request = MagicMock(side_effect=side_effect)
-    else:
-        client.tracked_request = MagicMock(return_value=response_cm)
+    for name, value in (
+        ("get_role_owners", owners if owners is not None else {}),
+        ("list_node_services", services if services is not None else {"services": []}),
+        ("node_service_action", action if action is not None else {"success": True, "message": ""}),
+    ):
+        setattr(client, name, AsyncMock(side_effect=error) if error else AsyncMock(return_value=value))
     return client
 
 
+def _http_error(status: int) -> aiohttp.ClientResponseError:
+    return aiohttp.ClientResponseError(request_info=MagicMock(), history=(), status=status)
+
+
+def _patched(client):
+    return patch("services.redis_service_manager.get_slm_client", return_value=client)
+
+
 class TestInit:
-    """Tests for RedisServiceManager initialisation (Issue #933)."""
+    """Tests for RedisServiceManager initialisation."""
 
     def test_no_longer_raises_not_implemented(self) -> None:
-        mgr = RedisServiceManager()
-        assert mgr is not None
+        assert RedisServiceManager() is not None
 
     def test_defaults_from_env(self, monkeypatch) -> None:
-        # _DEFAULT_SLM_URL / _DEFAULT_REDIS_NODE_ID are resolved once at module
-        # import time from ssot_config (itself an lru_cache'd singleton), so
-        # monkeypatch.setenv() after import has no effect on them. Patch the
-        # module-level constants directly to exercise the actual fallback path.
-        monkeypatch.setattr(redis_service_manager_module, "_DEFAULT_SLM_URL", "https://slm.test")
+        # _DEFAULT_REDIS_NODE_ID is resolved once at import time from ssot_config, so patch the module constant.
         monkeypatch.setattr(redis_service_manager_module, "_DEFAULT_REDIS_NODE_ID", "04-DBs")
-        mgr = RedisServiceManager()
-        assert mgr.slm_url == "https://slm.test"
-        assert mgr.slm_node_id == "04-DBs"
+        assert RedisServiceManager().slm_node_id == "04-DBs"
 
-    def test_explicit_params_override_env(self) -> None:
-        mgr = RedisServiceManager(
-            slm_url="https://override.example.com",
-            slm_node_id="custom-node",
-        )
-        assert mgr.slm_url == "https://override.example.com"
-        assert mgr.slm_node_id == "custom-node"
+    def test_explicit_param_overrides_env(self) -> None:
+        assert RedisServiceManager(slm_node_id="custom-node").slm_node_id == "custom-node"
 
-    def test_trailing_slash_stripped(self) -> None:
-        mgr = RedisServiceManager(slm_url="https://slm.example.com/")
-        assert mgr.slm_url == "https://slm.example.com"
+
+class TestNodeResolution:
+    """The Redis node is the configured id, else the SLM's ``redis`` role owner (#16346)."""
+
+    @pytest.mark.asyncio
+    async def test_a_configured_id_is_used_without_asking_the_slm(self, manager) -> None:
+        client = _client()
+        assert await resolve_redis_node_id(client, manager.slm_node_id) == "04-Databases"
+        client.get_role_owners.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_unset_id_resolves_to_the_role_owner(self) -> None:
+        client = _client(owners={"redis": ["07-Redis"], "backend": ["01-Main"]})
+        assert await resolve_redis_node_id(client, "") == "07-Redis"
+
+    @pytest.mark.asyncio
+    async def test_no_owner_fails_loudly_instead_of_querying_an_empty_id(self) -> None:
+        mgr = RedisServiceManager(slm_node_id="")
+        client = _client(owners={"backend": ["01-Main"]})
+        with pytest.raises(RedisNodeUnresolvedError):
+            await resolve_redis_node_id(client, mgr.slm_node_id)
+        with _patched(client), pytest.raises(RedisNodeUnresolvedError):
+            await mgr._slm_get_service_status()
+        client.list_node_services.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", [401, 403])
+    async def test_a_refused_credential_on_the_role_lookup_is_an_access_error(self, status) -> None:
+        mgr = RedisServiceManager(slm_node_id="")
+        with pytest.raises(RedisSlmAccessError):
+            await resolve_redis_node_id(_client(error=_http_error(status)), mgr.slm_node_id)
 
 
 class TestSlmServiceAction:
-    """Tests for _slm_service_action (Issue #933)."""
+    """Tests for _slm_service_action."""
 
     @pytest.mark.asyncio
-    async def test_start_calls_correct_url(self, manager) -> None:
-        resp_cm = _make_response({"success": True, "message": "started"})
-        client = _make_http_client(resp_cm)
-        with patch(
-            "services.redis_service_manager.get_http_client",
-            return_value=client,
-        ):
-            ok, msg = await manager._slm_service_action("start")
-        assert ok is True
-        assert msg == "started"
-        client.tracked_request.assert_called_once()
-        call_args = client.tracked_request.call_args
-        assert call_args[0][0] == "POST"
-        assert "04-Databases/services/redis-stack-server/start" in call_args[0][1]
-        assert call_args.kwargs["ssl"] is False
+    @pytest.mark.parametrize("action", ["start", "stop", "restart"])
+    async def test_action_goes_to_the_resolved_node_and_service(self, manager, action) -> None:
+        client = _client(action={"success": True, "message": action})
+        with _patched(client):
+            ok, msg = await manager._slm_service_action(action)
+        assert (ok, msg) == (True, action)
+        client.node_service_action.assert_awaited_once_with("04-Databases", "redis-stack-server", action)
 
     @pytest.mark.asyncio
-    async def test_stop_calls_correct_url(self, manager) -> None:
-        resp_cm = _make_response({"success": True, "message": "stopped"})
-        client = _make_http_client(resp_cm)
-        with patch(
-            "services.redis_service_manager.get_http_client",
-            return_value=client,
-        ):
-            ok, _msg = await manager._slm_service_action("stop")
-        called_url = client.tracked_request.call_args[0][1]
-        assert called_url.endswith("/stop")
-        assert ok is True
+    async def test_raises_when_the_slm_client_is_not_initialised(self, manager) -> None:
+        with _patched(None), pytest.raises(RedisConnectionError, match="not initialised"):
+            await manager._slm_service_action("start")
 
     @pytest.mark.asyncio
-    async def test_restart_calls_correct_url(self, manager) -> None:
-        resp_cm = _make_response({"success": True, "message": "restarted"})
-        client = _make_http_client(resp_cm)
-        with patch(
-            "services.redis_service_manager.get_http_client",
-            return_value=client,
-        ):
-            ok, _msg = await manager._slm_service_action("restart")
-        called_url = client.tracked_request.call_args[0][1]
-        assert called_url.endswith("/restart")
-        assert ok is True
+    async def test_raises_on_transport_error(self, manager) -> None:
+        with _patched(_client(error=Exception("connection refused"))), pytest.raises(RedisConnectionError):
+            await manager._slm_service_action("start")
 
     @pytest.mark.asyncio
-    async def test_raises_when_no_slm_url(self) -> None:
-        mgr = RedisServiceManager(slm_url="", slm_node_id="04-Databases")
-        with pytest.raises(RedisConnectionError, match="SLM_URL not configured"):
-            await mgr._slm_service_action("start")
+    async def test_a_refused_credential_is_an_access_error(self, manager) -> None:
+        with _patched(_client(error=_http_error(401))), pytest.raises(RedisSlmAccessError):
+            await manager._slm_service_action("start")
 
     @pytest.mark.asyncio
-    async def test_raises_on_http_error(self, manager) -> None:
-        client = _make_http_client(side_effect=Exception("connection refused"))
-        with patch(
-            "services.redis_service_manager.get_http_client",
-            return_value=client,
-        ):
-            with pytest.raises(RedisConnectionError):
-                await manager._slm_service_action("start")
+    async def test_another_http_error_is_a_connection_error(self, manager) -> None:
+        with _patched(_client(error=_http_error(500))), pytest.raises(RedisConnectionError, match="500"):
+            await manager._slm_service_action("start")
 
 
 class TestSlmGetServiceStatus:
-    """Tests for _slm_get_service_status (Issue #933)."""
+    """Tests for _slm_get_service_status and get_service_status."""
 
     @pytest.mark.asyncio
     async def test_returns_running_when_service_found(self, manager) -> None:
-        data = {"services": [{"service_name": "redis-stack-server", "status": "running"}]}
-        resp_cm = _make_response(data)
-        client = _make_http_client(resp_cm)
-        with patch(
-            "services.redis_service_manager.get_http_client",
-            return_value=client,
-        ):
-            status = await manager._slm_get_service_status()
-        assert status == "running"
+        client = _client(services={"services": [{"service_name": "redis-stack-server", "status": "running"}]})
+        with _patched(client):
+            assert await manager._slm_get_service_status() == "running"
+        client.list_node_services.assert_awaited_once_with("04-Databases", search="redis-stack-server", per_page=1)
 
     @pytest.mark.asyncio
-    async def test_returns_unknown_when_no_services(self, manager) -> None:
-        resp_cm = _make_response({"services": []})
-        client = _make_http_client(resp_cm)
-        with patch(
-            "services.redis_service_manager.get_http_client",
-            return_value=client,
-        ):
-            status = await manager._slm_get_service_status()
-        assert status == "unknown"
+    async def test_returns_unknown_only_when_the_slm_does_not_track_the_service(self, manager) -> None:
+        with _patched(_client(services={"services": []})):
+            assert await manager._slm_get_service_status() == "unknown"
 
     @pytest.mark.asyncio
-    async def test_returns_unknown_when_no_slm_url(self) -> None:
-        mgr = RedisServiceManager(slm_url="", slm_node_id="04-Databases")
-        status = await mgr._slm_get_service_status()
-        assert status == "unknown"
+    async def test_a_refused_credential_is_an_access_error_not_unknown(self, manager) -> None:
+        with _patched(_client(error=_http_error(401))), pytest.raises(RedisSlmAccessError):
+            await manager._slm_get_service_status()
 
     @pytest.mark.asyncio
-    async def test_returns_unknown_on_http_error(self, manager) -> None:
-        client = _make_http_client(side_effect=Exception("timeout"))
-        with patch(
-            "services.redis_service_manager.get_http_client",
-            return_value=client,
-        ):
-            status = await manager._slm_get_service_status()
-        assert status == "unknown"
+    async def test_get_service_status_surfaces_an_unresolved_node_and_a_refused_credential(self) -> None:
+        mgr = RedisServiceManager(slm_node_id="")
+        with _patched(_client(owners={})), pytest.raises(RedisNodeUnresolvedError):
+            await mgr.get_service_status(use_cache=False)
+        with _patched(_client(error=_http_error(403))), pytest.raises(RedisSlmAccessError):
+            await RedisServiceManager(slm_node_id="n").get_service_status(use_cache=False)
+
+    @pytest.mark.asyncio
+    async def test_a_transport_failure_still_reads_as_unknown(self, manager) -> None:
+        with _patched(_client(error=Exception("timeout"))):
+            status = await manager.get_service_status(use_cache=False)
+        assert status.status == "unknown"
 
 
 class TestCheckRedisConnectivity:

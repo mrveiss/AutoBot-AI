@@ -30,7 +30,6 @@ from services import (
     command_extraction_service,
     mcp_dispatch,
     playwright_service,
-    redis_service_manager,
     tts_client,
 )
 from services.provider_health import providers
@@ -76,7 +75,6 @@ def net(monkeypatch):
     for module in (ai_stack_client, mcp_dispatch, playwright_service, providers, skill_proposer, skill_ranker):
         monkeypatch.setattr(module, "get_http_client", lambda: mgr)
     monkeypatch.setattr(tts_client, "get_http_client", lambda: mgr)
-    monkeypatch.setattr(redis_service_manager, "get_http_client", lambda: mgr)
     return SimpleNamespace(session=session, monkeypatch=monkeypatch)
 
 
@@ -173,18 +171,6 @@ async def _google_health(n, base):
     await _vendor_health(providers.GoogleHealth, n, base)
 
 
-def _redis_manager(base):
-    return redis_service_manager.RedisServiceManager(slm_url=base, slm_node_id="node")
-
-
-async def _redis_action(n, base):
-    await _redis_manager(base)._slm_service_action("restart")
-
-
-async def _redis_status(n, base):
-    await _redis_manager(base)._slm_get_service_status()
-
-
 def _policy(monkeypatch, value):
     monkeypatch.setattr(skill_proposer, "fetch_slm_policy_json", AsyncMock(return_value=value))
     reset_log_once()
@@ -259,8 +245,6 @@ SITES = [
     pytest.param(_google_health, "/models", id="provider_health.google"),
     pytest.param(_lmstudio_health, "/v1/models", id="provider_health.lmstudio"),
     pytest.param(_vllm_health, "/v1/models", id="provider_health.vllm"),
-    pytest.param(_redis_action, "/restart", id="redis_service_manager.service_action"),
-    pytest.param(_redis_status, "/services", id="redis_service_manager.service_status"),
     pytest.param(_proposer, "/api/skills/propose", id="skill_proposer.send"),
     pytest.param(_ranker_skills, "/api/skills/active", id="skill_ranker.active_skills"),
     pytest.param(_ranker_embedding, "/api/embeddings", id="skill_ranker.embedding"),

@@ -11,6 +11,12 @@ the `autobot` user passwordless sudo for start/stop/restart/status of this
 service.
 
 Related to Issue #11340.
+
+No caller (#16346): the SLM's Redis panel reads the node-service API (``api/services.py``) and the backend's own
+``/api/redis-service`` resolves the Redis node from the ``redis`` role owner (``GET /api/roles/owners``) and goes
+through that API too. This route stays because it is the only control path that needs no node row or agent, and it
+acts on the SLM host's own systemd -- it is correct only where Redis runs on the SLM host. Whether it is retired or
+given a caller is an owner decision recorded on #16346.
 """
 
 import asyncio

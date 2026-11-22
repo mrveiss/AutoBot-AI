@@ -42,6 +42,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.ws_no_redirect import connect_no_redirect
 from constants.ttl_constants import TTL_5_MINUTES
 from services.slm_deployments import SLMDeploymentsMixin
+from services.slm_node_services import SLMNodeServicesMixin
 
 logger = get_logger(__name__)
 
@@ -333,7 +334,7 @@ class AgentConfigCache:
         logger.debug("Cleared agent config cache")
 
 
-class SLMClient(SLMDeploymentsMixin):
+class SLMClient(SLMDeploymentsMixin, SLMNodeServicesMixin):
     """HTTP and WebSocket client for SLM server communication."""
 
     def __init__(
