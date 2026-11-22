@@ -4,7 +4,7 @@
 // #21567: the primary fill utilities (bg-autobot-primary) paint the active scheme's
 // --primary, and the ink on it (text-autobot-text-on-primary) is that scheme's
 // --on-primary. Pin that the pair is defined wherever the fill is, and that the ink
-// meets 4.5:1 on the fill in every state, high-contrast and the no-theme state included.
+// meets 4.5:1 on the fill in every state, contrast and the no-theme state included.
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -49,7 +49,6 @@ const SCHEMES = [
   [SCHEME, ":root[data-app='slm'][data-theme='dark']"],
   [SCHEME, ":root[data-app='slm'][data-theme='contrast']"],
   [SCHEME, ":root[data-app='slm'][data-theme='mono']"],
-  [MAIN, ":root[data-theme='high-contrast']"],
 ] as const
 
 describe('SLM primary fill and its ink (#21567)', () => {
@@ -140,10 +139,12 @@ function cascade(prop: string, attrs: Attrs): string | undefined {
 }
 
 describe('SLM primary pair resolves through the cascade (#21567 review)', () => {
-  it('data-app=slm + high-contrast: the high-contrast yellow pair wins over every slm scheme', () => {
-    const attrs = { 'data-app': 'slm', 'data-theme': 'high-contrast' }
-    expect(cascade('--primary', attrs)).toBe('#facc15')
-    expect(cascade('--on-primary', attrs)).toBe('#000000')
+  it('data-app=slm + contrast: the contrast scheme pair applies, no legacy yellow overrides it', () => {
+    const attrs = { 'data-app': 'slm', 'data-theme': 'contrast' }
+    const contrastScheme = block(SCHEME, SCHEMES[2][1])
+    expect(cascade('--primary', attrs)).toBe(contrastScheme['--primary'])
+    expect(cascade('--on-primary', attrs)).toBe(contrastScheme['--on-primary'])
+    expect(MAIN).not.toContain("data-theme='high-contrast'")
   })
 
   it('data-app=slm with no theme attribute takes the light scheme pair, not the base sky', () => {
@@ -159,13 +160,13 @@ describe('SLM primary pair resolves through the cascade (#21567 review)', () => 
   })
 
   it('the matcher evaluates an html-prefixed root selector instead of discarding it', () => {
-    expect(matches(":root[data-app='slm'][data-theme='high-contrast']", { 'data-app': 'slm', 'data-theme': 'high-contrast' })).toBe(true)
-    expect(matches("html:root[data-app='slm'][data-theme='high-contrast']", { 'data-app': 'slm', 'data-theme': 'high-contrast' })).toBe(true)
-    expect(specificity("html:root[data-app='slm'][data-theme='high-contrast']")).toBeGreaterThan(specificity(":root[data-app='slm'][data-theme='high-contrast']"))
+    expect(matches(":root[data-app='slm'][data-theme='contrast']", { 'data-app': 'slm', 'data-theme': 'contrast' })).toBe(true)
+    expect(matches("html:root[data-app='slm'][data-theme='contrast']", { 'data-app': 'slm', 'data-theme': 'contrast' })).toBe(true)
+    expect(specificity("html:root[data-app='slm'][data-theme='contrast']")).toBeGreaterThan(specificity(":root[data-app='slm'][data-theme='contrast']"))
   })
 
   it('the matcher ignores selectors a bare :root cannot satisfy', () => {
-    expect(matches(':root[data-theme=\'high-contrast\'] .card', { 'data-theme': 'high-contrast' })).toBe(false)
+    expect(matches(':root[data-theme=\'contrast\'] .card', { 'data-theme': 'contrast' })).toBe(false)
     expect(matches(":root[data-app='slm']:not([data-theme])", { 'data-app': 'slm', 'data-theme': 'dark' })).toBe(false)
   })
 })

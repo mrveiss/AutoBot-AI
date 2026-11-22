@@ -482,7 +482,11 @@ REACH_ROOTS = {
     ),
     "repo_tests/shadowed_literal_routes_18720_test.py": ("autobot-backend", "autobot-slm-backend"),
     "repo_tests/sigterm_grace_one_home_19340_test.py": ("autobot-backend/llc",),
-    "repo_tests/single_attribute_writer_18240_test.py": ("autobot-frontend/src",),
+    "repo_tests/single_attribute_writer_18240_test.py": (
+        "autobot-frontend/src",
+        "autobot-slm-frontend/src",
+        "libs/autobot-ui/src",
+    ),
     "repo_tests/single_constant_time_compare_20761_test.py": (
         "autobot-backend",
         "autobot-slm-backend",
