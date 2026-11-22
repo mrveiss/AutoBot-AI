@@ -44,7 +44,8 @@ slm_backend_port: 8000
 # The port the slm_manager nginx vhost serves the SLM UI and /slm/api on (autobot-slm.conf.j2
 # `listen`). A frontend on another node proxies /slm/api here over HTTPS (#19832).
 slm_nginx_tls_port: 443
-# The port a browser assumes for https:// (the port-80 redirect omits it; #19832).
+# The port a browser assumes for https:// (the port-80 redirect omits it; #19832). A protocol constant:
+# never derive it from slm_nginx_tls_port, or the redirect could never tell the two apart.
 slm_https_implicit_port: 443
 # Loopback addresses, named once: the trusted-proxy list and the frontend's same-machine upstream read these.
 slm_loopback_ipv4: "127.0.0.1"
@@ -607,13 +608,15 @@ autobot_tls_remote_cert_dir: "/etc/autobot/certs"
 # list (config.py _get_trusted_proxies), so it carries loopback, this SLM node, its inventory
 # address, and every node in the inventory's `frontend` group. A frontend node that is not in
 # this list collapses all clients into one rate-limit bucket. Hosts that carry no address are
-# dropped; nothing here is a literal fleet address.
+# dropped; nothing here is a literal fleet address. The backend matches PEER IPs, so a frontend
+# given by DNS name (AUTOBOT_FRONTEND_HOST may be one) is resolved on the SLM host by the slm_manager
+# play into slm_trusted_frontend_resolved (IPv4 and IPv6), and that is what the unit carries.
 slm_trusted_frontend_addrs: >-
   {{ ([frontend_host | default('')]
       + (groups['frontend'] | default([]) | map('extract', hostvars, 'ansible_host') | select('defined') | list))
      | reject('equalto', '') | unique | join(',') }}
 slm_trusted_proxies: >-
-  {{ ([slm_loopback_ipv4, slm_loopback_ipv6, slm_host | default(''), ansible_host | default('')] + slm_trusted_frontend_addrs.split(','))
+  {{ ([slm_loopback_ipv4, slm_loopback_ipv6, slm_host | default(''), ansible_host | default('')] + (slm_trusted_frontend_resolved | default(slm_trusted_frontend_addrs)).split(','))
      | reject('equalto', '') | unique | join(',') }}
 
 # ==========================================

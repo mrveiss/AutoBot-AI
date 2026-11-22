@@ -112,35 +112,92 @@ def test_trusted_proxies_carry_the_frontend_group_and_frontend_host() -> None:
     assert _resolve("slm_trusted_frontend_addrs", {**ctx, "groups": {}, "frontend_host": ""}) == ""
 
 
-def _assert_task() -> dict:
-    tasks = yaml.safe_load(TASKS.read_text(encoding="utf-8"))
-    return next(t for t in tasks if "frontend is among the trusted proxies" in t.get("name", ""))
+def _tasks() -> dict[str, dict]:
+    return {t["name"]: t for t in yaml.safe_load(TASKS.read_text(encoding="utf-8")) if "name" in t}
 
 
-def _holds(task: dict, addrs: list[str], proxies: str) -> bool:
+def _task(fragment: str) -> dict:
+    return next(t for n, t in _tasks().items() if fragment in n)
+
+
+def _lookup(entry: str, out: str) -> dict:
+    """One `getent ahosts` loop result: the entry and its stdout (empty and rc 2 when it did not resolve)."""
+    return {"item": entry, "rc": 0 if out else 2, "stdout_lines": out.splitlines()}
+
+
+def _getent(ip: str) -> str:
+    return f"{ip:<15} STREAM name.test\n{ip:<15} DGRAM\n{ip:<15} RAW"
+
+
+def _env() -> jinja2.Environment:
     env = _proxy_env()
-    addrs = ",".join(addrs)
-    env.filters["intersect"] = lambda a, b: [x for x in a if x in b]
-    ctx = {"slm_trusted_frontend_addrs": addrs, "slm_trusted_proxies": proxies}
-    return all(env.compile_expression(c)(**ctx) for c in task["ansible.builtin.assert"]["that"])
+    env.filters["flatten"] = lambda seq: [x for sub in seq for x in sub]
+    env.filters["regex_replace"] = lambda v, pat, rep: re.sub(pat, rep, str(v))
+    return env
 
 
-def test_the_assert_fires_only_when_a_frontend_exists() -> None:
-    task = _assert_task()
-    when = task["when"]
-    assert "frontend_slm_remote" in when and "groups['frontend']" in when
-    assert "frontend" in task["ansible.builtin.assert"]["fail_msg"]
+def _resolved(results: list[dict]) -> str:
+    raw = _task("trust the resolved frontend addresses")["ansible.builtin.set_fact"]["slm_trusted_frontend_resolved"]
+    return _env().from_string(raw).render(_slm_frontend_lookup={"results": results}).strip()
 
 
-def test_the_assert_passes_with_a_frontend_entry_and_fails_without_one() -> None:
-    task = _assert_task()
-    assert _holds(task, ["192.0.2.50"], "127.0.0.1,192.0.2.10,192.0.2.50")
-    assert not _holds(task, [], "127.0.0.1,192.0.2.10")
-    assert not _holds(task, ["192.0.2.50"], "127.0.0.1,192.0.2.10")
-    assert not _holds(task, ["fe.example.test"], "127.0.0.1,fe.example.test"), "a DNS name is never trusted"
+def _assert_holds(addrs: str, results: list[dict]) -> tuple[bool, str]:
+    task = _task("every frontend entry resolved")["ansible.builtin.assert"]
+    env = _env()
+    ctx = {"slm_trusted_frontend_addrs": addrs, "_slm_frontend_lookup": {"results": results}}
+    ok = all(env.compile_expression(c)(**ctx) for c in task["that"])
+    return ok, env.from_string(task["fail_msg"]).render(**ctx)
+
+
+def test_the_lookup_runs_getent_with_argv_and_only_where_a_frontend_exists() -> None:
+    task = _task("resolve the frontend trusted-proxy entries")
+    assert task["ansible.builtin.command"]["argv"][:2] == ["getent", "ahosts"]
+    assert "frontend_slm_remote" in task["when"] and "groups['frontend']" in task["when"]
+
+
+def test_a_hostname_is_trusted_by_the_ip_it_resolves_to() -> None:
+    assert _resolved([_lookup("fe.example.test", _getent("192.0.2.50"))]) == "192.0.2.50"
+    assert _assert_holds("fe.example.test", [_lookup("fe.example.test", _getent("192.0.2.50"))])[0]
+
+
+def test_an_ipv6_frontend_is_accepted() -> None:
+    results = [_lookup("2001:db8::7", _getent("2001:db8::7")), _lookup("192.0.2.50", _getent("192.0.2.50"))]
+    assert _resolved(results) == "2001:db8::7,192.0.2.50"
+    assert _assert_holds("2001:db8::7,192.0.2.50", results)[0]
+
+
+def test_an_unresolvable_entry_fails_and_is_named() -> None:
+    results = [_lookup("192.0.2.50", _getent("192.0.2.50")), _lookup("gone.example.test", "")]
+    ok, message = _assert_holds("192.0.2.50,gone.example.test", results)
+    assert not ok
+    assert "gone.example.test" in message and "192.0.2.50," not in message
+
+
+def test_no_frontend_entry_at_all_fails() -> None:
+    assert not _assert_holds("", [])[0]
+
+
+def test_the_trusted_list_carries_the_resolved_addresses_not_the_names() -> None:
+    raw = yaml.safe_load(GROUP_VARS.read_text(encoding="utf-8"))
+    ctx = {
+        "slm_loopback_ipv4": "127.0.0.1",
+        "slm_loopback_ipv6": "::1",
+        "slm_host": "192.0.2.10",
+        "ansible_host": "192.0.2.10",
+        "slm_trusted_frontend_addrs": "fe.example.test",
+        "slm_trusted_frontend_resolved": "192.0.2.50,2001:db8::7",
+    }
+    got = _proxy_env().from_string(raw["slm_trusted_proxies"]).render(**ctx).split(",")
+    assert {"192.0.2.50", "2001:db8::7"} <= set(got) and "fe.example.test" not in got
+
+
+def test_the_unit_falls_back_to_the_addresses_before_the_play_resolves_them() -> None:
+    raw = yaml.safe_load(GROUP_VARS.read_text(encoding="utf-8"))
+    ctx = {"slm_loopback_ipv4": "a", "slm_loopback_ipv6": "b", "slm_trusted_frontend_addrs": "192.0.2.50"}
+    got = _proxy_env().from_string(raw["slm_trusted_proxies"]).render(**ctx).split(",")
+    assert "192.0.2.50" in got
 
 
 def test_trusted_proxies_derive_from_the_frontend_address_list() -> None:
     raw = yaml.safe_load(GROUP_VARS.read_text(encoding="utf-8"))
-    assert "slm_trusted_frontend_addrs" in raw["slm_trusted_proxies"]
     assert "groups['frontend']" in raw["slm_trusted_frontend_addrs"]

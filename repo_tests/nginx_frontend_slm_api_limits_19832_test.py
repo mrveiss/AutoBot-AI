@@ -71,10 +71,27 @@ def test_slm_locations_carry_the_slm_body_cap(loc: str) -> None:
     assert "client_max_body_size 7m;" in _block(_render("7m"), loc)
 
 
+def _active_caps(text: str) -> list[str]:
+    """Values of the uncommented `client_max_body_size` directives."""
+    return re.findall(r"^\s*client_max_body_size\s+(.+?);", text, re.M)
+
+
+def _literal_caps(text: str) -> list[str]:
+    """Active cap directives whose value is not the shared variable (#22055)."""
+    return [v for v in _active_caps(text) if v != "{{ slm_client_max_body_size }}"]
+
+
+def test_the_literal_cap_detector_has_a_contrast_pair() -> None:
+    assert _literal_caps("    client_max_body_size 10m;\n") == ["10m"]
+    assert _literal_caps("    client_max_body_size 0;\n") == ["0"]
+    assert _literal_caps("    client_max_body_size {{ slm_client_max_body_size }};\n") == []
+    assert _literal_caps("    # client_max_body_size 10m;\n") == []
+
+
 def test_the_slm_vhost_and_the_frontend_read_one_body_cap() -> None:
     vhost = VHOST.read_text(encoding="utf-8")
-    active = re.findall(r"^\s*client_max_body_size\s+(.+?);", vhost, re.M)  # a commented-out line does not count
-    assert active and set(active) == {"{{ slm_client_max_body_size }}"}, active
+    assert not _literal_caps(vhost), "the SLM vhost carries a literal client_max_body_size"
+    assert _active_caps(vhost) and set(_active_caps(vhost)) == {"{{ slm_client_max_body_size }}"}
     assert not re.search(r"client_max_body_size\s+10m", vhost), "the SLM cap has a second literal"
     assert yaml.safe_load(GROUP_VARS_ALL.read_text(encoding="utf-8"))["slm_client_max_body_size"] == "10m"
     defaults = yaml.safe_load(DEFAULTS.read_text(encoding="utf-8"))
