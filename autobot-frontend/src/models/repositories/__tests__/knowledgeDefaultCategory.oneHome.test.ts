@@ -6,8 +6,8 @@
  * One home for the knowledge default fact category (#21921).
  *
  * `DEFAULT_FACT_CATEGORY` in `knowledgeFactMapping.ts` is the only place the string `General` may
- * be written as a value at a knowledge call site (the knowledge repository, controller and
- * components); every other site imports the constant. A planted control proves the detector can
+ * be written as a value at a knowledge call site (the knowledge repository, controller, store,
+ * composables and components); every other site imports the constant. A planted control proves the detector can
  * fail, and a comment-only control proves it does not fire on prose.
  *
  * Limit: a LITERAL text match on code lines. A category assembled from pieces is invisible to it.
@@ -18,10 +18,11 @@ import { join, relative } from 'node:path'
 
 const SRC = join(__dirname, '..', '..', '..')
 const HOME = 'models/repositories/knowledgeFactMapping.ts'
-const KNOWLEDGE_SITE = /^(models\/(repositories|controllers)\/Knowledge[^/]*\.ts|components\/knowledge\/.*\.vue)$/
+const KNOWLEDGE_SITE =
+  /^(models\/(repositories|controllers)\/Knowledge[^/]*\.ts|stores\/useKnowledgeStore\.ts|composables\/knowledge\/[^/]*(?<!\.test)\.ts|components\/knowledge\/.*\.vue)$/
 const GENERAL_LITERAL = /(['"`])General\1/
 /** Floor on files scanned: a path change that matches nothing must not read as a clean tree. */
-const MIN_SITES_SCANNED = 5
+const MIN_SITES_SCANNED = 100 // 114 when measured: repositories, controller, store, composables and components
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -57,6 +58,14 @@ describe('the knowledge default fact category has one home', () => {
   it('catches a planted literal at a knowledge call site', () => {
     const planted = { 'models/controllers/KnowledgeController.ts': "category: category || 'General',\n" }
     expect(offenders(planted)).toEqual(['models/controllers/KnowledgeController.ts'])
+  })
+
+  it('catches a planted literal in the knowledge store and a knowledge composable', () => {
+    const planted = {
+      'stores/useKnowledgeStore.ts': "const c = 'General'\n",
+      'composables/knowledge/useKnowledgeFacts.ts': 'const c = "General"\n',
+    }
+    expect(offenders(planted).sort()).toEqual(Object.keys(planted).sort())
   })
 
   it('ignores prose, the home file, and files that are not knowledge call sites', () => {

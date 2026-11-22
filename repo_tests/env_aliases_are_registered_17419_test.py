@@ -17,16 +17,20 @@ from pathlib import Path
 from repo_tests._env_alias_census import Census, aliases_in, registered_in
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
-from repo_tests.env_alias_registry_gap_baseline_17419 import UNREGISTERED_ALIASES
+from repo_tests.env_alias_registry_gap_baseline_17419 import (
+    ALIAS_SIDE_DYNAMIC,
+    REGISTRY_SIDE_DYNAMIC,
+    UNREGISTERED_ALIASES,
+)
 
 from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 
 SSOT_GLOB = "ssot*.py"
 REGISTRY_GLOB = "env_registry*.py"
-#: Aliases extracted when this guard landed was 447; a census that finds fewer than this has narrowed.
-MIN_ALIASES_EXTRACTED = 350
-#: Source files read (48 when measured, floor pinned to it), less a margin for removals.
+#: Aliases extracted when this guard landed was 447; a census that finds fewer than 430 has narrowed.
+MIN_ALIASES_EXTRACTED = 430
+#: Source files read (48 when measured); the floor is pinned to it, with no margin, by the reach-floor gate.
 MIN_FILES_READ = 48
 
 
@@ -47,13 +51,17 @@ REACH = declare(
 )
 
 
-def _census(paths: list[Path], extract) -> Census:
+def _census(paths: list[Path], extract) -> tuple[Census, dict[str, int]]:
+    """The names found, and per file how many names the census could not read (counts, never line numbers)."""
     total = Census()
+    dynamic: dict[str, int] = {}
     for path in paths:
         found = extract(parse_cache.parse(path.read_text(encoding="utf-8"), str(path)))
         total.names |= found.names
         total.dynamic += found.dynamic
-    return total
+        if found.dynamic:
+            dynamic[path.name] = len(found.dynamic)
+    return total, dynamic
 
 
 def unregistered(aliases: set[str], registered: set[str]) -> set[str]:
@@ -63,12 +71,29 @@ def unregistered(aliases: set[str], registered: set[str]) -> set[str]:
 def test_every_alias_is_registered_or_baselined() -> None:
     root = repo_root()
     REACH.verify_floor(root)
-    aliases = _census(_sources(root, SSOT_GLOB), aliases_in).names
-    registered = _census(_sources(root, REGISTRY_GLOB), registered_in).names
-    assert len(aliases) >= MIN_ALIASES_EXTRACTED, f"extracted only {len(aliases)} aliases"
-    gap = unregistered(aliases, registered)
+    aliases, _ = _census(_sources(root, SSOT_GLOB), aliases_in)
+    registered, _ = _census(_sources(root, REGISTRY_GLOB), registered_in)
+    assert len(aliases.names) >= MIN_ALIASES_EXTRACTED, f"extracted only {len(aliases.names)} aliases"
+    gap = unregistered(aliases.names, registered.names)
     assert gap - UNREGISTERED_ALIASES == set(), "register these in an env_registry_<component>.py"
     assert UNREGISTERED_ALIASES - gap == set(), "stale baseline entries: delete them"
+
+
+def test_the_names_the_census_cannot_read_are_pinned_per_file() -> None:
+    """A new variable-built alias or registration is a blind spot appearing; it must be a reviewed decision."""
+    root = repo_root()
+    _, alias_side = _census(_sources(root, SSOT_GLOB), aliases_in)
+    _, registry_side = _census(_sources(root, REGISTRY_GLOB), registered_in)
+    assert alias_side == ALIAS_SIDE_DYNAMIC, "alias-side blind spots changed: see the baseline module"
+    assert registry_side == REGISTRY_SIDE_DYNAMIC, "registry-side blind spots changed: see the baseline module"
+
+
+def test_an_extra_dynamic_alias_changes_the_pinned_count(tmp_path: Path) -> None:
+    one = tmp_path / "ssot_one.py"
+    one.write_text('a = Field(alias="AUTOBOT_X")\nb = Field(alias=name)\n', encoding="utf-8")
+    assert _census([one], aliases_in)[1] == {"ssot_one.py": 1}
+    one.write_text('a = Field(alias="AUTOBOT_X")\nb = Field(alias=name)\nc = Field(alias=other)\n', encoding="utf-8")
+    assert _census([one], aliases_in)[1] == {"ssot_one.py": 2}
 
 
 def test_a_planted_unregistered_alias_is_caught_and_a_registered_one_is_not() -> None:

@@ -11,12 +11,24 @@ and this set (register it, do not add it here) and on an entry that is no longer
 Scope (a boundary, not a finding): string-constant ``alias=`` / ``validation_alias=`` / ``AliasChoices(...)``
 values in ``autobot_shared/ssot*.py``, against string-constant ``EnvVarSpec(name=...)`` in
 ``autobot_shared/env_registry*.py`` (``repo_tests/_env_alias_census.py``). Aliases built from a variable are
-not seen: two sites, ``ssot_config.py`` ``AliasChoices(*_profile.ENV_NAMES)`` (``AUTOBOT_ENV`` and
+not seen: two alias sites, ``ssot_config.py`` ``AliasChoices(*_profile.ENV_NAMES)`` (``AUTOBOT_ENV`` and
 ``AUTOBOT_ENVIRONMENT``, both registered) and ``ssot_hosted_models.py`` ``_override_field`` (its names are not
-``AUTOBOT_*``). Derived by reading the files as text on the date this guard landed; 403 entries.
+``AUTOBOT_*``); and five registry sites that take the name from a helper or loop (every whole-name string in
+such a file counts as registered). Both are pinned per file, by count, below. Derived by reading the files as
+text on the date this guard landed; 403 entries.
 """
 
 from __future__ import annotations
+
+#: Variable-built alias sites per ``ssot*.py`` file. SHRINK-ONLY: a new one fails the test, a removed one is deleted.
+ALIAS_SIDE_DYNAMIC = {"ssot_config.py": 1, "ssot_hosted_models.py": 1}
+#: Variable-named ``EnvVarSpec`` sites per ``env_registry*.py`` file. SHRINK-ONLY, same rule.
+REGISTRY_SIDE_DYNAMIC = {
+    "env_registry_ai.py": 1,
+    "env_registry_npu.py": 1,
+    "env_registry_slm_health.py": 1,
+    "env_registry_testing.py": 2,
+}
 
 UNREGISTERED_ALIASES = frozenset(
     {
