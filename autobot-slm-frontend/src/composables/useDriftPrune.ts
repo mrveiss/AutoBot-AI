@@ -44,7 +44,7 @@ export function useDriftPrune() {
 
   async function preview(component: string): Promise<DriftPrunePreview | null> {
     const data = await run(component, () =>
-      slmApiClient.post<DriftPrunePreview>('/code-sync/drift/prune/preview', { component }),
+      slmApiClient.call('post', '/api/code-sync/drift/prune/preview', { body: { component } }),
     )
     if (data) {
       previews.value = { ...previews.value, [component]: data }
@@ -58,7 +58,7 @@ export function useDriftPrune() {
     if (!shown || shown.files.length === 0) return null
     const paths = shown.files.map((file) => file.path)
     const data = await run(component, () =>
-      slmApiClient.post<DriftPruneResponse>('/code-sync/drift/prune', { component, paths }),
+      slmApiClient.call('post', '/api/code-sync/drift/prune', { body: { component, paths } }),
     )
     if (data) {
       results.value = { ...results.value, [component]: data }

@@ -30,7 +30,7 @@ vi.mock('@/composables/useCodeSync', () => ({
     fetchFullTreeDrift,
   }),
 }))
-vi.mock('@/utils/ApiClient', () => ({ default: { post: (...args: unknown[]) => post(...args) } }))
+vi.mock('@/utils/ApiClient', () => ({ default: { call: (...args: unknown[]) => post(...args) } }))
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
@@ -71,7 +71,7 @@ describe('FullTreeDriftPanel prune (#22082)', () => {
     await flushPromises()
 
     expect(post).toHaveBeenCalledTimes(1)
-    expect(post).toHaveBeenCalledWith('/code-sync/drift/prune/preview', { component: 'plugins' })
+    expect(post).toHaveBeenCalledWith('post', '/api/code-sync/drift/prune/preview', { body: { component: 'plugins' } })
     expect(wrapper.find('[data-testid="drift-prune-files"]').text()).toContain('core-plugins/x/plugin.py')
     expect(wrapper.find('[data-testid="drift-prune-confirm-button"]').exists()).toBe(true)
   })
@@ -87,9 +87,8 @@ describe('FullTreeDriftPanel prune (#22082)', () => {
     await wrapper.find('[data-testid="drift-prune-confirm-button"]').trigger('click')
     await flushPromises()
 
-    expect(post).toHaveBeenLastCalledWith('/code-sync/drift/prune', {
-      component: 'plugins',
-      paths: ['core-plugins/x/plugin.py'],
+    expect(post).toHaveBeenLastCalledWith('post', '/api/code-sync/drift/prune', {
+      body: { component: 'plugins', paths: ['core-plugins/x/plugin.py'] },
     })
     expect(fetchFullTreeDrift).toHaveBeenCalledTimes(1)
     expect(wrapper.find('[data-testid="drift-prune-result"]').text()).toContain('Removed 1 file(s); 0 left in place')
