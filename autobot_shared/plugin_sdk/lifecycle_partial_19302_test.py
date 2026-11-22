@@ -136,6 +136,9 @@ async def test_a_failing_unified_registration_leaves_nothing_half_registered(tmp
         def register(self, manifest):
             raise ValueError("already registered")
 
+        def unregister(self, name):
+            return False
+
     monkeypatch.setattr(loader_module, "get_registry", lambda: RefusingRegistry())
     assert await loader.load_plugin(manifest) is None
     assert PluginRegistry().get_plugin(manifest.name) is None

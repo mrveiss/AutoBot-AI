@@ -29,7 +29,7 @@ from autobot_shared.testfile_names import is_test_filename
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
 from .credential_binding import bound_resolver
 from .hooks import validate_hook_names
-from .lifecycle import initialize_attributed, reload_with_fresh_code, reverse_registrations
+from .lifecycle import initialize_attributed, reload_with_fresh_code, reverse_registrations, rollback_failed_load
 from .registry import get_registry
 
 if TYPE_CHECKING:
@@ -324,40 +324,13 @@ class PluginLoader:
         Returns:
             Loaded plugin instance or None on failure
         """
-        registered = False
+        registered = manifest_registered = False
         try:
-            # Check dependencies
-            missing_deps = self._check_dependencies(manifest)
-            if missing_deps:
-                logger.error(
-                    "Cannot load plugin %s: missing dependencies %s",
-                    manifest.name,
-                    missing_deps,
-                )
+            if not self._preflight(manifest, config):
                 return None
-
-            # Validate declared hooks against HOOK_REGISTRY (GH#6970)
-            if manifest.hooks:
-                validate_hook_names(manifest.hooks, plugin_name=manifest.name)
-
-            # Check required environment variables (GH#6971)
-            missing_required, missing_optional = self._check_required_env(manifest)
-            if missing_required:
-                raise PluginLoadError(
-                    f"Cannot load plugin '{manifest.name}': " f"required env vars not set: {missing_required}"
-                )
-            if missing_optional:
-                logger.info(
-                    "Plugin %s loaded with optional env vars unset: %s",
-                    manifest.name,
-                    missing_optional,
-                )
-
-            # GH#11522: validate config_schema and supplied config at load time
-            if manifest.config_schema:
-                _validate_config_schema(manifest.name, manifest.config_schema)
-                if config:
-                    _validate_config_against_schema(manifest.name, config, manifest.config_schema)
+            if self.registry.get_plugin(manifest.name):  # a duplicate must not construct under the live plugin's name
+                logger.warning("Plugin %s is already loaded; not loading it again", manifest.name)
+                return None
 
             # Import plugin module — pass on-disk directory for file-path fallback (#10294)
             plugin_dir = self._manifest_dirs.get(manifest.name)
@@ -377,16 +350,35 @@ class PluginLoader:
             await initialize_attributed(plugin)  # its tools are recorded for host-side reversal (#19302)
             plugin.status = PluginStatus.LOADED
             get_registry().register(manifest)
+            manifest_registered = True
             logger.info("Loaded plugin: %s v%s", manifest.name, manifest.version)
             return plugin
 
         except Exception as e:
             logger.error("Failed to load plugin %s: %s", manifest.name, e, exc_info=True)
-            if registered or not self.registry.get_plugin(manifest.name):
-                self.registry.unregister(manifest.name)  # half-registered: leave neither (#19302)
-                get_registry().unregister(manifest.name)
-                reverse_registrations(manifest.name)  # what a raising initialize() registered (#19302)
+            rollback_failed_load(self.registry, get_registry, manifest.name, registered, manifest_registered)
             return None
+
+    def _preflight(self, manifest: PluginManifest, config: Dict | None) -> bool:
+        """The checks that run before any plugin code is imported; False when a dependency is missing."""
+        missing_deps = self._check_dependencies(manifest)
+        if missing_deps:
+            logger.error("Cannot load plugin %s: missing dependencies %s", manifest.name, missing_deps)
+            return False
+        if manifest.hooks:  # GH#6970
+            validate_hook_names(manifest.hooks, plugin_name=manifest.name)
+        missing_required, missing_optional = self._check_required_env(manifest)  # GH#6971
+        if missing_required:
+            raise PluginLoadError(
+                f"Cannot load plugin '{manifest.name}': required env vars not set: {missing_required}"
+            )
+        if missing_optional:
+            logger.info("Plugin %s loaded with optional env vars unset: %s", manifest.name, missing_optional)
+        if manifest.config_schema:  # GH#11522: validate config_schema and supplied config at load time
+            _validate_config_schema(manifest.name, manifest.config_schema)
+            if config:
+                _validate_config_against_schema(manifest.name, config, manifest.config_schema)
+        return True
 
     async def unload_plugin(self, name: str) -> bool:
         """Unload a plugin; True if it was unloaded. A raising shutdown() still leaves nothing registered (#19302)."""
