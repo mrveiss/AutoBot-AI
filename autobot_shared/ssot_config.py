@@ -66,6 +66,7 @@ from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansib
     SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
     SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT,
 )
+from autobot_shared.ssot_ssh import SSHIdentitySettings
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
 _Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
@@ -1219,7 +1220,7 @@ class DatabasePoolConfig(RedactedSettings):
     )
 
 
-class PathConfig(RedactedSettings):
+class PathConfig(RedactedSettings, SSHIdentitySettings):
     """File-system path configuration.
 
     Provides a single source of truth for well-known AutoBot directories so
@@ -1290,31 +1291,6 @@ class PathConfig(RedactedSettings):
         default="/etc/autobot/ssh/autobot_key",
         validation_alias=AliasChoices("AUTOBOT_SSH_KEY_PATH", "SLM_SSH_KEY"),
     )
-
-    # Management-plane SSH key (#14173) — DISTINCT from ssh_key_path above, not
-    # an alias of it. autobot-infrastructure/shared/scripts/utilities/setup-ssh-keys.sh
-    # generates and deploys THIS key under the operator's own $HOME the first
-    # time a human runs the vm-management/utilities scripts from their own
-    # workstation; ssh_key_path is the service account's key, deployed by
-    # Ansible to /etc/autobot/ssh for automated fleet orchestration (SLM
-    # backend, code-sync agents). The two are provably different files with
-    # different owners and different consumers — #14173's audit found ~24
-    # scripts reading AUTOBOT_SSH_KEY with a $HOME-relative fallback and
-    # confirmed collapsing it onto ssh_key_path's /etc default would silently
-    # break the human-operator flow, so this stays a second field rather than
-    # a rename or an alias.
-    management_ssh_key_path: str = Field(
-        default_factory=lambda: str(Path.home() / ".ssh" / "autobot_key"),
-        alias="AUTOBOT_SSH_KEY",
-    )
-
-    # SSH user for inter-node connections from management scripts (#14173).
-    # Not a path, but belongs beside the two SSH key fields above — same
-    # feature (fleet SSH identity). Matches the 'autobot' operational account
-    # (autobot-slm-backend/ansible/ansible.cfg remote_user,
-    # inventory/*.yml ansible_user, inventory/group_vars/all.yml
-    # autobot_ssh_key_path's owning account).
-    ssh_user: str = Field(default="autobot", alias="AUTOBOT_SSH_USER")
 
     # Override for the `claude` CLI binary (LLC claude_code adapter, GH#12478); empty =
     # PATH, then per-user install locations (set it when ~/.local/bin is off the service PATH).

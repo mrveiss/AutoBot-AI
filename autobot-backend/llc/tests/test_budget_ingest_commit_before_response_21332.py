@@ -8,6 +8,11 @@
 handlers are called here directly (no teardown), and the spend is read from a SECOND connection to a
 file database: it only sees the charge if the handler itself committed. Before the fix the second
 session read the old remainder, which is how a caller that ingests, reads and ingests again charged twice.
+
+Claim (b), teardown after the response: the recorded version is the shared floor ``fastapi>=0.162.2``
+(``constraints/shared.txt:48``; no manifest pins an exact version). Source evidence on the issue: the
+response is sent inside the request-scoped exit stack (``fastapi/routing.py:149-153``,
+``dependencies/utils.py:715-725`` at 0.162.0) -- read from the constraint, not by running anything.
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ from llc.api.budget import (
     IngestRequest,
     ProvisionBudgetRequest,
     UpdateLimitRequest,
+    get_budget,
     ingest_cost,
     provision_budget,
     update_limit,
@@ -101,6 +107,19 @@ async def test_an_ingest_is_visible_to_another_session_the_moment_it_answers(fac
         )
         # No teardown has run: only the handler's own commit makes this visible.
         assert await _read(factory, LLCAgentBudget.tokens_spent) == SPENT + EVENT
+
+
+@pytest.mark.asyncio
+async def test_repeated_gets_right_after_an_ingest_always_see_the_post_ingest_value(
+    factory, company
+) -> None:  # noqa: ANN001
+    ctx = _ctx(company)
+    async with factory() as session:
+        await ingest_cost(SLUG, IngestRequest(tokens_in=EVENT, tokens_out=0, model="llama3"), session, {}, ctx)
+    for _ in range(5):
+        async with factory() as reader:  # a new session per read, as a new request has
+            seen = await get_budget(SLUG, reader, {}, ctx)
+            assert seen.tokens_spent == SPENT + EVENT
 
 
 @pytest.mark.asyncio

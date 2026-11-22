@@ -16,9 +16,9 @@ from api.agent import comprehensive_research_task
 from api.agent_kb_context import _enhance_context_with_kb
 from api.chat_knowledge_manager import ChatKnowledgeManager
 from api.schemas_agent_requests import ResearchTaskRequest
-from knowledge.read_path_fakes_16665 import PRIVATE_A, FakeKB, text_of
 from services.research.planner import SubQuestion, filter_skip_known
 from task_handlers.knowledge_base_handlers import KBSearchHandler
+from testkit.read_path_fakes_16665 import PRIVATE_A, FakeKB, text_of
 
 
 class _Payload:
