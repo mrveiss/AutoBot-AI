@@ -25,6 +25,8 @@ pytest.importorskip("fastapi")
 from fastapi import APIRouter, FastAPI, HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from testkit.fake_async_session import FakeAsyncSession  # noqa: E402
+
 _BACKEND = Path(__file__).resolve().parents[2]
 _PATHS = ["a.py", "b.py"]
 
@@ -37,8 +39,9 @@ def _module(monkeypatch, name: str, **attrs) -> types.ModuleType:
     return mod
 
 
-class _Db:
+class _Db(FakeAsyncSession):
     def __init__(self, events: list) -> None:
+        super().__init__()
         self.events = events
 
     async def commit(self) -> None:
