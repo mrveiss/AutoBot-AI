@@ -75,19 +75,11 @@ class _FakeRedis:
         return ordered[start : (None if stop == -1 else stop + 1)]
 
     def pipeline(self):
-        fake = self
-
-        class _Pipe:
-            def __init__(self):
-                self.keys = []
-
-            def get(self, key):
-                self.keys.append(key)
-
-            def execute(self):
-                return [fake.values.get(k) for k in self.keys]
-
-        return _Pipe()
+        queued: list = []
+        pipe = MagicMock()
+        pipe.get.side_effect = queued.append
+        pipe.execute.side_effect = lambda: [self.values.get(key) for key in queued]
+        return pipe
 
 
 @pytest.mark.asyncio
