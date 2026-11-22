@@ -100,6 +100,8 @@ def is_own_task(
 
 def stamp_status(item: LLCWorkItem, new_status: WorkItemStatus, now: datetime, *, own: bool = False) -> None:
     """Set the status and its timestamps; a move by the owner also clears what no longer holds."""
+    if item.status == WorkItemStatus.DONE and new_status != WorkItemStatus.DONE:
+        item.completed_at = None  # a reopened task is no longer completed
     item.status = new_status
     if own:
         item.completed_at = None
