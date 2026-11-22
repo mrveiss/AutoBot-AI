@@ -135,10 +135,12 @@ interface Emits {
   (e: 'clear-session'): void
   (e: 'toggle-mobile-sidebar'): void
   (e: 'open-settings'): void
+  /** The Full-mode switch hid the control that had focus: the parent moves focus to its always-visible fallback. */
+  (e: 'restore-focus'): void
 }
 
 const props = defineProps<Props>()
-defineEmits<Emits>()
+const emit = defineEmits<Emits>()
 
 const { t } = useI18n()
 const { setMode } = useUiMode()
@@ -147,6 +149,8 @@ const announceMode = useUiModeAnnouncer()
 function showAllFeatures(): void {
   setMode('full')
   announceMode('full')
+  // The note holding this button is display:none in Full mode; focus would fall to <body>.
+  emit('restore-focus')
 }
 
 const connectionVariant = computed<SemanticVariant>(() => {

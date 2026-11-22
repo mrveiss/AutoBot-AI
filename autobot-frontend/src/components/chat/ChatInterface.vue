@@ -55,6 +55,7 @@
           @clear-session="clearSession"
           @toggle-mobile-sidebar="showMobileSidebar = !showMobileSidebar"
           @open-settings="showChatSettings = true"
+          @restore-focus="fallbackBtnRef?.focus()"
           class="shrink-0"
         >
           <template #actions>

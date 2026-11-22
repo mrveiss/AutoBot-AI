@@ -4,10 +4,12 @@
 // ChatHeader (#18243): kit buttons with names and tooltips, advanced controls marked .adv, the
 // Minimal-mode note with its way back, and the connection badge variant.
 import { describe, it, expect, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent } from 'vue'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import ChatHeader from '../ChatHeader.vue'
+import ChatHeaderActions from '../ChatHeaderActions.vue'
 import { useUiMode } from '@/composables/useUiMode'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
@@ -98,6 +100,28 @@ describe('ChatHeader', () => {
     expect(note.text()).toContain(en.chat.header.essentialsNote)
     await note.get('button').trigger('click')
     expect(useUiMode().uiMode.value).toBe('full')
+    expect(w.emitted('restore-focus')).toHaveLength(1)
+    w.unmount()
+  })
+
+  it('moves focus from the vanishing note button to the always-visible voice-output toggle', async () => {
+    useUiMode().setMode('minimal')
+    let fallback: HTMLElement | null = null
+    const Harness = defineComponent({
+      components: { ChatHeader, ChatHeaderActions },
+      setup: () => ({ props: base, onEl: (panel: string, el: HTMLElement | null) => { if (panel === 'fallback') fallback = el }, restore: () => fallback?.focus() }),
+      template: `<ChatHeader v-bind="props" @restore-focus="restore"><template #actions>
+        <ChatHeaderActions :voice-output-enabled="false" :is-speaking="false" :voice-expanded="false" voice-controls-id="v"
+          :has-session="true" :is-collaborative="false" :show-file-panel="false" :show-compare-panel="false"
+          :show-collaboration-panel="false" @button-el="onEl" /></template></ChatHeader>`,
+    })
+    const w = mount(Harness, { attachTo: document.body, global: { plugins: [i18n] } })
+    await flushPromises()
+    const note = w.get('.only-min button')
+    ;(note.element as HTMLElement).focus()
+    expect(document.activeElement).toBe(note.element)
+    await note.trigger('click')
+    expect((document.activeElement as HTMLElement).getAttribute('aria-label')).toBe(en.chat.interface.voiceOutputOff)
     w.unmount()
   })
 

@@ -42,9 +42,13 @@ export interface UseInitialFocusReturn {
  */
 function preferredTarget(container: HTMLElement): HTMLElement | null {
   for (const marked of container.querySelectorAll<HTMLElement>('[data-autofocus]')) {
-    const target = marked.matches(FOCUSABLE_SELECTOR) ? marked : marked.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
-    // A target that is not rendered (display:none) cannot take focus: skipping it keeps the fallback alive.
-    if (target && isTabbable(target)) return target
+    // A marked wrapper offers its own focusable descendants in order; one that is not rendered
+    // (display:none) cannot take focus, so the first that can wins and the fallback stays alive.
+    const candidates = marked.matches(FOCUSABLE_SELECTOR)
+      ? [marked]
+      : Array.from(marked.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    const target = candidates.find(isTabbable)
+    if (target) return target
   }
   return null
 }

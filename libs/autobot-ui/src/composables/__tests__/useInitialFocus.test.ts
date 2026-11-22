@@ -47,4 +47,10 @@ describe('useInitialFocus', () => {
     await useInitialFocus(ref(el)).focusFirst()
     expect(document.activeElement?.id).toBe('field')
   })
+
+  it('finds the first tabbable descendant of a marked wrapper when an earlier one is hidden', async () => {
+    const el = container('<button id="close"></button><div data-autofocus><input id="hidden" style="display:none"><input id="field"></div>')
+    await useInitialFocus(ref(el)).focusFirst()
+    expect(document.activeElement?.id).toBe('field')
+  })
 })
