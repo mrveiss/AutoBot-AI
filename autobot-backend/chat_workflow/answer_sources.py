@@ -26,7 +26,7 @@ from typing import Any, Dict, Iterable, List
 
 from async_chat_workflow import WorkflowMessage
 from chat_workflow.reply_persistence import RESPOND_TOOL_TYPE, stamp_model
-from chat_workflow.step_evidence import STEP_KEY, is_quotable_value, kept_literals, value_literals
+from chat_workflow.step_evidence import STEP_KEY, is_quotable_value, value_digest, value_literals
 from chat_workflow.step_outcome import did_execute
 from source_attribution import Source, SourceKind, SourceReliability
 
@@ -131,19 +131,21 @@ def check_quoted_values(
 
     Only an answer that rests on tool output has values to account for. A value is found when it is among the
     literals of an executed step (its step id), of the user's message, or of a retrieved passage. ``truncated`` is
-    true when any step's output was longer than the scan cap or its literals are no longer held: the check is then
-    partial, and the UI says so. A value of fewer than 3 characters or 2 digits is not checked (``is_quotable_value``).
+    true when any step's output was longer than the scan cap or held more quotable values than its digest: the check
+    is then partial, and the UI says so. Steps carry hashes of their values (``step_digest``), so each turn's proof
+    depends on its own execution history only: nothing is shared between sessions or workers. A value of fewer than
+    3 characters or 2 digits is not checked (``is_quotable_value``).
     """
     records = _executed_records(history)
     if not records:
         return None
-    kept = {r["id"]: kept_literals(r["id"]) for r in records}
-    partial = any(r.get("partial") or kept[r["id"]] is None for r in records)
-    homes: List[tuple[str, set]] = [(step_id, set(lits or ())) for step_id, lits in kept.items()]
-    homes.append((FOUND_IN_USER, set(value_literals(user_message))))
-    homes.append((FOUND_IN_KB, {v for c in kb_citations for v in value_literals(str(c.get("content") or ""))}))
+    partial = any(r.get("partial") or "digest" not in r for r in records)
+    homes: List[tuple[str, set]] = [(r["id"], set(r.get("digest") or ())) for r in records]
+    homes.append((FOUND_IN_USER, {value_digest(v) for v in value_literals(user_message)}))
+    kb_values = (v for c in kb_citations for v in value_literals(str(c.get("content") or "")))
+    homes.append((FOUND_IN_KB, {value_digest(v) for v in kb_values}))
     checked = [v for v in value_literals(answer) if is_quotable_value(v)][:_MAX_CHECKED]
-    found = {v: next((name for name, lits in homes if v in lits), None) for v in checked}
+    found = {v: next((name for name, digests in homes if value_digest(v) in digests), None) for v in checked}
     return {
         "checked": len(checked),
         "found": {v: where for v, where in found.items() if where},

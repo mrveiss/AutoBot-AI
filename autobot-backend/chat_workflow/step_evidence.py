@@ -6,19 +6,20 @@
 
 ``begin_step`` is called before a tool call is dispatched; ``DispatchedStep.tag`` stamps its id on each message the
 call yields, and ``DispatchedStep.finish`` stamps the call's execution results with one ``step`` record (id, tool,
-redacted arguments, start and end time, origin; the literals the output contains are held aside, never streamed).
+redacted arguments, start and end time, origin, and a digest of the quotable values its output contains: hashes,
+never the values).
 ``answer_sources`` turns the records of a turn into the answer's sources. The record rides on the execution result,
 so it follows the result into the turn's execution history on both the legacy and the graph path.
 """
 
 from __future__ import annotations
 
+import hashlib
 import re
 import time
 import uuid
-from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Dict, FrozenSet, Iterable, List
+from typing import Any, Dict, Iterable, List
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.secret_redaction import (
@@ -40,14 +41,12 @@ _MAX_URLS = 10
 #: Most characters of one step's output (or of an answer) read for quotable values; more is read up to this and the
 #: proof is marked partial (#21976). Bounds the work on the request path.
 SCAN_MAX_CHARS: int = env_int("AUTOBOT_PROOF_SCAN_MAX_CHARS", default=200000)
-#: Steps whose literals are held between a step's end and its turn's end; the oldest are dropped first.
-KEPT_STEPS: int = env_int("AUTOBOT_PROOF_KEPT_STEPS", default=256)
+#: Most quotable values one step's digest holds; a step with more is marked partial (bounds the record's size).
+MAX_DIGEST = 5000
+_DIGEST_CHARS = 8
 #: A host that is not a bare label (an IP address, a dotted name) is shown as this, never as itself.
 UNLABELLED_HOST = "remote"
 _LABEL_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,31}")
-#: Literals of recent steps by step id. Kept out of the execution results: those are streamed to the client.
-_LITERALS: "OrderedDict[str, FrozenSet[str]]" = OrderedDict()
-
 _URL_RE = re.compile(r"https?://[^\s<>\"'`)\]]+")
 #: A run of characters with none of ``-_/=:,;()[]{}|<>`'"`` or whitespace ("6.18.33.2-microsoft" is two runs).
 #: Linear: a run is matched as it is; whether it holds a digit is tested after.
@@ -107,16 +106,21 @@ def node_label(host: Any) -> Any:
     return host if _LABEL_RE.fullmatch(host) else UNLABELLED_HOST
 
 
-def keep_literals(step_id: str, literals: Iterable[str]) -> None:
-    """Hold a step's literals until its turn's answer is checked; the oldest steps are dropped past ``KEPT_STEPS``."""
-    _LITERALS[step_id] = frozenset(literals)
-    while len(_LITERALS) > max(KEPT_STEPS, 1):
-        _LITERALS.popitem(last=False)
+def value_digest(literal: str) -> str:
+    """A short stable hash of a quotable value: the step record carries these, never the values (#21976).
+
+    8 hex characters (32 bits): with at most ``MAX_DIGEST`` values per step a chance match is below 1 in 800,000.
+    """
+    return hashlib.sha1(literal.encode("utf-8"), usedforsecurity=False).hexdigest()[:_DIGEST_CHARS]
 
 
-def kept_literals(step_id: str) -> FrozenSet[str] | None:
-    """The literals held for *step_id*, or None when they are gone (evicted, or the turn resumed elsewhere)."""
-    return _LITERALS.get(step_id)
+def step_digest(text: str) -> tuple[List[str], bool]:
+    """(sorted digests of the quotable values in *text*, whether the step is partial).
+
+    Partial when *text* is longer than the scan cap or holds more than ``MAX_DIGEST`` quotable values.
+    """
+    digests = sorted({value_digest(v) for v in value_literals(text) if is_quotable_value(v)})
+    return digests[:MAX_DIGEST], len(text) > SCAN_MAX_CHARS or len(digests) > MAX_DIGEST
 
 
 def _output_text(results: Iterable[Dict[str, Any]]) -> str:
@@ -170,7 +174,7 @@ class DispatchedStep:
         stamp_call_fingerprint(results, tool_call)
         tool, params = str(tool_call.get("name", "")), tool_call.get("params") or {}
         text = _output_text(results)
-        keep_literals(self.step_id, value_literals(text))
+        digest, partial = step_digest(text)
         record = {
             "id": self.step_id,
             "tool": tool,
@@ -178,7 +182,8 @@ class DispatchedStep:
             "started_at": self.started_at,
             "ended_at": time.time(),
             "origin": step_origin(tool, params, results),
-            "partial": len(text) > SCAN_MAX_CHARS,  # more output than the proof reads
+            "digest": digest,  # hashes of the output's quotable values, not the values (#21976)
+            "partial": partial,  # more output than the proof reads
         }
         for result in results:
             result[STEP_KEY] = record

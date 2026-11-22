@@ -269,16 +269,3 @@ register_env_var(
         component="chat_workflow",
     )
 )
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_PROOF_KEPT_STEPS",
-        type=int,
-        default=256,
-        description=(
-            "How many recent tool steps keep their quotable values in memory until their turn's answer is checked "
-            "(#21976). Older steps are dropped, and a proof that needs them is marked partial."
-        ),
-        component="chat_workflow",
-    )
-)

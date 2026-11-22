@@ -14,7 +14,7 @@ from async_chat_workflow import WorkflowMessage
 from chat_history.messages import MessagesMixin
 from chat_workflow.answer_sources import build_answer_sources, check_quoted_values, proof_message
 from chat_workflow.manager import ChatWorkflowManager
-from chat_workflow.step_evidence import begin_step, safe_args, value_literals
+from chat_workflow.step_evidence import begin_step, safe_args, value_digest, value_literals
 
 ANSWER = "It is overcast, 34°F (1°C)."
 SEARCH_OUTPUT = "[1] Riga weather https://weather.example/riga\nOvercast, 1°C"
@@ -267,13 +267,33 @@ def test_a_complete_check_is_not_marked_partial():
     assert check_quoted_values("It is 6.18.33.2.", _uname(), "", [])["truncated"] is False
 
 
-def test_literals_no_longer_held_make_the_proof_partial():
+def test_a_step_without_a_digest_makes_the_proof_partial():
+    history = _uname()
+    del history[0]["step"]["digest"]
+    assert check_quoted_values("It is 6.18.33.2.", history, "", [])["truncated"] is True
+
+
+def test_two_turns_at_once_keep_their_own_proofs_complete():
+    turn_a, turn_b = _uname(), _executed(
+        "web_search", {}, [{"tool": "web_search", "status": "success", "output": "reading 77.88.99"}]
+    )
+    for _ in range(600):  # far more steps than any shared store could hold
+        _uname()
+    proof_a = check_quoted_values("It is 6.18.33.2.", turn_a, "", [])
+    proof_b = check_quoted_values("It is 77.88.99.", turn_b, "", [])
+    assert (proof_a["unproven"], proof_a["truncated"]) == ([], False)
+    assert (proof_b["unproven"], proof_b["truncated"]) == ([], False)
+    assert check_quoted_values("It is 77.88.99.", turn_a, "", [])["unproven"] == ["77.88.99"]
+
+
+def test_a_step_record_is_bounded_per_turn():
     from chat_workflow import step_evidence
 
-    history = _uname()
-    step_evidence._LITERALS.clear()
-    proof = check_quoted_values("It is 6.18.33.2.", history, "", [])
-    assert proof["truncated"] is True
+    output = " ".join(f"{i}.{i}.{i}" for i in range(20000))
+    history = _executed("web_search", {}, [{"tool": "web_search", "status": "success", "output": output}])
+    record = history[0]["step"]
+    assert len(record["digest"]) <= step_evidence.MAX_DIGEST and record["partial"] is True
+    assert all(len(h) == 8 for h in record["digest"])
 
 
 def test_trivial_values_are_neither_found_nor_flagged():
@@ -286,7 +306,9 @@ def test_literals_never_reach_the_stream_or_the_stored_summary():
 
     history = _uname()
     summary = WorkflowMessage(type="execution_summary", content="", metadata={"execution_results": history})
-    assert "literals" not in str(summary.to_dict()) and "literals" not in str(persisted_metadata(summary))
+    for shown in (str(summary.to_dict()), str(persisted_metadata(summary))):
+        assert "literals" not in shown and "6.18.33.2" not in shown.replace(history[0]["stdout"], "")
+    assert value_digest("6.18.33.2") in history[0]["step"]["digest"]
 
 
 def test_the_proof_message_replaces_the_streamed_respond_bubble():
@@ -300,3 +322,19 @@ def test_a_fenced_example_tool_call_in_prose_keeps_its_text():
 
     example = 'Write it like this:\n```\n<TOOL_CALL name="web_search" params=\'{"query":"x"}\'>go</TOOL_CALL>\n```'
     assert "TOOL_CALL" in reply_prose_text(example)
+
+
+def test_the_production_path_keeps_the_streamed_respond_id():
+    """Graph path: the streamed dict is the one kept in state; it is rebuilt with its id, stored under it."""
+    from chat_workflow.state_messages import workflow_message_from_state
+
+    respond = WorkflowMessage(
+        type="response", content=ANSWER, metadata={"message_type": "respond_tool", "iteration": 1}
+    )
+    streamed = respond.to_dict()  # what graph_tool_dispatch streams and keeps in ``messages``
+    rebuilt = workflow_message_from_state(streamed)
+    chat_mgr = SimpleNamespace(_build_message_dict=lambda *a, **k: MessagesMixin._build_message_dict(None, *a, **k))
+    manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
+    batch = manager._build_persist_batch(chat_mgr, [rebuilt], [""], "m", None, False, "t", _search(), "q")
+    (stored,) = [e for e in batch if e["sender"] == "assistant"]
+    assert stored["id"] == streamed["id"] == proof_message(stored).to_dict()["id"]
