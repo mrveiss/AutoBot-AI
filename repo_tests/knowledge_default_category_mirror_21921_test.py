@@ -12,12 +12,12 @@ the TypeScript constant and fails when the two stop naming the same category.
 from __future__ import annotations
 
 import re
-from pathlib import Path
+
+from repo_tests._paths import repo_root
 
 from autobot_shared.category_defaults import CategoryDefaults
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-MAPPING = REPO_ROOT / "autobot-frontend" / "src" / "models" / "repositories" / "knowledgeFactMapping.ts"
+MAPPING = repo_root() / "autobot-frontend" / "src" / "models" / "repositories" / "knowledgeFactMapping.ts"
 _DECLARATION = re.compile(r"""^export const DEFAULT_FACT_CATEGORY = (['"])(?P<value>[^'"]+)\1\s*$""", re.MULTILINE)
 
 
