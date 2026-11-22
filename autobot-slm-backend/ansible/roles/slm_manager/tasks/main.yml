@@ -14,6 +14,21 @@
   ansible.builtin.import_tasks: clean.yml
   tags: ['clean']
 
+# #19832: SLM_TRUSTED_PROXIES replaces the backend's built-in list, so a frontend that is missing
+# from it collapses every client into one login rate-limit bucket. Fail loudly instead.
+- name: "SLM | #19832: assert the frontend is among the trusted proxies"
+  ansible.builtin.assert:
+    that:
+      - slm_trusted_frontend_addrs | length > 0
+      - (slm_trusted_frontend_addrs.split(',') | intersect(slm_trusted_proxies.split(','))) | length > 0
+    fail_msg: >-
+      A frontend is deployed (frontend_slm_remote is true or the inventory has a `frontend`
+      group) but slm_trusted_proxies has no frontend entry. Set frontend_host or give every
+      `frontend` group host an ansible_host; otherwise the SLM sees all clients as one address.
+    quiet: true
+  when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
+  tags: ['slm', 'config']
+
 # ==========================================================
 # System packages (assume blank host)
 # ==========================================================
@@ -1115,7 +1130,7 @@
 - name: "SLM | Allow HTTPS"
   community.general.ufw:
     rule: allow
-    port: "443"
+    port: "{{ slm_nginx_tls_port }}"
     proto: tcp
     comment: "HTTPS - AutoBot SLM"
   when: _slm_ufw_check.rc == 0
@@ -1302,7 +1317,7 @@
       - "=== SLM Manager Deployment Complete ==="
       - "Backend: {{ slm_backend_host }}:{{ slm_backend_port }}"
       - "Frontend: {{ slm_frontend_dir }}/current -> {{ slm_frontend_dir }}/dist-<build id>"
-      - "Nginx: HTTPS on port 443"
+      - "Nginx: HTTPS on port {{ slm_nginx_tls_port }}"
       - "TLS cert: {{ slm_tls_cert }}"
       - "Logs: {{ slm_log_dir }}/"
   tags: ['slm', 'report']

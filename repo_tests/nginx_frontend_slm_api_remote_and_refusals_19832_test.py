@@ -99,7 +99,7 @@ def _block(text: str, header: str) -> str:
 def test_same_machine_stays_on_loopback_uvicorn(slm_host: str | None) -> None:
     out = _render(slm_host)
     assert "server 127.0.0.1:8000 " in _block(out, "upstream autobot_slm_backend")
-    api = _block(out, "location /slm/api/ ")
+    api = _block(out, "location ^~ /slm/api/ ")
     assert "proxy_pass http://autobot_slm_backend/api/;" in api
     assert "proxy_ssl" not in api
 
@@ -107,7 +107,7 @@ def test_same_machine_stays_on_loopback_uvicorn(slm_host: str | None) -> None:
 def test_separate_node_proxies_https_to_the_slm_nginx_keeping_the_path() -> None:
     out = _render("198.51.100.7", remote=True)
     assert "server 198.51.100.7:443 " in _block(out, "upstream autobot_slm_backend")
-    for loc, upstream in (("location /slm/api/ ", "/slm/api/;"), ("location /slm/api/ws/ ", "/slm/api/ws/;")):
+    for loc, upstream in (("location ^~ /slm/api/ ", "/slm/api/;"), ("location ^~ /slm/api/ws/ ", "/slm/api/ws/;")):
         block = _block(out, loc)
         assert f"proxy_pass https://autobot_slm_backend{upstream}" in block
         assert "proxy_ssl_server_name on;" in block
@@ -121,7 +121,7 @@ def test_separate_node_proxies_https_to_the_slm_nginx_keeping_the_path() -> None
 def test_the_remote_proxy_never_turns_verification_off() -> None:
     assert (
         "proxy_ssl_verify off"
-        not in _render("198.51.100.7", remote=True).split("location /slm/api/ws/")[1].split("location /api/voice")[0]
+        not in _render("198.51.100.7", remote=True).split("location ^~ /slm/api/ws/")[1].split("location /api/voice")[0]
     )
 
 
@@ -132,32 +132,59 @@ def test_ports_come_from_the_group_vars_not_the_template() -> None:
     assert "listen 443 ssl" not in vhost
 
 
-REFUSED = ["health/database", "ready", "live", "recovery", "metrics/prometheus", "ready/"]
+REFUSED = [
+    "health",
+    "health/database",
+    "ready",
+    "ready/",
+    "live",
+    "live/",
+    "recovery",
+    "recovery/",
+    "metrics/prometheus",
+    "performance/metrics/prometheus",
+]
+# Paths the main app calls through /slm/api (useHostInventory, useTLSCredentials, ssot-config discover).
+STAYS_OPEN = ["nodes", "auth/login", "discover/redis", "monitoring/health", "ready-check"]
+
+
+def _refusals(out: str) -> list[tuple[str, str]]:
+    return re.findall(r"location (=|\^~) (/slm/api/\S+) \{\n\s+return 403;", out)
+
+
+def _nginx_match(refusals: list[tuple[str, str]], path: str) -> bool:
+    """True when an exact or ^~ refusal location matches `path` (nginx exact / prefix semantics)."""
+    return any(path == loc if mod == "=" else path.startswith(loc) for mod, loc in refusals)
 
 
 def test_open_health_and_metrics_routes_are_refused_on_the_main_origin() -> None:
-    out = _render("192.0.2.10")
-    refusal = _block(out, "location ~ ^/slm/api/(")
-    assert "return 403;" in refusal
-    header = out[out.index("location ~ ^/slm/api/(") : out.index("{", out.index("location ~ ^/slm/api/("))]
-    pattern = header.split("location ~ ")[1].strip()
-    rx = re.compile(pattern)
+    """#19832: none of these has a main-app caller; the SLM's own UI and Prometheus use the SLM vhost."""
+    refusals = _refusals(_render("192.0.2.10"))
+    assert len(refusals) == len(DEFAULTS["frontend_slm_refused_routes"]), refusals
     for path in REFUSED:
-        assert rx.match(f"/slm/api/{path}"), path
-    # What the unified UI calls stays reachable (useSlmWebSocket.ts, APISettings.vue, useFleetMetrics.ts).
-    for path in ("health", "nodes", "auth/login", "performance/metrics/prometheus", "monitoring/health"):
-        assert not rx.match(f"/slm/api/{path}"), path
+        assert _nginx_match(refusals, f"/slm/api/{path}"), path
+    for path in STAYS_OPEN:
+        assert not _nginx_match(refusals, f"/slm/api/{path}"), path
 
 
-def test_the_refusal_outranks_the_generic_prefix_in_nginx_matching() -> None:
-    """A regex location beats a plain prefix; the refusal must not be an exact/prefix block either."""
+def test_the_refusals_are_exact_or_prefix_never_regex() -> None:
+    """An asset-extension regex must not shadow a refusal, nor a refusal be a regex the ^~ prefix beats."""
     out = _render("192.0.2.10")
-    assert "location ~ ^/slm/api/(" in out
-    assert "location ^~ /slm/api/ " not in out  # only the internal-prefix deny below is a ^~ block
+    assert "location ~ ^/slm/api/" not in out
+    assert "location /slm/api/ " not in out and "location /slm/api/ws/ " not in out
+    assert "location ^~ /slm/api/ {" in out and "location ^~ /slm/api/ws/ {" in out
+
+
+def test_the_refusals_are_longer_prefixes_than_the_generic_proxy() -> None:
+    """nginx picks the longest matching prefix: every refusal path is longer than `/slm/api/`."""
+    out = _render("192.0.2.10")
+    for mod, loc in _refusals(out):
+        assert len(loc) > len("/slm/api/")
+        assert mod == "=" or loc.startswith("/slm/api/")
 
 
 def test_the_internal_slm_api_is_denied_at_the_edge() -> None:
     """#20046: the SLM's service-to-service routes are not reachable through the public /slm/api/ proxy."""
     out = _render("192.0.2.10")
     assert "return 404;" in _block(out, "location ^~ /slm/api/internal/ ")
-    assert out.index("location ^~ /slm/api/internal/ ") < out.index("location /slm/api/ {")
+    assert out.index("location ^~ /slm/api/internal/ ") < out.index("location ^~ /slm/api/ {")

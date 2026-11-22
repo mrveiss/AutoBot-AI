@@ -54,6 +54,7 @@ def _render(host: str, port: str) -> str:
         frontend_slm_backend_remote=False,
         frontend_slm_upstream_prefix="/api/",
         frontend_slm_ca_cert="/ca.pem",
+        frontend_slm_refused_routes=yaml.safe_load(DEFAULTS.read_text(encoding="utf-8"))["frontend_slm_refused_routes"],
         slm_client_max_body_size="10m",
     )
 
@@ -73,7 +74,7 @@ def _block(text: str, header: str) -> str:
 def test_slm_api_proxies_to_the_configured_upstream(target: dict[str, str]) -> None:
     out = _render(target["host"], target["port"])
     assert f"server {target['host']}:{target['port']} " in _block(out, "upstream autobot_slm_backend")
-    api = _block(out, "location /slm/api/ ")
+    api = _block(out, "location ^~ /slm/api/ ")
     assert "proxy_pass http://autobot_slm_backend/api/;" in api
     assert "proxy_set_header Upgrade $http_upgrade;" in api
     assert "proxy_set_header Connection $connection_upgrade;" in api
@@ -83,18 +84,18 @@ def test_slm_api_proxies_to_the_configured_upstream(target: dict[str, str]) -> N
 
 def test_slm_websocket_location_upgrades_and_precedes_the_generic_block() -> None:
     out = _render(**_SEPARATE)
-    ws = _block(out, "location /slm/api/ws/ ")
+    ws = _block(out, "location ^~ /slm/api/ws/ ")
     assert "proxy_pass http://autobot_slm_backend/api/ws/;" in ws
     assert 'proxy_set_header Connection "upgrade";' in ws
     assert "proxy_read_timeout 86400;" in ws
-    assert out.index("location /slm/api/ws/ ") < out.index("location /slm/api/ ")
+    assert out.index("location ^~ /slm/api/ws/ ") < out.index("location ^~ /slm/api/ ")
 
 
 def test_the_literal_host_and_port_are_not_in_the_template() -> None:
     text = TEMPLATE.read_text(encoding="utf-8")
     upstream = _block(text, "upstream autobot_slm_backend")
     assert re.search(r"server \{\{ frontend_slm_backend_host \}\}:\{\{ frontend_slm_backend_port \}\}", upstream)
-    for loc in ("location /slm/api/ws/ ", "location /slm/api/ "):
+    for loc in ("location ^~ /slm/api/ws/ ", "location ^~ /slm/api/ "):
         assert not re.search(r"proxy_pass\s+\S*(\d+\.\d+\.\d+\.\d+|:\d+)", _block(text, loc))
 
 

@@ -50,6 +50,7 @@ def _render(cap: str) -> str:
         frontend_slm_backend_remote=False,
         frontend_slm_upstream_prefix="/api/",
         frontend_slm_ca_cert="/ca.pem",
+        frontend_slm_refused_routes=yaml.safe_load(DEFAULTS.read_text(encoding="utf-8"))["frontend_slm_refused_routes"],
         slm_client_max_body_size=cap,
     )
 
@@ -65,7 +66,7 @@ def _block(text: str, header: str) -> str:
             return text[begin:i]
 
 
-@pytest.mark.parametrize("loc", ["location /slm/api/ws/ ", "location /slm/api/ "])
+@pytest.mark.parametrize("loc", ["location ^~ /slm/api/ws/ ", "location ^~ /slm/api/ "])
 def test_slm_locations_carry_the_slm_body_cap(loc: str) -> None:
     assert "client_max_body_size 7m;" in _block(_render("7m"), loc)
 

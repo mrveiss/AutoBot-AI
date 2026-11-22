@@ -129,7 +129,7 @@ def test_nothing_is_inferred_and_only_explicit_remote_can_fail_the_update() -> N
 
 def _proxies(hostvars: dict, groups: dict, **extra) -> list[str]:
     ctx = {**GROUP_VARS, "groups": groups, "hostvars": hostvars, **extra}
-    out = _resolve(GROUP_VARS, ("slm_trusted_proxies",), ctx)
+    out = _resolve(GROUP_VARS, ("slm_trusted_",), ctx)
     return out["slm_trusted_proxies"].split(",")
 
 

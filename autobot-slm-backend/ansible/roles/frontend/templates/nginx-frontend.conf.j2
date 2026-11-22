@@ -231,9 +231,9 @@ server {
         proxy_next_upstream_timeout 10s;
     }
 
-    # #19832: SLM backend WebSocket -- must be BEFORE /slm/api/ to take priority.
+    # #19832: SLM backend WebSocket. ^~ stops the asset-extension regexes shadowing it; the longer prefix beats /slm/api/.
     # Same shape as the slm_manager vhost's /slm/api/ws/ (autobot-slm.conf.j2).
-    location /slm/api/ws/ {
+    location ^~ /slm/api/ws/ {
         proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend{{ frontend_slm_upstream_prefix }}ws/;
         client_max_body_size {{ slm_client_max_body_size }};
 {% if frontend_slm_backend_remote | bool %}
@@ -255,20 +255,22 @@ server {
         proxy_read_timeout 86400;
     }
 
-    # #19832: the SLM's open health and metrics routes are not served on the main origin;
-    # monitoring uses the SLM's own address. A regex location outranks the plain /slm/api/
-    # prefix. /slm/api/health itself stays: the unified UI's reconnect probe and API
-    # settings page call it (autobot-slm-frontend useSlmWebSocket.ts, APISettings.vue).
-    # Only its sub-path (/health/database) is refused. /performance/metrics/prometheus stays
-    # too -- the fleet-metrics view reads it (useFleetMetrics.ts) -- see the PR for the gap.
-    location ~ ^/slm/api/(health/|ready/?$|live/?$|recovery/?$|metrics/prometheus/?$) {
+    # #19832: the SLM's open health and metrics routes are not served on the main origin.
+    # Neither has a caller in the main app (it reaches /slm/api/nodes, /auth/login and
+    # /discover/ only); the SLM's own UI is served from the SLM vhost, which has its own
+    # /slm/api/health, and Prometheus scrapes the SLM backend directly. Each is an exact (=)
+    # or ^~ location: a longer ^~ prefix beats the plain ^~ /slm/api/ one, and an asset-extension
+    # regex cannot shadow either.
+{% for modifier, route in frontend_slm_refused_routes %}
+    location {{ modifier }} /slm/api/{{ route }} {
         return 403;
     }
 
+{% endfor %}
     # #19832: SLM backend API. The unified UI calls /slm/api on its own origin; the
     # prefix is stripped to /api/ upstream. Upgrade headers follow the #13604 rule
     # ($connection_upgrade is "close" for plain HTTP, so REST is unaffected).
-    location /slm/api/ {
+    location ^~ /slm/api/ {
         proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend{{ frontend_slm_upstream_prefix }};
         client_max_body_size {{ slm_client_max_body_size }};
 {% if frontend_slm_backend_remote | bool %}

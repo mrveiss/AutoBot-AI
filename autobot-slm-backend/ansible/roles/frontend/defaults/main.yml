@@ -67,6 +67,20 @@ frontend_slm_backend_protocol: "{{ 'https' if (frontend_slm_backend_remote | boo
 # Upstream path prefix of /slm/api/: stripped to /api/ for uvicorn, kept for the SLM's nginx.
 frontend_slm_upstream_prefix: "{{ '/slm/api/' if (frontend_slm_backend_remote | bool) else '/api/' }}"
 frontend_slm_ca_cert: "{{ frontend_tls_cert_dir }}/ca-cert.pem"
+# #19832: SLM routes the main origin refuses (403) -- [nginx modifier, path under /slm/api/].
+# Health and metrics are open on the SLM backend and have no main-app caller; monitoring and the
+# SLM's own UI use the SLM vhost. `=` is an exact match, `^~` a prefix that beats /slm/api/.
+frontend_slm_refused_routes:
+  - ["=", "health"]
+  - ["^~", "health/"]
+  - ["=", "ready"]
+  - ["=", "ready/"]
+  - ["=", "live"]
+  - ["=", "live/"]
+  - ["=", "recovery"]
+  - ["=", "recovery/"]
+  - ["^~", "metrics/prometheus"]
+  - ["^~", "performance/metrics/prometheus"]
 
 # Issue #1098: Backend upstream health tracking
 backend_max_fails: 3

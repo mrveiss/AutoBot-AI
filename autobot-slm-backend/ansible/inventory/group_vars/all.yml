@@ -44,6 +44,8 @@ slm_backend_port: 8000
 # The port the slm_manager nginx vhost serves the SLM UI and /slm/api on (autobot-slm.conf.j2
 # `listen`). A frontend on another node proxies /slm/api here over HTTPS (#19832).
 slm_nginx_tls_port: 443
+# The port a browser assumes for https:// (the port-80 redirect omits it; #19832).
+slm_https_implicit_port: 443
 
 # Largest request body the SLM accepts at its edge: the slm_manager vhost's server-level cap and
 # the frontend site's /slm/api/ locations both read it, so a large SLM upload sees the same limit
@@ -603,9 +605,12 @@ autobot_tls_remote_cert_dir: "/etc/autobot/certs"
 # address, and every node in the inventory's `frontend` group. A frontend node that is not in
 # this list collapses all clients into one rate-limit bucket. Hosts that carry no address are
 # dropped; nothing here is a literal fleet address.
-slm_trusted_proxies: >-
-  {{ (['127.0.0.1', '::1', slm_host | default(''), ansible_host | default(''), frontend_host | default('')]
+slm_trusted_frontend_addrs: >-
+  {{ ([frontend_host | default('')]
       + (groups['frontend'] | default([]) | map('extract', hostvars, 'ansible_host') | select('defined') | list))
+     | reject('equalto', '') | unique | join(',') }}
+slm_trusted_proxies: >-
+  {{ (['127.0.0.1', '::1', slm_host | default(''), ansible_host | default('')] + slm_trusted_frontend_addrs.split(','))
      | reject('equalto', '') | unique | join(',') }}
 
 # ==========================================

@@ -38,7 +38,11 @@ server {
     listen [::]:80;
     server_name _;
 
+{% if (slm_nginx_tls_port | int) == (slm_https_implicit_port | int) %}
     return 301 https://$host$request_uri;
+{% else %}
+    return 301 https://$host:{{ slm_nginx_tls_port }}$request_uri;
+{% endif %}
 }
 
 # HTTPS server
