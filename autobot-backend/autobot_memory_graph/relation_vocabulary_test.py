@@ -31,6 +31,7 @@ from autobot_memory_graph.core import (
     canonical_relation_type,
     relation_type_matches,
 )
+from autobot_memory_graph.owner_scope import UNSCOPED_ALL_USERS
 from knowledge.relations import KB_RELATION_TYPES, RelationsMixin
 from services.security_memory_integration import (
     SECURITY_TO_BASE_RELATION,
@@ -199,7 +200,7 @@ class TestMemoryGraphRoundTrip:
         graph._get_outgoing_relations = AsyncMock(return_value=[{"to": "id-b", "type": "related_to"}])
         graph._get_incoming_relations = AsyncMock(return_value=[])
 
-        result = await graph.get_relations("id-a", relation_types=["relates_to"])
+        result = await graph.get_relations("id-a", relation_types=["relates_to"], owner=UNSCOPED_ALL_USERS)
 
         assert len(result["relations"]) == 1
 
@@ -209,7 +210,7 @@ class TestMemoryGraphRoundTrip:
         graph._get_outgoing_relations = AsyncMock(return_value=[{"to": "id-b", "type": "relates_to"}])
         graph._get_incoming_relations = AsyncMock(return_value=[])
 
-        result = await graph.get_relations("id-a", relation_types=["related_to"])
+        result = await graph.get_relations("id-a", relation_types=["related_to"], owner=UNSCOPED_ALL_USERS)
 
         assert len(result["relations"]) == 1
 
@@ -222,7 +223,9 @@ class TestMemoryGraphRoundTrip:
         )
         graph._get_incoming_relations = AsyncMock(return_value=[])
 
-        related = await graph.get_related_entities("A", relation_type="relates_to", direction="outgoing")
+        related = await graph.get_related_entities(
+            "A", relation_type="relates_to", direction="outgoing", owner=UNSCOPED_ALL_USERS
+        )
 
         assert len(related) == 1
         assert related[0]["relation"]["type"] == "related_to"
@@ -362,6 +365,8 @@ class TestUserSessionVocabulary:
         )
         graph._get_incoming_relations = AsyncMock(return_value=[])
 
-        result = await graph.get_relations("user-1", relation_types=["owns", "has_session"], direction="outgoing")
+        result = await graph.get_relations(
+            "user-1", relation_types=["owns", "has_session"], direction="outgoing", owner=UNSCOPED_ALL_USERS
+        )
 
         assert len(result["relations"]) == 1

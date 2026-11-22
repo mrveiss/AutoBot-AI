@@ -30,7 +30,11 @@ source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
 }
 
 # Configuration
-CERT_DIR="${PROJECT_ROOT}/certs"
+# AUTOBOT_TLS_CERT_DIR (from the .env ssot-config.sh loads): the PKI tree, relative to PROJECT_ROOT
+# unless absolute. The fallback is a copy of env_registry_tls.DEFAULT_TLS_CERT_DIR, pinned by
+# repo_tests/tls_cert_dir_one_home_19317_test.py (#19317).
+CERT_DIR="${AUTOBOT_TLS_CERT_DIR:-certs}"
+case "${CERT_DIR}" in /*) ;; *) CERT_DIR="${PROJECT_ROOT}/${CERT_DIR}" ;; esac
 CA_DIR="${CERT_DIR}/ca"
 VALIDITY_DAYS=365
 KEY_SIZE=4096

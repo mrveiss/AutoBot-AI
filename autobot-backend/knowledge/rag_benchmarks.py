@@ -27,18 +27,18 @@ from typing import Callable, Dict, List, Set
 import pytest
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import infrastructure_dir
 from constants.user_scope_constants import GLOBAL_USER
 
-# Add project root and shared infrastructure to path so benchmark_base is importable
+# Project root and shared infrastructure (#20578: from code_source), so benchmark_base is importable
 _repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(_repo_root))
-sys.path.insert(0, str(_repo_root / "autobot-infrastructure" / "shared"))
+sys.path.insert(0, str(infrastructure_dir(fallback_root=_repo_root) / "shared"))
 
 try:
     from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
 except ModuleNotFoundError:
-    # benchmark_base is only available when the full infrastructure tree is present.
-    # TestRealKBBenchmarks (below) does not require it; the mock benchmark classes do.
+    # benchmark_base needs the full infrastructure tree; TestRealKBBenchmarks (below) does not, the mocks do.
     BenchmarkRunner = None  # type: ignore[assignment,misc]
     assert_performance = None  # type: ignore[assignment]
 
@@ -951,14 +951,21 @@ class BenchmarkSplit(str, enum.Enum):
     ALL = "all"
 
 
+def _split_hash(qid: str) -> str:
+    return hashlib.sha256(qid.encode("utf-8")).hexdigest()
+
+
+def is_dev_query(qid: str, dev_fraction: float) -> bool:
+    """Hash-only DEV membership: depends on *qid* alone, never on the other queries (#20949)."""
+    return int(_split_hash(qid), 16) % 100 < int(dev_fraction * 100)
+
+
 def _deterministic_dev_test_split(query_ids: List[str], dev_fraction: float = 0.8) -> Dict[str, Set[str]]:
     """Split *query_ids* into ``dev_ids`` and ``test_ids`` deterministically.
 
-    Uses SHA-256 of each query string modulo 100 as a sort key; a query ``q``
-    lands in DEV when ``int(sha256(q).hexdigest(), 16) % 100 < dev_fraction*100``.
-    This means:
-      - The same query always lands in the same split across runs (reproducible).
-      - Adding or removing queries doesn't reshuffle the existing assignments.
+    A query lands in DEV when :func:`is_dev_query` says so (SHA-256 mod 100), so it lands in the same split
+    on every run. Adding queries keeps assignments EXCEPT the empty-side fallback below, which depends on
+    the whole set; callers needing a stable split (the retrieval gate) use :func:`is_dev_query` directly.
 
     Args:
         query_ids:    List of query identifiers (query text works as the ID).
@@ -968,25 +975,17 @@ def _deterministic_dev_test_split(query_ids: List[str], dev_fraction: float = 0.
         ``{"dev_ids": set[str], "test_ids": set[str]}`` — disjoint and
         covering ``query_ids``.
     """
-    threshold = int(dev_fraction * 100)
-    dev_ids: Set[str] = set()
-    test_ids: Set[str] = set()
-    for qid in query_ids:
-        h = hashlib.sha256(qid.encode("utf-8")).hexdigest()
-        bucket = int(h, 16) % 100
-        if bucket < threshold:
-            dev_ids.add(qid)
-        else:
-            test_ids.add(qid)
+    dev_ids: Set[str] = {q for q in query_ids if is_dev_query(q, dev_fraction)}
+    test_ids: Set[str] = set(query_ids) - dev_ids
     # Guarantee both splits are non-empty for tiny datasets: if one side is
     # empty, move the deterministically-smallest-hash query from the other.
     if query_ids and (not dev_ids or not test_ids):
         if not test_ids:
-            move = sorted(dev_ids, key=lambda q: hashlib.sha256(q.encode()).hexdigest())[-1]
+            move = sorted(dev_ids, key=_split_hash)[-1]
             dev_ids.remove(move)
             test_ids.add(move)
         elif not dev_ids:
-            move = sorted(test_ids, key=lambda q: hashlib.sha256(q.encode()).hexdigest())[0]
+            move = sorted(test_ids, key=_split_hash)[0]
             test_ids.remove(move)
             dev_ids.add(move)
     return {"dev_ids": dev_ids, "test_ids": test_ids}
@@ -1248,7 +1247,7 @@ _BENCHMARK_USER = GLOBAL_USER
 _BENCHMARK_STREAM_TTL = 60 * 60 * 24 * 30
 
 
-class BenchmarkResult:
+class RetrievalBenchmarkResult:
     """Lightweight result container returned by run_benchmark_suite().
 
     Attributes:
@@ -1310,7 +1309,7 @@ class BenchmarkRunReport:
                         Any other combination is False (Issue #5160: empty
                         runs must not be labelled held-out).
         mean_precision_at_k: Mean precision@k across results in the run.
-        results:       The underlying BenchmarkResult list.
+        results:       The underlying RetrievalBenchmarkResult list.
     """
 
     split_used: str
@@ -1319,7 +1318,7 @@ class BenchmarkRunReport:
     tuned_on_dev: bool
     held_out_score: bool
     mean_precision_at_k: float
-    results: List["BenchmarkResult"]
+    results: List["RetrievalBenchmarkResult"]
 
     def as_dict(self) -> dict:
         return {
@@ -1366,7 +1365,7 @@ class BenchmarkHarness:
     def _build_report(
         self,
         split: BenchmarkSplit,
-        results: List["BenchmarkResult"],
+        results: List["RetrievalBenchmarkResult"],
         touched_test: bool,
     ) -> BenchmarkRunReport:
         mean_p = sum(r.precision_at_k for r in results) / len(results) if results else 0.0
@@ -1387,7 +1386,7 @@ class BenchmarkHarness:
 
     def tune(
         self,
-        harness_fn: Callable[[BenchmarkDataset], List["BenchmarkResult"]],
+        harness_fn: Callable[[BenchmarkDataset], List["RetrievalBenchmarkResult"]],
     ) -> BenchmarkRunReport:
         """Run *harness_fn* under dev-only enforcement.
 
@@ -1403,7 +1402,7 @@ class BenchmarkHarness:
 
     def score(
         self,
-        scorer_fn: Callable[[BenchmarkDataset], List["BenchmarkResult"]],
+        scorer_fn: Callable[[BenchmarkDataset], List["RetrievalBenchmarkResult"]],
     ) -> BenchmarkRunReport:
         """Run *scorer_fn* under test-only enforcement.
 
@@ -1420,7 +1419,7 @@ class BenchmarkHarness:
 
     def run(
         self,
-        runner_fn: Callable[[BenchmarkDataset], List["BenchmarkResult"]],
+        runner_fn: Callable[[BenchmarkDataset], List["RetrievalBenchmarkResult"]],
         split: BenchmarkSplit = BenchmarkSplit.TEST,
     ) -> BenchmarkRunReport:
         """Generic entry point; dispatches to tune / score / combined run."""
@@ -1463,10 +1462,10 @@ def run_benchmark_suite(
     k: int = 5,
     dataset: BenchmarkDataset | None = None,
     split: BenchmarkSplit = BenchmarkSplit.ALL,
-) -> List["BenchmarkResult"]:
+) -> List["RetrievalBenchmarkResult"]:
     """Run the precision@k benchmark suite against *chroma_collection*.
 
-    Issue #4676: Produces BenchmarkResult objects that can be passed to
+    Issue #4676: Produces RetrievalBenchmarkResult objects that can be passed to
     ``publish_feedback_events()`` so the scores feed into RetrievalLearner.
     Issue #5074: Accepts an explicit *dataset* and *split* so the same suite
     can serve both tuning (DEV) and held-out scoring (TEST).
@@ -1483,12 +1482,12 @@ def run_benchmark_suite(
         split:             Which portion of the dataset to run against.
 
     Returns:
-        List of BenchmarkResult — one entry per query in the requested split.
+        List of RetrievalBenchmarkResult — one entry per query in the requested split.
     """
     if dataset is None:
         dataset = get_default_dataset()
 
-    results: List[BenchmarkResult] = []
+    results: List[RetrievalBenchmarkResult] = []
     dim = 128  # must match _deterministic_embed default
 
     for query in dataset.iter_split(split):
@@ -1511,7 +1510,7 @@ def run_benchmark_suite(
 
         precision = sum(1 for d in ranked_ids[:k] if d in expected_ids) / k
         results.append(
-            BenchmarkResult(
+            RetrievalBenchmarkResult(
                 query=query,
                 retrieved_ids=retrieved_ids,
                 ranked_ids=ranked_ids,
@@ -1531,12 +1530,12 @@ def run_benchmark_suite(
     return results
 
 
-async def publish_feedback_events(redis, results: List["BenchmarkResult"]) -> int:
+async def publish_feedback_events(redis, results: List["RetrievalBenchmarkResult"]) -> int:
     """Publish benchmark results as synthetic rag:feedback stream entries.
 
     Issue #4676 — Evaluator adapter.
 
-    Translates each BenchmarkResult into the same schema that
+    Translates each RetrievalBenchmarkResult into the same schema that
     ``knowledge_rag_feedback.py`` writes so ``RetrievalLearner.consume_feedback_stream()``
     can process them without any schema changes.  Events are written to the
     ``__global__`` namespace so all users benefit from the benchmark signal.
@@ -1546,7 +1545,7 @@ async def publish_feedback_events(redis, results: List["BenchmarkResult"]) -> in
 
     Args:
         redis:   An async Redis client (``get_async_redis_client(database='analytics')``).
-        results: BenchmarkResult list from ``run_benchmark_suite()``.
+        results: RetrievalBenchmarkResult list from ``run_benchmark_suite()``.
 
     Returns:
         Number of feedback events written to Redis.

@@ -6,11 +6,12 @@ target_node: slm
 deploy:
   source: autobot-slm-frontend/
   destination: /opt/autobot/autobot-slm-frontend/
+  sync_target: "{base_dir}"   # #16025: what role_registry rsyncs INTO (not `destination`)
   shared: false
   infrastructure: true
 
 system_dependencies:
-  - nodejs   # v20 via NodeSource — shared with slm-backend
+  - nodejs   # major = node_major (= .nvmrc), via NodeSource — shared with slm-backend
 
 # #15603: no services entry. This used to declare a `oneshot` build step
 # (`npm ci && npm run build`, unstaged — the exact defect roles/_shared/tasks/

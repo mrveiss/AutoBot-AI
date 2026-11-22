@@ -148,7 +148,7 @@ class TestAsyncUpdateGraph:
         with patch("autobot_memory_graph.AutoBotMemoryGraph", return_value=graph):
             import tasks.memory_tasks as mt
 
-            return await mt._async_update_graph("sess-1", entities, relations)
+            return await mt._async_update_graph("sess-1", entities, relations, "user-1")  # #18825: owner required
 
     @pytest.mark.asyncio
     async def test_creates_new_entity_and_relation(self):

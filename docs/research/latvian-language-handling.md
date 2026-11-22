@@ -37,3 +37,10 @@ Status: complete (2026-10-12). Issues: #18442, #18443.
 - `autobot-backend/services/personality_service.py:38` — add `lv: "Latvian"`, `pl: "Polish"`.
 - `autobot-backend/prompt_manager.py:1431` — replace the duplicated map with the canonical one.
 - `autobot-tts-worker/` — Latvian voice selection when `language == "lv"`, under #17778.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #18442 — bug(i18n): response-language map lacks lv and pl — Latvian users get "respond in lv (lv)" (closed)
+- #18443 — feat(voice): Latvian speech synthesis — the TTS worker engine does not support lv

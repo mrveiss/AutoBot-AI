@@ -1,6 +1,8 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 // Frontend testing script that uses the existing Playwright Docker service
+const BROWSER_PORT = process.env.AUTOBOT_BROWSER_SERVICE_PORT || '9001';  // port.browser (#19418)
+
 const http = require('http');
 
 async function makeRequest(options, data = null) {
@@ -35,7 +37,7 @@ async function testFrontendWithPlaywright() {
   try {
     const healthResponse = await makeRequest({
       hostname: 'localhost',
-      port: 3000,
+      port: BROWSER_PORT,
       path: '/health',
       method: 'GET'
     });

@@ -10,20 +10,17 @@ old ids are read first and only those the new run did not rewrite are removed.
 """
 
 import asyncio
-import hashlib
 import uuid
 from typing import Any, Callable, Iterable, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.chunk_identity import DOC_ID_LENGTH, doc_chunk_id
+from knowledge.retrieval_invalidation import invalidates_retrieval_caches
 
 logger = get_logger(__name__)
 
-BASE_ID_LENGTH = 12  # sub-splits append "_L<depth>" / "_R<depth>" to the base id
-
-
-def chunk_base_id(rel_path: str, section: str, index: int) -> str:
-    """The deterministic id of a chunk before any oversize split."""
-    return hashlib.md5(f"{rel_path}:{section}:{index}".encode(), usedforsecurity=False).hexdigest()[:BASE_ID_LENGTH]
+BASE_ID_LENGTH = DOC_ID_LENGTH
+chunk_base_id = doc_chunk_id  # the one definition lives in knowledge.chunk_identity (#18142)
 
 
 def _ids_for(collection: Any, rel_path: str, run_token: str | None = None) -> Set[str]:
@@ -52,6 +49,69 @@ async def drop_stale_chunks(
     return len(stale)
 
 
+@invalidates_retrieval_caches("docs_collection_recreated")
+async def _bump_after_recreate() -> None:
+    """Invalidate cached retrievals once a dimension-mismatch recreate ends, even when it raised (#20992)."""
+
+
+async def resolve_collection(indexer: Any, model_name: str, embed_dim: Any) -> Any:
+    """Run the indexer's sync collection resolve; a dimension-mismatch recreate invalidates caches (#20992).
+
+    ``_handle_dim_mismatch`` deletes the collection and sets ``_needs_reindex`` from a worker thread, so
+    the await-able invalidation lives here. It runs when the resolve recreated the collection (also if the
+    create then failed) and regardless of how many files the forced re-index later finds.
+    """
+    prior, indexer._needs_reindex = indexer._needs_reindex, False
+    worker = asyncio.ensure_future(asyncio.to_thread(indexer._resolve_collection, model_name, embed_dim))
+    try:
+        resolved = await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        await _await_worker(worker)  # a thread cannot be interrupted: read the flag only once it has stopped
+        await _bump_if_recreated(indexer, prior, keep_error=True)
+        raise
+    except BaseException:
+        await _bump_if_recreated(indexer, prior, keep_error=True)
+        raise
+    await _bump_if_recreated(indexer, prior, keep_error=False)
+    return resolved
+
+
+async def _await_worker(worker: "asyncio.Future[Any]") -> None:
+    """Wait for the worker thread to finish, ignoring its outcome and any further cancellation."""
+    while not worker.done():
+        try:
+            await asyncio.wait({worker})
+        except asyncio.CancelledError:
+            continue
+    if not worker.cancelled():
+        worker.exception()  # mark retrieved; the cancelled resolve's own error is not this caller's
+
+
+async def _bump_if_recreated(indexer: Any, prior: bool, *, keep_error: bool) -> None:
+    """Restore the reindex flag and invalidate if the resolve recreated the collection.
+
+    With *keep_error* the resolve itself failed: an invalidation failure is logged, never raised over the
+    resolve's own (root-cause) exception.
+    """
+    recreated = indexer._needs_reindex
+    indexer._needs_reindex = prior or recreated
+    if not recreated:
+        return
+    try:
+        await _bump_after_recreate()
+    except Exception:
+        if not keep_error:
+            raise
+        logger.exception("Cache invalidation after the docs-collection recreate failed")
+
+
+@invalidates_retrieval_caches("docs_collection_dropped")
+async def drop_collection(client: Any, name: str) -> None:
+    """Delete the docs collection; cached retrievals of its chunks are invalidated even if this raises (#20958)."""
+    await asyncio.to_thread(client.delete_collection, name)
+
+
+@invalidates_retrieval_caches("doc_indexed")
 async def reindex_file(
     collection: Any,
     index_chunk: Callable[..., bool],

@@ -17,11 +17,22 @@ survives, not only what is removed.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 
-from tools.lint._comment_syntax import CodeLine, code_lines, code_text, markers_for, strip_trailing_comment
+from tools.lint._comment_syntax import (
+    SCRIPT_ELEMENT,
+    SCRIPT_ELEMENT_FLAGS,
+    CodeLine,
+    code_lines,
+    code_text,
+    markers_for,
+    strip_html_comments,
+    strip_trailing_comment,
+    unterminated_construct,
+)
 
 # ---------------------------------------------------------------------------
 # The headline case: prose must not satisfy a search
@@ -212,3 +223,274 @@ def test_a_block_comment_marker_inside_a_string_is_data() -> None:
     text = code_text('const s = "not /* a comment */ really"\nconst c = 3\n', name="x.ts")
     assert "really" in text, "a block marker inside a string literal was treated as a comment"
     assert "const c = 3" in text
+
+
+def test_an_apostrophe_in_a_line_comment_does_not_open_a_string_that_hides_later_globs() -> None:
+    """The #21509 defect: `worker's` in a `//` comment swallowed the `/**/` of every later glob."""
+    source = (
+        "// the worker's stdout, and a stray /* opener\n"
+        "const g = ['src/**/*.spec.ts'] // don't\n"
+        "const after = 1 /* real */\n"
+    )
+    text = code_text(source, name="x.ts", strip_trailing=True)
+    assert "'src/**/*.spec.ts'" in text, f"the glob was eaten: {text!r}"
+    assert "const after = 1" in text and "real" not in text, text
+    assert "worker" not in text and "don't" not in text
+
+
+def test_a_double_slash_inside_a_regex_class_is_not_a_line_comment() -> None:
+    """The regression against the previous scanner: the real block opener after the regex must still be found."""
+    source = "const re = /[//]/; /*\nbanned_token\n*/\nconst z = 1\n"
+    text = code_text(source, name="x.ts")
+    assert "banned_token" not in text, "the regex's `//` hid the block comment that follows it"
+    assert "/[//]/" in text and "const z = 1" in text, "the regex itself must be kept verbatim"
+
+
+def test_a_double_slash_after_a_division_is_still_a_line_comment() -> None:
+    text = code_text("const q = a / b // banned_token\nconst z = 1\n", name="x.ts", strip_trailing=True)
+    assert "banned_token" not in text and "const q = a / b" in text and "const z = 1" in text
+
+
+def test_a_block_comment_between_two_divisions_is_still_stripped() -> None:
+    text = code_text("x = 4 / 2 /* banned_token */ / 1\n", name="x.ts")
+    assert "banned_token" not in text and "x = 4 / 2" in text and "/ 1" in text
+
+
+def test_a_quote_inside_a_regex_does_not_open_a_string() -> None:
+    source = "const q = /'/; /* banned_token */\nconst s = 'x'\n"
+    text = code_text(source, name="x.ts")
+    assert "banned_token" not in text, "the regex's quote opened a string that hid the block comment"
+    assert "/'/" in text and "const s = 'x'" in text
+
+
+def test_a_regex_after_a_keyword_or_at_a_line_start_is_read_as_a_regex() -> None:
+    assert "banned_token" not in code_text("function f() { return /[//]/ } /* banned_token */\n", name="x.ts")
+    assert "banned_token" not in code_text("/[//]/.test(a) /* banned_token */\n", name="x.ts")
+
+
+def test_a_slash_with_no_closing_slash_on_its_line_is_a_plain_character() -> None:
+    text = code_text("const a = /unterminated\nconst b = 2 /* banned_token */\n", name="x.ts")
+    assert "banned_token" not in text and "const b = 2" in text
+
+
+def test_a_url_in_a_string_is_untouched_by_line_comment_handling() -> None:
+    text = code_text("const u = 'http://x/y' /* banned_token */ // tail\nconst v = 1\n", name="x.ts")
+    assert "http://x/y" in text and "banned_token" not in text and "const v = 1" in text
+
+
+@pytest.mark.parametrize("name", ["x.mts", "x.cts"])
+def test_module_typescript_suffixes_get_slash_and_block_comment_handling(name) -> None:
+    source = "// banned_one\n/* banned_two */\nconst live = 1\n"
+    text = code_text(source, name=name)
+    assert "banned" not in text and "const live = 1" in text
+
+
+@pytest.mark.parametrize(
+    "source,kept",
+    [
+        ("const n = i++ / 2; /* banned_token */\n", "const n = i++ / 2;"),
+        ("const n = i++ / 2 + '/'; /* banned_token */\n", "const n = i++ / 2 + '/';"),
+        ("const n = i-- / 2 + '/'; /* banned_token */\n", "const n = i-- / 2 + '/';"),
+        ("<b>x</b> '/' /* banned_token */\n", "<b>x</b> '/'"),
+        ("const w = </b> /* banned_token */\n", "const w = </b>"),
+        ("i++ / 2; // don't\n/* banned_token */\nconst k = 1\n", "i++ / 2;"),
+        ("<div>x</div> // worker's\n/* banned_token */\nconst k = 1\n", "<div>x</div>"),
+        ("x! / 2; // don't\n/* banned_token */\nconst k = 1\n", "x! / 2;"),
+        ("const d = 8 / 2 / 1; /* banned_token */\n", "const d = 8 / 2 / 1;"),
+        ("const n = x! / 2 + '/'; /* banned_token */\n", "const n = x! / 2 + '/';"),
+        ("const of = 8;\nconst n = of / 2 + '/'; /* banned_token */\n", "const n = of / 2 + '/';"),
+        ("<b>x</b> / 2 + '/'; /* banned_token */\n", "<b>x</b> / 2 + '/';"),
+        ("const n = (a) / 2 + '/'; /* banned_token */\n", "const n = (a) / 2 + '/';"),
+    ],
+)
+def test_a_division_is_never_read_as_a_regex_that_swallows_a_comment(source, kept) -> None:
+    text = code_text(source, name="x.vue", strip_trailing=True)
+    assert "banned_token" not in text and "worker" not in text and "don't" not in text, text
+    assert kept in text, f"the code before the comment was damaged: {text!r}"
+
+
+@pytest.mark.parametrize(
+    "source,regex",
+    [
+        ("if (!/'/.test(x)) {} /* banned_token */\n", "!/'/.test(x)"),
+        ("x = /'\\//; /* banned_token */\n", "/'\\//"),
+        ("x = /a\\/\\/b/;  // banned_token\n", "/a\\/\\/b/;"),
+        ("const re = /[//]/; /*\nbanned_token\n*/\n", "/[//]/;"),
+        ("function f() { return /'/ } /* banned_token */\n", "return /'/"),
+        ("const f = (s) => /'/.test(s); /* banned_token */\n", "=> /'/.test(s);"),
+        ("if (a && !/'/.test(x)) {} /* banned_token */\n", "&& !/'/.test(x)"),
+        ("if ((!/'/.test(x))) {} /* banned_token */\n", "(!/'/.test(x))"),
+        ("if (!!/'/.test(x)) {} /* banned_token */\n", "!!/'/.test(x)"),
+        ("function f() { return !/'/.test(x) } /* banned_token */\n", "return !/'/.test(x)"),
+        ("!/'/.test(x); /* banned_token */\n", "!/'/.test(x);"),
+    ],
+)
+def test_a_regex_literal_stays_a_regex_and_the_comment_after_it_is_stripped(source, regex) -> None:
+    text = code_text(source, name="x.ts", strip_trailing=True)
+    assert "banned_token" not in text, text
+    assert regex in text, f"the regex literal was damaged: {text!r}"
+
+
+def test_a_vue_line_with_a_closing_tag_a_html_comment_and_a_line_comment_is_read_as_code() -> None:
+    text = code_text('<a href="/x/y">t</a> <!-- n --> // banned_token\n', name="x.vue", strip_trailing=True)
+    assert 'href="/x/y">t</a>' in text and "banned_token" not in text and "<!-- n -->" in text
+
+
+def test_a_vue_apostrophe_in_template_prose_does_not_hide_a_following_line_comment() -> None:
+    """The template is markup (#21571): its apostrophe opens no string, so the script's `//` line is a comment."""
+    source = "<template>\n<p>don't do this</p>\n</template>\n<script>\n// banned_token\nconst k = 1\n</script>\n"
+    text = code_text(source, name="x.vue")
+    assert "banned_token" not in text and "const k = 1" in text, text
+
+
+#: A `/*` in a `.vue` template that is not a comment: prose, an attribute value, an HTML comment (#21571).
+_TEMPLATE_SLASH_STAR = [
+    "<p>Backed by /api/errors/* endpoints</p>",
+    '<a href="/api/project/*">all</a>',
+    "<!-- Backed by /api/errors/* -->",
+]
+
+
+@pytest.mark.parametrize("opener", _TEMPLATE_SLASH_STAR)
+def test_a_slash_star_in_a_vue_template_opens_no_block_comment(opener) -> None:
+    source = f'<!-- header -->\n<template>\n  {opener}\n  <div class="kept">x</div>\n</template>\n<script>\nconst a = 1\n</script>\n'
+    text = code_text(source, name="x.vue")
+    assert 'class="kept"' in text and "const a = 1" in text, text
+    assert unterminated_construct(source, name="x.vue") is None
+
+
+def test_a_block_comment_in_a_vue_script_or_style_is_still_stripped() -> None:
+    source = "<template><p>t</p></template>\n<script>\n/* gone_a */ const a = 1\n</script>\n<style>\n/* gone_b */ .x {}\n</style>\n"
+    text = code_text(source, name="x.vue")
+    assert "gone_a" not in text and "gone_b" not in text and "const a = 1" in text and ".x {}" in text, text
+
+
+def test_a_block_comment_header_above_a_vue_component_is_still_stripped() -> None:
+    """A `/** */` licence header outside every block is a comment, not markup (#21571)."""
+    source = "/**\n * gone_header: Issue #7453\n */\n<template>\n  <p>kept</p>\n</template>\n"
+    text = code_text(source, name="x.vue")
+    assert "gone_header" not in text and "<p>kept</p>" in text, text
+
+
+def test_a_compact_one_line_root_template_is_markup_too() -> None:
+    """`<template>...</template>` on one line has a `/api/errors/*` in it: no block comment, the rest stays (#21571)."""
+    source = "<template><p>Backed by /api/errors/*</p></template>\n<script>\nconst a = 1 // gone\n</script>\n"
+    text = code_text(source, name="x.vue", strip_trailing=True)
+    assert "/api/errors/*" in text and "const a = 1" in text and "gone" not in text, text
+    assert unterminated_construct(source, name="x.vue") is None
+
+
+def test_a_root_template_with_an_indented_close_and_a_nested_slot_is_one_markup_span() -> None:
+    """The root closes at its LAST `</template>` before the script, indented or not; a slot's close is not it (#21571)."""
+    source = (
+        "<template>\n  <Foo>\n    <template #x>/api/a/*</template>\n  </Foo>\n  <p>/api/b/*</p>\n  </template>\n"
+        "<script>\n/* gone */ const a = 1\n</script>\n"
+    )
+    text = code_text(source, name="x.vue")
+    assert "/api/a/*" in text and "/api/b/*" in text and "const a = 1" in text and "gone" not in text, text
+    assert unterminated_construct(source, name="x.vue") is None
+
+
+def test_template_tags_inside_a_script_literal_are_script_text() -> None:
+    """A line-start `<template>` in a backtick literal in script is not the root template (#21571)."""
+    source = "<script>\nconst html = `\n<template>\n<p>x</p>\n</template>\n` /* gone */\n</script>\n"
+    text = code_text(source, name="x.vue")
+    assert "gone" not in text and "<p>x</p>" in text, text
+    assert unterminated_construct(source, name="x.vue") is None
+
+
+def test_html_comments_in_a_vue_template_are_left_for_the_explicit_stripper() -> None:
+    """The recorded choice (#21571): `code_lines` keeps `<!-- -->`; `strip_html_comments` is the call that removes it."""
+    source = "<template>\n<!-- kept_note -->\n<p>x</p>\n</template>\n"
+    assert "kept_note" in code_text(source, name="x.vue")
+    assert "kept_note" not in strip_html_comments(source)
+
+
+def test_a_script_runner_tag_is_not_a_script_block() -> None:
+    """`<script-runner>` is a component; `\\b` matches `-` and it opened a block a later `</script>` closed (#21797)."""
+    source = '<template>\n<script-runner />\n<p class="kept">x</p>\n</template>\n<script>\n/* gone */ const a = 1\n</script>\n'
+    text = code_text(source, name="x.vue")
+    assert 'class="kept"' in text and "gone" not in text, text
+    assert re.search(SCRIPT_ELEMENT, source, SCRIPT_ELEMENT_FLAGS).group(1).strip() == "/* gone */ const a = 1"
+
+
+@pytest.mark.parametrize(
+    ("source", "name", "ended"),
+    [
+        ("const a = 1 /* never closed\nconst b = 2\n", "x.ts", "block comment"),
+        ("const a = `never closed\nconst b = 2\n", "x.ts", "quote"),
+        ("<script>\n/* never closed\n</script>\n", "x.vue", "block comment"),
+        ("const a = 'closed' /* ok */\n", "x.ts", None),
+        ("const a = 'it\\'s'\nconst b = \"x\"\n", "x.js", None),
+        ("# no block comments here /* \n", "x.py", None),
+    ],
+)
+def test_the_scan_reports_a_file_that_ends_inside_a_comment_or_a_quote(source, name, ended) -> None:
+    """Reached the end of the file inside a construct is surfaced, not silently blanked (#21571)."""
+    assert unterminated_construct(source, name=name) == ended
+
+
+def test_a_crlf_line_continuation_in_a_quoted_string_is_one_escape() -> None:
+    """`\\` + CRLF continues a single-quoted string; the `\\r` must not eat the escape and let `\\n` end the quote (#21571)."""
+    source = "const a = 'one \\\r\ntwo' /* gone */\r\nconst b = 1\r\n"
+    text = code_text(source, name="x.ts")
+    assert "gone" not in text and "const b = 1" in text, text
+    assert "one" in text and "two'" in text, text
+    assert unterminated_construct(source, name="x.ts") is None
+
+
+def test_an_apostrophe_in_prose_does_not_run_a_string_past_the_line() -> None:
+    """A single or double quote ends at a newline; only a template literal spans lines (#21571)."""
+    text = code_text("const a = don't\nconst keep = 1\n", name="x.ts")
+    assert "const keep = 1" in text and unterminated_construct("const a = don't\n", name="x.ts") is None
+
+
+#: Lines where the scanner and the older quote-only trailing strip must cut at the same place.
+_AGREED = [
+    ("const a = 1 // c", "const a = 1 "),
+    ("const u = 'http://x/y' // c", "const u = 'http://x/y' "),
+    ('const s = "a // b" // c', 'const s = "a // b" '),
+    ("no comment here", "no comment here"),
+    ("const n = i++ / 2; // c", "const n = i++ / 2; "),
+    ("x! / 2; // c", "x! / 2; "),
+    ("<b>x</b> // c", "<b>x</b> "),
+]
+
+#: Lines the quote-only strip cannot read (a regex class, an escaped slash, a template, a division).
+_SCANNER_ONLY = [
+    ("const re = /[//]/; // c", "const re = /[//]/; "),
+    ("x = /a\\/\\/b/; // c", "x = /a\\/\\/b/; "),
+    ("const t = `x // y` // c", "const t = `x // y` "),
+]
+
+
+@pytest.mark.parametrize("line,expected", _AGREED)
+def test_the_trailing_cut_is_the_scanners_and_matches_the_quote_only_strip_where_that_can_read_the_line(
+    line, expected
+) -> None:
+    assert code_text(line + "\n", name="x.ts", strip_trailing=True) == expected
+    assert strip_trailing_comment(line, ("//",)) == expected, "the two stages disagree on a line both can read"
+
+
+@pytest.mark.parametrize("line,expected", _SCANNER_ONLY)
+def test_the_trailing_cut_follows_the_scanner_on_lines_the_quote_only_strip_cannot_read(line, expected) -> None:
+    assert code_text(line + "\n", name="x.ts", strip_trailing=True) == expected
+
+
+def test_a_line_that_is_only_a_comment_is_dropped_and_numbering_survives_the_scanner_cut() -> None:
+    lines = code_lines("// whole\nconst a = 1 // t\n/* b */ const b = /[//]/ // t\n", name="x.ts", strip_trailing=True)
+    assert [(line.lineno, line.text.strip()) for line in lines] == [(2, "const a = 1"), (3, "const b = /[//]/")]
+
+
+def test_a_template_literal_line_starting_with_double_slash_is_code_and_a_real_comment_line_is_not() -> None:
+    """#21883: the whole-line drop follows the scanner, so a line inside a template literal is kept."""
+    source = "const text = `\n// ${api.get<Shape>('/x')}\n`;\n// api.get<Real>('/y')\nconst z = 1;\n"
+    lines = code_lines(source, name="x.ts")
+    assert [line.lineno for line in lines] == [1, 2, 3, 5]
+    assert "api.get<Shape>" in code_text(source, name="x.ts")
+    assert "api.get<Real>" not in code_text(source, name="x.ts")
+
+
+def test_a_string_continuation_line_and_an_indented_comment_follow_the_scanner_too() -> None:
+    source = "const a = `\n    // kept\n`;\n    // dropped\n/* b */ // dropped too\nconst c = 2;\n"
+    assert [line.lineno for line in code_lines(source, name="x.vue")] == [1, 2, 3, 6]

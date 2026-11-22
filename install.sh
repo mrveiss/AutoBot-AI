@@ -8,7 +8,7 @@
 # Virtualmin-style single installer that deploys SLM and all dependencies.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo bash
 #   # OR after cloning:
 #   sudo ./install.sh
 #   sudo ./install.sh --unattended
@@ -23,7 +23,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
     exit 1
 fi
 
-set -euo pipefail
+set -euo pipefail; umask 022  # #19503: the root-run code tree must not take a loose caller umask (world-writable)
 
 # =============================================================================
 # Constants
@@ -36,16 +36,15 @@ readonly AUTOBOT_BASE="/opt/autobot"
 readonly INSTALL_MARKER="${AUTOBOT_BASE}/.autobot-installed"
 readonly CODE_SOURCE="${AUTOBOT_BASE}/code_source"
 readonly SECRETS_FILE="/etc/autobot/slm-secrets.env"
-# The service account that owns ${AUTOBOT_BASE} and runs the AutoBot units, and the
-# account the SLM later reaches this node as (PathConfig.ssh_user, AUTOBOT_SSH_USER).
-# Named once here because this script runs before the repository, and so before
-# ssot-config.sh, exists on the host.
+# #18653: what this installer itself created -- read by scripts/uninstall.sh, which removes an
+# account, package or apt source only if it is recorded here, never a pre-existing one.
+readonly INSTALL_RECORD="/etc/autobot/install-record"
+# The account that owns ${AUTOBOT_BASE}, runs the units and is how the SLM reaches this node
+# (PathConfig.ssh_user, AUTOBOT_SSH_USER). Named here: this script runs before ssot-config.sh exists.
 readonly AUTOBOT_USER="autobot"
 readonly AUTOBOT_HOME="/home/${AUTOBOT_USER}"
-# #9956: Default SLM manager node_id. Must match the host/slm_node_id written
-# into the generated localhost inventory (generate_inventory) — that inventory
-# is the canonical definition; this constant mirrors it for the API
-# registration calls so the value is not duplicated as scattered literals.
+# #9956: Default SLM manager node_id. generate_inventory's localhost inventory is the canonical
+# definition; this mirrors it for the API registration calls, so it must match host/slm_node_id.
 readonly SLM_NODE_ID="00-SLM-Manager"
 # External hosts the install reaches, each named once. The connectivity pre-flight
 # probes these same hosts, so it checks exactly what the install goes on to use.
@@ -53,7 +52,11 @@ readonly REPO_HOST="github.com"
 readonly REPO_SLUG="mrveiss/AutoBot-AI"
 readonly DEFAULT_REPO="https://${REPO_HOST}/${REPO_SLUG}.git"
 readonly NODESOURCE_HOST="deb.nodesource.com"
-readonly DEFAULT_BRANCH="main"
+# #19239: each pinned to its source of truth by a repo test -- autobot-frontend/package.json
+# engines.node, slm_backend_port in the ansible group_vars/all.yml -- since the installer runs before the code exists.
+readonly NODE_MIN_VERSION="22.22.2" SLM_BACKEND_PORT="8000"
+readonly IP_CACHE_FILE="/run/autobot-install-ip"  # root-only, unlike /tmp, which any user can plant a file in
+readonly DEFAULT_BRANCH="main" PINNED_COMMIT=""  # a release build pins both: tag and its commit (#18666)
 # #18586: where this script was started from, resolved before any cd; empty under `curl | bash`
 SCRIPT_DIR=""
 [[ -f "${BASH_SOURCE[0]:-}" ]] && SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -69,7 +72,8 @@ UNINSTALL=false
 VALIDATE=false
 CONFIRM_YES=false
 ROTATE_SECRETS=false  # #7075: --rotate-secrets opts in to replacing existing SLM_ADMIN_PASSWORD
-GIT_BRANCH="${DEFAULT_BRANCH}"
+INSTALL_TMP="" ADMIN_PASSWORD_GENERATED=false ADMIN_PASSWORD_PRESERVED=false  # #19236: private temp dir; print the password only if generated. PRESERVED: a reinstall kept the stored one
+GIT_BRANCH=""  # empty until --branch=, AUTOBOT_INSTALL_BRANCH, unattended or the prompt sets it -- a default here made the prompt unreachable (#7060, #19403)
 ADMIN_PASSWORD=""
 OVERRIDE_IP=""  # --ip= override for multi-interface hosts (#2832)
 
@@ -130,6 +134,18 @@ run_ok() {
     fi
 }
 
+record_install() {  # record_install <key> <value>, once (#18653)
+    mkdir -p "$(dirname "${INSTALL_RECORD}")"
+    grep -qxF "$1=$2" "${INSTALL_RECORD}" 2>/dev/null || echo "$1=$2" >> "${INSTALL_RECORD}"
+}
+pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'ok installed'; }
+apt_install_recorded() {  # <desc> <pkg>...: install; record only packages absent BEFORE (#18727)
+    local desc="$1" p new=(); shift
+    for p in "$@"; do pkg_installed "${p}" || new+=("${p}"); done
+    run_ok "${desc}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" || return
+    for p in "${new[@]}"; do record_install package "${p}"; done
+}
+
 # add_ppa_if_missing: prefer device-shipped PPA; only add if not already configured (#7144)
 #   $1 = ppa spec for apt-add-repository, e.g. "ppa:ansible/ansible"
 #   $2 = match string to grep across /etc/apt/sources.list.d/ — typically
@@ -168,11 +184,27 @@ add_ppa_if_missing() {
 
     run_ok "Adding ${desc} PPA" \
         apt-add-repository -y "${ppa}"
+    record_install apt_source "${match%%/*}"
 }
 
 # =============================================================================
 # Network Interface Detection (#2832)
 # =============================================================================
+
+# #17642: a firewall source, so given (NETWORK_SUBNET/NETWORK_GATEWAY) or detected, never guessed
+detect_network() {
+    local cidr
+    network_subnet="${NETWORK_SUBNET:-}" network_gateway="${NETWORK_GATEWAY:-}"
+    cidr=$(ip -4 addr show | awk -v ip="${local_ip}/" '$1 == "inet" && index($2, ip) == 1 {print $2; exit}')
+    if [[ -z "${network_subnet}" && -n "${cidr}" ]]; then
+        network_subnet=$(python3 -c "import ipaddress; print(ipaddress.ip_interface('${cidr}').network)") || network_subnet=""
+    fi
+    if [[ -z "${network_gateway}" ]]; then
+        network_gateway=$(ip route | awk '/^default/ {print $3}' | head -1)
+    fi
+    python3 -c 'import ipaddress, sys; ipaddress.ip_network(sys.argv[1]); ipaddress.ip_address(sys.argv[2])' "${network_subnet}" "${network_gateway}" 2>/dev/null \
+        || fatal "No usable network for ${local_ip} (subnet '${network_subnet}', gateway '${network_gateway}'). Re-run with NETWORK_SUBNET=<cidr> NETWORK_GATEWAY=<ip> (INSTALL.md)."
+}
 
 detect_local_ip() {
     # If OVERRIDE_IP is set, use it directly
@@ -187,13 +219,12 @@ detect_local_ip() {
     # garble any curl command that interpolates the result.
     # On reinstall, always clear the cache so the interface prompt re-runs
     # and the user can select the correct interface (#3194).
-    local cache_file="/tmp/.autobot_detected_ip"
-    if [[ "${REINSTALL}" == true ]]; then
-        rm -f "${cache_file}"
-    fi
-    if [[ -f "${cache_file}" ]]; then
-        cat "${cache_file}"
-        return
+    local cache_file="${IP_CACHE_FILE}" cached=""
+    [[ "${REINSTALL}" == true ]] && rm -f "${cache_file}"
+    [[ -f "${cache_file}" ]] && cached="$(head -n1 "${cache_file}")"
+    # #19239: reuse a cached address only while it is still assigned to an interface here.
+    if [[ -n "${cached}" ]] && ip -4 -o addr show | awk '{print $4}' | cut -d/ -f1 | grep -qxF "${cached}"; then
+        echo "${cached}"; return
     fi
 
     # Gather all interfaces with IPv4 addresses (exclude loopback)
@@ -232,13 +263,10 @@ detect_local_ip() {
         for i in "${!ifaces[@]}"; do
             echo -e "    ${CYAN}[$((i+1))]${NC} ${ifaces[$i]}: ${ips[$i]}" >&2
         done
-        echo -ne "\n  ${YELLOW}Select interface for AutoBot [1-${#ips[@]}]:${NC} " >&2
-        local choice
-        read -r choice
-        choice=$((choice - 1))
-        if [[ $choice -lt 0 || $choice -ge ${#ips[@]} ]]; then
-            fatal "Invalid selection"
-        fi
+        local choice=""  # /dev/tty, never stdin: under curl | bash stdin is the script itself (#17929)
+        prompt_from_tty choice "  Select interface for AutoBot [1-${#ips[@]}]: " || fatal "No terminal to choose an interface. sudo drops variables set before it, so pass the choice after it: curl -fsSL <installer-url> | sudo AUTOBOT_INSTALL_INTERFACE=<name> bash (one of: ${ifaces[*]}), or | sudo bash -s -- --ip=<address>."
+        [[ "${choice}" =~ ^[0-9]+$ ]] || fatal "Invalid selection"; choice=$((choice - 1))
+        [[ $choice -ge 0 && $choice -lt ${#ips[@]} ]] || fatal "Invalid selection"
         detected_ip="${ips[$choice]}"
         success "Using ${ifaces[$choice]}: ${detected_ip}" >&2
     fi
@@ -283,26 +311,27 @@ print_usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
 
-Installs AutoBot SLM (Service Lifecycle Manager) on a blank Debian/Ubuntu host.
+Installs AutoBot SLM (Service Lifecycle Manager) on a blank Ubuntu 22.04+ host.
 After installation, use the SLM web UI setup wizard to add fleet nodes.
 
 Options:
   --unattended          Run without prompts, use all defaults
   --reinstall           Force reinstall over existing installation
-  --uninstall           Completely remove AutoBot and all dependencies (#2706)
+  --uninstall           Remove AutoBot: shows the plan, then asks (#2706, #18653)
   --validate            Verify installation integrity (check required service distributions)
   --yes                 Skip confirmation prompts (use with --uninstall)
   --branch=BRANCH       Git branch to install (default: ${DEFAULT_BRANCH})
-  --admin-pass=PASS     SLM admin password (auto-generated if not set)
+  --admin-pass-file=F   read the SLM admin password from file F (mode 600 or tighter, auto-generated if not set)
   --ip=IP               Override auto-detected IP address (#2832)
   --rotate-secrets      Replace existing SLM_ADMIN_PASSWORD on reinstall (#7075).
                         By default reinstall PRESERVES the wizard-set password
-                        and ignores --admin-pass= / AUTOBOT_SLM_ADMIN_PASSWORD.
+                        and ignores --admin-pass-file= / SLM_ADMIN_PASSWORD.
   --help                Show this help message
 
 Environment overrides (skip the corresponding interactive prompt; #7057):
   AUTOBOT_INSTALL_BRANCH=<branch>     same as --branch=
-  AUTOBOT_SLM_ADMIN_PASSWORD=<pass>   same as --admin-pass=
+  SLM_ADMIN_PASSWORD=<pass>           the admin password itself (not a file path);
+                                      AUTOBOT_SLM_ADMIN_PASSWORD is a deprecated alias (#19318)
   AUTOBOT_INSTALL_INTERFACE=<iface>   pick an interface by name (eth2, eth0, ...)
                                       instead of the menu prompt
   OVERRIDE_IP=<ip>                    skip detection entirely and use this IP
@@ -310,13 +339,13 @@ Environment overrides (skip the corresponding interactive prompt; #7057):
 Examples:
   sudo $0                                    # Interactive install
   sudo $0 --unattended                       # Default unattended install
-  sudo $0 --unattended --admin-pass=MyPass   # Unattended with custom password
+  sudo $0 --unattended --admin-pass-file=/root/pw   # Unattended with custom password
   sudo $0 --reinstall                        # Reinstall over existing
   sudo $0 --uninstall                        # Full uninstall (with confirmation)
   sudo $0 --uninstall --yes                  # Full uninstall (no prompt)
   sudo AUTOBOT_INSTALL_INTERFACE=eth2 \\
        AUTOBOT_INSTALL_BRANCH=${DEFAULT_BRANCH} \\
-       AUTOBOT_SLM_ADMIN_PASSWORD=secret \\
+       SLM_ADMIN_PASSWORD='<pass>' \\
        $0 --reinstall                        # Fully scripted reinstall (#7057)
 
 Post-Install:
@@ -329,7 +358,7 @@ EOF
 
 # #18583: name the requirement and the way out for this host — not a WSL2-only hint for all
 systemd_missing_hint() {
-    local fix="Use a Debian/Ubuntu VM or bare-metal host booted with systemd; in a container or a host without systemd, use the Docker path in INSTALL.md instead."
+    local fix="Use an Ubuntu 22.04+ VM or bare-metal host booted with systemd; in a container or a host without systemd, use the Docker path in INSTALL.md instead."
     grep -qi microsoft "${PROC_VERSION_FILE}" 2>/dev/null && fix="On WSL2 (WSL1 cannot run systemd): add [boot] systemd=true to /etc/wsl.conf and restart WSL."
     echo "systemd must be running as PID 1 (see Requirements in INSTALL.md). ${fix}"
 }
@@ -352,11 +381,11 @@ preflight_checks() {
     fi
     success "systemd is running"
 
-    if [[ ! -f /etc/debian_version ]]; then
-        fatal "This script requires Debian or Ubuntu"
-    fi
-    local os_name
-    os_name=$(. /etc/os-release 2>/dev/null && echo "${NAME} ${VERSION_ID}" || cat /etc/debian_version)
+    # #19235: Ubuntu 22.04+ only -- Python 3.14 and Ansible come from Launchpad PPAs, which Debian lacks.
+    local os_id="" os_version="" os_name
+    os_id=$(. /etc/os-release 2>/dev/null && echo "${ID:-}") || true; os_version=$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID:-}") || true
+    [[ "${os_id}" == ubuntu && "$(printf '%s\n' 22.04 "${os_version}" | sort -V | head -1)" == 22.04 ]] || fatal "This installer supports Ubuntu 22.04 or newer (found: ${os_id:-unknown} ${os_version}). On other systems use the Docker path in INSTALL.md."
+    os_name=$(. /etc/os-release 2>/dev/null && echo "${NAME} ${VERSION_ID}")
     success "OS: ${os_name}"
 
     if [[ -f "${INSTALL_MARKER}" ]] && [[ "${REINSTALL}" != true ]]; then
@@ -432,9 +461,7 @@ system_setup() {
         add_ppa_if_missing "ppa:deadsnakes/ppa" "deadsnakes/ppa" "deadsnakes (Python 3.14)"
         run_ok "Updating package lists (Python 3.14)" \
             apt-get update -qq
-        run_ok "Installing Python 3.14" \
-            env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-                python3.14 python3.14-venv python3.14-dev
+        apt_install_recorded "Installing Python 3.14" python3.14 python3.14-venv python3.14-dev
     else
         success "  Python 3.14 already installed ($(python3.14 --version))"
     fi
@@ -443,17 +470,17 @@ system_setup() {
         add_ppa_if_missing "ppa:ansible/ansible" "ansible/ansible" "Ansible"
         run_ok "Updating package lists (Ansible)" \
             apt-get update -qq
-        run_ok "Installing Ansible" \
-            env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ansible
+        apt_install_recorded "Installing Ansible" ansible
     else
         success "  Ansible already installed ($(ansible --version | head -1))"
     fi
 
     if ! command -v node &>/dev/null; then
         run_ok "Adding NodeSource repository" \
-            bash -c "curl -fsSL https://${NODESOURCE_HOST}/setup_20.x | bash -"
-        run_ok "Installing Node.js" \
-            env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs
+            bash -c "curl -fsSL https://${NODESOURCE_HOST}/setup_${NODE_MIN_VERSION%%.*}.x | bash -"
+        apt_install_recorded "Installing Node.js" nodejs; record_install apt_source nodesource
+    elif [[ "$(printf '%s\n' "${NODE_MIN_VERSION}" "$(node --version | tr -d v)" | sort -V | head -1)" != "${NODE_MIN_VERSION}" ]]; then
+        fatal "Node.js $(node --version) is installed, but AutoBot needs ${NODE_MIN_VERSION} or newer. Upgrade or remove it, then rerun this installer."
     else
         success "  Node.js already installed ($(node --version))"
     fi
@@ -463,11 +490,13 @@ system_setup() {
             useradd -r -m -s /bin/bash -d "${AUTOBOT_HOME}" "${AUTOBOT_USER}"
         echo "${AUTOBOT_USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/autobot
         chmod 0440 /etc/sudoers.d/autobot
+        record_install created_user "${AUTOBOT_USER}"; record_install created_sudoers /etc/sudoers.d/autobot
         success "  Passwordless sudo configured"
     else
         success "  User '${AUTOBOT_USER}' already exists"
     fi
 
+    local fresh_base=false; [[ -d "${AUTOBOT_BASE}" ]] || fresh_base=true
     run_ok "Creating directory structure" \
         mkdir -p \
             "${AUTOBOT_BASE}" \
@@ -479,6 +508,7 @@ system_setup() {
             /etc/autobot \
             /etc/autobot/ssh
 
+    if ${fresh_base} && command -v setfacl >/dev/null 2>&1; then setfacl -R -b -k "${AUTOBOT_BASE}" || warn "Could not clear inherited ACLs on ${AUTOBOT_BASE}"; fi  # #19503: a parent's default ACL overrides the umask; only a tree created just now
     chown -R "${AUTOBOT_USER}:${AUTOBOT_USER}" "${AUTOBOT_BASE}"
     success "  Directory ownership set"
 
@@ -539,19 +569,20 @@ code_deployment() {
         done
 
         run_ok "Fetching latest code" \
-            sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" fetch origin
+            sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" fetch --tags origin
         run_ok "Checking out ${GIT_BRANCH}" \
             sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" checkout "${GIT_BRANCH}"
         run_ok "Pulling latest changes" \
-            sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" pull origin "${GIT_BRANCH}"
+            sudo -u "${AUTOBOT_USER}" sh -c 'git -C "$1" symbolic-ref -q HEAD >/dev/null || exit 0; git -C "$1" pull origin "$2"' _ "${CODE_SOURCE}" "${GIT_BRANCH}"  # a release tag is already exact (#18666)
     else
         run_ok "Cloning AutoBot repository (branch: ${GIT_BRANCH})" \
             sudo -u "${AUTOBOT_USER}" git clone -b "${GIT_BRANCH}" "${DEFAULT_REPO}" "${CODE_SOURCE}"
     fi
 
     local installed_sha  # #18586: record exactly what was installed
-    installed_sha="$(sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" rev-parse HEAD)"
+    installed_sha="$(sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" rev-parse HEAD)"; [[ -z "${PINNED_COMMIT}" || "${GIT_BRANCH}" != "${DEFAULT_BRANCH}" || "${installed_sha}" == "${PINNED_COMMIT}" ]] || fatal "${GIT_BRANCH} checked out ${installed_sha}, but this signed installer was built for ${PINNED_COMMIT}; the tag moved -- refusing (#18666)"
     success "Installing ${DEFAULT_REPO} branch ${GIT_BRANCH} @ ${installed_sha}"
+    refuse_guessable_admin_password
 
     # Copy code from code_source to service directories where Ansible expects them
     info "Distributing code to service directories..."
@@ -559,7 +590,7 @@ code_deployment() {
     for dir in "${CRITICAL_DIRS[@]}"; do
         if [[ -d "${CODE_SOURCE}/${dir}" ]]; then
             run_ok "Copying ${dir} to ${AUTOBOT_BASE}/${dir}" \
-                sudo -u "${AUTOBOT_USER}" rsync -a --delete "${CODE_SOURCE}/${dir}/" "${AUTOBOT_BASE}/${dir}/"
+                sudo -u "${AUTOBOT_USER}" rsync -a --chmod=o-w --delete "${CODE_SOURCE}/${dir}/" "${AUTOBOT_BASE}/${dir}/"
             if [[ ! -d "${AUTOBOT_BASE}/${dir}" ]]; then
                 fatal "Distribution of ${dir} failed — destination directory not created"
             fi
@@ -597,10 +628,10 @@ all:
   vars:
     # #7162: network_subnet/network_gateway/slm_host MUST be defined here so
     # firewall rules in group_vars/slm.yml resolve. Match slm-nodes.yml's
-    # lookup-with-fallback pattern: env first, then secrets file, then default.
+    # lookup pattern: env first, then secrets file, never an open-range default (#17642).
     slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
-    network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
-    network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') or lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
+    network_subnet: "{{ (lookup('env', 'NETWORK_SUBNET') | trim) or (lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || true') | trim) or undef(hint='network_subnet is unset: set NETWORK_SUBNET in the environment or in /etc/autobot/slm-secrets.env. It is a firewall source, so it never falls back to an open range (#17642)') }}"
+    network_gateway: "{{ (lookup('env', 'NETWORK_GATEWAY') | trim) or (lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || true') | trim) or undef(hint='network_gateway is unset: set NETWORK_GATEWAY in the environment or in /etc/autobot/slm-secrets.env (#17642)') }}"
   hosts:
     00-SLM-Manager:
       ansible_connection: local
@@ -616,31 +647,23 @@ all:
 INVENTORY
     success "  Localhost inventory generated"
 
-    if [[ -z "${ADMIN_PASSWORD}" ]]; then
-        ADMIN_PASSWORD=$(generate_admin_password)
-    fi
+    [[ -n "${ADMIN_PASSWORD}" ]] || { ADMIN_PASSWORD=$(generate_admin_password); ADMIN_PASSWORD_GENERATED=true; }
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
         info "Writing secrets file..."
-        local secret_key encryption_key local_ip network_subnet network_gateway
-        secret_key=$(openssl rand -hex 32)
-        encryption_key=$(openssl rand -hex 32)
-        # Issue #2758: detect the machine's primary outbound IP so that
-        # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
+        local secret_key encryption_key hmac_api_key_secret local_ip network_subnet network_gateway autobot_encryption_key autobot_internal_api_key
+        autobot_encryption_key=$(if [[ -f "${SECRETS_FILE}" ]]; then grep -oP '^AUTOBOT_ENCRYPTION_KEY=\K.+' "${SECRETS_FILE}" || true; else openssl rand -hex 32; fi)  # #19864: new installs only; a reinstall keeps what it has
+        secret_key=$(openssl rand -hex 32) encryption_key=$(openssl rand -hex 32) hmac_api_key_secret=$(grep -oP '^SLM_HMAC_API_KEY_SECRET=\K.+' "${SECRETS_FILE}" 2>/dev/null | head -1 || true); hmac_api_key_secret=${hmac_api_key_secret:-$(openssl rand -hex 32)}  # #16299, #19120: a reinstall keeps an existing pepper
+        autobot_internal_api_key=$(grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.+' "${SECRETS_FILE}" 2>/dev/null | head -1 || true); autobot_internal_api_key=${autobot_internal_api_key:-$(openssl rand -hex 32)}  # #10200: the SLM's canonical key (#20750); a reinstall keeps it
+        # Issue #2758: detect the primary outbound IP so SLM_EXTERNAL_URL is set, not left to the Python fallback.
         local_ip="$(detect_local_ip)"
-        # Detect subnet and gateway from the selected interface so Ansible
-        # firewall rules use the correct network range for any installation.
-        local cidr
-        cidr=$(ip -4 addr show | awk '/inet / {print $2}' | grep "^${local_ip%.*}" | head -1)
-        if [[ -n "$cidr" ]]; then
-            network_subnet=$(python3 -c "import ipaddress; print(str(ipaddress.ip_interface('$cidr').network))" 2>/dev/null)
-        fi
-        network_gateway=$(ip route | awk '/^default/ {print $3}' | head -1)
-        [[ -z "$network_subnet" ]] && network_subnet="${local_ip%.*}.0/24"
-        [[ -z "$network_gateway" ]] && network_gateway="${local_ip%.*}.1"
-        cat > "${SECRETS_FILE}" << EOF
+        detect_network
+        (umask 077; cat > "${SECRETS_FILE}") << EOF  # created 0600, never briefly world-readable under the tree's 022
 SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
+AUTOBOT_ENCRYPTION_KEY=${autobot_encryption_key}
+SLM_HMAC_API_KEY_SECRET=${hmac_api_key_secret}
+AUTOBOT_INTERNAL_API_KEY=${autobot_internal_api_key}
 SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 SLM_EXTERNAL_URL=https://${local_ip}
 SLM_HOST=${local_ip}
@@ -652,22 +675,11 @@ EOF
         success "  Secrets written to ${SECRETS_FILE}"
     else
         ADMIN_PASSWORD=$(grep -oP 'SLM_ADMIN_PASSWORD=\K.*' "${SECRETS_FILE}" 2>/dev/null || echo "${ADMIN_PASSWORD}")
-        # Refresh IP/network fields even when preserving static secrets (#3266).
-        # Stale IPs remain when the machine's address changes between installs.
+        # Refresh IP/network fields even when preserving static secrets (#3266): a changed address leaves stale IPs.
         info "  Refreshing IP/network fields in preserved secrets file..."
-        local local_ip network_subnet network_gateway cidr
-        local_ip="$(detect_local_ip)"
-        cidr=$(ip -4 addr show | awk '/inet / {print $2}' | grep "^${local_ip%.*}" | head -1)
-        if [[ -n "$cidr" ]]; then
-            network_subnet=$(python3 -c "import ipaddress; print(str(ipaddress.ip_interface('$cidr').network))" 2>/dev/null)
-        fi
-        network_gateway=$(ip route | awk '/^default/ {print $3}' | head -1)
-        [[ -z "$network_subnet" ]] && network_subnet="${local_ip%.*}.0/24"
-        [[ -z "$network_gateway" ]] && network_gateway="${local_ip%.*}.1"
-        # Upsert each key: replace the line if it exists, append if missing.
-        # Plain sed s/// silently does nothing when the key is absent — which
-        # causes SLM_HOST / NETWORK_* to stay missing on secrets files written
-        # before those keys were introduced (#3194).
+        local local_ip network_subnet network_gateway; local_ip="$(detect_local_ip)"
+        detect_network
+        # Upsert, as plain sed s/// does nothing on a file written before the key existed (#3194).
         _upsert_secrets_key() {
             local key="$1" value="$2" file="$3"
             if grep -q "^${key}=" "${file}"; then
@@ -680,6 +692,7 @@ EOF
         _upsert_secrets_key "SLM_HOST"         "${local_ip}"          "${SECRETS_FILE}"
         _upsert_secrets_key "NETWORK_SUBNET"   "${network_subnet}"    "${SECRETS_FILE}"
         _upsert_secrets_key "NETWORK_GATEWAY"  "${network_gateway}"   "${SECRETS_FILE}"
+        grep -q '^AUTOBOT_INTERNAL_API_KEY=.' "${SECRETS_FILE}" || _upsert_secrets_key "AUTOBOT_INTERNAL_API_KEY" "$(openssl rand -hex 32)" "${SECRETS_FILE}"  # #10200: only when absent or empty
         success "  Secrets file preserved (IP/network fields updated to ${local_ip})"
     fi
 
@@ -694,25 +707,25 @@ EOF
     chown "${AUTOBOT_USER}:${AUTOBOT_USER}" /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp
 
     info "Running Ansible deployment (this may take several minutes)..."
-    # #6600: keep `provision` so backend role applies to the SLM manager node in
-    # single-host mode. Skip only `seed` — fleet seeding requires SLM DB
-    # rows that don't exist yet on a fresh install.
-    log "  Playbook: deploy-slm-manager.yml --skip-tags seed"
+    # #6600: keep `provision` so backend role applies to the SLM manager node in single-host mode. Skip only
+    # `seed` — fleet seeding requires SLM DB rows absent on a fresh install — and `mark-synced`, which register_local_node runs once the node exists (#18663). #19867: the re-run hint shares this set.
+    local skip_tags="seed,mark-synced"; log "  Playbook: deploy-slm-manager.yml --skip-tags ${skip_tags}"
     info "  Live progress below — full output also in ${LOG_FILE}"
     echo
 
     cd "${ansible_dir}"
-    set +o pipefail
+    local vars_file="${INSTALL_TMP}/ansible-vars.json"  # #19236: never argv; the EXIT trap removes INSTALL_TMP. deploy_ref: Play 0 resyncs code_source to the installed branch, not main (#18663)
+    (umask 077 && PW="${ADMIN_PASSWORD}" REF="${GIT_BRANCH:-}" jq -n '{slm_admin_password: env.PW} + (if (env.REF // "") != "" then {deploy_ref: env.REF} else {} end)' > "${vars_file}"); set +o pipefail
     ansible-playbook \
         -i "${inventory}" \
         playbooks/deploy-slm-manager.yml \
-        --skip-tags "seed" \
-        -e "slm_admin_password=${ADMIN_PASSWORD}" \
+        --skip-tags "${skip_tags}" \
+        -e "@${vars_file}" \
         -e "target_host=localhost" \
         2>&1 | tee -a "${LOG_FILE}" | \
-        grep --line-buffered -E \
-            "^(PLAY \[|TASK \[|ok: \[|changed: \[|failed: \[|skipping: \[|fatal:|PLAY RECAP|[A-Za-z0-9_-].*: ok=)"
-    _ansible_exit=${PIPESTATUS[0]}
+        { grep --line-buffered -E \
+            "^(PLAY \[|TASK \[|ok: \[|changed: \[|failed: \[|skipping: \[|fatal:|PLAY RECAP|[A-Za-z0-9_-].*: ok=)" || true; }
+    _ansible_exit=${PIPESTATUS[0]}  # #19493: `|| true` -- a no-match grep exit killed the run here, silently, under set -e
     set -o pipefail
 
     echo
@@ -721,7 +734,7 @@ EOF
     else
         error "Ansible deployment failed (exit ${_ansible_exit})"
         error "Check ${LOG_FILE} for details"
-        error "Re-run: cd ${ansible_dir} && ansible-playbook -i ${inventory} playbooks/deploy-slm-manager.yml --skip-tags seed,provision"
+        error "Re-run: cd ${ansible_dir} && ansible-playbook -i ${inventory} playbooks/deploy-slm-manager.yml --skip-tags ${skip_tags}"
         exit 1
     fi
 }
@@ -759,7 +772,7 @@ service_verification() {
     local max_attempts=80
     local attempt=0
     while [[ ${attempt} -lt ${max_attempts} ]]; do
-        if curl -sf --max-time 3 http://127.0.0.1:8000/api/health > /dev/null 2>&1; then
+        if curl -sf --max-time 3 http://127.0.0.1:${SLM_BACKEND_PORT}/api/health > /dev/null 2>&1; then
             success "SLM backend health check passed"
             break
         fi
@@ -768,16 +781,18 @@ service_verification() {
         sleep 5
     done
 
-    if [[ ${attempt} -ge ${max_attempts} ]]; then
-        warn "SLM backend did not respond within 7 minutes"
-        warn "Check: journalctl -u autobot-slm-backend -n 50"
-    fi
+    # #19234: a failed required step stops the install -- no marker, so a plain rerun retries it.
+    [[ ${attempt} -lt ${max_attempts} ]] || fatal "Step 'SLM backend health' failed: no answer within 7 minutes. Check: journalctl -u autobot-slm-backend -n 50, then rerun this installer."
+    wait_for_https || fatal "Step 'HTTPS endpoint' failed: https://127.0.0.1/api/health did not answer within 60s. Check: nginx -t; journalctl -u nginx -n 50, then rerun this installer."
+    success "HTTPS endpoint accessible"
+}
 
-    if curl -sfk --max-time 3 https://127.0.0.1/api/health > /dev/null 2>&1; then
-        success "HTTPS endpoint accessible"
-    else
-        warn "HTTPS endpoint not responding (nginx may need time)"
-    fi
+wait_for_https() {  # 0 once https://127.0.0.1/api/health answers, 1 after 60s (#2830, #19234)
+    local waited=0
+    until curl -sfk --max-time 3 https://127.0.0.1/api/health >/dev/null 2>&1; do
+        [[ ${waited} -ge 60 ]] && return 1
+        sleep 2; waited=$((waited + 2))
+    done
 }
 
 # =============================================================================
@@ -789,22 +804,9 @@ register_local_node() {
 
     local api_url="https://127.0.0.1"
 
-    # Wait for HTTPS to be ready before registering (#2830)
-    # After Ansible deployment, nginx may still be loading TLS certificates
-    # or the reverse-proxy upstream may not be connected yet.
+    # nginx may still be loading TLS certificates after the Ansible deploy (#2830).
     info "Waiting for HTTPS endpoint to be ready..."
-    local max_wait=60
-    local waited=0
-    while ! curl -sk --max-time 3 "${api_url}/api/health" >/dev/null 2>&1; do
-        sleep 2
-        waited=$((waited + 2))
-        if [[ ${waited} -ge ${max_wait} ]]; then
-            warn "HTTPS not ready after ${max_wait}s — skipping node registration"
-            warn "Register manually once services are up: SLM UI > Fleet > Add Node"
-            return
-        fi
-        log "  Waiting for HTTPS (${waited}s / ${max_wait}s)..."
-    done
+    wait_for_https || fatal "Step 'node registration' failed: HTTPS is not answering. Check: journalctl -u nginx -n 50, then rerun this installer."
     success "HTTPS endpoint is ready"
 
     local local_ip
@@ -820,17 +822,11 @@ register_local_node() {
     # failure the installer died here and the two warn lines -- which read as
     # careful handling -- could never run. `-f` is kept deliberately: on a 401
     # we want no body to parse, not an error page fed to jq.
-    token=$(curl -sfk --max-time 10 \
-        -X POST "${api_url}/api/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PASSWORD}\"}" \
-        2>/dev/null | jq -r '.access_token // empty') || true
+    token=$(PW="${ADMIN_PASSWORD}" jq -n '{username: "admin", password: env.PW}' | curl -sfk --max-time 10 \
+        -X POST "${api_url}/api/auth/login" -H "Content-Type: application/json" --data @- \
+        2>/dev/null | jq -r '.access_token // empty') || true  # #19236: the body goes on stdin, never argv
 
-    if [[ -z "${token}" ]]; then
-        warn "Could not authenticate with SLM API — skipping node registration"
-        warn "Register manually: SLM UI > Fleet > Add Node"
-        return
-    fi
+    [[ -n "${token}" ]] || fatal "Step 'admin login' failed: the SLM API refused the admin credentials. Check /etc/autobot/slm-secrets.env and journalctl -u autobot-slm-backend -n 50, then rerun this installer."
     success "Authenticated with SLM API"
 
     # Register this node with all single-host roles
@@ -871,15 +867,13 @@ register_local_node() {
     case "${http_code:-000}" in
         201) success "Local node registered (${hostname_val} / ${local_ip})" ;;
         400) success "Local node already registered" ;;
-        *)   warn "Node registration returned HTTP ${http_code:-000} — register manually via SLM UI"
-             return ;;
+        *)   fatal "Step 'node registration' failed: the SLM API returned HTTP ${http_code:-000}. Check journalctl -u autobot-slm-backend -n 50, then rerun this installer." ;;
     esac
 
     # Auto-assign SLM Manager as code source (#2755)
     info "Assigning code source to SLM Manager..."
     local cs_code
-    # #15825: same as above -- capturing the status code means not using -f,
-    # and a transport failure must reach the wildcard arm rather than abort.
+    # #15825: same as above -- the status code is captured, so no -f, and a transport failure reaches the wildcard arm.
     cs_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
         -X POST "${api_url}/api/code-source/assign" \
         -H "Content-Type: application/json" \
@@ -891,8 +885,9 @@ register_local_node() {
         }" 2>/dev/null) || true
 
     case "${cs_code:-000}" in
-        200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})" ;;
-        *)   warn "Code source assignment returned HTTP ${cs_code:-000} — assign manually via SLM UI > Code Sync" ;;
+        200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})"
+             bash "${CODE_SOURCE}/scripts/deployment/mark_local_node_synced.sh" "${CODE_SOURCE}" "${SLM_NODE_ID}" "${api_url}" "${INSTALL_TMP:-}/ansible-vars.json" "${LOG_FILE:-}" || warn "Step 'mark synced' did not complete. Check the node's status in Code Sync. See ${LOG_FILE}" ;;
+        *)   warn "Optional step 'code source' returned HTTP ${cs_code:-000}, so mark-synced was skipped (#18663) — assign it in SLM UI > Code Sync" ;;
     esac
 }
 
@@ -934,7 +929,7 @@ EOF
     echo
     echo -e "  ${BLUE}SLM URL:${NC}         https://${server_ip}/slm/"
     echo -e "  ${BLUE}Admin Username:${NC}  admin"
-    echo -e "  ${BLUE}Admin Password:${NC}  ${ADMIN_PASSWORD}"
+    if ${ADMIN_PASSWORD_GENERATED}; then echo -e "  ${BLUE}Admin Password:${NC}  ${ADMIN_PASSWORD}"; else echo -e "  ${BLUE}Admin Password:${NC}  $(${ADMIN_PASSWORD_PRESERVED} && echo "the existing password, kept from the previous install (see ${creds_file})" || echo "the one you supplied")"; fi
     echo
     echo -e "  ${YELLOW}Note:${NC} Using self-signed certificate — browser will show a warning."
     echo
@@ -956,7 +951,7 @@ EOF
     echo
 
     # Clean up IP detection cache file (#3010)
-    rm -f /tmp/.autobot_detected_ip 2>/dev/null || true
+    rm -f "${IP_CACHE_FILE}" 2>/dev/null || true
 }
 
 # =============================================================================
@@ -984,6 +979,11 @@ prompt_from_tty() {
     printf -v "${__var}" '%s' "${__value}"
 }
 
+refuse_guessable_admin_password() {  # #16299: before any secret is written; a kept or generated one is not checked
+    local why; [[ -n "${ADMIN_PASSWORD}" ]] && ! ${ADMIN_PASSWORD_GENERATED} && ! ${ADMIN_PASSWORD_PRESERVED} || return 0
+    why="$(printf '%s' "${ADMIN_PASSWORD}" | python3 "${CODE_SOURCE}/autobot_shared/security/password_weakness.py")" || fatal "The admin password was refused: ${why}"
+}
+
 # One generator, so the interactive-blank and no-terminal paths cannot drift.
 generate_admin_password() {
     openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20
@@ -993,14 +993,13 @@ prompt_config() {
     # #7057: env-var overrides skip the corresponding interactive prompt
     # so the script can run from CI / cron / runbooks without a TTY.
     #   AUTOBOT_INSTALL_BRANCH=<branch>     skips the branch prompt
-    #   AUTOBOT_SLM_ADMIN_PASSWORD=<pass>   skips the password prompt
+    #   SLM_ADMIN_PASSWORD=<pass>   skips the password prompt (AUTOBOT_SLM_ADMIN_PASSWORD: deprecated alias, #19318)
     #   (interface override is in detect_local_ip via AUTOBOT_INSTALL_INTERFACE)
     if [[ -n "${AUTOBOT_INSTALL_BRANCH:-}" ]]; then
         GIT_BRANCH="${AUTOBOT_INSTALL_BRANCH}"
     fi
-    if [[ -n "${AUTOBOT_SLM_ADMIN_PASSWORD:-}" ]]; then
-        ADMIN_PASSWORD="${AUTOBOT_SLM_ADMIN_PASSWORD}"
-    fi
+    ADMIN_PASSWORD="${SLM_ADMIN_PASSWORD:-${AUTOBOT_SLM_ADMIN_PASSWORD:-${ADMIN_PASSWORD}}}"
+    if [[ -n "${AUTOBOT_SLM_ADMIN_PASSWORD:-}" && -z "${SLM_ADMIN_PASSWORD:-}" ]]; then warn "AUTOBOT_SLM_ADMIN_PASSWORD is deprecated: set SLM_ADMIN_PASSWORD (#19318)"; fi
 
     # #7075: preserve existing admin password on reinstall.
     # The install wizard is the source of truth for SLM_ADMIN_PASSWORD;
@@ -1014,10 +1013,10 @@ prompt_config() {
         existing_pass=$(grep -E '^SLM_ADMIN_PASSWORD=' "${secrets_file}" 2>/dev/null | cut -d'=' -f2- || true)
         if [[ -n "${existing_pass}" ]]; then
             if [[ -n "${ADMIN_PASSWORD}" && "${ADMIN_PASSWORD}" != "${existing_pass}" ]]; then
-                warn "AUTOBOT_SLM_ADMIN_PASSWORD env-var ignored — existing wizard-set password preserved."
+                warn "SLM_ADMIN_PASSWORD env-var ignored — existing wizard-set password preserved."
                 warn "  To rotate: rerun with --rotate-secrets (warns + replaces) or edit ${secrets_file} manually."
             fi
-            ADMIN_PASSWORD="${existing_pass}"
+            ADMIN_PASSWORD="${existing_pass}"; ADMIN_PASSWORD_PRESERVED=true
             info "Preserving existing SLM_ADMIN_PASSWORD from ${secrets_file}"
         fi
     fi
@@ -1025,7 +1024,7 @@ prompt_config() {
     if ${UNATTENDED}; then
         GIT_BRANCH="${GIT_BRANCH:-${DEFAULT_BRANCH}}"
         if [[ -z "${ADMIN_PASSWORD}" ]]; then
-            ADMIN_PASSWORD=$(generate_admin_password)
+            ADMIN_PASSWORD=$(generate_admin_password); ADMIN_PASSWORD_GENERATED=true
         fi
         return
     fi
@@ -1052,7 +1051,7 @@ prompt_config() {
         if [[ -n "${input}" ]]; then
             ADMIN_PASSWORD="${input}"
         else
-            ADMIN_PASSWORD=$(generate_admin_password)
+            ADMIN_PASSWORD=$(generate_admin_password); ADMIN_PASSWORD_GENERATED=true
             info "  Password auto-generated; it is printed at the end of this run."
         fi
     fi
@@ -1062,6 +1061,11 @@ prompt_config() {
 # =============================================================================
 # Distribution Validation (#4130)
 # =============================================================================
+
+report_world_writable_code() {
+    local found; found="$(find "${CODE_SOURCE}" "${CRITICAL_DIRS[@]/#/${AUTOBOT_BASE}/}" -xdev \( -type d -o -type f \) -perm -0002 -print 2>/dev/null | wc -l)" || true  # #19503: read-only, approval changes a live tree (#17038); a missing dir must not end --validate
+    [[ "${found}" -eq 0 ]] || warn "${found} world-writable paths in the code tree: any local account can change what root runs. List them: find ${CODE_SOURCE} ${AUTOBOT_BASE} -xdev -perm -0002"
+}
 
 validate_distributions() {
     # Verify all critical service directories are present in AUTOBOT_BASE.
@@ -1087,6 +1091,12 @@ validate_distributions() {
 # Argument Parsing
 # =============================================================================
 
+read_admin_pass_file() {  # owner-only and non-empty, or refuse (#19236)
+    [[ -r "$1" ]] || arg_error "Cannot read $1"
+    [[ "$(stat -c %a "$1")" =~ ^[0-7]00$ ]] || arg_error "$1 is readable by group or others; chmod 600 it first"
+    ADMIN_PASSWORD="$(head -n1 "$1")"; [[ -n "${ADMIN_PASSWORD}" ]] || arg_error "$1 is empty"
+}
+arg_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 2; }  # parse_args runs before _log_init: no log yet
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -1096,11 +1106,12 @@ parse_args() {
             --validate)       VALIDATE=true;           shift ;;
             --yes|-y)         CONFIRM_YES=true;        shift ;;
             --branch=*)       GIT_BRANCH="${1#*=}";    shift ;;
-            --admin-pass=*)   ADMIN_PASSWORD="${1#*=}"; shift ;;
+            --admin-pass-file=*) read_admin_pass_file "${1#*=}"; shift ;;
+            --admin-pass=*)   arg_error "--admin-pass= puts the password on the command line, readable by every local user (#19236). Use --admin-pass-file=PATH, SLM_ADMIN_PASSWORD, or the prompt." ;;
             --ip=*)           OVERRIDE_IP="${1#*=}";    shift ;;
             --rotate-secrets) ROTATE_SECRETS=true;     shift ;;
             --help|-h)        print_usage; exit 0 ;;
-            *)                fatal "Unknown option: $1 (use --help for usage)" ;;
+            *)                arg_error "Unknown option: $1 (use --help for usage)" ;;
         esac
     done
 }
@@ -1110,177 +1121,17 @@ parse_args() {
 # =============================================================================
 
 uninstall() {
-    print_banner
-    _log_init
-    log "AutoBot Uninstaller started"
-
-    if [[ $EUID -ne 0 ]]; then
-        fatal "This script must be run as root (use sudo)"
+    # #18653: the uninstaller is its own script, installed with the code. It removes only
+    # what the install record and AutoBot's own roles account for, shows the plan, and asks.
+    local script="${CODE_SOURCE}/scripts/uninstall.sh"
+    [[ $EUID -eq 0 ]] || fatal "This script must be run as root (use sudo)"
+    if [[ ! -f "${script}" ]]; then
+        echo "No installed AutoBot at ${CODE_SOURCE}: its uninstaller (scripts/uninstall.sh) lives there." >&2
+        echo "See 'Uninstalling' in INSTALL.md for a partial install." >&2
+        exit 1
     fi
-
-    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${RED}  WARNING: Full AutoBot Uninstall${NC}"
-    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo
-    echo "  This will permanently remove:"
-    echo "    - All AutoBot services and data"
-    echo "    - PostgreSQL server and all databases"
-    echo "    - Node.js, Grafana, Ansible"
-    echo "    - APT repositories added by the installer"
-    echo "    - The '${AUTOBOT_USER}' system user"
-    echo "    - Directories: /opt/autobot, /etc/autobot, /var/lib/slm, /var/log/autobot"
-    echo
-
-    if ! ${CONFIRM_YES}; then
-        echo -e "  ${YELLOW}Type 'UNINSTALL' to confirm:${NC}"
-        # The no-terminal branch REFUSES here, where the password prompt
-        # auto-generates (#17929). The direction is deliberate and opposite:
-        # continuing without an answer costs a generated credential there and an
-        # unconfirmed destructive wipe here. Today EOF aborts this via `set -e`,
-        # which is accidentally fail-safe -- this keeps that outcome and makes it
-        # intentional, with a message naming the flag to use instead.
-        if ! prompt_from_tty confirmation "  > "; then
-            error "No terminal available to confirm an uninstall."
-            error "Re-run with --yes if you intend to uninstall non-interactively."
-            exit 1
-        fi
-        if [[ "${confirmation}" != "UNINSTALL" ]]; then
-            info "Uninstall cancelled."
-            exit 0
-        fi
-        echo
-    fi
-
-    info "Starting full uninstall..."
-
-    # ---- Phase 1: Stop and disable services ----
-    info "Stopping services..."
-    # Stop all autobot-* units first (covers playwright, browser-worker, tts, npu, etc.)
-    # before removing their unit files — otherwise processes survive with no unit file.
-    while IFS= read -r unit; do
-        [[ -z "$unit" ]] && continue
-        svc="${unit%.service}"
-        systemctl stop "${svc}" >> "${LOG_FILE}" 2>&1 && success "  Stopped ${svc}" || true
-        systemctl disable "${svc}" >> "${LOG_FILE}" 2>&1 || true
-    done < <(systemctl list-units --all --no-legend 'autobot-*' 2>/dev/null | grep -oP 'autobot-\S+\.service')
-
-    local services=(nginx grafana-server postgresql)
-    for svc in "${services[@]}"; do
-        if systemctl is-active --quiet "${svc}" 2>/dev/null; then
-            systemctl stop "${svc}" >> "${LOG_FILE}" 2>&1 && success "  Stopped ${svc}" || warn "  Failed to stop ${svc}"
-        fi
-        if systemctl is-enabled --quiet "${svc}" 2>/dev/null; then
-            systemctl disable "${svc}" >> "${LOG_FILE}" 2>&1 || true
-        fi
-    done
-
-    # Remove AutoBot systemd unit files
-    for unit_file in /etc/systemd/system/autobot-*.service; do
-        if [[ -f "${unit_file}" ]]; then
-            rm -f "${unit_file}"
-            log "  Removed ${unit_file}"
-        fi
-    done
-    systemctl daemon-reload >> "${LOG_FILE}" 2>&1 || true
-
-    # ---- Phase 2: Drop PostgreSQL databases and user ----
-    info "Removing PostgreSQL databases..."
-    if command -v psql &>/dev/null; then
-        systemctl start postgresql >> "${LOG_FILE}" 2>&1 || true
-        sleep 2
-        local dbs=(slm slm_users autobot_users)
-        for db in "${dbs[@]}"; do
-            if sudo -u postgres psql -lqt 2>/dev/null | cut -d\| -f1 | grep -qw "${db}"; then
-                sudo -u postgres dropdb "${db}" >> "${LOG_FILE}" 2>&1 && success "  Dropped database: ${db}" || warn "  Failed to drop: ${db}"
-            fi
-        done
-        if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='slm_app'" 2>/dev/null | grep -q 1; then
-            sudo -u postgres dropuser slm_app >> "${LOG_FILE}" 2>&1 && success "  Dropped user: slm_app" || warn "  Failed to drop user: slm_app"
-        fi
-        systemctl stop postgresql >> "${LOG_FILE}" 2>&1 || true
-    else
-        warn "  PostgreSQL not installed — skipping database cleanup"
-    fi
-
-    # ---- Phase 3: Remove APT packages ----
-    info "Removing installed packages..."
-    local pg_version
-    pg_version=$(pg_lsclusters 2>/dev/null | awk 'NR==2{print $1}' || echo "16")
-
-    # Drop the PostgreSQL cluster before purging
-    if command -v pg_dropcluster &>/dev/null; then
-        pg_dropcluster --stop "${pg_version}" main >> "${LOG_FILE}" 2>&1 || true
-    fi
-
-    local packages=("postgresql-${pg_version}" "postgresql-client-${pg_version}"
-        "postgresql-contrib-${pg_version}" python3-psycopg2 grafana ansible nodejs)
-    for pkg in "${packages[@]}"; do
-        if dpkg -l "${pkg}" &>/dev/null 2>&1; then
-            env DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq "${pkg}" >> "${LOG_FILE}" 2>&1 \
-                && success "  Purged ${pkg}" || warn "  Failed to purge ${pkg}"
-        fi
-    done
-
-    # Purge remaining PostgreSQL and Grafana config
-    env DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq 'postgresql-common' >> "${LOG_FILE}" 2>&1 || true
-    env DEBIAN_FRONTEND=noninteractive apt-get autoremove -y -qq >> "${LOG_FILE}" 2>&1 || true
-
-    # ---- Phase 4: Remove APT repositories ----
-    info "Removing APT repositories..."
-    local repo_files=(/etc/apt/sources.list.d/{pgdg,deadsnakes-*,nodesource,grafana,ansible-*}.{list,sources})
-    for pattern in "${repo_files[@]}"; do
-        # shellcheck disable=SC2086
-        for f in ${pattern}; do
-            if [[ -f "${f}" ]]; then
-                rm -f "${f}"
-                log "  Removed ${f}"
-            fi
-        done
-    done
-
-    # Remove signing keys
-    rm -f /usr/share/keyrings/pgdg.asc /usr/share/keyrings/grafana.gpg \
-          /usr/share/keyrings/nodesource.gpg 2>/dev/null || true
-    success "  APT repositories cleaned"
-
-    # ---- Phase 5: Remove directories and files ----
-    info "Removing AutoBot directories and files..."
-    local dirs=(/opt/autobot /var/lib/slm /var/log/autobot /etc/autobot /var/lib/postgresql /etc/postgresql /var/lib/grafana /etc/grafana)
-    for dir in "${dirs[@]}"; do
-        if [[ -d "${dir}" ]]; then
-            rm -rf "${dir}"
-            success "  Removed ${dir}"
-        fi
-    done
-
-    # Remove credential and config files
-    rm -f /root/autobot-credentials.txt /etc/sudoers.d/autobot /tmp/.autobot_detected_ip 2>/dev/null || true
-
-    # Remove nginx site config (but leave nginx installed)
-    rm -f /etc/nginx/sites-available/autobot-slm /etc/nginx/sites-enabled/autobot-slm \
-          /etc/systemd/system/nginx.service.d/ssl-cert-check.conf 2>/dev/null || true
-
-    # ---- Phase 6: Remove autobot user ----
-    info "Removing ${AUTOBOT_USER} user..."
-    if id "${AUTOBOT_USER}" &>/dev/null; then
-        userdel -r "${AUTOBOT_USER}" >> "${LOG_FILE}" 2>&1 && success "  Removed user: ${AUTOBOT_USER}" || warn "  Failed to remove user (may have running processes)"
-    fi
-    if getent group "${AUTOBOT_USER}" &>/dev/null; then
-        groupdel "${AUTOBOT_USER}" >> "${LOG_FILE}" 2>&1 || true
-    fi
-
-    # ---- Done ----
-    echo
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}  AutoBot has been completely uninstalled.${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo
-    echo -e "  ${CYAN}Removed:${NC} services, databases, packages, repos, user, data"
-    echo -e "  ${CYAN}Log:${NC}     ${LOG_FILE}"
-    echo
-    echo -e "  ${YELLOW}Note:${NC} nginx was left installed but AutoBot site config was removed."
-    echo -e "  To remove nginx too: ${BLUE}sudo apt purge nginx${NC}"
-    echo
+    if ${CONFIRM_YES}; then exec bash "${script}" --yes; fi
+    exec bash "${script}"
 }
 
 # =============================================================================
@@ -1288,20 +1139,18 @@ uninstall() {
 # =============================================================================
 
 main() {
-    parse_args "$@"
+    parse_args "$@"; cd /  # the service user cannot read the caller's cwd, and git aborts in it (#19403)
 
     if ${UNINSTALL}; then
         uninstall
         exit 0
     fi
 
-    if ${VALIDATE}; then
-        _log_init
-        validate_distributions
-        exit 0
-    fi
+    if ${VALIDATE}; then _log_init; report_world_writable_code; validate_distributions; exit 0; fi
 
     _log_init
+    # #19236: one owner-only temp dir for the run, removed however it ends -- exit, fatal, Ctrl-C.
+    INSTALL_TMP="$(umask 077 && mktemp -d)"; trap 'rm -rf "${INSTALL_TMP:-}"' EXIT; trap 'exit 130' INT TERM
     print_banner
     log "AutoBot Installer v${SCRIPT_VERSION}"
     log "Log file: ${LOG_FILE}"

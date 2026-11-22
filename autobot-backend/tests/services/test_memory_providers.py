@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, create_autospec, patch
 
 import pytest
 
+from autobot_memory_graph.owner_scope import UNSCOPED_ALL_USERS, OwnerScope
 from services.memory import (
     PostgresMemoryProvider,
     RedisMemoryProvider,
@@ -94,10 +95,12 @@ class TestPostgresMemoryProvider:
             {"id": "entity_2", "score": 0.87},
         ]
 
-        results = await provider.search("test query", limit=10)
+        results = await provider.search("test query", limit=10, filters={"user_id": "user_456"})
 
         assert len(results) == 2
-        mock_graph.search_entities.assert_called_once_with("test query", limit=10)
+        mock_graph.search_entities.assert_called_once_with(
+            "test query", limit=10, owner=OwnerScope.for_user("user_456")
+        )
 
     @pytest.mark.asyncio
     async def test_health_check(self, provider):
@@ -117,7 +120,7 @@ class TestPostgresMemoryProvider:
 
         await provider.update_entity("e1", {"observations": ["port: 6379"]})
 
-        graph.get_entity.assert_awaited_once_with(entity_id="e1")
+        graph.get_entity.assert_awaited_once_with(entity_id="e1", owner=UNSCOPED_ALL_USERS)
         graph.add_observations.assert_awaited_once_with("Redis", ["port: 6379"])
 
     @pytest.mark.asyncio
@@ -180,6 +183,7 @@ class TestRedisMemoryProvider:
 
         turn = {
             "conversation_id": "conv_123",
+            "user_id": "user-1",  # #18825: a turn with no owner is not cached
             "timestamp": "2025-04-13T10:00:00Z",
             "entity_updates": [{"action": "create", "name": "Task 1"}],
             "relation_updates": [],

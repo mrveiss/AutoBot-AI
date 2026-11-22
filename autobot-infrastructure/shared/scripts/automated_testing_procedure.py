@@ -291,11 +291,11 @@ class AutomatedTestingSuite:
         start_time = time.time()
 
         try:
-            from config import global_config_manager
+            from config import config_manager
 
             # Test basic config access
-            global_config_manager.get("backend", {})
-            global_config_manager.get("memory", {})
+            config_manager.get("backend", {})
+            config_manager.get("memory", {})
 
             duration = time.time() - start_time
             return TestResult(
@@ -435,13 +435,13 @@ class AutomatedTestingSuite:
         start_time = time.time()
 
         try:
-            from config import global_config_manager
+            from config import config_manager
 
             # Measure config access time
             for _ in range(100):
-                global_config_manager.get("backend", {})
-                global_config_manager.get("memory", {})
-                global_config_manager.get("llm_config", {})
+                config_manager.get("backend", {})
+                config_manager.get("memory", {})
+                config_manager.get("llm_config", {})
 
             duration = time.time() - start_time
             avg_time = duration / 100

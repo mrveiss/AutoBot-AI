@@ -28,11 +28,11 @@ Usage:
 """
 
 from planner.planner import LLMPlannerModule, PlannerModule
-from planner.types import ExecutionPlan, PlanStatus, PlanStep, StepStatus
+from planner.types import ExecutionPlan, PlanStatus, PlanStep, PlanStepStatus
 
 __all__ = [
     # Types
-    "StepStatus",
+    "PlanStepStatus",
     "PlanStatus",
     "PlanStep",
     "ExecutionPlan",

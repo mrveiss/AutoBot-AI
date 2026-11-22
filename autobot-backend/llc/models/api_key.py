@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, Uuid
+from sqlalchemy import DateTime, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from user_management.models.base import Base
@@ -28,13 +28,13 @@ class LLCApiKey(Base):
     company_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     key_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # GH#9623: optional TTL backstop for ephemeral run-scoped keys. NULL = never
     # expires (default for long-lived keys); a value self-expires the key even if
     # explicit revocation never runs (e.g. scheduler crash mid-run).
-    expires_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 __all__ = ["LLCApiKey"]

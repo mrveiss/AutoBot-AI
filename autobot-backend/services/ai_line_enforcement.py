@@ -16,7 +16,8 @@ Every surface where an agent acts resolves its line HERE, and only here:
 and nothing else decides whether an agent may act without a person. The pieces that used to
 decide on their own are INPUTS here, and can only tighten:
 
-* the approval baseline (#18294) -- a category in the baseline can never be line 1;
+* the approval baseline (#18294) -- a category in the baseline can never be line 1, except that a
+  shell command which only reads never gets a baseline category (#19950);
 * the role policy ``CommandApprovalManager.needs_approval`` (#17463) -- a role that needs
   approval for a risk can never be line 1;
 * the work item's declared ``requires_approval_before`` -- the same floor, add-only.
@@ -29,10 +30,10 @@ category, and an approval that cannot be recorded still leaves the action un-run
 
 from __future__ import annotations
 
-import functools
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -42,6 +43,7 @@ from typing import Any, Iterable, Mapping, Optional
 from sqlalchemy import select
 
 from autobot_shared.ai_lines import (
+    CONVERSATION_TOOLS,
     SCOPE_COMPANY,
     VERIFIED_COMPANY_KEY,
     VERIFIED_USER_KEY,
@@ -49,14 +51,22 @@ from autobot_shared.ai_lines import (
     LineResolution,
     LineScope,
     action_key,
+    declared_categories_of,
     is_mutating,
     resolve_line,
     resolve_scope,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.secret_redaction import redact_nested
 from autobot_shared.ssot_config import config as ssot_config
-from autobot_shared.tool_catalogue import approval_category_for, valid_approval_categories
+from autobot_shared.status_enums import CommandRisk
+from autobot_shared.tool_catalogue import (
+    ALWAYS_AVAILABLE_TOOLS,
+    approval_category_for,
+    canonical_tool_name,
+    valid_approval_categories,
+)
 from llc.services.ai_lines import stored_line
 from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
@@ -69,6 +79,9 @@ logger = get_logger(__name__)
 #: handler; a held tool call has nothing to execute on approval (HOOK for #18404 is in ``_file_hold``).
 KIND_HOLD = "ai_line_hold"
 REQUESTER_PREFIX = "ai-line"
+
+#: The tool name a shell command carries in the tool-effect catalogue.
+TERMINAL_TOOL = "execute_command"
 
 
 class Outcome(str, Enum):
@@ -120,6 +133,27 @@ async def _stored(scope: Optional[LineScope], key: str) -> tuple[Optional[AiLine
         return None, True
 
 
+def _is_read_only_command(tool_name: str, params: Optional[Mapping[str, Any]]) -> bool:
+    """Whether this call is a shell command rated SAFE that also only reads (#19950).
+
+    The tool name says only "runs a command", so the command decides. SAFE alone is not enough: it covers
+    ``git push`` and ``curl -X POST``. No command, or a classifier that cannot answer, is not read-only:
+    the call keeps the tool's own line.
+    """
+    command = (params or {}).get("command") if tool_name == TERMINAL_TOOL else None
+    if not command or not isinstance(command, str):
+        return False
+    try:
+        from secure_command_executor import SecureCommandExecutor
+        from security.read_only_commands import is_read_only_command
+
+        risk, _reasons = SecureCommandExecutor(use_docker_sandbox=False).assess_command_risk(command)
+        return risk is CommandRisk.SAFE and is_read_only_command(command)
+    except Exception as exc:  # noqa: BLE001 - fail closed on an unreadable verdict
+        logger.error("Command risk unreadable (%s); the command keeps its tool's line", exc)
+        return False
+
+
 async def resolve_action_line(
     tool_name: str,
     params: Optional[Mapping[str, Any]],
@@ -131,17 +165,24 @@ async def resolve_action_line(
 ) -> LineResolution:
     """Resolve the effective line for one action. Read-only: creates nothing, runs nothing.
 
-    LineScope: the verified company; with none, the verified user's personal scope (#18430). A company that is
+    LineScope: the verified company; with none, the verified user's personal scope (#18430). A shell command that
+    only reads gets no baseline category, so the baseline floor does not apply to it, and counts as not mutating
+    (#19950); a work item's declared category still does. A company that is
     present but malformed is not a missing one and is never replaced by the user's scope.
     """
     key = action_key(tool_name, params)
     scope = resolve_scope(company_id, user_id)
     stored, unavailable = await _stored(scope, key)
-    category = approval_category_for(tool_name, await gated_categories(declared_categories))
+    read_only = _is_read_only_command(tool_name, params)
+    # A work item's own declared gate still applies to a read or to an always-available tool (#17237); the baseline's
+    # floor cannot.
+    unmanaged = read_only or canonical_tool_name(tool_name) in ALWAYS_AVAILABLE_TOOLS
+    gated = list(declared_categories) if unmanaged else await gated_categories(declared_categories)
+    category = approval_category_for(tool_name, gated)
     return resolve_line(
         key,
         stored=stored,
-        mutating=is_mutating(tool_name),
+        mutating=not read_only and is_mutating(tool_name),
         baseline_category=category,
         role_requires_approval=role_requires_approval,
         store_unavailable=unavailable,
@@ -149,10 +190,21 @@ async def resolve_action_line(
     )
 
 
+def turn_requires_approval(tool_name: str, ctx: Any) -> bool:
+    """Whether the turn itself puts *tool_name* behind a person's approval (#20195).
+
+    A turn that carries attached files holds untrusted text in its prompt, so every tool call of it needs a
+    yes, reads included. The two conversation tools stay free: gating them would stall the answer itself. This
+    is the existing ``role_requires_approval`` floor of ``resolve_line`` (a stored ``never`` still refuses).
+    """
+    return bool(getattr(ctx, "approve_every_call", False)) and tool_name not in CONVERSATION_TOOLS
+
+
 async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
-    """Plan-time projection for the chat graph's interrupt: any line stricter than line 1 (GH#11202).
+    """Plan-time projection for the chat graph's interrupt: line 2 (GH#11202).
 
     Asks the same resolver ``enforce_line`` applies, so the interrupt and the dispatch seam cannot disagree.
+    Line 3 gets no card: no yes lifts it. The dispatch seam refuses it and the model is told (#19957).
     """
     params = tool_call.get("params") or tool_call.get("arguments") or {}
     resolution = await resolve_action_line(
@@ -160,9 +212,10 @@ async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
         params if isinstance(params, dict) else {},
         (getattr(ctx, "context", None) or {}).get(VERIFIED_COMPANY_KEY),
         user_id=(getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY),
-        declared_categories=getattr(ctx, "requires_approval_before", None) or (),
+        declared_categories=declared_categories_of(ctx),
+        role_requires_approval=turn_requires_approval(tool_call.get("name", ""), ctx),
     )
-    return resolution.line is not AiLine.AUTONOMOUS
+    return resolution.line is AiLine.DRAFT_THEN_SEND
 
 
 def _fingerprint_key() -> bytes:
@@ -180,11 +233,13 @@ def _fingerprint_key() -> bytes:
     return _PROCESS_KEY
 
 
-@functools.lru_cache(maxsize=1)
 def _warn_random_key_once() -> None:
-    logger.error(
+    log_once(
+        logger,
+        logging.ERROR,
+        "random_process_key",
         "AUTOBOT_JWT_SECRET (and SECRET_KEY) are unset: AI-line approvals are bound with a random per-process key "
-        "and must be given again after a restart"
+        "and must be given again after a restart",
     )
 
 
@@ -252,15 +307,30 @@ async def _file_hold(
         )
 
 
-async def _report(verdict: LineVerdict, requested_by: str, surface: str) -> None:
-    """Line 1 'then report', and the trail for refusals and holds. Best effort; never blocks the action."""
+async def _report(
+    verdict: LineVerdict, requested_by: str, surface: str, floor_waived: bool = False, user_id: Any = None
+) -> None:
+    """Line 1 'then report', and the trail for refusals and holds. Best effort; never blocks the action.
+
+    The actor is the verified user when known, else the internal ``ai-line:<session>`` scope (one per session, so
+    threat detection's per-user volume rule never pools unrelated sessions into a single bucket); the requester (a chat
+    session id) is the audit event's ``session_id`` and never stands in for a user (#18844).
+    """
     try:
         await audit_log(
             f"ai_line.{verdict.outcome.value}",
             result="success",
-            user_id=requested_by,
+            user_id=(
+                str(user_id) if user_id else f"{REQUESTER_PREFIX}:{requested_by}"
+            ),  # one bucket per session (#18844)
+            session_id=requested_by,
             resource=verdict.resolution.key,
-            details={"surface": surface, "source": verdict.resolution.source, "approval_id": verdict.approval_id},
+            details={
+                "surface": surface,
+                "source": verdict.resolution.source,
+                "approval_id": verdict.approval_id,
+                **({"attachment_floor_waived": True} if floor_waived else {}),  # #20195: ran on the admin's setting
+            },
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("AI line report for %s was not recorded: %s", verdict.resolution.key, exc)
@@ -278,8 +348,11 @@ async def enforce_line(
     role_requires_approval: bool = False,
     hold_in_approvals: bool = True,
     approved_fingerprints: frozenset[str] = frozenset(),
+    floor_waived: bool = False,
 ) -> LineVerdict:
     """Decide and apply the line for one agent action: line 1 RUN (reported), 2 HOLD, 3 REFUSE.
+
+    ``floor_waived``: the admin setting lifted the attachment floor for this call (#20195); the report says so.
 
     ``hold_in_approvals=False`` is for a surface that holds the action in its own live queue (the terminal):
     the decision is still made here, the hold is not duplicated. ``approved_fingerprints`` are the
@@ -302,7 +375,7 @@ async def enforce_line(
         verdict = await _hold(
             resolution, params or {}, resolve_scope(company_id, user_id), requested_by, surface, hold_in_approvals
         )
-    await _report(verdict, requested_by, surface)
+    await _report(verdict, requested_by, surface, floor_waived, user_id)
     return verdict
 
 

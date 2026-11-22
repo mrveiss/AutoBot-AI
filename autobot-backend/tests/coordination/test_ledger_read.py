@@ -206,7 +206,7 @@ async def test_a_dev_loop_action_that_outlived_its_claim_is_a_conflict(redis):
     clean = dla.build_action(7, intent="triage", outcome=dla.OUTCOME_RAN, estimated_tokens=1)
     lapsed = dla.build_action(8, intent="fix", outcome=dla.OUTCOME_RAN_CLAIM_LAPSED, estimated_tokens=1, reason="slow")
     for action in (clean, lapsed):
-        assert await dla.record(action)
+        assert await dla.record_dev_loop_action(action)
     rows = (await ledger_read.conflicts()).conflicts
     assert [(r.kind, r.scope) for r in rows] == [("claim_lapsed_during_action", "issue:8")]
     assert (await ledger_read.conflicts("anyone")).conflicts == []  # install-wide data, never a company's
@@ -217,10 +217,10 @@ async def test_a_dev_loop_action_that_outlived_its_claim_is_a_conflict(redis):
 
 @pytest.mark.asyncio
 async def test_dev_loop_history_per_issue_includes_refusals(redis):
-    await dla.record(
+    await dla.record_dev_loop_action(
         dla.build_action(5, intent="a", outcome=dla.OUTCOME_SKIPPED_CLAIMED, estimated_tokens=0, reason="held")
     )
-    await dla.record(dla.build_action(5, intent="b", outcome=dla.OUTCOME_RAN, estimated_tokens=3))
+    await dla.record_dev_loop_action(dla.build_action(5, intent="b", outcome=dla.OUTCOME_RAN, estimated_tokens=3))
     assert (await ledger_read.dev_loop_issues()).issues == [5]
     history = await ledger_read.dev_loop_history(5)
     assert [a.outcome for a in history.actions] == ["ran", "skipped_claimed"]  # newest first

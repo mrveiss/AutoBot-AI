@@ -18,7 +18,6 @@ than report a comfortable "no offenders" over a handful of files.
 from __future__ import annotations
 
 import pathlib
-import re
 import textwrap
 
 import pytest

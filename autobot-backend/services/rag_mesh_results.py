@@ -11,13 +11,14 @@ the stale-chunk filter and the feedback emitters read ``RankedResult`` attribute
 from typing import Any
 
 from advanced_rag_optimizer import RankedResult
+from knowledge.chunk_identity import resolve_chunk_id
 
 
 def _from_dict(index: int, chunk: dict[str, Any]) -> RankedResult:
     """Build a ``RankedResult`` from a reranker result dict."""
     score = float(chunk.get("score", 0.0) or 0.0)
     metadata = dict(chunk.get("metadata") or {})
-    chunk_id = chunk.get("chunk_id") or metadata.get("chunk_id") or chunk.get("source_path", "")
+    chunk_id = resolve_chunk_id(chunk)
     metadata.setdefault("chunk_id", chunk_id)
     return RankedResult(
         content=chunk.get("content", ""),

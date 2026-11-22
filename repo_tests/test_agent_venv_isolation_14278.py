@@ -23,6 +23,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _ROLES = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles"
 
@@ -146,7 +148,7 @@ def _agent_import_closure() -> set[str]:
             continue
         visited_files.add(path)
         try:
-            tree = _ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:  # pragma: no cover
             continue
         for node in _ast.walk(tree):
@@ -236,7 +238,7 @@ def test_the_code_sync_command_installs_the_same_set_into_the_same_venv():
     """A code-sync that updates a different interpreter than the unit runs, with
     a different package list than provisioning, cannot keep the agent working."""
     registry = (_REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py").read_text(encoding="utf-8")
-    match = re.search(r'"post_sync_cmd":\s*\((.*?)\),\n', registry[registry.index("_SLM_AGENT_DIR,") :], re.DOTALL)
+    match = re.search(r'"post_sync_cmd":\s*\((.*?)\),\n', registry[registry.index('"name": "slm-agent"') :], re.DOTALL)
     assert match, "no post_sync_cmd found for the slm-agent role"
     command = match.group(1)
 

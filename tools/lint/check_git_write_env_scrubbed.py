@@ -93,10 +93,13 @@ from _scan_helpers import enforce_reach, iter_python_files  # noqa: E402
 from _subprocess_ast import _is_subprocess_call  # noqa: E402
 from check_git_toplevel_env_scrubbed import subprocess_names  # noqa: E402
 
-#: The two scrub helpers this codebase has today. See the module docstring's
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+
+#: The scrub helpers this codebase has today (``isolated_git_env`` is #18940's, built on
+#: ``scrubbed_git_env``). See the module docstring's
 #: "shadowed scrub helper" gap for what recognising them by name does not
 #: verify.
-RECOGNIZED_SCRUB_NAMES = frozenset({"scrubbed_git_env", "hermetic_git_env"})
+RECOGNIZED_SCRUB_NAMES = frozenset({"scrubbed_git_env", "hermetic_git_env", "isolated_git_env"})
 
 #: See the module docstring's SCOPE section for how each verb earned its
 #: place here.
@@ -154,7 +157,7 @@ TEST_FILE_FLOOR = 1500
 
 
 def _is_test_file(rel_posix: str) -> bool:
-    return rel_posix.endswith("_test.py") or Path(rel_posix).name.startswith("test_")
+    return is_test_filename(rel_posix, include_js=False, include_conftest=False)
 
 
 #: One slot per argv element: its literal string if the element is a plain

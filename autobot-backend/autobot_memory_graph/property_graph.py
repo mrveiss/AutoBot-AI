@@ -26,10 +26,11 @@ import json
 import time
 import uuid
 from collections import deque
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from constants.rag_graph_constants import RAG_GRAPH_PATH_DEPTH, RAG_GRAPH_TRAVERSAL_DEPTH
 
 logger = get_logger(__name__)
 
@@ -128,12 +129,11 @@ class PropertyGraph:
 
         await graph.add_node("file:main.py", {"type": "file", "lang": "python"})
         await graph.add_node("bug:123",      {"type": "bug",  "severity": "high"})
-        await graph.add_edge("file:main.py", "bug:123", "CONTAINS",
-                              {"confidence": "0.9"})
+        await graph.add_edge("file:main.py", "bug:123", "CONTAINS", {"confidence": "0.9"})
 
         neighbours = await graph.get_neighbors("file:main.py", relation="CONTAINS")
         bugs = await graph.query_nodes({"type": "bug", "severity": "high"})
-        subgraph = await graph.subgraph("file:main.py", max_depth=2)
+        subgraph = await graph.subgraph("file:main.py")
         path = await graph.shortest_path("file:main.py", "bug:123")
 
     **Property serialisation:** All property values are stored as strings in
@@ -484,7 +484,7 @@ class PropertyGraph:
         self,
         start_node_id: str,
         relation: str | None = None,
-        max_depth: int = 2,
+        max_depth: int = RAG_GRAPH_TRAVERSAL_DEPTH,
         direction: str = "outgoing",
     ) -> List[Dict[str, Any]]:
         """
@@ -523,7 +523,7 @@ class PropertyGraph:
     async def subgraph(
         self,
         center_node_id: str,
-        max_depth: int = 2,
+        max_depth: int = RAG_GRAPH_TRAVERSAL_DEPTH,
         relation: str | None = None,
     ) -> Dict[str, Any]:
         """
@@ -577,8 +577,9 @@ class PropertyGraph:
         from_id: str,
         to_id: str,
         relation: str | None = None,
-        max_depth: int = 6,
+        max_depth: int = RAG_GRAPH_PATH_DEPTH,
         direction: str = "outgoing",
+        hop_allowed: Callable[[str], Awaitable[bool]] | None = None,
     ) -> List[Dict[str, Any]] | None:
         """
         BFS shortest path between two nodes.
@@ -588,19 +589,15 @@ class PropertyGraph:
             to_id: Target node identifier.
             relation: Restrict traversal to this relation type; None = all.
             max_depth: Maximum path length to search.
-            direction: Edges to follow — ``"outgoing"`` (default, follows the
-                relation as stored), ``"incoming"``, or ``"both"``. #13474 added
-                the parameter: "how are these two things connected" is usually an
-                undirected question, but only half the memory graph's relations
-                are mirrored (``create_relation(bidirectional=True)``), so a
-                caller that cannot cross an edge backwards gets "no path" for
-                pairs that are in fact one hop apart.
+            direction: ``"outgoing"`` (default, as stored), ``"incoming"``, or ``"both"`` (#13474:
+                only half the relations are mirrored, so an undirected question needs ``"both"``).
+            hop_allowed: Async predicate on a neighbour's node id (#18825); a rejected hop is
+                dropped -- neither returned nor traversed through.
 
         Returns:
-            Ordered list of ``{node, edge, direction}`` dicts representing the
-            path (excluding the start node), or None if no path found. Each
-            step's ``direction`` records how that edge was crossed, which is the
-            only way to read a ``direction="both"`` path unambiguously.
+            Ordered ``{node, edge, direction}`` dicts for the path (start node excluded), or
+            None if there is none. ``direction`` records how each edge was crossed, the only
+            way to read a ``direction="both"`` path unambiguously.
         """
         if from_id == to_id:
             return []
@@ -618,7 +615,9 @@ class PropertyGraph:
             neighbours = await self.get_neighbors(current_id, relation=relation, direction=direction)
             for entry in neighbours:
                 neighbour_id = entry["node"].get("id")
-                if not neighbour_id:
+                if not neighbour_id or (neighbour_id != to_id and neighbour_id in visited):
+                    continue  # visited: skip the per-hop read (#18825)
+                if hop_allowed is not None and not await hop_allowed(neighbour_id):
                     continue
                 new_path = path + [_traversal_step(entry, current_id)]
                 if neighbour_id == to_id:
