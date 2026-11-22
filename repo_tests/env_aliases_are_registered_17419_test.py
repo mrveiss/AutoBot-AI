@@ -108,6 +108,13 @@ def test_a_planted_unregistered_alias_is_caught_and_a_registered_one_is_not() ->
     assert unregistered(aliases.names, registered_in(registry).names) == {"AUTOBOT_PLANTED_X", "AUTOBOT_PLANTED_Y"}
 
 
+def test_keyword_expansion_is_a_dynamic_site_and_a_literal_name_is_not() -> None:
+    static = registered_in(parse_cache.parse('EnvVarSpec(name="AUTOBOT_X", type=str)\n'))
+    expanded = registered_in(parse_cache.parse("EnvVarSpec(**spec)\n"))
+    assert static.names == {"AUTOBOT_X"} and static.dynamic == []
+    assert expanded.dynamic == [(1, "EnvVarSpec")]
+
+
 def test_a_name_handed_to_a_registering_helper_counts_as_registered() -> None:
     helper = parse_cache.parse(
         "def _register(name):\n    register_env_var(EnvVarSpec(name=name))\n\n_register('AUTOBOT_VIA_HELPER')\n"

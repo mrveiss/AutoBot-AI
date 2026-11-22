@@ -44,6 +44,7 @@ from autobot_shared.env_unknown_keys import (
     POLICY_WARN,
     declared_env_names,
     describe_unknown_key,
+    is_agent_provider_override,
     resolve_policy,
     suggest_key,
 )
@@ -248,7 +249,7 @@ def _find_unknown_keys(declared: Iterable[str], env_values: Dict[str, str]) -> L
     unrelated third-party variables (VITE_*, REDIS_*, TF_USE_LEGACY_KERAS, etc.) alone.
     """
     autobot_env = {k for k in env_values if k.startswith("AUTOBOT_")}
-    return sorted(autobot_env - set(declared))
+    return sorted(k for k in autobot_env - set(declared) if not is_agent_provider_override(k))
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +300,12 @@ def check_env_drift(env_path: str | None = None) -> DriftReport:
     report.drifted = _find_missing_keys(ssot_defaults, env_values)
 
     # Find unknown AUTOBOT_ keys (in .env but not in SSOT config)
-    declared = declared_env_names() | set(ssot_defaults)
+    try:
+        declared = declared_env_names() | set(ssot_defaults)
+    except Exception as exc:  # classifying against incomplete declarations would call valid names unknown
+        report.error = f"declaration lookup failed: {exc}"
+        logger.warning("env_drift_detector: %s", report.error)
+        return report
     report.unknown_keys = _find_unknown_keys(declared, env_values)
     report.unknown_suggestions = {key: suggest_key(key, declared) for key in report.unknown_keys}
     report.unknown_key_policy = resolve_policy()

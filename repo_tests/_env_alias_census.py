@@ -72,6 +72,8 @@ def registered_in(tree: ast.AST) -> Census:
         named = [kw.value for kw in node.keywords if kw.arg == "name"] or node.args[:1]
         for value in named:
             _take(census, value, "EnvVarSpec")
+        if not named:  # ``EnvVarSpec(**spec)``: the name arrives inside a mapping the census cannot read
+            census.dynamic.append((node.lineno, "EnvVarSpec"))
     if census.dynamic:
         # A helper or loop registers names it was handed (``_register("AUTOBOT_X", ...)``): in a file
         # with such a site, every whole-name string constant counts as registered, so the helper's

@@ -60,3 +60,12 @@ def test_a_mistyped_key_in_an_env_file_is_reported_with_its_suggestion(tmp_path)
     report = det.check_env_drift(str(env_file))
     assert report.unknown_keys == ["AUTOBOT_SSH_USERR"]
     assert report.unknown_suggestions == {"AUTOBOT_SSH_USERR": "AUTOBOT_SSH_USER"}
+
+
+def test_a_per_agent_provider_override_is_supported_and_a_misspelt_suffix_is_not() -> None:
+    assert unknown.is_agent_provider_override("AUTOBOT_CODE_ANALYSIS_PROVIDER")
+    assert unknown.is_agent_provider_override("AUTOBOT_RESEARCH_PROVIDER")
+    assert not unknown.is_agent_provider_override("AUTOBOT_CODE_ANALYSIS_PROVIDR")
+    assert not unknown.is_agent_provider_override("AUTOBOT_PROVIDER")
+    env = {"AUTOBOT_RESEARCH_PROVIDER": "openai", "AUTOBOT_RESEARCH_PROVIDR": "openai"}
+    assert det._find_unknown_keys(DECLARED, env) == ["AUTOBOT_RESEARCH_PROVIDR"]

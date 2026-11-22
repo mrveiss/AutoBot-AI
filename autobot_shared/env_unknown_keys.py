@@ -18,11 +18,12 @@ from __future__ import annotations
 
 import difflib
 import inspect
+import re
 from datetime import date, datetime, timezone
-from typing import Iterable, Iterator
+from typing import TYPE_CHECKING, Iterable, Iterator
 
-from pydantic import AliasChoices
-from pydantic_settings import BaseSettings
+if TYPE_CHECKING:  # annotations only: the runtime import is lazy
+    from pydantic_settings import BaseSettings
 
 #: Unknown ``AUTOBOT_*`` keys warn before this date and are refused on and after it.
 UNKNOWN_KEY_REFUSE_AFTER = date(2027, 3, 1)
@@ -31,6 +32,15 @@ POLICY_REFUSE = "refuse"
 #: ``difflib`` ratio below which two names are not offered as "did you mean".
 SUGGESTION_CUTOFF = 0.8
 _NAMESPACE = "AUTOBOT_"
+#: ``LLMConfig.get_provider_for_agent`` reads ``AUTOBOT_<AGENT_ID>_PROVIDER`` at runtime for any agent id, so the
+#: agent segment is open-ended and cannot be listed. The ``_PROVIDER`` suffix is the contract: a key ending in it
+#: is a supported override, and a misspelt suffix (``_PROVIDR``) or prefix (``AUTOBOT_`` mistyped) still fails.
+_AGENT_PROVIDER_OVERRIDE = re.compile(r"AUTOBOT_[A-Z0-9]+(?:_[A-Z0-9]+)*_PROVIDER")
+
+
+def is_agent_provider_override(key: str) -> bool:
+    """True for a per-agent provider override: supported at runtime though no model field declares it."""
+    return _AGENT_PROVIDER_OVERRIDE.fullmatch(key) is not None
 
 
 def resolve_policy(today: date | None = None, *, deadline: date = UNKNOWN_KEY_REFUSE_AFTER) -> str:
@@ -60,12 +70,16 @@ def describe_unknown_key(
 
 
 def _field_names(field) -> set[str]:
+    from pydantic import AliasChoices  # lazy: policy and message helpers stay importable without pydantic
+
     validation = field.validation_alias
     choices = validation.choices if isinstance(validation, AliasChoices) else [validation]
     return {n for n in (field.alias, *choices) if isinstance(n, str) and n.startswith(_NAMESPACE)}
 
 
 def _settings_classes(module) -> Iterator[type[BaseSettings]]:
+    from pydantic_settings import BaseSettings
+
     for value in vars(module).values():
         if inspect.isclass(value) and issubclass(value, BaseSettings) and value is not BaseSettings:
             yield value
