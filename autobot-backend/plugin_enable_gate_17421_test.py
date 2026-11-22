@@ -288,7 +288,8 @@ async def test_gate_failure_loads_nothing_then_retries_without_a_restart(store, 
     manager = PluginManager([root], enable_gate=peg.DatabaseEnableGate(_FlakyStore(store, failures=2)))
     await peg.start_plugin_manager(manager)
     assert "gate_old_a" not in PluginRegistry().get_all_plugins(), "fail closed"
-    await eventually(lambda: "gate_old_a" in PluginRegistry().get_all_plugins(), deadline=6.0)
+    # Wait on the load report, not registry membership: a plugin registers mid-startup, before the report says
+    # the start completed, so polling the registry races the end of the retry on a loaded runner.
+    await eventually(lambda: manager.get_load_report()["completed"], deadline=6.0)
     assert "gate_old_a" in PluginRegistry().get_all_plugins(), "loaded once the database answered"
-    assert manager.get_load_report()["completed"]
     await manager.shutdown()
