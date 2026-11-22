@@ -126,7 +126,7 @@ from services.slm_frontend_build import build_slm_frontend as _build_slm_fronten
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable, ssh_remote_path
 from services.sync_orchestrator import get_sync_orchestrator
-from services.sync_restart import no_restart_args
+from services.sync_restart import no_restart_args, record_backend_start
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -2294,10 +2294,9 @@ async def _restart_component_services(component: str, steps: List[str], services
     global _restart_pending
     if services is None:
         services = _COMPONENT_SERVICES.get(component, [])
+    await record_backend_start(services)  # #17421: the new backend reads the old one's start time
     if component in _SELF_KILLING_COMPONENTS:
-        # #11437: this chain will restart autobot-slm-backend itself — reject
-        # new resolve jobs until the process dies (flag resets on boot).
-        _restart_pending = True
+        _restart_pending = True  # #11437: this chain restarts autobot-slm-backend itself; reject new resolve jobs
     for service in services:
         steps.append(f"restart: {service}")
         try:
