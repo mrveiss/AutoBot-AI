@@ -14,6 +14,8 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 SITES = (
     "autobot-frontend/src/utils/slmClient.ts",
     "autobot-slm-frontend/src/utils/ApiClient.ts",
@@ -22,7 +24,7 @@ _READ = re.compile(r"getEnvPositiveInt\(\s*import\.meta\.env,\s*'VITE_SLM_API_TI
 
 
 def _default(text: str) -> int | None:
-    match = _READ.search(text)
+    match = _READ.search(code_text(text, name="source.ts", strip_trailing=True))
     return int(match.group(1).replace("_", "")) if match else None
 
 
@@ -43,3 +45,12 @@ def test_detector_reads_a_default():
     src = "getEnvPositiveInt(import.meta.env, 'VITE_SLM_API_TIMEOUT_MS', 45_000)"
     assert _default(src) == 45000
     assert _default("const X = 1") is None
+
+
+def test_detector_ignores_a_commented_out_declaration():
+    src = (
+        "// const T = getEnvPositiveInt(import.meta.env, 'VITE_SLM_API_TIMEOUT_MS', 45_000)\n"
+        "/* getEnvPositiveInt(import.meta.env, 'VITE_SLM_API_TIMEOUT_MS', 45_000) */\n"
+        "const T = 45_000\n"
+    )
+    assert _default(src) is None
