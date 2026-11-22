@@ -24,6 +24,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from testkit.canonical_gate import unauthenticated_canonical_gate
 from user_management.services import TenantContext
 
 _FIXED_USER_ID = uuid.UUID("66666666-6666-6666-6666-666666666666")
@@ -117,15 +118,13 @@ class TestReviewGatePoliciesNoAuth:
         return TestClient(app)
 
     def test_list_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.get(_base(str(uuid.uuid4())))
         assert resp.status_code == 401
 
     def test_delete_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.delete(f"{_base(str(uuid.uuid4()))}/{uuid.uuid4()}")
         assert resp.status_code == 401
@@ -207,3 +206,27 @@ class TestReviewGatePoliciesIdor:
         client = _make_client(org, policy_company_id=_OTHER_ORG)
         resp = client.delete(f"{_base(org)}/{uuid.uuid4()}")
         assert resp.status_code == 404
+
+
+class TestReviewerRoleIsAMembershipRole:
+    """A ``reviewer_role`` that is no ``MembershipRole`` is a 422: a typo must not lock items out of review (#21588)."""
+
+    def test_create_with_an_unknown_role_is_422_and_names_the_field(self):
+        org = str(uuid.uuid4())
+        resp = _make_client(org).post(_base(org), json={"item_type": "task", "reviewer_role": "adnim"})
+        assert resp.status_code == 422
+        assert "reviewer_role" in resp.text
+
+    def test_update_with_an_unknown_role_is_422(self):
+        org = str(uuid.uuid4())
+        resp = _make_client(org).patch(f"{_base(org)}/{uuid.uuid4()}", json={"reviewer_role": "reviewer"})
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("role", ["owner", "admin", "lead", "member", "guest"])
+    def test_a_membership_role_is_accepted_and_stored_as_its_value(self, role):
+        org = str(uuid.uuid4())
+        resp = _make_client(org).post(_base(org), json={"item_type": "task", "reviewer_role": role})
+        assert resp.status_code == 201
+        from llc.api.review_gate_policies import ReviewGatePolicyService  # noqa: PLC0415
+
+        assert ReviewGatePolicyService.create_policy.await_args.kwargs["reviewer_role"] == role

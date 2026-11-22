@@ -137,7 +137,7 @@ venv_is_healthy() {
 # sentence-transformers, and resolved against PyPI that pulls the CUDA build
 # (~1.6GB of nvidia-* wheels). The CPU index yields torch==X.Y.Z+cpu, whose
 # PEP 440 local version segment sorts above the plain release, so the CPU
-# build wins without torch being pinned anywhere.
+# build wins; constraints/shared.txt's torch==X.Y.Z (#19330) matches that +cpu build.
 install_requirements() {
   local file
   for file in "${REQUIREMENT_FILES[@]}"; do

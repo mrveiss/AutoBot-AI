@@ -10,6 +10,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import config, { getBackendUrl, getGrafanaUrl, getPrometheusUrl, getSlmApiBase } from '@/config/ssot-config'
 import slmApiClient from '@/utils/ApiClient'
 
@@ -64,7 +65,7 @@ function copyToClipboard(text: string): void {
 <template>
   <div class="p-6">
     <!-- Connection Test Card -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6 mb-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold">{{ $t('settings.aPISettings.connectionStatus') }}</h2>
         <button
@@ -84,39 +85,27 @@ function copyToClipboard(text: string): void {
         </button>
       </div>
 
-      <div
+      <BaseAlert
         v-if="connectionStatus !== 'unknown'"
-        :class="[
-          'p-4 rounded-lg flex items-center gap-3',
-          connectionStatus === 'connected' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-        ]"
-      >
-        <div
-          :class="[
-            'w-3 h-3 rounded-full',
-            connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'
-          ]"
-        ></div>
-        <span :class="connectionStatus === 'connected' ? 'text-green-700' : 'text-red-700'">
-          {{ connectionMessage }}
-        </span>
-      </div>
+        :variant="connectionStatus === 'connected' ? 'success' : 'error'"
+        :message="connectionMessage"
+      />
     </div>
 
     <!-- API Endpoints -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6 mb-6">
       <h2 class="text-lg font-semibold mb-6">{{ $t('settings.aPISettings.aPIEndpoints') }}</h2>
 
       <div class="space-y-4">
         <!-- Backend API -->
-        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+        <div class="flex items-center justify-between p-4 bg-autobot-bg-secondary rounded-lg">
           <div>
-            <p class="font-medium text-gray-900">{{ $t('settings.aPISettings.backendAPI') }}</p>
-            <p class="text-sm text-gray-500 font-mono">{{ apiUrl }}</p>
+            <p class="font-medium text-autobot-text-primary">{{ $t('settings.aPISettings.backendAPI') }}</p>
+            <p class="text-sm text-autobot-text-tertiary font-mono">{{ apiUrl }}</p>
           </div>
           <button
             @click="copyToClipboard(apiUrl)"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
+            class="p-2 text-autobot-text-tertiary hover:text-autobot-text-secondary hover:bg-autobot-bg-active rounded-sm"
             :title="$t('settings.aPISettings.copyToClipboard')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,14 +115,14 @@ function copyToClipboard(text: string): void {
         </div>
 
         <!-- WebSocket -->
-        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+        <div class="flex items-center justify-between p-4 bg-autobot-bg-secondary rounded-lg">
           <div>
-            <p class="font-medium text-gray-900">{{ $t('settings.aPISettings.webSocket') }}</p>
-            <p class="text-sm text-gray-500 font-mono">{{ wsUrl }}</p>
+            <p class="font-medium text-autobot-text-primary">{{ $t('settings.aPISettings.webSocket') }}</p>
+            <p class="text-sm text-autobot-text-tertiary font-mono">{{ wsUrl }}</p>
           </div>
           <button
             @click="copyToClipboard(wsUrl)"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
+            class="p-2 text-autobot-text-tertiary hover:text-autobot-text-secondary hover:bg-autobot-bg-active rounded-sm"
             :title="$t('settings.aPISettings.copyToClipboard')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,14 +132,14 @@ function copyToClipboard(text: string): void {
         </div>
 
         <!-- Grafana -->
-        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+        <div class="flex items-center justify-between p-4 bg-autobot-bg-secondary rounded-lg">
           <div>
-            <p class="font-medium text-gray-900">{{ $t('settings.aPISettings.grafanaProxied') }}</p>
-            <p class="text-sm text-gray-500 font-mono">{{ origin + getGrafanaUrl() }}</p>
+            <p class="font-medium text-autobot-text-primary">{{ $t('settings.aPISettings.grafanaProxied') }}</p>
+            <p class="text-sm text-autobot-text-tertiary font-mono">{{ origin + getGrafanaUrl() }}</p>
           </div>
           <button
             @click="copyToClipboard(origin + getGrafanaUrl())"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
+            class="p-2 text-autobot-text-tertiary hover:text-autobot-text-secondary hover:bg-autobot-bg-active rounded-sm"
             :title="$t('settings.aPISettings.copyToClipboard')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -160,14 +149,14 @@ function copyToClipboard(text: string): void {
         </div>
 
         <!-- Prometheus -->
-        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+        <div class="flex items-center justify-between p-4 bg-autobot-bg-secondary rounded-lg">
           <div>
-            <p class="font-medium text-gray-900">{{ $t('settings.aPISettings.prometheusProxied') }}</p>
-            <p class="text-sm text-gray-500 font-mono">{{ origin + getPrometheusUrl() }}</p>
+            <p class="font-medium text-autobot-text-primary">{{ $t('settings.aPISettings.prometheusProxied') }}</p>
+            <p class="text-sm text-autobot-text-tertiary font-mono">{{ origin + getPrometheusUrl() }}</p>
           </div>
           <button
             @click="copyToClipboard(origin + getPrometheusUrl())"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
+            class="p-2 text-autobot-text-tertiary hover:text-autobot-text-secondary hover:bg-autobot-bg-active rounded-sm"
             :title="$t('settings.aPISettings.copyToClipboard')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,14 +166,14 @@ function copyToClipboard(text: string): void {
         </div>
 
         <!-- AutoBot Backend -->
-        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+        <div class="flex items-center justify-between p-4 bg-autobot-bg-secondary rounded-lg">
           <div>
-            <p class="font-medium text-gray-900">{{ $t('settings.aPISettings.autoBotBackendProxied') }}</p>
-            <p class="text-sm text-gray-500 font-mono">{{ origin + getBackendUrl() }}</p>
+            <p class="font-medium text-autobot-text-primary">{{ $t('settings.aPISettings.autoBotBackendProxied') }}</p>
+            <p class="text-sm text-autobot-text-tertiary font-mono">{{ origin + getBackendUrl() }}</p>
           </div>
           <button
             @click="copyToClipboard(origin + getBackendUrl())"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
+            class="p-2 text-autobot-text-tertiary hover:text-autobot-text-secondary hover:bg-autobot-bg-active rounded-sm"
             :title="$t('settings.aPISettings.copyToClipboard')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -196,14 +185,14 @@ function copyToClipboard(text: string): void {
     </div>
 
     <!-- Configuration Reference -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
       <h2 class="text-lg font-semibold mb-4">{{ $t('settings.aPISettings.configurationReference') }}</h2>
-      <p class="text-sm text-gray-500 mb-4">
+      <p class="text-sm text-autobot-text-tertiary mb-4">
         {{ $t('settings.aPISettings.theseSettingsAreDefined') }}
       </p>
 
-      <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-        <pre class="text-sm text-gray-300 font-mono">
+      <div class="bg-autobot-bg-tertiary rounded-lg p-4 overflow-x-auto">
+        <pre class="text-sm text-autobot-text-tertiary font-mono">
 // src/config/ssot-config.ts
 const config = {
   httpProtocol: '{{ config.httpProtocol }}',
@@ -216,7 +205,7 @@ const config = {
   },
   port: {
     backend: {{ config.port.backend }},
-    frontend: {{ config.port.frontend }},
+    frontend: {{ config.port.frontendServed }},
     slmApi: {{ config.port.slmApi }},
     // ...
   }

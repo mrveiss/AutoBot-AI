@@ -567,7 +567,7 @@ class DockerBackend(ExecutionBackend):
         """Return the language-to-image mapping."""
         return {
             "python": "python:3.10-slim",
-            "javascript": "node:18-slim",
+            "javascript": "node:22-slim",  # major pinned to .nvmrc by node_major_one_home_19328_test (#19328)
             "bash": "bash:5.1",
             "shell": "bash:5.1",
         }

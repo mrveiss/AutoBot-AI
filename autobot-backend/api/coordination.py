@@ -9,11 +9,17 @@ was acquired cannot learn it from the event it missed, so the same fact is
 readable here -- `EVENT_STATE_DOCTRINE.md` principle 2, "state over
 notification".
 
-Read-only by design. Claims are acquired and released through
+`/claims` is read-only by design. Claims are acquired and released through
 `autobot_shared.coordination.work_claims`, by the agent doing the work, holding
 the task identity that owns them. An HTTP endpoint that could release another
 agent's claim would make every claim advisory against anyone with a session
 cookie, which is a coordination bug wearing an API.
+
+The one write surface is `/issue-claims` (#18811, `coordination_issue_claims`): a
+developer session reaches the issue-claims registry through it, and the holder is
+bound to the authenticated principal, so a caller can only touch their own claims.
+It is mounted beside this router, not inside it, because it admits the issue-claims
+client credential, which this router's gate does not read.
 """
 
 from __future__ import annotations

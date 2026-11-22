@@ -76,7 +76,7 @@ async def _list_user_sources() -> list[MarketplaceSource]:
     return sources
 
 
-async def list_sources() -> list[MarketplaceSource]:
+async def list_marketplace_sources() -> list[MarketplaceSource]:
     """Return the built-in source plus all user-added sources."""
     return [_builtin_source(), *await _list_user_sources()]
 
@@ -115,7 +115,7 @@ async def list_marketplaces(
     """Issue #6481: list built-in + user-added marketplace sources.
     Authenticated users only — source UUIDs would otherwise be enumerable
     and feed the `/catalog?source_id=` SSRF surface."""
-    return MarketplaceSourcesResponse(sources=await list_sources())
+    return MarketplaceSourcesResponse(sources=await list_marketplace_sources())
 
 
 @router.post(

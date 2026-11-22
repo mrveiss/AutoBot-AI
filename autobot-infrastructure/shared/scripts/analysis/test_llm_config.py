@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # #14518: the path insert here pointed at a ``src`` directory that does not
 # exist beside this script, and ``llm_interface`` is a pre-restructure module
-# name. LLMInterface now lives in autobot-backend/llm_multi_provider.py. Add
+# name. The canonical entry point is services.llm_service.get_llm_service (#18552). Add
 # autobot-backend the way the other operator entry points in this tree do
 # (#14129).
 # A backend tool (#18289): it also puts the repository root on the path (for `autobot_shared`), so it
@@ -28,7 +28,7 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
         sys.path.insert(0, str(_root))
 
 import config as config  # noqa: E402
-from llm_multi_provider import LLMInterface  # noqa: E402
+from services.llm_service import get_llm_service  # noqa: E402
 
 
 def check_llm_config():
@@ -52,19 +52,11 @@ def check_llm_config():
             logger.info("   %s: %s", key, value)
 
         # Create LLM interface and check its settings
-        logger.info("\n🤖 LLM Interface Settings:")
-        llm = LLMInterface()
+        logger.info("\n🤖 LLM Service Settings:")
+        stats = get_llm_service().get_stats()
 
-        logger.info("   Orchestrator LLM alias: %s", llm.orchestrator_llm_alias)
-        logger.info("   Task LLM alias: %s", llm.task_llm_alias)
-        logger.info("   Ollama models: %s", llm.ollama_models)
-        logger.info("   Ollama host: %s", llm.ollama_host)
-
-        # Check what model would be used for task LLM
-        if llm.task_llm_alias.startswith("ollama_"):
-            base_alias = llm.task_llm_alias.replace("ollama_", "")
-            model_name = llm.ollama_models.get(base_alias, base_alias)
-            logger.info("   Task LLM resolved model: %s", model_name)
+        for key, value in stats.items():
+            logger.info("   %s: %s", key, value)
 
         return True
 

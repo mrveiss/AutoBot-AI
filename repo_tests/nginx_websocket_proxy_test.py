@@ -30,6 +30,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 REPO_ROOT = repo_root()
 BACKEND = REPO_ROOT / "autobot-backend"
 REGISTRY_DIR = BACKEND / "initialization" / "router_registry"
@@ -114,9 +116,7 @@ def _parse_locations(text: str) -> list[Location]:
     out: list[Location] = []
     for server in re.finditer(r"\bserver\s*\{", text):
         body = text[server.end() : _block_end(text, server.end()) - 1]
-        server_level = re.sub(
-            r"location\s+[=~^*]*\s*[^\s{]+\s*\{.*?\n    \}", "", body, flags=re.DOTALL
-        )
+        server_level = re.sub(r"location\s+[=~^*]*\s*[^\s{]+\s*\{.*?\n    \}", "", body, flags=re.DOTALL)
         out.extend(_locations_in(body, _declares_upgrade(server_level)))
     return out
 
@@ -146,9 +146,7 @@ def _select(locations: list[Location], path: str) -> Location | None:
     for loc in locations:
         if loc.modifier == "=" and loc.pattern == path:
             return loc
-    prefixes = [
-        loc for loc in locations if loc.modifier in ("", "^~") and path.startswith(loc.pattern)
-    ]
+    prefixes = [loc for loc in locations if loc.modifier in ("", "^~") and path.startswith(loc.pattern)]
     best = max(prefixes, key=lambda loc: len(loc.pattern), default=None)
     if best is not None and best.modifier == "^~":
         return best
@@ -162,7 +160,7 @@ def _registry_prefixes() -> dict[str, str]:
     """Map ``api.<module>`` -> mount prefix from the router registry tuples."""
     prefixes: dict[str, str] = {}
     for path in sorted(REGISTRY_DIR.glob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Tuple) or len(node.elts) < 2:
                 continue
@@ -191,9 +189,7 @@ def _websocket_routes() -> list[tuple[str, str]]:
 def _websocket_decorators(source: Path) -> list[tuple[int, str]]:
     """Every ``@router.websocket("<path>")`` in *source*, as (lineno, path)."""
     found: list[tuple[int, str]] = []
-    for match in re.finditer(
-        r"@router\.websocket\(\s*[\"']([^\"']+)[\"']", source.read_text(encoding="utf-8")
-    ):
+    for match in re.finditer(r"@router\.websocket\(\s*[\"']([^\"']+)[\"']", source.read_text(encoding="utf-8")):
         lineno = source.read_text(encoding="utf-8")[: match.start()].count("\n") + 1
         found.append((lineno, match.group(1)))
     return found
@@ -215,11 +211,7 @@ def test_catch_all_proxy_blocks_set_the_upgrade_headers(template: str) -> None:
     block; if this passes, forgetting is harmless.
     """
     locations = _locations_for(template)
-    catch_alls = [
-        loc
-        for loc in locations
-        if loc.modifier == "" and loc.pattern in CATCH_ALL_PREFIXES and loc.proxies
-    ]
+    catch_alls = [loc for loc in locations if loc.modifier == "" and loc.pattern in CATCH_ALL_PREFIXES and loc.proxies]
     assert catch_alls, f"{template}: no catch-all proxy block found to check"
     missing = [repr(loc) for loc in catch_alls if not loc.sets_upgrade]
     assert not missing, (

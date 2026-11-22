@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import parse_utc_iso
+from chat_history.message_times import parse_message_timestamp, timestamp_sort_key
 
 logger = get_logger(__name__)
 
@@ -23,21 +23,14 @@ logger = get_logger(__name__)
 STREAMING_TYPES = frozenset(["llm_response", "llm_response_chunk", "response"])
 
 
-def _parse_timestamp(msg_ts: str) -> datetime | None:
-    """Parse message timestamp string (Issue #315 - extracted)."""
-    if not isinstance(msg_ts, str) or not msg_ts:
-        return None
-    try:
-        if "T" in msg_ts:
-            return parse_utc_iso(msg_ts)
-        return datetime.strptime(msg_ts, "%Y-%m-%d %H:%M:%S")
-    except (ValueError, TypeError):
-        return None
-
-
 def _is_streaming_type(msg: Dict[str, Any]) -> bool:
     """Check if message is a streaming type (Issue #315 - extracted)."""
     msg_type = msg.get("messageType", msg.get("type", "default"))
+    metadata = msg.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    if metadata.get("completed") is True or metadata.get("iteration") is not None:
+        return False  # #21904: a completed reply is a whole message, never an accumulated state
     return msg_type in STREAMING_TYPES
 
 
@@ -64,7 +57,7 @@ def _group_streaming_by_time_window(
             non_streaming.append(msg)
             continue
 
-        current_ts = _parse_timestamp(msg.get("timestamp", ""))
+        current_ts = parse_message_timestamp(msg.get("timestamp", ""))
         if current_ts and last_streaming_ts:
             time_diff = abs((current_ts - last_streaming_ts).total_seconds())
             if time_diff > 120:  # 2 minutes = new group
@@ -125,7 +118,7 @@ class DeduplicationMixin:
                 )
                 result.append(longest)
 
-        result.sort(key=lambda m: m.get("timestamp", ""))
+        result.sort(key=timestamp_sort_key)  # #21846: old and new timestamp formats order together
         return result
 
     def _dedupe_user_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

@@ -53,8 +53,8 @@ def _compress_value_by_type(optimizer: "PayloadOptimizer", value: Any) -> Any | 
 
 
 @dataclass
-class OptimizationResult:
-    """Result of payload optimization"""
+class PayloadOptimizationResult:
+    """The optimized payload plus its before/after sizes and what was trimmed (#17312)."""
 
     original_size: int
     optimized_size: int
@@ -101,7 +101,7 @@ class PayloadOptimizer:
 
         logger.info("PayloadOptimizer initialized: max=%s, chunk=%s", max_size, chunk_size)
 
-    def optimize_payload(self, payload: Any, context: str = "") -> OptimizationResult:
+    def optimize_payload(self, payload: Any, context: str = "") -> PayloadOptimizationResult:
         """
         Optimize payload to prevent 413 errors and reduce API usage.
 
@@ -110,13 +110,13 @@ class PayloadOptimizer:
             context: Additional context about the payload type
 
         Returns:
-            OptimizationResult with optimized chunks and metadata
+            PayloadOptimizationResult with optimized chunks and metadata
         """
         original_size = self._calculate_size(payload)
 
         # Quick return if payload is already small
         if original_size <= self.warning_size:
-            return OptimizationResult(
+            return PayloadOptimizationResult(
                 original_size=original_size,
                 optimized_size=original_size,
                 chunks=[payload],
@@ -131,7 +131,7 @@ class PayloadOptimizer:
         else:
             return self._compress_payload(payload, original_size, context)
 
-    def optimize_todowrite_payload(self, todos: List[Dict]) -> OptimizationResult:
+    def optimize_todowrite_payload(self, todos: List[Dict]) -> PayloadOptimizationResult:
         """
         Specialized optimization for TodoWrite payloads.
         Reduces verbose todo updates by using incremental changes.
@@ -139,7 +139,7 @@ class PayloadOptimizer:
         original_size = self._calculate_size(todos)
 
         if original_size <= self.warning_size:
-            return OptimizationResult(
+            return PayloadOptimizationResult(
                 original_size=original_size,
                 optimized_size=original_size,
                 chunks=[todos],
@@ -157,7 +157,7 @@ class PayloadOptimizer:
             chunks = self._chunk_todos_by_priority(optimized_todos)
             total_chunked_size = sum(self._calculate_size(chunk) for chunk in chunks)
 
-            return OptimizationResult(
+            return PayloadOptimizationResult(
                 original_size=original_size,
                 optimized_size=total_chunked_size,
                 chunks=chunks,
@@ -173,7 +173,7 @@ class PayloadOptimizer:
             self.total_optimizations += 1
             self.total_size_saved += original_size - optimized_size
 
-        return OptimizationResult(
+        return PayloadOptimizationResult(
             original_size=original_size,
             optimized_size=optimized_size,
             chunks=[optimized_todos],
@@ -213,7 +213,7 @@ class PayloadOptimizer:
             logger.warning("Failed to calculate payload size: %s", e)
             return 0
 
-    def _compress_payload(self, payload: Any, original_size: int, context: str) -> OptimizationResult:
+    def _compress_payload(self, payload: Any, original_size: int, context: str) -> PayloadOptimizationResult:
         """Apply compression techniques to reduce payload size"""
         if isinstance(payload, str):
             compressed = self._compress_text(payload)
@@ -233,7 +233,7 @@ class PayloadOptimizer:
             self.compression_count += 1
             self.total_size_saved += original_size - compressed_size
 
-        return OptimizationResult(
+        return PayloadOptimizationResult(
             original_size=original_size,
             optimized_size=compressed_size,
             chunks=[compressed],
@@ -242,7 +242,7 @@ class PayloadOptimizer:
             needs_chunking=False,
         )
 
-    def _chunk_payload(self, payload: Any, original_size: int, context: str) -> OptimizationResult:
+    def _chunk_payload(self, payload: Any, original_size: int, context: str) -> PayloadOptimizationResult:
         """Split large payload into manageable chunks"""
         if isinstance(payload, str):
             chunks = self._chunk_text(payload)
@@ -264,7 +264,7 @@ class PayloadOptimizer:
 
         logger.info(f"Split payload into {len(chunks)} chunks, {savings:.1f}% size reduction")
 
-        return OptimizationResult(
+        return PayloadOptimizationResult(
             original_size=original_size,
             optimized_size=total_chunked_size,
             chunks=chunks,
@@ -520,13 +520,13 @@ from autobot_shared.singleton_factory import lazy_singleton
 get_payload_optimizer = lazy_singleton(PayloadOptimizer)
 
 
-def optimize_payload(payload: Any, context: str = "") -> OptimizationResult:
+def optimize_payload(payload: Any, context: str = "") -> PayloadOptimizationResult:
     """Convenience function to optimize any payload"""
     optimizer = get_payload_optimizer()
     return optimizer.optimize_payload(payload, context)
 
 
-def optimize_todowrite(todos: List[Dict]) -> OptimizationResult:
+def optimize_todowrite(todos: List[Dict]) -> PayloadOptimizationResult:
     """Convenience function to optimize TodoWrite payloads"""
     optimizer = get_payload_optimizer()
     return optimizer.optimize_todowrite_payload(todos)

@@ -14,8 +14,8 @@ import pytest
 import media.audio.pipeline as audio_pipeline
 from autobot_shared.pinned_model_registry import ModelIntegrityError
 from voice_processing.providers import (
-    ProviderRegistry,
     SpeechProvider,
+    SpeechProviderRegistry,
     TranscriptionUnavailableError,
     TranscriptSegment,
 )
@@ -211,7 +211,7 @@ def _fake(name, *, segments=None, available=True, error=None):
 
 
 def _registry(*providers):
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     for priority, provider in enumerate(reversed(providers)):
         registry.register("en", provider, priority=priority)
     return registry
@@ -284,7 +284,7 @@ async def test_a_loader_returning_none_raises_instead_of_yielding_an_empty_trans
 
 @pytest.mark.asyncio
 async def test_the_registry_records_the_whisper_load_failure_as_a_reason(short_wav):
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     registry.register("en", WhisperProvider(), priority=1)
     with (
         patch("voice_processing.providers.whisper_provider.whisper_loadable", return_value=True),

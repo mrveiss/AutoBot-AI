@@ -21,7 +21,11 @@ not a completed exchange and is left out; the in-flight turn is re-registered
 by ``ConversationHandlerMixin._register_user_message_in_history``.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
+
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 #: How many completed exchanges the LLM sees. Matches the in-process window
 #: ``ConversationHandlerMixin._update_conversation_history`` keeps, and the
@@ -42,10 +46,36 @@ def _is_prose_reply(message: Dict[str, Any]) -> bool:
     return message.get("messageType") in _PROSE_REPLY_TYPES
 
 
-def _close_pair(pairs: List[Dict[str, str]], user: str | None, replies: List[str]) -> None:
-    """Append the exchange being collected, if it is a completed one."""
+def _close_pair(pairs: List[Tuple[int, Dict[str, str]]], start: int, user: str | None, replies: List[str]) -> None:
+    """Append the exchange being collected (it began at message index *start*), if it is a completed one."""
     if user and replies:
-        pairs.append({"user": user, "assistant": "\n\n".join(replies)})
+        pairs.append((start, {"user": user, "assistant": "\n\n".join(replies)}))
+
+
+def project_indexed_pairs(messages: List[Dict[str, Any]], start: int = 0) -> List[Tuple[int, Dict[str, str]]]:
+    """Every completed exchange that begins at or after message index *start*, as (index of its user message, pair).
+
+    Pure. An exchange begins at a user message and ends at the next one, so projecting from
+    the index of a user message gives exactly the pairs a projection of the whole list gives
+    from that point on: a caller that stored the index of the last exchange it folded reads
+    only the messages after it. A *start* inside an exchange begins at the next user message.
+    """
+    pairs: List[Tuple[int, Dict[str, str]]] = []
+    user: str | None = None
+    user_at = start
+    replies: List[str] = []
+    for index in range(max(0, start), len(messages)):
+        message = messages[index]
+        if not isinstance(message, dict):
+            continue
+        if message.get("sender") == "user":
+            _close_pair(pairs, user_at, user, replies)
+            text = message.get("text") or ""
+            user, user_at, replies = (text if text.strip() else None), index, []
+        elif user and _is_prose_reply(message):
+            replies.append(message["text"].strip())
+    _close_pair(pairs, user_at, user, replies)
+    return pairs
 
 
 def project_turn_pairs(messages: List[Dict[str, Any]], limit: int = LLM_CONTEXT_TURN_LIMIT) -> List[Dict[str, str]]:
@@ -54,17 +84,32 @@ def project_turn_pairs(messages: List[Dict[str, Any]], limit: int = LLM_CONTEXT_
     Pure: plain dicts in, plain dicts out. *messages* is what
     ``ChatHistoryManager.load_session`` returns, oldest first.
     """
-    pairs: List[Dict[str, str]] = []
-    user: str | None = None
-    replies: List[str] = []
-    for message in messages:
-        if not isinstance(message, dict):
-            continue
-        if message.get("sender") == "user":
-            _close_pair(pairs, user, replies)
-            text = message.get("text") or ""
-            user, replies = (text if text.strip() else None), []
-        elif user and _is_prose_reply(message):
-            replies.append(message["text"].strip())
-    _close_pair(pairs, user, replies)
+    pairs = [pair for _, pair in project_indexed_pairs(messages)]
     return pairs[-limit:] if limit > 0 else []
+
+
+async def load_session_messages(session_id: str) -> List[Dict[str, Any]] | None:
+    """The raw messages of *session_id* from chat_sessions, the system of record; None if unreadable.
+
+    The store keeps a session as one document (Redis cache first, else the session file), so
+    this is one read and parse whatever is projected from it afterwards; a caller that wants
+    only the tail projects from a stored message index (``project_indexed_pairs``) instead of
+    reading the document twice. The one reader ``load_turn_pairs`` and the rolling summary share.
+    """
+    from chat_history import ChatHistoryManager
+
+    try:
+        return await ChatHistoryManager().load_session(session_id)
+    except (PermissionError, ValueError, OSError) as exc:
+        logger.error("Cannot read chat session %s for LLM context: %s", session_id, exc)
+        return None
+
+
+async def load_turn_pairs(session_id: str, limit: int = LLM_CONTEXT_TURN_LIMIT) -> List[Dict[str, str]] | None:
+    """The last *limit* completed exchanges of *session_id* read from chat_sessions, the system of record.
+
+    None (an unreadable session) is kept apart from ``[]`` (a session with no
+    completed turns) so the first is logged as the error it is.
+    """
+    messages = await load_session_messages(session_id)
+    return None if messages is None else project_turn_pairs(messages, limit)

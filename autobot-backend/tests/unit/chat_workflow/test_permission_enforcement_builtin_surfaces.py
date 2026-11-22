@@ -92,6 +92,7 @@ class TestExecuteCommandDenial:
         """`admin` is the only role holding SHELL_EXECUTE — the control case
         proving this discriminates rather than always denying."""
         handler = _handler()
+        handler.terminal_tool = None  # set by ChatWorkflowManager; __new__ skips it
         handler._execute_terminal_command = AsyncMock(return_value={"status": "error", "error": "boom", "stderr": ""})
 
         async for _msg in handler._process_single_command(

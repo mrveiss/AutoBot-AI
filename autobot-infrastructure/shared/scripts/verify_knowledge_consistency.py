@@ -16,6 +16,7 @@ This script ensures ZERO knowledge retrieval inconsistencies by:
 Usage: python scripts/verify_knowledge_consistency.py --enforce-locks
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -32,10 +33,10 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))
 
+from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_list
 from config import ConfigManager
-from knowledge_base import KnowledgeBase
-from autobot_shared.redis_client import get_redis_client
+from knowledge_factory import get_knowledge_base_async
 
 # Wire in the canonical chunker so the embedding-model consistency check
 # at `verify_embedding_model_consistency()` can actually verify the
@@ -52,6 +53,45 @@ config = ConfigManager()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# One event loop and one KB for the whole one-shot process (#18122). The KB's async clients
+# bind to the loop that created them, so every coroutine -- KB creation and chunker embedding
+# alike -- must run on this same loop; a per-call asyncio.run() would leave them on a dead one.
+_STATE: Dict[str, Any] = {"loop": None, "kb": None}
+
+
+def _run_async(coro):
+    """Run a coroutine on the process-wide loop, creating it on first use."""
+    if _STATE["loop"] is None:
+        _STATE["loop"] = asyncio.new_event_loop()
+    return _STATE["loop"].run_until_complete(coro)
+
+
+def _close_loop() -> None:
+    """Close the process-wide loop and drop the KB bound to it."""
+    loop, _STATE["loop"], _STATE["kb"] = _STATE["loop"], None, None
+    if loop is not None:
+        loop.close()
+
+
+class CanonicalKBUnavailable(Exception):
+    """The canonical KB could not be obtained (factory returned None or init failed).
+
+    Deliberately NOT a RuntimeError/OSError subclass: the per-check handlers that tolerate
+    optional-check failures catch those, and an unreachable KB must never be tolerated -- a run
+    that never reached a KB has verified nothing (#19205 review, #18122).
+    """
+
+
+def _canonical_kb():
+    """The canonical initialized KB for this one-shot process (#18122), built once."""
+    if _STATE["kb"] is None:
+        kb = _run_async(get_knowledge_base_async())
+        if kb is None:
+            raise CanonicalKBUnavailable("Knowledge base unavailable: initialization failed or retry cooldown active")
+        _STATE["kb"] = kb
+    return _STATE["kb"]
 
 
 # Issue #338: Helper functions extracted to reduce nesting depth
@@ -120,7 +160,7 @@ def _verify_redis_vector_dimension(redis_client: Any, expected_dimension: int) -
 def _verify_embedding_dimension(expected_dimension: int) -> Tuple[bool, Optional[str]]:
     """Verify actual embedding dimension (Issue #338 - extracted helper)."""
     try:
-        kb = KnowledgeBase()
+        kb = _canonical_kb()
         if not hasattr(kb, "embed_model"):
             return True, None
 
@@ -136,6 +176,8 @@ def _verify_embedding_dimension(expected_dimension: int) -> Tuple[bool, Optional
         logger.info("✅ Actual embedding dimension correct: %s", actual_dim)
         return True, None
 
+    except CanonicalKBUnavailable:
+        raise  # not optional: the caller must fail the check, never pass it
     except Exception as e:
         logger.warning("Could not test actual embedding dimensions: %s", e)
         return True, None
@@ -153,12 +195,10 @@ class KnowledgeConsistencyVerifier:
     def _verify_chunker_vector_shape(self, chunker) -> bool:
         """--deep: the chunker's vector width must equal the KB's. False on a critical mismatch."""
         try:
-            import asyncio
-
             test_text = "test chunker-kb model consistency"
-            kb_obj = KnowledgeBase()
+            kb_obj = _canonical_kb()
             kb_vec = kb_obj.embed_model.get_text_embedding(test_text)
-            chunker_vecs = asyncio.run(chunker.embed_sentences([test_text]))
+            chunker_vecs = _run_async(chunker.embed_sentences([test_text]))
             if chunker_vecs is None or len(chunker_vecs[0]) != len(kb_vec):
                 chunker_dim = len(chunker_vecs[0]) if chunker_vecs else "None"
                 self.critical_errors.append(
@@ -172,6 +212,8 @@ class KnowledgeConsistencyVerifier:
                 )
                 return False
             logger.info("✅ --deep: chunker vector shape verified (dim=%s)", len(kb_vec))
+        except CanonicalKBUnavailable:
+            raise  # not optional: surfaces as a failure of the embedding-consistency check
         except Exception as exc:
             self.warnings.append(f"--deep chunker vector check failed: {exc}")
             logger.warning("--deep chunker vector check failed: %s", exc)
@@ -238,19 +280,26 @@ class KnowledgeConsistencyVerifier:
 
             # 4. Check Redis vector schema consistency
             try:
-                kb = KnowledgeBase()
+                kb = _canonical_kb()
                 if hasattr(kb, "embedding_model_name"):
                     if not kb.embedding_model_name.startswith("nomic-embed-text"):
                         self.critical_errors.append(
                             f"CRITICAL: KnowledgeBase embedding model inconsistency: {kb.embedding_model_name}"
                         )
                         return False
+            except CanonicalKBUnavailable:
+                raise  # not optional: the outer handler records a critical failure
             except Exception as e:
                 logger.warning("Could not instantiate KnowledgeBase for verification: %s", e)
 
             logger.info("✅ EMBEDDING MODEL CONSISTENCY: VERIFIED")
             return True
 
+        except CanonicalKBUnavailable as e:
+            self.critical_errors.append(
+                f"CRITICAL FAILURE: Knowledge base unreachable, embedding consistency unverified: {e}"
+            )
+            return False
         except Exception as e:
             self.critical_errors.append(f"CRITICAL FAILURE: Could not verify embedding consistency: {e}")
             return False
@@ -278,6 +327,11 @@ class KnowledgeConsistencyVerifier:
             logger.info("✅ VECTOR DIMENSION CONSISTENCY: VERIFIED")
             return True
 
+        except CanonicalKBUnavailable as e:
+            self.critical_errors.append(
+                f"CRITICAL FAILURE: Knowledge base unreachable, vector dimensions unverified: {e}"
+            )
+            return False
         except Exception as e:
             self.critical_errors.append(f"CRITICAL FAILURE: Could not verify vector dimensions: {e}")
             return False
@@ -415,8 +469,11 @@ def main():
     )
     args = parser.parse_args()
 
-    verifier = KnowledgeConsistencyVerifier()
-    success = verifier.run_full_verification(enforce_locks=args.enforce_locks, deep=args.deep)
+    try:
+        verifier = KnowledgeConsistencyVerifier()
+        success = verifier.run_full_verification(enforce_locks=args.enforce_locks, deep=args.deep)
+    finally:
+        _close_loop()
 
     if not success:
         sys.exit(1)

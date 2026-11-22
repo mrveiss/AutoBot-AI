@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
-from .types import ModalityType, ProcessingIntent
+from .types import ModalityType, MultimodalProcessingIntent
 
 
 @dataclass
@@ -23,7 +23,7 @@ class MultiModalInput:
 
     input_id: str
     modality_type: ModalityType
-    intent: ProcessingIntent
+    intent: MultimodalProcessingIntent
     data: Any  # Flexible data field for any input type
     metadata: Dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
@@ -34,13 +34,13 @@ class MultiModalInput:
 
 
 @dataclass
-class ProcessingResult:
+class MultimodalResult:
     """Unified result structure for all processing types"""
 
     result_id: str
     input_id: str
     modality_type: ModalityType
-    intent: ProcessingIntent
+    intent: MultimodalProcessingIntent
     success: bool
     confidence: float
     result_data: Any

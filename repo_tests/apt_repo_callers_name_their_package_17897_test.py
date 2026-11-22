@@ -38,7 +38,7 @@ from pathlib import Path
 import jinja2
 import pytest
 import yaml
-from repo_tests._ansible_tasks import load_tasks, named
+from repo_tests._ansible_tasks import load_tasks, named, without_comment_lines
 from repo_tests._paths import repo_root
 
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
@@ -54,7 +54,7 @@ SOURCES_DIR = "/etc/apt/sources.list.d/"
 #: call site drops below the floor and reddens, so the set can only shrink
 #: deliberately. It is also the reach floor -- a resolver that finds nothing
 #: fails here rather than reporting "all compliant".
-EXPECTED_CALL_SITES = 7
+EXPECTED_CALL_SITES = 6
 
 #: Documented, shrink-only exemptions: ``"<role>/tasks/<file>.yml": "<reason>"``.
 #: A site belongs here only when no package can be named *from the role itself* --
@@ -69,6 +69,16 @@ EXEMPTIONS: dict[str, str] = {}
 MAX_EXEMPTIONS = 0
 
 
+def _flattened(tasks: list[dict]) -> list[dict]:
+    """*tasks* with the tasks inside each ``block``/``rescue``/``always`` included (#19661)."""
+    found: list[dict] = []
+    for task in tasks:
+        found.append(task)
+        for key in ("block", "rescue", "always"):
+            found += _flattened([t for t in task.get(key) or [] if isinstance(t, dict)])
+    return found
+
+
 def _call_sites() -> list[tuple[str, dict]]:
     """Every ``include_tasks`` of the helper, as ``(role-relative path, task)``."""
     found: list[tuple[str, dict]] = []
@@ -77,7 +87,7 @@ def _call_sites() -> list[tuple[str, dict]]:
             tasks = load_tasks(path)
         except (AssertionError, yaml.YAMLError):
             continue
-        for task in tasks:
+        for task in _flattened(tasks):
             include = str(task.get("ansible.builtin.include_tasks", task.get("include_tasks", "")))
             if HELPER_STEM in include:
                 found.append((path.relative_to(ROLES).as_posix(), task))
@@ -103,6 +113,20 @@ def call_sites() -> list[tuple[str, dict]]:
 
 
 # ── Reach floor ──────────────────────────────────────────────────────────────
+
+
+def test_every_file_naming_the_helper_is_a_resolved_call_site(
+    call_sites: list[tuple[str, dict]],
+) -> None:
+    """The floor above counts findings, so a caller the resolver misses could hide behind a new one (#19661)."""
+    paths = sorted(ROLES.glob("*/tasks/*.yml"))
+    assert len(paths) >= 100, f"the sweep read {len(paths)} task files -- a clean result would be blind"
+    naming = {
+        p.relative_to(ROLES).as_posix()
+        for p in paths
+        if HELPER_STEM in without_comment_lines(p.read_text(encoding="utf-8"))
+    }
+    assert naming == {path for path, _ in call_sites}
 
 
 def test_the_resolver_reaches_every_known_call_site(

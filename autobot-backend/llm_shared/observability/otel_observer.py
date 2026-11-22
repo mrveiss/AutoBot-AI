@@ -16,6 +16,8 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from autobot_shared.logging_manager import get_logger
 
+from .tracing_policy import trace_text
+
 logger = get_logger(__name__)
 
 _tracer = trace.get_tracer("autobot.llm", "2.0.0")
@@ -40,7 +42,7 @@ class OTELObserver:
         }
         with _tracer.start_as_current_span("llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs) as span:
             if response.error:
-                span.set_status(Status(StatusCode.ERROR, response.error))
+                span.set_status(Status(StatusCode.ERROR, trace_text(response.error)))
                 span.set_attribute("llm.error", True)
             else:
                 span.set_status(Status(StatusCode.OK))
@@ -53,5 +55,9 @@ class OTELObserver:
             "llm.error": True,
         }
         with _tracer.start_as_current_span("llm.inference.error", kind=SpanKind.CLIENT, attributes=span_attrs) as span:
-            span.set_status(Status(StatusCode.ERROR, str(exc)))
-            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR, trace_text(str(exc))))
+            # record_exception would attach the raw message; record type + policy-filtered text.
+            span.add_event(
+                "exception",
+                {"exception.type": type(exc).__qualname__, "exception.message": trace_text(str(exc))},
+            )

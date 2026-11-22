@@ -23,6 +23,8 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from testkit.fake_async_session import FakeAsyncSession
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _code_sync_import import import_code_sync  # noqa: E402
 
@@ -63,25 +65,9 @@ def _run(coro):
         loop.close()
 
 
-class _FakeSessionCtx:
-    def __init__(self, rows):
-        self._rows = rows
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *_exc):
-        return False
-
-    async def execute(self, _stmt):
-        result = MagicMock()
-        result.all.return_value = self._rows
-        return result
-
-
 def _db_service_with_rows(rows):
     db_service_ref = MagicMock()
-    db_service_ref.session.return_value = _FakeSessionCtx(rows)
+    db_service_ref.session.return_value = FakeAsyncSession(default_result=list(rows))
     return db_service_ref
 
 

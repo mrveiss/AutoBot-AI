@@ -8,7 +8,7 @@ Endpoints:
     GET  /api/admin/orphans?resource_type=...   list orphans of one type (#15779 AC4)
     POST /api/admin/orphans/repair              assign a live owner to one orphan
 
-Access: admin/superadmin (``require_role``). A repair is a break-glass, and is
+Access: admin/superadmin (``check_admin_permission``). A repair is a break-glass, and is
 refused unless the resource is genuinely unreachable; see ``services.orphan_repair``.
 Every attempt, refused or not, is audited.
 """
@@ -18,8 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_orphan_repair import OrphanListResponse, OrphanRepairRequest, OrphanRepairResponse
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.principal import resolve_principal_id
 from services.orphan_repair import (
     InvalidNewOwner,
@@ -32,7 +31,7 @@ from services.orphan_repair import (
 )
 from services.orphan_repair_types import REPAIRERS
 
-router = APIRouter(prefix="/admin", dependencies=[Depends(require_role("admin", "superadmin"))])
+router = APIRouter(prefix="/admin", dependencies=[Depends(check_admin_permission)])
 
 #: How each refusal is answered. A reachable resource is a conflict, not a bad request.
 _STATUS = {UnknownResourceType: 400, InvalidNewOwner: 400, ResourceNotFound: 404, NotAnOrphan: 409}

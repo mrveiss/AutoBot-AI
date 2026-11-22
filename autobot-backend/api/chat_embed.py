@@ -38,6 +38,7 @@ from pydantic import BaseModel
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.proxy_utils import get_client_ip
 from autobot_shared.rate_limiter import RateLimiter
+from security.chat_message_safety import scan_chat_message
 
 logger = get_logger(__name__)
 
@@ -140,10 +141,10 @@ class EmbedMessageRequest(BaseModel):
 
 
 async def _get_llm_service(request: Request) -> Any:
-    from services.llm_service import LLMService
+    from services.llm_service import get_llm_service
     from utils.lazy_singleton import lazy_init_singleton
 
-    llm_service = lazy_init_singleton(request.app.state, "llm_service", LLMService)
+    llm_service = lazy_init_singleton(request.app.state, "llm_service", get_llm_service)
     if llm_service is None:
         logger.error("LLMService initialization failed for embed endpoint")
         raise HTTPException(status_code=503, detail="LLM service unavailable")
@@ -207,6 +208,15 @@ async def embed_message(
     message = body.message.strip()
     if not message:
         return JSONResponse({"content": ""}, status_code=200)
+
+    # #19786: this unauthenticated route is a chat entry point like the ones in api/chat.py. The scan
+    # sits before the branch, so no path reaches the model with the raw message.
+    try:
+        message = scan_chat_message(message)
+    except HTTPException as exc:
+        return JSONResponse(
+            {"detail": exc.detail}, status_code=exc.status_code, headers={"Access-Control-Allow-Origin": acao}
+        )
 
     llm_service = await _get_llm_service(request)
 

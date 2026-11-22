@@ -16,6 +16,17 @@ acquire a token.  If the bucket is empty they wait (or raise immediately,
 depending on the ``blocking`` flag).  All workers share the same Redis keys, so
 the aggregate rate is correctly bounded regardless of worker count.
 
+Why this is not ``autobot_shared.rate_limiter.RateLimiter`` (#18087)
+--------------------------------------------------------------------
+A different algorithm, not a second copy of the same one. A sliding window
+admits ``max`` requests at once and then nothing until the oldest hit ages out;
+this bucket holds ``(tokens, ts)``, refills continuously and fractionally, and
+separates burst capacity from the sustained rate, so a drained bucket admits one
+request per ``1/rate`` seconds. The canonical limiter's only token bucket
+(``acquire_token``) is in-process, so it cannot bound the aggregate across
+workers, which is this module's whole purpose. Kept deliberately, with its
+reason recorded in ``repo_tests/one_rate_limiter_18087_test.py``.
+
 Token bucket algorithm
 ----------------------
 Each provider bucket has two parameters:
