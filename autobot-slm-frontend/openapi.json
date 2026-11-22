@@ -5755,6 +5755,18 @@
             "title": "Frontend",
             "type": "string"
           },
+          "manifest_errors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Manifest Errors",
+            "type": "object"
+          },
+          "manifests": {
+            "default": "healthy",
+            "title": "Manifests",
+            "type": "string"
+          },
           "nodes_online": {
             "title": "Nodes Online",
             "type": "integer"
