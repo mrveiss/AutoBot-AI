@@ -6,6 +6,10 @@
 
 Plain jinja2 stands in for Ansible's templar (the ``bool`` filter and ``intersect`` are registered
 as Ansible would), and nginx is not run: assertions are on rendered text and parsed YAML.
+
+The trusted-proxy tests are a jinja SIMULATION of the task expressions over hand-written ``getent ahosts``
+results. They do not run Ansible, ``getent`` or the unit template, so they pin the logic and the task keys,
+not the behaviour of a live play.
 """
 
 from __future__ import annotations
@@ -125,6 +129,12 @@ def _lookup(entry: str, out: str) -> dict:
     return {"item": entry, "rc": 0 if out else 2, "stdout_lines": out.splitlines()}
 
 
+def _host_error(entry: str, rc: int, stderr: str = "", msg: str | None = None) -> dict:
+    """A loop result for a getent that did not run properly (a missing binary reports rc 2 WITH `msg`)."""
+    result = {"item": entry, "rc": rc, "stdout_lines": [], "stderr": stderr}
+    return {**result, "msg": msg} if msg else result
+
+
 def _getent(ip: str) -> str:
     return f"{ip:<15} STREAM name.test\n{ip:<15} DGRAM\n{ip:<15} RAW"
 
@@ -149,6 +159,39 @@ def _assert_holds(addrs: str, results: list[dict]) -> tuple[bool, str]:
     return ok, env.from_string(task["fail_msg"]).render(**ctx)
 
 
+def _getent_ran(results: list[dict]) -> tuple[bool, str]:
+    task = _task("assert getent itself ran")["ansible.builtin.assert"]
+    env = _env()
+    ctx = {"_slm_frontend_lookup": {"results": results}}
+    return all(env.compile_expression(c)(**ctx) for c in task["that"]), env.from_string(task["fail_msg"]).render(**ctx)
+
+
+def test_the_lookup_runs_in_check_mode_too() -> None:
+    assert _task("resolve the frontend trusted-proxy entries")["check_mode"] is False
+
+
+def test_the_resolve_assert_and_fact_carry_every_tag_of_the_unit_task() -> None:
+    """Under --tags backend or systemd the unit renders, so the resolution must run too (#19832)."""
+    units = yaml.safe_load((ROLE / "tasks" / "service_units.yml").read_text(encoding="utf-8"))
+    unit = next(t for t in units if t.get("name") == "SLM | Deploy backend systemd service")
+    for fragment in (
+        "resolve the frontend trusted-proxy",
+        "assert getent itself ran",
+        "assert every frontend entry",
+        "trust the resolved",
+    ):
+        assert set(unit["tags"]) <= set(_task(fragment)["tags"]), fragment
+
+
+def test_a_missing_getent_or_resolver_outage_blames_the_host_not_the_inventory() -> None:
+    ok, _ = _getent_ran([_lookup("192.0.2.50", _getent("192.0.2.50")), _lookup("gone.example.test", "")])
+    assert ok, "rc 2 with no msg is plain not-found"
+    ok, message = _getent_ran([_host_error("fe.example.test", 2, msg="[Errno 2] No such file or directory: 'getent'")])
+    assert not ok and "fe.example.test" in message and "No such file" in message
+    ok, message = _getent_ran([_host_error("fe.example.test", 1, stderr="resolver down")])
+    assert not ok and "rc=1" in message and "inventory problem" in message
+
+
 def test_the_lookup_runs_getent_with_argv_and_only_where_a_frontend_exists() -> None:
     task = _task("resolve the frontend trusted-proxy entries")
     assert task["ansible.builtin.command"]["argv"][:2] == ["getent", "ahosts"]
@@ -171,6 +214,18 @@ def test_an_unresolvable_entry_fails_and_is_named() -> None:
     ok, message = _assert_holds("192.0.2.50,gone.example.test", results)
     assert not ok
     assert "gone.example.test" in message and "192.0.2.50," not in message
+
+
+def test_a_dual_stack_multi_record_host_yields_each_address_once() -> None:
+    """Realistic `getent ahosts` output: every address repeated for STREAM, DGRAM and RAW, both families."""
+    out = (
+        "2001:db8::7     STREAM fe.example.test\n2001:db8::7     DGRAM  \n2001:db8::7     RAW    \n"
+        "192.0.2.50      STREAM \n192.0.2.50      DGRAM  \n192.0.2.50      RAW    \n"
+        "192.0.2.51      STREAM \n192.0.2.51      DGRAM  \n192.0.2.51      RAW    "
+    )
+    results = [_lookup("fe.example.test", out)]
+    assert _resolved(results) == "2001:db8::7,192.0.2.50,192.0.2.51"
+    assert _assert_holds("fe.example.test", results)[0]
 
 
 def test_no_frontend_entry_at_all_fails() -> None:

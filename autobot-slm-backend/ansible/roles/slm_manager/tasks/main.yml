@@ -25,23 +25,40 @@
   register: _slm_frontend_lookup
   changed_when: false
   failed_when: false
+  check_mode: false  # read-only; under --check the items would otherwise carry no rc and every entry would fail
   when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
-  tags: ['slm', 'config']
+  tags: ['slm', 'backend', 'systemd', 'config']
+
+# getent exits 2 for "not found"; any other rc, or a task-level error (a missing binary also reports
+# rc 2 but carries `msg`), is the host or its resolver, not the inventory.
+- name: "SLM | #19832: assert getent itself ran"
+  ansible.builtin.assert:
+    that:
+      - _slm_frontend_lookup.results | selectattr('msg', 'defined') | list | length == 0
+      - _slm_frontend_lookup.results | rejectattr('rc', 'in', [0, 2]) | list | length == 0
+    fail_msg: >-
+      getent failed on the SLM host for a reason other than "not found" (a missing binary or a resolver
+      outage, not an inventory problem):
+      {% for r in _slm_frontend_lookup.results | default([]) if r.msg is defined or r.rc not in [0, 2] %}{{ r.item }}
+      (rc={{ r.rc | default('n/a') }}, {{ r.msg | default(r.stderr | default('')) }}){{ ', ' if not loop.last }}{% endfor %}
+    quiet: true
+  when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
+  tags: ['slm', 'backend', 'systemd', 'config']
 
 - name: "SLM | #19832: assert every frontend entry resolved, then trust the resolved addresses"
   ansible.builtin.assert:
     that:
       - slm_trusted_frontend_addrs | length > 0
-      - _slm_frontend_lookup.results | rejectattr('rc', 'equalto', 0) | list | length == 0
+      - _slm_frontend_lookup.results | selectattr('rc', 'equalto', 2) | list | length == 0
     fail_msg: >-
       A frontend is deployed (frontend_slm_remote is true or the inventory has a `frontend` group)
       but these frontend entries did not resolve to an IP address on the SLM host:
-      {{ _slm_frontend_lookup.results | default([]) | rejectattr('rc', 'equalto', 0) | map(attribute='item') | join(', ') }}.
+      {{ _slm_frontend_lookup.results | default([]) | selectattr('rc', 'equalto', 2) | map(attribute='item') | join(', ') }}.
       Set frontend_host or give every `frontend` group host an ansible_host (an IPv4 address, an IPv6
       address or a resolvable DNS name); otherwise the SLM sees all clients as one address.
     quiet: true
   when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
-  tags: ['slm', 'config']
+  tags: ['slm', 'backend', 'systemd', 'config']
 
 - name: "SLM | #19832: trust the resolved frontend addresses"
   ansible.builtin.set_fact:
@@ -49,7 +66,7 @@
       {{ _slm_frontend_lookup.results | map(attribute='stdout_lines') | flatten
          | map('regex_replace', ' .*$', '') | reject('equalto', '') | unique | join(',') }}
   when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
-  tags: ['slm', 'config']
+  tags: ['slm', 'backend', 'systemd', 'config']
 
 # ==========================================================
 # System packages (assume blank host)
