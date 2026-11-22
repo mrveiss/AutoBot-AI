@@ -352,7 +352,7 @@ async def _find_system_secret_id(session: AsyncSession, name: str) -> uuid.UUID 
     from services.envelope_secrets_service import EnvelopeSecretsService
 
     row = await EnvelopeSecretsService.find_by_name(session, owner_vault=_SYSTEM_VAULT.to_str(), name=name)
-    return row.id if row is not None and row.is_active else None
+    return row.id if row is not None and row.is_live else None
 
 
 async def capture_provider_key(
