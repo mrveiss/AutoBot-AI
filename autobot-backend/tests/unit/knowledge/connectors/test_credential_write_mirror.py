@@ -9,6 +9,7 @@ import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+from models.secret import Secret
 from services import credential_write as cw
 
 _OWNER = uuid.uuid4()
@@ -33,7 +34,7 @@ async def _run(sess):
 
 
 async def test_name_hit_without_marker_rotates_and_marks(monkeypatch):
-    row = SimpleNamespace(id=uuid.uuid4(), is_active=True, type="t", extra_data={"k": 1})
+    row = Secret(id=uuid.uuid4(), is_active=True, type="t", extra_data={"k": 1})
     svc = _svc(monkeypatch, by_name=row)
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
     await _run(MagicMock(flush=AsyncMock()))
@@ -52,8 +53,7 @@ async def test_no_row_creates(monkeypatch):
 
 
 async def _refused(monkeypatch, **fields):
-    row = SimpleNamespace(id=uuid.uuid4(), is_active=True, type="t", extra_data=None)
-    row.__dict__.update(fields)
+    row = Secret(id=uuid.uuid4(), **{"is_active": True, "type": "t", "extra_data": None, **fields})
     svc = _svc(monkeypatch, by_name=row)
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
     await _run(MagicMock(flush=AsyncMock()))

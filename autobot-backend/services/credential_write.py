@@ -107,7 +107,7 @@ async def _rotate_or_skip(session, svc, vault, row, sqlite_id: str, value: str) 
 
 def _adoptable(existing, secret_type, sqlite_id) -> str | None:
     """None when *existing* is safe to adopt as this credential's mirror, else the failed condition."""
-    if not existing.is_active:
+    if not existing.is_live:
         return "inactive"
     if existing.type != secret_type:
         return "type_differs"

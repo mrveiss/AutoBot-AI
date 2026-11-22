@@ -149,7 +149,7 @@ class SecretsCoordinator:
         """Whether *secret* is live, owned by an active user's own vault, and holds *presented*."""
         if secret is None or secret.sealed_value is None or secret.type != secret_type:
             return False
-        if not secret.is_active or secret.is_expired:
+        if not secret.is_live or secret.is_expired:
             return False
         owner_vault = VaultRef(VaultKind.USER, str(secret.owner_id))
         if secret.owner_vault != owner_vault.to_str():
