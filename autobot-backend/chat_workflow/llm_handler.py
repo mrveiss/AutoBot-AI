@@ -29,6 +29,7 @@ from prompt_manager import get_language_instruction, get_prompt, resolve_languag
 from .interpretation_guard import interpretation_never_fails_the_tool
 from .models import WorkflowSession
 from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
+from .prompt_drift import record_session_prefix
 from .tool_timing import mark_tool_started, take_tool_elapsed, tool_outcome_fields
 
 logger = get_logger(__name__)
@@ -42,12 +43,7 @@ async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
     is registered for this hook the function is a no-op and the original prompt
     is returned unchanged.
 
-    Args:
-        system_prompt: The assembled system prompt string.
-        session: WorkflowSession instance (passed as data["session"]).
-
-    Returns:
-        Possibly modified system prompt string.
+    Returns the (possibly rewritten) prompt; ``session`` rides in ``data["session"]``.
     """
     ctx = HookContext(
         session_id=getattr(session, "session_id", ""),
@@ -827,10 +823,9 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             {"message": message, "use_knowledge": use_knowledge, "language": language},
         )
 
-        system_prompt = self._get_system_prompt(
-            language=language,
-            company_id=(session.metadata.get("company_id") if session and session.metadata else None),
-        )
+        company_id = session.metadata.get("company_id") if session and session.metadata else None
+        system_prompt = self._get_system_prompt(language=language, company_id=company_id)
+        record_session_prefix(session, language, company_id, bool(self._get_compose_tool_prompt()), system_prompt)
         # Issue #5066: Tiered L0-L4 context wake-up.
         # #13689 turned this ON on 2026-08-08; #13866 reverted it to OFF on
         # 2026-08-10. The A/B's "all five layers render" was measured against
