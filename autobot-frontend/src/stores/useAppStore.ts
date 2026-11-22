@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import { ref, computed } from 'vue'
+import type { SystemNotification, SystemSeverity, SystemStatusDetails } from '@/types/system'
+import { ref } from 'vue'
 import type { Router } from 'vue-router'
 import { defineStore } from 'pinia'
 
@@ -9,13 +10,14 @@ import { defineStore } from 'pinia'
 // Issue #591: Added 'operations' for long-running operations tracker
 export type TabType = 'chat' | 'infrastructure' | 'knowledge' | 'tools' | 'monitoring' | 'operations' | 'analytics' | 'secrets' | 'settings' | 'automation'
 
+/** The backend's health as a state class; the header pill words it (systemStatusContext, #16253). */
 export interface BackendStatus {
-  text: string
   class: 'success' | 'warning' | 'error'
 }
 
 export type NotificationLevel = 'toast' | 'banner' | 'modal'
-export type SystemSeverity = 'info' | 'warning' | 'error' | 'success'
+// #16253: one home in types/system.ts; re-exported for the store's importers.
+export type { SystemNotification, SystemSeverity, SystemStatusDetails }
 
 export interface NotificationSettings {
   enabled: boolean
@@ -41,24 +43,6 @@ export interface NotificationSettings {
   }
   showDetails: boolean
   soundEnabled: boolean
-}
-
-export interface SystemStatusDetails {
-  status: string
-  lastCheck: number
-  consecutiveFailures?: number
-  error?: string
-  timestamp: number
-}
-
-export interface SystemNotification {
-  id: string
-  severity: SystemSeverity
-  title: string
-  message: string
-  visible: boolean
-  statusDetails?: SystemStatusDetails
-  timestamp: number
 }
 
 const defaultNotificationSettings: NotificationSettings = {
@@ -91,10 +75,7 @@ export const useAppStore = defineStore('app', () => {
   // State
   const activeTab = ref<TabType>('chat')
   const navShown = ref(false)
-  const backendStatus = ref<BackendStatus>({
-    text: 'Checking...',
-    class: 'warning'
-  })
+  const backendStatus = ref<BackendStatus>({ class: 'warning' })
   const connectedUsers = ref(0)
   const systemNotifications = ref<SystemNotification[]>([])
   const notificationSettings = ref<NotificationSettings>({ ...defaultNotificationSettings })
@@ -108,33 +89,6 @@ export const useAppStore = defineStore('app', () => {
 
   // Chat session state moved to useChatStore (#6781). useAppStore is no longer
   // a session SSOT — consumers use useChatStore.{sessions,currentSessionId,...}.
-
-  // System status for status indicator
-  const systemStatusIndicator = computed(() => {
-    const errorNotification = systemNotifications.value.find(n => n.severity === 'error' && n.visible);
-    const warningNotification = systemNotifications.value.find(n => n.severity === 'warning' && n.visible);
-
-    if (errorNotification) {
-      return {
-        status: 'error',
-        text: 'System errors detected',
-        pulse: true,
-        statusDetails: errorNotification.statusDetails
-      }
-    }
-    if (warningNotification) {
-      return {
-        status: 'warning',
-        text: 'System warnings',
-        pulse: false,
-        statusDetails: warningNotification.statusDetails
-      }
-    }
-    if (backendStatus.value.class === 'success') {
-      return { status: 'success', text: backendStatus.value.text, pulse: false }  // Use actual backend status text instead of generic message
-    }
-    return { status: 'warning', text: backendStatus.value.text, pulse: true }
-  })
 
   // Actions
   const setActiveTab = (tab: TabType) => {
@@ -297,7 +251,6 @@ export const useAppStore = defineStore('app', () => {
     loadingMessage,
 
     // Computed
-    systemStatusIndicator,
 
     // Actions
     setActiveTab,

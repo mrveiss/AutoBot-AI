@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert, BaseSwitch } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -10,9 +11,10 @@
  * NTP sync triggers Ansible time_sync role across all fleet nodes.
  */
 
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useDarkMode } from '@/composables/useAccessibility'
+import { useI18n } from 'vue-i18n'
+import { useSlmTheme, SLM_THEME_LABEL_KEYS, type SlmTheme } from '@/composables/useSlmTheme'
 // #13140: settings/setup endpoints live beside the canonical SLM client
 // (ADR-008 rule 3). `TimeConfig`/`TimeSyncResult`/`WizardStatus` are the
 // generated contract types re-exported from there (#13138).
@@ -29,9 +31,11 @@ import {
   type WizardStatus,
 } from '@/utils/slmSettingsApi'
 
-const darkMode = useDarkMode()
+// #18239: the theme is a browser-side choice (localStorage), applied on change and not part of Save.
+const theme = useSlmTheme()
 
 const router = useRouter()
+const { t } = useI18n()
 const loading = ref(false)
 const saving = ref(false)
 const syncing = ref(false)
@@ -42,14 +46,8 @@ const syncResult = ref<TimeSyncResult | null>(null)
 const settings = ref({
   system_name: 'AutoBot Production',
   default_timezone: 'UTC',
-  dark_mode: true,
   auto_refresh: true,
   refresh_interval: '30',
-})
-
-// Issue #3305: Apply dark mode immediately when the toggle changes
-watch(() => settings.value.dark_mode, (enabled: boolean) => {
-  darkMode.set(Boolean(enabled))
 })
 
 const timeConfig = ref<TimeConfig>({
@@ -185,7 +183,7 @@ async function fetchSettings(): Promise<void> {
       settings.value.default_timezone = tc.timezone
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load settings'
+    error.value = e instanceof Error ? e.message : t('settings.generalSettings.failedToLoadSettings')
   } finally {
     loading.value = false
   }
@@ -207,19 +205,19 @@ async function saveAllSettings(): Promise<void> {
       }
     }
     if (failed.length > 0) {
-      throw new Error(`Failed to save setting(s): ${failed.join(', ')}`)
+      throw new Error(t('settings.generalSettings.failedToSaveSettingsList', { keys: failed.join(', ') }))
     }
 
     // Save time config (timezone + NTP)
     timeConfig.value.timezone = settings.value.default_timezone
     await putTimeConfig(timeConfig.value)
 
-    success.value = 'Settings saved successfully'
+    success.value = t('settings.generalSettings.settingsSaved')
     setTimeout(() => {
       success.value = null
     }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save settings'
+    error.value = e instanceof Error ? e.message : t('settings.generalSettings.failedToSaveSettings')
   } finally {
     saving.value = false
   }
@@ -236,7 +234,7 @@ async function syncTimeToNodes(): Promise<void> {
     // previous raw `res.text()` body (a JSON blob) as the surfaced message.
     syncResult.value = await syncTimeToNodesApi(null)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Time sync failed'
+    error.value = e instanceof Error ? e.message : t('settings.generalSettings.timeSyncFailed')
   } finally {
     syncing.value = false
   }
@@ -268,11 +266,11 @@ async function resetWizard(): Promise<void> {
   try {
     if (await resetWizardApi()) {
       await fetchWizardStatus()
-      success.value = 'Setup wizard has been reset'
+      success.value = t('settings.generalSettings.setupWizardReset')
       setTimeout(() => { success.value = null }, 3000)
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to reset wizard'
+    error.value = e instanceof Error ? e.message : t('settings.generalSettings.failedToResetWizard')
   } finally {
     wizardResetting.value = false
   }
@@ -296,12 +294,8 @@ onMounted(() => {
 
     <template v-else>
       <!-- Messages -->
-      <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-        {{ error }}
-      </div>
-      <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-        {{ success }}
-      </div>
+      <BaseAlert v-if="error" variant="error" :message="error" />
+      <BaseAlert v-if="success" variant="success" :message="success" />
 
       <!-- General Settings Card -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
@@ -335,16 +329,20 @@ onMounted(() => {
             </select>
           </div>
 
-          <!-- Dark Mode -->
+          <!-- Theme (#18239) -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.darkMode') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.useDarkThemeFor') }}</p>
+              <label for="slm-theme" class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.theme') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.themeHint') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="settings.dark_mode" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <select
+              id="slm-theme"
+              :value="theme.theme.value"
+              class="w-64 px-3 py-2 border border-autobot-border rounded-lg focus:ring-2 focus:ring-primary-500"
+              @change="theme.set(($event.target as HTMLSelectElement).value as SlmTheme)"
+            >
+              <option v-for="name in theme.availableThemes" :key="name" :value="name">{{ $t(SLM_THEME_LABEL_KEYS[name]) }}</option>
+            </select>
           </div>
 
           <!-- Auto Refresh -->
@@ -353,10 +351,7 @@ onMounted(() => {
               <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.autoRefresh') }}</label>
               <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.automaticallyRefreshDataOn') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="settings.auto_refresh" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="settings.auto_refresh" :label="$t('settings.generalSettings.autoRefresh')" />
           </div>
 
           <!-- Refresh Interval -->
@@ -439,20 +434,17 @@ onMounted(() => {
         </div>
 
         <!-- Sync result -->
-        <div
+        <BaseAlert
           v-if="syncResult"
-          :class="syncResult.success
-            ? 'bg-green-50 border-green-200 text-green-800'
-            : 'bg-red-50 border-red-200 text-red-800'"
-          class="border rounded-lg p-4 text-sm"
+          :variant="syncResult.success ? 'success' : 'error'"
         >
-          <div class="font-medium mb-1">{{ $t('settings.generalSettings.value0Value1NodePlural', { value0: syncResult.success ? $t('settings.generalSettings.syncComplete') : $t('settings.generalSettings.syncFailed'), value1: syncResult.node_count, plural: syncResult.node_count !== 1 ? 's' : '' }) }}</div>
+          <div class="font-medium mb-1">{{ $t('settings.generalSettings.value0Value1NodePlural', { value0: syncResult.success ? $t('settings.generalSettings.syncComplete') : $t('settings.generalSettings.syncFailed'), value1: syncResult.node_count }, syncResult.node_count) }}</div>
           <div class="text-xs opacity-80">{{ syncResult.message }}</div>
           <details v-if="syncResult.output" class="mt-2">
             <summary class="cursor-pointer text-xs font-medium">{{ $t('settings.generalSettings.ansibleOutput') }}</summary>
             <pre class="mt-2 text-xs whitespace-pre-wrap font-mono opacity-80">{{ syncResult.output }}</pre>
           </details>
-        </div>
+        </BaseAlert>
       </div>
       <!-- Setup Wizard Card -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">

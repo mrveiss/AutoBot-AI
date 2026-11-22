@@ -18,16 +18,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from media.document.html_extraction import extract_html_title as _extract_title
 from web_fetch.extractors import (
-    _extract_title,
-    _html_to_markdown_via_markdownify,
-    _html_to_plain_text_via_bs4,
     _is_noscript_dominated,
     _strip_boilerplate,
     _strip_script_blocks,
-    extract_markdown,
     is_spa_content,
 )
+from web_fetch.profile import IngestProfile, extract_page
 
 _SIMPLE_HTML = """<html><head><title>My Page</title></head>
 <body><main><p>Hello world content here.</p></main></body></html>"""
@@ -111,58 +109,33 @@ class TestStripBoilerplate:
         assert "Main content here" in soup.get_text()
 
 
-class TestHtmlToMarkdownify:
-    def test_converts_heading(self) -> None:
-        html = "<h1>Title</h1><p>Para</p>"
-        md = _html_to_markdown_via_markdownify(html)
-        assert "Title" in md
+class TestExtractPage:
+    """The page extractor every HTML ingest path uses (#18826): title plus document text."""
 
-    def test_exception_path_handled(self) -> None:
-        # markdownify is imported inside the function; test that the function
-        # does not propagate exceptions to the caller.
-        result = _html_to_markdown_via_markdownify("<p>hi</p>")
-        # Normal path: markdownify is available, should return non-empty string.
-        assert isinstance(result, str)
+    def test_returns_title_and_text(self) -> None:
+        document = extract_page(_SIMPLE_HTML, IngestProfile.DOCUMENT)
+        assert document.info["title"] == "My Page"
+        assert document.text == "Hello world content here."
 
-    def test_returns_string(self) -> None:
-        result = _html_to_markdown_via_markdownify("<p>text</p>")
-        assert isinstance(result, str)
+    def test_og_title_extracted(self) -> None:
+        assert extract_page(_OG_TITLE_HTML, IngestProfile.DOCUMENT).info["title"] == "OG Title Value"
 
+    def test_empty_html_returns_empty_strings(self) -> None:
+        document = extract_page("", IngestProfile.DOCUMENT)
+        assert document.info["title"] == "" and document.text == ""
 
-class TestHtmlToPlainText:
-    def test_extracts_main_text(self) -> None:
-        result = _html_to_plain_text_via_bs4(_SIMPLE_HTML)
-        assert "Hello world" in result
-
-    def test_empty_body_returns_empty(self) -> None:
-        html = "<html><body></body></html>"
-        result = _html_to_plain_text_via_bs4(html)
-        assert result == ""
+    def test_strips_whitespace(self) -> None:
+        assert extract_page("<p>  hello  </p>", IngestProfile.DOCUMENT).text == "hello"
 
     def test_prefers_article_tag(self) -> None:
         html = "<html><body><article><p>Article text</p></article><p>Outside</p></body></html>"
-        result = _html_to_plain_text_via_bs4(html)
-        assert "Article text" in result
+        assert extract_page(html, IngestProfile.DOCUMENT).text == "Article text"
 
-
-class TestExtractMarkdown:
-    def test_returns_title_and_markdown(self) -> None:
-        title, md = extract_markdown(_SIMPLE_HTML)
-        assert title == "My Page"
-        assert isinstance(md, str)
-
-    def test_og_title_extracted(self) -> None:
-        title, md = extract_markdown(_OG_TITLE_HTML)
-        assert title == "OG Title Value"
-
-    def test_empty_html_returns_empty_strings(self) -> None:
-        title, md = extract_markdown("")
-        assert isinstance(title, str)
-        assert isinstance(md, str)
-
-    def test_strips_whitespace(self) -> None:
-        _, md = extract_markdown("<p>  hello  </p>")
-        assert md == md.strip()
+    def test_boilerplate_is_dropped(self) -> None:
+        text = extract_page(_BOILERPLATE_HTML, IngestProfile.DOCUMENT).text
+        assert "Main content here" in text
+        for chrome in ("Nav content", "Header", "Footer", "Sidebar", "var x", ".cls", "Enable JS"):
+            assert chrome not in text
 
 
 class TestIsSpaContent:
@@ -396,3 +369,39 @@ async def test_extract_url_strips_scripts_before_llm() -> None:
 
     assert captured_text, "extract() was never called"
     assert "steal_cookies" not in captured_text[0]
+
+
+_INERT_TEXT_HTML = """<html><head><title>Docs</title>
+<script type="application/ld+json">
+{"@context": "https://schema.org", "@type": "WebPage", "name": "LDJSON-MARKER"}</script>
+<style>.STYLE-MARKER { color: red }</style></head>
+<body><main><h1>Guide</h1><p>Real paragraph text that a reader came for.</p>
+<script>var SCRIPT_MARKER = 1;</script><noscript>NOSCRIPT-MARKER</noscript>
+<template>TEMPLATE-MARKER</template></main></body></html>"""
+
+_INERT_MARKERS = (
+    "LDJSON-MARKER",
+    "schema.org",
+    "STYLE-MARKER",
+    "SCRIPT_MARKER",
+    "NOSCRIPT-MARKER",
+    "TEMPLATE-MARKER",
+)
+
+
+class TestInertTextNeverReachesStoredText:
+    """Script, style, JSON-LD, noscript and template text never reaches extracted text (#18826)."""
+
+    def test_extract_page_drops_script_style_noscript_template_text(self) -> None:
+        document = extract_page(_INERT_TEXT_HTML, IngestProfile.DOCUMENT)
+        assert document.info["title"] == "Docs"
+        assert "Real paragraph text" in document.text
+        leaked = [m for m in _INERT_MARKERS if m in document.text]
+        assert leaked == [], f"inert tag text leaked into extracted text: {leaked}"
+
+    def test_control_the_page_text_does_carry_the_markers(self) -> None:
+        """The fixture is meaningful: stripping tags but keeping their text (the old defect) keeps every marker."""
+        import re
+
+        raw = re.sub(r"<[^>]+>", "", _INERT_TEXT_HTML)
+        assert [m for m in _INERT_MARKERS if m not in raw] == []

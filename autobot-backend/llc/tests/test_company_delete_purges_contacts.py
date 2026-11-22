@@ -22,20 +22,13 @@ from typing import AsyncIterator
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.ext.compiler import compiles
 
 from llc.models.contact import LLCContact
 from llc.services.company import CompanyService
 from llc.services.contact import ContactService
-from user_management.models.base import Base
+from llc.tests import _e2e_harness as harness
 from user_management.models.organization import Organization
-
-
-@compiles(JSONB, "sqlite")
-def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
-    return "JSON"
 
 
 async def _seed_company(session_factory, llc_status: str = "active") -> uuid.UUID:  # noqa: ANN001
@@ -49,6 +42,7 @@ async def _seed_company(session_factory, llc_status: str = "active") -> uuid.UUI
             budget_monthly_cents=0,
             spent_monthly_cents=0,
             require_approval_for_hires=False,
+            require_approval_for_budget_raises=False,
         )
         session.add(org)
         await session.commit()
@@ -58,10 +52,12 @@ async def _seed_company(session_factory, llc_status: str = "active") -> uuid.UUI
 @pytest.fixture()
 async def session_factory() -> AsyncIterator:
     engine = create_async_engine("sqlite+aiosqlite://")  # canonical: ignore py-adhoc-db-engine (test-local engine)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all, tables=[Organization.__table__, LLCContact.__table__])
+    # The loop schema: a delete also stops the company's heartbeats (#15907), so it reaches the agent tables.
+    await harness.create_loop_schema(engine)
     try:
-        yield async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+        yield async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test)
+            bind=engine, expire_on_commit=False, autoflush=False
+        )
     finally:
         await engine.dispose()
 

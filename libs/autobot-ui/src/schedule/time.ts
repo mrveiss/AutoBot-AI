@@ -9,13 +9,18 @@ export function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n)
 }
 
-/** "HH:MM" → [h, m]; null when malformed or out of range. */
-export function splitTime(time: LocalTime): [number, number] | null {
+/**
+ * "HH:MM" → [h, m]; null when malformed or out of range. "24:00" is accepted only
+ * with `endOfDay` -- a minutes window's end (types.ts) -- never as a time of day,
+ * where it would reach localToUtc as hour 24.
+ */
+export function splitTime(time: LocalTime, endOfDay = false): [number, number] | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(time)
   if (!m) return null
   const h = Number(m[1])
   const min = Number(m[2])
-  return h <= 24 && min <= 59 ? [h, min] : null
+  if (h === 24 && min === 0) return endOfDay ? [24, 0] : null
+  return h < 24 && min <= 59 ? [h, min] : null
 }
 
 export function joinTime(h: number, m: number): LocalTime {

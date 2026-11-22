@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("autobot_memory_graph")
 
-from autobot_memory_graph import AutoBotMemoryGraph  # noqa: E402
+from autobot_memory_graph import UNSCOPED_ALL_USERS, AutoBotMemoryGraph  # noqa: E402
 from services.security_memory_integration import SecurityMemoryIntegration  # noqa: E402
 
 
@@ -35,6 +35,8 @@ async def test_get_host_context_uses_canonical_traversal():
 
     result = await integration.get_host_context("10.0.0.1", depth=2)
 
-    graph.get_related_entities.assert_awaited_once_with(entity_name="Host: 10.0.0.1", max_depth=2)
+    graph.get_related_entities.assert_awaited_once_with(
+        entity_name="Host: 10.0.0.1", max_depth=2, owner=UNSCOPED_ALL_USERS
+    )
     assert result["found"] is True
     assert result["related"] == [{"entity": {"name": "svc"}}]

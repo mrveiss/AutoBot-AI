@@ -57,6 +57,7 @@ from typing import List, Optional, Tuple
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_text
 from tools.lint._scan_helpers import tracked_paths
 
@@ -78,6 +79,7 @@ _EXPECTED_EXECUTORS = frozenset({"autobot-backend/tasks/man_page_indexing.py"})
 #: time is not a rule.
 _ALLOWED = {
     "repo_tests/man_page_indexer_path_resolves_15853_test.py": "this guard; the name is its subject",
+    "repo_tests/kb_write_chokepoint_19517_test.py": "classifies that script as a knowledge writer; it does not run it",
     "autobot-backend/api/api_endpoint_migrations_test.py": (
         "PARKED under #15173 and skipped -- 1017 source-text assertions frozen by #5359 Option C. "
         "Its assertion that `refresh_system_knowledge` contains the script name describes the "
@@ -115,7 +117,7 @@ def executable_source(text: str) -> Optional[str]:
     or function, plus any bare string expression used as a comment.
     """
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except SyntaxError:
         return None
     for node in ast.walk(tree):
@@ -197,7 +199,7 @@ def _module_source() -> str:
 
 def _indexer_path_expression() -> str:
     """The right-hand side of MAN_PAGE_INDEXER, as written in the module."""
-    tree = ast.parse(_module_source())
+    tree = parse_cache.parse(_module_source())
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(
             isinstance(t, ast.Name) and t.id == "MAN_PAGE_INDEXER" for t in node.targets
@@ -214,18 +216,19 @@ def _resolved_indexer() -> Path:
     path segments -- read them from the AST instead.
     """
     expression = _indexer_path_expression()
-    assert "PATH.PROJECT_ROOT" in expression, f"MAN_PAGE_INDEXER is not anchored to the project root: {expression}"
+    assert "infrastructure_dir(" in expression, f"MAN_PAGE_INDEXER is not anchored to the tree: {expression}"
     segments = re.findall(r"'([^']+)'|\"([^\"]+)\"", expression)
     parts = [a or b for a, b in segments]
     assert parts, f"no path segments found in {expression}"
-    return REPO_ROOT.joinpath(*parts)
+    # #20578: infrastructure_dir() is the tree's own autobot-infrastructure in a checkout.
+    return REPO_ROOT.joinpath("autobot-infrastructure", *parts)
 
 
 def test_the_indexer_path_is_anchored_to_the_repo_root_not_the_cwd():
     """A cwd-relative path resolves differently under Celery, systemd and pytest."""
     expression = _indexer_path_expression()
 
-    assert "PATH.PROJECT_ROOT" in expression, expression
+    assert "infrastructure_dir(" in expression, expression
     assert not re.search(
         r"^['\"]scripts/", expression
     ), "the indexer is addressed relative to the process working directory"

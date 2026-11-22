@@ -87,7 +87,7 @@ async def test_navigate_answers_with_the_classified_reason():
     message = "Refused: 'ftp' is not a browsable scheme."
     request = browser_mcp.BrowserNavigateRequest(url="ftp://example.org/x")
 
-    with patch("api.browser_mcp.check_rate_limit", AsyncMock(return_value=True)):
+    with patch("api.browser_mcp._rate_limiter.acquire_window", AsyncMock(return_value=True)):
         with patch(
             "api.browser_mcp.classify_url",
             AsyncMock(return_value=UrlDecision(False, "unsupported_scheme", message)),

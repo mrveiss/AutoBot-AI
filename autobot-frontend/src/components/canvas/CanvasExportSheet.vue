@@ -62,7 +62,7 @@
 
         <div class="flex gap-3">
           <button
-            class="flex-1 px-4 py-2 bg-autobot-primary text-white rounded hover:opacity-90 font-medium"
+            class="flex-1 px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded hover:opacity-90 font-medium"
             aria-label="Export canvas"
             @click="doExport"
           >

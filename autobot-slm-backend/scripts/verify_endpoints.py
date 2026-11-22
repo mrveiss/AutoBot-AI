@@ -89,7 +89,7 @@ def main():
         ("NodeEvent", "Lifecycle event tracking"),
         ("Certificate", "PKI certificate management"),
         ("UpdateInfo", "Update tracking and management"),
-        ("EventType", "Event type enumeration (13 types)"),
+        ("NodeEventType", "Event type enumeration (13 types)"),
         ("EventSeverity", "Event severity levels (4 levels)"),
     ]
 

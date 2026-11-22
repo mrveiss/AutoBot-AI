@@ -1,6 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Memory / fact-lane / tool-output-spill AUTOBOT_* environment variable registrations.
+"""Memory / fact-lane / tool-output-spill / edit-miss-search AUTOBOT_* environment variable registrations.
 
 New sibling module (#17855), following the pattern ``env_registry_slm.py``'s
 docstring records: ``env_registry.py`` is closed to new entries.
@@ -154,6 +154,18 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_FACT_SCAN_BATCH_SIZE",
+        type=int,
+        default=200,
+        description=(
+            "Fact hashes read per round trip while get_all_facts streams the fact keyspace (knowledge/fact_stream.py)."
+        ),
+        component="knowledge",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_FACTS_PRUNE_MAX_PER_RUN",
         type=int,
         default=100,
@@ -162,5 +174,182 @@ env_registry.register_env_var(
             "logs loudly (knowledge/facts.py)."
         ),
         component="knowledge",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_GRAPH_SCAN_KEY_BUDGET",
+        type=int,
+        default=20000,
+        description=(
+            "Most memory:entity:* keys one scan-fallback call (_fallback_search, get_entities_as_of) may "
+            "examine before it stops and returns what it found, logging a warning (autobot_memory_graph/queries.py)."
+        ),
+        component="memory_graph",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_EDIT_MISS_OLD_TEXT_MAX_CHARS",
+        type=int,
+        default=2000,
+        description=(
+            "Longest edit_file old_text that the closest-span search runs for after a miss. A longer "
+            "old_text still fails as a miss, and the error says the search was capped (api/filesystem_edit.py, #19463)."
+        ),
+        component="filesystem_mcp",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_EDIT_MISS_MAX_WINDOWS",
+        type=int,
+        default=2000,
+        description=(
+            "Most line windows that the edit_file closest-span search compares after a miss before it stops "
+            "and reports that the search was capped (api/filesystem_edit.py, #19463)."
+        ),
+        component="filesystem_mcp",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_EDIT_MISS_SEARCH_BUDGET_SECONDS",
+        type=float,
+        default=1.0,
+        description=(
+            "Wall-clock budget for one edit_file closest-span search after a miss. On expiry the search "
+            "returns the best span found so far and says it was capped (api/filesystem_edit.py, #19463)."
+        ),
+        component="filesystem_mcp",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_READ_MAX_CHUNKS",
+        type=int,
+        default=500,
+        description=(
+            "Most chunks one memory.session_read call returns for a single session "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+        range=(1, 100_000),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_LIST_MAX_SCAN",
+        type=int,
+        default=5000,
+        description=(
+            "Most of the caller's chunks one memory.session_list call scans when grouping them into sessions "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+        range=(1, 1_000_000),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_LIST_LIMIT",
+        type=int,
+        default=50,
+        description=(
+            "Default number of sessions memory.session_list returns when the caller gives no limit "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+        range=(1, 10_000),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_DECOMPRESSED_BYTES",
+        type=int,
+        default=1073741824,
+        description=(
+            "Most decompressed bytes read from one transcript or history file "
+            "before the read stops and reports itself truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_LINE_BYTES",
+        type=int,
+        default=16777216,
+        description=(
+            "Longest single line a transcript or history read will load; "
+            "a longer line stops the file and reports it truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_EVENTS",
+        type=int,
+        default=1000000,
+        description=(
+            "Most events (or history entries) returned from one file "
+            "before the read stops and reports itself truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_RETAINED_BYTES",
+        type=int,
+        default=268435456,
+        description=(
+            "Most source-line bytes behind the events or entries one transcript or history read retains; "
+            "over it the read stops and reports itself truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_READ_MAX_BYTES",
+        type=int,
+        default=262144,
+        description=(
+            "Most text bytes one memory.session_read call returns after redaction; "
+            "over it the result carries truncated=true "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_EVENT_OVERHEAD_BYTES",
+        type=int,
+        default=1024,
+        description=(
+            "Bytes charged per retained event, on top of its source bytes, against "
+            "AUTOBOT_TRANSCRIPT_MAX_RETAINED_BYTES (services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
     )
 )

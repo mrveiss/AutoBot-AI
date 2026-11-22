@@ -34,17 +34,27 @@ into ``autobot_shared`` so all callers share one implementation.
   ``run_or_schedule(coro)`` runs ``coro`` to completion and returns its
   result, regardless of whether the caller is in a sync or async context:
 
+  0. **Inside a Celery worker** (#20887) → the worker's persistent loop
+     (``autobot_shared.worker_loop``), in both branches below.
   1. **No event loop in the current thread** → ``asyncio.run(coro)``
      directly. Standard sync-entry behavior.
-  2. **Event loop is running in the current thread** → schedule the coro
-     in a ThreadPoolExecutor that owns its own loop, then block until
-     it returns. This is the only safe option because the current loop
-     is busy and we can't await without making the caller async.
+  2. **Event loop is running in the current thread** → submit the coro to
+     the API process's registered main loop (``register_main_loop``) and
+     block until it returns (in a Celery worker the target is the worker's
+     persistent loop instead). It falls back to a thread with its own loop
+     only in the two situations listed under the fresh-loop fallback below.
 
-The threadpool-detour costs a thread spawn per call (and gives up
-asyncio's I/O concurrency for the duration of the coro). Use it only at
-the sync/async boundary — never as a substitute for ``await`` inside
-async code.
+  **Fresh-loop fallback (#21082, #20919).** Case 2 uses a thread with a brand-new
+  loop in exactly two situations: (a) the target loop is unavailable (no main loop
+  registered, or it is not running / is closed; no worker loop in a worker), or
+  (b) the target loop IS the caller's own running loop. A fresh loop does not own the
+  process-wide loop-bound singletons (async DB engine, Redis pools, aiosqlite
+  connections), so touching them there can fail with ``Event loop is closed`` or
+  attach them to a loop that dies on return. The first fallback per call site is
+  logged as a warning; callers on the loop thread should ``await`` instead.
+
+Use it only at the sync/async boundary — never as a substitute for
+``await`` inside async code.
 
 ## Migration target
 
@@ -71,10 +81,14 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import inspect
 import threading
 from typing import Any, Coroutine, TypeVar
 
+from autobot_shared.logging_once import first_time
+
 __all__ = [
+    "register_main_loop",
     "run_or_schedule",
     "fire_and_forget",
     "fire_and_forget_threadsafe",
@@ -87,29 +101,88 @@ __all__ = [
 T = TypeVar("T")
 
 
+# #20887: the API process's serving loop, registered by the lifespan. A sync
+# caller on a different thread whose own loop is busy submits here, so the
+# coroutine runs on the loop that owns the process-wide singletons.
+_MAIN_LOOP: asyncio.AbstractEventLoop | None = None
+
+
+def register_main_loop(loop: asyncio.AbstractEventLoop | None) -> None:
+    """Record (or clear, with ``None``) the API process's serving loop."""
+    global _MAIN_LOOP
+    _MAIN_LOOP = loop
+
+
+def _usable_main_loop() -> asyncio.AbstractEventLoop | None:
+    loop = _MAIN_LOOP
+    return loop if loop is not None and loop.is_running() and not loop.is_closed() else None
+
+
+def _run_in_fresh_loop_thread(coro: Coroutine[Any, Any, T]) -> T:
+    """Last resort: a thread with its own loop (no usable shared loop exists)."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
+def _warn_fallback_once() -> None:
+    """Log (once per call site per process) that a sync caller blocks the loop it needs (#20887)."""
+    # frame 0 = here, 1 = _run_under_running_loop, 2 = run_or_schedule, 3 = the caller
+    frame = inspect.stack()[3]
+    site = (frame.frame.f_globals.get("__name__", "?"), frame.function)
+    if not first_time(__name__, "fallback:%s.%s" % site):  # once per call site (module, function)
+        return
+    _log_threadsafe(
+        "warning",
+        "run_or_schedule called synchronously on the API loop thread; falling back to a "
+        "private-loop thread (loop-bound singletons are unsafe there). Caller: %s.%s",
+        *site,
+    )
+
+
+def _run_under_running_loop(coro: Coroutine[Any, Any, T], running: asyncio.AbstractEventLoop) -> T:
+    """Delegate while the caller's thread is running ``running`` (#20887)."""
+    from autobot_shared import worker_loop
+
+    target = worker_loop.get_worker_loop() if worker_loop.in_worker_process() else _usable_main_loop()
+    if target is None or target is running:
+        # Blocking this thread on its own loop would deadlock, and there is no
+        # other shared loop: keep the pre-#20887 detour rather than hang.
+        _warn_fallback_once()
+        return _run_in_fresh_loop_thread(coro)
+    return worker_loop.run_on_loop(coro, target)
+
+
 def run_or_schedule(coro: Coroutine[Any, Any, T]) -> T:
     """Run ``coro`` to completion from either sync or async context.
 
-    See module docstring for the full contract. Sync entry: uses
-    ``asyncio.run``. Already-in-loop entry: spawns a thread pool that
-    owns its own loop, runs ``coro`` there, and blocks for the result.
+    See module docstring for the full contract. Inside a Celery worker the
+    coroutine runs on the worker's persistent loop, except in the fresh-loop
+    fallback cases below (running loop, target unavailable or the caller's own
+    loop). Otherwise, with no
+    loop running in this thread it uses ``asyncio.run``; with a loop running it
+    is submitted to the worker loop or the API process's main loop; a fresh loop in a
+    thread is used only in the fallback cases below, because it would touch loop-bound
+    singletons from the wrong loop. Worker-loop lookup checks only that the loop is
+    not closed, not ``is_running()``.
 
-    Raises whatever ``coro`` raises (after unwrapping the
-    concurrent.futures.Future indirection in the threaded path).
+    Fresh-loop fallback (#21082, #20919): under a running loop the coroutine runs in a
+    thread with its OWN new loop when (a) the target loop (worker loop, or registered
+    main loop) is unavailable, or (b) the target is the caller's own loop, since blocking
+    on it would deadlock. Loop-bound singletons (async DB engine, Redis pools) used there
+    are bound to a loop that closes on return and may fail on later reuse; the first
+    fallback per call site logs a warning.
+
+    Raises whatever ``coro`` raises.
     """
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        # No loop in this thread — standard sync entry.
-        return asyncio.run(coro)
+    from autobot_shared import worker_loop
 
-    # Loop is running. Hand off to a worker thread that creates its own
-    # loop. Single-shot ThreadPoolExecutor with one worker; the future
-    # blocks the calling thread which is what we want at the sync/async
-    # boundary.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(asyncio.run, coro)
-        return future.result()
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        if worker_loop.in_worker_process():
+            return worker_loop.run_in_worker_loop(coro)
+        return asyncio.run(coro)
+    return _run_under_running_loop(coro, running)
 
 
 # #15522: the event loop keeps only a WEAK reference to a task, so a task whose

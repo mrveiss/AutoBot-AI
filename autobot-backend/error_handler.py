@@ -62,7 +62,7 @@ def with_default_on_error(
     Decorator that logs an error and returns a caller-supplied default value.
 
     Renamed from ``with_error_handling`` (#14191): this module's decorator and
-    ``utils.error_boundaries.decorators.with_error_handling`` shared that name
+    ``autobot_shared.error_boundaries.decorators.with_error_handling`` shared that name
     with disjoint signatures and opposite behaviour on ``HTTPException`` — the
     other re-raises it to preserve intentional status codes, this one caught
     it like any other exception and returned ``default_return``. The name

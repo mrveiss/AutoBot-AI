@@ -18,7 +18,7 @@ from autobot_shared.content_digest import content_digest
 from autobot_shared.status_enums import Severity
 
 
-class PatternType(Enum):
+class CrossLangPatternType(Enum):
     """Types of cross-language patterns detected."""
 
     # API Contract Patterns
@@ -58,7 +58,7 @@ class PatternType(Enum):
 PatternSeverity = Severity
 
 
-class PatternCategory(Enum):
+class CrossLangPatternCategory(Enum):
     """Categories for organizing patterns."""
 
     API_CONTRACT = "api_contract"
@@ -94,7 +94,7 @@ class PatternLocation:
 
 
 @dataclass
-class PatternMatch:
+class CrossLangMatch:
     """A match between patterns in different languages."""
 
     pattern_id: str
@@ -127,8 +127,8 @@ class CrossLanguagePattern:
     """A pattern that appears across multiple languages."""
 
     pattern_id: str
-    pattern_type: PatternType
-    category: PatternCategory
+    pattern_type: CrossLangPatternType
+    category: CrossLangPatternCategory
     severity: PatternSeverity
     name: str
     description: str
@@ -296,7 +296,7 @@ class CrossLanguageAnalysis:
     api_contract_mismatches: List[APIContractMismatch] = field(default_factory=list)
 
     # Pattern matches (cross-language similarities)
-    pattern_matches: List[PatternMatch] = field(default_factory=list)
+    pattern_matches: List[CrossLangMatch] = field(default_factory=list)
 
     # Statistics
     total_patterns: int = 0

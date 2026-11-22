@@ -29,6 +29,14 @@ from code_intelligence.base_analyzer import (
 
 logger = get_logger(__name__)
 
+# Issue #19566: one combined regex per API style, compiled once at import, so
+# each check is a single pass. Factoring the shared ``\b`` prefix and ``\s*\(`` /
+# ``\s*\{`` suffix out of the alternation keeps the match set identical.
+_COMPOSITION_API_RE = re.compile(r"\b(?:setup|ref|reactive|computed|watch|watchEffect|onMounted|onUnmounted)\s*\(")
+_OPTIONS_API_RE = re.compile(
+    r"\b(?:data\s*\(\s*\)|methods\s*:|computed\s*:|watch\s*:|mounted\s*\(\s*\)|created\s*\(\s*\))\s*\{"
+)
+
 
 # =============================================================================
 # Template Section Patterns
@@ -560,31 +568,9 @@ class VueAnalyzer(BaseLanguageAnalyzer):
                 )
 
     def _check_api_consistency(self, content: str, base_line: int) -> None:
-        """Check for mixing Composition API and Options API."""
-        # Composition API indicators
-        composition_indicators = [
-            r"\bsetup\s*\(",
-            r"\bref\s*\(",
-            r"\breactive\s*\(",
-            r"\bcomputed\s*\(",
-            r"\bwatch\s*\(",
-            r"\bwatchEffect\s*\(",
-            r"\bonMounted\s*\(",
-            r"\bonUnmounted\s*\(",
-        ]
-
-        # Options API indicators
-        options_indicators = [
-            r"\bdata\s*\(\s*\)\s*\{",
-            r"\bmethods\s*:\s*\{",
-            r"\bcomputed\s*:\s*\{",
-            r"\bwatch\s*:\s*\{",
-            r"\bmounted\s*\(\s*\)\s*\{",
-            r"\bcreated\s*\(\s*\)\s*\{",
-        ]
-
-        has_composition = any(re.search(p, content) for p in composition_indicators)
-        has_options = any(re.search(p, content) for p in options_indicators)
+        """Check for mixing Composition API and Options API (#19566: one pass each)."""
+        has_composition = _COMPOSITION_API_RE.search(content) is not None
+        has_options = _OPTIONS_API_RE.search(content) is not None
 
         if has_composition and has_options:
             self.issues.append(

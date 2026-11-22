@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # #14518: the path insert here pointed at a ``src`` directory that does not
 # exist beside this script, and ``llm_interface`` is a pre-restructure module
-# name. LLMInterface now lives in autobot-backend/llm_multi_provider.py. Add
+# name. The canonical entry point is services.llm_service.get_llm_service (#18552). Add
 # autobot-backend the way the other operator entry points in this tree do
 # (#14129).
 # A backend tool (#18289): it also puts the repository root on the path (for `autobot_shared`), so it
@@ -27,7 +27,7 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))
 
-from llm_multi_provider import LLMInterface  # noqa: E402
+from services.llm_service import get_llm_service  # noqa: E402
 
 
 async def test_failsafe_sequence():
@@ -36,22 +36,21 @@ async def test_failsafe_sequence():
 
     try:
         # This is exactly what the failsafe agent does
-        llm = LLMInterface()
+        llm = get_llm_service()
 
-        logger.info("   LLM interface created")
-        logger.info("   Task LLM alias: %s", llm.task_llm_alias)
+        logger.info("   LLM service created")
 
         # Create the same message structure
         prompt = "Say hello back to the user."
         messages = [{"role": "user", "content": prompt}]
 
         logger.info("   Messages: %s", messages)
-        logger.info("   Making chat_completion call with llm_type='task'...")
+        logger.info("   Making chat call with llm_type='task'...")
 
         # This is the exact call that hangs
         start_time = time.time()
         response_data = await asyncio.wait_for(
-            llm.chat_completion(messages, llm_type="task"),
+            llm.chat(messages, llm_type="task"),
             timeout=20.0,  # Shorter timeout to catch hangs
         )
         end_time = time.time()
@@ -59,19 +58,19 @@ async def test_failsafe_sequence():
         logger.info("✅ Response received in %.2fs!", end_time - start_time)
         logger.info("   Response data: %s", response_data)
 
-        response = response_data.get("response", "")
+        response = response_data.content
         logger.info("   Extracted response: %s", response)
 
         return True
 
     except asyncio.TimeoutError:
         elapsed = time.time() - start_time
-        logger.error("❌ chat_completion call timed out after %.2fs", elapsed)
+        logger.error("❌ chat call timed out after %.2fs", elapsed)
         return False
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error("❌ chat_completion call failed after %.2fs: %s", elapsed, e)
+        logger.error("❌ chat call failed after %.2fs: %s", elapsed, e)
         import traceback
 
         traceback.print_exc()
@@ -79,13 +78,13 @@ async def test_failsafe_sequence():
 
 
 async def test_direct_ollama_completion():
-    """Test calling _ollama_chat_completion directly"""
-    logger.info("\n🎯 Testing _ollama_chat_completion directly...")
+    """Test calling the ollama provider directly"""
+    logger.info("\n🎯 Testing the ollama provider directly...")
 
     try:
-        llm = LLMInterface()
+        llm = get_llm_service()
 
-        # Call the Ollama method directly
+        # Call the Ollama provider directly
         messages = [
             {
                 "role": "system",
@@ -101,13 +100,14 @@ async def test_direct_ollama_completion():
             {"role": "user", "content": "Say hello back to the user."},
         ]
 
-        logger.info("   Calling _ollama_chat_completion directly...")
+        logger.info("   Calling the ollama provider directly...")
 
         start_time = time.time()
         response_data = await asyncio.wait_for(
-            llm._ollama_chat_completion(
-                model="artifish/llama3.2-uncensored:latest",
-                messages=messages,
+            llm.chat(
+                messages,
+                provider_name="ollama",
+                model_name="artifish/llama3.2-uncensored:latest",
                 temperature=0.7,
             ),
             timeout=20.0,
@@ -115,7 +115,7 @@ async def test_direct_ollama_completion():
         end_time = time.time()
 
         logger.info("✅ Direct Ollama response in %.2fs!", end_time - start_time)
-        logger.info("   Response: %s...", response_data.get("response", "No response")[:100])
+        logger.info("   Response: %s...", (response_data.content or "No response")[:100])
 
         return True
 
@@ -147,7 +147,7 @@ async def main():
     if direct_result and sequence_result:
         logger.info("\n✅ Both direct and sequence calls work!")
     elif direct_result and not sequence_result:
-        logger.info("\n🚨 The issue is in the chat_completion method!")
+        logger.info("\n🚨 The issue is in the chat method!")
     elif not direct_result:
         logger.error("\n🚨 Even direct Ollama calls are failing!")
 

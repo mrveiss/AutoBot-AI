@@ -12,8 +12,8 @@
  * Issue #754: Added ARIA attributes, keyboard navigation, high contrast toggle.
  */
 
-import { BrandMark } from '@autobot/ui'
-import { computed, onMounted, onUnmounted } from 'vue'
+import { BrandMark, usePollingJob } from '@autobot/ui'
+import { computed, onMounted, ref, watch } from 'vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -21,7 +21,8 @@ import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useCodeSync } from '@/composables/useCodeSync'
 import { useSystemUpdates } from '@/composables/useSystemUpdates'
-import { useHighContrast } from '@/composables/useAccessibility'
+import { useSlmTheme } from '@/composables/useSlmTheme'
+import { useKeyboardNav } from '@/composables/useAccessibility'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,11 +31,10 @@ const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 const codeSync = useCodeSync()
 const systemUpdates = useSystemUpdates()
-const highContrast = useHighContrast()
+const theme = useSlmTheme()
 
 // Polling interval for code sync + system updates status (1 minute)
 const STATUS_POLL_INTERVAL = 60000
-let statusPollTimer: ReturnType<typeof setInterval> | null = null
 
 // Combined badge count for sidebar
 const combinedUpdateCount = computed(() =>
@@ -121,38 +121,18 @@ function navigate(path: string): void {
   router.push(path)
 }
 
-/**
- * Handle keyboard navigation within sidebar nav items.
- *
- * Helper for Sidebar keyboard navigation (Issue #754).
- */
-function handleNavKeydown(event: KeyboardEvent, index: number): void {
-  const items = visibleNavItems.value
-  let targetIndex = -1
+const navButtons = ref<HTMLElement[]>([])
 
-  switch (event.key) {
-    case 'ArrowDown':
-      targetIndex = index < items.length - 1 ? index + 1 : 0
-      break
-    case 'ArrowUp':
-      targetIndex = index > 0 ? index - 1 : items.length - 1
-      break
-    case 'Home':
-      targetIndex = 0
-      break
-    case 'End':
-      targetIndex = items.length - 1
-      break
-    default:
-      return
-  }
-
-  event.preventDefault()
-  const navEl = document.querySelector(`[data-nav-index="${targetIndex}"]`)
-  if (navEl instanceof HTMLElement) {
-    navEl.focus()
-  }
+function setNavButton(el: unknown, index: number): void {
+  if (el instanceof HTMLElement) navButtons.value[index] = el
 }
+
+// Keep one slot per visible item: a removed tail item (admin-only entry after a role change)
+// must not leave a hole that End / wrap-around would target. Post-flush, after the refs settle.
+watch(() => visibleNavItems.value.length, (count) => { navButtons.value.length = count }, { flush: 'post' })
+
+// Arrow / Home / End navigation of the menu comes from the shared a11y composable (#754).
+const navKeys = useKeyboardNav(navButtons, { orientation: 'vertical', wrap: true })
 
 /**
  * Handle user logout.
@@ -175,19 +155,15 @@ async function refreshStatusPolling(): Promise<void> {
   ])
 }
 
-onMounted(async () => {
-  if (!authStore.isAuthenticated) return
-  // Fetch initial status for both code sync and system updates
-  await refreshStatusPolling()
-  // Set up combined polling
-  statusPollTimer = setInterval(refreshStatusPolling, STATUS_POLL_INTERVAL)
-})
+// #19482: usePollingJob for scope disposal. No consecutiveErrorLimit and no paused
+// alert: this is a 60s status poll in the app chrome, where a banner would be the
+// wrong surface, so it keeps polling through failures as before.
+const statusPoller = usePollingJob(refreshStatusPolling, { intervalMs: STATUS_POLL_INTERVAL, maxAttempts: Infinity })
 
-onUnmounted(() => {
-  if (statusPollTimer) {
-    clearInterval(statusPollTimer)
-    statusPollTimer = null
-  }
+onMounted(() => {
+  if (!authStore.isAuthenticated) return
+  // The first tick fetches code sync and system updates now; then every minute.
+  statusPoller.start('')
 })
 </script>
 
@@ -243,8 +219,9 @@ onUnmounted(() => {
         <li v-for="(item, index) in visibleNavItems" :key="item.path" role="none">
           <button
             @click="navigate(item.path)"
-            @keydown="handleNavKeydown($event, index)"
-            :data-nav-index="index"
+            :ref="(el) => setNavButton(el, index)"
+            @keydown="navKeys.handleKeyDown"
+            @focus="navKeys.activeIndex.value = index"
             :aria-current="isItemActive(item.path) ? 'page' : undefined"
             role="menuitem"
             :tabindex="isItemActive(item.path) ? 0 : -1"
@@ -355,15 +332,15 @@ onUnmounted(() => {
 
       <!-- Issue #754: High contrast toggle -->
       <button
-        @click="highContrast.toggle()"
+        @click="theme.toggleContrast()"
         class="w-full flex items-center gap-2 px-3 py-2 mb-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
-        :aria-pressed="highContrast.enabled.value"
+        :aria-pressed="theme.isContrast.value"
         :aria-label="$t('common.sidebar.toggleHighContrastAria')"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
         </svg>
-        <span>{{ highContrast.enabled.value ? $t('common.sidebar.standardMode') : $t('common.sidebar.highContrast') }}</span>
+        <span>{{ theme.isContrast.value ? $t('common.sidebar.standardMode') : $t('common.sidebar.highContrast') }}</span>
       </button>
 
       <div class="flex items-center justify-between mb-2">
