@@ -5022,6 +5022,10 @@
   "agent": {
     "title": "Agents",
     "systemActor": "System",
+    "heartbeatReasons": {
+      "manual_pause_ui": "Manual pause from UI",
+      "manual_wakeup_ui": "Manual wakeup from UI"
+    },
     "status": "Agent Status",
     "config": "Agent Configuration",
     "orchestrator": "Orchestrator",

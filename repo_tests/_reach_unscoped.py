@@ -22,6 +22,9 @@ from __future__ import annotations
 UNSCOPED = frozenset(
     {
         "ansible-apt-repo-budget-override-sweep",
+        # #17419: the population is the AUTOBOT_* alias NAMES the census extracts, not paths, so no prefix
+        # describes it; its file reach is the scoped "env-alias-registry-gap" declaration in the same guard.
+        "env-alias-census",
         # #19807: every tracked non-test .py file, since the canned command output could be written in
         # any component; the population is the whole tree, so no prefix describes it.
         "no-simulated-command-output-19807-scan",
