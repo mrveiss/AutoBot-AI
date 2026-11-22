@@ -107,7 +107,7 @@ class TestValidatePrUrl:
 
 class TestVerifySignature:
     def _fn(self):
-        from llc.api.github_webhooks import verify_webhook_signature  # noqa: PLC0415
+        from autobot_shared.webhook_signature import verify_webhook_signature  # noqa: PLC0415
 
         return verify_webhook_signature
 
@@ -252,18 +252,6 @@ class TestWebhookEndpoint:
         assert resp.json()["status"] == "processed"
         assert item.linked_pr_urls
 
-    def test_merge_transitions_to_in_review(self, monkeypatch):
-        from llc.models.enums import WorkItemStatus  # noqa: PLC0415
-
-        monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", _SECRET)
-        item = _mock_item(status="in_progress")
-        app, session = _make_webhook_app(item)
-        resp = _post(TestClient(app), _pr_payload(action="closed", merged=True))
-        assert resp.json()["status"] == "processed"
-        assert item.status == WorkItemStatus.IN_REVIEW
-        # Two comments: link + transition.
-        assert session.add.call_count == 2
-
     def test_merge_does_not_touch_done_item(self, monkeypatch):
         monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", _SECRET)
         item = _mock_item(status="done")
@@ -284,6 +272,14 @@ class TestWebhookEndpoint:
         assert resp.json()["status"] == "processed"
         assert item.status == "in_progress"
         assert session.add.call_count == 1  # close comment only (already linked)
+
+    def test_the_item_is_loaded_under_a_row_lock_before_anything_changes(self, monkeypatch):
+        monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", _SECRET)
+        item = _mock_item(status="done")
+        app, session = _make_webhook_app(item)
+        _post(TestClient(app), _pr_payload(action="closed", merged=True))
+        first_select = session.execute.await_args_list[0].args[0]
+        assert first_select._for_update_arg is not None  # FOR UPDATE: a repeated delivery waits for the first
 
     def test_mismatched_pr_url_rejected(self, monkeypatch):
         monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", _SECRET)

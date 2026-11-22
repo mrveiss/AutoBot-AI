@@ -47,13 +47,17 @@ WHAT THIS CANNOT SEE
 from __future__ import annotations
 
 import ast
+import functools
 import re
 import sys
 from pathlib import Path
 
+from tools.lint import _parse_cache as parse_cache
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from repo_tests._paths import repo_root  # noqa: E402
+from repo_tests._ratchet_base import added_entries, base_table  # noqa: E402
 
 from tools.lint._scan_helpers import tracked_paths  # noqa: E402
 
@@ -79,6 +83,8 @@ _RESTORES = re.compile(
     r"|sys\.modules\.update\("
 )
 
+_THIS_FILE = "repo_tests/sys_modules_module_scope_restoration_test.py"
+
 #: Files with a module-scope `sys.modules` write and no restoration anywhere in
 #: them. Frozen so a NEW one fails. Shrinks only, and a shrink must be recorded.
 GRANDFATHERED = frozenset(
@@ -91,7 +97,6 @@ GRANDFATHERED = frozenset(
         "autobot-backend/knowledge_sync_incremental_test.py",
         "autobot-backend/llc/tests/test_autobot_agent_adapter.py",
         "autobot-backend/onboarding/doctor_test.py",
-        "autobot-backend/services/audit_logger_test.py",
         "autobot-backend/services/knowledge/test_contradiction_detector.py",
         "autobot-backend/services/knowledge/test_doc_indexer.py",
         "autobot-backend/services/knowledge/test_doc_indexer_dim_mismatch.py",
@@ -158,14 +163,18 @@ def _tracked_python() -> list[Path]:
     return [root / rel for rel in tracked_paths(root, "*.py")]
 
 
+@functools.lru_cache(maxsize=1)
 def _scan() -> tuple[set[str], int]:
-    """(files writing at module scope with no restoration, files parsed)."""
+    """(files writing at module scope with no restoration, files parsed).
+
+    Memoised (#20814): 3 tests read the same sweep.
+    """
     root = repo_root()
     offenders, parsed = set(), 0
     for path in _tracked_python():
         try:
             source = path.read_text(encoding="utf-8")
-            tree = ast.parse(source)
+            tree = parse_cache.parse(source)
         except (OSError, UnicodeDecodeError, SyntaxError):
             continue
         parsed += 1
@@ -181,14 +190,16 @@ def test_the_detector_sees_a_write_inside_a_module_level_try() -> None:
     between indentation and scope.
     """
     src = "import sys\ntry:\n    sys.modules['x'] = object()\nexcept ImportError:\n    pass\n"
-    assert module_scope_sys_modules_writes(ast.parse(src)), "detector misses a write inside a module-level try"
+    assert module_scope_sys_modules_writes(parse_cache.parse(src)), "detector misses a write inside a module-level try"
 
 
 def test_the_detector_ignores_a_write_inside_a_function() -> None:
     """The contrast pair. A write inside `def` does not run at import, and a
     detector that cannot tell the two apart would report the whole test suite."""
     src = "import sys\ndef f():\n    sys.modules['x'] = object()\n"
-    assert not module_scope_sys_modules_writes(ast.parse(src)), "detector reports a write that never runs at import"
+    assert not module_scope_sys_modules_writes(
+        parse_cache.parse(src)
+    ), "detector reports a write that never runs at import"
 
 
 def test_the_sweep_parsed_enough_files_to_mean_anything() -> None:
@@ -218,3 +229,18 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     assert not stale, "GRANDFATHERED entries that now restore -- remove them, the list only shrinks:\n  " + "\n  ".join(
         stale
     )
+
+
+def test_the_grandfathered_list_never_grows() -> None:
+    """Adding a new offender to the list satisfies both tests above, so the base commit decides (#20243)."""
+    grown = added_entries(GRANDFATHERED, base_table(repo_root(), (_THIS_FILE,), "GRANDFATHERED"))
+    assert not grown, (
+        "GRANDFATHERED gained entries against the base commit -- restore the substitution "
+        "instead of exempting it:\n  " + "\n  ".join(grown)
+    )
+
+
+def test_the_growth_check_finds_an_added_entry() -> None:
+    """Known positive: the check must see an addition before its silence means anything."""
+    planted = "autobot-backend/planted_leak_test.py"
+    assert added_entries(GRANDFATHERED | {planted}, GRANDFATHERED) == [planted]

@@ -15,11 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autobot_shared.time_utils import now_utc
-from user_management.services.user_service import (
-    InvalidCredentialsError,
-    UserNotFoundError,
-    UserService,
-)
+from autobot_shared.user_management.user_service_errors import InvalidCredentialsError, UserNotFoundError
+from user_management.services.user_service import UserService
 
 
 @pytest.fixture

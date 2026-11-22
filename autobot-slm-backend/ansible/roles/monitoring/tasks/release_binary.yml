@@ -1,0 +1,40 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Ansible Monitoring Role - does an upstream release binary need (re)installing?
+#
+# Shared by prometheus.yml, alertmanager.yml and node_exporter.yml (#18556 review).
+# Presence alone is not enough: after a *_version bump the old binary is still
+# there, and a stat-only gate kept it forever. The binary is asked its version;
+# a missing binary or a different version sets release_install_needed, an equal
+# one leaves it false so a re-run changes nothing.
+#
+# Inputs: release_binary (path), release_version (the role's pinned version).
+---
+
+- name: "{{ release_binary | basename }} | Note whether the binary is installed"
+  ansible.builtin.stat:
+    path: "{{ release_binary }}"
+  register: _release_binary_stat
+
+- name: "{{ release_binary | basename }} | Ask the installed binary its version"
+  ansible.builtin.command:
+    argv:
+      - "{{ release_binary }}"
+      - --version
+  register: _release_binary_version
+  changed_when: false
+  failed_when: false
+  when: _release_binary_stat.stat.exists
+  check_mode: false
+
+# Upstream prints "<name>, version X.Y.Z (branch: ...)" -- older builds to stderr,
+# so both streams are read; the trailing space keeps 2.48.0 from matching 2.48.01.
+- name: "{{ release_binary | basename }} | Decide whether the pinned release must be installed"
+  ansible.builtin.set_fact:
+    release_install_needed: >-
+      {{ not _release_binary_stat.stat.exists
+         or ('version ' ~ release_version ~ ' ') not in
+            ((_release_binary_version.stdout | default('')) ~ ' ' ~ (_release_binary_version.stderr | default(''))) }}

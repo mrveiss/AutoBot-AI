@@ -17,11 +17,11 @@ from datetime import datetime
 from typing import Any, Dict, FrozenSet, List, Tuple
 
 from code_intelligence.doc_generation.types import (
+    CodeElementType,
     DiagramType,
     DocCompleteness,
     DocFormat,
     DocSection,
-    ElementType,
     ExampleDoc,
     ExceptionDoc,
     ParameterDoc,
@@ -38,7 +38,7 @@ class FunctionDoc:
     """Complete documentation for a function or method."""
 
     name: str
-    element_type: ElementType
+    element_type: CodeElementType
     signature: str
     docstring: str | None = None
     description: str | None = None

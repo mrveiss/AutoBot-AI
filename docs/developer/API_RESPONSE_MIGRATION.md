@@ -40,7 +40,7 @@ Function name mapping (`api_responses.py` → `response_builder.py`):
 | `internal_error()` | `server_error_response()` |
 | `conflict()` | `conflict_response()` |
 | `service_unavailable()` | `service_unavailable_response()` |
-| `raise_not_found()` / `raise_bad_request()` / `raise_unauthorized()` / `raise_forbidden()` / `raise_internal_error()` / `raise_conflict()` | Same names, `from utils.response_builder import raise_not_found, ...` |
+| `raise_not_found()` / `raise_bad_request()` / `raise_unauthorized()` / `raise_forbidden()` / `raise_internal_error()` / `raise_conflict()` | `raise_not_found_with_message()` / `raise_internal_error_with_message()` (renamed apart from the catalog raisers of the same name, #18450); the others keep their names. All `from utils.response_builder import ...` |
 | `StandardResponse` / `ErrorResponse` / `PaginatedResponse` (Pydantic models, no callers) | Not carried over — use `autobot-backend/api/schemas_common.py` (`DataResponse`, `SuccessMessageResponse`, `SuccessDataResponse`) for typed `response_model=` declarations; see the Response Schema Selection Guide below. |
 
 **Note**: `response_builder.py`'s `success_response`/`error_response`/

@@ -261,6 +261,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWatchFolders, type WatchFolderConfig } from '@/composables/knowledge/useWatchFolders'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const {
   watchFolders,
@@ -292,13 +293,7 @@ const newFolder = ref<Omit<WatchFolderConfig, 'folder_id' | 'created_at' | 'is_w
   tags: [],
 })
 
-function formatDate(dateString: string): string {
-  try {
-    return new Date(dateString).toLocaleString()
-  } catch {
-    return dateString
-  }
-}
+const formatDate = createDateFormatter()
 
 async function handleSubmit() {
   // Parse tags

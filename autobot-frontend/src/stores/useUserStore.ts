@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { ref, computed } from 'vue'
+import { ROLE_PERMISSIONS } from '@/types/_generated/workflow'
 import type { Role } from '@/types/_generated/workflow'
 import { defineStore } from 'pinia'
 import { createLogger } from '@/utils/debugUtils'
@@ -8,6 +9,7 @@ import { getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { isRealAuthToken } from '@/utils/authToken'
 import { isAdminRole } from '@/constants/roles'
+import type { EffectiveTheme } from '@/composables/useTheme'
 
 const logger = createLogger('useUserStore')
 
@@ -25,7 +27,7 @@ export interface UserProfile {
 }
 
 export interface UserPreferences {
-  theme: 'light' | 'dark' | 'auto'
+  theme: EffectiveTheme | 'auto'
   language: string
   timezone: string
   notifications: {
@@ -68,8 +70,12 @@ export const useUserStore = defineStore('user', () => {
 
   const currentUser = ref<UserProfile | null>(null)
 
+  // Counts fresh sign-ins (login() only). A session restore from storage or the
+  // backend never bumps it, so consumers can tell a sign-in from a reload (#18240).
+  const signInCount = ref(0)
+
   const defaultPreferences: UserPreferences = {
-    theme: 'auto',
+    theme: 'light',
     language: 'en',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     notifications: {
@@ -104,26 +110,17 @@ export const useUserStore = defineStore('user', () => {
   // role (admin AND superadmin), not just a literal 'admin' comparison.
   const isAdmin = computed(() => isAdminRole(currentUser.value?.role))
 
-  // Roles that hold Permission.SERVICE_MANAGEMENT (service.management) — must
-  // mirror ROLE_PERMISSIONS in autobot_shared/auth/permissions.py (#10198).
-  // superadmin deliberately excluded: its ROLE_PERMISSIONS entry is empty by
-  // design (it is an administrative predicate, not a permission grant) —
-  // see autobot_shared/auth/permissions.py.
+  // Holds Permission.SERVICE_MANAGEMENT (service.management). Derived from the
+  // generated ROLE_PERMISSIONS map (autobot_shared/auth/permissions.py, #10198),
+  // so it cannot drift: superadmin inherits admin's set (#19125).
   // Fail-safe: unknown role → false (hidden).
   const hasServiceManagement = computed(() => {
-    const role = currentUser.value?.role
-    return role === 'admin' || role === 'operator'
+    const role = currentUser.value?.role as Role | undefined
+    const granted = role ? ROLE_PERMISSIONS[role] : undefined
+    return !!granted && granted.includes('service.management')
   })
 
   const preferences = computed(() => currentUser.value?.preferences || defaultPreferences)
-
-  const theme = computed(() => {
-    const userTheme = preferences.value.theme
-    if (userTheme === 'auto') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    }
-    return userTheme
-  })
 
   const isTokenExpired = computed(() => {
     if (!authState.value.expiresAt) return false
@@ -132,6 +129,7 @@ export const useUserStore = defineStore('user', () => {
 
   // Actions
   function login(user: UserProfile, tokens: { token: string; refreshToken?: string; expiresIn?: number }) {
+    signInCount.value += 1
     currentUser.value = user
     authState.value = {
       isAuthenticated: true,
@@ -169,11 +167,6 @@ export const useUserStore = defineStore('user', () => {
         ...updates
       }
     }
-  }
-
-  function updateTheme(theme: 'light' | 'dark' | 'auto') {
-    updatePreferences({ theme })
-    applyTheme()
   }
 
   function updateLanguage(language: string) {
@@ -231,27 +224,9 @@ export const useUserStore = defineStore('user', () => {
     authState.value.expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : undefined
   }
 
-  // Theme and accessibility helpers
-  // Theme is applied via the `data-theme` attribute to match the SSOT
-  // selector convention in src/assets/tailwind.css (`@variant dark
-  // (&:where([data-theme="dark"], [data-theme="dark"] *))`). Setting a
-  // `dark` class instead leaves Tailwind's `dark:` utilities and the
-  // design-token CSS unmatched, which is why /preferences could show
-  // "Dark" while pages still rendered in light mode (#6772).
-  function applyTheme() {
-    const currentTheme = theme.value
-    const root = document.documentElement
-
-    root.setAttribute('data-theme', currentTheme)
-    root.style.colorScheme = currentTheme
-
-    // Update meta theme-color for mobile browsers
-    const metaThemeColor = document.querySelector('meta[name="theme-color"]')
-    if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', currentTheme === 'dark' ? '#1f2937' : '#ffffff')
-    }
-  }
-
+  // Accessibility helpers. The theme itself is NOT applied here: `data-theme`
+  // has exactly one writer, composables/useTheme.ts (#18240, guarded by
+  // repo_tests/single_attribute_writer_18240_test.py).
   function applyAccessibilitySettings() {
     const root = document.documentElement
     const settings = preferences.value.accessibility
@@ -307,7 +282,6 @@ export const useUserStore = defineStore('user', () => {
             lastLoginAt: user.lastLoginAt ? new Date(user.lastLoginAt) : undefined
           }
 
-          applyTheme()
           applyAccessibilitySettings()
         } else if (hasRealToken && auth.expiresAt && new Date(auth.expiresAt) <= new Date()) {
           // Clear stale expired token so ApiClient doesn't keep sending it (#979)
@@ -432,13 +406,13 @@ export const useUserStore = defineStore('user', () => {
     // State
     authState,
     currentUser,
+    signInCount,
 
     // Computed
     isAuthenticated,
     isAdmin,
     hasServiceManagement,
     preferences,
-    theme,
     isTokenExpired,
 
     // Actions
@@ -446,7 +420,6 @@ export const useUserStore = defineStore('user', () => {
     logout,
     updateProfile,
     updatePreferences,
-    updateTheme,
     updateLanguage,
     updateTimezone,
     updateNotificationSettings,
@@ -454,7 +427,6 @@ export const useUserStore = defineStore('user', () => {
     updateAccessibilitySettings,
     updateChatSettings,
     refreshToken,
-    applyTheme,
     applyAccessibilitySettings,
     initializeFromStorage,
     persistToStorage,

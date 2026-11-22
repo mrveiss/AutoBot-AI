@@ -75,8 +75,10 @@ async def test_is_processing_clears_even_when_the_stream_raises(monkeypatch):
     monkeypatch.setattr(mgr, "_process_via_graph", _raising_graph)
     monkeypatch.setattr(mgr, "_process_message_stream_legacy", _raising_legacy)
 
-    with pytest.raises(RuntimeError, match="boom-legacy"):
-        async for _ in mgr.process_message_stream("sess-1", "hello"):
-            pass
+    # #17273: the fallback is a registered turn like the graph path, so a failure in it reaches the
+    # client as an error event (details never leaked, #9410) rather than escaping the generator.
+    messages = [m async for m in mgr.process_message_stream("sess-1", "hello")]
 
+    assert [m.type for m in messages] == ["error"]
+    assert "boom" not in messages[0].content
     assert mgr.is_processing() is False

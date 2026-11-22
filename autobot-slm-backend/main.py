@@ -49,6 +49,7 @@ from api import (
     rdp_router,
     redis_service_router,
     scim_router,
+    secrets_backup_status_router,
     secrets_router,
     security_router,
     services_router,
@@ -65,6 +66,7 @@ from api import (
 )
 from api.code_source import router as code_source_router
 from api.memory_lifecycle_proxy import router as memory_lifecycle_router
+from api.node_ssh_password_internal import router as node_ssh_password_internal_router
 from api.performance import metrics_router as performance_metrics_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
@@ -72,6 +74,7 @@ from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
 from autobot_shared.fastapi_validation_handlers import register_validation_error_handlers
 from autobot_shared.integrity_manifest import verify_integrity_at_startup
+from autobot_shared.logging_manager import setup_logging
 from autobot_shared.stream_logging import (
     build_stderr_handler,
     build_stdout_handler,
@@ -82,15 +85,21 @@ from middleware import install_middleware
 from services.a2a_card_fetcher import start_card_refresh_task
 from services.auth import require_service_management, require_service_management_or_internal
 from services.compose_fleet import (
-    _SLM_MGMT_IP,
     _compose_nodes_enabled,
     seed_compose_nodes,
+    slm_mgmt_ip,
     start_compose_heartbeat,
 )
 from services.database import db_service
+from services.generated_system_secrets import (
+    INTERNAL_API_KEY,
+    PROMETHEUS_SCRAPE_TOKEN,
+    SCIM_BEARER_TOKEN,
+    ensure_generated_secret,
+)
 from services.git_tracker import start_version_checker
 from services.local_admin_socket import start_local_admin_socket
-from services.node_seeder import sync_slm_node_roles
+from services.node_seeder import heal_existing_slm_node_roles
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
 from services.security_posture_auditor import (
@@ -108,6 +117,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[build_stdout_handler(), build_stderr_handler()],
 )
+setup_logging()  # service startup (uvicorn imports this module): file logging on (#20894)
 logger = logging.getLogger(__name__)
 
 
@@ -172,28 +182,8 @@ async def _run_migrations():
         raise
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
-    # Reconfigure root logger AFTER uvicorn's setup so application
-    # logs (code_sync, git_tracker, etc.) are visible in service logs.
-    # #12488: keep the same stdout/stderr level split as the module-level
-    # basicConfig() above — force=True replaces it, so it must be
-    # re-applied here too.
-    logging.basicConfig(
-        level=logging.DEBUG if settings.debug else logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[build_stdout_handler(), build_stderr_handler()],
-        force=True,
-    )
-    logger.info("Starting SLM Backend v1.0.0")
-    logger.info("Debug mode: %s", settings.debug)
-
-    # Non-fatal file-integrity check — detects out-of-band tampering of
-    # security-critical config files (#11265).  No-op unless
-    # AUTOBOT_INTEGRITY_CHECK_ENABLED=1 and AUTOBOT_INTEGRITY_MANIFEST_PATH are set.
-    verify_integrity_at_startup()
-
+async def _startup_database() -> None:
+    """Lifespan step (#16375 extraction): collision check and DB init; failure is fatal."""
     # Validate that the two Base MetaData objects share no tablenames (#1878).
     # Must run before create_all / migrations so conflicts are caught immediately.
     try:
@@ -210,9 +200,12 @@ async def lifespan(app: FastAPI):
         await db_service.initialize()
         logger.info("Database initialized")
     except Exception as e:
-        logger.error("Database initialization failed: %s", e, exc_info=True)
+        logger.error("Database initialization failed: %s (%s)", db_service.describe_failure(e), e, exc_info=True)
         raise
 
+
+async def _startup_schema() -> None:
+    """Lifespan step (#16375 extraction): user tables, then migrations; failure is fatal."""
     try:
         logger.info("Initializing user management tables")
         await _init_user_management_tables()
@@ -227,6 +220,18 @@ async def lifespan(app: FastAPI):
         logger.error("Database migrations failed during startup", exc_info=True)
         raise
 
+
+async def _seed_generated_secrets() -> None:
+    """Seed each SLM-generated service secret (#10263, #10157, #16375); failures are non-fatal."""
+    for seed in (_ensure_internal_api_key, _ensure_scim_bearer_token, _ensure_prometheus_scrape_token):
+        try:
+            await seed()
+        except Exception:
+            logger.exception("%s failed (non-fatal)", seed.__name__)
+
+
+async def _startup_seed() -> None:
+    """Lifespan step (#16375 extraction): fatal data seeding, then non-fatal secrets and nodes."""
     try:
         await _ensure_admin_user()
         await _seed_default_roles()
@@ -236,19 +241,8 @@ async def lifespan(app: FastAPI):
         logger.error("Data seeding failed: %s", e, exc_info=True)
         raise
 
-    # Internal API key seeding is an enhancement (enables personality/voice
-    # proxies) — a failure here must never abort SLM startup; the proxies just
-    # degrade to 503 until the key exists, as they did before (#10263).
-    try:
-        await _ensure_internal_api_key()
-    except Exception:
-        logger.exception("Internal API key seeding failed (non-fatal) (#10263)")
-
-    # SCIM bearer token — non-fatal; SCIM simply returns 401 until seeded.
-    try:
-        await _ensure_scim_bearer_token()
-    except Exception:
-        logger.exception("SCIM bearer token seeding failed (non-fatal) (#10157)")
+    # Non-fatal: each consumer degrades (503/401) until its secret exists.
+    await _seed_generated_secrets()
 
     # Compose fleet-node surfacing is best-effort cosmetic — a seeding failure here
     # must never abort SLM startup (it previously rode the re-raising block above).
@@ -257,6 +251,9 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Compose fleet node seeding failed (non-fatal)")
 
+
+async def _startup_reconcile() -> None:
+    """Lifespan step (#16375 extraction): reconcile jobs a crash or restart interrupted."""
     # Reconcile stale fleet sync jobs from prior crash (#1729)
     try:
         from api.code_sync import reconcile_stale_fleet_sync_jobs
@@ -267,6 +264,19 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to reconcile stale fleet sync jobs")
 
+    await _reconcile_component_sync_jobs()
+
+    # Resume any update-all fleet stage interrupted by SLM self-update restart (#9971)
+    try:
+        from api.code_sync import resume_update_all_orchestration
+
+        await resume_update_all_orchestration()
+    except Exception:
+        logger.exception("Failed to resume update-all orchestration")
+
+
+async def _reconcile_component_sync_jobs() -> None:
+    """Reconcile and re-run component sync jobs a restart interrupted; never fatal."""
     # Reconcile stale component sync jobs from prior crash (#11303).
     # #11437: jobs interrupted by a racing restart are re-queued (once) and
     # re-run here so their post-steps (incl. DB migrations) are not skipped.
@@ -287,13 +297,31 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to reconcile stale component sync jobs")
 
-    # Resume any update-all fleet stage interrupted by SLM self-update restart (#9971)
-    try:
-        from api.code_sync import resume_update_all_orchestration
 
-        await resume_update_all_orchestration()
-    except Exception:
-        logger.exception("Failed to resume update-all orchestration")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager."""
+    # Reconfigure root logger AFTER uvicorn's setup so application
+    # logs (code_sync, git_tracker, etc.) are visible in service logs.
+    # #12488: the same stdout/stderr split as the module-level basicConfig(); force=True replaces it.
+    logging.basicConfig(
+        level=logging.DEBUG if settings.debug else logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[build_stdout_handler(), build_stderr_handler()],
+        force=True,
+    )
+    logger.info("Starting SLM Backend v1.0.0")
+    logger.info("Debug mode: %s", settings.debug)
+
+    # Non-fatal file-integrity check — detects out-of-band tampering of
+    # security-critical config files (#11265).  No-op unless
+    # AUTOBOT_INTEGRITY_CHECK_ENABLED=1 and AUTOBOT_INTEGRITY_MANIFEST_PATH are set.
+    verify_integrity_at_startup()
+
+    await _startup_database()
+    await _startup_schema()
+    await _startup_seed()
+    await _startup_reconcile()
 
     # Initialize manifest loader singleton (Issue #926 Phase 3)
     from services.manifest_loader import init_manifest_loader
@@ -388,7 +416,7 @@ async def _ensure_local_node() -> None:
     if _compose_nodes_enabled():
         # Use the SLM's static address on the shared autobot-mgmt network so the
         # manager matches the other compose nodes' IP range (#9761).
-        local_ip = _SLM_MGMT_IP
+        local_ip = slm_mgmt_ip()
     elif ip_match:
         local_ip = ip_match.group(1)
     else:
@@ -414,11 +442,7 @@ async def _ensure_local_node() -> None:
                     local_ip,
                 )
                 existing.ip_address = local_ip
-            # Heal detected_roles so the fleet role view shows the SLM roles as
-            # running (older rows predate this).
-            if list(existing.detected_roles or []) != _SLM_ROLES:
-                existing.detected_roles = _SLM_ROLES
-            await sync_slm_node_roles(session, _SLM_NODE_ID, list(existing.roles or []), _SLM_ROLES)
+            await heal_existing_slm_node_roles(session, existing, _SLM_NODE_ID, _SLM_ROLES)
             await session.commit()
             return
 
@@ -452,20 +476,18 @@ async def _ensure_admin_user():
     """Create or sync the admin user.
 
     When SLM_ADMIN_PASSWORD is set (Ansible-managed), ensures the
-    admin password always matches. This makes the secrets file the
-    single source of truth for the admin credential.
+    admin password always matches. SLM_ADMIN_PASSWORD_FILE seeds a fresh
+    install only (#19368); services/admin_seed_password.py resolves both.
 
     Uses the user_management UserService and slm_users database (Issue #1900).
     """
-    import os
     import secrets
 
-    from services.auth import auth_service
+    from autobot_shared.user_management.user_service_errors import DuplicateUserError
+    from services.admin_password_sync import sync_admin_password_at_startup
+    from services.admin_seed_password import RANDOM_ADMIN_NOTICE, password_for_existing_admin, password_for_new_admin
     from user_management.database import get_slm_session
     from user_management.services import TenantContext, UserService
-    from user_management.services.user_service import DuplicateUserError
-
-    env_password = os.getenv("SLM_ADMIN_PASSWORD", "")
 
     async with get_slm_session() as db:
         context = TenantContext(is_platform_admin=True)
@@ -474,16 +496,15 @@ async def _ensure_admin_user():
         existing = await user_service.get_user_by_username("admin")
 
         if existing:
-            if env_password:
-                existing.password_hash = auth_service.hash_password(env_password)
-                await db.flush()
-                logger.info("Admin password synced from SLM_ADMIN_PASSWORD")
+            env_password = password_for_existing_admin()
+            if env_password:  # rehash + revoke older sessions only on a real change; an epoch outage logs, never aborts
+                await sync_admin_password_at_startup(db, existing, env_password)
             return
 
-        password = env_password
+        password = password_for_new_admin()
         if not password:
             password = secrets.token_urlsafe(16)
-            logger.critical("Initial admin password set — CHANGE IMMEDIATELY")
+            logger.critical(RANDOM_ADMIN_NOTICE)
 
         try:
             await user_service.create_user(
@@ -505,71 +526,28 @@ async def _ensure_internal_api_key() -> None:
     X-Internal-API-Key header; the value must match on both sides. It is
     distributed to deploys via fetch_deploy_secrets() -> the
     autobot_internal_api_key extra_var -> slm-secrets.env + backend.env.
-
-    Historically the value was only present if an admin manually created the
-    secret in the SLM UI, so a fresh deployment left it empty and every
-    personality/voice request 503'd. Generate a strong key once and store it;
-    idempotent thereafter (never overwrites an existing value).
+    Generated once, never overwritten (``services.generated_system_secrets``).
     """
-    import secrets as _secrets
-
-    from sqlalchemy import select
-    from sqlalchemy.exc import IntegrityError
-
-    from models.database import SystemSecret
-    from services.encryption import encrypt_data
-
-    key_name = "autobot_internal_api_key"  # nosec B105  # secret-store key name, not a credential
-    async with db_service.session() as db:
-        result = await db.execute(select(SystemSecret).where(SystemSecret.key == key_name))
-        if result.scalar_one_or_none() is not None:
-            return
-        db.add(SystemSecret(key=key_name, encrypted_value=encrypt_data(_secrets.token_hex(32))))
-        try:
-            await db.commit()
-        except IntegrityError:
-            # Concurrent startup seeded it first (unique key) — keep theirs.
-            await db.rollback()
-            logger.info("Internal API key already created concurrently — keeping existing (#10263)")
-            return
-        logger.info("Generated shared internal API key — personality/voice proxies enabled (#10263)")
+    await ensure_generated_secret(INTERNAL_API_KEY)
 
 
 async def _ensure_scim_bearer_token() -> None:
     """Seed the SCIM bearer token into SystemSecret on first startup (#10157).
 
-    The token is generated once; admins retrieve it from the SLM secrets UI
-    to configure their IdP (Okta, Entra, Google Workspace) SCIM provisioning.
-    Idempotent — never overwrites an existing value.
+    Admins retrieve it from the SLM secrets UI to configure their IdP SCIM
+    provisioning. Idempotent — never overwrites an existing value.
     """
-    import secrets as _secrets
+    await ensure_generated_secret(SCIM_BEARER_TOKEN)
 
-    from sqlalchemy.exc import IntegrityError
 
-    from models.database import SystemSecret
-    from services.encryption import encrypt_data
+async def _ensure_prometheus_scrape_token() -> None:
+    """Seed the Prometheus scrape token into SystemSecret on first startup (#16375).
 
-    key_name = "scim_bearer_token"  # nosec B105  # secret-store key name, not a credential
-    async with db_service.session() as db:
-        from sqlalchemy import select
-
-        result = await db.execute(select(SystemSecret).where(SystemSecret.key == key_name))
-        if result.scalar_one_or_none() is not None:
-            return
-        db.add(
-            SystemSecret(
-                key=key_name,
-                encrypted_value=encrypt_data(_secrets.token_hex(32)),
-                description="SCIM 2.0 bearer token — configure in IdP SCIM provisioning settings (#10157)",
-            )
-        )
-        try:
-            await db.commit()
-        except IntegrityError:
-            await db.rollback()
-            logger.info("SCIM bearer token already seeded concurrently — keeping existing (#10157)")
-            return
-        logger.info("Generated SCIM 2.0 bearer token — retrieve from SLM secrets UI (#10157)")
+    Distributed via fetch_deploy_secrets() -> the prometheus_scrape_token
+    extra_var -> backend.env (verified on each scrape) and the monitoring
+    role's bearer_token_file (presented by Prometheus).
+    """
+    await ensure_generated_secret(PROMETHEUS_SCRAPE_TOKEN)
 
 
 async def _seed_default_roles():
@@ -600,12 +578,11 @@ app = FastAPI(
     root_path=os.getenv("SLM_ROOT_PATH", ""),
     docs_url="/api/docs" if settings.debug else None,
     redoc_url="/api/redoc" if settings.debug else None,
-    # Security: MVA-3397 - Trust X-Forwarded-For from nginx proxy for rate limiting
-    proxy_headers=True,
-    forwarded_allow_ips=settings.trusted_proxies,
 )
+# MVA-3397 / #9616: the client IP behind nginx comes from get_client_ip(..., settings.trusted_proxies);
+# proxy-header trust is a uvicorn setting, never a FastAPI() argument (0.145 rejects it).
 # #16428 review: FastAPI's default 422 body echoes the submitted payload --
-# UserCreate.password and VNCCredentialCreate.password have the same
+# SlmAdminUserCreate.password and VNCCredentialCreate.password have the same
 # exposure the audit found on autobot-backend's secrets endpoint.
 register_validation_error_handlers(app)
 
@@ -617,20 +594,15 @@ install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, 
 #   sso_router      — SSO provider list; accessed before credentials are available
 #   sso_auth_router — OAuth callback; must complete before a token exists
 #   websocket_router — out of scope (#10198); has separate async auth handling
-#   scim_router     — authenticated per route by _require_scim_bearer, not by
-#       this gate; all 11 routes carry it. Declared here because "no
-#       service.management gate" is what this list tracks, and it was already
-#       absent before #14339 added the check below
+#   scim_router     — authenticated per route by _require_scim_bearer (all 11 carry it), not by this gate;
+#       declared here because that is what this list tracks, and it was absent before #14339 added the check below
 #   performance_metrics_router — prometheus scrape surface; a scraper cannot
 #       authenticate, so the gate returned 401 on every scrape (#14339)
 #
 # Two routes below are declared here rather than moved into a router, because
 # the idiom itself — not the auth outcome — is what has to be visible:
-#   root (@app.get("/")) — service banner; no credentials exist yet to check,
-#       and it discloses only a static name/version string
-#   prometheus_registry_metrics (@app.get("/metrics")) — top-level prometheus
-#       scrape target (#10851); a scraper cannot authenticate, same reasoning
-#       as performance_metrics_router above
+#   root (@app.get("/")) — static name/version banner; no credentials exist yet to check
+#   prometheus_registry_metrics (@app.get("/metrics")) — top-level scrape target (#10851); a scraper cannot authenticate
 #
 # This list is enforced, not decorative: tests/api/
 # test_prometheus_scrape_is_unauthenticated_14339.py fails if any router is
@@ -643,14 +615,14 @@ install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, 
 # entirely because the check only ever looked for `app.include_router(...)`.
 
 # Service-management gate (#10198, epic #10193): all other routers require
-# Permission.SERVICE_MANAGEMENT.  Ordinary users (role=user/readonly/analyst/editor)
-# do not have this permission and receive 403.  Admin and Operator do.
+# Permission.SERVICE_MANAGEMENT.  #20631: the SLM is admin only, so the operator role, which
+# holds it, still gets 403: get_current_user, run first by this gate, refuses non-admins.
 _SM = [Depends(require_service_management)]
 
 # #11450: routers that ALSO carry machine-to-machine agent-ingest endpoints
 # (heartbeat/enroll, roles/definitions, code-sync/notify, events/sync). The
 # node agent presents AUTOBOT_INTERNAL_API_KEY (no user JWT), so these mount
-# with a gate that accepts the internal key OR a service.management user —
+# with a gate that accepts the internal key OR an admin session (as _SM above) —
 # preserving #10198's human-surface gate while un-breaking the agent plane.
 _SM_OR_AGENT = [Depends(require_service_management_or_internal)]
 
@@ -667,14 +639,15 @@ app.include_router(scim_router)
 # --- Service-management–gated routers ---
 app.include_router(browser_router, prefix="/api", dependencies=_SM)
 app.include_router(agents_router, prefix="/api", dependencies=_SM)
+app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(nodes_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(nodes_execution_router, prefix="/api", dependencies=_SM)  # Issue #3406
-app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(fleet_services_router, prefix="/api", dependencies=_SM)
 app.include_router(deployments_router, prefix="/api", dependencies=_SM)
 app.include_router(blue_green_router, prefix="/api", dependencies=_SM)
 app.include_router(settings_router, prefix="/api", dependencies=_SM)
 app.include_router(stateful_router, prefix="/api", dependencies=_SM)
+app.include_router(secrets_backup_status_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(updates_router, prefix="/api", dependencies=_SM)
 app.include_router(maintenance_router, prefix="/api", dependencies=_SM)
 app.include_router(monitoring_router, prefix="/api", dependencies=_SM)
@@ -687,6 +660,7 @@ app.include_router(errors_router, prefix="/api", dependencies=_SM)
 app.include_router(events_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(external_agents_router, prefix="/api", dependencies=_SM)
 app.include_router(node_rdp_router, prefix="/api", dependencies=_SM)
+app.include_router(node_ssh_password_internal_router, prefix="/api", dependencies=_SM_OR_AGENT)  # key-only, #20046
 app.include_router(rdp_router, prefix="/api", dependencies=_SM)
 app.include_router(node_vnc_router, prefix="/api", dependencies=_SM)
 app.include_router(vnc_router, prefix="/api", dependencies=_SM)
@@ -762,9 +736,9 @@ async def prometheus_registry_metrics() -> Response:
 
 
 if __name__ == "__main__":
-    import os
-
     import uvicorn
+
+    from autobot_shared.env_registry_tls import DEFAULT_TLS_REMOTE_CERT_DIR
 
     # TLS Configuration - Issue #725 Phase 5
     tls_enabled = os.getenv("SLM_TLS_ENABLED", "false").lower() == "true"
@@ -773,7 +747,7 @@ if __name__ == "__main__":
     port = settings.port
 
     if tls_enabled:
-        cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "/etc/autobot/certs")
+        cert_dir = os.getenv("AUTOBOT_TLS_REMOTE_CERT_DIR", DEFAULT_TLS_REMOTE_CERT_DIR)  # node's flat dir (#19317)
         ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
         ssl_certfile = os.path.join(cert_dir, "server-cert.pem")
         port = int(os.getenv("SLM_TLS_PORT", "8443"))

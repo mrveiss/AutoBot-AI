@@ -11,7 +11,8 @@ and lifting them is what makes room for changes inside the module.
 
 Note for anyone searching: `models/schemas.py` defines a DIFFERENT
 `SystemMetrics`, a pydantic `BaseModel` for the API surface. These are the
-monitoring dataclasses; the two are unrelated and neither imports the other.
+monitoring dataclasses (`HostPerformanceMetrics` here); the two are unrelated
+and neither imports the other.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from typing import Any, Dict, List
 
 
 @dataclass
-class SystemMetrics:
+class HostPerformanceMetrics:
     """System performance metrics data class."""
 
     timestamp: str

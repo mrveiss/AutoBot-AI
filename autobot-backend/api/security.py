@@ -12,7 +12,6 @@ Includes:
 - Domain security statistics
 """
 
-import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_system import (
@@ -140,50 +139,12 @@ async def get_command_history(request: Request, user: str = None, limit: int = 5
         if not security_layer:
             security_layer = SecurityLayer()
             request.app.state.security_layer = security_layer
-        history = security_layer.get_command_history(user=user, limit=limit)
+        history = await security_layer.get_command_history(user=user, limit=limit)
 
         return {"success": True, "command_history": history, "count": len(history)}
     except Exception as e:
         logger.error("Error getting command history: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-def _parse_audit_log_lines(lines: list, limit: int) -> list:
-    """Parse JSON audit log lines safely. (Issue #315 - extracted)"""
-    import json
-
-    entries = []
-    for line in lines[-limit:]:
-        try:
-            entry = json.loads(line.strip())
-            # #13258: response_model=AuditLogData declares List[Dict[str, Any]], and a
-            # non-object line (null / 123 / [...]) would fail response validation AFTER
-            # this handler returns — past its own try/except — and 500 the whole
-            # endpoint. Only the writer at security_layer.py:585 should ever produce
-            # lines here, so a non-object is corruption; skip it like a malformed line.
-            if isinstance(entry, dict):
-                entries.append(entry)
-        except json.JSONDecodeError:
-            continue
-    return entries
-
-
-async def _read_audit_log_file(log_file: str, limit: int) -> list:
-    """Read and parse audit log file. (Issue #315 - extracted)"""
-    try:
-        async with aiofiles.open(log_file, "r", encoding="utf-8") as f:
-            lines = await f.readlines()
-        return _parse_audit_log_lines(lines, limit)
-    except FileNotFoundError:
-        # No audit log has been written yet — an empty log is the correct answer.
-        return []
-    except OSError as e:
-        # Any other read failure (permissions, I/O error) must NOT be reported as
-        # an empty audit log: that silently hides a security artifact the caller
-        # asked for. #288 stated the pattern as "HTTPException with 500 status for
-        # API endpoints" but landed `audit_entries = []` here; #13258 restores it.
-        logger.error("Failed to read audit log file: %s", e)
-        raise
 
 
 @router.get("/audit-log", response_model=AuditLogData)
@@ -201,8 +162,8 @@ async def get_audit_log(request: Request, limit: int = 100):
             security_layer = SecurityLayer()
             request.app.state.security_layer = security_layer
 
-        # Use extracted helper (Issue #315 - reduced depth)
-        audit_entries = await _read_audit_log_file(security_layer.audit_log_file, limit)
+        # #17225 D6: the layer's records live in the canonical audit trail.
+        audit_entries = await security_layer.get_audit_entries(limit=limit)
 
         return {
             "success": True,

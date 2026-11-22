@@ -73,6 +73,8 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _SLM_ROOT = Path(__file__).resolve().parent.parent
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
@@ -263,16 +265,6 @@ class _Clock:
         self.current = self.current + timedelta(seconds=seconds)
 
 
-class _FakeSession:
-    """`add`/`commit` no-ops -- everything `_remediate_node` writes through `db`."""
-
-    def add(self, _obj):
-        pass
-
-    async def commit(self):
-        pass
-
-
 class _AsyncReturns:
     """A stand-in for an async instance method that always returns a fixed value.
 
@@ -331,7 +323,7 @@ def test_a_node_whose_restart_never_gets_a_heartbeat_accepted_reaches_max_attemp
     clock = _Clock(datetime.now(timezone.utc))
     reconciler.datetime = clock
     try:
-        db = _FakeSession()
+        db = FakeAsyncSession()
         node = _degraded_node()
 
         for _cycle in range(reconciler.MAX_REMEDIATION_ATTEMPTS + 2):
@@ -368,7 +360,7 @@ def test_escalation_survives_the_expiry_floor_at_its_worst_case_setting():
     original_expiry = reconciler.REMEDIATION_TRACKER_EXPIRY_S
     reconciler.REMEDIATION_TRACKER_EXPIRY_S = 1
     try:
-        db = _FakeSession()
+        db = FakeAsyncSession()
         node = _degraded_node()
         for _cycle in range(reconciler.MAX_REMEDIATION_ATTEMPTS + 2):
             asyncio.run(service._remediate_node(db, node))
@@ -395,7 +387,7 @@ def test_a_node_that_verifies_every_time_never_accumulates_by_design():
     clock = _Clock(datetime.now(timezone.utc))
     reconciler.datetime = clock
     try:
-        db = _FakeSession()
+        db = FakeAsyncSession()
         node = _degraded_node()
 
         for _cycle in range(reconciler.MAX_REMEDIATION_ATTEMPTS + 2):
@@ -502,7 +494,7 @@ def test_a_genuinely_flapping_node_with_verified_heartbeats_does_not_escalate():
     reconciler.datetime = clock
     try:
         with _real_heartbeat_verification_installed(clock):
-            db = _FakeSession()
+            db = FakeAsyncSession()
             node = _degraded_node()
             for _cycle in range(reconciler.MAX_REMEDIATION_ATTEMPTS + 5):
                 asyncio.run(service._remediate_node(db, node))
@@ -517,34 +509,6 @@ def test_a_genuinely_flapping_node_with_verified_heartbeats_does_not_escalate():
         f"decision may have landed and this test needs updating, not silencing."
     )
     assert not tracker.get("exhausted"), "escalation is not reachable for this shape via any tracker-side mechanism"
-
-
-class _HeartbeatSession:
-    """Drives `update_node_heartbeat`: one scripted `Node` row, no-op writes.
-
-    Used ONLY to prove ordinary heartbeat processing (the `/heartbeat` API
-    path, unrelated to `_heartbeat_returned`'s remediation-side polling) has
-    zero effect on the remediation tracker.
-    """
-
-    def __init__(self, node):
-        self._node = node
-        self._reads = 0
-
-    async def execute(self, _query):
-        self._reads += 1
-        if self._reads == 1:
-            return SimpleNamespace(scalar_one_or_none=lambda: self._node)
-        return SimpleNamespace(scalar_one_or_none=lambda: None, scalars=lambda: SimpleNamespace(all=lambda: []))
-
-    def add(self, _obj):
-        pass
-
-    async def commit(self):
-        pass
-
-    async def refresh(self, _obj):
-        pass
 
 
 def test_ordinary_heartbeat_processing_never_touches_the_remediation_tracker():
@@ -573,14 +537,16 @@ def test_ordinary_heartbeat_processing_never_touches_the_remediation_tracker():
     service = reconciler.ReconcilerService()
     service._restart_service_via_ansible = _AsyncReturns((True, None))
     service._heartbeat_returned = _AsyncReturns(False)
-    remediation_db = _FakeSession()
+    remediation_db = FakeAsyncSession()
 
     asyncio.run(service._remediate_node(remediation_db, node))
     assert service._remediation_tracker[node.node_id]["count"] == 1
 
     for _ in range(10):
         asyncio.run(
-            service.update_node_heartbeat(_HeartbeatSession(node), node.node_id, 0.0, 10.0, 10.0, extra_data={})
+            service.update_node_heartbeat(
+                FakeAsyncSession(results=[[node]]), node.node_id, 0.0, 10.0, 10.0, extra_data={}
+            )
         )
 
     assert (
@@ -690,7 +656,7 @@ def test_an_exhausted_node_broadcasts_are_throttled_not_flooded():
 
     clock = _Clock(datetime.now(timezone.utc))
     reconciler.datetime = clock
-    db = _FakeSession()
+    db = FakeAsyncSession()
     try:
         # 5 reconcile-tick-scale passes, all inside one broadcast-throttle window.
         for _ in range(5):
@@ -737,7 +703,7 @@ def test_cooldown_still_paces_attempts_even_with_frequent_reconcile_ticks():
     ticks = 40
 
     try:
-        db = _FakeSession()
+        db = FakeAsyncSession()
         node = _degraded_node()
         for _ in range(ticks):
             asyncio.run(service._remediate_node(db, node))
@@ -755,25 +721,6 @@ def test_cooldown_still_paces_attempts_even_with_frequent_reconcile_ticks():
     assert restart_calls < ticks, "a restart on every single tick means the cooldown gate did nothing at all"
 
 
-class _FailingResultCommitSession:
-    """`add` is a no-op; the SECOND `commit()` (the outcome event's) raises.
-
-    The FIRST commit is the REMEDIATION_STARTED event, which must succeed for
-    the attempt to even begin.
-    """
-
-    def __init__(self):
-        self._commits = 0
-
-    def add(self, _obj):
-        pass
-
-    async def commit(self):
-        self._commits += 1
-        if self._commits == 2:
-            raise RuntimeError("simulated DB commit failure")
-
-
 def test_the_tracker_write_survives_a_failed_result_commit():
     """One of the three shapes this PR actually fixes. Review's corrected
     principle: for a PACING record, over-recording is safe (it only delays a
@@ -787,7 +734,9 @@ def test_the_tracker_write_survives_a_failed_result_commit():
     service = reconciler.ReconcilerService()
     service._restart_service_via_ansible = _AsyncReturns((True, None))
     service._heartbeat_returned = _AsyncReturns(False)
-    db = _FailingResultCommitSession()
+    # The FIRST commit is the REMEDIATION_STARTED event, which must succeed for the attempt to
+    # even begin; the SECOND (the outcome event's) raises.
+    db = FakeAsyncSession(commit_error=lambda n: RuntimeError("simulated DB commit failure") if n == 2 else None)
     node = _degraded_node()
 
     raised = False
@@ -804,16 +753,6 @@ def test_the_tracker_write_survives_a_failed_result_commit():
     )
 
 
-class _FailingFirstCommitSession:
-    """`add` is a no-op; the FIRST `commit()` (the max-attempts event's) raises."""
-
-    def add(self, _obj):
-        pass
-
-    async def commit(self):
-        raise RuntimeError("simulated DB commit failure")
-
-
 def test_exhausted_flag_survives_a_failed_max_attempts_event_commit():
     """The inverse principle from the tracker-write test above: for a WRITE
     that only needs to happen ONCE (the max-attempts DB event), the `exhausted`
@@ -828,7 +767,8 @@ def test_exhausted_flag_survives_a_failed_max_attempts_event_commit():
     node = _degraded_node()
     tracker = {"count": reconciler.MAX_REMEDIATION_ATTEMPTS, "last_attempt": datetime.now(timezone.utc)}
     service._remediation_tracker[node.node_id] = tracker
-    db = _FailingFirstCommitSession()
+    # The FIRST commit (the max-attempts event's) raises.
+    db = FakeAsyncSession(commit_error=RuntimeError("simulated DB commit failure"))
 
     raised = False
     try:

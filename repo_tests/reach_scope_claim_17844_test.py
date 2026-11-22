@@ -4,8 +4,8 @@
 # Author: mrveiss
 """A declaration's claimed population must match the one its discovery reaches (#17844).
 
-`floor` is a number the framework verifies. `what=` was free text nobody verified, and both sit
-in the same `declare()` call. That leaves a third coverage state nothing could see:
+`floor` is a number the framework verifies. `what=` was free text nobody verified, and both sit in the same
+`declare()` call. That leaves a third coverage state nothing could see:
 
 | state | caught by |
 |---|---|
@@ -13,15 +13,13 @@ in the same `declare()` call. That leaves a third coverage state nothing could s
 | floored below its reach | the floor assertion itself |
 | floored correctly, over the WRONG population | nothing, until this |
 
-Measured on #17844's base: 52 `what=` strings, 14 naming a root or scope, 38 bare population
-nouns. Seven guards claimed some form of "production python files" across floors from 2555 to
-3247 -- a 692-file spread fully explained by differing scan roots, and invisible because only
-two of the seven said which roots.
+Measured on #17844's base: 52 `what=` strings, 14 naming a root or scope, 38 bare population nouns. Seven guards
+claimed "production python files" across floors from 2555 to 3247 -- a 692-file spread fully explained by differing
+scan roots, invisible because only two said which.
 
-The real-fixture case below is the one the issue asks for by name. A synthetic declaration
-proves the rule can fire; it does not prove the rule fires on the shape that actually occurs,
-and the shape that occurs is a guard whose discovery stopped reaching one of its own roots
-while its floor went on being cleared by the others.
+The real-fixture case below is the one the issue asks for by name. A synthetic declaration proves the rule can fire;
+it does not prove the rule fires on the shape that actually occurs, and the shape that occurs is a guard whose
+discovery stopped reaching one of its own roots while its floor went on being cleared by the others.
 """
 
 from __future__ import annotations
@@ -29,16 +27,79 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import repo_tests.ansible_concept_forks_17856_test as _ansible_forks_guard  # noqa: F401 -- registers its scope
+import repo_tests.ansible_credentials_never_logged_19764_test as _credentials_logged_guard  # noqa: F401 -- registers its scope
+import repo_tests.anti_pattern_type_emitted_18189_test as _anti_pattern_guard  # noqa: F401 -- registers its scope
+import repo_tests.audit_writer_single_source_17225_test as _audit_writer_guard  # noqa: F401 -- registers its scope
+import repo_tests.chat_history_async_calls_awaited_18316_test as _chat_async_guard  # noqa: F401 -- registers its scope
+import repo_tests.chat_single_delete_implementation_18316_test as _chat_delete_guard  # noqa: F401 -- registers its scope
+import repo_tests.chunker_private_embedding_hooks_18185_test as _chunker_hooks_guard  # noqa: F401 -- registers its scope
+import repo_tests.compat_module_needs_importer_18552_test as _compat_importer_guard  # noqa: F401 -- registers its scope
+import repo_tests.concept_forks_17856_test as _concept_forks_guard  # noqa: F401 -- registers its scope
+import repo_tests.conftest_stubset_primitives_13596_test as _conftest_stubset_guard  # noqa: F401 -- registers its scope
+import repo_tests.container_hardening_single_source_17267_test as _hardening_guard  # noqa: F401 -- registers its scope
+import repo_tests.conversation_turn_single_store_18293_test as _conversation_turn_guard  # noqa: F401 -- registers its scope
+import repo_tests.credential_field_name_only_17336_test as _credential_field_guard  # noqa: F401 -- registers its scope
 import repo_tests.data_db_path_single_source_test as _data_db_guard  # noqa: F401 -- registers its scope
+import repo_tests.docker_admin_seed_18729_test as _user_mode_guard  # noqa: F401 -- registers its scope
+import repo_tests.egress_default_guard_17576_test as _egress_default_guard  # noqa: F401 -- registers its scope
+import repo_tests.embedding_model_preserved_15502_test as _embedding_render_guard  # noqa: F401 -- registers its scope
+import repo_tests.env_file_family_18555_test as _env_family_guard  # noqa: F401 -- registers its scope
+import repo_tests.env_fork_guard_18094_test as _env_fork_guard  # noqa: F401 -- registers its scope
+import repo_tests.extraction_registry_17995_test as _extraction_registry_guard  # noqa: F401 -- registers its scope
+import repo_tests.github_api_single_module_15411_test as _github_api_guard  # noqa: F401 -- registers its scope
+import repo_tests.infra_scripts_no_backend_imports_18288_test as _infra_backend_guard  # noqa: F401 -- registers its scope
 import repo_tests.kb_read_visibility_guard_test as kb
+import repo_tests.knowledge_metadata_parse_canonical_18220_test as _metadata_parse_guard  # noqa: F401 -- registers its scope
+import repo_tests.llm_quality_seam_16133_test as _quality_seam_guard  # noqa: F401 -- registers its scope
+import repo_tests.migration_gate_filter_covers_what_its_tests_import_test as _migration_gate_guard  # noqa: F401 -- registers its scope
+import repo_tests.model_tier_single_definition_15502_test as _model_tier_guard  # noqa: F401 -- registers its scope
+import repo_tests.no_doubled_api_prefix_18722_test as _doubled_api_prefix_guard  # noqa: F401 -- registers its scope
+import repo_tests.oauth_bundle_no_app_secret_13630_test as _oauth_bundle_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_actor_id_15754_test as _actor_id_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_anthropic_message_split_16815_test as _anthropic_split_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_backoff_formula_15402_test as _backoff_formula_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_bm25_formula_18183_test as _bm25_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_brand_mark_and_announcer_18240_test as _brand_mark_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_circuit_breaker_18554_test as _circuit_breaker_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_claim_model_18086_test as _claim_model_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_compare_and_delete_script_19631_test as _compare_delete_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_content_digest_15722_test as _content_digest_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_deployment_mode_detector_12771_test as _deployment_mode_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_fact_read_authorization_18184_test as _fact_read_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_gateway_adapter_package_15024_test as _gateway_adapter_guard  # noqa: F401 -- registers its scope
-import repo_tests.one_session_scope_15068_test as _session_scope_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_hybrid_search_17599_test as _hybrid_search_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_internal_api_key_reader_17856_test as _internal_key_reader_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_paths_filter_job_15360_test as _paths_filter_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_permission_gate_18263_test as _permission_gate_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_playwright_server_18549_test as _playwright_server_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_rate_limiter_18087_test as _rate_limiter_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_semantic_chunker_14485_test as _semantic_chunker_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_serving_predicate_18820_test as _serving_predicate_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_session_ownership_validator_14016_test as _ownership_validator_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_ssh_restart_executor_18186_test as _ssh_restart_guard
+import repo_tests.one_static_data_copy_18556_test as _static_data_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_sync_command_runner_18180_test as _sync_runner_guard  # noqa: F401 -- registers its scope
+import repo_tests.opt_autobot_literal_ratchet_18880_test as _opt_autobot_guard  # noqa: F401 -- registers its scope
+import repo_tests.optimization_taxonomies_13049_test as _taxonomy_guard  # noqa: F401 -- registers its scope
+import repo_tests.pr_comment_upsert_12984_test as _pr_comment_guard  # noqa: F401 -- registers its scope
+import repo_tests.provider_key_env_reads_route_through_vault_18094_test as _provider_key_env_guard  # noqa: F401 -- registers its scope
+import repo_tests.provider_tool_schema_single_source_16815_test as _provider_tool_schema_guard  # noqa: F401 -- registers its scope
+import repo_tests.redis_direct_constructor_18553_test as _redis_constructor_guard  # noqa: F401 -- registers its scope
+import repo_tests.root_resolver_single_source_18101_test as _root_resolver_guard  # noqa: F401 -- registers its scope
+import repo_tests.script_module_names_unique_14873_test as _script_names_guard  # noqa: F401 -- registers its scope
+import repo_tests.shadowed_literal_routes_18720_test as _shadowed_routes_guard  # noqa: F401 -- registers its scope
+import repo_tests.single_attribute_writer_18240_test as _attribute_writer_guard  # noqa: F401 -- registers its scope
+import repo_tests.single_constant_time_compare_20761_test as _constant_time_guard  # noqa: F401 -- registers its scope
+import repo_tests.slm_backend_no_embedded_playbook_18606_test as _embedded_playbook_guard  # noqa: F401 -- registers its scope
+import repo_tests.test_name_predicate_single_home_21078_test as _test_name_guard  # noqa: F401 -- registers its scope
 from repo_tests._paths import repo_root
 from repo_tests._reach import Reach, ReachScopeError, declare
+from repo_tests._reach_declared_scopes import DECLARED_SCOPES
 from repo_tests._reach_scope import relative_paths, scope_complaint
 
 _ROOT = repo_root()
+_NEW_GUARD_MODULES = (_ssh_restart_guard,)  # importing a guard module is what registers its scope
 
 
 def test_declare_renders_the_scope_from_the_data() -> None:
@@ -73,9 +134,9 @@ def test_declare_refuses_an_empty_roots_tuple() -> None:
 def test_the_real_guard_passes_its_own_scope_check() -> None:
     """The negative control, and it has to come first: a check that fails everything is not a check.
 
-    `kb-read-visibility-production-sweep` is the declaration #17844 names as the instance -- it
-    claimed "production python files" unqualified over three scan roots. With the scope carried
-    as data it must now PASS, or the mutation below would be meaningless.
+    `kb-read-visibility-production-sweep` is the declaration #17844 names as the instance -- it claimed "production
+    python files" unqualified over three scan roots. With the scope carried as data it must now PASS, or the mutation
+    below would be meaningless.
     """
     kb.REACH.verify_scope(_ROOT)
     assert kb.REACH.what.endswith(", ".join(kb.SCAN_ROOTS)), "the rendered claim must name the roots it was built from"
@@ -84,10 +145,9 @@ def test_the_real_guard_passes_its_own_scope_check() -> None:
 def test_a_real_guard_whose_discovery_stops_reaching_a_root_fails() -> None:
     """The mutation, on the REAL fixture rather than a synthetic one (#17844 AC2).
 
-    The guard's own `discover` is kept and its output narrowed to two of its three declared
-    roots -- the shape a moved directory or an inverted filter produces. The floor is untouched
-    and still cleared: 2,701 files minus the MCP tree is far above 2,555, so every count check
-    in the suite stays green. Only the scope check notices.
+    The guard's own `discover` is kept and its output narrowed to two of its three declared roots -- the shape a moved
+    directory or an inverted filter produces. The floor is untouched and still cleared: 2,701 files minus the MCP tree
+    is far above 2,555, so every count check in the suite stays green. Only the scope check notices.
     """
     narrowed, dropped = kb.SCAN_ROOTS[:-1], kb.SCAN_ROOTS[-1]
 
@@ -97,7 +157,7 @@ def test_a_real_guard_whose_discovery_stops_reaching_a_root_fails() -> None:
     mutant = Reach(
         name="self-check::kb-read-visibility-narrowed",
         discover=_narrowed,
-        floor=kb.REACH.floor,
+        pinned_floor=kb.REACH.floor,
         what=kb.REACH.what,
         growth=kb.REACH.growth,
         roots=kb.SCAN_ROOTS,
@@ -114,7 +174,7 @@ def test_a_sweep_reaching_outside_its_declared_scope_fails() -> None:
     reach = Reach(
         name="self-check::under-claimed-scope",
         discover=lambda _root: ["a/x.py", "elsewhere/y.py"],
-        floor=1,
+        pinned_floor=1,
         what="things under a/",
         roots=("a/",),
     )
@@ -137,14 +197,13 @@ def test_the_scope_check_is_satisfiable() -> None:
 def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
     """The synthetic control for `verify_scope`: it must be able to fail.
 
-    The real-fixture mutation above is the one #17844 asks for; this is the cheap half that
-    keeps `reach_declarations_test`'s parametrised sweep from passing vacuously if
-    `verify_scope` ever became a no-op.
+    The real-fixture mutation above is the one #17844 asks for; this is the cheap half that keeps
+    `reach_declarations_test`'s parametrised sweep from passing vacuously if `verify_scope` ever became a no-op.
     """
     overclaiming = Reach(
         name="self-check::overclaiming-scope",
         discover=lambda _root: ["autobot-backend/api/x.py"],
-        floor=1,
+        pinned_floor=1,
         what="production python files under autobot-backend/, autobot-slm-backend/",
         roots=("autobot-backend/", "autobot-slm-backend/"),
     )
@@ -152,65 +211,36 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
         overclaiming.verify_scope(_ROOT)
 
 
-#: What each scoped declaration claims, written out BY HAND rather than read from the constant
-#: the guard walks (#17844, review). Every call site passes `roots=SCAN_ROOTS` or the local
-#: equivalent, so narrowing that constant narrows the claim with it and `verify_scope` stays
-#: green over the smaller population -- which is the very mutation #17844's AC2 describes.
-#: This is the independent second derivation that closes it: narrow a guard's roots constant
-#: and this goes red, because the expectation does not move with it.
-#:
-#: Compared as a SET in both directions. Adding a scoped declaration means adding a line here,
-#: and that is the point -- the scope is a decision, so it is written twice on purpose.
-_DECLARED_SCOPES = {
-    "gateway-adapter-package-scan": ("autobot-backend/services/gateway",),
-    "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "direct-secrets-service-callers": ("autobot-backend", "autobot_shared"),
-    "data-db-path-production-python": ("autobot-backend", "autobot_shared"),
-    "jekyll-processed-docs": ("docs",),
-    "kb-admin-read-bypass": ("autobot-backend/", "autobot_shared/"),
-    "kb-read-visibility-production-sweep": (
-        "autobot-backend/",
-        "autobot_shared/",
-        "autobot-infrastructure/shared/mcp/",
-    ),
-    "model-revision-pinning-sweep": ("autobot-backend", "autobot_shared", "autobot-slm-backend"),
-    "one-claim-registry": (
-        "autobot-backend",
-        "autobot_shared",
-        "autobot-slm-backend",
-        "scripts",
-        "pipeline-scripts",
-    ),
-    "store-fact-chokepoint": ("autobot-backend/", "autobot_shared/"),
-}
-
-
 def test_every_scoped_declaration_claims_the_roots_recorded_here() -> None:
     """A guard's roots constant cannot be narrowed without this failing.
 
-    `verify_scope` holds the sweep to `roots`; it cannot hold `roots` to anything, because the
-    call sites alias the same constant the discovery walks. Without this pin, deleting a tree
-    from `SCAN_ROOTS` shrinks the sweep AND the claim together and every check in the suite
-    stays green over two thirds of the population -- the exact state #17844 was filed about.
+    `verify_scope` holds the sweep to `roots`; it cannot hold `roots` to anything, because the call sites alias the same
+    constant the discovery walks. Without this pin, deleting a tree from `SCAN_ROOTS` shrinks the sweep AND the claim
+    together and every check in the suite stays green over two thirds of the population -- the exact state #17844 was
+    filed about.
     """
     import repo_tests.direct_secrets_service_callers_17773_test  # noqa: F401, PLC0415
     import repo_tests.docs_liquid_tags_are_defined_17930_test  # noqa: F401, PLC0415
     import repo_tests.kb_admin_read_bypass_guard_test  # noqa: F401, PLC0415
     import repo_tests.model_revision_pinning_enforced_17804_test  # noqa: F401, PLC0415
     import repo_tests.one_claim_registry_16653_test  # noqa: F401, PLC0415
+
+    # Every guard module, not a hand-kept list: importing reach_declarations_test runs its _import_every_guard(), so
+    # this check sees the same REGISTRY alone as in a full run. A hand list drifted (#18295 train fixups recorded scopes
+    # whose modules it never imported), and the test then failed only when run alone -- i.e. in every pre-push.
+    import repo_tests.reach_declarations_test  # noqa: F401, PLC0415
     import repo_tests.store_fact_chokepoint_guard_test  # noqa: F401, PLC0415
     from repo_tests._reach import REGISTRY
 
     live = {
         name: reach.roots for name, reach in REGISTRY.items() if reach.roots and not name.startswith("self-check::")
     }
-    assert live == _DECLARED_SCOPES, (
+    assert live == DECLARED_SCOPES, (
         "declared scopes disagree with the hand-written record. Narrowed or widened: "
         + repr(
             {
-                n: (live.get(n), _DECLARED_SCOPES.get(n))
-                for n in set(live) ^ set(_DECLARED_SCOPES) | {n for n in live if live[n] != _DECLARED_SCOPES.get(n)}
+                n: (live.get(n), DECLARED_SCOPES.get(n))
+                for n in set(live) ^ set(DECLARED_SCOPES) | {n for n in live if live[n] != DECLARED_SCOPES.get(n)}
             }
         )
         + "\nA root removed from a guard's own constant shrinks the sweep and the claim "

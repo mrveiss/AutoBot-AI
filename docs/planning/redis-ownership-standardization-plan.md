@@ -31,7 +31,7 @@
 **Critical Path - Start Immediately**
 
 #### Task 1.1: Emergency Ownership Fix on Redis VM
-- **Agent:** devops-engineer
+- **Agent:** autobot-dev-skills:senior-developer (devops-engineer lens)
 - **Time:** 5 minutes
 - **Commands:**
   ```bash
@@ -44,7 +44,7 @@
 - **Mitigation:** Verify service health immediately after restart
 
 #### Task 1.2: Verify Redis Health Post-Fix
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Time:** 3 minutes
 - **Commands:**
   ```bash
@@ -61,7 +61,7 @@
 **Persistence Layer - Infrastructure as Code**
 
 #### Task 2.1: Update Ansible Group Variables
-- **Agent:** devops-engineer
+- **Agent:** autobot-dev-skills:senior-developer (devops-engineer lens)
 - **Time:** 5 minutes
 - **File:** `ansible/inventory/group_vars/database.yml`
 - **Changes:**
@@ -79,7 +79,7 @@
 - **Dependencies:** Phase 1 complete (need working baseline)
 
 #### Task 2.2: Update Ansible Deploy Database Playbook
-- **Agent:** devops-engineer
+- **Agent:** autobot-dev-skills:senior-developer (devops-engineer lens)
 - **Time:** 5 minutes
 - **File:** `ansible/playbooks/deploy-database.yml`
 - **Changes:**
@@ -93,7 +93,7 @@
 - **Dependencies:** Task 2.1 complete (maintain variable consistency)
 
 #### Task 2.3: Code Review - Ansible Changes
-- **Agent:** code-reviewer (MANDATORY)
+- **Agent:** autobot-dev-skills:reviewer (code-reviewer lens) (MANDATORY)
 - **Time:** 10 minutes
 - **Review Focus:**
   - Variable naming consistency
@@ -104,7 +104,7 @@
 - **Dependencies:** Task 2.1 + 2.2 complete
 
 #### Task 2.4: Test Ansible Playbook (Dry Run)
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Time:** 5 minutes
 - **Commands:**
   ```bash
@@ -119,7 +119,7 @@
 **Automated Ownership Management**
 
 #### Task 3.1: Update VM Management Start Redis Script
-- **Agent:** senior-backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Time:** 3 minutes
 - **File:** `scripts/vm-management/start-redis.sh`
 - **Changes:**
@@ -133,7 +133,7 @@
 - **Dependencies:** Phase 2 complete (Ansible aligned first)
 
 #### Task 3.2: Add Ownership Verification to Service Startup
-- **Agent:** senior-backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Time:** 15 minutes
 - **Note:** `run_autobot.sh` is deprecated (Issue #863). Add to Ansible role or systemd `ExecStartPre`.
 - **Changes:**
@@ -161,7 +161,7 @@
 - **Dependencies:** Task 3.1 complete
 
 #### Task 3.3: Code Review - Startup Script Changes
-- **Agent:** code-reviewer (MANDATORY)
+- **Agent:** autobot-dev-skills:reviewer (code-reviewer lens) (MANDATORY)
 - **Time:** 10 minutes
 - **Review Focus:**
   - Bash syntax correctness
@@ -178,7 +178,7 @@
 **End-to-End Verification**
 
 #### Task 4.1: Create Test Plan for Redis Ownership
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Time:** 15 minutes
 - **Test Scenarios:**
   1. Fresh startup verification (`systemctl start autobot-backend`)
@@ -191,7 +191,7 @@
 - **Dependencies:** Phase 3 complete (all code changes done)
 
 #### Task 4.2: Execute Integration Tests
-- **Agent:** testing-engineer
+- **Agent:** autobot-dev-skills:senior-developer (testing-engineer lens)
 - **Time:** 20 minutes
 - **Test Commands:**
   ```bash
@@ -216,7 +216,7 @@
 - **Dependencies:** Task 4.1 complete
 
 #### Task 4.3: Performance & Stability Validation
-- **Agent:** performance-engineer (PARALLEL with Task 4.2)
+- **Agent:** autobot-dev-skills:senior-developer (performance-engineer lens) (PARALLEL with Task 4.2)
 - **Time:** 15 minutes
 - **Validation Points:**
   - Redis response times (baseline vs post-change)
@@ -233,7 +233,7 @@
 ### Phase-Specific Rollback Procedures
 
 #### Phase 1 Rollback (if Redis fails to start)
-- **Agent:** devops-engineer
+- **Agent:** autobot-dev-skills:senior-developer (devops-engineer lens)
 - **Time:** 3 minutes
 - **Commands:**
   ```bash
@@ -242,7 +242,7 @@
   ```
 
 #### Phase 2 Rollback (if Ansible playbook breaks)
-- **Agent:** devops-engineer
+- **Agent:** autobot-dev-skills:senior-developer (devops-engineer lens)
 - **Time:** 2 minutes
 - **Commands:**
   ```bash
@@ -252,7 +252,7 @@
   ```
 
 #### Phase 3 Rollback (if startup script fails)
-- **Agent:** senior-backend-engineer
+- **Agent:** autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 - **Time:** 2 minutes
 - **Commands:**
   ```bash
@@ -261,7 +261,7 @@
   ```
 
 #### Complete Rollback (nuclear option)
-- **Agent:** systems-architect
+- **Agent:** autobot-dev-skills:planner (systems-architect lens)
 - **Time:** 5 minutes
 - **Commands:**
   ```bash
@@ -305,15 +305,15 @@
 
 | Agent | Tasks | Total Time |
 |-------|-------|------------|
-| **devops-engineer** | Phase 1 (emergency fix), Phase 2 (Ansible updates) | 15 min |
-| **senior-backend-engineer** | Phase 3 (startup scripts) | 18 min |
-| **testing-engineer** | Phase 1 (verification), Phase 2 (dry run), Phase 4 (testing) | 28 min |
-| **code-reviewer** | Phase 2 (Ansible review), Phase 3 (script review) | 20 min |
-| **performance-engineer** | Phase 4 (performance validation) | 15 min |
-| **systems-architect** | Rollback coordination (if needed) | 0 min (standby) |
+| **autobot-dev-skills:senior-developer (devops-engineer lens)** | Phase 1 (emergency fix), Phase 2 (Ansible updates) | 15 min |
+| **autobot-dev-skills:senior-developer (senior-backend-engineer lens)** | Phase 3 (startup scripts) | 18 min |
+| **autobot-dev-skills:senior-developer (testing-engineer lens)** | Phase 1 (verification), Phase 2 (dry run), Phase 4 (testing) | 28 min |
+| **autobot-dev-skills:reviewer (code-reviewer lens)** | Phase 2 (Ansible review), Phase 3 (script review) | 20 min |
+| **autobot-dev-skills:senior-developer (performance-engineer lens)** | Phase 4 (performance validation) | 15 min |
+| **autobot-dev-skills:planner (systems-architect lens)** | Rollback coordination (if needed) | 0 min (standby) |
 
 **Parallel Execution Opportunities:**
-- Phase 4: testing-engineer and performance-engineer can work simultaneously
+- Phase 4: autobot-dev-skills:senior-developer (testing-engineer lens) and autobot-dev-skills:senior-developer (performance-engineer lens) can work simultaneously
 
 ---
 

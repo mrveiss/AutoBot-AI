@@ -8,15 +8,14 @@
         <Icon name="folder-open" />
         Sandbox Files
       </h3>
-      <button
-        class="btn-action-secondary btn-sm"
+      <BaseButton variant="secondary" size="sm"
         :disabled="loading"
         :aria-label="loading ? 'Loading…' : 'Refresh sandbox files'"
         @click="refresh"
       >
         <i :class="['fas', loading ? 'fa-spinner fa-spin' : 'fa-sync-alt']"></i>
         Refresh
-      </button>
+      </BaseButton>
     </div>
 
     <div v-if="error" class="sbfb-error" role="alert">
@@ -65,6 +64,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { onMounted } from 'vue'
 import { useFileSandbox } from '@/composables/useFileSandbox'
@@ -85,7 +85,7 @@ onMounted(refresh)
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem;
-  background: var(--bg-secondary, #1a1a2e);
+  background: var(--bg-secondary);
   border-radius: 0.5rem;
   border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
 }
@@ -100,7 +100,7 @@ onMounted(refresh)
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -114,7 +114,7 @@ onMounted(refresh)
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 0.375rem;
-  color: #fca5a5;
+  color: var(--color-error-light);
   font-size: 0.85rem;
 }
 
@@ -123,7 +123,7 @@ onMounted(refresh)
   background: none;
   border: none;
   cursor: pointer;
-  color: #fca5a5;
+  color: var(--color-error-light);
   padding: 0;
   line-height: 1;
 }
@@ -160,8 +160,4 @@ onMounted(refresh)
   justify-content: center;
 }
 
-.btn-sm {
-  font-size: 0.8rem;
-  padding: 0.25rem 0.6rem;
-}
 </style>

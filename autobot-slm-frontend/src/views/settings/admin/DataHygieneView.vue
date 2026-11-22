@@ -43,11 +43,11 @@ import {
   type OrphanResource,
   type OrphanStorageCandidate,
   type OrphanStorageListResponse,
-  type UserResponse,
 } from '@/composables/useAutobotApi'
-import { formatFileSize } from '@/utils/formatHelpers'
-import { formatRelativeTime } from '@/utils/dateUtils'
-import { createLogger } from '@/utils/debugUtils'
+import type { SlmUserResponse } from '@/composables/useSlmUserApi'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
+import { BaseAlert, BaseModal, formatFileSize, createLogger } from '@autobot/ui'
+import KnowledgeCleanupSection from './KnowledgeCleanupSection.vue'
 
 const logger = createLogger('DataHygieneView')
 const api = useAutobotApi()
@@ -56,7 +56,6 @@ const api = useAutobotApi()
 const { t } = useI18n()
 
 // -- Unreferenced storage -----------------------------------------------
-
 const orphanStorage = ref<OrphanStorageListResponse | null>(null)
 const storageLoading = ref(false)
 const storageError = ref('')
@@ -177,7 +176,6 @@ async function confirmPreview(): Promise<void> {
 }
 
 // -- Unreachable resources -------------------------------------------------
-
 const RESOURCE_TYPES = ['knowledge_fact', 'secret'] as const
 type ResourceType = (typeof RESOURCE_TYPES)[number]
 
@@ -185,7 +183,7 @@ const resourceType = ref<ResourceType>('knowledge_fact')
 const orphans = ref<OrphanResource[]>([])
 const orphansLoading = ref(false)
 const orphansError = ref('')
-const users = ref<UserResponse[]>([])
+const users = ref<SlmUserResponse[]>([])
 const newOwnerByResource = ref<Record<string, string>>({})
 const repairingResource = ref<Record<string, boolean>>({})
 
@@ -292,7 +290,7 @@ const AUDIT_LIMIT_PER_OPERATION = 25
 
 /** `AuditLogEntry.timestamp` is Unix-epoch SECONDS, not an ISO string or ms. */
 function formatAuditTime(ts: number): string {
-  return formatRelativeTime(new Date(ts * 1000).toISOString())
+  return formatCompactRelativeTime(new Date(ts * 1000).toISOString())
 }
 
 const auditEntries = ref<AuditLogEntry[]>([])
@@ -348,57 +346,52 @@ onMounted(() => {
 <template>
   <div class="p-6 max-w-7xl mx-auto space-y-8">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">{{ $t('dataHygiene.title') }}</h1>
-      <p class="text-sm text-gray-500 mt-1">{{ $t('dataHygiene.subtitle') }}</p>
+      <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('dataHygiene.title') }}</h1>
+      <p class="text-sm text-autobot-text-tertiary mt-1">{{ $t('dataHygiene.subtitle') }}</p>
     </div>
 
     <!-- ============================= Unreferenced storage ============================= -->
     <section class="bg-white rounded-lg shadow p-6" aria-labelledby="data-hygiene-storage-heading">
       <div class="flex items-center justify-between mb-1">
-        <h2 id="data-hygiene-storage-heading" class="text-lg font-semibold text-gray-900">
+        <h2 id="data-hygiene-storage-heading" class="text-lg font-semibold text-autobot-text-primary">
           {{ $t('dataHygiene.storage.title') }}
         </h2>
         <button
-          class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-sm"
+          class="px-3 py-1.5 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active disabled:opacity-50 text-sm"
           :disabled="storageLoading"
           @click="refreshOrphanStorage"
         >
           {{ $t('dataHygiene.refresh') }}
         </button>
       </div>
-      <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.storage.subtitle') }}</p>
+      <p class="text-sm text-autobot-text-tertiary mb-4">{{ $t('dataHygiene.storage.subtitle') }}</p>
 
-      <div v-if="storageError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-        {{ storageError }}
-      </div>
-      <div
+      <BaseAlert v-if="storageError" variant="error" class="mb-4" :message="storageError" />
+      <BaseAlert
         v-for="status in unavailableProviders"
         :key="status.provider"
-        class="mb-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700"
-        role="alert"
-        data-testid="storage-provider-unavailable"
-      >
-        {{ $t('dataHygiene.storage.providerUnavailable', { provider: status.provider, error: status.error || 'unknown error' }) }}
-      </div>
+        variant="warning" size="compact" class="mb-2" role="alert" data-testid="storage-provider-unavailable"
+        :message="$t('dataHygiene.storage.providerUnavailable', { provider: status.provider, error: status.error || $t('dataHygiene.storage.unknownError') })"
+      />
 
       <div class="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-4 max-w-md">
-        <div class="bg-gray-50 rounded-lg p-4">
-          <p class="text-xs uppercase text-gray-500">{{ $t('dataHygiene.storage.totalCandidates') }}</p>
-          <p class="text-2xl font-bold text-gray-900" data-testid="storage-total-count">
+        <div class="bg-autobot-bg-secondary rounded-lg p-4">
+          <p class="text-xs uppercase text-autobot-text-tertiary">{{ $t('dataHygiene.storage.totalCandidates') }}</p>
+          <p class="text-2xl font-bold text-autobot-text-primary" data-testid="storage-total-count">
             {{ orphanStorage?.total_count ?? 0 }}
           </p>
         </div>
-        <div class="bg-gray-50 rounded-lg p-4">
-          <p class="text-xs uppercase text-gray-500">{{ $t('dataHygiene.storage.totalSize') }}</p>
-          <p class="text-2xl font-bold text-gray-900" data-testid="storage-total-size">
+        <div class="bg-autobot-bg-secondary rounded-lg p-4">
+          <p class="text-xs uppercase text-autobot-text-tertiary">{{ $t('dataHygiene.storage.totalSize') }}</p>
+          <p class="text-2xl font-bold text-autobot-text-primary" data-testid="storage-total-size">
             {{ formatFileSize(orphanStorage?.total_size_bytes ?? 0) }}
           </p>
         </div>
       </div>
 
-      <div class="overflow-x-auto border border-gray-200 rounded-lg">
+      <div class="overflow-x-auto border border-autobot-border rounded-lg">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+          <thead class="bg-autobot-bg-secondary text-autobot-text-tertiary uppercase text-xs">
             <tr>
               <th class="px-3 py-2 text-left"></th>
               <th class="px-3 py-2 text-left">{{ $t('dataHygiene.storage.provider') }}</th>
@@ -408,17 +401,17 @@ onMounted(() => {
               <th class="px-3 py-2 text-left">{{ $t('dataHygiene.storage.reason') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y divide-autobot-border-subtle">
             <tr v-if="storageLoading && candidates.length === 0">
-              <td colspan="6" class="px-3 py-6 text-center text-gray-400">{{ $t('dataHygiene.storage.loading') }}</td>
+              <td colspan="6" class="px-3 py-6 text-center text-autobot-text-tertiary">{{ $t('dataHygiene.storage.loading') }}</td>
             </tr>
             <tr v-else-if="candidates.length === 0">
-              <td colspan="6" class="px-3 py-6 text-center text-gray-400">{{ $t('dataHygiene.storage.empty') }}</td>
+              <td colspan="6" class="px-3 py-6 text-center text-autobot-text-tertiary">{{ $t('dataHygiene.storage.empty') }}</td>
             </tr>
             <tr
               v-for="c in candidates"
               :key="candidateKey(c)"
-              class="hover:bg-gray-50"
+              class="hover:bg-autobot-bg-hover"
               data-testid="storage-row"
             >
               <td class="px-3 py-2">
@@ -431,13 +424,13 @@ onMounted(() => {
                   @change="toggleCandidate(c)"
                 />
               </td>
-              <td class="px-3 py-2 text-gray-900">{{ c.provider }}</td>
-              <td class="px-3 py-2 font-mono text-xs text-gray-600">{{ c.location }}</td>
+              <td class="px-3 py-2 text-autobot-text-primary">{{ c.provider }}</td>
+              <td class="px-3 py-2 font-mono text-xs text-autobot-text-secondary">{{ c.location }}</td>
               <td class="px-3 py-2">{{ formatFileSize(c.size_bytes) }}</td>
-              <td class="px-3 py-2 text-gray-500">{{ formatRelativeTime(c.modified_at) }}</td>
+              <td class="px-3 py-2 text-autobot-text-tertiary">{{ formatCompactRelativeTime(c.modified_at) }}</td>
               <td class="px-3 py-2">
                 <span>{{ c.reason }}</span>
-                <span v-if="!c.deletable" class="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
+                <span v-if="!c.deletable" class="ml-2 px-2 py-0.5 rounded-full text-xs bg-autobot-bg-tertiary text-autobot-text-tertiary">
                   {{ $t('dataHygiene.storage.notDeletable') }}
                 </span>
               </td>
@@ -459,13 +452,13 @@ onMounted(() => {
 
       <!-- Per-candidate proposal results (#17040 AC: a failure is shown per-row, never swallowed) -->
       <div v-if="proposalResults.length > 0" class="mt-4">
-        <h3 class="text-sm font-semibold text-gray-700 mb-2">{{ $t('dataHygiene.storage.resultsTitle') }}</h3>
+        <h3 class="text-sm font-semibold text-autobot-text-secondary mb-2">{{ $t('dataHygiene.storage.resultsTitle') }}</h3>
         <ul class="space-y-1">
           <li
             v-for="r in proposalResults"
             :key="r.key"
             class="text-sm px-3 py-2 rounded-lg"
-            :class="r.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
+            :class="r.ok ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg' : 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'"
             :data-testid="r.ok ? 'proposal-result-success' : 'proposal-result-failure'"
             role="status"
           >
@@ -475,69 +468,63 @@ onMounted(() => {
       </div>
 
       <!-- Preview modal -->
-      <div v-if="previewOpen" class="fixed inset-0 z-50 flex items-center justify-center" data-testid="storage-preview-modal">
-        <div class="absolute inset-0 bg-black/50" @click="cancelPreview"></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('dataHygiene.storage.previewTitle') }}</h3>
-          <p class="text-sm text-gray-600 mb-4">
-            {{ $t('dataHygiene.storage.previewBody', { count: selectedCandidates.length }) }}
-          </p>
-          <ul class="space-y-2 max-h-64 overflow-y-auto mb-4">
-            <li
-              v-for="c in selectedCandidates"
-              :key="candidateKey(c)"
-              class="text-sm p-2 bg-gray-50 rounded-lg"
-              data-testid="preview-candidate"
-            >
-              <span class="font-medium">{{ c.provider }}:{{ c.location }}</span>
-              <span class="text-gray-500"> — {{ formatFileSize(c.size_bytes) }}, {{ c.reason }}</span>
-            </li>
-          </ul>
-          <div class="flex justify-end gap-3">
-            <button
-              class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-              data-testid="storage-preview-cancel"
-              @click="cancelPreview"
-            >
-              {{ $t('dataHygiene.storage.previewCancel') }}
-            </button>
-            <button
-              class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              :disabled="proposing"
-              data-testid="storage-preview-confirm"
-              @click="confirmPreview"
-            >
-              {{ proposing ? $t('dataHygiene.storage.proposing') : $t('dataHygiene.storage.previewConfirm') }}
-            </button>
-          </div>
-        </div>
-      </div>
+      <BaseModal v-model="previewOpen" :title="$t('dataHygiene.storage.previewTitle')" size="md" :close-label="$t('ui.modal.closeDialog')">
+        <p class="text-sm text-autobot-text-secondary mb-4" data-testid="storage-preview-modal">
+          {{ $t('dataHygiene.storage.previewBody', { count: selectedCandidates.length }) }}
+        </p>
+        <ul class="space-y-2 max-h-64 overflow-y-auto">
+          <li
+            v-for="c in selectedCandidates"
+            :key="candidateKey(c)"
+            class="text-sm p-2 bg-autobot-bg-secondary rounded-lg"
+            data-testid="preview-candidate"
+          >
+            <span class="font-medium">{{ c.provider }}:{{ c.location }}</span>
+            <span class="text-autobot-text-tertiary"> — {{ formatFileSize(c.size_bytes) }}, {{ c.reason }}</span>
+          </li>
+        </ul>
+        <template #actions>
+          <button
+            class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active"
+            data-testid="storage-preview-cancel"
+            @click="cancelPreview"
+          >
+            {{ $t('dataHygiene.storage.previewCancel') }}
+          </button>
+          <button
+            class="px-4 py-2 bg-autobot-error-solid text-(--text-on-error) rounded-lg hover:bg-(--color-error-solid-hover) disabled:opacity-50"
+            :disabled="proposing"
+            data-testid="storage-preview-confirm"
+            @click="confirmPreview"
+          >
+            {{ proposing ? $t('dataHygiene.storage.proposing') : $t('dataHygiene.storage.previewConfirm') }}
+          </button>
+        </template>
+      </BaseModal>
     </section>
 
     <!-- ============================= Unreachable resources ============================= -->
     <section class="bg-white rounded-lg shadow p-6" aria-labelledby="data-hygiene-resources-heading">
       <div class="flex items-center justify-between mb-1">
-        <h2 id="data-hygiene-resources-heading" class="text-lg font-semibold text-gray-900">
+        <h2 id="data-hygiene-resources-heading" class="text-lg font-semibold text-autobot-text-primary">
           {{ $t('dataHygiene.resources.title') }}
         </h2>
       </div>
-      <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.resources.subtitle') }}</p>
+      <p class="text-sm text-autobot-text-tertiary mb-4">{{ $t('dataHygiene.resources.subtitle') }}</p>
 
-      <div v-if="orphansError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-        {{ orphansError }}
-      </div>
+      <BaseAlert v-if="orphansError" variant="error" class="mb-4" :message="orphansError" />
 
       <div class="flex items-end gap-3 mb-4">
         <div>
-          <label class="block text-xs font-medium text-gray-700 mb-1">{{ $t('dataHygiene.resources.resourceType') }}</label>
-          <select v-model="resourceType" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" data-testid="resource-type-select">
+          <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('dataHygiene.resources.resourceType') }}</label>
+          <select v-model="resourceType" class="px-3 py-2 border border-autobot-border-strong rounded-lg text-sm" data-testid="resource-type-select">
             <option v-for="rt in RESOURCE_TYPES" :key="rt" :value="rt">
               {{ rt === 'knowledge_fact' ? $t('dataHygiene.resources.knowledgeFact') : $t('dataHygiene.resources.secret') }}
             </option>
           </select>
         </div>
         <button
-          class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-sm"
+          class="px-3 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active disabled:opacity-50 text-sm"
           :disabled="orphansLoading"
           data-testid="resources-load-button"
           @click="refreshOrphans"
@@ -546,9 +533,9 @@ onMounted(() => {
         </button>
       </div>
 
-      <div class="overflow-x-auto border border-gray-200 rounded-lg">
+      <div class="overflow-x-auto border border-autobot-border rounded-lg">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+          <thead class="bg-autobot-bg-secondary text-autobot-text-tertiary uppercase text-xs">
             <tr>
               <th class="px-3 py-2 text-left">{{ $t('dataHygiene.resources.resourceId') }}</th>
               <th class="px-3 py-2 text-left">{{ $t('dataHygiene.resources.conditions') }}</th>
@@ -556,20 +543,20 @@ onMounted(() => {
               <th class="px-3 py-2 text-left"></th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y divide-autobot-border-subtle">
             <tr v-if="orphansLoading && orphans.length === 0">
-              <td colspan="4" class="px-3 py-6 text-center text-gray-400">{{ $t('dataHygiene.resources.loading') }}</td>
+              <td colspan="4" class="px-3 py-6 text-center text-autobot-text-tertiary">{{ $t('dataHygiene.resources.loading') }}</td>
             </tr>
             <tr v-else-if="orphans.length === 0">
-              <td colspan="4" class="px-3 py-6 text-center text-gray-400">{{ $t('dataHygiene.resources.empty') }}</td>
+              <td colspan="4" class="px-3 py-6 text-center text-autobot-text-tertiary">{{ $t('dataHygiene.resources.empty') }}</td>
             </tr>
             <tr v-for="o in orphans" :key="o.resource_id" data-testid="resource-row">
-              <td class="px-3 py-2 font-mono text-xs text-gray-600">{{ o.resource_id }}</td>
-              <td class="px-3 py-2 text-gray-600 text-xs">{{ formatConditions(o.conditions) }}</td>
+              <td class="px-3 py-2 font-mono text-xs text-autobot-text-secondary">{{ o.resource_id }}</td>
+              <td class="px-3 py-2 text-autobot-text-secondary text-xs">{{ formatConditions(o.conditions) }}</td>
               <td class="px-3 py-2">
                 <select
                   v-model="newOwnerByResource[o.resource_id]"
-                  class="px-2 py-1 border border-gray-300 rounded-lg text-xs"
+                  class="px-2 py-1 border border-autobot-border-strong rounded-lg text-xs"
                   data-testid="resource-owner-select"
                 >
                   <option value="">{{ $t('dataHygiene.resources.selectOwner') }}</option>
@@ -588,7 +575,7 @@ onMounted(() => {
                 <div
                   v-if="repairResults[o.resource_id]"
                   class="mt-1 text-xs"
-                  :class="repairResults[o.resource_id].ok ? 'text-green-700' : 'text-red-700'"
+                  :class="repairResults[o.resource_id].ok ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg' : 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'"
                   :data-testid="repairResults[o.resource_id].ok ? 'repair-result-success' : 'repair-result-failure'"
                   role="status"
                 >
@@ -601,34 +588,32 @@ onMounted(() => {
       </div>
     </section>
 
+    <KnowledgeCleanupSection />
     <!-- ============================= Audit trail ============================= -->
     <section class="bg-white rounded-lg shadow p-6" aria-labelledby="data-hygiene-audit-heading">
       <div class="flex items-center justify-between mb-1">
-        <h2 id="data-hygiene-audit-heading" class="text-lg font-semibold text-gray-900">
+        <h2 id="data-hygiene-audit-heading" class="text-lg font-semibold text-autobot-text-primary">
           {{ $t('dataHygiene.audit.title') }}
         </h2>
         <button
-          class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-sm"
+          class="px-3 py-1.5 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active disabled:opacity-50 text-sm"
           :disabled="auditLoading"
           @click="fetchAudit"
         >
           {{ $t('dataHygiene.refresh') }}
         </button>
       </div>
-      <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.audit.subtitle') }}</p>
+      <p class="text-sm text-autobot-text-tertiary mb-4">{{ $t('dataHygiene.audit.subtitle') }}</p>
 
-      <div
+      <BaseAlert
         v-if="auditPartialError"
-        class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700"
-        role="alert"
-        data-testid="audit-partial-error"
-      >
-        {{ auditPartialError }}
-      </div>
+        variant="warning" size="compact" class="mb-4" role="alert" data-testid="audit-partial-error"
+        :message="auditPartialError"
+      />
 
-      <div class="overflow-x-auto border border-gray-200 rounded-lg">
+      <div class="overflow-x-auto border border-autobot-border rounded-lg">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+          <thead class="bg-autobot-bg-secondary text-autobot-text-tertiary uppercase text-xs">
             <tr>
               <th class="px-3 py-2 text-left">{{ $t('dataHygiene.audit.timestamp') }}</th>
               <th class="px-3 py-2 text-left">{{ $t('dataHygiene.audit.operation') }}</th>
@@ -637,30 +622,30 @@ onMounted(() => {
               <th class="px-3 py-2 text-left">{{ $t('dataHygiene.audit.resource') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y divide-autobot-border-subtle">
             <tr v-if="auditLoading && auditEntries.length === 0">
-              <td colspan="5" class="px-3 py-6 text-center text-gray-400">{{ $t('dataHygiene.audit.loading') }}</td>
+              <td colspan="5" class="px-3 py-6 text-center text-autobot-text-tertiary">{{ $t('dataHygiene.audit.loading') }}</td>
             </tr>
             <tr v-else-if="auditEntries.length === 0">
-              <td colspan="5" class="px-3 py-6 text-center text-gray-400">{{ $t('dataHygiene.audit.empty') }}</td>
+              <td colspan="5" class="px-3 py-6 text-center text-autobot-text-tertiary">{{ $t('dataHygiene.audit.empty') }}</td>
             </tr>
             <tr v-for="entry in auditEntries" :key="entry.id" data-testid="audit-row">
-              <td class="px-3 py-2 text-gray-500">{{ formatAuditTime(entry.timestamp) }}</td>
-              <td class="px-3 py-2 font-mono text-xs text-gray-900">{{ entry.operation }}</td>
+              <td class="px-3 py-2 text-autobot-text-tertiary">{{ formatAuditTime(entry.timestamp) }}</td>
+              <td class="px-3 py-2 font-mono text-xs text-autobot-text-primary">{{ entry.operation }}</td>
               <td class="px-3 py-2">
                 <span
                   class="px-2 py-0.5 rounded-full text-xs font-medium"
-                  :class="entry.result === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                  :class="entry.result === 'success' ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg' : 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'"
                 >
                   {{ entry.result }}
                 </span>
               </td>
-              <td class="px-3 py-2 text-gray-600">{{ entry.user_id || '—' }}</td>
-              <td class="px-3 py-2 font-mono text-xs text-gray-600">{{ entry.resource || '—' }}</td>
+              <td class="px-3 py-2 text-autobot-text-secondary">{{ entry.user_id || '—' }}</td>
+              <td class="px-3 py-2 font-mono text-xs text-autobot-text-secondary">{{ entry.resource || '—' }}</td>
             </tr>
           </tbody>
         </table>
-        <p v-if="auditHasMore" class="text-xs text-gray-500 mt-2" data-testid="audit-has-more">
+        <p v-if="auditHasMore" class="text-xs text-autobot-text-tertiary mt-2" data-testid="audit-has-more">
           {{ $t('dataHygiene.audit.moreAvailable') }}
         </p>
       </div>

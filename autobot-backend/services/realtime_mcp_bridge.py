@@ -32,6 +32,7 @@ from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from services.ai_line_enforcement import Outcome, enforce_line
 from services.mcp_aggregation import discover_and_resolve, server_id_from_uri
 
 logger = get_logger(__name__)
@@ -283,8 +284,13 @@ class RealtimeMCPBridge:
         *,
         user_id: str | None = None,
         session_id: str | None = None,
+        company_id: str | None = None,
     ) -> RealtimeToolResult:
         """Route a Realtime tool call through MCPClient and return the result.
+
+        #18430: the call first resolves its AI line at the single enforcement point, with the AUTHENTICATED
+        caller's company (``company_id``, never an argument the model supplied). Only line 1 reaches the
+        transport; a held or refused call comes back as an error result the model can read aloud.
 
         Errors from the transport surface as ``is_error=True`` with the
         original message in ``content`` so the model can self-correct verbally.
@@ -316,6 +322,17 @@ class RealtimeMCPBridge:
                 content=f"Unknown tool '{name}'. No MCP server registered this tool.",
                 is_error=True,
             )
+
+        verdict = await enforce_line(
+            tool_name=name,
+            params=arguments,
+            company_id=company_id,
+            user_id=user_id,
+            requested_by=str(user_id or session_id or "realtime"),
+            surface="realtime_voice",
+        )
+        if verdict.outcome is not Outcome.RUN:
+            return RealtimeToolResult(content=verdict.message, is_error=True)
 
         start = time.monotonic()
         try:

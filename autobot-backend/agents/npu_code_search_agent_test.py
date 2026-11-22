@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from agents.base_agent_types import AgentRequest
-from agents.npu_code_search_agent import CodeSearchResult, NPUCodeSearchAgent, SearchStats
+from agents.npu_code_search_agent import NPUCodeSearchAgent, NpuCodeSearchResult, SearchStats
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -53,8 +53,8 @@ def _make_agent(npu_available: bool = True) -> NPUCodeSearchAgent:
     return agent
 
 
-def _make_code_result(file_path: str = "foo.py", confidence: float = 0.9) -> CodeSearchResult:
-    return CodeSearchResult(
+def _make_code_result(file_path: str = "foo.py", confidence: float = 0.9) -> NpuCodeSearchResult:
+    return NpuCodeSearchResult(
         file_path=file_path,
         content="def foo(): pass",
         line_number=1,

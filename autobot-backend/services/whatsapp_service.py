@@ -20,11 +20,9 @@ Security: access token and app secret are encrypted at rest (see
 ``autobot_shared.field_encryption``).
 """
 
-import hashlib
-import hmac
 from typing import Any, Dict, List, Optional, Tuple
 
-from autobot_shared.field_encryption import decrypt_field, encrypt_field
+from autobot_shared.field_encryption import open_tagged, seal_tagged, storage_context
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from integrations.base import IntegrationConfig
@@ -40,18 +38,18 @@ WHATSAPP_PHONE_NUMBER_ID_KEY = "autobot:settings:whatsapp_phone_number_id"  # no
 WHATSAPP_BUSINESS_ACCOUNT_ID_KEY = "autobot:settings:whatsapp_business_account_id"  # nosec B105  # Redis key name
 WHATSAPP_BASE_URL_KEY = "autobot:settings:whatsapp_base_url"  # nosec B105  # Redis key name
 
-# Sentinel prefix for encrypted values (backward compatibility with plaintext)
-_ENCRYPTED_PREFIX = "enc:"
+
+def _context(key: str) -> str:
+    """Where a sealed WhatsApp value is stored; the seal is bound to it (#17981)."""
+    return storage_context("redis", key)
 
 
-def _decode(raw: Any) -> Optional[str]:
-    """Decode a Redis value to ``str``, decrypting if it carries the enc: prefix."""
+def _decode(key: str, raw: Any) -> Optional[str]:
+    """Decode a Redis value; an ``enc:`` value is decrypted or raises ``FieldDecryptionError``."""
     if raw is None:
         return None
     value = raw.decode("utf-8") if isinstance(raw, bytes) else raw
-    if value.startswith(_ENCRYPTED_PREFIX):
-        return decrypt_field(value[len(_ENCRYPTED_PREFIX) :])
-    return value
+    return open_tagged(value, context=_context(key))
 
 
 async def _set_encrypted(key: str, value: str) -> None:
@@ -60,7 +58,7 @@ async def _set_encrypted(key: str, value: str) -> None:
     if redis is None:
         logger.error("Redis unavailable; cannot persist WhatsApp config key %s", key)
         return
-    await redis.set(key, f"{_ENCRYPTED_PREFIX}{encrypt_field(value)}")
+    await redis.set(key, seal_tagged(value, context=_context(key)))
 
 
 async def _set_plain(key: str, value: str) -> None:
@@ -77,7 +75,7 @@ async def _get(key: str) -> Optional[str]:
     redis = await get_redis_client()
     if redis is None:
         return None
-    return _decode(await redis.get(key))
+    return _decode(key, await redis.get(key))
 
 
 async def save_whatsapp_config(
@@ -134,22 +132,6 @@ async def build_integration() -> Optional[WhatsAppIntegration]:
     return WhatsAppIntegration(config)
 
 
-def verify_webhook_signature(payload: bytes, signature_header: Optional[str], app_secret: str) -> bool:
-    """Verify Meta's ``X-Hub-Signature-256`` HMAC over the raw request body.
-
-    Meta signs every webhook delivery with ``sha256=<hex>`` computed using the
-    app secret. Fails closed: a missing/malformed header or absent secret yields
-    False.
-    """
-    if not app_secret or not signature_header:
-        return False
-    if not signature_header.startswith("sha256="):
-        return False
-    provided = signature_header[len("sha256=") :]
-    expected = hmac.new(app_secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(provided, expected)
-
-
 async def download_whatsapp_media(media_id: str) -> Tuple[Optional[bytes], Optional[str]]:
     """Download WhatsApp media bytes via the Graph API media endpoint.
 
@@ -180,7 +162,7 @@ async def download_whatsapp_media(media_id: str) -> Tuple[Optional[bytes], Optio
     try:
         # Step 1: resolve the temporary download URL
         async with http_client.tracked_request(
-            "GET", f"{base_url}/{media_id}", headers=headers, timeout=timeout
+            "GET", f"{base_url}/{media_id}", headers=headers, timeout=timeout, guard_egress=False
         ) as resp:
             if resp.status != 200:
                 logger.warning(
@@ -198,7 +180,9 @@ async def download_whatsapp_media(media_id: str) -> Tuple[Optional[bytes], Optio
             return None, None
 
         # Step 2: fetch the raw bytes
-        async with http_client.tracked_request("GET", download_url, headers=headers, timeout=timeout) as resp:
+        async with http_client.tracked_request(
+            "GET", download_url, headers=headers, timeout=timeout, guard_egress=False
+        ) as resp:
             if resp.status != 200:
                 logger.warning(
                     "WhatsApp media download failed (media_id=%s, status=%s)",

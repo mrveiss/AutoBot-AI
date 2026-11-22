@@ -20,7 +20,7 @@ from typing import List, Optional
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
-from voice_processing.providers import SpeechProvider, TranscriptSegment
+from voice_processing.providers import ProviderFailed, ProviderUnavailable, SpeechProvider, TranscriptSegment
 
 logger = get_logger(__name__)
 
@@ -36,6 +36,9 @@ class CloudSpeechProvider(SpeechProvider):
 
     #: env var name that holds the API key for this provider
     _api_key_env: str = ""
+
+    #: audio is sent to a third-party API
+    is_external: bool = True
 
     #: cloud providers always return speaker labels
     diarizes: bool = True
@@ -53,6 +56,17 @@ class CloudSpeechProvider(SpeechProvider):
     def is_configured(self) -> bool:
         """True when the API key is present in the environment."""
         return bool(self._api_key)
+
+    def is_available(self) -> bool:
+        """A cloud provider can run only when configured (key or credentials present)."""
+        return self.is_configured
+
+    def _require_ready(self, audio_path: str) -> None:
+        """Raise the typed failure for a missing key or audio file (never ``[]``)."""
+        if not self.is_configured:
+            raise ProviderUnavailable(f"{self.provider_name}: not configured")
+        if not os.path.exists(audio_path):
+            raise ProviderFailed(f"{self.provider_name}: audio file not found")
 
     @abstractmethod
     async def transcribe(self, audio_path: str, language: Optional[str] = None) -> List[TranscriptSegment]:

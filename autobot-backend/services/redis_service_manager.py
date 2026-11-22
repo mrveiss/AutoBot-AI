@@ -18,15 +18,16 @@ Features:
 
 import asyncio
 import json
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Tuple
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_rest_url import rest_url
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
+from services.redis_service_models import ManagedServiceStatus, ServiceHealthReport, ServiceOperationResult
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -46,43 +47,6 @@ class RedisConnectionError(RedisServiceException):
 
 class RedisPermissionError(RedisServiceException):
     """Raised when user lacks permissions for operation"""
-
-
-@dataclass
-class ServiceOperationResult:
-    """Result of a service operation"""
-
-    success: bool
-    operation: str  # "start", "stop", "restart", "status"
-    message: str
-    duration_seconds: float
-    timestamp: datetime
-    new_status: str  # "running", "stopped", "failed", "unknown"
-    error: str | None = None
-
-
-@dataclass
-class ManagedServiceStatus:
-    """Current service status"""
-
-    status: str  # "running", "stopped", "failed", "unknown"
-    pid: int | None = None
-    uptime_seconds: float | None = None
-    memory_mb: float | None = None
-    last_check: datetime = None
-
-
-@dataclass
-class HealthStatus:
-    """Detailed health status"""
-
-    overall_status: str  # "healthy", "degraded", "critical"
-    service_running: bool
-    connectivity: bool
-    response_time_ms: float
-    last_successful_command: datetime | None = None
-    error_count_last_hour: int = 0
-    recommendations: list = None
 
 
 class RedisServiceManager:
@@ -196,7 +160,7 @@ class RedisServiceManager:
             raise RedisConnectionError("SLM_URL not configured")
         url = rest_url(self.slm_url, f"/api/nodes/{self.slm_node_id}/services/{self.service_name}/{action}")
         try:
-            async with get_http_client().tracked_request("POST", url, ssl=False) as resp:
+            async with get_http_client().tracked_request("POST", url, ssl=False, guard_egress=EGRESS_POLICY) as resp:
                 data = await resp.json()
                 success = data.get("success", resp.status < 300)
                 message = data.get("message", "")
@@ -220,7 +184,9 @@ class RedisServiceManager:
         url = rest_url(self.slm_url, f"/api/nodes/{self.slm_node_id}/services")
         try:
             params = {"search": self.service_name, "per_page": "1"}
-            async with get_http_client().tracked_request("GET", url, params=params, ssl=False) as resp:
+            async with get_http_client().tracked_request(
+                "GET", url, params=params, ssl=False, guard_egress=EGRESS_POLICY
+            ) as resp:
                 if resp.status != 200:
                     return "unknown"
                 data = await resp.json()
@@ -581,14 +547,14 @@ class RedisServiceManager:
             recommendations.append(f"High response time ({response_time_ms:.1f}ms) - check system load")
         return recommendations
 
-    async def get_health(self) -> HealthStatus:
+    async def get_health(self) -> ServiceHealthReport:
         """
         Get detailed health status.
 
         (Issue #398: refactored to use extracted helpers)
 
         Returns:
-            HealthStatus with comprehensive health information
+            ServiceHealthReport with comprehensive health information
         """
         try:
             status = await self.get_service_status(use_cache=False)
@@ -600,7 +566,7 @@ class RedisServiceManager:
                 service_running, connectivity, response_time_ms, status.status
             )
 
-            return HealthStatus(
+            return ServiceHealthReport(
                 overall_status=overall_status,
                 service_running=service_running,
                 connectivity=connectivity,
@@ -613,7 +579,7 @@ class RedisServiceManager:
         except Exception as e:
             logger.error("Health check failed: %s", e)
             await self._record_error()
-            return HealthStatus(
+            return ServiceHealthReport(
                 overall_status="critical",
                 service_running=False,
                 connectivity=False,
