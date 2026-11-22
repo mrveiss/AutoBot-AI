@@ -12,6 +12,8 @@ although the two processes are configured through different variables.
 from __future__ import annotations
 
 import asyncio
+import os
+import shutil
 import stat
 import sys
 import time
@@ -73,7 +75,19 @@ def test_a_failing_systemctl_records_nothing_and_does_not_raise(tmp_path, monkey
 
 def test_a_hung_systemctl_is_killed_at_the_timeout_and_never_blocks_the_restart(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(sync_restart, "SYSTEMCTL_TIMEOUT_S", 0.3)
+    sleeper = shutil.which("sleep")  # resolved before PATH is replaced: the stand-in must really sleep
+    assert sleeper, "the host has no sleep binary"
+    pid_file = tmp_path / "pid"
     started = time.monotonic()
-    _, target = _setup(monkeypatch, tmp_path, "sleep 30", ["autobot-backend"])
+    argv_log, target = _setup(
+        monkeypatch, tmp_path / "run", f'echo $$ > "{pid_file}"\nexec {sleeper} 30', ["autobot-backend"]
+    )
     assert time.monotonic() - started < 10
     assert not target.exists()
+    assert argv_log.exists(), "the stand-in ran, so the timeout was what ended it"
+    pid = int(pid_file.read_text(encoding="utf-8"))
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return
+    raise AssertionError(f"the timed-out systemctl (pid {pid}) was not killed")

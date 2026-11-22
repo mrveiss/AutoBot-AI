@@ -24,3 +24,6 @@ class EnableGate(Protocol):
 
         *locations* maps a plugin name to its directory on disk, for a gate that needs to look at the files.
         """
+
+    async def still_admitted(self, plugin_name: str) -> bool:
+        """Whether *plugin_name* may still be imported and enabled; an operator can disable it after admission."""

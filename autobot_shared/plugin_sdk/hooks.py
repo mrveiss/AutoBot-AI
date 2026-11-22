@@ -184,7 +184,8 @@ def is_plugin_active(plugin_name: str | None) -> bool:
     """False when the owning plugin is known and not ENABLED (#19302).
 
     Only an enabled plugin's callbacks and tools run. A name the registry does not know
-    (a host callback, or a plugin still initialising) is not gated.
+    is a host callback and is not gated. The loader registers a plugin (not ENABLED) before it
+    initialises, so a plugin still initialising is gated until the host records ENABLED.
     """
     plugin = PluginRegistry().get_plugin(plugin_name) if plugin_name else None
     return plugin is None or plugin.status == PluginStatus.ENABLED

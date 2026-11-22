@@ -23,6 +23,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, Type
 
+from autobot_shared.plugin_attribution import registering_for_plugin
 from autobot_shared.testfile_names import is_test_filename
 
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
@@ -323,6 +324,7 @@ class PluginLoader:
         Returns:
             Loaded plugin instance or None on failure
         """
+        registered = False
         try:
             # Check dependencies
             missing_deps = self._check_dependencies(manifest)
@@ -359,29 +361,30 @@ class PluginLoader:
 
             # Import plugin module — pass on-disk directory for file-path fallback (#10294)
             plugin_dir = self._manifest_dirs.get(manifest.name)
-            plugin_class = self._import_plugin_class(manifest.entry_point, plugin_dir)
-            if not plugin_class:
+            # Module-scope and constructor registrations are attributed to the plugin (#19302).
+            with registering_for_plugin(manifest.name):
+                plugin_class = self._import_plugin_class(manifest.entry_point, plugin_dir)
+                plugin = plugin_class(manifest, config) if plugin_class else None
+            if plugin is None:
                 return None
 
-            plugin = plugin_class(manifest, config)
+            # Registered (UNLOADED, so inactive) before initialize(): its callbacks wait for ENABLED (#19302).
+            self.registry.register(plugin)
+            registered = True
             plugin.credential_resolver = bound_resolver(
                 manifest.name, plugin_dir, self.credential_resolvers, self.trusted_roots
             )
             await initialize_attributed(plugin)  # its tools are recorded for host-side reversal (#19302)
             plugin.status = PluginStatus.LOADED
-            self.registry.register(plugin)
-            try:
-                get_registry().register(manifest)
-            except Exception:
-                self.registry.unregister(manifest.name)  # half-registered: leave neither (#19302)
-                raise
-
+            get_registry().register(manifest)
             logger.info("Loaded plugin: %s v%s", manifest.name, manifest.version)
             return plugin
 
         except Exception as e:
             logger.error("Failed to load plugin %s: %s", manifest.name, e, exc_info=True)
-            if not self.registry.get_plugin(manifest.name):
+            if registered or not self.registry.get_plugin(manifest.name):
+                self.registry.unregister(manifest.name)  # half-registered: leave neither (#19302)
+                get_registry().unregister(manifest.name)
                 reverse_registrations(manifest.name)  # what a raising initialize() registered (#19302)
             return None
 

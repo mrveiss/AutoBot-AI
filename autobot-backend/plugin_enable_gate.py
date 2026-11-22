@@ -36,6 +36,7 @@ from plugin_enable_state import (
     SYSTEM_ACTOR,
     PluginEnableStore,
     audit_decision,
+    disabled_in_this_process,
 )
 from plugin_paths import plugin_search_dirs, trusted_plugin_roots
 from plugin_previous_start import previous_start
@@ -80,6 +81,7 @@ async def grandfather(store: PluginEnableStore, manifests: List[PluginManifest],
     A boot that fails after the audit rolls back the baseline, so its retry audits again; the duplicate
     entries are accepted (each is true: that attempt decided that).
     """
+    manifests = [m for m in manifests if m.name not in await store.known_names()]  # an existing row is a decision
     since, source = await previous_start(store)
     if since is None:
         names: List[str] = []
@@ -98,6 +100,10 @@ async def grandfather(store: PluginEnableStore, manifests: List[PluginManifest],
     rows = [(name, True, SOURCE_GRANDFATHERED, SYSTEM_ACTOR) for name in names]
     if await store.write_baseline(rows, audit_all):
         logger.info("Plugin gate: grandfathered %d plugin(s): %s", len(names), sorted(names))
+    else:
+        logger.warning(
+            "Plugin gate: baseline not written (a concurrent boot or admin decision won); retried next start"
+        )
 
 
 async def record_bundled(store: PluginEnableStore, names: List[str]) -> None:
@@ -141,7 +147,12 @@ class DatabaseEnableGate:
             await record_bundled(self._store, [m.name for m in bundled])
         enabled = await self._store.enabled_names()
         await self._store.touch_start()
-        return [m for m in manifests if m.name in enabled]
+        return [m for m in manifests if m.name in enabled and not disabled_in_this_process(m.name)]
+
+    async def still_admitted(self, plugin_name: str) -> bool:
+        """Re-check one admitted plugin just before it is imported or enabled: an admin may have disabled it since."""
+        enabled = await self._store.is_enabled(plugin_name)
+        return enabled and not disabled_in_this_process(plugin_name)
 
 
 def build_plugin_manager() -> PluginManager:

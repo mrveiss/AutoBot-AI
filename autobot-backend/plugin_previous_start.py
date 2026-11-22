@@ -40,11 +40,27 @@ LOG_TAIL_BYTES = 8 * 1024 * 1024
 _STAMP = "%Y-%m-%d %H:%M:%S"
 
 
+#: A parent with one of these names is a service manager, not the backend's own worker supervisor.
+INIT_PROCESS_NAMES = frozenset({"systemd", "init", "launchd"})
+
+
+def _is_service_manager(parent: psutil.Process) -> bool:
+    """True for PID 1 or a systemd/init process: its start time is the host's (or user session's), not ours."""
+    return parent.pid == 1 or parent.name() in INIT_PROCESS_NAMES
+
+
 def boot_started_at() -> float:
-    """When this boot began: the earlier of this process and its parent (a worker's supervisor)."""
+    """When this boot began: the earlier of this process and its parent, when the parent supervises workers.
+
+    A uvicorn worker's parent is the backend's own supervisor, so its start line is a sibling's from the
+    same boot. Started directly by systemd, the parent is the service manager, whose start time is the
+    host boot: using it would reject every earlier start line in this boot, so only this process counts.
+    """
     started = [psutil.Process().create_time()]
     try:
-        started.append(psutil.Process(os.getppid()).create_time())
+        parent = psutil.Process(os.getppid())
+        if not _is_service_manager(parent):
+            started.append(parent.create_time())
     except psutil.Error:
         pass
     return min(started)

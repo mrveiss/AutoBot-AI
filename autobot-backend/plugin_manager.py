@@ -270,7 +270,11 @@ async def load_plugin(
             detail=f"Failed to load plugin: {plugin_name}",
         )
 
-    await enable_attributed(plugin)  # only an ENABLED plugin's hooks and tools run (#19302)
+    try:
+        await enable_attributed(plugin)  # only an ENABLED plugin's hooks and tools run (#19302)
+    except Exception:
+        await loader.unload_plugin(plugin_name)  # a plugin whose activation failed is not left registered
+        raise
     if manifest.trust_tier == TrustTier.OFFICIAL:
         CapabilityChecker().grant_capabilities(manifest.name, manifest.capabilities)
 

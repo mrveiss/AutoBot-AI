@@ -12,11 +12,14 @@ Two reserved rows are not plugins: ``__baseline__`` (the one-time grandfathering
 ``__last_start__`` (its ``updated_at`` is when a backend last finished admitting plugins).
 """
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, List
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from autobot_shared.logging_manager import get_logger
@@ -44,6 +47,34 @@ SOURCE_SYSTEM = "system"
 SYSTEM_ACTOR = "system"
 
 Row = tuple[str, bool, str, str]
+
+#: One lock per plugin name (names are validated against discovery first, so the map stays bounded).
+_decision_locks: dict[str, asyncio.Lock] = {}
+
+#: Plugins an admin disabled while this process was running. Startup admission reads the table, then imports
+#: later; a disable committed in between is recorded here (synchronously, after the write) so the import is refused.
+_disabled_here: set[str] = set()
+
+
+def disabled_in_this_process(plugin_name: str) -> bool:
+    """True when an admin disabled *plugin_name* since this process started (and has not re-enabled it)."""
+    return plugin_name in _disabled_here
+
+
+def _upsert(session: Any, name: str, enabled: bool, source: str, actor: str) -> Any:
+    """Insert-or-update one row; ``updated_at`` is set explicitly because a conflict update skips ``onupdate``."""
+    dialect = session.get_bind().dialect.name
+    insert = sqlite_insert if dialect == "sqlite" else postgresql_insert
+    values = {
+        "plugin_name": name,
+        "enabled": enabled,
+        "source": source,
+        "decided_by": actor,
+        "updated_at": datetime.now(timezone.utc),
+    }
+    stmt = insert(PluginEnableState).values(**values)
+    changed = {k: stmt.excluded[k] for k in ("enabled", "source", "decided_by", "updated_at")}
+    return stmt.on_conflict_do_update(index_elements=["plugin_name"], set_=changed)
 
 
 class PluginEnableStore:
@@ -81,24 +112,17 @@ class PluginEnableStore:
 
     async def touch_start(self) -> None:
         """Record now as this backend's start (an explicit ``updated_at``, so an unchanged row still moves)."""
-        row = PluginEnableState(
-            plugin_name=LAST_START_ROW,
-            enabled=False,
-            source=SOURCE_SYSTEM,
-            decided_by=SYSTEM_ACTOR,
-            updated_at=datetime.now(timezone.utc),
-        )
-        async with self._session() as session:
-            await session.merge(row)
-            await session.commit()
+        await self.put([(LAST_START_ROW, False, SOURCE_SYSTEM, SYSTEM_ACTOR)])
 
     async def put(self, rows: List[Row]) -> None:
-        """Upsert ``(plugin_name, enabled, source, decided_by)`` rows in one transaction."""
+        """Upsert ``(plugin_name, enabled, source, decided_by)`` rows in one transaction.
+
+        A native upsert, so two writers of the same new row both succeed (last write wins) instead of the
+        second raising ``IntegrityError`` as a read-then-insert ``merge`` would.
+        """
         async with self._session() as session:
             for name, enabled, source, actor in rows:
-                await session.merge(
-                    PluginEnableState(plugin_name=name, enabled=enabled, source=source, decided_by=actor)
-                )
+                await session.execute(_upsert(session, name, enabled, source, actor))
             await session.commit()
 
     async def known_names(self) -> set[str]:
@@ -171,13 +195,25 @@ async def decide_plugin_enabled(
     known = plugin is not None or any(m.name == plugin_name for m in loader.discover_plugins())
     if plugin_name in RESERVED_ROWS or not known:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Plugin not found: {plugin_name}")
+    async with _decision_locks.setdefault(plugin_name, asyncio.Lock()):
+        # One unit: persist and apply together, so two decisions for one plugin cannot interleave and leave this
+        # worker's status opposite to the durable record. Re-read the instance: an unload may have run meanwhile.
+        plugin = PluginRegistry().get_plugin(plugin_name)
+        await _persist_and_apply(plugin_name, enabled, user, plugin, store)
+    return plugin is not None
+
+
+async def _persist_and_apply(
+    plugin_name: str, enabled: bool, user: dict, plugin: Any, store: PluginEnableStore | None
+) -> None:
+    """Audit, write the decision, then flip the loaded plugin's status; the caller holds the plugin's lock."""
     actor = user.get("username") or "unknown"
     action = AuditAction.PLUGIN_ENABLE if enabled else AuditAction.PLUGIN_DISABLE
     await audit_decision(action, plugin_name, actor, loaded=plugin is not None)
     await (store or PluginEnableStore()).put([(plugin_name, enabled, SOURCE_ADMIN, actor)])
+    (_disabled_here.discard if enabled else _disabled_here.add)(plugin_name)
     if plugin is not None:
         await (enable_attributed(plugin) if enabled else plugin.disable())
-    return plugin is not None
 
 
 def plugin_decision_message(plugin_name: str, enabled: bool, loaded: bool) -> str:

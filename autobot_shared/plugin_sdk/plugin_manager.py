@@ -137,8 +137,12 @@ class PluginManager:
                 logger.info("PluginManager: '%s' is already registered — not re-initialising", manifest.name)
                 continue
             try:
+                if not await self._still_admitted(manifest.name):
+                    continue
                 plugin = await self._loader.load_plugin(manifest)
-                if plugin:
+                if plugin and not await self._still_admitted(manifest.name):
+                    await self._loader.unload_plugin(manifest.name)  # disabled while it loaded (#17421)
+                elif plugin:
                     await enable_attributed(plugin)
                     loaded.append(manifest.name)
                     logger.info(
@@ -184,6 +188,15 @@ class PluginManager:
         if self._gated:
             logger.info("PluginManager: %d plugin(s) not enabled, not imported: %s", len(self._gated), self._gated)
         return admitted
+
+    async def _still_admitted(self, name: str) -> bool:
+        """False when the gate says an operator disabled *name* after admission; it is then gated, not loaded."""
+        if self._enable_gate is None or await self._enable_gate.still_admitted(name):
+            return True
+        if name not in self._gated:
+            self._gated = sorted([*self._gated, name])
+        logger.info("PluginManager: '%s' was disabled during startup; not loaded", name)
+        return False
 
     def get_gated_plugins(self) -> List[str]:
         """Discovered plugins held back because no operator has enabled them (#17421)."""
