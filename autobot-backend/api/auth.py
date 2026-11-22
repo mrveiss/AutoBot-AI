@@ -35,6 +35,7 @@ from auth_middleware import check_admin_permission, get_auth_middleware, get_cur
 from auth_refresh import decode_refresh_token as _decode_refresh_token  # tests patch this name here
 from auth_refresh import reject_if_account_not_live
 from auth_revocation import reject_if_revoked_by_password_change, revoked_by_password_change_for_introspection
+from autobot_shared.auth.configured_users import is_configured_user, verify_configured_user
 from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_no_verify_exp
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role, role_value
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -45,6 +46,7 @@ from autobot_shared.user_management.password_epoch import set_password_epoch
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from services.audit.audit import ComplianceEventType
 from services.audit.audit import emit_compliance as _emit_event  # #17225
+from services.config_manager_writer import set_nested_and_save
 from user_management.database import db_session_context
 from user_management.middleware.rate_limit import SESSION_MAX_ATTEMPTS, SESSION_WINDOW_SECONDS  # #15757
 from user_management.services.user_service import UserService
@@ -102,7 +104,7 @@ async def _authenticate_and_build_user_data(username: str, password: str, ip_add
         user_data = {
             "username": user.username,
             "user_id": str(user.id),
-            "role": role_value(Role.ADMIN) if user.is_platform_admin else role_value(Role.USER),
+            "role": UserService.account_role(user),
             "email": user.email,
             "last_login": (user.last_login_at.isoformat() if user.last_login_at else None),
         }
@@ -357,13 +359,11 @@ async def _check_password_change_rate_limit(username: str, ip_address: str) -> N
 def _verify_current_password(username: str, current_password: str, ip_address: str) -> str:
     """Verify current password and return the hash. Raises HTTPException on failure."""
     allowed_users = get_auth_middleware().security_config.get("allowed_users", {})
-    if username not in allowed_users:
+    if not is_configured_user(allowed_users, username):
         raise HTTPException(status_code=404, detail="User not found in system")
 
-    user_config = allowed_users[username]
-    current_password_hash = user_config.get("password_hash", "")
-
-    if not get_auth_middleware().verify_password(current_password, current_password_hash):
+    user_config = verify_configured_user(allowed_users, username, current_password)
+    if user_config is None:
         get_auth_middleware().security_layer.audit_log(
             action="password_change_failed",
             user=username,
@@ -372,7 +372,7 @@ def _verify_current_password(username: str, current_password: str, ip_address: s
         )
         raise HTTPException(status_code=401, detail="Current password is incorrect")
 
-    return current_password_hash
+    return user_config["password_hash"]
 
 
 def _persist_password_change(username: str, new_password_hash: str) -> None:
@@ -385,11 +385,7 @@ def _persist_password_change(username: str, new_password_hash: str) -> None:
 
     # Persist to disk
     config_manager = get_config_manager()
-    config_manager.set_nested(
-        f"security_config.allowed_users.{username}.password_hash",
-        new_password_hash,
-    )
-    config_manager.save_settings()
+    set_nested_and_save(config_manager, f"security_config.allowed_users.{username}.password_hash", new_password_hash)
 
 
 @router.post("/change-password", response_model=ChangePasswordResponse)

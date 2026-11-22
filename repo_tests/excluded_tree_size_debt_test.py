@@ -97,7 +97,6 @@ def _source_tree_files(root: Path) -> list[str]:
 REACH = declare(
     "excluded-tree-size-debt",
     discover=_source_tree_files,
-    floor=300,
     what="tracked python files in excluded source trees",
     growth=100,
 )

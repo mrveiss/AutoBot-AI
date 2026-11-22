@@ -27,6 +27,13 @@ import { getConfig, getServiceUrl, getVmIp } from '../config/ssot-config';
 const config = getConfig();
 
 /**
+ * Protocol of the internal services the GUI addresses directly (VNC, NPU worker, Ollama, the
+ * browser worker): plain HTTP on the service network. The backend's own protocol is
+ * `getConfig().httpProtocol` in `config/ssot-config.ts`, which follows the page (#19821).
+ */
+export const INTERNAL_SERVICE_PROTOCOL = 'http' as const
+
+/**
  * Core network constants for AutoBot's distributed infrastructure
  * CRITICAL: All values read from SSOT config (which reads from environment)
  *

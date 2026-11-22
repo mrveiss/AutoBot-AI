@@ -62,7 +62,7 @@ export { LOCALE_ENDONYMS, localeOptions } from './src/utils/locales'
 export type { LocaleOption } from './src/utils/locales'
 
 export { default as BaseModal } from './src/components/BaseModal.vue'
-export type { ModalSize } from './src/components/BaseModal.vue'
+export type { ModalSize, ModalRole } from './src/components/BaseModal.vue'
 
 export { default as BaseDrawer } from './src/components/BaseDrawer.vue'
 
@@ -91,6 +91,13 @@ export type { TooltipPlacement } from './src/components/BaseTooltip.vue'
 // Screen-reader announcer (#18240) — promoted from the SLM useAccessibility.
 export { useAnnounce, LIVE_REGION_ID } from './src/composables/useAnnounce'
 export type { AnnouncePriority } from './src/composables/useAnnounce'
+
+// Theme names, storage and `data-theme` application shared by both apps (#18239).
+export {
+  EFFECTIVE_THEMES, THEMES, THEME_STORAGE_KEY, colorSchemeFor, resolveTheme,
+  applyThemeToDocument, readStoredTheme, writeStoredTheme,
+} from './src/composables/themeScheme'
+export type { EffectiveTheme, Theme } from './src/composables/themeScheme'
 
 // Dialog-a11y composables — the focus-trap / scroll-lock / focus-restore /
 // initial-focus primitives shared by every dialog and modal consumer.
@@ -161,16 +168,26 @@ export {
   formatTime,
   formatDateTime,
   formatISOString,
-  formatTimeAgo,
   formatRelativeTime,
+  createRecencyFormatter,
   createDateFormatter,
+  formatLocalTime,
+  isoDateStamp,
+  isoTimestampStamp,
+  toDateTimeLocalValue,
   DEFAULT_DATE_TIME_INTL
 } from './src/utils/format'
-export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions } from './src/utils/format'
+export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions, RecencyFormatterOptions } from './src/utils/format'
+// The installed-theme descriptor both apps read from /api/themes (#14908).
+export type { InstalledTheme } from './src/types/theme'
+// Saving a file from the browser, the one implementation (#20770).
+export { saveBlob, saveTextFile, saveUrl } from './src/utils/saveFile'
 
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger. The SLM
 // imports them from the kit; the user app's utils/debugUtils.ts re-exports them.
 export { log, createLogger } from './src/utils/logger'
+// Credential-shaped URL/error redaction for log lines -- the one copy (#18550).
+export { redactUrlForLogging, redactErrorForLogging } from './src/utils/redactUrlForLogging'
 // Managed polling with scoped disposal and a consecutive-error stop (#19482).
 export { usePollingJob } from './src/composables/usePollingJob'
 export type { UsePollingJobOptions, UsePollingJobReturn } from './src/composables/usePollingJob'
@@ -187,7 +204,7 @@ export { backoffDelay, RETRY_BACKOFF } from './src/utils/backoff'
 export type { BackoffOptions } from './src/utils/backoff'
 
 // What a canonical API client throws for a non-2xx response: status and details kept (#12363).
-export { HttpError, isHttpError, isHttpClientError, extractErrorInfo, httpErrorFrom, parseJsonBody, type ErrorInfo } from './src/utils/httpError'
+export { HttpError, isHttpError, isHttpClientError, httpErrorText, extractErrorInfo, httpErrorFrom, parseJsonBody, type ErrorInfo } from './src/utils/httpError'
 
 export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
 export * from './src/schedule'
@@ -206,8 +223,8 @@ export { default as LedgerSectionState } from './src/components/LedgerSectionSta
 export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'
 
 // The one HTTP transport under both apps' ApiClients; each app subclasses it for auth (#14908).
-export { ApiClientBase, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
-export type { TransportRequestOptions, RawRequestOptions, TransportLogger } from './src/utils/ApiClientBase'
+export { ApiClientBase, AbsoluteEndpointError, RequestTimeoutError, fillPathParams, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
+export type { TransportRequestOptions, RawRequestOptions, TransportLogger, HttpMethod, MethodsOf, JsonMethodsOf, CallInit, CallResponse } from './src/utils/ApiClientBase'
 
 // The one spinner and the one skeleton for every loading state (#19906).
 export { default as BaseSpinner } from './src/components/BaseSpinner.vue'
@@ -259,3 +276,4 @@ export type {
   SelectMenuVariant,
   SelectMenuOption,
 } from './src/components/BaseSelectMenu.vue'
+export type { AuditQueryResponse } from './src/types/audit'

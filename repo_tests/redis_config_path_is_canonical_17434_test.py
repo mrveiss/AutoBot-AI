@@ -63,6 +63,8 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ANSIBLE = "autobot-slm-backend/ansible"
@@ -198,7 +200,7 @@ def _declared_in_python(root: Path) -> str | None:
     Parsed, not imported: `pki.config` pulls pydantic-settings and the shared
     paths module, and what is being pinned is the declaration itself.
     """
-    tree = ast.parse((root / "autobot-backend" / "pki" / "config.py").read_text(encoding="utf-8"))
+    tree = parse_cache.parse((root / "autobot-backend" / "pki" / "config.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
             for target in node.targets:
@@ -219,7 +221,7 @@ def scan_text(rel: str, text: str) -> list[str]:
     """
     findings: list[str] = []
     for number, line in enumerate(text.splitlines(), start=1):
-        if is_comment_line(line):
+        if is_comment_line(line, rel):
             continue
         hit = next((wrong for wrong in _WRONG if wrong in line), None)
         if hit and f"{rel}:{number}" not in _EXEMPT:
@@ -227,15 +229,18 @@ def scan_text(rel: str, text: str) -> list[str]:
     return findings
 
 
-def is_comment_line(line: str) -> bool:
-    """A whole-line `#` comment, which the sweep never reports.
+def is_comment_line(line: str, rel: str) -> bool:
+    """A whole-line comment in file `rel`'s syntax, which the sweep never reports.
+
+    `rel` selects the comment syntax: Markdown has none, so a `# heading` in a
+    `.md` file is content and is scanned (#17941 review).
 
     Named rather than inlined because `_EXEMPT`'s liveness check needs the same
     question: an exemption pointing at a line the sweep skips anyway covers
     nothing, and used to read as live because the line still contained a
     `_WRONG` literal (#17444 review).
     """
-    return line.strip().startswith("#")
+    return bool(line.strip()) and not code_lines(line, name=rel)
 
 
 def _sweep(root: Path) -> list[str]:
@@ -404,7 +409,7 @@ def test_every_exemption_is_still_live() -> None:
         index = int(number) - 1
         if index >= len(lines) or not any(wrong in lines[index] for wrong in _WRONG):
             stale.append(f"{where} (no longer names a non-canonical path) -- {reason}")
-        elif is_comment_line(lines[index]):
+        elif is_comment_line(lines[index], rel):
             # The sweep never reports a `#` comment line, so an exemption on one
             # excuses nothing while reading as live -- the literal is still there,
             # which is all the old check asked (#17444 review). A dead entry that
@@ -453,6 +458,12 @@ class TestTheDetectorTripsAndStaysQuiet:
         """
         findings = scan_text("fake.yml", "dest: ok  # was /etc/redis/redis.conf\n")
         assert len(findings) == 1
+
+    def test_a_markdown_heading_is_content_not_a_comment(self) -> None:
+        """Markdown has no comment syntax, so `# heading` is scanned (#17941)."""
+        line = "# /etc/redis/redis.conf\n"
+        assert len(scan_text("guide.md", line)) == 1
+        assert scan_text("guide.py", line) == []
 
     def test_an_exempt_line_is_not_reported(self) -> None:
         rel, number = next(iter(_EXEMPT)).rsplit(":", 1)

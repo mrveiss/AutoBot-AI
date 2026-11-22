@@ -39,6 +39,7 @@ import ast
 from repo_tests._paths import repo_root
 
 from autobot_shared.local_models import LOCAL_MODEL_NAMES
+from tools.lint import _parse_cache as parse_cache
 
 _REPO = repo_root()
 _SSOT_CONSTANTS_FILE = _REPO / "autobot_shared" / "ssot_constants.py"
@@ -65,7 +66,7 @@ def _local_constant_values(source: str | None = None) -> tuple[str, ...]:
     today's tree, not the detector.
     """
     text = source if source is not None else _SSOT_CONSTANTS_FILE.read_text(encoding="utf-8")
-    tree = ast.parse(text)
+    tree = parse_cache.parse(text)
     values = []
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.Assign):

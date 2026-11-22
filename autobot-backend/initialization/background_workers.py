@@ -120,6 +120,24 @@ async def start_background_workers(app: FastAPI) -> None:
     await start_vector_reconciler(app)
     await start_telegram_poller(app)
     await start_schedule_reconciler(app)
+    from services.approval_expiry_scheduler import start_approval_expiry_scheduler
+
+    await start_approval_expiry_scheduler(app)
+    await adopt_chat_shares()
+
+
+async def adopt_chat_shares() -> None:
+    """Move pre-#18890 Redis-only chat shares into the durable table now, so none lapses before first use.
+
+    Non-fatal: the same adoption runs lazily on the first share, unshare or Redis read-miss.
+    """
+    try:
+        from autobot_shared.redis_client import get_redis_client
+        from security.session_shares import adopt_redis_shares
+
+        await adopt_redis_shares(await get_redis_client(async_client=True, database="main"))
+    except Exception:
+        logger.exception("Chat share adoption deferred to first use; old Redis-only shares keep their TTL until then")
 
 
 async def start_schedule_reconciler(app: FastAPI) -> None:

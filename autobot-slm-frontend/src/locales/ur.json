@@ -145,8 +145,8 @@
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
-      "durationSeconds": "s",
-      "durationMinutes": "m",
+      "durationSeconds": "سیکنڈ",
+      "durationMinutes": "منٹ",
       "actions": "اقدامات",
       "agentID": "Agent ID",
       "all": "All",
@@ -241,6 +241,32 @@
     "started": "شروع ہوا",
     "statefulServices": "Stateful Services",
     "status": "Status"
+  },
+  "codeRollback": {
+    "cancel": "Cancel",
+    "checked": "two databases, the SLM database and the backend database, for a migration the chosen version does not have.",
+    "checkedLabel": "Checked:",
+    "close": "بند کریں",
+    "confirm": "Roll back",
+    "confirmTitle": "Roll back to this version?",
+    "description": "Deploy an earlier version of the main branch through the updater. Run Update Everything afterwards to return to the latest.",
+    "empty": "No earlier versions are available.",
+    "notChecked": "SQLite stores, Redis, ChromaDB, file formats, and tables the application creates on startup. If the chosen version reads any of these differently, the rollback does not detect it.",
+    "notCheckedLabel": "Not checked:",
+    "option": "{date}: {subject}",
+    "optionRunning": "{date}: {subject} (running now)",
+    "pickerLabel": "Version to roll back to",
+    "pickerPlaceholder": "Choose an earlier version",
+    "refusedTitle": "This rollback is not possible",
+    "requestFailed": "The request failed. Try again, or check the SLM logs.",
+    "review": "Review rollback",
+    "stepFetch": "Fetch the latest history from the code source.",
+    "stepFleet": "Update every fleet node that is on a different version.",
+    "stepLatest": "Show the nodes as outdated against the latest version. Run Update Everything to return to it.",
+    "stepMigrations": "Never undo a database migration. A rollback that a migration is in the way of is refused.",
+    "stepSlm": "Update this SLM server to that version and restart it.",
+    "title": "Roll back to an earlier version",
+    "willDo": "This will:"
   },
   "codeSourceModal": {
     "assign": "تفویض",
@@ -470,7 +496,8 @@
     },
     "errors": {
       "withStatus": "{message} (HTTP {status})",
-      "withCause": "{message}: {cause}"
+      "withCause": "{message}: {cause}",
+      "unknown": "نامعلوم خطا"
     }
   },
   "deploymentLogViewer": {
@@ -726,6 +753,9 @@
       "toConfirm": "to confirm",
       "type": "قسم"
     },
+    "errors": {
+      "nodeNotFound": "Node {nodeId} was not found in the fleet."
+    },
     "fleetSummary": {
       "fleetHealthSummary": "Fleet health summary"
     },
@@ -865,7 +895,6 @@
     "nPUWorkerMonitor": {
       "avgUtilization": "Avg utilization:",
       "currentTask": "Current Task",
-      "metricsUnavailable": "NPU fleet metrics are unavailable",
       "noNPUWorkers": "No NPU Workers",
       "noNodesWithThe": "No nodes with the npu-worker role are registered in the fleet.",
       "online": "online",
@@ -904,12 +933,10 @@
       "enrollNode": "Enroll Node",
       "enrolling": "Enrolling...",
       "healthMetricsAria": "Health metrics",
-      "hoursAgo": "{hours}h ago",
       "justNow": "Just now",
       "lastSeen": "Last seen: {time}",
       "manageRoles": "Manage Roles",
       "memory": "MEM",
-      "minutesAgo": "{minutes}m ago",
       "never": "کبھی نہیں",
       "noHealthDataAvailable": "No health data available",
       "noRolesAssigned": "No roles assigned",
@@ -919,7 +946,6 @@
       "reEnrollNode": "Re-enroll Node",
       "recoverConnection": "Recover Connection",
       "restartNodeAria": "Restart {hostname}",
-      "secondsAgo": "{seconds}s ago",
       "serviceHealthSummaryAria": "Service health summary",
       "services": "Services",
       "services1": "Services:",
@@ -1029,6 +1055,10 @@
     "fleetNodesAria": "Fleet nodes",
     "fleetOverview": "Fleet Overview",
     "fleetViewTabsAria": "Fleet view tabs",
+    "incompleteList": "Showing {loaded} of {total} nodes. The rest could not be loaded: {message}",
+    "incompleteTotalUnknown": "an unknown number of",
+    "loadFailed": "Could not load the node list: {message}",
+    "loadFailedUnknown": "Could not load the node list",
     "infrastructure": "Infrastructure",
     "infrastructureSetupAria": "Infrastructure setup",
     "lastSeen": "Last seen:",
@@ -1122,6 +1152,7 @@
     "signInWithProviderAria": "{provider} کے ساتھ سائن ان کریں",
     "signingIn": "Signing in...",
     "singleSignOnProvidersAria": "Single sign-on providers",
+    "adminOnly": "This console is for administrators.",
     "ssoLoginFailed": "SSO login failed. Please try again.",
     "twoFactorAuthentication": "Two-Factor Authentication",
     "twoFactorAuthenticationAria": "Two-factor authentication",
@@ -1740,6 +1771,105 @@
         "label": "Latest events pages",
         "summary": "Page {page} of {count}"
       }
+    },
+    "installMetrics": {
+      "title": "Install metrics",
+      "subtitle": "This install's own monitoring figures from the main backend: host, services, alerts, recommendations, GPU and NPU. Updated every 15 seconds.",
+      "refresh": "تازہ کریں",
+      "loading": "Reading install metrics...",
+      "unavailableTitle": "The main app is not available",
+      "unavailableBody": "The main backend did not answer any install metrics request. No figures are shown, because any shown now would be out of date. Polling stops after repeated failures; use Refresh to read again.",
+      "unauthorisedTitle": "Not authorised to read the main app",
+      "unauthorisedBody": "The main app answered every install metrics request but refused this session. Sign in again or ask an administrator for access. No figures are shown.",
+      "sectionFailedTitle": "{section} could not be read",
+      "sectionFailedBody": "The install metrics request failed.",
+      "emptyTitle": "Nothing reported yet",
+      "emptyBody": "The main backend answered and reports no host figures, services, alerts, recommendations or devices.",
+      "notReported": "Not reported",
+      "percent": "{value}%",
+      "celsius": "{n} °C",
+      "watts": "{n} W",
+      "ms": "{n} ms",
+      "hours": "{n} h",
+      "readAt": "Read {time}",
+      "sections": {
+        "dashboard": "Host metrics",
+        "services": "Service health",
+        "alerts": "Alerts",
+        "recommendations": "Recommendations",
+        "gpu": "GPU",
+        "npu": "NPU"
+      },
+      "system": {
+        "title": "Host"
+      },
+      "gpu": {
+        "title": "GPU",
+        "absent": "The main backend reports no GPU on this install."
+      },
+      "npu": {
+        "title": "NPU",
+        "absent": "The main backend reports no NPU on this install."
+      },
+      "stat": {
+        "cpu": "CPU",
+        "memory": "Memory",
+        "overallHealth": "Overall health",
+        "performanceScore": "Performance score",
+        "gpuName": "Device",
+        "gpuUtilization": "Utilization",
+        "gpuMemory": "Memory utilization",
+        "gpuTemperature": "Temperature",
+        "gpuPower": "Power",
+        "npuUtilization": "Utilization",
+        "npuAcceleration": "Acceleration ratio",
+        "npuInferences": "Inferences"
+      },
+      "services": {
+        "title": "Services",
+        "summary": "{healthy} of {total} services healthy, overall {status}",
+        "empty": "The backend reports no services.",
+        "col": {
+          "name": "Service",
+          "status": "Status",
+          "endpoint": "Endpoint",
+          "response": "Response",
+          "score": "Health score",
+          "uptime": "اپ ٹائم"
+        }
+      },
+      "alerts": {
+        "title": "Alerts",
+        "empty": "The backend reports no active alerts."
+      },
+      "recommendations": {
+        "title": "Recommendations",
+        "empty": "The backend has no optimization recommendations.",
+        "action": "Action: {action}"
+      },
+      "status": {
+        "healthy": "صحت مند",
+        "degraded": "کمزور",
+        "critical": "Critical",
+        "offline": "Offline"
+      },
+      "health": {
+        "healthy": "healthy",
+        "degraded": "degraded",
+        "critical": "critical",
+        "unknown": "unknown"
+      },
+      "severity": {
+        "critical": "Critical",
+        "high": "زیادہ",
+        "warning": "انتباہ",
+        "info": "معلومات"
+      },
+      "priority": {
+        "high": "زیادہ",
+        "medium": "درمیانہ",
+        "low": "Low"
+      }
     }
   },
   "monitoringView": {
@@ -1759,7 +1889,8 @@
       "performance": "کارکردگی",
       "agentLedger": "ایجنٹ لیجر",
       "validation": "Validation",
-      "rum": "Real user monitoring"
+      "rum": "Real user monitoring",
+      "install": "Install metrics"
     }
   },
   "orchestration": {
@@ -1911,7 +2042,7 @@
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
     "tabFleet": "Fleet Operations",
-    "tabInfrastructure": "جائزہ",
+    "tabInfrastructure": "Infrastructure",
     "tabMigration": "Migration",
     "tabPerNode": "Per-Node Control",
     "tabReplication": "Replication",
@@ -2033,7 +2164,13 @@
       "time": "Time:",
       "time1": "Time",
       "value0TracePlural": "{value0} trace{plural}",
-      "paginationAria": "Trace list pages"
+      "paginationAria": "Trace list pages",
+      "range": {
+        "1h": "1h",
+        "6h": "6h",
+        "24h": "24h",
+        "7d": "7d"
+      }
     }
   },
   "performanceView": {
@@ -3008,6 +3145,7 @@
         "value": "ویلیو"
       },
       "userManagementSettings": {
+        "personPushFailed": "The SLM could not be updated for: {names}. If one of them was deactivated or changed their password, the SLM still has the old state. It retries by itself.",
         "23PermissionsAcross8": "23 permissions across 8 resources",
         "actions": "اقدامات",
         "active": "فعال",
@@ -3148,6 +3286,44 @@
         "checkingRbacStatus": "Checking RBAC status...",
         "failedToInitializeRbac": "Failed to initialize RBAC"
       },
+      "themeManager": {
+        "title": "Themes",
+        "subtitle": "Theme packages installed on the main app. Installing or removing one applies to every user.",
+        "refresh": "تازہ کریں",
+        "dismiss": "Dismiss",
+        "loading": "Reading the installed themes...",
+        "errorTitle": "The installed themes could not be read",
+        "errorBody": "The theme list request failed.",
+        "malformedList": "The theme list answer was not a list.",
+        "unavailableTitle": "The theme manager is not available",
+        "unavailableBody": "Theme packages live on the main app, which did not answer. Try again once it is running.",
+        "emptyTitle": "No themes installed",
+        "emptyBody": "Upload a theme package (.zip) to make it available to every user.",
+        "installTitle": "Install a theme",
+        "installHint": "A .zip package holding theme.json and theme.css.",
+        "chooseFile": "Choose package",
+        "installing": "Installing...",
+        "installedOk": "Installed {name} {version}.",
+        "installFailed": "The theme could not be installed.",
+        "notZip": "Choose a .zip theme package.",
+        "tooLarge": "The package is larger than the SLM proxy accepts, so it was refused before the main app saw it.",
+        "adminOnly": "Only an administrator can change themes.",
+        "col": {
+          "name": "نام",
+          "version": "Version",
+          "author": "Author",
+          "supports": "Supports",
+          "id": "Id"
+        },
+        "tableLabel": "Installed themes",
+        "actions": "اقدامات",
+        "uninstall": "Uninstall",
+        "confirmTitle": "Uninstall {name}?",
+        "confirmBody": "The theme is removed from the main app for every user.",
+        "confirmCancel": "Cancel",
+        "removedOk": "Uninstalled {name}.",
+        "removeFailed": "The theme could not be uninstalled."
+      },
       "webResearchSettings": {
         "title": "Web Research",
         "subtitle": "Platform-wide web research settings. Changes apply to every user.",
@@ -3245,6 +3421,32 @@
       "failedToSaveSetting": "Failed to save setting",
       "failedToLoadSettings": "Failed to load settings"
     },
+    "chatApprovalSettings": {
+      "categories": {
+        "pushing commits": "Pushing commits",
+        "publishing": "Publishing",
+        "destructive operations": "Destructive operations",
+        "rotating credentials": "Rotating credentials",
+        "sending externally": "Sending externally",
+        "writing files": "Writing files",
+        "executing code": "Executing code",
+        "deploying infrastructure": "Deploying infrastructure",
+        "discarding local changes": "Discarding local changes",
+        "writing data": "Writing data",
+        "browser actions": "Browser actions",
+        "delegating work": "Delegating work"
+      },
+      "autoApproveHelp": "When on, tool calls in a chat turn that used an attached file run without asking for approval. Off by default.",
+      "autoApproveLabel": "Auto-approve tool calls in chats that used an attached file",
+      "autoApproveRisk": "Risk: text inside an attached file could steer tools without anyone being asked. Turn this on only if you trust every file your users can attach.",
+      "autoApproveTitle": "Auto-approve for attachment chats",
+      "failedToLoad": "Failed to load chat approval settings",
+      "failedToSave": "Failed to save chat approval settings",
+      "relaxedHelp": "Categories switched on here no longer ask for approval by default. Every other category keeps asking. Changes are recorded in the audit log.",
+      "relaxedTitle": "Relaxed approval categories",
+      "save": "محفوظ کریں",
+      "saved": "Saved."
+    },
     "disposalPolicySettings": {
       "controlsHowCompanyOSProjectsAre": "Controls how Company OS projects are disposed after archiving. Default: immediate, no approval.",
       "howManyDaysAnArchivedProject": "How many days an archived project waits before disposal. Set 0 for immediate.",
@@ -3292,7 +3494,6 @@
       "automaticallyRefreshDataOn": "Automatically refresh data on dashboards",
       "completed": "مکمل",
       "configureNTPServersAnd": "Configure NTP servers and push time settings to all fleet nodes via Ansible.",
-      "darkMode": "Dark Mode",
       "defaultTimezone": "Default Timezone",
       "displayNameForThis": "Display name for this installation",
       "fleetTimeSynchronization": "Fleet Time Synchronization",
@@ -3315,8 +3516,13 @@
       "syncFailed": "❌ Sync failed",
       "syncing": "Syncing…",
       "systemName": "System Name",
+      "theme": "تھیم",
+      "themeContrast": "اعلیٰ کنٹراسٹ",
+      "themeDark": "گہرا",
+      "themeHint": "Colour scheme for the console. Saved in this browser.",
+      "themeLight": "ہلکا",
+      "themeMono": "یک رنگی",
       "timezoneForDisplayingDatesAndTimes": "Timezone for displaying dates and times ({count} zones available)",
-      "useDarkThemeFor": "Use dark theme for the interface",
       "value0Value1NodePlural": "{value0} — {value1} node | {value0} — {value1} nodes",
       "viewWizard": "View Wizard",
       "settingsSaved": "Settings saved successfully",
@@ -3480,6 +3686,7 @@
       "api": "API",
       "backend": "Backend",
       "disposalPolicy": "Disposal Policy",
+      "chatApproval": "Chat Approvals",
       "findingsPolicy": "Findings Policy",
       "users": "Users",
       "cache": "Cache",
@@ -3491,7 +3698,8 @@
       "llmFallbacks": "LLM Fallbacks",
       "budgetAudit": "Budget Audit",
       "sso": "SSO / OIDC",
-      "webResearch": "Web Research"
+      "webResearch": "Web Research",
+      "themes": "Themes"
     }
   },
   "settingsView": {
@@ -3714,6 +3922,13 @@
     "upgradeAllStartedOnNode": "Upgrade all started for {nodeId}"
   },
   "tools": {
+    "moved": {
+      "title": "{name} moved to the user app",
+      "description": "{name} is user work, so it now lives in the AutoBot user app, where every signed-in user can reach it.",
+      "open": "Open {name} in the user app",
+      "batch": "Batch Processing",
+      "vision": "Vision"
+    },
     "admin": {
       "advancedControlTool": {
         "title": "ایڈوانسڈ کنٹرول",
@@ -3867,6 +4082,8 @@
       "fileBrowserTool": {
         "actions": "اقدامات",
         "download": "ڈاؤن لوڈ",
+        "downloadFailed": "Failed to download file",
+        "downloadUnauthorized": "This file cannot be downloaded because your session is not accepted by the main backend. Sign in there and try again.",
         "emptyDirectory": "Empty directory",
         "go": "Go",
         "goUp": "Go Up",
@@ -4157,6 +4374,35 @@
       "subtitle": "Recent orphan-storage cleanups and orphan-resource repairs, with actor and result.",
       "timestamp": "Time",
       "title": "Audit Trail"
+    },
+    "knowledge": {
+      "credentials": {
+        "action": "Action",
+        "connector": "Connector",
+        "empty": "No connector records hold a clear-text credential copy.",
+        "fields": "Fields",
+        "loadErrorFallback": "Failed to scan connector credentials",
+        "noStoreCopy": "No secrets-store copy; cannot be proposed",
+        "subtitle": "Connector records that keep a clear-text copy of a credential beside the secrets-store copy. Only the record's copy is ever proposed for removal; rotate the credential at the provider.",
+        "title": "Stored connector credentials",
+        "type": "قسم",
+        "unscannable": "These records could not be checked and are not reported clean: {ids}"
+      },
+      "collections": {
+        "action": "Action",
+        "empty": "No empty knowledge-base collections found.",
+        "loadErrorFallback": "Failed to list empty collections",
+        "name": "مجموعہ",
+        "subtitle": "Knowledge-base vector collections holding zero vectors. Deletion is only PROPOSED here; the collection is re-checked when the request is approved.",
+        "title": "Empty vector collections",
+        "unreadable": "These collections could not be counted and are not reported empty: {names}"
+      },
+      "loading": "لوڈ ہو رہا ہے…",
+      "propose": "Propose cleanup",
+      "proposeErrorFallback": "Failed to create the approval request",
+      "proposed": "Proposed (approval {id}) — decide it in the Approvals inbox",
+      "subtitle": "Read-only findings. Each row only creates an approval request; nothing is removed until a human approves it in the Approvals inbox.",
+      "title": "Knowledge cleanup"
     },
     "refresh": "تازہ کریں",
     "resources": {

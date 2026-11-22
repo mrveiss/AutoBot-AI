@@ -14,7 +14,7 @@ import pytest
 import redis
 
 from autobot_shared.redis_client import get_redis_client
-from config import unified_config_manager as global_config_manager
+from config import config_manager
 
 # This module is a manual end-to-end script, not a unit test: every function
 # needs a live Redis plus a running orchestrator to consume the published
@@ -32,7 +32,7 @@ def test_worker_capabilities():
     print("=== TESTING WORKER CAPABILITIES LISTENER ===")  # noqa: print
 
     # Get Redis configuration
-    redis_config = global_config_manager.get_redis_config()
+    redis_config = config_manager.get_redis_config()
     redis_host = redis_config.get("host", "localhost")
     redis_port = redis_config.get("port", 6379)
 
@@ -79,7 +79,7 @@ def test_command_approval():
     print("\n=== TESTING COMMAND APPROVAL LISTENER ===")  # noqa: print
 
     # Get Redis configuration
-    redis_config = global_config_manager.get_redis_config()
+    redis_config = config_manager.get_redis_config()
     redis_config.get("host", "localhost")
     redis_config.get("port", 6379)
 
@@ -121,7 +121,7 @@ def test_redis_connection():
     print("=== TESTING REDIS CONNECTION ===")  # noqa: print
 
     # Get Redis configuration
-    redis_config = global_config_manager.get_redis_config()
+    redis_config = config_manager.get_redis_config()
     redis_host = redis_config.get("host", "localhost")
     redis_port = redis_config.get("port", 6379)
 

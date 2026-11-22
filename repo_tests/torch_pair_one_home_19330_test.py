@@ -52,7 +52,6 @@ def _sources(root: Path) -> list[Path]:
 REACH = declare(
     "torch-pair-literals",
     discover=_sources,
-    floor=1033,  # mid-window: population 1087, window (979, 1087)
     growth=108,  # ~10%: ordinary growth between repins must not turn an unrelated PR red
     what="workflow, docker, infrastructure, Ansible and script files",
     roots=_ROOTS,

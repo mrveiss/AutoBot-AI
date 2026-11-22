@@ -5,8 +5,12 @@
 # Author: mrveiss
 """
 Fix knowledge base dimension mismatch by recreating with correct settings.
+
+The destructive half (dropping the llama_index index and its keys) is a #17038 wipe proposal: run with
+``--request-wipe`` to raise it, ``--dry-run`` to preview it. This script itself deletes nothing (#21383).
 """
 
+import argparse
 import asyncio
 import logging
 import os
@@ -24,68 +28,15 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# Import centralized Redis client
-from autobot_shared.redis_client import get_redis_client  # noqa: E402
+# The shared wipe-request helper sits beside this script; put it on the path when loaded by file path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import kb_wipe_cli  # noqa: E402
 
 
 async def fix_dimensions():
-    """Drop all llama_index traces and let it recreate properly."""
-
-    # The llama_index vector store lives in the knowledge DB (db 1, DATABASE_MAPPING["knowledge"];
-    # KnowledgeBase.redis_db), the DB the pre-#18964 script dropped it from.
-    r = get_redis_client(database="knowledge")
-    if r is None:
-        logger.error("No Redis client available for the knowledge database; aborting before any change")
-        return False
-
-    logger.info("Cleaning up Redis...")
-
-    # Drop the index if it exists
-    try:
-        r.execute_command("FT.DROPINDEX", "llama_index", "DD")
-        logger.info("Dropped llama_index")
-    except Exception as e:
-        logger.info(f"Index drop: {e}")
-
-    # Clean specific databases using centralized client
-    database_names = [
-        "main",
-        "knowledge",
-        "prompts",
-        "agents",
-        "metrics",
-        "logs",
-        "sessions",
-        "workflows",
-        "vectors",
-        "models",
-    ]
-
-    for db_name in database_names:
-        try:
-            r_db = get_redis_client(database=db_name)
-            if r_db is None:
-                logger.warning("Database %s: no Redis client available, skipping", db_name)
-                continue
-
-            # Delete any llama_index related keys
-            keys = r_db.keys("llama_index:*")
-            if keys:
-                for key in keys:
-                    r_db.delete(key)
-                logger.info(f"Cleaned {len(keys)} keys from {db_name} database")
-
-            # Also look for doc: prefixed keys
-            doc_keys = r_db.keys("doc:*")
-            if doc_keys:
-                for key in doc_keys:
-                    r_db.delete(key)
-                logger.info(f"Cleaned {len(doc_keys)} doc keys from {db_name} database")
-        except Exception as e:
-            logger.info(f"Database {db_name}: {e}")
-
-    logger.info("\nRedis cleanup complete!")
-    logger.info("\nNow testing with correct embedding model...")
+    """Initialise a fresh knowledge base and test it. Run after an approved wipe; it deletes nothing."""
+    logger.info("\nTesting with the correct embedding model...")
 
     from knowledge_factory import get_knowledge_base_async
 
@@ -118,8 +69,17 @@ async def fix_dimensions():
         return False
 
 
-def main() -> int:
+def _parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Request the KB wipe, or test the KB after an approved wipe.")
+    kb_wipe_cli.add_wipe_arguments(parser)
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
     """Run the dimension fix; the process exit code: 0 on success, 1 on failure."""
+    args = _parse_args(argv)
+    if kb_wipe_cli.wipe_wanted(args):
+        return 0 if asyncio.run(kb_wipe_cli.request_wipe(args.dry_run)) else 1
     if asyncio.run(fix_dimensions()):
         logger.info("\nKnowledge base is now ready! You can run populate_knowledge_base.py")
         return 0

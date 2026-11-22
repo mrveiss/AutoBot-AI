@@ -108,3 +108,26 @@ export function nextGridline(current: number, delta: number): number {
  * layout constant is asserting the number it was told, not the behaviour.
  */
 export const CANVAS_FIT_PADDING = 60
+
+/**
+ * The width/height a node occupies for geometry (hit-testing, port anchors,
+ * fit, minimap). Only `org-group` is sized from `data` (#13996); every other
+ * type is the fixed footprint the layout builders in `orgCanvasGraph.ts`
+ * assume. One source for what the renderer, edges and hit test all read
+ * (#14008).
+ */
+export function nodeExtent(node: CanvasNode): { width: number; height: number } {
+  if (node.type === 'org-group') {
+    const data = node.data as Record<string, unknown>
+    return {
+      width: typeof data.width === 'number' ? data.width : CANVAS_NODE_WIDTH,
+      height: typeof data.height === 'number' ? data.height : CANVAS_NODE_HEIGHT,
+    }
+  }
+  return { width: CANVAS_NODE_WIDTH, height: CANVAS_NODE_HEIGHT }
+}
+
+/** Where a connection attaches vertically: the mid-line of the node's extent. */
+export function nodePortY(node: CanvasNode): number {
+  return nodeExtent(node).height / 2
+}

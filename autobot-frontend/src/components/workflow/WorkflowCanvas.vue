@@ -234,13 +234,13 @@
              :data-group-kind="groupKind(node)"
              :data-node-id="node.id"
              :style="nodeStyle(node)"
-             role="button"
-             :tabindex="rovingTabStopId === node.id ? 0 : -1"
+             :role="isActivatable(node) ? 'button' : 'group'"
+             :tabindex="isActivatable(node) && rovingTabStopId === node.id ? 0 : -1"
              :aria-label="nodeAriaLabel(node)"
-             :aria-pressed="isNodeSelected(node)"
-             :aria-describedby="instructionsId"
+             :aria-pressed="isActivatable(node) ? isNodeSelected(node) : undefined"
+             :aria-describedby="isActivatable(node) ? instructionsId : undefined"
              @pointerdown="onNodePointerDown(node, $event)"
-             @click.stop="selectNode(node.id, $event)"
+             @click.stop="isActivatable(node) && selectNode(node.id, $event)"
              @contextmenu.prevent.stop="onNodeContextMenu(node, $event)"
              @focus="focusedNodeId = node.id"
              @keydown="onNodeKeydown(node, $event)">
@@ -360,15 +360,12 @@
                      change it. `.stop` keeps the click from also selecting the
                      node, which would navigate to the workflow builder — the
                      mutation itself is OrgChart.vue's job, reached by event. -->
-                <button
-                  type="button"
-                  class="process-detach-btn"
-                  data-testid="process-detach-btn"
-                  :aria-label="processDetachLabel(node)"
+                <CanvasDetachButton
+                  v-if="detachable"
+                  kind="process"
+                  :label="processDetachLabel(node)"
                   @click.stop="emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id'))"
-                >
-                  <Icon name="times" />
-                </button>
+                />
               </div>
             </template>
             <!-- #14597: a tool one or more roles carry. `roles` is empty
@@ -388,15 +385,12 @@
                   <span class="tool-role-name">{{ role.role_name }}</span>
                   <!-- #14597: mirrors the org-process detach control — `.stop`
                        keeps the click from also selecting the tool node. -->
-                  <button
-                    type="button"
-                    class="tool-detach-btn"
-                    data-testid="tool-detach-btn"
-                    :aria-label="toolDetachLabel(node, role)"
+                  <CanvasDetachButton
+                    v-if="detachable"
+                    kind="tool"
+                    :label="toolDetachLabel(node, role)"
                     @click.stop="emit('tool-detached', role.role_id, nodeText(node, 'tool_name'))"
-                  >
-                    <Icon name="times" />
-                  </button>
+                  />
                 </li>
               </ul>
             </template>
@@ -557,14 +551,15 @@
 
 <script setup lang="ts">
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import CanvasDetachButton from './CanvasDetachButton.vue'
 import { ref, reactive, computed, nextTick, useId, watch, toRaw } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
 import {
   CANVAS_NODE_WIDTH,
-  CANVAS_NODE_HEIGHT,
-  CANVAS_NODE_PORT_Y,
+  nodeExtent,
+  nodePortY,
   CANVAS_GRID_SIZE,
   CANVAS_FIT_PADDING,
   snapToGrid,
@@ -607,8 +602,10 @@ const props = withDefaults(
     // actually exists in `nodes`. Optional and defaulted to null so every
     // existing mount (WorkflowBuilderView included) is unaffected.
     focusNodeId?: string | null;
+    // #20682: whether the viewer may detach an org attachment (the server 403s all but owner/admin).
+    detachable?: boolean;
   }>(),
-  { readonly: false, tabs: () => [], activeTabId: null, focusNodeId: null },
+  { readonly: false, tabs: () => [], activeTabId: null, focusNodeId: null, detachable: true },
 );
 const emit = defineEmits<{
   (e: 'node-added', node: WorkflowNode): void;
@@ -1140,6 +1137,14 @@ const instructionsId = computed(() =>
 const focusedNodeId = ref<string | null>(null);
 const nodeEls = new Map<string, HTMLElement>();
 
+/** Whether activating a node does anything. An `org-group` container is a
+ *  backdrop with a synthetic id nothing can open, so it is no button, no Tab
+ *  stop (tabindex -1 still lets search move focus there) and has no pressed
+ *  state (#14687); its "…" menu still offers zoom. */
+function isActivatable(node: CanvasNode): boolean {
+  return node.type !== 'org-group';
+}
+
 function registerNodeEl(id: string, el: Element | null): void {
   if (el instanceof HTMLElement) nodeEls.set(id, el);
   else nodeEls.delete(id);
@@ -1152,7 +1157,7 @@ const NODE_ROW_TOLERANCE = 60;
 /** `nodes` sorted into a predictable top-to-bottom, start-to-end reading order —
  *  used only to pick the initial roving tab stop before any focus has occurred. */
 const visualOrder = computed<CanvasNode[]>(() =>
-  [...props.nodes].sort((a, b) => {
+  props.nodes.filter(isActivatable).sort((a, b) => {
     const rowDelta = a.position.y - b.position.y;
     if (Math.abs(rowDelta) > NODE_ROW_TOLERANCE) return rowDelta;
     return a.position.x - b.position.x;
@@ -1162,7 +1167,7 @@ const visualOrder = computed<CanvasNode[]>(() =>
 /** The single node that is a Tab stop. Falls back to reading order when
  *  nothing has been focused yet, or the previously-focused node is gone. */
 const rovingTabStopId = computed<string | null>(() => {
-  if (focusedNodeId.value && props.nodes.some((n) => n.id === focusedNodeId.value)) {
+  if (focusedNodeId.value && props.nodes.some((n) => n.id === focusedNodeId.value && isActivatable(n))) {
     return focusedNodeId.value;
   }
   return visualOrder.value[0]?.id ?? null;
@@ -1251,8 +1256,8 @@ const connections = computed(() => {
     node.connections.forEach(targetId => {
       const target = byId.get(targetId);
       if (target) {
-        const x1 = node.position.x + CANVAS_NODE_WIDTH, y1 = node.position.y + CANVAS_NODE_PORT_Y;
-        const x2 = target.position.x, y2 = target.position.y + CANVAS_NODE_PORT_Y;
+        const x1 = node.position.x + nodeExtent(node).width, y1 = node.position.y + nodePortY(node);
+        const x2 = target.position.x, y2 = target.position.y + nodePortY(target);
         const mx = (x1 + x2) / 2;
         result.push({ id: `${node.id}-${targetId}`, path: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}` });
       }
@@ -1516,12 +1521,23 @@ function addVisionNode(type: WorkflowNode['type']) {
   showVisionDropdown.value = false;
 }
 
-function deleteNode(id: string) {
+/** Removes a node and returns its undo record without pushing history (#14749). */
+function removeNode(id: string): CanvasAtomicAction | null {
   const node = props.nodes.find((n) => n.id === id);
   emit('node-removed', id);
   if (props.selectedNodeId === id) emit('node-selected', null);
   if (selectedIds.value.has(id)) mutateSelection((ids) => ids.delete(id));
-  if (node) pushHistory([{ kind: 'remove', node: structuredClone(toRaw(node)) }]);
+  return node ? { kind: 'remove', node: structuredClone(toRaw(node)) } : null;
+}
+
+/** Deletes `ids` as ONE gesture: one history entry, one Undo. */
+function deleteNodes(ids: string[]) {
+  const removed = ids.map(removeNode).filter((a): a is CanvasAtomicAction => a !== null);
+  pushHistory(removed);
+}
+
+function deleteNode(id: string) {
+  deleteNodes([id]);
 }
 
 /**
@@ -1579,7 +1595,8 @@ function isRtl(): boolean {
 /** A node's approximate visual centre, in canvas space — same anchor the
  *  connection-line paths already use (`CANVAS_NODE_WIDTH`, `CANVAS_NODE_PORT_Y`). */
 function nodeCenter(node: CanvasNode): { x: number; y: number } {
-  return { x: node.position.x + CANVAS_NODE_WIDTH / 2, y: node.position.y + CANVAS_NODE_PORT_Y };
+  const { width } = nodeExtent(node);
+  return { x: node.position.x + width / 2, y: node.position.y + nodePortY(node) };
 }
 
 /**
@@ -1595,7 +1612,7 @@ function findNodeInDirection(from: CanvasNode, direction: SpatialDirection): Can
   let best: CanvasNode | null = null;
   let bestScore = Infinity;
   for (const candidate of props.nodes) {
-    if (candidate.id === from.id) continue;
+    if (candidate.id === from.id || !isActivatable(candidate)) continue;
     const point = nodeCenter(candidate);
     const dx = point.x - origin.x;
     const dy = point.y - origin.y;
@@ -1685,7 +1702,7 @@ function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
 
   // #14612: Shift+Enter/Shift+Space is shift-click's keyboard equivalent —
   // toggles `node` into/out of the multi-selection instead of replacing it.
-  if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+  if (isActivatable(node) && (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar')) {
     e.preventDefault();
     applySelectionIntent(node.id, e.shiftKey);
     return;
@@ -1708,7 +1725,7 @@ function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
   }
 
   const direction = resolveArrowDirection(e.key);
-  if (!direction) return;
+  if (!direction || !isActivatable(node)) return;
   e.preventDefault();
 
   if (e.ctrlKey || e.metaKey) {
@@ -1886,16 +1903,6 @@ function onSearchKeydown(e: KeyboardEvent): void {
  * link's own viewport jump — all three share the same centring/fitting math.
  * ------------------------------------------------------------------ */
 
-/** Node footprint the layout builders assume, for a node type that carries no
- *  size of its own — the same row height `endInteraction` below already uses
- *  for its connection-drop hit test, and `org-group`'s own `data.width`/
- *  `data.height` (`nodeStyle` above) when the node IS sized.
- *
- *  #14690: this was a second, independent `100`. The comment already said it
- *  was "the same" height as the hit test, which is exactly the claim a shared
- *  constant should be making instead of prose. */
-const NODE_APPROX_HEIGHT = CANVAS_NODE_HEIGHT;
-
 /** A zoom level comfortable for looking at one node up close — fixed, rather
  *  than a maximal fit, so repeatedly jumping between search hits or deep
  *  links only recentres the view and never also snaps the zoom level around
@@ -1905,19 +1912,6 @@ const FOCUS_ZOOM = 1;
 /** Padding, in canvas px, kept around a fitted bounding box so a fitted node
  *  or selection is never drawn flush against the canvas edge. */
 const FIT_PADDING = CANVAS_FIT_PADDING;
-
-/** The width/height a node occupies for bounding-box math (fit, minimap) —
- *  `org-group` carries its own from `data`, every other type is the fixed
- *  240x100 footprint every layout builder in `orgCanvasGraph.ts` assumes. */
-function nodeExtent(node: CanvasNode): { width: number; height: number } {
-  if (node.type === 'org-group') {
-    const data = node.data as Record<string, unknown>;
-    const width = typeof data.width === 'number' ? data.width : CANVAS_NODE_WIDTH;
-    const height = typeof data.height === 'number' ? data.height : NODE_APPROX_HEIGHT;
-    return { width, height };
-  }
-  return { width: CANVAS_NODE_WIDTH, height: NODE_APPROX_HEIGHT };
-}
 
 /** Move the viewport so `node`'s centre lands in the middle of the visible
  *  canvas area, without changing zoom. */
@@ -2229,8 +2223,8 @@ function startConnect(nodeId: string, port: string, e: PointerEvent) {
   const node = props.nodes.find(n => n.id === nodeId);
   if (node) {
     lineStart.nodeId = nodeId;
-    lineStart.x = node.position.x + (port === 'out' ? CANVAS_NODE_WIDTH : 0);
-    lineStart.y = node.position.y + CANVAS_NODE_PORT_Y;
+    lineStart.x = node.position.x + (port === 'out' ? nodeExtent(node).width : 0);
+    lineStart.y = node.position.y + nodePortY(node);
   }
   mousePos.x = e.clientX; mousePos.y = e.clientY;
   capturePointer(e);
@@ -2306,7 +2300,10 @@ function endInteraction(e: PointerEvent) {
       const y = (e.clientY - rect.top - pan.y) / zoom.value;
       // Geometry from the shared constants (#14690); the connect is recorded
       // so it can be undone (#14612). Both sides of this merge were wanted.
-      const target = props.nodes.find(n => x >= n.position.x && x <= n.position.x + CANVAS_NODE_WIDTH && y >= n.position.y && y <= n.position.y + CANVAS_NODE_HEIGHT);
+      const target = props.nodes.find(n => {
+        const { width, height } = nodeExtent(n);
+        return x >= n.position.x && x <= n.position.x + width && y >= n.position.y && y <= n.position.y + height;
+      });
       if (target && target.id !== lineStart.nodeId) {
         emit('nodes-connected', lineStart.nodeId, target.id);
         pushHistory([{ kind: 'connect', sourceId: lineStart.nodeId, targetId: target.id }]);
@@ -2449,7 +2446,7 @@ const contextMenuStyle = computed(() => ({ left: `${contextMenu.x}px`, top: `${c
  * includes the node it was opened on.
  */
 function onNodeContextMenu(node: CanvasNode, e: MouseEvent): void {
-  if (!selectedIds.value.has(node.id)) {
+  if (isActivatable(node) && !selectedIds.value.has(node.id)) {
     selectedIds.value = new Set([node.id]);
     emit('node-selected', node.id);
   }
@@ -2496,14 +2493,14 @@ const contextMenuActions = computed<CanvasContextMenuAction[]>(() => {
     });
   }
 
-  if (node.type === 'org-process') {
+  if (!props.readonly && props.detachable && node.type === 'org-process') {
     actions.push({
       id: 'detach-process',
       label: processDetachLabel(node),
       run: () => emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id')),
     });
   }
-  if (node.type === 'org-tool') {
+  if (!props.readonly && props.detachable && node.type === 'org-tool') {
     for (const role of toolRoles(node)) {
       actions.push({
         id: `detach-tool-${role.role_id}`,
@@ -2520,7 +2517,7 @@ const contextMenuActions = computed<CanvasContextMenuAction[]>(() => {
         ? t('workflow.canvas.contextMenuDeleteSelection', { count: selectedIds.value.size })
         : t('common.delete'),
       run: () => {
-        for (const id of bulk ? [...selectedIds.value] : [node.id]) deleteNode(id);
+        deleteNodes(bulk ? [...selectedIds.value] : [node.id]);
       },
     });
   }
@@ -2780,24 +2777,6 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
   color: var(--text-secondary);
   font-family: var(--font-family-mono, monospace);
 }
-.process-detach-btn {
-  margin-inline-start: auto;
-  padding: var(--spacing-1);
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-default);
-  line-height: 1;
-}
-.process-detach-btn:hover {
-  color: var(--color-error);
-  background: var(--bg-hover);
-}
-.process-detach-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
 /* #14597: a tool node must not read as "another process node" — colour is
    never the only signal (#13941), so the header background AND the border
    style both differ from every other org node type (solid info for
@@ -2830,23 +2809,6 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .tool-role-name {
   flex: 1;
   font-family: var(--font-family-mono, monospace);
-}
-.tool-detach-btn {
-  padding: var(--spacing-1);
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-default);
-  line-height: 1;
-}
-.tool-detach-btn:hover {
-  color: var(--color-error);
-  background: var(--bg-hover);
-}
-.tool-detach-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 
 /* #14612: multi-select status chip — mirrors `.rule-mode`'s existing

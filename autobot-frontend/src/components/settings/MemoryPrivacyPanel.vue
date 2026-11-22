@@ -87,8 +87,9 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { formatISOString } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
-import { isHttpError, BaseButton } from '@autobot/ui'
+import { isHttpError, BaseButton, saveTextFile } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
@@ -134,14 +135,7 @@ const storeCounts = computed(() => {
 // Methods
 // ---------------------------------------------------------------------------
 
-function formatTs(ts: string): string {
-  if (!ts) return ''
-  try {
-    return new Date(ts).toLocaleString()
-  } catch {
-    return ts
-  }
-}
+const formatTs = formatISOString
 
 async function loadMemories() {
   loading.value = true
@@ -223,13 +217,7 @@ async function downloadExport() {
   try {
     // ApiClient.get returns parsed JSON directly — no axios envelope.
     const data = await apiClient.get<Record<string, unknown>>('/memory/privacy/export')
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'memory_export.json'
-    a.click()
-    URL.revokeObjectURL(url)
+    saveTextFile(JSON.stringify(data, null, 2), 'memory_export.json', 'application/json')
     showToast(t('settings.memoryPrivacy.exportDownloaded'), 'success')
     logger.info('MemoryPrivacyPanel: export downloaded')
   } catch (err) {

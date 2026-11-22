@@ -33,7 +33,7 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table, raised_entries
+from repo_tests._ratchet_base import base_file_present, base_table, raised_entries
 from repo_tests._reach import declare
 
 _FRONTEND_SRC = "autobot-frontend/src"
@@ -66,7 +66,6 @@ REACH_VUE_FILES = declare(
     "dead-icon-selector-vue-files",
     discover=lambda root: [p.relative_to(root).as_posix() for p in vue_files(root / _FRONTEND_SRC)],
     roots=(_FRONTEND_SRC,),
-    floor=447,  # mid-window: population 467, window (427, 467)
     growth=40,
     skips=0,
     what=".vue files scanned for dead <i> selectors",
@@ -171,8 +170,11 @@ def test_no_dead_icon_rule_beyond_the_pinned_ones() -> None:
 
 
 def test_the_pin_was_not_raised_against_the_base() -> None:
-    base = base_table(repo_root(), ("repo_tests/dead_icon_selector_ratchet_19491_test.py",), "PINS")
-    if not base or "dead_icon_selector_rules" in base:
-        return  # new at this base, or the base still pins a single total
+    this = ("repo_tests/dead_icon_selector_ratchet_19491_test.py",)
+    if not base_file_present(repo_root(), this):
+        return  # the guard is new at this base
+    base = base_table(repo_root(), this, "PINS")
+    if "dead_icon_selector_rules" in base:
+        return  # the base still pins a single total
     raised = raised_entries(PINS, base)
     assert not raised, f"PINS entries rose or were added against the base (#19491): {raised}; the pin only goes down."

@@ -22,6 +22,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import ReachFloorError, declare
 
 from autobot_shared.isolated_git import isolated_git_env
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 SCANNED_ROOTS = ("autobot-backend", "autobot_shared")
@@ -46,7 +47,6 @@ def _discover(root: Path) -> list[str]:
 REACH = declare(
     "captcha-type-fork-scan",
     discover=_discover,
-    floor=5619,  # re-pinned mid-window (train 50): population 5281, window [4981, 5281]
     growth=300,
     roots=SCANNED_ROOTS,
     what="tracked Python files scanned for a re-declared CAPTCHA taxonomy",
@@ -69,7 +69,7 @@ def _taxonomies(root: Path) -> tuple[list[str], int]:
     parsed = 0
     for rel in REACH.examined(root):
         try:
-            tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError, OSError):
             continue
         parsed += 1
@@ -91,7 +91,7 @@ def _result_classes(root: Path) -> tuple[list[str], int]:
     parsed = 0
     for rel in REACH.examined(root):
         try:
-            tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError, OSError):
             continue
         parsed += 1

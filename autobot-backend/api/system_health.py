@@ -56,6 +56,8 @@ class KnownProbes(str, enum.Enum):
     SANDBOX = "sandbox"  # #14872
     SECRETS_STORE = "secrets_store"  # #14126
     EMBEDDING_MODEL = "embedding_model"  # #18834
+    VERIFIER_MODEL = "verifier_model"  # #21844
+    FIRST_ADMIN_LINK = "first_admin_link"  # #10200
 
 
 # Per-probe timeout, so a slow component cannot hold the aggregator hostage. A probe

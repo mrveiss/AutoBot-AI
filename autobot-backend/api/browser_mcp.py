@@ -101,6 +101,7 @@ MANIFEST = MCPBridgeManifest(
 )
 
 logger = get_logger(__name__)
+_BROWSER_VM_REQUEST_TIMEOUT_S = 60.0  # one value for the request and its timeout message (#18056)
 router = APIRouter(
     tags=["browser_mcp", "mcp"],
     dependencies=[Depends(check_admin_permission)],
@@ -660,15 +661,11 @@ async def send_to_browser_vm(
 
     try:
         http_client = get_http_client()
-        payload = {
-            "action": action,
-            "params": params,
-            "session_id": session_id or DEFAULT_BROWSER_SESSION_ID,
-        }
+        payload = {"action": action, "params": params, "session_id": session_id or DEFAULT_BROWSER_SESSION_ID}
         async with await http_client.post(
             f"{BROWSER_VM_URL}/automation",
             json=payload,
-            timeout=aiohttp.ClientTimeout(total=60),
+            timeout=aiohttp.ClientTimeout(total=_BROWSER_VM_REQUEST_TIMEOUT_S),
         ) as response:
             if response.status != 200:
                 error_text = await response.text()
@@ -685,7 +682,7 @@ async def send_to_browser_vm(
                     detail="Invalid JSON response from Browser VM",
                 )
     except asyncio.TimeoutError:
-        logger.error("Browser VM request timed out after 60 seconds")
+        logger.error("Browser VM request timed out after %.0f seconds", _BROWSER_VM_REQUEST_TIMEOUT_S)
         raise HTTPException(
             status_code=504,
             detail="Browser VM request timed out",
