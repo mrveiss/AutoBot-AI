@@ -22,6 +22,7 @@ from services.audit_logger import AuditResult, audit_log
 
 logger = get_logger(__name__)
 
+_FAILED_REASONS = {"unshare": "not_a_participant", "assign_company": "already_assigned"}
 _OPERATIONS = {"share": "session.share", "unshare": "session.unshare", "assign_company": "session.company_assign"}
 
 
@@ -88,7 +89,7 @@ async def audited_change(
     if changed:
         await _record_outcome(action, "success", actor, session_id, details)
     else:
-        reason = "not_a_participant" if action == "unshare" else "not_recorded"
+        reason = _FAILED_REASONS.get(action, "not_recorded")
         await _record_outcome(action, "failed", actor, session_id, {**details, "reason": reason})
     return changed
 

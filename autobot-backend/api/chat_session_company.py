@@ -51,6 +51,28 @@ async def _require_assignable(request: Request, session_id: str, company_id: uui
         raise fixed_refusal(404)
 
 
+async def _assign_audited(request: Request, session_id: str, company: str, user: dict) -> None:
+    """Write the company between its audit rows, as one compare-and-set under the session lease.
+
+    A lost race (another assignment won) is a 409 and its outcome row is ``failed``; no durable ``attempted`` row
+    means no change (503).
+    """
+    manager = get_chat_history_manager(request)
+    try:
+        changed = await audited_change(
+            "assign_company",
+            session_shares.audit_actor(request, user),
+            session_id,
+            [],
+            lambda: manager.set_metadata_if_unset(session_id, "company_id", company),
+            details={"company_id": company},
+        )
+    except ShareAuditError:
+        raise fixed_refusal(503) from None
+    if not changed:
+        raise fixed_refusal(409)
+
+
 @router.post(
     "/chat/sessions/{session_id}/company",
     response_model=DataResponse[SessionCompanyAssignData],
@@ -75,20 +97,7 @@ async def assign_session_company(
     user = ownership.get("user_data") or {}
     await _require_assignable(request, session_id, body.company_id, user)
     company = str(body.company_id)
-    manager = get_chat_history_manager(request)
-    try:
-        changed = await audited_change(
-            "assign_company",
-            session_shares.audit_actor(request, user),
-            session_id,
-            [],
-            lambda: manager.update_session_metadata(session_id, {"company_id": company}),
-            details={"company_id": company},
-        )
-    except ShareAuditError:
-        raise fixed_refusal(503) from None  # no audit record, no change
-    if not changed:
-        raise fixed_refusal(503)
+    await _assign_audited(request, session_id, company, user)
     await publish_session_updated(session_id, {"companyId": company})
     return create_chat_response(
         data={"session_id": session_id, "company_id": company},

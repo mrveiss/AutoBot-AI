@@ -9,6 +9,10 @@ The active company is the one every Company OS route already uses (``docs/llc/te
 header naming a company the caller is not a member of is refused, exactly as ``get_tenant_context`` refuses it;
 a platform admin may name any. A service principal, or a caller with no identity, acts in no company. Companies
 are internal entities, not tenants: this scopes what a person sees and opens, it is not an isolation boundary.
+
+With no active company nothing is refused: a chat tagged with a company is hidden from that caller's list (it is
+in neither set, ``chat_history.company_scope``) but its owner can still open it by id, under the owner and share
+rules alone. The owner-only rule applies and a company is not a tenant, so hiding is not denying.
 """
 
 from __future__ import annotations
@@ -16,15 +20,18 @@ from __future__ import annotations
 import uuid
 
 from fastapi import Request
+from starlette.datastructures import State
 
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from chat_history.company_scope import ActiveCompany
+from security.session_owner_errors import SessionOwnerUnreadable
 
 logger = get_logger(__name__)
 
 #: The header the company switcher sends on every request (the same one ``get_tenant_context`` reads).
 ACTIVE_COMPANY_HEADER = "X-Organization-Id"
+_STATE_KEY = "active_company_scope"
 
 
 def _parse(value) -> uuid.UUID | None:
@@ -56,7 +63,21 @@ def _caller(request: Request) -> dict | None:
 
 
 async def resolve_company_scope(request: Request, user: dict | None = None) -> ActiveCompany:
-    """The caller's ``ActiveCompany``; a header naming a company they may not act in is the canonical 403."""
+    """The caller's ``ActiveCompany``, resolved once per request; a company they may not act in is the canonical 403.
+
+    The answer (membership check included) is kept on ``request.state``, so the several checks one request makes
+    cost one lookup. It is the request's own state, not a process-wide cache.
+    """
+    state = getattr(request, "state", None)
+    if isinstance(state, State) and hasattr(state, _STATE_KEY):
+        return getattr(state, _STATE_KEY)
+    scope = await _resolve_company_scope(request, user)
+    if isinstance(state, State):
+        setattr(state, _STATE_KEY, scope)
+    return scope
+
+
+async def _resolve_company_scope(request: Request, user: dict | None) -> ActiveCompany:
     user = user if user is not None else _caller(request)
     if not user or user.get("service") or user.get("auth_disabled"):
         return ActiveCompany(None)
@@ -70,20 +91,32 @@ async def resolve_company_scope(request: Request, user: dict | None = None) -> A
 
 
 async def company_of_session(request: Request, session_id: str) -> str | None:
-    """The company stored on the session, ``None`` when it is Unassigned or absent."""
+    """The company stored on the session (a metadata read), ``None`` when it is Unassigned or absent.
+
+    A file that cannot be read is the canonical 503, never "Unassigned": it is not evidence of no company.
+    """
     from utils.chat_utils import get_chat_history_manager
 
-    doc = await get_chat_history_manager(request).get_session(session_id)
-    return ((doc or {}).get("metadata") or {}).get("company_id") or None
+    try:
+        return await get_chat_history_manager(request).get_session_company(session_id)
+    except SessionOwnerUnreadable:
+        raise fixed_refusal(503) from None
+
+
+def refuse_other_company(scope: ActiveCompany, stored_company: str | None) -> None:
+    """The one company rule behind HTTP, WebSocket and import: the canonical 403 for a chat of another company.
+
+    No active company, or an Unassigned chat, or the same company, passes.
+    """
+    if scope.active is not None and not scope.allows(stored_company):
+        raise fixed_refusal(403)
 
 
 async def enforce_session_company(session_id: str, request: Request, user: dict | None = None) -> None:
     """Refuse (canonical 403) a session tagged with a company other than the active one; no active company, no check."""
     scope = await resolve_company_scope(request, user)
-    if scope.active is None:
-        return
-    if not scope.allows(await company_of_session(request, session_id)):
-        raise fixed_refusal(403)
+    if scope.active is not None:
+        refuse_other_company(scope, await company_of_session(request, session_id))
 
 
 async def creation_company_metadata(request: Request, client_metadata: dict | None, user: dict | None) -> dict:

@@ -290,23 +290,26 @@ async def _owner_refusal(
     id (#21731).
     """
     importer = (user_data or {}).get("username")
-    try:
-        existing_owner = await chat_history_manager.get_session_owner(session_id)
-    except SessionOwnerUnreadable:
-        raise deny_unreadable_owner(session_id, importer) from None  # as a read denies (#14033)
+    existing_owner = await _recorded_owner(chat_history_manager, session_id, importer)
     if exists and existing_owner is None and is_admin_role((user_data or {}).get("role")):
-        logger.error(
-            "Import refused: session %s has no owner and an import does not claim one",
-            session_id[:8],
-        )
-        return (
-            _conflict_result(
-                session_id,
-                f"Session {session_id!r} has no owner; its owner is assigned through the approval queue",
-            ),
-            existing_owner,
-        )
+        return _ownerless_refusal(session_id), existing_owner
     return None, existing_owner
+
+
+async def _recorded_owner(chat_history_manager, session_id: str, importer: str | None):
+    """The owner the session records; one that cannot be read is refused, never "unowned" (#14033)."""
+    try:
+        return await chat_history_manager.get_session_owner(session_id)
+    except SessionOwnerUnreadable:
+        raise deny_unreadable_owner(session_id, importer) from None  # as a read denies
+
+
+def _ownerless_refusal(session_id: str) -> Dict[str, Any]:
+    """The conflict an admin's import onto an ownerless session gets: its owner is assigned by approval (#17038)."""
+    logger.error("Import refused: session %s has no owner and an import does not claim one", session_id[:8])
+    return _conflict_result(
+        session_id, f"Session {session_id!r} has no owner; its owner is assigned through the approval queue"
+    )
 
 
 async def _import_under_lease(
@@ -328,9 +331,10 @@ async def _import_under_lease(
     refusal, existing_owner = await _owner_refusal(chat_history_manager, session_id, user_data, exists)
     if refusal is not None:
         return refusal
-    session_id, exists, conflict = await _import_target(
-        chat_history_manager, session_id, exists, existing_owner is not None and existing_owner == importer, on_conflict
-    )
+    owns_it = existing_owner is not None and existing_owner == importer
+    if exists and owns_it:  # a replace, rename or skip of one's own chat must not reach into another company's
+        await _refuse_other_company(chat_history_manager, session_id, company_metadata)
+    session_id, exists, conflict = await _import_target(chat_history_manager, session_id, exists, owns_it, on_conflict)
     if conflict is not None:
         return conflict
     # #21664: index a new session or one the importer already owns (an ownerless one is refused above, #21668)
@@ -338,6 +342,15 @@ async def _import_under_lease(
     return await _save_import(
         chat_history_manager, document, session_id, exists, on_conflict, user_data, index, company_metadata
     )
+
+
+async def _refuse_other_company(chat_history_manager, session_id: str, company_metadata) -> None:
+    """The canonical 403 when the active company is not the one the existing chat belongs to (#21997)."""
+    from chat_history.company_scope import ActiveCompany  # noqa: PLC0415
+    from security.session_company import refuse_other_company  # noqa: PLC0415
+
+    active = ActiveCompany((company_metadata or {}).get("company_id"))
+    refuse_other_company(active, await chat_history_manager.get_session_company(session_id))
 
 
 async def _import_target(manager, session_id: str, exists: bool, owns_it: bool, on_conflict: str):

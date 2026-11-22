@@ -9,6 +9,7 @@ route shares), not at a helper in isolation.
 """
 
 import ast
+import asyncio
 import json
 import pathlib
 import uuid
@@ -16,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from starlette.datastructures import State
 
 from api import chat_session_company, chat_sessions
 from chat_history.company_scope import ActiveCompany
@@ -45,7 +47,8 @@ def _manager(sessions=None, doc=None):
     manager = MagicMock()
     manager.list_sessions_fast = AsyncMock(return_value=list(_ALL if sessions is None else sessions))
     manager.get_session = AsyncMock(return_value=doc)
-    manager.update_session_metadata = AsyncMock(return_value=True)
+    manager.set_metadata_if_unset = AsyncMock(return_value=True)
+    manager.get_session_company = AsyncMock(return_value=((doc or {}).get("metadata") or {}).get("company_id"))
     manager.get_session_owner = AsyncMock(return_value="alice")
     return manager
 
@@ -312,7 +315,7 @@ class TestAssignCompany:
     async def test_writes_the_company_and_audits_attempted_then_success(self):
         manager = _manager(doc={"metadata": {}})
         response, audit = await _assign(manager)
-        manager.update_session_metadata.assert_awaited_once_with("s1", {"company_id": CO_A})
+        manager.set_metadata_if_unset.assert_awaited_once_with("s1", "company_id", CO_A)
         assert _payload(response)["company_id"] == CO_A
         calls = audit.await_args_list
         assert [c.args[1] for c in calls] == ["attempted", "success"]
@@ -326,7 +329,7 @@ class TestAssignCompany:
         with pytest.raises(HTTPException) as refused:
             await _assign(manager)
         assert refused.value.status_code == 409
-        manager.update_session_metadata.assert_not_awaited()
+        manager.set_metadata_if_unset.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_no_durable_attempted_record_means_no_change(self):
@@ -334,16 +337,18 @@ class TestAssignCompany:
         with pytest.raises(HTTPException) as refused:
             await _assign(manager, audit=AsyncMock(return_value=False))
         assert refused.value.status_code == 503
-        manager.update_session_metadata.assert_not_awaited()
+        manager.set_metadata_if_unset.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_a_failed_write_is_recorded_as_failed(self):
         manager = _manager(doc={"metadata": {}})
-        manager.update_session_metadata = AsyncMock(return_value=False)
+        manager.set_metadata_if_unset = AsyncMock(return_value=False)
         audit = AsyncMock(return_value=True)
-        with pytest.raises(HTTPException):
+        with pytest.raises(HTTPException) as refused:
             await _assign(manager, audit=audit)
+        assert refused.value.status_code == 409  # a lost race: another assignment holds the company
         assert [c.args[1] for c in audit.await_args_list] == ["attempted", "failed"]
+        assert audit.await_args_list[1].kwargs["details"]["reason"] == "already_assigned"
 
     @pytest.mark.asyncio
     async def test_a_company_the_caller_may_not_act_in_is_refused(self):
@@ -351,7 +356,7 @@ class TestAssignCompany:
         with pytest.raises(HTTPException) as refused:
             await _assign(manager, member=False)
         assert refused.value.status_code == 403
-        manager.update_session_metadata.assert_not_awaited()
+        manager.set_metadata_if_unset.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_an_unknown_company_or_session_is_a_404(self):
@@ -390,3 +395,112 @@ class TestNothingRetagsAChatOnItsOwn:
             if "session_scope_backfill" in path.read_text(encoding="utf-8", errors="ignore"):
                 importers.append(str(path.relative_to(root)))
         assert importers == [], f"the backfill is wired into: {importers}"
+
+
+class TestConcurrentAssignIsACompareAndSet:
+    """The assign is one compare-and-set under the session lease: of two concurrent assigns exactly one wins."""
+
+    @pytest.mark.asyncio
+    async def test_two_concurrent_assigns_one_wins_the_other_is_409_and_the_winners_company_stands(self, tmp_path):
+        from chat_history.session_lease_20862_test import _Manager
+
+        manager = _Manager(str(tmp_path))
+        await manager.save_session("s1", messages=[{"sender": "user", "text": "hi", "timestamp": "t0"}])
+        audit = AsyncMock(return_value=True)
+        outcomes = await asyncio.gather(
+            _assign(manager, company=CO_A, audit=audit),
+            _assign(manager, company=CO_B, audit=audit),
+            return_exceptions=True,
+        )
+        won = [o for o in outcomes if not isinstance(o, BaseException)]
+        lost = [o for o in outcomes if isinstance(o, HTTPException)]
+        assert len(won) == 1 and [e.status_code for e in lost] == [409]
+        winner = _payload(won[0][0])["company_id"]
+        assert await manager.get_session_company("s1") == winner
+        results = sorted(c.args[1] for c in audit.await_args_list)
+        assert results == ["attempted", "attempted", "failed", "success"]
+
+
+def _socket(company: str | None = None):
+    socket = MagicMock()
+    socket.headers = {session_company.ACTIVE_COMPANY_HEADER: company} if company else {}
+    socket.state = State()
+    return socket
+
+
+class TestWebSocketAppliesTheSameCompanyRule:
+    """``owns_chat_session`` (the Overseer socket) refuses another company's chat exactly as HTTP does."""
+
+    async def _owns(self, user, stored, company, durable_owner="alice"):
+        from api import ws_security
+
+        manager = MagicMock(get_session_company=AsyncMock(return_value=stored))
+        with (
+            patch.object(session_company, "may_act_in_company", new=AsyncMock(return_value=True)),
+            patch("utils.chat_utils.get_chat_history_manager", return_value=manager),
+            patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock()),
+            patch("security.session_ownership.SessionOwnershipValidator") as validator,
+        ):
+            validator.return_value.get_session_owner = AsyncMock(return_value=durable_owner)
+            return await ws_security.owns_chat_session(_socket(company), "s1", user)
+
+    @pytest.mark.asyncio
+    async def test_the_owner_of_a_chat_of_another_company_is_refused(self):
+        assert await self._owns({"username": "alice", "role": "user"}, CO_B, CO_A) is False
+
+    @pytest.mark.asyncio
+    async def test_an_administrator_is_bound_by_the_active_company_too(self):
+        assert await self._owns({"username": "root", "role": "admin"}, CO_B, CO_A) is False
+
+    @pytest.mark.asyncio
+    async def test_the_same_company_and_an_unassigned_chat_pass_for_the_owner(self):
+        assert await self._owns({"username": "alice", "role": "user"}, CO_A, CO_A) is True
+        assert await self._owns({"username": "alice", "role": "user"}, None, CO_A) is True
+
+    @pytest.mark.asyncio
+    async def test_no_active_company_changes_nothing(self):
+        assert await self._owns({"username": "alice", "role": "user"}, CO_B, None) is True
+        assert await self._owns({"username": "root", "role": "admin"}, CO_B, None) is True
+
+    @pytest.mark.asyncio
+    async def test_a_non_owner_is_still_refused_in_the_same_company(self):
+        assert await self._owns({"username": "bob", "role": "user"}, CO_A, CO_A) is False
+
+
+class TestNoActiveCompanyOpensATaggedChatById:
+    """Hidden is not denied: a tagged chat is absent from the list with no active company, its owner opens it by id."""
+
+    @pytest.mark.asyncio
+    async def test_hidden_from_the_list_yet_open_by_id(self):
+        data = _payload(await _list(None))
+        assert "a1" not in _ids(data["sessions"]) | _ids(data["unassigned"])
+        with patch(
+            "utils.chat_utils.get_chat_history_manager", return_value=_manager(doc={"metadata": {"company_id": CO_A}})
+        ):
+            await session_company.enforce_session_company("a1", _request(None), dict(_USER))
+
+
+class TestPerRequestCost:
+    """One request resolves the active company once, and reads the stored company without the full session."""
+
+    @pytest.mark.asyncio
+    async def test_membership_is_checked_once_per_request(self):
+        request = MagicMock()
+        request.headers = {session_company.ACTIVE_COMPANY_HEADER: CO_A}
+        request.state = State()
+        member = AsyncMock(return_value=True)
+        with (
+            patch.object(session_company, "may_act_in_company", new=member),
+            patch("utils.chat_utils.get_chat_history_manager", return_value=_manager()),
+        ):
+            await session_company.enforce_session_company("s", request, dict(_USER))
+            await session_company.enforce_session_company("s", request, dict(_USER))
+        assert member.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_the_stored_company_is_a_metadata_read(self):
+        manager = _manager(doc={"metadata": {"company_id": CO_A}})
+        with patch("utils.chat_utils.get_chat_history_manager", return_value=manager):
+            assert await session_company.company_of_session(_request(CO_A), "s") == CO_A
+        manager.get_session_company.assert_awaited_once_with("s")
+        manager.get_session.assert_not_awaited()
