@@ -20,6 +20,7 @@ from typing import Optional
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
+from autobot_shared.worker_loop import run_in_worker_loop
 
 logger = get_logger(__name__)
 metrics = get_metrics_manager()
@@ -237,16 +238,16 @@ def register_celery_task_success_hook() -> None:
             return
 
         task_name = getattr(sender, "name", str(sender))
-        # GH#9091: asyncio.run() inside a Celery signal handler raises
-        # RuntimeError when a loop is already running (gevent/eventlet pools).
-        # Run in a daemon thread so each call owns a fresh event loop regardless
-        # of the Celery worker pool type.
+        # GH#9091: a signal handler may run where a loop is already running
+        # (gevent/eventlet pools), so the wait happens in a daemon thread. The
+        # coroutine runs on the worker's persistent loop (#20887): the engine it
+        # reaches is bound to that loop, not to a throwaway one per call.
         _uid = str(user_id)
         _name = task_name
 
         def _dispatch() -> None:
             try:
-                asyncio.run(
+                run_in_worker_loop(
                     send_push_notification(
                         user_id=_uid,
                         title="Task complete",

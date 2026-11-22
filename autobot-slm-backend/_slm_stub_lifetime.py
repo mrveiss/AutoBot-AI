@@ -42,6 +42,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
+import pytest
+
 PLUGIN_NAME = "slm-backend-stub-lifetime"
 
 
@@ -80,8 +82,18 @@ class StubLifetime:
     def pytest_runtest_setup(self, item: Any) -> None:
         self._apply(item)
 
+    @pytest.hookimpl(hookwrapper=True, tryfirst=True)
+    def pytest_runtest_protocol(self, item: Any, nextitem: Any):
+        """Withdraw before the leak guard's own protocol check (registered earlier, so this wraps it).
 
-def register(config: Any, root: Path, stubs: Dict[str, Any]) -> None:
+        Collection can end inside this directory, leaving the stubs live when the first item of
+        another tree starts; ``pytest_runtest_setup`` is too late, the guard has already looked.
+        """
+        self._apply(item)
+        yield
+
+
+def register_stub_lifetime(config: Any, root: Path, stubs: Dict[str, Any]) -> None:
     """Register the lifetime manager once, globally."""
     if not config.pluginmanager.hasplugin(PLUGIN_NAME):
         config.pluginmanager.register(StubLifetime(root, stubs), PLUGIN_NAME)

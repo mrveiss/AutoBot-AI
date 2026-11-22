@@ -22,6 +22,7 @@ import pytest
 
 from api.schemas_knowledge import AIStackRAGQueryRequest
 from knowledge.ownership import KnowledgeOwnership
+from knowledge.read_path_fakes_16665 import RESEARCH, QuarantineGatedKB, quarantined_fact
 
 
 def _make_kb(search_results: list) -> MagicMock:
@@ -90,3 +91,30 @@ async def test_rag_search_gives_an_admin_no_bypass_of_another_users_private_fact
     assert result.data["documents_used"] == 0, "admin u2 must not get u99's private fact into RAG context"
     mock_ai_client.rag_query.assert_called_once()
     assert mock_ai_client.rag_query.call_args.kwargs["documents"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["user", "admin"])
+async def test_rag_search_never_feeds_a_research_quarantined_fact_into_rag_context(role):
+    """AC3 (#16665): the quarantined fact is the only fact held; the ungated twin proves it would reach the context."""
+    from api.knowledge_ai_stack import rag_search
+
+    async def documents_for(kb) -> list:
+        ai_client = AsyncMock()
+        ai_client.rag_query.return_value = {"answer": "ok"}
+        with (
+            patch("api.knowledge_ai_stack.get_ai_stack_client", AsyncMock(return_value=ai_client)),
+            patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
+        ):
+            await rag_search(
+                request_data=AIStackRAGQueryRequest(query="test"),
+                knowledge_base=kb,
+                current_user=_current_user("u1", role=role),
+            )
+        return ai_client.rag_query.call_args.kwargs["documents"]
+
+    ungated = QuarantineGatedKB(only_quarantined=True)
+    ungated.search = AsyncMock(return_value=[quarantined_fact()])
+
+    assert RESEARCH in repr(await documents_for(ungated)), "control: ungated, the fact reaches the RAG context"
+    assert await documents_for(QuarantineGatedKB(only_quarantined=True)) == []

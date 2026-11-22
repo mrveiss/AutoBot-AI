@@ -6,11 +6,11 @@
 """Quick backend diagnostic script"""
 
 import logging
-import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -18,9 +18,17 @@ logger = logging.getLogger(__name__)
 
 import requests
 
-# Import configuration from centralized source
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import API_BASE_URL, OLLAMA_URL
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
+from autobot_shared.ollama_urls import ollama_tags_url  # noqa: E402
+
+API_BASE_URL = ServiceURLs.BACKEND_API
+OLLAMA_URL = ServiceURLs.OLLAMA_LOCAL
 
 
 @dataclass
@@ -53,7 +61,7 @@ def check_endpoint(url: str, name: str, timeout: int = 5) -> EndpointResult:
             url=url,
             name=name,
             elapsed=time.time() - start,
-            error="TIMEOUT after 5 seconds",
+            error=f"TIMEOUT after {timeout:g} seconds",
         )
     except requests.exceptions.ConnectionError as e:
         return EndpointResult(
@@ -109,7 +117,7 @@ for result in results:
 # Check Ollama
 logger.info("\n🤖 Checking Ollama...")
 try:
-    response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+    response = requests.get(ollama_tags_url(OLLAMA_URL), timeout=5)
     if response.status_code == 200:
         models = response.json().get("models", [])
         logger.info(f"   ✅ Ollama is running with {len(models)} models")

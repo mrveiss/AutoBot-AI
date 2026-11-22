@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
+from knowledge.quarantine import drop_quarantined_hashes
 
 logger = get_logger(__name__)
 
@@ -640,10 +641,7 @@ class CategoriesMixin:
         try:
             category = await self._get_category_data(category_id)
             if not category:
-                return {
-                    "success": False,
-                    "message": f"Category not found: {category_id}",
-                }
+                return {"success": False, "message": f"Category not found: {category_id}"}
 
             category_ids = [category_id]
             if include_descendants:
@@ -653,7 +651,7 @@ class CategoriesMixin:
             total_count = len(all_fact_ids)
 
             paginated_ids = sorted(list(all_fact_ids))[offset : offset + limit]
-            facts = await self._load_fact_data(paginated_ids)
+            facts = drop_quarantined_hashes(await self._load_fact_data(paginated_ids))  # #16665
 
             return {
                 "success": True,

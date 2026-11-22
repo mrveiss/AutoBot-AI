@@ -12,7 +12,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from constants import ServiceURLs
+from autobot_shared.network_constants import ServiceURLs
 
 # Set up minimal logging
 logging.basicConfig(level=logging.INFO)

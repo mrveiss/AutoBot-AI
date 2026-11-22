@@ -59,7 +59,7 @@ from .threshold_constants import StringParsingConstants  # Issue #380: Centraliz
 from .threshold_constants import (  # Issue #318: Threshold and timing constants
     AgentThresholds,
     BatchConfig,
-    CacheConfig,
+    CacheSizeDefaults,
     CircuitBreakerDefaults,
     ComputerVisionThresholds,
     FileWatcherConfig,
@@ -109,7 +109,7 @@ __all__ = [
     "ComputerVisionThresholds",
     "CircuitBreakerDefaults",
     "VoiceRecognitionConfig",
-    "CacheConfig",
+    "CacheSizeDefaults",
     "KnowledgeSyncConfig",
     "TimingConstants",
     "RetryConfig",

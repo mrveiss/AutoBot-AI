@@ -213,7 +213,7 @@ portainer stack`) — only this file has ever mentioned it; this is new ground.
   git-tracked, non-secret, but are wired in purely via
   `./docker/<script>:/path:ro` bind mounts (docker-compose.yml lines 192,
   222, 373, 562) — neither is `COPY`'d into any image. Same issue for
-  `docker/postgres/init-databases.sql` (line 90) and the default
+  `docker/postgres/init-databases.sh` (line 90) and the default
   `docker/nginx/nginx.conf` path override variable (already solved for the
   *built-in* default per point above, but the override mechanism itself is
   still bind-mount-only). None of these resolve without the repo checked out.
@@ -251,13 +251,13 @@ portainer stack`) — only this file has ever mentioned it; this is new ground.
   higher-RAM boards/cube units) but would be a rough fit on a low-end 4-8GB
   box — worth a plain "minimum 16GB RAM recommended" note in any store
   listing rather than a code change.
-- **The `autobot-mgmt` network hardcodes `subnet: 172.30.0.0/24`**
+- **The `autobot-mgmt` network hardcodes a fixed management subnet**
   ([docker-compose.yml:837-839](../../docker-compose.yml#L837)) with no env
   override. Low risk (an unusual-enough private range), but on a shared
   multi-app NAS host running many Compose stacks side by side, a fixed
   subnet is the one thing that can produce a hard Docker network-creation
   conflict with some other app's stack. Parameterizing it
-  (`${AUTOBOT_MGMT_SUBNET:-172.30.0.0/24}`) is a one-line, low-cost
+  (`${AUTOBOT_MGMT_SUBNET:-<default>}`) is a one-line, low-cost
   hardening move independent of any NAS-store ambition.
 
 ### Specific Code/Files Affected
@@ -311,3 +311,12 @@ Three independent platforms in this category, three arrivals at the same
 "any Compose file, pasted directly, works" door. The generalization holds;
 this isn't one platform's quirk.
 
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16829 — umbrella: distribute AutoBot through Compose-based NAS/homelab app-store platforms
+- #16830 — feat(deploy): add a distribution Compose variant that references published images instead of building from a repo checkout
+- #16831 — fix(deploy): bake with-secrets.sh / secrets-init.sh / postgres init SQL into images instead of bind-mounting from the repo
+- #16832 — feat(deploy): lean-hardware profile defaulting to a cloud LLM provider instead of mandatory local Ollama
+- #16833 — fix(deploy): parameterize the hardcoded management-network subnet

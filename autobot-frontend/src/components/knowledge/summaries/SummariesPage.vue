@@ -189,7 +189,7 @@ function handleDrillDown(summaryId: string): void {
   background: var(--color-primary);
   border: none;
   border-radius: var(--radius-md);
-  color: white;
+  color: var(--text-on-primary);
   font-size: var(--text-sm);
   cursor: pointer;
 }

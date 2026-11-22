@@ -51,7 +51,9 @@ class TestResetAlwaysClearsNothingCarriedOver:
         request = MagicMock()
         reset = ChatResetRequest(session_id="s-1", clear_context=True)
 
-        with patch.object(chat_sessions, "validate_session_ownership", AsyncMock(return_value={})):
+        with patch.object(
+            chat_sessions, "validate_session_ownership", AsyncMock(return_value={"reason": "owner_match"})
+        ):
             with patch.object(chat_sessions, "get_chat_history_manager", MagicMock(return_value=manager)):
                 await chat_sessions.reset_chat(request, reset)
 
@@ -64,7 +66,9 @@ class TestResetAlwaysClearsNothingCarriedOver:
         request = MagicMock()
         reset = ChatResetRequest(session_id="s-1", clear_context=True)
 
-        with patch.object(chat_sessions, "validate_session_ownership", AsyncMock(return_value={})):
+        with patch.object(
+            chat_sessions, "validate_session_ownership", AsyncMock(return_value={"reason": "owner_match"})
+        ):
             with patch.object(chat_sessions, "get_chat_history_manager", MagicMock(return_value=manager)):
                 await chat_sessions.reset_chat(request, reset)
 
@@ -75,7 +79,9 @@ class TestResetAlwaysClearsNothingCarriedOver:
         request = MagicMock()
         reset = ChatResetRequest(session_id="s-1", clear_context=False)
 
-        with patch.object(chat_sessions, "validate_session_ownership", AsyncMock(return_value={})):
+        with patch.object(
+            chat_sessions, "validate_session_ownership", AsyncMock(return_value={"reason": "owner_match"})
+        ):
             with patch.object(chat_sessions, "get_chat_history_manager", MagicMock(return_value=manager)):
                 await chat_sessions.reset_chat(request, reset)
 

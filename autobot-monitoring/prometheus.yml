@@ -35,6 +35,9 @@ scrape_configs:
       - targets: ["autobot-backend:8001"]
     metrics_path: /api/metrics/prometheus
     scheme: http
+    # #16375: the backend refuses a scrape without its scrape token. Written by
+    # autobot-secrets-init (docker/secrets-init.sh) into the shared volume.
+    bearer_token_file: /run/autobot-secrets/prometheus_scrape_token
 
   # AutoBot SLM backend DB-derived metrics (docker-compose service name)
   - job_name: "autobot-slm"

@@ -231,8 +231,14 @@ install_one_hook() {
         fi
     fi
 
-    cp "$src" "$dest" || { fail "failed to copy $name into $dest"; return 1; }
-    chmod +x "$dest" || { fail "failed to chmod +x $dest"; return 1; }
+    # #18921: replace by rename, never by an in-place write. `.git/hooks` is shared by
+    # every worktree, so another session's push can be executing this very hook; bash
+    # reads a script incrementally, and rewriting the inode under it resumes that shell
+    # at a byte offset inside different content ("syntax error near unexpected token").
+    # A same-directory temp file + `mv -f` leaves a running shell on the old inode.
+    local tmp="$dest.new"
+    { cp "$src" "$tmp" && chmod +x "$tmp" && mv -f "$tmp" "$dest"; } \
+        || { rm -f "$tmp"; fail "failed to install $name into $dest"; return 1; }
     # `changed`, not `ok`: a replacement is reported even under --sync.
     changed "installed $name"
 }

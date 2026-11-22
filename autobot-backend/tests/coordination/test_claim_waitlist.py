@@ -243,9 +243,9 @@ async def test_a_waiter_invited_while_a_shared_holder_remains_stays_queued(redis
     await try_acquire("path:a/b", agent_id="s2", task_id="t2", mode=ClaimMode.SHARED, intent="read")
     await join("path:a/b", agent_id="w1", task_id="tw", intent="wants exclusive")
 
-    from autobot_shared.coordination.work_claims import ClaimConflict, release
+    from autobot_shared.coordination.work_claims import ClaimConflict, release_scope
 
-    await release("path:a/b", agent_id="s1", task_id="t1")
+    await release_scope("path:a/b", agent_id="s1", task_id="t1")
     invited = await next_waiter("path:a/b")
     assert invited is not None and invited.agent_id == "w1"
 
@@ -255,10 +255,10 @@ async def test_a_waiter_invited_while_a_shared_holder_remains_stays_queued(redis
     assert await depth("path:a/b") == 1
 
     # And succeeds once the last SHARED holder goes.
-    await release("path:a/b", agent_id="s2", task_id="t2")
-    from autobot_shared.coordination.work_claims import Claim
+    await release_scope("path:a/b", agent_id="s2", task_id="t2")
+    from autobot_shared.coordination.work_claims import WorkClaim
 
-    assert isinstance(await try_acquire("path:a/b", agent_id="w1", task_id="tw", intent="wants exclusive"), Claim)
+    assert isinstance(await try_acquire("path:a/b", agent_id="w1", task_id="tw", intent="wants exclusive"), WorkClaim)
     assert await leave("path:a/b", agent_id="w1", task_id="tw") is True
 
 

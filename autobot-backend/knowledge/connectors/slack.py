@@ -39,7 +39,7 @@ from autobot_shared.auth import BearerAuth
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
-from knowledge.connectors.base import AbstractConnector, RetryableError
+from knowledge.connectors.base import VENDOR_API_EGRESS, AbstractConnector, RetryableError
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -270,6 +270,7 @@ class SlackConnector(AbstractConnector):
                 json=json_data or {},
                 timeout=timeout,
                 suppress_error_log=True,
+                guard_egress=VENDOR_API_EGRESS,
             ) as resp:
                 if resp.status == 429:
                     raise RetryableError("Slack rate-limited", status_code=429)

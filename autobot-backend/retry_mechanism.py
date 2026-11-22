@@ -12,9 +12,9 @@ This module re-exports everything for backward compatibility.
 
 from autobot_shared.retry_mechanism import (  # noqa: F401
     BackoffStrategy,
-    RetryConfig,
     RetryExhaustedError,
     RetryMechanism,
+    RetryPolicy,
     RetryStrategy,
     get_default_retry_mechanism,
     retry_async,

@@ -5,12 +5,10 @@
 """Shared content-extraction helpers for knowledge connectors.
 
 Pure, provider-agnostic utilities that were byte-identical across the Google
-Drive and OneDrive connectors (and, for ``content_hash``, several others).
+Drive and OneDrive connectors .
 Extracted here so every connector imports a single implementation (#9794
 duplication sweep) instead of carrying its own copy.
 """
-
-import hashlib
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_content
@@ -18,11 +16,6 @@ from media.document.extraction import DocumentExtractionError, ExtractedDocument
 from media.document.provenance import render_text_and_tables
 
 logger = get_logger(__name__)
-
-
-def content_hash(text: str) -> str:
-    """Generate SHA-256 hash of content for change detection."""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def extract_text_from_docx(content_bytes: bytes) -> str:

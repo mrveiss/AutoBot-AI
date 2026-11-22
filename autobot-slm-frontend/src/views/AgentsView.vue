@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseButton, createLogger } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -14,6 +15,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import config from '@/config/ssot-config'
 import { slmApiClient } from '@/utils/ApiClient'
+import { useFleetStore } from '@/stores/fleet'
+import type { SLMNode } from '@/types/slm'
 import ExternalAgentsView from '@/views/ExternalAgentsView.vue'
 import OrgChartTab from '@/components/agents/OrgChartTab.vue'
 import ConfigHistoryTab from '@/components/agents/ConfigHistoryTab.vue'
@@ -32,17 +35,14 @@ interface Agent {
   is_default: boolean
 }
 
-interface FleetNode {
-  node_id: string
-  hostname: string
-  ip_address: string
-  status: string
-  roles: string[]
-}
+// The node fields this view reads, from the one node type the fleet store holds.
+type FleetNode = Pick<SLMNode, 'node_id' | 'hostname' | 'ip_address' | 'status' | 'roles'>
 
 const OLLAMA_PORT = config.port.ollama
 const CUSTOM_VALUE = '__custom__'
 
+const fleetStore = useFleetStore()
+const logger = createLogger('AgentsView')
 const route = useRoute()
 const router = useRouter()
 
@@ -121,13 +121,11 @@ async function fetchNodes() {
   try {
     // A non-OK response used to `return` silently; `get()` rejects, so it now
     // lands in the catch below — the same outcome (fall back to Custom mode)
-    // reached by one code path instead of two.
-    const data = await slmApiClient.get<{ nodes?: FleetNode[] }>('/nodes')
-    nodes.value = (data.nodes || []).filter(
-      (n: FleetNode) => n.status === 'online',
-    )
-  } catch {
-    // Non-critical — fall back to Custom mode
+    // reached by one code path instead of two. Every page of the fleet (#21584).
+    await fleetStore.fetchNodes() // a partial read is kept and announced once by the shell, not here
+    nodes.value = fleetStore.nodeList.filter((n: FleetNode) => n.status === 'online')
+  } catch (err) {
+    logger.warn('Could not load the node list; falling back to Custom mode (non-critical):', err)
   }
 }
 
@@ -308,10 +306,10 @@ onMounted(() => {
         <div class="detail-header">
           <h2>{{ selectedAgent.name }}</h2>
           <div class="actions">
-            <button v-if="!isEditing" class="btn-edit" @click="startEditing">{{ $t('agentsView.edit') }}</button>
+            <BaseButton size="sm" v-if="!isEditing" @click="startEditing">{{ $t('agentsView.edit') }}</BaseButton>
             <template v-else>
-              <button class="btn-save" @click="saveAgent">{{ $t('agentsView.save') }}</button>
-              <button class="btn-cancel" @click="cancelEditing">{{ $t('agentsView.cancel') }}</button>
+              <BaseButton variant="success" size="sm" @click="saveAgent">{{ $t('agentsView.save') }}</BaseButton>
+              <BaseButton variant="secondary" size="sm" @click="cancelEditing">{{ $t('agentsView.cancel') }}</BaseButton>
             </template>
           </div>
         </div>
@@ -472,7 +470,7 @@ onMounted(() => {
 
 .error-banner {
   background: var(--slm-red-100);
-  border: 1px solid var(--color-danger-500);
+  border: 1px solid var(--color-error-500);
   color: var(--slm-red-700);
   padding: var(--spacing-3) var(--spacing-4);
   border-radius: var(--radius-lg);
@@ -701,32 +699,6 @@ onMounted(() => {
 .actions {
   display: flex;
   gap: var(--spacing-2);
-}
-
-.btn-edit,
-.btn-save,
-.btn-cancel {
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-}
-
-.btn-edit {
-  background: var(--slm-indigo-500);
-  color: var(--color-white);
-}
-
-.btn-save {
-  background: var(--slm-emerald-500);
-  color: var(--color-white);
-}
-
-.btn-cancel {
-  background: var(--slm-gray-200);
-  color: var(--slm-gray-700);
 }
 
 .loading {

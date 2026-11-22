@@ -5,8 +5,12 @@ import { defineStore } from 'pinia'
 import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
+import { visibleMessages } from '@/utils/internalMessage'
 import type { ChatMessage } from '@/types/api'
 import apiClient from '@/utils/ApiClient'
+import type { SecretType } from '@/types/secretKind'
+import { usePendingApproval } from './chatPendingApproval'
+import { debugPersistenceState as debugPersistenceStateCheck } from './chatPersistenceDebug'
 
 // Issue #2066: ChatMessage is now the canonical type from types/api.ts.
 // Re-export so existing consumers that import from this store still work.
@@ -37,7 +41,8 @@ export interface SessionActivity {
 export interface SessionSecret {
   id: string
   name: string
-  type: 'api_key' | 'token' | 'password' | 'ssh_key' | 'certificate'
+  // #17976: every canonical kind (#15008), not a 5-kind subset
+  type: SecretType
   scope: 'user' | 'session' | 'shared'
   ownerId: string
   usageCount: number
@@ -47,8 +52,8 @@ export interface ChatSession {
   id: string
   title: string
   messages: ChatMessage[]
-  createdAt: Date
-  updatedAt: Date
+  createdAt?: Date
+  updatedAt?: Date
   isActive: boolean
   // Issue #608: User-centric session tracking
   owner?: UserContext
@@ -93,8 +98,8 @@ export const useChatStore = defineStore('chat', () => {
   }
   // Issue #691: Track streaming preview text for real-time feedback
   const streamingPreview = ref<string>('')
-  // Issue #680: Track pending approval state to prevent polling race conditions
-  const hasPendingApproval = ref(false)
+  // Issue #680: pending approval, per chat (#21357), to prevent polling race conditions
+  const { hasPendingApproval, isPendingApproval, setPendingApproval } = usePendingApproval(currentSessionId, sessions)
   const sidebarCollapsed = ref(false)
   // Issue #671: Track initialization state for loading indicators
   const isInitializing = ref(false)
@@ -116,9 +121,8 @@ export const useChatStore = defineStore('chat', () => {
     sessions.value.find(session => session.id === currentSessionId.value)
   )
 
-  const currentMessages = computed(() =>
-    currentSession.value?.messages || []
-  )
+  // #21846: backend-internal bookkeeping is filtered here, so counts, previews and export never see it either
+  const currentMessages = computed(() => visibleMessages(currentSession.value?.messages ?? []))
 
   const sessionCount = computed(() => sessions.value.length)
 
@@ -329,16 +333,28 @@ export const useChatStore = defineStore('chat', () => {
     return true
   }
 
-  function addMessage(message: Omit<ChatMessage, 'id' | 'timestamp'>): string | null {
+  /**
+   * #21357: the session a write targets. An explicit `sessionId` pins the write to the chat that
+   * originated it (a response stream keeps writing to its own chat after the person switches away);
+   * omitted, it is the open chat. An explicit id that no longer exists resolves to undefined, so the
+   * write is dropped instead of landing in whichever chat is open.
+   */
+  function resolveSession(sessionId?: string): ChatSession | undefined {
+    if (sessionId === undefined) return currentSession.value
+    return sessions.value.find(s => s.id === sessionId)
+  }
+
+  function addMessage(message: Omit<ChatMessage, 'id' | 'timestamp'>, sessionId?: string): string | null {
     // #6746: don't auto-create a session as a side effect of addMessage.
     // The previous fallback was a major source of session_id churn (#6745):
     // any state path that nulled currentSession (page mount, sync, race)
     // caused subsequent stream chunks to spawn a new session, scattering
     // assistant replies across blank "Chat N" sidebar entries. Now callers
     // must own session lifecycle explicitly.
-    if (!currentSession.value) {
+    const target = resolveSession(sessionId)
+    if (!target) {
       logger.error(
-        'addMessage called with no current session — message dropped. ' +
+        'addMessage called with no target session — message dropped. ' +
           'Caller must invoke createNewSession() first.',
         message,
       )
@@ -351,8 +367,8 @@ export const useChatStore = defineStore('chat', () => {
       ...message
     }
 
-    currentSession.value.messages.push(newMessage)
-    currentSession.value.updatedAt = new Date()
+    target.messages.push(newMessage)
+    target.updatedAt = new Date()
 
     // #14821: applied optimistically — the UI shows it now, but it is not
     // confirmed state until the server echoes it back.
@@ -378,9 +394,14 @@ export const useChatStore = defineStore('chat', () => {
    * @param message - Message with optional id, message_id and version fields
    * @returns The message ID (new or existing)
    */
-  function addOrUpdateMessage(message: Partial<ChatMessage> & { content: string; sender: ChatMessage['sender'] }): string {
-    if (!currentSession.value) {
+  function addOrUpdateMessage(message: Partial<ChatMessage> & { content: string; sender: ChatMessage['sender'] }, sessionId?: string): string {
+    if (sessionId === undefined && !currentSession.value) {
       createNewSession()
+    }
+    const target = resolveSession(sessionId)
+    if (!target) {
+      logger.warn(`addOrUpdateMessage: session ${sessionId} is gone, message dropped`)
+      return ''
     }
 
     // #11843: Resolve the stable server identity. The stream/normal path carries
@@ -388,11 +409,11 @@ export const useChatStore = defineStore('chat', () => {
     // existing message on either field so the same reply never double-renders.
     const serverId = message.id ?? message.message_id
     if (serverId) {
-      const existingIndex = currentSession.value!.messages.findIndex(
+      const existingIndex = target.messages.findIndex(
         m => m.id === serverId || m.message_id === serverId
       )
       if (existingIndex >= 0) {
-        const existing = currentSession.value!.messages[existingIndex]
+        const existing = target.messages[existingIndex]
 
         // Issue #656: Version-based deduplication - skip if we already have this or newer version
         const incomingVersion = message.metadata?.version ?? 0
@@ -405,7 +426,7 @@ export const useChatStore = defineStore('chat', () => {
         }
 
         // Update existing message (streaming chunk accumulation)
-        currentSession.value!.messages[existingIndex] = {
+        target.messages[existingIndex] = {
           ...existing,
           content: message.content,  // Replace with accumulated content
           type: message.type || existing.type,  // Issue #650: Preserve display type
@@ -417,7 +438,7 @@ export const useChatStore = defineStore('chat', () => {
             version: incomingVersion  // Track version for next comparison
           }
         }
-        currentSession.value!.updatedAt = new Date()
+        target.updatedAt = new Date()
         logger.debug(`[#11843] Reconciled message ${existing.id} (serverId=${serverId}) to version ${incomingVersion}`)
         return existing.id
       }
@@ -436,22 +457,23 @@ export const useChatStore = defineStore('chat', () => {
       metadata: message.metadata
     }
 
-    currentSession.value!.messages.push(newMessage)
-    currentSession.value!.updatedAt = new Date()
+    target.messages.push(newMessage)
+    target.updatedAt = new Date()
     logger.debug(`[#11843] Added new message: ${newMessage.id}, serverId=${serverId ?? 'none'}, version: ${message.metadata?.version ?? 0}`)
 
     return newMessage.id
   }
 
-  function updateMessage(messageId: string, updates: Partial<ChatMessage>) {
-    if (!currentSession.value) return
-    const msgs = currentSession.value.messages
+  function updateMessage(messageId: string, updates: Partial<ChatMessage>, sessionId?: string) {
+    const target = resolveSession(sessionId)
+    if (!target) return
+    const msgs = target.messages
 
     // Issue #1316: Fast path — streaming always updates the last message
     const lastIdx = msgs.length - 1
     if (lastIdx >= 0 && msgs[lastIdx].id === messageId) {
       msgs[lastIdx] = { ...msgs[lastIdx], ...updates }
-      currentSession.value.updatedAt = new Date()
+      target.updatedAt = new Date()
       return
     }
 
@@ -459,7 +481,7 @@ export const useChatStore = defineStore('chat', () => {
     const messageIndex = msgs.findIndex(m => m.id === messageId)
     if (messageIndex !== -1) {
       msgs[messageIndex] = { ...msgs[messageIndex], ...updates }
-      currentSession.value.updatedAt = new Date()
+      target.updatedAt = new Date()
     }
   }
 
@@ -471,9 +493,10 @@ export const useChatStore = defineStore('chat', () => {
    * @param metadataUpdates - Partial metadata to merge
    * @returns true if message was found and updated
    */
-  function updateMessageMetadata(messageId: string, metadataUpdates: Record<string, unknown>): boolean {
-    if (!currentSession.value) return false
-    const msgs = currentSession.value.messages
+  function updateMessageMetadata(messageId: string, metadataUpdates: Record<string, unknown>, sessionId?: string): boolean {
+    const target = resolveSession(sessionId)
+    if (!target) return false
+    const msgs = target.messages
 
     // Issue #1316: Fast path — check last message first
     const lastIdx = msgs.length - 1
@@ -493,7 +516,7 @@ export const useChatStore = defineStore('chat', () => {
           ...(metadataUpdates as Record<string, string | number | boolean | undefined>)
         }
       }
-      currentSession.value.updatedAt = new Date()
+      target.updatedAt = new Date()
       logger.debug(`[METADATA] Updated message ${messageId} metadata:`, metadataUpdates)
       return true
     }
@@ -519,13 +542,14 @@ export const useChatStore = defineStore('chat', () => {
     })
   }
 
-  function deleteMessage(messageId: string) {
-    if (!currentSession.value) return
+  function deleteMessage(messageId: string, sessionId?: string) {
+    const target = resolveSession(sessionId)
+    if (!target) return
 
-    const messageIndex = currentSession.value.messages.findIndex(m => m.id === messageId)
+    const messageIndex = target.messages.findIndex(m => m.id === messageId)
     if (messageIndex !== -1) {
-      currentSession.value.messages.splice(messageIndex, 1)
-      currentSession.value.updatedAt = new Date()
+      target.messages.splice(messageIndex, 1)
+      target.updatedAt = new Date()
     }
   }
 
@@ -616,11 +640,6 @@ export const useChatStore = defineStore('chat', () => {
   // Issue #691: Set streaming preview text for real-time feedback during LLM generation
   function setStreamingPreview(preview: string) {
     streamingPreview.value = preview
-  }
-
-  // Issue #680: Pending approval state management to prevent polling race conditions
-  function setPendingApproval(pending: boolean) {
-    hasPendingApproval.value = pending
   }
 
   // Issue #671: Initialization state management for loading feedback
@@ -1014,42 +1033,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // CRITICAL FIX: Debug method to verify persistence state
   function debugPersistenceState(): void {
-    try {
-      const persistedData = localStorage.getItem('autobot-chat-store')
-      if (persistedData) {
-        const parsed = JSON.parse(persistedData)
-        logger.debug('📊 Persistence Debug:')
-        logger.debug(`  Store sessions: ${sessions.value.length}`)
-        logger.debug(`  Persisted sessions: ${parsed.sessions?.length || 0}`)
-        logger.debug(`  Store currentSessionId: ${currentSessionId.value}`)
-        logger.debug(`  Persisted currentSessionId: ${parsed.currentSessionId}`)
-
-        // Check for specific session IDs
-        const storeIds = sessions.value.map(s => s.id)
-        const persistedIds = parsed.sessions?.map((s: { id: string }) => s.id) || []
-        logger.debug(`  Store IDs: [${storeIds.join(', ')}]`)
-        logger.debug(`  Persisted IDs: [${persistedIds.join(', ')}]`)
-
-        // Find discrepancies
-        const missingFromPersisted = storeIds.filter(id => !persistedIds.includes(id))
-        const extraInPersisted = persistedIds.filter((id: string) => !storeIds.includes(id))
-
-        if (missingFromPersisted.length > 0) {
-          logger.warn(`⚠️ Sessions in store but not persisted: [${missingFromPersisted.join(', ')}]`)
-        }
-        if (extraInPersisted.length > 0) {
-          logger.warn(`⚠️ Sessions persisted but not in store: [${extraInPersisted.join(', ')}]`)
-        }
-
-        if (missingFromPersisted.length === 0 && extraInPersisted.length === 0) {
-          logger.debug('✅ Store and persistence are in sync')
-        }
-      } else {
-        logger.debug('📊 No persisted data found in localStorage')
-      }
-    } catch (error) {
-      logger.error('❌ Error checking persistence state:', error)
-    }
+    debugPersistenceStateCheck(sessions.value, currentSessionId.value)
   }
 
   function setCurrentAgentType(type: string): void {
@@ -1064,7 +1048,8 @@ export const useChatStore = defineStore('chat', () => {
     activeChatContext,       // #11690: request-context merged into sends
     setActiveChatContext,    // #11690
     streamingPreview,  // Issue #691: Streaming preview text
-    hasPendingApproval,  // Issue #680: Pending approval state
+    hasPendingApproval,  // Issue #680: the open chat's pending approval
+    isPendingApproval,   // #21357: any chat's
     sidebarCollapsed,
     settings,
     // Issue #671: Initialization state for loading indicators
@@ -1104,7 +1089,7 @@ export const useChatStore = defineStore('chat', () => {
     setTyping,
     setCurrentAgentType,
     setStreamingPreview,  // Issue #691: Streaming preview text management
-    setPendingApproval,  // Issue #680: Pending approval state management
+    setPendingApproval,  // Issue #680 / #21357: (pending, sessionId?)
     // Issue #671: Initialization state management
     setInitializing,
     setInitializationError,
@@ -1144,8 +1129,8 @@ export const useChatStore = defineStore('chat', () => {
               id: session.id,
               title: session.title,
               messages: [],
-              createdAt: new Date(session.createdAt as string),
-              updatedAt: new Date(session.updatedAt as string),
+              createdAt: session.createdAt ? new Date(session.createdAt as string) : undefined,
+              updatedAt: session.updatedAt ? new Date(session.updatedAt as string) : undefined,
               isActive: false
             }))
           }

@@ -12,6 +12,8 @@ from typing import List
 from uuid import UUID
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.quarantine import is_quarantined, without_quarantine
+from knowledge.where_combine import and_where
 
 logger = get_logger(__name__)
 
@@ -44,7 +46,8 @@ class SummarySearchService:
         try:
             collection = await self.client.get_collection(name=self.collection_name)
 
-            where_filter = {"level": level} if level else None
+            # #19163: summaries of a research-quarantined fact are never served here.
+            where_filter = without_quarantine({"level": level} if level else None)
 
             results = await collection.query(query_texts=[query], n_results=top_k, where=where_filter)
 
@@ -70,10 +73,10 @@ class SummarySearchService:
             collection = await self.client.get_collection(name=self.collection_name)
 
             # Get document-level summary
-            doc_results = await collection.get(where={"document_id": str(document_id), "level": "document"})
+            doc_results = await collection.get(where=self._visible_where(str(document_id), "document"))
 
             # Get section-level summaries
-            section_results = await collection.get(where={"document_id": str(document_id), "level": "section"})
+            section_results = await collection.get(where=self._visible_where(str(document_id), "section"))
 
             overview = {
                 "document_id": str(document_id),
@@ -112,7 +115,7 @@ class SummarySearchService:
             # Get the summary
             summary_results = await collection.get(ids=[str(summary_id)])
 
-            if not summary_results["ids"]:
+            if not summary_results["ids"] or self._is_withheld(summary_results):
                 logger.warning("Summary not found: %s", summary_id)
                 return {"summary": None, "children": []}
 
@@ -120,7 +123,7 @@ class SummarySearchService:
 
             # Get child summaries
             parent_id = str(summary_id)
-            child_results = await collection.get(where={"parent_summary_id": parent_id})
+            child_results = await collection.get(where=without_quarantine({"parent_summary_id": parent_id}))
 
             children = self._format_get_results(child_results)
 
@@ -140,6 +143,18 @@ class SummarySearchService:
         except Exception as e:
             logger.error("Drill down failed: %s", e)
             return {"summary": None, "children": []}
+
+    @staticmethod
+    def _visible_where(document_id: str, level: str) -> dict:
+        """A document's summaries at *level*, minus the research-quarantined ones (#19163)."""
+        clauses = ({"document_id": document_id}, {"level": level}, without_quarantine())
+        return and_where(*clauses)  # type: ignore[return-value]
+
+    @staticmethod
+    def _is_withheld(get_results: dict) -> bool:
+        """Whether the one summary a ``get`` returned derives from a quarantined fact (#19163)."""
+        metadatas = get_results.get("metadatas") or []
+        return any(is_quarantined({"metadata": m or {}}) for m in metadatas)
 
     def _format_results(self, results: dict) -> List[dict]:
         """Format ChromaDB query results."""

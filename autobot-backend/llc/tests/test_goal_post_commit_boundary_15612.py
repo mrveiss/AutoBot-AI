@@ -34,13 +34,14 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from autobot_shared.async_compat import pending_background_tasks
+from llc.models.activity import LLCActivityLog
 from llc.models.goal import GoalLevel, LLCGoal
 from llc.services import goal as goal_module
 from llc.services.goal import GoalService
 from llc.tests import _e2e_harness as harness
 from user_management.models.base import Base
 
-_COMPANY = "co-15612"
+_COMPANY = "00000000-0000-4000-8000-000000015612"  # a real UUID: the goal's audit row keys on it (#20101)
 
 # Session methods that constitute "using the database through this session".
 _SESSION_DB_METHODS = frozenset(
@@ -94,7 +95,7 @@ async def goal_env(monkeypatch) -> AsyncIterator[tuple]:
     engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:"
     )
-    tables = [LLCGoal.__table__]
+    tables = [LLCActivityLog.__table__, LLCGoal.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)
@@ -370,3 +371,36 @@ def test_neither_scheduler_captures_the_row_it_was_given():
         assert not any(
             isinstance(n, ast.Attribute) and n.attr == "create_task" for n in ast.walk(tree)
         ), f"{name} schedules with a bare create_task — use fire_and_forget (#15522)"
+
+
+async def _drain(before: set) -> None:
+    """Await what the commit scheduled."""
+    await asyncio.gather(*(pending_background_tasks() - before))
+
+
+class TestGoalIndexingRidesTheOneQueue:
+    """#21107: KB indexing follows the one after-commit queue - after commit, not after rollback, once."""
+
+    async def test_indexing_runs_after_commit_exactly_once(self, goal_env, monkeypatch):
+        svc, request_session, _job_sessions = goal_env
+        index = AsyncMock()
+        monkeypatch.setattr(svc, "_index_goal", index)
+        before = pending_background_tasks()
+        await svc.create(request_session, company_id=_COMPANY, title="G", level=GoalLevel.VISION, description="d")
+        index.assert_not_called()  # flushed, not committed
+        await request_session.commit()
+        await _drain(before)
+        await request_session.commit()  # a second commit must not fire it again
+        await _drain(before)
+        assert index.await_count == 1
+
+    async def test_indexing_does_not_run_after_a_rollback(self, goal_env, monkeypatch):
+        svc, request_session, _job_sessions = goal_env
+        index = AsyncMock()
+        monkeypatch.setattr(svc, "_index_goal", index)
+        before = pending_background_tasks()
+        await svc.create(request_session, company_id=_COMPANY, title="G", level=GoalLevel.VISION, description="d")
+        await request_session.rollback()
+        await request_session.commit()
+        await _drain(before)
+        index.assert_not_called()

@@ -22,10 +22,10 @@ from autobot_shared.plugin_sdk.base import (
     RequiredEnvVar,
 )
 from autobot_shared.plugin_sdk.capabilities import (
-    Capability,
     CapabilityChecker,
     CapabilityContext,
     CapabilityError,
+    PluginCapability,
     TrustTier,
 )
 from autobot_shared.plugin_sdk.hooks import Hook, HookRegistry
@@ -40,7 +40,7 @@ __all__ = [
     "RequiredEnvVar",
     "PluginLoader",
     "validate_plugin_config",
-    "Capability",
+    "PluginCapability",
     "CapabilityChecker",
     "CapabilityContext",
     "CapabilityError",

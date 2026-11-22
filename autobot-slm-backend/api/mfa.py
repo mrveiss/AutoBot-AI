@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.schemas import TokenResponse
 from services.auth import auth_service, get_current_user
-from user_management.database import get_slm_session
+from user_management.database import get_slm_db
 from user_management.models.user import User
 from user_management.schemas.mfa import (
     BackupCodesResponse,
@@ -38,12 +38,6 @@ from user_management.services.mfa_service import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/mfa", tags=["mfa"])
-
-
-async def get_slm_db():
-    """Dependency for SLM database session."""
-    async with get_slm_session() as session:
-        yield session
 
 
 @router.post("/setup", response_model=MFASetupResponse)

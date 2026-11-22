@@ -47,7 +47,7 @@ def gate(request):
     """Load one gate and leave the shared logger exactly as it was found.
 
     ``logging.getLogger(name)`` returns the SAME object for every load of a gate, so
-    ``configure_logging()`` -- which attaches a stderr handler and sets INFO -- leaks out
+    ``configure_logging(logger)`` -- which attaches a stderr handler and sets INFO -- leaks out
     of whichever test called it into every later test in the process. Two tests here call
     it, directly and through ``main()``, and neither removes the handler.
 
@@ -68,7 +68,7 @@ def test_findings_go_to_stderr(gate) -> None:
     """Not stdout. The shell gate used stdout, so its findings were not where the
     python gate's were, and a caller redirecting one stream saw half the gates."""
     gate.logger.handlers.clear()
-    gate.configure_logging()
+    gate.configure_logging(gate.logger)
     streams = [h.stream for h in gate.logger.handlers if isinstance(h, logging.StreamHandler)]
     assert streams, "configure_logging attached no stream handler"
     assert all(s is sys.stderr for s in streams), f"findings are not on stderr: {streams}"
@@ -83,7 +83,7 @@ def test_configure_logging_sets_the_informational_level(gate) -> None:
     (``python_file_size_ratchet_test.test_configure_logging_makes_the_clean_run_visible``);
     the shell gate had none, so for one of these two gates the line was unguarded.
     """
-    gate.configure_logging()
+    gate.configure_logging(gate.logger)
     assert gate.logger.level == logging.INFO, (
         f"configure_logging left the logger at {gate.logger.level}; the clean-run summary "
         "is emitted at INFO and vanishes under lastResort's WARNING floor"
@@ -225,7 +225,7 @@ def _wording(message: str, gate) -> str:
     -- which is the actual claim this PR makes.
     """
     floor = next(v for k, v in vars(gate).items() if k.startswith("MIN_TRACKED"))
-    out = message.replace(gate.SELF_REL, "<SELF>").replace(gate.RATCHET_REL, "<BASELINE>")
+    out = message.replace(gate.SELF_REL, "<SELF>")
     # `ts|vue` joined `py|sh` with the frontend gate (#17885): an un-normalised
     # path in one gate's message is a spurious difference, and the comparison
     # would then fail for a reason that has nothing to do with wording.
@@ -240,7 +240,6 @@ def _grandfathered(gate):
 
 _BRANCHES = {
     "over-ceiling": lambda g: g.verdict(*(lambda r, c: (r, c + 1))(*_grandfathered(g))),
-    "under-ceiling": lambda g: g.verdict(*(lambda r, c: (r, c - 1))(*_grandfathered(g))),
     "now-compliant": lambda g: g.verdict(_grandfathered(g)[0], g.MAX_LINES),
     "unlisted-oversized": lambda g: g.verdict(f"probe/unlisted_probe.{g.SELF_REL[-2:]}", g.MAX_LINES + 1),
     "unmeasured": lambda g: g.unmeasured(f"probe/unreadable_probe.{g.SELF_REL[-2:]}"),
@@ -273,29 +272,21 @@ def test_every_gate_words_every_branch_identically(branch: str) -> None:
     )
 
 
-def test_the_baseline_a_gate_names_is_the_one_holding_the_entries(gate) -> None:
-    """``RATCHET_REL`` must name the file a developer can actually edit.
+def test_every_gate_passes_a_file_under_its_ceiling() -> None:
+    """#19673: the under-ceiling branch is gone from all gates alike (the merge base gates a shrink instead)."""
+    verdicts = {
+        name: (lambda g: g.verdict(*(lambda r, c: (r, max(c - 1, g.MAX_LINES + 1)))(*_grandfathered(g))))(_load(rel))
+        for name, rel in sorted(_GATES.items())
+    }
+    assert verdicts == dict.fromkeys(_GATES), verdicts
 
-    The Python gate pointed at ``python_file_size_ratchet_test.py``, whose
-    ``RATCHET_BASELINE`` is a single re-export line; the entries live in
-    ``python_file_size_ratchet_baseline.py``. So "lower the matching RATCHET_BASELINE
-    entry in <that file>" sent the developer to a file with no entries in it -- the
-    wrong-copy failure #17872 exists to prevent, emitted by the gate itself.
 
-    Not covered by the wording-parity test above, which normalises ``RATCHET_REL`` away
-    precisely because it legitimately differs per gate: that test compares words, so it
-    cannot see a pointer aimed at the wrong file. This one reads the file named and
-    requires a literal mapping, which a re-export is not.
+def test_a_gate_message_asks_for_no_second_edit(gate) -> None:
+    """The gate's own messages send the developer to ``SELF_REL`` alone (#19544).
+
+    The Python gate once pointed at a file with no entries (#17377), then at a mirror
+    that had to be edited in step (#17872). With one record, the pointer is gone.
     """
-    named = repo_root() / gate.RATCHET_REL
-    assert named.is_file(), f"{gate.SELF_REL} names a baseline that does not exist: {gate.RATCHET_REL}"
-    source = named.read_text(encoding="utf-8")
-    assert "RATCHET_BASELINE: dict[str, int] = {" in source, (
-        f"{gate.RATCHET_REL} does not DEFINE RATCHET_BASELINE as a mapping, so a developer "
-        "told to lower an entry there finds nothing to edit"
-    )
-    entries = source.count('": ')
-    assert entries >= len(gate.KNOWN_LARGE), (
-        f"{gate.RATCHET_REL} holds {entries} entries against the hook's {len(gate.KNOWN_LARGE)} -- "
-        "the gate is naming a file that does not carry the second copy"
-    )
+    assert "RATCHET_BASELINE" not in gate.verdict(
+        sorted(gate.KNOWN_LARGE)[0], gate.MAX_LINES
+    ), "the now-compliant message still asks for a second edit"

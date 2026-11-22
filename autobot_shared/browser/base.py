@@ -59,7 +59,7 @@ class ContentFormat(str, Enum):
     STRUCTURED = "structured"
 
 
-class Capability(str, Enum):
+class BrowserCapability(str, Enum):
     """What a backend can do. Callers request these; backends declare them.
 
     ``(str, Enum)`` rather than ``StrEnum``: it is the shape
@@ -113,7 +113,7 @@ class NoCapableBackendError(BrowserError):
     """No registered backend both declares the capabilities and is reachable."""
 
 
-class UnsupportedFormatError(BrowserError):
+class UnsupportedContentFormatError(BrowserError):
     """The resolved backend cannot produce the requested content format.
 
     Raised rather than returning the wrong shape, which is what a single
@@ -131,10 +131,10 @@ class UnsafeUrlError(BrowserError):
 
 
 #: Which capability a backend must declare to serve each content format.
-FORMAT_CAPABILITY: dict[ContentFormat, Capability] = {
-    ContentFormat.TEXT: Capability.EXTRACT_TEXT,
-    ContentFormat.HTML: Capability.EXTRACT_HTML,
-    ContentFormat.STRUCTURED: Capability.EXTRACT_STRUCTURED,
+FORMAT_CAPABILITY: dict[ContentFormat, BrowserCapability] = {
+    ContentFormat.TEXT: BrowserCapability.EXTRACT_TEXT,
+    ContentFormat.HTML: BrowserCapability.EXTRACT_HTML,
+    ContentFormat.STRUCTURED: BrowserCapability.EXTRACT_STRUCTURED,
 }
 
 
@@ -218,7 +218,7 @@ class BrowserResult:
     title: str | None = None
     content: str | None = None
     #: Structured extraction (headings, links, metadata) where the backend
-    #: produces it. `content_reach` maps this onto `ContentResult.structured`,
+    #: produces it. `content_reach` maps this onto `ContentReachResult.structured`,
     #: and it had no home in this result until #13236.
     structured: dict[str, Any] = field(default_factory=dict)
     image_path: str | None = None
@@ -239,7 +239,7 @@ class BrowserBackend(Protocol):
     """
 
     name: str
-    capabilities: frozenset[Capability]
+    capabilities: frozenset[BrowserCapability]
 
     async def probe(self) -> bool:
         """True if this backend is currently usable."""

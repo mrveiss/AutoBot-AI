@@ -117,11 +117,11 @@ for tip in recommendations['performance_tips']:
 
 ### Configure Agent Hardware
 ```python
-from src.config import global_config_manager
+from src.config import config_manager
 
 # Get hardware-optimized configuration for specific agent
-chat_config = global_config_manager.get_hardware_acceleration_config("chat")
-rag_config = global_config_manager.get_ollama_runtime_config("rag")
+chat_config = config_manager.get_hardware_acceleration_config("chat")
+rag_config = config_manager.get_ollama_runtime_config("rag")
 ```
 
 ## System Requirements

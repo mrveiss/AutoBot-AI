@@ -287,7 +287,7 @@ class TestTheActionIsRecorded:
 
 
 class TestAFailingReleaseDoesNotMaskTheAction:
-    """A review finding: `release` reaches Redis and can raise.
+    """A review finding: `release_scope` reaches Redis and can raise.
 
     Raised from inside the outer `finally` it would REPLACE the exception
     already propagating from the action, so the caller would be told the release
@@ -299,7 +299,7 @@ class TestAFailingReleaseDoesNotMaskTheAction:
         async def _boom(*args, **kwargs):
             raise RuntimeError("redis went away at release time")
 
-        monkeypatch.setattr(gate_module, "release", _boom)
+        monkeypatch.setattr(gate_module, "release_scope", _boom)
 
         with pytest.raises(ValueError, match="simulated action failure"):
             await run_dev_loop_action(17091, intent="verify", estimated_tokens=1, action=_failing_action)
@@ -309,7 +309,7 @@ class TestAFailingReleaseDoesNotMaskTheAction:
         async def _boom(*args, **kwargs):
             raise RuntimeError("redis went away at release time")
 
-        monkeypatch.setattr(gate_module, "release", _boom)
+        monkeypatch.setattr(gate_module, "release_scope", _boom)
 
         assert await run_dev_loop_action(17091, intent="verify", estimated_tokens=1, action=_ok_action) == "done"
 
@@ -327,7 +327,7 @@ class TestAFailingReleaseDoesNotMaskTheAction:
             return True
 
         monkeypatch.setattr(gate_module, "_renew_forever", _renew_boom)
-        monkeypatch.setattr(gate_module, "release", _record_release)
+        monkeypatch.setattr(gate_module, "release_scope", _record_release)
 
         assert await run_dev_loop_action(17091, intent="verify", estimated_tokens=1, action=_ok_action) == "done"
         assert released == ["issue:17091"], "the claim must be released even when the renewal task dies"
@@ -400,7 +400,7 @@ class TestCancellationIsAnExitPathToo:
             running.set()
             await asyncio.sleep(60)
 
-        monkeypatch.setattr(gate_module, "release", _suspending_release)
+        monkeypatch.setattr(gate_module, "release_scope", _suspending_release)
 
         task = asyncio.create_task(run_dev_loop_action(17094, intent="verify", estimated_tokens=1, action=_slow_action))
         await running.wait()

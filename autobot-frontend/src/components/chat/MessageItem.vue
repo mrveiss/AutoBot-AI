@@ -9,8 +9,8 @@
         <div class="message-info">
           <span class="sender-name">
             {{ senderName }}
-            <span v-if="message.sender === 'assistant' && message.metadata?.model" class="model-name">
-              ({{ message.metadata.model }})
+            <span v-if="message.sender === 'assistant' && shownModel(message.metadata)" class="model-name">
+              ({{ shownModel(message.metadata) }})
             </span>
           </span>
           <span class="message-time">{{ formatTime(message.timestamp) }}</span>
@@ -98,9 +98,9 @@
       <!-- Message Metadata -->
       <div v-if="showMetadata" class="message-metadata">
         <div class="metadata-items">
-          <span v-if="message.metadata?.model" class="metadata-item">
+          <span v-if="shownModel(message.metadata)" class="metadata-item">
             <Icon name="robot" />
-            {{ message.metadata.model }}
+            {{ shownModel(message.metadata) }}
           </span>
           <span v-if="message.metadata?.tokens" class="metadata-item">
             <Icon name="dollar-sign" />
@@ -171,6 +171,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatChatMessageHtml } from '@/utils/chatMessageFormat'
+import { sanitizeChatHtml } from '@/utils/sanitize'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -191,19 +193,16 @@ import { useRouter } from 'vue-router'
 import type { ChatMessage } from '@/stores/useChatStore'
 import type { Citation } from '@/types/api'
 import { formatTime } from '@/utils/formatHelpers'
+import { shownModel } from '@/utils/internalMessage'
 
 const { t } = useI18n()
 import MessageStatus from '@/components/ui/MessageStatus.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import ApprovalRequestCard from './ApprovalRequestCard.vue'
 import CitationsDisplay from './CitationsDisplay.vue'
 import MessageAttachments from './MessageAttachments.vue'
-import { sanitizeChatHtml } from '@/utils/sanitize'
 import { useAIDocument } from '@/composables/useAIDocument'
-import {
-  createEntityAnchorClickHandler,
-  renderMarkdownLinks,
-} from '@/composables/chat/useEntityAnchors'
+import { createEntityAnchorClickHandler } from '@/composables/chat/useEntityAnchors'
 
 interface Props {
   message: ChatMessage
@@ -342,48 +341,7 @@ const hasApprovalRequest = computed(() => {
   return props.message.metadata?.approval_status || props.message.metadata?.requires_approval
 })
 
-const formattedContent = computed(() => {
-  let content = props.message.content
-
-  // Strip ANSI escape codes
-  content = content
-    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
-    .replace(/\u001b\][0-9;]*[^\u0007]*\u0007/g, '')
-    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u001b\\)?/g, '')
-    .replace(/\u001b[=>]/g, '')
-    .replace(/\u001b[()][AB012]/g, '')
-    .replace(/\[[?\d;]*[hlHJ]/g, '')
-    .replace(/\]0;[^\u0007\n]*\u0007?/g, '')
-    .trim()
-
-  // Strip TOOL_CALL tags
-  content = content.replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
-
-  // Process code blocks
-  content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-    return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
-  })
-
-  // Issue #9479: render `[text](href)` markdown links — including entity
-  // anchors (`#kind-id`) — into <a> before inline formatting so they become
-  // clickable. Output is sanitized by sanitizeChatHtml below.
-  content = renderMarkdownLinks(content)
-
-  // Basic markdown formatting
-  content = content
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>')
-
-  // Bare URLs — skip URLs already inside an anchor href (rendered above)
-  content = content.replace(
-    /(?<!href=")(https?:\/\/[^\s<]+)/g,
-    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
-  )
-
-  return sanitizeChatHtml(content)
-})
+const formattedContent = computed(() => sanitizeChatHtml(formatChatMessageHtml(props.message.content)))
 </script>
 
 <style scoped src="@/design-system/styles/chat-message-shared.css"></style>

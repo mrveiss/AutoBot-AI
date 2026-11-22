@@ -27,6 +27,7 @@ from phase_feature_checks import declares_compose_services, defines_callable
 from phase_score import LIVE_STACK_GROUPS, PhaseScore, overall, project_report
 
 from autobot_shared.network_constants import ServiceURLs
+from autobot_shared.ollama_urls import ollama_tags_url
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client  # noqa: F401
 
 # Setup logging
@@ -130,7 +131,7 @@ class PhaseValidationCriteria:
                 "Handle LLM timeout and error scenarios",
             ],
             "files": [
-                "autobot-backend/llm_multi_provider.py",
+                "autobot-backend/services/llm_service.py",
                 "autobot-backend/prompt_manager.py",
             ],
             "directories": ["autobot-backend/llm_shared/"],  # renamed from llm_interface_pkg in #6941
@@ -157,7 +158,7 @@ class PhaseValidationCriteria:
             ],
             "files": [
                 "autobot-backend/security_layer.py",
-                ".github/workflows/security.yml",
+                ".github/workflows/_gate-security.yml",
                 ".bandit",
             ],
             "endpoints": ["/api/security/status"],
@@ -227,7 +228,7 @@ class PhaseValidationCriteria:
             # links to them instead of this phase claiming a UI verdict of its
             # own. A file-presence sweep has no business reporting on UX.
             "authoritative_gates": [
-                ".github/workflows/frontend-test.yml",
+                ".github/workflows/_gate-frontend-test.yml",
                 ".github/workflows/visual-regression.yml",
                 ".github/workflows/stylelint-tokens.yml",
                 ".github/workflows/frontend-typecheck-regression.yml",
@@ -283,7 +284,6 @@ class PhaseValidationCriteria:
             "files": [
                 "autobot-backend/utils/database_pool.py",
                 "autobot-backend/utils/advanced_cache_manager.py",
-                "autobot-backend/utils/cache_manager.py",
             ],
             "directories": ["autobot-backend/utils/", "autobot-backend/services/"],
             "endpoints": ["/api/metrics/system/health"],
@@ -712,7 +712,7 @@ class PhaseValidator:
     def _check_ollama_service(self) -> bool:
         """Check if Ollama is accessible (Issue #315: extracted helper)."""
         try:
-            response = requests.get(f"{ServiceURLs.OLLAMA_LOCAL}/api/tags", timeout=3)
+            response = requests.get(ollama_tags_url(ServiceURLs.OLLAMA_LOCAL), timeout=3)
             return response.status_code == 200
         except Exception:
             return False
@@ -821,7 +821,7 @@ class PhaseValidator:
         """
         root = self.project_root
         return {
-            "dependency_scanning": lambda: (root / ".github/workflows/security.yml").exists(),
+            "dependency_scanning": lambda: (root / ".github/workflows/_gate-security.yml").exists(),
             "sast_analysis": lambda: (root / ".bandit").exists(),
             "container_security": lambda: any((root / _SHARED_SCRIPTS).glob("*security*")),
             "system_metrics": lambda: (root / _SHARED_SCRIPTS / "monitoring_system.py").exists(),

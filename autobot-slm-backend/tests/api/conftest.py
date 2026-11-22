@@ -177,6 +177,10 @@ async def _reconcile_component_default_stub(*args: object, **kwargs: object) -> 
     return None
 
 
+#: The real values the call-phase guard replaced, for the teardown-phase repair below.
+_GUARD_ORIGINALS: dict = {}
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
     """Fail fast instead of dead-waiting or touching the host."""
@@ -198,6 +202,7 @@ def pytest_runtest_call(item):
     saved_reconcile = code_sync.reconcile_component if has_reconcile else None
     if has_reconcile:
         code_sync.reconcile_component = _reconcile_component_default_stub
+    _GUARD_ORIGINALS.update(client=saved_client, exec=saved_exec, reconcile=saved_reconcile)
     try:
         yield
     finally:
@@ -205,3 +210,29 @@ def pytest_runtest_call(item):
         asyncio.create_subprocess_exec = saved_exec
         if has_reconcile:
             code_sync.reconcile_component = saved_reconcile
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_teardown(item):
+    """Undo a guard that fixture teardown put back after the call phase restored it.
+
+    A test that monkeypatches a guarded name records the GUARD as the original,
+    so monkeypatch's undo -- which runs after pytest_runtest_call's ``finally``
+    -- reinstalls it for the rest of the process, and every later test that
+    spawns a real subprocess fails as if it had broken the rule (train #6b).
+    """
+    yield
+    if not _GUARD_ORIGINALS:
+        return
+    import asyncio
+
+    import httpx
+
+    if asyncio.create_subprocess_exec is _blocked_subprocess_exec:
+        asyncio.create_subprocess_exec = _GUARD_ORIGINALS["exec"]
+    if httpx.AsyncClient is _LiveHealthPollBlocked:
+        httpx.AsyncClient = _GUARD_ORIGINALS["client"]
+    code_sync = sys.modules.get("api.code_sync")
+    if code_sync is not None and getattr(code_sync, "reconcile_component", None) is _reconcile_component_default_stub:
+        code_sync.reconcile_component = _GUARD_ORIGINALS["reconcile"]
+    _GUARD_ORIGINALS.clear()

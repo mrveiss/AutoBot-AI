@@ -6,6 +6,7 @@ target_node: backend
 deploy:
   source: autobot-backend/
   destination: /opt/autobot/autobot-backend/
+  sync_target: "{base_dir}"   # #16025: what role_registry rsyncs INTO (not `destination`)
   shared: true
   infrastructure: true
 

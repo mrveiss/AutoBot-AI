@@ -90,10 +90,14 @@ ssh autobot@<slm-manager-ip> "sudo systemctl restart autobot-slm-backend nginx"
 
 **Step 4: If DB is corrupt, recover from backup**
 
+A watchdog starts a stopped SLM within a minute, so stop its timer first and start it again after:
+
 ```bash
+ssh autobot@<slm-manager-ip> "sudo systemctl stop autobot-slm-watchdog.timer"
 ssh autobot@<slm-manager-ip> "sudo systemctl stop autobot-slm-backend"
 ssh autobot@<slm-manager-ip> "sudo -u postgres pg_restore -d autobot_slm /opt/autobot/data/backups/latest.dump"
 ssh autobot@<slm-manager-ip> "sudo systemctl start autobot-slm-backend"
+ssh autobot@<slm-manager-ip> "sudo systemctl start autobot-slm-watchdog.timer"
 ```
 
 **Step 5: If full redeploy needed**

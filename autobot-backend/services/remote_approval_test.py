@@ -36,7 +36,7 @@ class _Store(RemoteApprovalStore):
         return None
 
 
-_DELIVERY = DeliveredApproval(approval_id="a1b2c3", platform="slack", channel_id="C42")
+_DELIVERY = DeliveredApproval(approval_id="a1b2c3", platform="slack", channel_id="C42", allowed_senders=("U-operator",))
 
 
 class TestToken:
@@ -95,24 +95,38 @@ class TestResolveFromReply:
     @pytest.mark.asyncio
     async def test_a_well_formed_reply_resolves(self):
         reply = embed_token("👍", "a1b2c3")
-        got = await resolve_from_reply(reply, platform="slack", channel_id="C42", store=_Store(_DELIVERY))
+        got = await resolve_from_reply(
+            reply, platform="slack", channel_id="C42", sender_id="U-operator", store=_Store(_DELIVERY)
+        )
         assert got is not None and got.approval_id == "a1b2c3" and got.approved is True
 
     @pytest.mark.asyncio
     async def test_a_denial_resolves_as_a_denial(self):
         reply = embed_token("👎", "a1b2c3")
-        got = await resolve_from_reply(reply, platform="slack", channel_id="C42", store=_Store(_DELIVERY))
+        got = await resolve_from_reply(
+            reply, platform="slack", channel_id="C42", sender_id="U-operator", store=_Store(_DELIVERY)
+        )
         assert got is not None and got.approved is False
 
     @pytest.mark.asyncio
     async def test_an_unknown_token_resolves_nothing(self):
         reply = embed_token("👍", "neversent")
-        assert await resolve_from_reply(reply, platform="slack", channel_id="C42", store=_Store(_DELIVERY)) is None
+        assert (
+            await resolve_from_reply(
+                reply, platform="slack", channel_id="C42", sender_id="U-operator", store=_Store(_DELIVERY)
+            )
+            is None
+        )
 
     @pytest.mark.asyncio
     async def test_a_reply_with_no_decision_resolves_nothing(self):
         reply = embed_token("what would this do?", "a1b2c3")
-        assert await resolve_from_reply(reply, platform="slack", channel_id="C42", store=_Store(_DELIVERY)) is None
+        assert (
+            await resolve_from_reply(
+                reply, platform="slack", channel_id="C42", sender_id="U-operator", store=_Store(_DELIVERY)
+            )
+            is None
+        )
 
     @pytest.mark.asyncio
     async def test_a_reply_on_the_wrong_channel_resolves_nothing(self):
@@ -122,18 +136,33 @@ class TestResolveFromReply:
         could answer on the operator's behalf.
         """
         reply = embed_token("👍", "a1b2c3")
-        assert await resolve_from_reply(reply, platform="slack", channel_id="OTHER", store=_Store(_DELIVERY)) is None
+        assert (
+            await resolve_from_reply(
+                reply, platform="slack", channel_id="OTHER", sender_id="U-operator", store=_Store(_DELIVERY)
+            )
+            is None
+        )
 
     @pytest.mark.asyncio
     async def test_a_reply_on_the_wrong_platform_resolves_nothing(self):
         reply = embed_token("👍", "a1b2c3")
-        assert await resolve_from_reply(reply, platform="discord", channel_id="C42", store=_Store(_DELIVERY)) is None
+        assert (
+            await resolve_from_reply(
+                reply, platform="discord", channel_id="C42", sender_id="U-operator", store=_Store(_DELIVERY)
+            )
+            is None
+        )
 
     @pytest.mark.asyncio
     async def test_an_unavailable_store_resolves_nothing(self):
         """Redis down must not approve by default."""
         reply = embed_token("👍", "a1b2c3")
-        assert await resolve_from_reply(reply, platform="slack", channel_id="C42", store=_Store(None)) is None
+        assert (
+            await resolve_from_reply(
+                reply, platform="slack", channel_id="C42", sender_id="U-operator", store=_Store(None)
+            )
+            is None
+        )
 
 
 class TestStoreDegradesWithoutRedis:

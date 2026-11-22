@@ -18,7 +18,7 @@ from typing import Any, Dict, List
 
 
 @dataclass
-class BenchmarkResult:
+class PerfBenchmarkResult:
     """Result of a performance benchmark test."""
 
     test_name: str

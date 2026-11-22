@@ -20,9 +20,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from models.npu_models import (
-    NPUWorkerConfig,
+    NPUWorkerDefinition,
     NPUWorkerDetails,
-    NPUWorkerMetrics,
+    NPUWorkerLoadMetrics,
     NPUWorkerStatus,
     WorkerStatus,
 )
@@ -35,8 +35,8 @@ from services.npu_worker_manager import NPUWorkerManager
 _WORKER_ID = "test-worker-1"
 
 
-def _make_worker_config(worker_id: str = _WORKER_ID) -> NPUWorkerConfig:
-    return NPUWorkerConfig(
+def _make_worker_config(worker_id: str = _WORKER_ID) -> NPUWorkerDefinition:
+    return NPUWorkerDefinition(
         id=worker_id,
         name="Test Worker",
         url="http://127.0.0.1:8099",  # canonical: ignore py-hardcoded-url — test fixture/mock URL
@@ -59,8 +59,8 @@ def _make_status(
     )
 
 
-def _make_metrics(worker_id: str = _WORKER_ID) -> NPUWorkerMetrics:
-    return NPUWorkerMetrics(
+def _make_metrics(worker_id: str = _WORKER_ID) -> NPUWorkerLoadMetrics:
+    return NPUWorkerLoadMetrics(
         id=worker_id,
         success_rate=98.0,
         requests_per_minute=1.65,
@@ -96,7 +96,7 @@ def _make_manager(redis_client=None) -> NPUWorkerManager:
 def _make_worker_details(
     worker_id: str = _WORKER_ID,
     ws: WorkerStatus = WorkerStatus.ONLINE,
-    metrics: NPUWorkerMetrics | None = None,
+    metrics: NPUWorkerLoadMetrics | None = None,
 ) -> NPUWorkerDetails:
     return NPUWorkerDetails(
         config=_make_worker_config(worker_id),

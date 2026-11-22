@@ -47,9 +47,12 @@ from api.schemas_code import (
     UnsubscribeResourceRequest,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.git_probe import start_git
+from autobot_shared.git_refs import is_safe_ref
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.time_utils import now_utc
@@ -78,8 +81,6 @@ router = APIRouter(
 # These are called on every git request validation
 _SAFE_PATH_RE = re.compile(r"^[a-zA-Z0-9_\-./]+$")  # Safe file paths
 _SHELL_METACHAR_RE = re.compile(r"[;&|`$]")  # Shell injection characters
-_COMMIT_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~]+$")  # Git commit refs
-_FULL_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~:]+$")  # Git refs with colon
 
 # Security Configuration
 
@@ -143,9 +144,11 @@ BLOCKED_GIT_COMMANDS = [
 ]
 
 # Rate limiting
-MAX_GIT_OPS_PER_MINUTE = 60
-git_counter = {"count": 0, "reset_time": now_utc()}
-_rate_limit_lock = asyncio.Lock()
+MAX_GIT_OPS_PER_MINUTE = env_int_clamped("AUTOBOT_MCP_GIT_RATE_LIMIT", 60, min_v=1, max_v=1_000_000)
+RATE_LIMIT_WINDOW_SECONDS = 60
+# One global Redis-backed count shared by every worker (#18087); fails open when Redis is down.
+_rate_limiter = RateLimiter("mcp:git", log_label="mcp:git")
+_RATE_LIMIT_KEY = "global"
 
 # Output limits
 MAX_OUTPUT_SIZE = 1 * 1024 * 1024  # 1 MB
@@ -237,30 +240,6 @@ def sanitize_git_args(args: List[str]) -> bool:
             return False
 
     return True
-
-
-async def check_rate_limit() -> bool:
-    """
-    Enforce rate limiting for git operations
-
-    Uses asyncio.Lock for thread safety in concurrent async environments
-    """
-
-    async with _rate_limit_lock:
-        now = now_utc()
-        elapsed = (now - git_counter["reset_time"]).total_seconds()
-
-        # Reset counter every minute (in-place modification for thread safety)
-        if elapsed >= 60:
-            git_counter["count"] = 0
-            git_counter["reset_time"] = now
-
-        if git_counter["count"] >= MAX_GIT_OPS_PER_MINUTE:
-            logger.warning("Rate limit exceeded: %s git ops/min", git_counter["count"])
-            return False
-
-        git_counter["count"] += 1
-        return True
 
 
 def _validate_git_command(git_args: List[str]) -> None:
@@ -576,7 +555,7 @@ async def git_status_mcp(request: GitStatusRequest) -> Metadata:
     Shows staged, unstaged, and untracked files
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -613,7 +592,7 @@ async def git_log_mcp(request: GitLogRequest) -> Metadata:
     Shows commit messages, authors, and dates
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -658,7 +637,7 @@ async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
     Compare working directory, staged changes, or commits
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -707,7 +686,7 @@ async def git_branch_mcp(request: GitBranchRequest) -> Metadata:
     Shows local and optionally remote branches
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -758,7 +737,7 @@ async def git_blame_mcp(request: GitBlameRequest) -> Metadata:
     Line-by-line authorship information
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -800,7 +779,7 @@ async def git_show_mcp(request: GitShowRequest) -> Metadata:
     Displays commit info and changes for specified ref
     """
     # Security checks
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -836,7 +815,7 @@ async def get_git_repo_info() -> Metadata:
     Returns list of allowed repositories and their status
     """
     # Security check
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     logger.info("Getting git repository info")
@@ -896,12 +875,12 @@ async def get_git_mcp_status() -> Metadata:
     - Configuration info
     """
 
-    async with _rate_limit_lock:
-        current_rate = git_counter["count"]
-        time_until_reset = max(
-            0,
-            60 - (now_utc() - git_counter["reset_time"]).total_seconds(),
-        )
+    remaining = await _rate_limiter.get_remaining_in_window(
+        _RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS
+    )
+    current_rate = MAX_GIT_OPS_PER_MINUTE - remaining
+    # A sliding window has no single reset instant; the window length bounds it.
+    time_until_reset = RATE_LIMIT_WINDOW_SECONDS if current_rate else 0
 
     return {
         "status": "operational",
@@ -945,7 +924,7 @@ async def list_git_resources() -> Metadata:
     - git://repo/branch/<name> - branch tip commit
     - git://repo/diff/<base>..<head> - diff between commits
     """
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     resources = []
@@ -1010,7 +989,7 @@ async def read_git_resource(request: Metadata) -> Metadata:
     - git://repo/branch/<name> - show branch tip commit
     - git://repo/diff/<base>..<head> - show diff between commits
     """
-    if not await check_rate_limit():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     uri = request.get("uri", "")
@@ -1030,7 +1009,7 @@ async def read_git_resource(request: Metadata) -> Metadata:
     try:
         if resource_type == "commit":
             # Show commit details
-            if not _COMMIT_REF_RE.match(identifier):
+            if not is_safe_ref(identifier):
                 raise HTTPException(status_code=400, detail="Invalid commit reference")
             result = await execute_git_command(repo_path, ["show", identifier])
             content = result["stdout"]
@@ -1048,7 +1027,7 @@ async def read_git_resource(request: Metadata) -> Metadata:
             # Show diff between commits
             if ".." in identifier:
                 base, head = identifier.split("..", 1)
-                if not _COMMIT_REF_RE.match(base) or not _COMMIT_REF_RE.match(head):
+                if not is_safe_ref(base) or not is_safe_ref(head):
                     raise HTTPException(status_code=400, detail="Invalid diff reference")
                 result = await execute_git_command(repo_path, ["diff", f"{base}..{head}"])
             else:

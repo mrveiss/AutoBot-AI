@@ -1,15 +1,61 @@
 {
-  "fixture_version": "1",
+  "fixture_version": "2",
   "trajectory_id": "code_fix_null_guard",
   "task_class": "code_fix",
   "inputs": {
-    "prompt": "The function crashes when the config dict is missing the 'timeout' key. Add a null guard that falls back to the module default."
+    "prompt": "This function crashes when the config dict is missing the 'timeout' key:\n\ndef connect(config):\n    return open_connection(config['host'], timeout=config['timeout'])\n\nAdd a null guard that falls back to the module default DEFAULT_TIMEOUT. Reply with the corrected function. Do not run anything."
   },
-  "expected_tools": ["read_file", "edit_file", "run_tests"],
+  "expected_tools": [],
+  "tool_match": "subsequence",
+  "allowed_tools": [],
+  "success_criteria": [
+    {
+      "type": "output_pattern",
+      "parameters": {
+        "pattern": "(?s)\\.(?:get|setdefault)\\(\\s*['\"]timeout['\"]\\s*,\\s*DEFAULT_TIMEOUT\\s*\\)|if\\s[^\\n]*['\"]timeout['\"][^\\n]*:\\s*\\n[^\\n]*DEFAULT_TIMEOUT|if\\s[^\\n]*['\"]timeout['\"][^\\n]*\\selse\\s+DEFAULT_TIMEOUT|DEFAULT_TIMEOUT\\s+if\\s[^\\n]*['\"]timeout['\"]|\\.get\\(\\s*['\"]timeout['\"]\\s*\\)\\s*or\\s+DEFAULT_TIMEOUT"
+      },
+      "description": "applies the fallback: .get('timeout', DEFAULT_TIMEOUT), a conditional expression, `or DEFAULT_TIMEOUT`, or an explicit branch that assigns DEFAULT_TIMEOUT"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {
+        "pattern": "(?ms)\\A(?!.*^[ \\t]*\\w+\\.get\\(\\s*['\"]timeout['\"]\\s*,\\s*DEFAULT_TIMEOUT\\s*\\)[ \\t]*$)"
+      },
+      "description": "does not discard the fallback (a bare .get('timeout', DEFAULT_TIMEOUT) statement whose value is never used)"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {
+        "pattern": "```"
+      },
+      "description": "answers with a code fence"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {
+        "pattern": "(?is)^(?!.*(?:i (?:do not|don't|cannot|can't|am unable to) (?:know|help|answer|assist)|i'm not sure|i am not sure|as an ai|unable to (?:help|answer|assist)|no information)).*$"
+      },
+      "description": "is not a refusal"
+    },
+    {
+      "type": "output_pattern",
+      "parameters": {
+        "pattern": "(?s)^.{60,}"
+      },
+      "description": "at least 60 characters"
+    },
+    {
+      "type": "resource_exists",
+      "parameters": {
+        "key": "no_tool_calls"
+      },
+      "description": "called no tool (the prompt says to run nothing)"
+    }
+  ],
   "baseline_score": 0.9,
   "expected_output": {
     "final_status": "completed",
-    "output_text_excerpt": "Added a guard that defaults timeout to DEFAULT_TIMEOUT when absent; ran the test suite and all tests pass."
+    "output_text_excerpt": "Added a guard that defaults timeout to DEFAULT_TIMEOUT when absent: config.get('timeout', DEFAULT_TIMEOUT)."
   },
   "agent_config": {
     "adapter_type": "autobot_agent"
