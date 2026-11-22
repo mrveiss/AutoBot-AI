@@ -87,7 +87,7 @@ _BACKSLASH_ESCAPES = frozenset({".sh", ".bash", ""})
 #: the very line it guards. The anchor was a heuristic; quote tracking is the
 #: actual answer, since a `/*` inside a string literal is data in every case the
 #: heuristic was approximating.
-_BLOCK_COMMENTS = frozenset({".ts", ".mts", ".cts", ".js", ".mjs", ".cjs", ".vue", ".json5"})
+BLOCK_COMMENT_SUFFIXES = frozenset({".ts", ".mts", ".cts", ".js", ".mjs", ".cjs", ".vue", ".json5"})
 
 
 class CodeLine(NamedTuple):
@@ -366,7 +366,7 @@ def _scan_regions(text: str) -> _FileScan:
 
 def _scan_file(text: str, suffix: str) -> _FileScan | None:
     """The block-comment pass over *text*; ``None`` for a suffix with no block comments."""
-    if suffix not in _BLOCK_COMMENTS:
+    if suffix not in BLOCK_COMMENT_SUFFIXES:
         return None
     if suffix == ".vue":
         return _scan_regions(text)
@@ -386,8 +386,8 @@ def unterminated_construct(source: str | Path, *, name: str | Path | None = None
 
     ``"block comment"`` or ``"quote"``: the rest of the file was read as that and every guard going through
     `code_lines` is blind to it. A suffix with no block comments is never unterminated. `code_lines` itself does not
-    raise on this -- about a hundred guards read through it -- so a file that does it is reported here. Nothing calls
-    this yet: the guard that runs it over the tracked tree waits on the scope record it must be registered in (#21571).
+    raise on this -- about a hundred guards read through it -- so a file that does it is reported here.
+    ``repo_tests/no_unterminated_construct_21571_test.py`` runs it over every tracked source file.
     """
     text, name = _read(source, name)
     scanned = _scan_file(text, Path(name).suffix if name is not None else "")

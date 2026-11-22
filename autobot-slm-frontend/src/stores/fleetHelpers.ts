@@ -9,7 +9,13 @@
  */
 
 import type { FleetUpdateSummary, SLMNode } from '@/types/slm'
+import i18n from '@/i18n'
 import { PartialListError } from '@/utils/fetchAllPages'
+
+/** The error for an action on a node the store does not hold; the text is translated (#21963). */
+export function nodeNotFoundError(nodeId: string): Error {
+  return new Error(i18n.global.t('fleet.errors.nodeNotFound', { nodeId }))
+}
 
 /**
  * Reconcile a single node's cached update summary with a fresh live-check

@@ -322,6 +322,7 @@ class TestCoworkerAuthz:
             new=AsyncMock(return_value="owner"),
         ).start()
         patch("llc.api.work_items._relations_to_list", new=AsyncMock(return_value=[])).start()
+        patch("llc.api.work_items.require_member_targets", new=AsyncMock()).start()  # membership: its own test file
         app = _make_app(org_id=org)
         client = TestClient(app, raise_server_exceptions=False)
         resp = client.post(
