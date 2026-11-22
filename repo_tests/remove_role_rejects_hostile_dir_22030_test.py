@@ -16,10 +16,11 @@ import subprocess  # nosec B404 -- runs ansible-playbook on the repo's own playb
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 pytestmark = pytest.mark.skipif(shutil.which("ansible-playbook") is None, reason="ansible not installed")
 
-_PLAYBOOK = Path(__file__).resolve().parents[1] / "ansible" / "playbooks" / "remove-role.yml"
+_PLAYBOOK = repo_root() / "autobot-slm-backend" / "ansible" / "playbooks" / "remove-role.yml"
 _SHAPE = "role_target_dir must be a relative path of plain segments"
 _ESCAPE = "resolves outside"
 
