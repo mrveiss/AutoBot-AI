@@ -161,4 +161,15 @@ def test_details_hash_the_way_postgresql_returns_them() -> None:
     assert chain.jsonb_form({"a": [1e22, 1.5e300, 1.0, 1e-07, 5, "x"]}) == {
         "a": [10**22, int("15" + "0" * 299), 1.0, 1e-07, 5, "x"]
     }
+    assert chain.jsonb_form({"z": [-0.0, 0.0]}) == {"z": [0.0, 0.0]}
+    assert chain.canonical_bytes({"d": chain.jsonb_form({"v": -0.0})}) == chain.canonical_bytes({"d": {"v": 0.0}})
     assert chain.canonical_bytes({"d": chain.jsonb_form({"v": 1e22})}) == chain.canonical_bytes({"d": {"v": 10**22}})
+
+
+def test_non_string_dict_keys_hash_as_the_strings_jsonb_returns() -> None:
+    """``{10: .., 2: ..}`` is stored with string keys, which sort lexically ("10" before "2")."""
+    form = chain.jsonb_form({10: "a", 2: "b", True: 1, None: 2, 1.5: 3, "n": {7: [{3: 4}]}})
+    assert form == {"10": "a", "2": "b", "true": 1, "null": 2, "1.5": 3, "n": {"7": [{"3": 4}]}}
+    assert chain.canonical_bytes({"d": chain.jsonb_form({10: 1, 2: 2})}) == chain.canonical_bytes(
+        {"d": {"10": 1, "2": 2}}
+    )

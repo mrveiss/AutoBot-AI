@@ -77,16 +77,28 @@ def _scalar(value: Any) -> Any:
     return value
 
 
+def _json_key(key: Any) -> str:
+    """A dict key as ``json.dumps`` writes it: JSONB keys are always strings, and they sort as strings."""
+    if isinstance(key, str):
+        return key
+    if key is None or isinstance(key, bool):
+        return json.dumps(key)
+    return repr(key) if isinstance(key, float) else str(key)
+
+
 def jsonb_form(value: Any) -> Any:
     """*value* as PostgreSQL JSONB hands it back, so the hash taken before the insert equals the one after the read.
 
     JSONB stores numbers as ``numeric``: a float written with a positive exponent (``1e+22``) comes back as a plain
-    integer, while ``1.0`` keeps its scale and comes back as a float. Everything else round-trips unchanged.
+    integer, while ``1.0`` keeps its scale and comes back as a float; ``-0.0`` comes back as ``0.0``; dict keys come
+    back as strings. Everything else round-trips unchanged.
     """
     if isinstance(value, dict):
-        return {k: jsonb_form(v) for k, v in value.items()}
+        return {_json_key(k): jsonb_form(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [jsonb_form(v) for v in value]
+    if isinstance(value, float) and value == 0:
+        return 0.0  # numeric has no negative zero
     if isinstance(value, float) and "e+" in repr(value):
         return int(Decimal(repr(value)))
     return value

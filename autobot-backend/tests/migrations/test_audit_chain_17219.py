@@ -407,3 +407,9 @@ async def test_float_details_with_an_exponent_keep_the_same_hash_after_jsonb(mig
     sessions, _ = migrated
     await _insert(sessions, 1, details={"big": 1e22, "huge": 1.5e300, "one": 1.0, "tiny": 1e-07, "n": [1e16, 2.5]})
     assert (await _verify()).ok
+
+
+async def test_negative_zero_and_non_string_keys_keep_the_same_hash_after_jsonb(migrated) -> None:
+    sessions, _ = migrated
+    await _insert(sessions, 1, details={"z": -0.0, "k": {10: "a", 2: "b"}, 3: [-0.0, {7: 1.5}]})
+    assert (await _verify()).ok
