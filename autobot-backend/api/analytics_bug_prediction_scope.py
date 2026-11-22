@@ -12,6 +12,7 @@ source.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from api.codebase_analytics.endpoints.shared import resolve_scan_root
@@ -38,6 +39,21 @@ def scoped_key(base: str, source_id: str) -> str:
 def file_in_source(root: Path, file_path: str) -> Path:
     """``file_path`` (relative to the source root) as an existing path inside that root, or a 4xx."""
     return require_contained_relative_path(file_path, root, must_exist=True)
+
+
+def contained_files(root: Path, candidates: Iterable[Path]) -> Iterator[Path]:
+    """The candidates that are real paths inside ``root``: a symlink, or anything resolving outside, is dropped.
+
+    ``rglob`` follows a symlinked ``*.py`` to its target, and the analysis would then read a host file
+    the source never contained.
+    """
+    real_root = root.resolve()
+    for candidate in candidates:
+        try:
+            if not candidate.is_symlink() and candidate.resolve().is_relative_to(real_root):
+                yield candidate
+        except OSError:
+            continue
 
 
 def relative_to_root(file_path: Path, root: Path) -> str:

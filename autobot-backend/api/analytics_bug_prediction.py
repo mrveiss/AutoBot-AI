@@ -13,13 +13,20 @@ and targeted testing suggestions.
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
+from itertools import islice
 from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
 
 from api.analytics_bug_prediction_cache import get_cached_prediction, set_cached_prediction
-from api.analytics_bug_prediction_scope import file_in_source, relative_to_root, scan_root, scoped_key
+from api.analytics_bug_prediction_scope import (
+    contained_files,
+    file_in_source,
+    relative_to_root,
+    scan_root,
+    scoped_key,
+)
 from api.analytics_shared import no_data_response
 from api.codebase_analytics.endpoints.shared import require_source_access
 from api.codebase_analytics.task_routes import add_clear_stuck_route
@@ -634,7 +641,7 @@ def _find_files_sync(root: Path, include_pattern: str, limit: int) -> List[Path]
     result = []
     try:
         if root.is_dir():
-            result = list(root.rglob(include_pattern))[:limit]
+            result = list(islice(contained_files(root, root.rglob(include_pattern)), limit))
     except Exception as e:
         logger.debug("Path traversal error: %s", e)
     return result
