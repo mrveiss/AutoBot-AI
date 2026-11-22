@@ -55,6 +55,7 @@ from models.heartbeat import (
     HeartbeatRun,
     HeartbeatStatus,
     WakeupTrigger,
+    new_control_id,
 )
 from services.audit.taxonomy import AuditAction
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
@@ -456,6 +457,7 @@ async def set_agent_error(
     state.error_detail = body.error_detail
     state.error_at = now_utc()
     state.error_code = body.error_code
+    state.control_id = new_control_id()
     await session.commit()
     await session.refresh(state)
     await scheduler.disable_agent(agent_id)
@@ -488,6 +490,7 @@ async def recover_agent(
     state.error_detail = None
     state.error_at = None
     state.error_code = None
+    state.control_id = new_control_id()
     await session.commit()
     await session.refresh(state)
     await scheduler.enable_agent(agent_id, state.heartbeat_interval_seconds)

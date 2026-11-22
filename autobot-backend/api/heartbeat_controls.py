@@ -15,7 +15,6 @@ The restore is best-effort: a newer control (``superseded``) or a database error
 the row as it is, and the ``failed`` row names which. The trail never claims a change that did not happen.
 """
 
-import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -25,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
-from models.heartbeat import AgentRuntimeState, HeartbeatStatus
+from models.heartbeat import AgentRuntimeState, HeartbeatStatus, new_control_id
 from services.audit.outcome import FAILED, SUCCESS, record_audit_attempt, record_audit_outcome
 from services.audit.taxonomy import AuditAction, AuditCategory, AuditEvent, action_name
 
@@ -63,12 +62,12 @@ class Control:
 def halt_changes(status: HeartbeatStatus, actor: str, reason: str | None) -> dict[str, Any]:
     """The columns a pause or terminate writes: the new status and who stopped the agent, when and why."""
     halt = {"status": status.value, "paused_reason": reason, "paused_at": now_utc(), "paused_by": actor}
-    return {**halt, "control_id": uuid.uuid4()}
+    return {**halt, "control_id": new_control_id()}
 
 
 def resume_changes() -> dict[str, Any]:
     """The columns a resume writes: ACTIVE, with the pause record cleared."""
-    cleared = {"paused_reason": None, "paused_at": None, "paused_by": None, "control_id": uuid.uuid4()}
+    cleared = {"paused_reason": None, "paused_at": None, "paused_by": None, "control_id": new_control_id()}
     return {"status": HeartbeatStatus.ACTIVE.value, **cleared}
 
 
@@ -92,7 +91,7 @@ async def _restore(
         if any(getattr(state, column) != control.changes[column] for column in _IDENTITY_COLUMNS):
             await session.rollback()
             return SUPERSEDED
-        await _commit_changes(session, state, {**prior, "control_id": uuid.uuid4()})  # the restore is a control too
+        await _commit_changes(session, state, {**prior, "control_id": new_control_id()})  # the restore is a control too
     except Exception as exc:  # noqa: BLE001 -- reported through the outcome row; the caller still gets the 503
         logger.error(
             "heartbeat: could not restore %s after a scheduler failure: %s", control.agent_id, type(exc).__name__

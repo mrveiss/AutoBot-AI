@@ -68,6 +68,12 @@ class HeartbeatStatus(str, Enum):
     TERMINATED = "terminated"
 
 
+def new_control_id() -> uuid.UUID:
+    """A fresh ``control_id``: every writer of an agent's status stamps one, so a failed control can tell its
+    own change from any newer one, even one that wrote the same status and actor (#21376)."""
+    return uuid.uuid4()
+
+
 class AgentRuntimeState(Base):
     """Persistent runtime state per agent, survives restarts (#1407)."""
 
@@ -105,6 +111,7 @@ class AgentRuntimeState(Base):
     @heartbeat_enabled.setter
     def heartbeat_enabled(self, value: bool) -> None:
         self.status = HeartbeatStatus.ACTIVE.value if value else HeartbeatStatus.DISABLED.value
+        self.control_id = new_control_id()
         if value:
             # Clear pause metadata whenever the agent is re-enabled (P1: GH#6476)
             self.paused_reason = None
