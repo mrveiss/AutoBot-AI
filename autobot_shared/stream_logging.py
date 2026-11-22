@@ -38,6 +38,20 @@ from pathlib import Path
 
 _UVICORN_LOG_CONFIG_PATH = Path(__file__).parent / "uvicorn_log_config.json"
 
+# Set by route_console_to_stderr(): the process's stdout is a machine interface (#22044).
+_stdout_is_machine_interface = False
+
+
+def route_console_to_stderr() -> None:
+    """Make every stdout log handler built from now on write to stderr (#22044).
+
+    For a CLI whose stdout is parsed (the deletion planner's JSON, read by ansible). Call it
+    before importing a module that calls ``get_logger`` at import time: handlers made earlier
+    keep the stream they were built with.
+    """
+    global _stdout_is_machine_interface
+    _stdout_is_machine_interface = True
+
 
 class MaxLevelFilter(logging.Filter):
     """Reject any log record at or above ``max_level``.
@@ -85,8 +99,8 @@ class EmitOnceFilter(logging.Filter):
 
 
 def build_stdout_handler(formatter: logging.Formatter | None = None) -> logging.StreamHandler:
-    """Build a DEBUG/INFO handler writing to stdout (WARNING+ filtered out)."""
-    handler = logging.StreamHandler(sys.stdout)
+    """Build a DEBUG/INFO handler writing to stdout (WARNING+ filtered out); stderr after route_console_to_stderr()."""
+    handler = logging.StreamHandler(sys.stderr if _stdout_is_machine_interface else sys.stdout)
     if formatter is not None:
         handler.setFormatter(formatter)
     handler.addFilter(MaxLevelFilter(logging.WARNING))
