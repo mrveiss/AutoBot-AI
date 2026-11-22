@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS conversation_files (
     file_hash TEXT NOT NULL,                       -- SHA-256 hash for deduplication and integrity
     mime_type TEXT,                                -- MIME type (e.g., 'image/png', 'application/pdf')
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    uploaded_by TEXT,                              -- User identifier (optional for multi-user support)
+    uploaded_by TEXT,                              -- Who wrote the file (user or agent name); not who pays
+    quota_owner TEXT,                              -- Who the bytes are charged to (#20678); NULL = uploaded_by
     is_deleted INTEGER DEFAULT 0,                  -- Soft delete flag (0=active, 1=deleted)
     deleted_at TIMESTAMP NULL,                     -- Deletion timestamp
 
@@ -64,14 +65,14 @@ CREATE TABLE IF NOT EXISTS session_file_associations (
 CREATE TABLE IF NOT EXISTS file_access_log (
     log_id INTEGER PRIMARY KEY AUTOINCREMENT,
     file_id TEXT NOT NULL,                         -- Foreign key to conversation_files
-    access_type TEXT NOT NULL,                     -- Type: 'upload', 'download', 'view', 'delete'
+    access_type TEXT NOT NULL,                     -- Type: 'upload', 'download', 'view', 'delete', 'restore', 'reference' (#21404)
     accessed_by TEXT,                              -- User identifier
     accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     access_metadata TEXT,                          -- JSON for additional context (IP, user agent, etc.)
 
     -- Constraints
     FOREIGN KEY (file_id) REFERENCES conversation_files(file_id) ON DELETE CASCADE,
-    CHECK (access_type IN ('upload', 'download', 'view', 'delete', 'restore'))
+    CHECK (access_type IN ('upload', 'download', 'view', 'delete', 'restore', 'reference'))
 );
 
 -- file_cleanup_queue: Queue for scheduled file cleanup operations

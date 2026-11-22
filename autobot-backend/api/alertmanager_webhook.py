@@ -10,7 +10,6 @@ Security: GH#9657 - Added webhook authentication (fail-closed)
 """
 
 import os
-import secrets
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -24,6 +23,7 @@ from api.schemas_system import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.constant_time import secure_compare
 
 logger = get_logger(__name__)
 
@@ -55,7 +55,7 @@ async def verify_alertmanager_secret(request: Request) -> None:
             detail="Missing authentication header",
         )
 
-    if not secrets.compare_digest(request_secret, webhook_secret):
+    if not secure_compare(request_secret, webhook_secret):
         logger.warning("AlertManager webhook authentication failed - invalid secret")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

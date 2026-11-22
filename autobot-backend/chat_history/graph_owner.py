@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 
 from autobot_memory_graph.owner_scope import OwnerScope, OwnerScopeRequired
 from autobot_shared.logging_manager import get_logger
+from chat_history.owner_keys import graph_owner_from_metadata
 
 logger = get_logger(__name__)
 
@@ -15,13 +16,14 @@ logger = get_logger(__name__)
 def session_owner_scope(metadata: Dict[str, Any] | None) -> OwnerScope:
     """OwnerScope recorded in a session's stored metadata.
 
-    Uses the same identity the session entity is written under (``user_id``, else the
-    ``owner`` / ``username`` stamped by ``build_owner_metadata``) plus ``org_id``. A
+    Uses the same identity the session entity is written under: ``graph_owner_from_metadata``
+    (``user_id``, else the ``owner`` / ``username`` stamped by ``build_owner_metadata``; the
+    order is ``owner_keys.GRAPH_OWNER_KEYS``, #20928) plus ``org_id``. A
     session with no recorded owner (CLI, tests) maps to ``OwnerScope.system()``: the
     entity still exists but no user-scoped read can see it -- never ownerless-visible.
     """
     meta = metadata or {}
-    user = meta.get("user_id") or meta.get("owner") or meta.get("username")
+    user = graph_owner_from_metadata(meta)
     if not user:
         return OwnerScope.system()
     try:

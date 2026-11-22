@@ -30,7 +30,7 @@ async def _dispatch(status: LLCRunStatus, billing, session: FakeAsyncSession, in
         patch(f"{_HBS}._issue_run_key", AsyncMock(return_value=(None, None))),
         patch(f"{_HBS}._revoke_run_key", AsyncMock()),
         patch(f"{_HBS}.get_async_session_factory", return_value=factory),
-        patch(f"{_HBS}.BudgetService.ingest_cost_event", new=ingest),
+        patch("llc.services.budget.BudgetService.ingest_cost_event", new=ingest),
     ):
         await _dispatch_registry_adapter(adapter, dict(_AGENT), {})
 

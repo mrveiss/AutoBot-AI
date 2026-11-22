@@ -87,7 +87,7 @@ async function getServiceLogs(): Promise<void> {
 <template>
   <div>
     <!-- Info Banner -->
-    <div class="mb-6 flex items-center gap-2 text-sm text-gray-600 bg-white rounded-lg p-3 border border-gray-200">
+    <div class="mb-6 flex items-center gap-2 text-sm text-autobot-text-secondary bg-white rounded-lg p-3 border border-autobot-border">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
       </svg>
@@ -102,7 +102,7 @@ async function getServiceLogs(): Promise<void> {
         @click="selectTool(tool.id)"
         :disabled="!tool.available"
         :class="[
-          'bg-white rounded-lg shadow-xs border border-gray-200 p-6 text-left transition-all',
+          'bg-white rounded-lg shadow-xs border border-autobot-border p-6 text-left transition-all',
           tool.available
             ? 'hover:shadow-md hover:border-primary-300 cursor-pointer'
             : 'opacity-50 cursor-not-allowed',
@@ -125,23 +125,23 @@ async function getServiceLogs(): Promise<void> {
             </svg>
           </div>
           <div>
-            <h3 class="font-medium text-gray-900">{{ tool.name }}</h3>
-            <p class="text-sm text-gray-500 mt-1">{{ tool.description }}</p>
+            <h3 class="font-medium text-autobot-text-primary">{{ tool.name }}</h3>
+            <p class="text-sm text-autobot-text-tertiary mt-1">{{ tool.description }}</p>
           </div>
         </div>
       </button>
     </div>
 
     <!-- Tool Interface Panel -->
-    <div v-if="activeTool" class="bg-white rounded-lg shadow-xs border border-gray-200">
+    <div v-if="activeTool" class="bg-white rounded-lg shadow-xs border border-autobot-border">
       <!-- Panel Header -->
-      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-        <h2 class="text-lg font-semibold text-gray-900">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">
+        <h2 class="text-lg font-semibold text-autobot-text-primary">
           {{ tools.find(t => t.id === activeTool)?.name }}
         </h2>
         <button
           @click="closeTool"
-          class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          class="p-2 text-autobot-text-tertiary hover:text-autobot-text-secondary hover:bg-autobot-bg-hover rounded-lg transition-colors"
           :aria-label="$t('fleet.fleetToolsTab.closeToolPanel')"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -156,10 +156,10 @@ async function getServiceLogs(): Promise<void> {
         <div v-if="activeTool === 'log-viewer'" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.selectNode') }}</label>
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('fleet.fleetToolsTab.selectNode') }}</label>
               <select
                 v-model="selectedNode"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="">{{ $t('fleet.fleetToolsTab.selectANode') }}</option>
                 <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
@@ -168,19 +168,19 @@ async function getServiceLogs(): Promise<void> {
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.serviceName') }}</label>
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('fleet.fleetToolsTab.serviceName') }}</label>
               <input
                 type="text"
                 v-model="selectedService"
                 :placeholder="$t('fleet.fleetToolsTab.eGAutobotAgent')"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.lines') }}</label>
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('fleet.fleetToolsTab.lines') }}</label>
               <select
                 v-model="logLines"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option :value="50">{{ $t('fleet.fleetToolsTab.50Lines') }}</option>
                 <option :value="100">{{ $t('fleet.fleetToolsTab.100Lines') }}</option>
@@ -205,15 +205,15 @@ async function getServiceLogs(): Promise<void> {
         <!-- Redis CLI Tool -->
         <div v-else-if="activeTool === 'redis-cli'" class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.redisCommand') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('fleet.fleetToolsTab.redisCommand') }}</label>
             <input
               type="text"
               v-model="redisCommand"
               :placeholder="$t('fleet.fleetToolsTab.eGPINGINFOKEYS')"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
             />
           </div>
-          <p class="text-xs text-gray-500">
+          <p class="text-xs text-autobot-text-tertiary">
             {{ $t('fleet.fleetToolsTab.commandWillBeExecuted') }}
           </p>
           <button
@@ -233,10 +233,10 @@ async function getServiceLogs(): Promise<void> {
         <div v-else-if="activeTool === 'ansible-runner'" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.selectNode') }}</label>
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('fleet.fleetToolsTab.selectNode') }}</label>
               <select
                 v-model="selectedNode"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="">{{ $t('fleet.fleetToolsTab.selectANode') }}</option>
                 <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
@@ -245,16 +245,16 @@ async function getServiceLogs(): Promise<void> {
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.command') }}</label>
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('fleet.fleetToolsTab.command') }}</label>
               <input
                 type="text"
                 v-model="shellCommand"
                 :placeholder="$t('fleet.fleetToolsTab.eGUptimeDfHFree')"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
+                class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
               />
             </div>
           </div>
-          <p class="text-xs text-gray-500">
+          <p class="text-xs text-autobot-text-tertiary">
             {{ $t('fleet.fleetToolsTab.runShellCommandsOn') }}
           </p>
           <button
@@ -275,8 +275,8 @@ async function getServiceLogs(): Promise<void> {
 
         <!-- Result Output -->
         <div v-if="result" class="mt-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.fleetToolsTab.output') }}</label>
-          <pre class="p-4 bg-gray-900 text-gray-100 rounded-lg overflow-auto max-h-96 text-sm font-mono whitespace-pre-wrap">{{ result }}</pre>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('fleet.fleetToolsTab.output') }}</label>
+          <pre class="p-4 bg-autobot-bg-tertiary text-autobot-text-primary rounded-lg overflow-auto max-h-96 text-sm font-mono whitespace-pre-wrap">{{ result }}</pre>
         </div>
       </div>
     </div>

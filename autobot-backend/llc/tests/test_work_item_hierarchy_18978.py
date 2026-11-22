@@ -32,6 +32,7 @@ from llc.services.work_item_hierarchy import (
     ProjectRequired,
     count_items_without_project,
     find_hierarchy_violations,
+    move_subtree_to_project,
     parent_if_allowed,
 )
 from llc.services.work_item_service import WorkItemService
@@ -248,7 +249,9 @@ async def test_the_read_only_report_names_invalid_rows_and_changes_nothing(sessi
     epic = await _make(session, T.EPIC, project=PROJECT)
     bad = await _legacy(session, T.TASK, parent_id=epic.id, project_id=PROJECT)
     no_project = await _legacy(session, T.EPIC)
-    found = {v["id"]: v["reason"] for v in await find_hierarchy_violations(session, COMPANY)}
+    rows, truncated = await find_hierarchy_violations(session, COMPANY)
+    found = {v["id"]: v["reason"] for v in rows}
+    assert truncated is False
     assert set(found) == {str(bad.id), str(no_project.id)}
     await session.refresh(bad)
     assert bad.parent_id == epic.id
@@ -413,3 +416,77 @@ async def test_a_system_made_item_keeps_a_projectless_parent_when_it_brings_a_pr
     get = WorkItemService().get
     assert await parent_if_allowed(session, get, COMPANY, T.TASK, str(old_pbi.id), PROJECT) == str(old_pbi.id)
     assert await parent_if_allowed(session, get, COMPANY, T.TASK, str(old_pbi.id)) is None
+
+
+async def test_a_project_id_is_compared_as_a_uuid_not_as_text(session):
+    epic = await _make(session, T.EPIC, project=PROJECT)
+    pbi = await _make(session, T.PBI, parent=epic, project=PROJECT.replace("-", ""))  # same project, other spelling
+    assert str(pbi.project_id) == PROJECT
+
+
+async def test_moving_a_subtree_reaches_every_depth_before_writing(session):
+    root = await _legacy(session, T.EPIC, project_id=PROJECT)
+    parent, chain = root, []
+    for _ in range(40):  # deeper than the ancestor-walk limit
+        parent = await _legacy(session, T.SUBTASK, parent_id=parent.id, project_id=PROJECT)
+        chain.append(parent)
+    other = uuid.uuid4()
+    await _ensure_project(session, COMPANY, str(other))
+    assert await move_subtree_to_project(session, root.id, other, uuid.UUID(COMPANY)) == 40
+    for row in chain:
+        await session.refresh(row)
+        assert row.project_id == other
+
+
+async def test_detaching_a_projectless_legacy_item_enforces_the_project_rule(session):
+    epic = await _legacy(session, T.EPIC)
+    pbi = await _legacy(session, T.PBI, parent_id=epic.id)  # legacy: neither has a project
+    with pytest.raises(ProjectRequired):
+        await WorkItemService().update(session, str(pbi.id), parent_id=None)
+    await session.refresh(pbi)
+    assert pbi.parent_id == epic.id
+
+
+async def test_detaching_an_item_that_has_a_project_is_allowed_and_a_noop_detach_stays_a_noop(session):
+    epic = await _make(session, T.EPIC, project=PROJECT)
+    pbi = await _make(session, T.PBI, parent=epic)
+    await WorkItemService().update(session, str(pbi.id), parent_id=None)
+    await session.refresh(pbi)
+    assert pbi.parent_id is None and str(pbi.project_id) == PROJECT
+    legacy = await _legacy(session, T.EPIC)  # no parent, no project: nothing changes, so nothing is checked
+    assert (await WorkItemService().update(session, str(legacy.id), title="x", parent_id=None)).title == "x"
+
+
+async def test_unfiled_recovery_with_no_work_item_lands_in_the_company_activity_feed(session):
+    """Company users read the activity feed (it is pushed live to the dashboard); the router notice alone
+    has no reader in the UI (#20930)."""
+    from llc.models.activity import LLCActivityLog
+
+    _, company, run = await _unfiled_run_recovery(session)
+    rows = (
+        (await session.execute(select(LLCActivityLog).where(LLCActivityLog.company_id == uuid.UUID(company))))
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    entry = rows[0]
+    assert entry.action == "heartbeat.failed" and str(entry.entity_id) == str(run.id)
+    assert entry.log_metadata["reason"] == "recovery_unfiled" and "agent-007" in entry.log_metadata["message"]
+
+
+async def test_a_failed_unfiled_recovery_activity_write_does_not_fail_the_recovery(session):
+    """The feed entry is best-effort: its failure is logged and the router notice still goes out."""
+    redis = AsyncMock()
+    run = SimpleNamespace(id=uuid.uuid4())
+    with (
+        patch.object(LivenessMonitor, "_resolve_manager", new=AsyncMock(return_value=None)),
+        patch("llc.scheduler.liveness_monitor.get_async_redis_client", new=AsyncMock(return_value=redis)),
+        patch("llc.scheduler.liveness_monitor.audit", new=AsyncMock(side_effect=RuntimeError("feed down"))),
+        patch("llc.scheduler.liveness_monitor.logger") as log,
+    ):
+        await LivenessMonitor(poll_interval=9999)._create_recovery_item(
+            session, run, None, str(uuid.uuid4()), "agent-007"
+        )
+    redis.publish.assert_awaited_once()
+    assert any("not written" in c.args[0] for c in log.warning.call_args_list)
+    assert log.warning.call_args.kwargs.get("exc_info") is True

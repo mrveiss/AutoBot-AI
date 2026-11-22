@@ -72,6 +72,7 @@ class ApprovalSource(str, Enum):
     SKILL_GOVERNANCE = "skill_governance"
     COMPANY = "company"
     MCP_TOOL_SCHEMA = "mcp_tool_schema"
+    WORKFLOW_STEP = "workflow_step"  # a step of an automated workflow waiting for its owner (#20917)
 
 
 class Approval(Base):
@@ -243,6 +244,40 @@ Index(
 ).ddl_if(dialect="postgresql")
 
 
+#: One PENDING run-record cleanup proposal per deleted code source, enforced by the database (#21417).
+#: Two deletes can both pass the "already proposed" read. PostgreSQL only, like the file-cleanup index above.
+PENDING_SOURCE_RUN_RECORD_INDEX = "uq_approvals_pending_source_run_record_cleanup"
+PENDING_SOURCE_RUN_RECORD_WHERE = "status = 'pending' AND context ->> 'action' = 'source_run_record_cleanup'"
+Index(
+    PENDING_SOURCE_RUN_RECORD_INDEX,
+    Approval.context["source_id"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_SOURCE_RUN_RECORD_WHERE),
+).ddl_if(dialect="postgresql")
+
+
+#: One PENDING knowledge-base cleanup proposal per target, enforced by the database (#20992): the connector
+#: credential strip (per connector) and the empty-collection delete (per collection). The proposers read for an
+#: open proposal and then create one; only a unique index makes the second concurrent insert fail.
+PENDING_CONNECTOR_CREDENTIAL_INDEX = "uq_approvals_pending_connector_credential_strip"
+PENDING_CONNECTOR_CREDENTIAL_WHERE = "status = 'pending' AND context ->> 'action' = 'connector_credential_strip'"
+Index(
+    PENDING_CONNECTOR_CREDENTIAL_INDEX,
+    Approval.context["connector_id"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_CONNECTOR_CREDENTIAL_WHERE),
+).ddl_if(dialect="postgresql")
+
+PENDING_EMPTY_COLLECTION_INDEX = "uq_approvals_pending_empty_collection_delete"
+PENDING_EMPTY_COLLECTION_WHERE = "status = 'pending' AND context ->> 'action' = 'chroma_empty_collection_delete'"
+Index(
+    PENDING_EMPTY_COLLECTION_INDEX,
+    Approval.context["collection"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_EMPTY_COLLECTION_WHERE),
+).ddl_if(dialect="postgresql")
+
+
 #: One PENDING owner proposal per chat session, enforced by the database (#20030). Two admins' requests
 #: can both pass the application-level "already pending" read; only a unique index makes the second
 #: insert fail, and the route answers it 409. Partial, so it constrains nothing but pending rows of
@@ -269,6 +304,18 @@ Index(
     Approval.context["node_id"].astext,
     unique=True,
     postgresql_where=text(PENDING_SSH_CREDENTIAL_WHERE),
+).ddl_if(dialect="postgresql")
+
+
+#: One PENDING internal-key realign proposal per node, enforced by the database (#20750): the same race as
+#: above, on the updater's propose call. The route returns the winner's proposal.
+PENDING_KEY_REALIGN_INDEX = "uq_approvals_pending_key_realign"
+PENDING_KEY_REALIGN_WHERE = "status = 'pending' AND context ->> 'action' = 'slm_backend_internal_key_realign'"
+Index(
+    PENDING_KEY_REALIGN_INDEX,
+    Approval.context["node_id"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_KEY_REALIGN_WHERE),
 ).ddl_if(dialect="postgresql")
 
 

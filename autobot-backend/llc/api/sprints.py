@@ -44,8 +44,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from llc.deps import get_session
 from llc.deps import load_owned_project as _load_owned_project
+from llc.deps import log_unexpected
 from user_management.services import TenantContext
 
 from ..models.enums import ApprovalType, SprintStatus, WorkItemRelationType, WorkItemStatus
@@ -59,6 +61,7 @@ from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..services.timeline import compute_critical_path, duration_days
 from ._common import actor_id
+from ._named_agent import require_member_targets
 from .sprint_access import require_sprint_in_org
 
 logger = get_logger(__name__)
@@ -235,18 +238,13 @@ class SprintResponse(BaseModel):
 
 class SprintCloseRequest(BaseModel):
     approval_id: uuid.UUID
-    decided_by: Optional[uuid.UUID] = None  # deprecated and ignored: the decider is the authenticated caller
 
 
 # ------------------------------------------------------------------ Portfolio routes
 
 
-# ---------------------------------------------------------------------------
-# Card-enrichment aggregation helpers (#10232)
-#
-# Each returns a {parent_id: value} map computed with a single grouped query so
-# list endpoints stay O(1) queries — never N+1 per card.
-# ---------------------------------------------------------------------------
+# Card-enrichment aggregation helpers (#10232): each returns a {parent_id: value} map from ONE grouped query,
+# so list endpoints stay O(1) queries -- never N+1 per card.
 _OPEN_WORK_ITEM_STATUSES = [s.value for s in WorkItemStatus if s not in (WorkItemStatus.DONE, WorkItemStatus.CANCELLED)]
 
 
@@ -308,10 +306,7 @@ async def _enrich_projects(session: AsyncSession, projects: List[LLCProject]) ->
     enriched: List[ProjectResponse] = []
     for p in projects:
         resp = _enrich(
-            ProjectResponse,
-            p,
-            open_work_item_count=open_counts.get(p.id, 0),
-            active_sprint_name=active.get(p.id),
+            ProjectResponse, p, open_work_item_count=open_counts.get(p.id, 0), active_sprint_name=active.get(p.id)
         )
         resp.code_source = await _project_source_summary(p.code_source_id)
         enriched.append(resp)
@@ -572,6 +567,7 @@ async def create_project(
     prog = (await session.execute(select(LLCProgram).where(LLCProgram.id == program_id))).scalar_one_or_none()
     if prog is None or str(prog.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Program not found")
+    await require_member_targets(session, prog.company_id, body.lead_user_id, body.lead_agent_id)
     project = LLCProject(
         # #10261: derive tenant from the validated parent, never trust body.company_id.
         company_id=prog.company_id,
@@ -694,6 +690,7 @@ async def update_project(
     # IDOR guard (#10148).
     if project is None or str(project.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
+    await require_member_targets(session, project.company_id, body.lead_user_id, body.lead_agent_id)
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(project, field, value)
     await session.commit()
@@ -910,8 +907,8 @@ async def delete_sprint(
         from llc.kb.collections import KbCollectionManager  # noqa: PLC0415
 
         await KbCollectionManager().drop_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
-    except Exception:  # noqa: BLE001 - defensive; drop_collection does not raise
-        logger.warning("Could not drop KB collection for sprint %s", sprint_id, exc_info=True)
+    except Exception as exc:  # noqa: BLE001 - defensive; drop_collection does not raise
+        log_unexpected(logger, f"sprints.drop_kb_collection {sprint_id}", exc)
 
 
 @router.post("/sprints/{sprint_id}/close", response_model=SprintResponse)
@@ -941,7 +938,7 @@ async def close_sprint(
     except (ApprovalNotFoundError, ApprovalStateError) as exc:
         raise HTTPException(status_code=422, detail="Internal server error") from exc
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=400, detail="Internal server error") from exc
 
 
@@ -965,7 +962,7 @@ async def get_sprint_capacity(
     try:
         return await _planning_svc.get_capacity(session, sprint_id)
     except SprintNotFound as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error") from exc
 
 
@@ -1086,7 +1083,7 @@ async def get_sprint_burndown(
     try:
         return await _planning_svc.get_burndown(session, sprint_id)
     except SprintNotFound as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error") from exc
 
 
@@ -1108,11 +1105,9 @@ async def get_project_knowledge(
     proj = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
     if proj is None or str(proj.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
-    from autobot_shared.singleton_factory import lazy_singleton
+    from ..services.accessors import get_work_product_service
 
-    from ..services.work_product_service import WorkProductService
-
-    svc = lazy_singleton(WorkProductService)()
+    svc = get_work_product_service()
     artifacts = await svc.list_indexed_by_project(
         session=None,  # type: ignore[arg-type]  — no DB needed, reads ChromaDB directly
         project_id=str(project_id),
@@ -1210,6 +1205,6 @@ async def get_sprint_agent_scorecard(
     try:
         scorecard = await _scorecard_svc.build(session, sprint_id)
     except SprintNotFound as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error") from exc
     return SprintScorecardResponse(**scorecard.to_dict())

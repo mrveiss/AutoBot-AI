@@ -31,7 +31,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
-from config import cfg
+from config import config_manager as cfg
 
 # Import existing AutoBot components
 from knowledge.backends import get_default_client
@@ -345,8 +345,8 @@ class NPUSemanticSearch:
             return await self._search_with_llamaindex(query, similarity_top_k, filters), "knowledge_base"
 
         logger.warning("Vector store not available, using basic search fallback")
-        basic_results = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, mode="text")
-        return self._convert_basic_results(basic_results, "cpu_fallback"), "cpu_fallback"
+        hits = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, hardware_backend="cpu")
+        return self._convert_basic_results(hits, "cpu_fallback"), "cpu_fallback"  # KB.search gated it (#19144)
 
     def _hybrid_populated(self) -> bool:
         """True when the hybrid FAISS index holds vectors, so a search would be in its space. #18185."""
@@ -392,8 +392,8 @@ class NPUSemanticSearch:
     ) -> Tuple[List[NpuSearchResult], SearchMetrics]:
         """Handle search error with fallback."""
         logger.error("❌ Enhanced search failed: %s", error)
-        basic_results = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, mode="auto")
-        fallback_results = self._convert_basic_results(basic_results, "fallback")
+        hits = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, hardware_backend="cpu")
+        fallback_results = self._convert_basic_results(hits, "fallback")  # KB.search gated it (#19144)
         total_time = (time.time() - start_time) * 1000
 
         fallback_metrics = SearchMetrics(
@@ -1068,9 +1068,6 @@ class NPUSemanticSearch:
             doc_metadata: Base metadata dictionary
             doc_id: Document ID
             modality: Source modality type
-
-        Returns:
-            None
         """
         if modality == "multimodal" or not self.ai_accelerator:
             return
@@ -1084,7 +1081,8 @@ class NPUSemanticSearch:
 
             multimodal_collection = self.collections.get("multimodal")
             if multimodal_collection:
-                multimodal_collection.add(
+                await asyncio.to_thread(  # leased write waits: keep it off the event loop (#20992)
+                    multimodal_collection.add,
                     embeddings=[embedding.tolist()],
                     metadatas=[fused_metadata],
                     documents=[str(content)],
@@ -1138,7 +1136,7 @@ class NPUSemanticSearch:
             doc_metadata = self._prepare_document_metadata(content, modality, metadata)
             doc_id = self._generate_document_id(modality, doc_id)
 
-            self._store_in_collection(modality, embedding, content, doc_metadata, doc_id)
+            await asyncio.to_thread(self._store_in_collection, modality, embedding, content, doc_metadata, doc_id)
             await self._store_in_multimodal_collection(embedding, content, doc_metadata, doc_id, modality)
 
             logger.info("✅ Stored %s content with ID: %s", modality, doc_id)
@@ -1226,7 +1224,8 @@ class NPUSemanticSearch:
             )
 
             collection = self.collections["code"]
-            collection.add(
+            await asyncio.to_thread(  # leased write waits: keep it off the event loop (#20992)
+                collection.add,
                 embeddings=[embedding.tolist()],
                 metadatas=[doc_metadata],
                 documents=[code_content],

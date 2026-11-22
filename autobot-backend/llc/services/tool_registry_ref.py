@@ -28,8 +28,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..exceptions import PublicMessageMixin
+from .company_os.errors import CompanyOsError
 
-class ToolRegistryUnavailable(RuntimeError):
+
+class ToolRegistryUnavailable(PublicMessageMixin, RuntimeError):
     """The tool registry holds no tools, so no name can be validated.
 
     Distinct from "unknown tool" on purpose: this is an environment problem,
@@ -120,8 +123,8 @@ def require_registered_tool(tool_name: str) -> str:
     """The tool must be registered. Returns the cleaned name."""
     cleaned = (tool_name or "").strip()
     if not cleaned:
-        raise ValueError("a tool name is required")
+        raise CompanyOsError("a tool name is required")
 
     if cleaned not in registered_tool_names():
-        raise ValueError(f"unknown tool {cleaned!r}")
+        raise CompanyOsError(f"unknown tool {cleaned!r}")
     return cleaned

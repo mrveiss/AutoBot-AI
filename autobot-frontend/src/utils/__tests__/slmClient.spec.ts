@@ -8,9 +8,8 @@
  *  - the SLM token is injected per-client from its token getter (read live),
  *    and token-less clients send no Authorization header
  *  - JSON body serialisation + default JSON Content-Type
- *  - raw bodies (URLSearchParams) pass through untouched, no forced JSON header
- *  - skipAuth suppresses token injection
- *  - error handling: detail/message/error preference, HTTP status fallback
+ *  - a 401 surfaces as an HttpError (the main app session is not the SLM's)
+ *  - error handling: HttpError with the detail, a 4xx is not retried
  *  - 204 / non-JSON bodies parse to {}
  */
 
@@ -88,13 +87,11 @@ describe('SlmClient', () => {
     expect(headers['Content-Type']).toBe('application/json')
   })
 
-  it('skipAuth suppresses token injection even when a token is present', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ access_token: 'x' }))
-    const client = new SlmClient(() => 'tok')
-    await client.rawRequest('/api/auth/token', { method: 'POST', skipAuth: true })
-
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>
-    expect(headers.Authorization).toBeUndefined()
+  it('a 401 from the SLM surfaces as an HttpError and never runs the main app 401 policy', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: 'expired' }, { ok: false, status: 401 }))
+    const error = await new SlmClient(() => 'stale').post('/api/nodes', {}).catch((e) => e)
+    expect(error).toMatchObject({ name: 'HttpError', status: 401 })
+    expect(error.message).toContain('expired')
   })
 
   it('JSON-serialises object bodies and defaults the JSON Content-Type', async () => {
@@ -107,30 +104,17 @@ describe('SlmClient', () => {
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
   })
 
-  it('passes raw bodies (URLSearchParams) through without forcing JSON Content-Type', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ access_token: 'x' }))
-    const form = new URLSearchParams({ username: 'u', password: 'p' })
-    await new SlmClient().rawRequest('/api/auth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form,
-    })
-
-    const init = fetchMock.mock.calls[0][1] as RequestInit
-    expect(init.body).toBe(form)
-    expect((init.headers as Record<string, string>)['Content-Type']).toBe(
-      'application/x-www-form-urlencoded'
-    )
-  })
-
-  it('throws Error(detail) on a non-OK JSON error body', async () => {
+  it('throws an HttpError carrying the detail on a non-OK JSON error body', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ detail: 'node not found' }, { ok: false, status: 404 }))
-    await expect(new SlmClient().get('/api/nodes/x')).rejects.toThrow('node not found')
+    const error = await new SlmClient().get('/api/nodes/x').catch((e) => e)
+    expect(error).toMatchObject({ name: 'HttpError', status: 404 })
+    expect(error.message).toContain('node not found')
   })
 
-  it('falls back to HTTP <status>: <statusText> when no detail/message/error present', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({}, { ok: false, status: 500 }))
-    await expect(new SlmClient().get('/api/nodes')).rejects.toThrow('HTTP 500: Status 500')
+  it('a client error is not retried', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}, { ok: false, status: 404 }))
+    await expect(new SlmClient().get('/api/nodes')).rejects.toThrow('HTTP 404')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('delete on a 204 No Content resolves to {} (no body read error)', async () => {

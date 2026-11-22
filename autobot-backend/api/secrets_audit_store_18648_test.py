@@ -43,7 +43,15 @@ class FakeStore:
 @pytest.fixture
 def store():
     fake = FakeStore()
-    with patch("services.audit_logger.canonical.emit", fake.emit):
+
+    async def record_committed(event):  # a required record is awaited until committed (#20557)
+        fake.emit(event)
+        return True
+
+    with (
+        patch("services.audit_logger.canonical.emit", fake.emit),
+        patch("services.audit_logger.canonical.record_committed", record_committed),
+    ):
         yield fake
 
 
@@ -151,8 +159,13 @@ class TestRecordLandsInTheAuditStore:
         response = FAMILIES[operation](client)
         assert response.status_code in (200, 201), response.text
         # #20557: an irreversible update or delete records before the write and again with its outcome.
-        records = 2 if operation in WRITE_THEN_OUTCOME else 1
-        assert store.actions() == [(operation, "success")] * records
+        # The first says "attempted" (#20665): only the second claims the write happened.
+        expected = (
+            [(operation, "attempted"), (operation, "success")]
+            if operation in WRITE_THEN_OUTCOME
+            else [(operation, "success")]
+        )
+        assert store.actions() == expected
         event = store.events[0]
         assert event.actor_id == "user-42"
         assert event.category.name == "SECURITY"
@@ -167,7 +180,7 @@ class TestRecordLandsInTheAuditStore:
         assert client.get("/api/secrets/").status_code == 500
         assert store.actions() == [
             ("secret.access", "failed"),
-            ("secret.delete", "success"),  # #20557: the record written before the write
+            ("secret.delete", "attempted"),  # #20557/#20665: the record written before the write
             ("secret.delete", "denied"),
         ]
 

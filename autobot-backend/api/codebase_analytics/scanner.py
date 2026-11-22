@@ -366,11 +366,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str
     Issue #1710: source_id scopes all storage to one project.
     """
     try:
-        logger.info(
-            "[Task %s] Starting background codebase indexing for: %s",
-            task_id,
-            root_path,
-        )
+        logger.info("[Task %s] Starting background codebase indexing for: %s", task_id, root_path)
 
         async with _tasks_lock:
             state = _create_initial_task_state_bound()
@@ -440,4 +436,5 @@ async def do_indexing_with_progress(task_id: str, root_path: str, source_id: str
         logger.error("[Task %s] Indexing failed: %s", task_id, e, exc_info=True)
         _mark_task_failed_bound(task_id, e)
         await _save_task_to_redis_bound(task_id)
-        await record_run_finished(source_id, task_id, STATUS_FAILED, str(e))
+        # The reason is served to readers, so it names the failure class only; the text is logged above.
+        await record_run_finished(source_id, task_id, STATUS_FAILED, f"indexing failed ({type(e).__name__})")

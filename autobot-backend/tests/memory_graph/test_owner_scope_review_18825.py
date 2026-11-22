@@ -274,7 +274,7 @@ class TestUpdateGraphTaskWritesUnderTheSessionOwner:
             coro.close()
             raise OwnerScopeRequired("no owner")
 
-        with patch.object(mt, "run_or_schedule", side_effect=_raise):
+        with patch.object(mt, "run_in_worker_loop", side_effect=_raise):
             result = mt.update_graph_task.run("s1", [], [], None, None)
 
         assert result["status"] == "rejected" and result["entities_written"] == 0

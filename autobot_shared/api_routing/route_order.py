@@ -37,6 +37,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
+from autobot_shared.testfile_names import is_test_filename
+
 __all__ = ["OrderedRoute", "RouteOrder", "shadowed_literals"]
 
 _VERBS = ("get", "post", "put", "patch", "delete", "head", "options", "api_route", "websocket")
@@ -70,8 +72,7 @@ def _kwarg(call: ast.Call, name: str) -> Optional[ast.AST]:
 
 
 def is_test_path(path: Path) -> bool:
-    name = path.name
-    return name.endswith("_test.py") or name.startswith("test_") or bool(_SKIP_PARTS & set(path.parts))
+    return is_test_filename(path.name, include_js=False) or bool(_SKIP_PARTS & set(path.parts))
 
 
 class RouteOrder:

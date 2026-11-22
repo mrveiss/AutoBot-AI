@@ -13,7 +13,8 @@ import pytest
 
 # Import the modules to test
 import security_layer
-from autobot_shared.paths import project_root
+from autobot_shared.auth.jwt_core import hash_password
+from autobot_shared.log_dir import resolve_logs_dir
 from autobot_shared.ssot_config import default_audit_log_file
 from autobot_shared.status_enums import CommandRisk
 from security_layer import SecurityLayer
@@ -308,17 +309,12 @@ class TestSecurityLayer:
         """Test command execution with security disabled"""
         self.security.enable_command_security = False
 
-        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"output\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+        # A real `echo`: the security-off branch runs through the same bounded runner (#20740).
+        result = await self.security.execute_command("echo output", "test_user", "user")
 
-            result = await self.security.execute_command("echo hello", "test_user", "user")
-
-            assert result["status"] == "success"
-            assert result["stdout"] == "output"
-            assert result["security"]["enabled"] is False
+        assert result["status"] == "success"
+        assert result["stdout"] == "output"
+        assert result["security"]["enabled"] is False
 
     def test_audit_log(self):
         """An action is recorded as a SECURITY event at the canonical service, tagged as this layer's."""
@@ -382,7 +378,7 @@ class TestSecurityLayer:
     def test_authenticate_user_auth_enabled(self):
         """Test user authentication when auth is enabled"""
         self.security.enable_auth = True
-        self.security.allowed_users = {"test_user": "test_password"}
+        self.security.allowed_users = {"test_user": {"password_hash": hash_password("test_password")}}
         self.security.security_config = {"user_roles": {"test_user": "developer"}}
 
         # Valid credentials
@@ -395,6 +391,20 @@ class TestSecurityLayer:
 
         result = self.security.authenticate_user("invalid_user", "any_password")
         assert result is None
+
+    def test_authenticate_user_verifies_through_verify_password(self):
+        """#20761/#21088: the password is checked by the canonical hasher, not ``==``."""
+        from autobot_shared.auth import configured_users
+
+        self.security.enable_auth = True
+        self.security.allowed_users = {"test_user": {"password_hash": hash_password("stored")}}
+        self.security.security_config = {"user_roles": {"test_user": "developer"}}
+        with patch.object(configured_users, "verify_password", return_value=True) as verify:
+            assert self.security.authenticate_user("test_user", "supplied") == "developer"
+        assert verify.call_count == 1
+        assert verify.call_args.args[0] == "supplied"
+        with patch.object(configured_users, "verify_password", return_value=False):
+            assert self.security.authenticate_user("test_user", "stored") is None
 
     def test_get_pending_approvals(self):
         """Test getting pending approvals list"""
@@ -439,17 +449,12 @@ class TestSecurityLayerIntegration:
     @pytest.mark.asyncio
     async def test_end_to_end_safe_command(self):
         """Test end-to-end execution of safe command"""
-        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"hello world\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+        # End to end means a real `echo`, run through the bounded runner (#20740).
+        result = await self.security.execute_command("echo 'hello world'", "test_user", "admin")
 
-            result = await self.security.execute_command("echo 'hello world'", "test_user", "admin")
-
-            assert result["status"] == "success"
-            assert result["stdout"] == "hello world"
-            assert result["security"]["risk"] == "safe"
+        assert result["status"] == "success"
+        assert result["stdout"] == "hello world"
+        assert result["security"]["risk"] == "safe"
 
     @pytest.mark.asyncio
     async def test_end_to_end_forbidden_command(self):
@@ -476,14 +481,12 @@ class TestAuditLogFileDefault:
         assert not default_audit_log_file().startswith("/opt/autobot")
 
     def test_default_is_wired_to_the_canonical_resolver(self):
-        assert default_audit_log_file() == str(project_root() / "logs" / "audit.log")
+        assert default_audit_log_file() == str(resolve_logs_dir() / "audit.log")
 
-    def test_default_tracks_project_root_env_override(self, monkeypatch, tmp_path):
-        fake_root = tmp_path / "fake-checkout"
-        fake_root.mkdir()
-        monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", str(fake_root))
+    def test_default_tracks_logs_dir_env_override(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path / "logs"))
 
-        assert default_audit_log_file() == str(fake_root / "logs" / "audit.log")
+        assert default_audit_log_file() == str(tmp_path / "logs" / "audit.log")
 
     def test_deployed_install_still_resolves_to_the_original_default(self, monkeypatch):
         """Compositional check for the deployed case — see the equivalent test
@@ -491,7 +494,7 @@ class TestAuditLogFileDefault:
         the real ``.env``-walk here, and why full host verification is out of
         scope for a hermetic test.
         """
-        monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", "/opt/autobot")
+        monkeypatch.setenv("AUTOBOT_LOGS_DIR", "/opt/autobot/logs")
 
         assert default_audit_log_file() == str(Path("/opt/autobot/logs/audit.log"))
 

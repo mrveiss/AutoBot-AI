@@ -30,6 +30,10 @@
       <BaseSpinner size="sm" />{{ t(`${NS}.loading`) }}
     </p>
     <BaseAlert
+      v-else-if="state === 'unauthorised'" variant="warning" data-testid="slm-install-unauthorised"
+      :title="t(`${NS}.unauthorisedTitle`)" :message="t(`${NS}.unauthorisedBody`)"
+    />
+    <BaseAlert
       v-else-if="state === 'unavailable'" variant="warning" data-testid="slm-install-unavailable"
       :title="t(`${NS}.unavailableTitle`)" :message="unavailableText"
     />
@@ -58,6 +62,8 @@ import { autobotApiErrorMessage } from '@/composables/autobotApiError'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import {
   INSTALL_METRICS_SECTIONS,
+  analysisMeasured,
+  isMainAppUnauthorised,
   isMainAppUnavailable,
   useInstallMetricsApi,
   type InstallMetricsReading,
@@ -65,7 +71,7 @@ import {
 import InstallMetricsFindings from '@/components/monitoring/install/InstallMetricsFindings.vue'
 import InstallMetricsOverview from '@/components/monitoring/install/InstallMetricsOverview.vue'
 
-type LoadState = 'loading' | 'ready' | 'unavailable'
+type LoadState = 'loading' | 'ready' | 'unavailable' | 'unauthorised'
 
 const NS = 'monitoring.installMetrics'
 const POLL_INTERVAL_MS = 15000
@@ -92,16 +98,18 @@ const failures = computed(() => {
   })
 })
 
-/** Read but empty: every route answered and none carries a figure, a service, an alert or a recommendation. */
+/** Read but empty: every route answered and none carries a measured figure (host or analysis), a service, an alert or a recommendation. */
 const isEmpty = computed(() => {
   const r = reading.value
   if (!r || failures.value.length > 0) return false
-  const hasHost = r.dashboard.ok && r.dashboard.data.system_metrics != null
+  const sys = r.dashboard.ok ? r.dashboard.data.system : null
+  const hasHost = typeof sys?.cpu_usage_percent === 'number' || typeof sys?.memory_usage_percent === 'number'
+  const hasAnalysis = r.dashboard.ok && analysisMeasured(r.dashboard.data.analysis)
   const hasServices = r.services.ok && r.services.data.services.length > 0
   const hasAlerts = r.alerts.ok && r.alerts.data.alerts.length > 0
   const hasRecommendations = r.recommendations.ok && r.recommendations.data.length > 0
   const hasDevice = (r.gpu.ok && r.gpu.data.available) || (r.npu.ok && r.npu.data.available)
-  return !(hasHost || hasServices || hasAlerts || hasRecommendations || hasDevice)
+  return !(hasHost || hasAnalysis || hasServices || hasAlerts || hasRecommendations || hasDevice)
 })
 
 /**
@@ -113,7 +121,7 @@ async function tick(): Promise<void> {
   reading.value = next
   readAt.value = new Date().toISOString()
   const down = isMainAppUnavailable(next)
-  state.value = down ? 'unavailable' : 'ready'
+  state.value = isMainAppUnauthorised(next) ? 'unauthorised' : down ? 'unavailable' : 'ready'
   throwUnlessLoaded(!down)
 }
 

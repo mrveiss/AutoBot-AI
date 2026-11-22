@@ -12,6 +12,7 @@
  * Issue #590 - NPU Dashboard Improvements.
  */
 
+import { formatFleetTime } from '@/composables/useTimezone'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PollingPausedAlert, BaseSkeleton, formatUptime } from '@autobot/ui'
@@ -39,15 +40,15 @@ const nodeMetrics = computed<NPUWorkerMetrics[]>(
 // -- Helpers --
 
 function utilizationBarColor(pct: number): string {
-  if (pct > 80) return 'bg-red-500'
-  if (pct >= 60) return 'bg-yellow-500'
-  return 'bg-green-500'
+  if (pct > 80) return 'bg-autobot-dot-bad'
+  if (pct >= 60) return 'bg-autobot-dot-warn'
+  return 'bg-autobot-dot-ok'
 }
 
 function utilizationTextColor(pct: number): string {
-  if (pct > 80) return 'text-red-600'
-  if (pct >= 60) return 'text-yellow-600'
-  return 'text-green-600'
+  if (pct > 80) return 'text-autobot-error'
+  if (pct >= 60) return 'text-autobot-pill-warn-fg'
+  return 'text-autobot-success'
 }
 
 // #13138: `temperature_celsius` is optional AND nullable in the contract
@@ -55,10 +56,10 @@ function utilizationTextColor(pct: number): string {
 // `undefined`, not `null` — a `=== null` test alone let it fall through to the
 // "cool" branch and render `undefined°C`.
 function temperatureColor(temp: number | null | undefined): string {
-  if (temp === null || temp === undefined) return 'text-gray-400'
-  if (temp > 75) return 'text-red-600'
-  if (temp >= 60) return 'text-yellow-600'
-  return 'text-green-600'
+  if (temp === null || temp === undefined) return 'text-autobot-text-tertiary'
+  if (temp > 75) return 'text-autobot-error'
+  if (temp >= 60) return 'text-autobot-pill-warn-fg'
+  return 'text-autobot-success'
 }
 
 function temperatureDisplay(temp: number | null | undefined): string {
@@ -87,11 +88,10 @@ function isExpanded(nodeId: string): boolean {
 
 const { t } = useI18n()
 
-/** One tick; the store reports a failed read as null, so the tick throws for the poller to count. */
+/** One tick; the store rethrows a failed read, so the poller counts it. */
 async function loadMetrics(): Promise<void> {
   try {
-    const metrics = await fleetStore.fetchNpuFleetMetrics()
-    if (metrics === null) throw new Error(fleetStore.error ?? 'NPU fleet metrics unavailable')
+    await fleetStore.fetchNpuFleetMetrics()
   } finally {
     isLoading.value = false
   }
@@ -120,7 +120,7 @@ onMounted(() => metricsPoller.start(''))
         <div
           v-for="i in 4"
           :key="i"
-          class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
+          class="bg-white rounded-lg shadow-xs border border-autobot-border p-4"
         >
           <div class="flex items-center gap-3" role="status" aria-busy="true" :aria-label="t('fleet.loadBalancingView.loadingNPUFleetData')">
             <div class="w-10 shrink-0"><BaseSkeleton shape="block" height="2.5rem" /></div>
@@ -134,7 +134,7 @@ onMounted(() => metricsPoller.start(''))
         <div
           v-for="i in 3"
           :key="i"
-          class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
+          class="bg-white rounded-lg shadow-xs border border-autobot-border p-4"
         >
           <div role="status" aria-busy="true" :aria-label="t('fleet.loadBalancingView.loadingNPUFleetData')"><BaseSkeleton :lines="3" /></div>
         </div>
@@ -146,107 +146,107 @@ onMounted(() => metricsPoller.start(''))
       <!-- Fleet Summary Cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Total Inferences -->
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
           <div class="flex items-center gap-3">
-            <div class="p-2 rounded-lg bg-blue-100">
+            <div class="p-2 rounded-lg bg-autobot-pill-info-bg">
               <!-- Bolt / lightning icon -->
-              <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-autobot-text-link" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
             <div>
-              <p class="text-2xl font-bold text-gray-900">
+              <p class="text-2xl font-bold text-autobot-text-primary">
                 {{ (metrics?.total_inference_count ?? 0).toLocaleString() }}
               </p>
-              <p class="text-sm text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.totalInferences') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.totalInferences') }}</p>
             </div>
           </div>
         </div>
 
         <!-- Avg Latency -->
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
           <div class="flex items-center gap-3">
-            <div class="p-2 rounded-lg bg-purple-100">
+            <div class="p-2 rounded-lg bg-autobot-illus-2-tint">
               <!-- Clock icon -->
-              <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-autobot-text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <div>
-              <p class="text-2xl font-bold text-gray-900">
+              <p class="text-2xl font-bold text-autobot-text-primary">
                 {{ (metrics?.avg_latency_ms ?? 0).toFixed(1) }}
               </p>
-              <p class="text-sm text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.avgLatencyMs') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.avgLatencyMs') }}</p>
             </div>
           </div>
         </div>
 
         <!-- Throughput -->
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
           <div class="flex items-center gap-3">
-            <div class="p-2 rounded-lg bg-green-100">
+            <div class="p-2 rounded-lg bg-autobot-pill-ok-bg">
               <!-- Trending up icon -->
-              <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-autobot-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
             <div>
-              <p class="text-2xl font-bold text-gray-900">
+              <p class="text-2xl font-bold text-autobot-text-primary">
                 {{ (metrics?.total_throughput_rps ?? 0).toFixed(2) }}
               </p>
-              <p class="text-sm text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.throughputReqS') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.throughputReqS') }}</p>
             </div>
           </div>
         </div>
 
         <!-- Queue Depth -->
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
           <div class="flex items-center gap-3">
-            <div class="p-2 rounded-lg bg-amber-100">
+            <div class="p-2 rounded-lg bg-autobot-pill-warn-bg">
               <!-- Queue / list icon -->
-              <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
               </svg>
             </div>
             <div>
-              <p class="text-2xl font-bold text-gray-900">
+              <p class="text-2xl font-bold text-autobot-text-primary">
                 {{ metrics?.total_queue_depth ?? 0 }}
               </p>
-              <p class="text-sm text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.totalQueueDepth') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.totalQueueDepth') }}</p>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Online / Total indicator -->
-      <div class="flex items-center gap-2 text-sm text-gray-500">
-        <span class="inline-block w-2 h-2 rounded-full bg-green-500" />{{ $t('fleet.nPUPerformanceMetrics.value0OfValue1NPUNodesOnline', { value0: metrics?.online_nodes ?? 0, value1: metrics?.total_nodes ?? 0 }) }}</div>
+      <div class="flex items-center gap-2 text-sm text-autobot-text-tertiary">
+        <span class="inline-block w-2 h-2 rounded-full bg-autobot-dot-ok" />{{ $t('fleet.nPUPerformanceMetrics.value0OfValue1NPUNodesOnline', { value0: metrics?.online_nodes ?? 0, value1: metrics?.total_nodes ?? 0 }) }}</div>
 
       <!-- Per-Node Metrics -->
       <div class="space-y-3">
-        <h3 class="text-lg font-semibold text-gray-900">{{ $t('fleet.nPUPerformanceMetrics.perNodeMetrics') }}</h3>
+        <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('fleet.nPUPerformanceMetrics.perNodeMetrics') }}</h3>
 
         <p
           v-if="nodeMetrics.length === 0"
-          class="text-sm text-gray-500 bg-white rounded-lg shadow-xs border border-gray-200 p-6 text-center"
+          class="text-sm text-autobot-text-tertiary bg-white rounded-lg shadow-xs border border-autobot-border p-6 text-center"
         >{{ $t('fleet.nPUPerformanceMetrics.noNPUWorkerMetricsAvailable') }}</p>
 
         <div
           v-for="node in nodeMetrics"
           :key="node.node_id"
-          class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden"
+          class="bg-white rounded-lg shadow-xs border border-autobot-border overflow-hidden"
         >
           <!-- Collapsed row header -->
           <button
             type="button"
-            class="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+            class="w-full px-4 py-3 flex items-center justify-between hover:bg-autobot-bg-hover transition-colors text-left"
             @click="toggleNode(node.node_id)"
           >
             <div class="flex items-center gap-3 min-w-0">
               <!-- Chevron -->
               <svg
                 :class="[
-                  'w-4 h-4 text-gray-400 transition-transform shrink-0',
+                  'w-4 h-4 text-autobot-text-tertiary transition-transform shrink-0',
                   isExpanded(node.node_id) ? 'rotate-90' : '',
                 ]"
                 fill="none"
@@ -256,7 +256,7 @@ onMounted(() => metricsPoller.start(''))
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
 
-              <span class="font-medium text-gray-900 truncate">
+              <span class="font-medium text-autobot-text-primary truncate">
                 {{ node.node_id }}
               </span>
             </div>
@@ -268,14 +268,14 @@ onMounted(() => metricsPoller.start(''))
               </span>
 
               <!-- Latency -->
-              <span class="text-gray-500 hidden sm:inline">
+              <span class="text-autobot-text-tertiary hidden sm:inline">
                 {{ node.avg_latency_ms.toFixed(1) }} ms
               </span>
 
               <!-- Error badge -->
               <span
                 v-if="node.error_count > 0"
-                class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"
+                class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-pill-bad-bg text-autobot-pill-bad-fg"
               >{{ $t('fleet.nPUPerformanceMetrics.value0Errors', { value0: node.error_count }) }}</span>
             </div>
           </button>
@@ -283,17 +283,17 @@ onMounted(() => metricsPoller.start(''))
           <!-- Expanded details -->
           <div
             v-if="isExpanded(node.node_id)"
-            class="border-t border-gray-200 px-4 py-4 space-y-4"
+            class="border-t border-autobot-border px-4 py-4 space-y-4"
           >
             <!-- Utilization bar -->
             <div>
-              <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <div class="flex items-center justify-between text-xs text-autobot-text-tertiary mb-1">
                 <span>{{ $t('fleet.nPUPerformanceMetrics.utilization') }}</span>
                 <span :class="utilizationTextColor(node.utilization)">
                   {{ node.utilization.toFixed(1) }}%
                 </span>
               </div>
-              <div class="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+              <div class="w-full h-2.5 bg-autobot-bg-active rounded-full overflow-hidden">
                 <div
                   :class="['h-full rounded-full transition-all', utilizationBarColor(node.utilization)]"
                   :style="{ width: `${Math.min(100, node.utilization)}%` }"
@@ -303,13 +303,13 @@ onMounted(() => metricsPoller.start(''))
 
             <!-- Memory bar -->
             <div>
-              <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <div class="flex items-center justify-between text-xs text-autobot-text-tertiary mb-1">
                 <span>{{ $t('fleet.nPUPerformanceMetrics.memory') }}</span>
                 <span>
                   {{ node.memory_used_gb.toFixed(1) }} / {{ node.memory_total_gb.toFixed(1) }} GB
                 </span>
               </div>
-              <div class="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+              <div class="w-full h-2.5 bg-autobot-bg-active rounded-full overflow-hidden">
                 <div
                   :class="[
                     'h-full rounded-full transition-all',
@@ -323,72 +323,72 @@ onMounted(() => metricsPoller.start(''))
             <!-- Detail grid -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <!-- Temperature -->
-              <div class="text-center p-2 bg-gray-50 rounded-sm">
+              <div class="text-center p-2 bg-autobot-bg-secondary rounded-sm">
                 <p :class="['text-lg font-semibold', temperatureColor(node.temperature_celsius)]">
                   {{ temperatureDisplay(node.temperature_celsius) }}
                 </p>
-                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.temperature') }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.temperature') }}</p>
               </div>
 
               <!-- Inference Count -->
-              <div class="text-center p-2 bg-gray-50 rounded-sm">
-                <p class="text-lg font-semibold text-gray-900">
+              <div class="text-center p-2 bg-autobot-bg-secondary rounded-sm">
+                <p class="text-lg font-semibold text-autobot-text-primary">
                   {{ node.inference_count.toLocaleString() }}
                 </p>
-                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.inferences') }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.inferences') }}</p>
               </div>
 
               <!-- Avg Latency -->
-              <div class="text-center p-2 bg-gray-50 rounded-sm">
-                <p class="text-lg font-semibold text-gray-900">
+              <div class="text-center p-2 bg-autobot-bg-secondary rounded-sm">
+                <p class="text-lg font-semibold text-autobot-text-primary">
                   {{ node.avg_latency_ms.toFixed(1) }}
                 </p>
-                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.avgLatencyMs') }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.avgLatencyMs') }}</p>
               </div>
 
               <!-- Throughput -->
-              <div class="text-center p-2 bg-gray-50 rounded-sm">
-                <p class="text-lg font-semibold text-gray-900">
+              <div class="text-center p-2 bg-autobot-bg-secondary rounded-sm">
+                <p class="text-lg font-semibold text-autobot-text-primary">
                   {{ node.throughput_rps.toFixed(2) }}
                 </p>
-                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.throughputReqS') }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.throughputReqS') }}</p>
               </div>
 
               <!-- Queue Depth -->
-              <div class="text-center p-2 bg-gray-50 rounded-sm">
-                <p class="text-lg font-semibold text-gray-900">
+              <div class="text-center p-2 bg-autobot-bg-secondary rounded-sm">
+                <p class="text-lg font-semibold text-autobot-text-primary">
                   {{ node.queue_depth }}
                 </p>
-                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.queueDepth') }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.queueDepth') }}</p>
               </div>
 
               <!-- Error Count -->
-              <div class="text-center p-2 bg-gray-50 rounded-sm">
+              <div class="text-center p-2 bg-autobot-bg-secondary rounded-sm">
                 <p
                   :class="[
                     'text-lg font-semibold',
-                    node.error_count > 0 ? 'text-red-600' : 'text-gray-900',
+                    node.error_count > 0 ? 'text-autobot-error' : 'text-autobot-text-primary',
                   ]"
                 >
                   {{ node.error_count }}
                 </p>
-                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.errors') }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.errors') }}</p>
               </div>
 
               <!-- Uptime -->
-              <div class="text-center p-2 bg-gray-50 rounded-sm">
-                <p class="text-lg font-semibold text-gray-900">
+              <div class="text-center p-2 bg-autobot-bg-secondary rounded-sm">
+                <p class="text-lg font-semibold text-autobot-text-primary">
                   {{ formatUptime(node.uptime_seconds) }}
                 </p>
-                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.uptime') }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.uptime') }}</p>
               </div>
 
               <!-- Last Report -->
-              <div class="text-center p-2 bg-gray-50 rounded-sm">
-                <p class="text-lg font-semibold text-gray-900">
-                  {{ node.timestamp ? new Date(node.timestamp).toLocaleTimeString() : 'N/A' }}
+              <div class="text-center p-2 bg-autobot-bg-secondary rounded-sm">
+                <p class="text-lg font-semibold text-autobot-text-primary">
+                  {{ node.timestamp ? formatFleetTime(node.timestamp) : 'N/A' }}
                 </p>
-                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.lastReport') }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUPerformanceMetrics.lastReport') }}</p>
               </div>
             </div>
           </div>

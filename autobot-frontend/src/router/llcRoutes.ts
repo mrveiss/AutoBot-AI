@@ -11,6 +11,16 @@
 import type { RouteRecordRaw } from 'vue-router'
 import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
 
+/** The approvals page without a company (#20917): the person's waiting approvals, from any page. */
+export const approvalsRoutes: RouteRecordRaw[] = [
+  {
+    path: '/approvals',
+    name: 'approvals',
+    component: () => import('@/views/llc/ApprovalsInbox.vue'),
+    meta: { title: 'Approvals', requiresAuth: true, hideInNav: true },
+  },
+]
+
 export const llcCompanyChildren: RouteRecordRaw[] = [
   { path: '', redirect: { name: 'llc-backlog' } },
   {
@@ -75,9 +85,11 @@ export const llcCompanyChildren: RouteRecordRaw[] = [
   // #13714: Company OS > Mailbox -- no mailbox backend yet, so the view states that plainly.
   { path: 'mailbox', name: 'llc-mailbox', component: () => import('@/views/llc/MailboxView.vue'), meta: { title: 'Mailbox', requiresAuth: true } },
   { path: 'routines', name: 'llc-routines', component: () => import('@/views/llc/RoutinesView.vue'), props: true, meta: { title: 'Routines', requiresAuth: true } },
-  { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
+  { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true, keepOnCompanySwitch: true } },
   { path: 'activity', name: 'llc-activity', component: () => import('@/views/llc/ActivityFeedView.vue'), props: true, meta: { title: 'Activity', requiresAuth: true } },
   { path: 'roles', name: 'llc-roles', component: () => import('@/views/llc/RolesView.vue'), props: true, meta: { title: 'Roles', requiresAuth: true } },
+  // #18431: Organization > Handbook -- generated role/workflow/process pages from the company model.
+  { path: 'handbook', name: 'llc-handbook', component: () => import('@/views/llc/HandbookView.vue'), props: true, meta: { title: 'Handbook', requiresAuth: true } },
   { path: 'members', name: 'llc-members', component: () => import('@/views/llc/MembersView.vue'), props: true, meta: { title: 'Members', requiresAuth: true } },
   // #18245: Organization > Teams -- company-scoped; the server limits writes to platform administrators.
   { path: 'teams', name: 'llc-teams', component: () => import('@/views/llc/TeamsView.vue'), props: true, meta: { title: 'Teams', requiresAuth: true } },
@@ -101,7 +113,11 @@ export const llcCompanyChildren: RouteRecordRaw[] = [
     name: 'llc-company-automation',
     component: WorkflowBuilderView,
     // #16901: no longer hidden — it has a Company OS sidebar entry now.
-    meta: { title: 'Workflow Automation', requiresAuth: true },
+    // keepOnCompanySwitch (#21502): route.meta is the merge of every matched record, so this one
+    // flag on the parent covers the children. The builder holds an unsaved draft in component state;
+    // a remount on a sidebar company switch would discard it. On a switch it reloads in place, drops the draft with a notice and
+    // refuses Save/Start while the sidebar and route companies disagree (decided and implemented in #21520).
+    meta: { title: 'Workflow Automation', requiresAuth: true, keepOnCompanySwitch: true },
     children: [
       {
         // Named so vue-router does not warn about an unnamed empty-path

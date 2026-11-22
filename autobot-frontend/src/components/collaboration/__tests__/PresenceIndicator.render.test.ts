@@ -12,6 +12,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { ref } from 'vue'
+import { createI18n } from 'vue-i18n'
+import en from '@/i18n/locales/en.json'
 import type { UserPresence } from '@/composables/useSessionCollaboration'
 
 const state = vi.hoisted(() => ({ presence: [] as unknown[], me: null as unknown }))
@@ -68,6 +70,21 @@ describe('PresenceIndicator renders who is present (#16754)', () => {
 
   it('the expanded view counts everyone present, me included', () => {
     const wrapper = mountWith([person('u1', 'ada'), person('u2', 'bob')], true)
-    expect(wrapper.text()).toContain('collaboration.presence.participants{"count":3}')
+    expect(wrapper.text()).toContain('collaboration.presenceIndicator.participants{"count":3}')
+  })
+
+  // #19416: with the real English bundle, the placeholders resolve: the count and each tab show.
+  it('the expanded view renders the count and every participant\'s tab from the real strings', () => {
+    const me = person('me', 'Alex Doe')
+    state.me = me
+    state.presence = [me, { ...person('u1', 'ada'), currentTab: 'knowledge' } as UserPresence]
+    const wrapper = mount(PresenceIndicator, {
+      props: { expanded: true },
+      global: { plugins: [createI18n({ legacy: false, globalInjection: true, locale: 'en', messages: { en } })] },
+    })
+    const text = wrapper.text()
+    expect(text).toContain('Participants (2)')
+    expect(text).toContain('chat tab')
+    expect(text).toContain('knowledge tab')
   })
 })
