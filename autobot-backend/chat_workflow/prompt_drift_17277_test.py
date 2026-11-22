@@ -39,7 +39,7 @@ def test_release_change_is_intended_not_drift():
 
 
 def test_report_carries_no_prompt_text():
-    secret = "/home/someone/secret-host"
+    secret = "PROMPT-SECRET-7f3a: internal-host.invalid/token-path"
     old = pd.prefix_record(STABLE)
     report = pd.compare_records(old, pd.prefix_record(STABLE + "\n\n" + secret))
     assert secret not in json.dumps(report) and secret not in json.dumps(old)
