@@ -24,14 +24,14 @@ NOT derived, and still declared only in ``role_registry.py``: ``display_name``, 
 
 from __future__ import annotations
 
-import logging
 from typing import Dict, List, Mapping, Tuple
 from urllib.parse import urlparse
 
+from autobot_shared.logging_manager import get_logger
 from models.manifest import RoleManifest, ServiceType
 from services.role_manifest_errors import MANIFEST_ERRORS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_HTTPS_PORT = 443
 _DEFAULT_HTTP_PORT = 80

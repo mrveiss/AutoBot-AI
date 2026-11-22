@@ -84,7 +84,10 @@ def test_the_registry_imports_against_stale_manifests_and_names_the_roles(tmp_pa
         "SLM_INFRA_BASE_DIR": str(infra),
         "PYTHONPATH": os.pathsep.join([str(_BACKEND_ROOT), str(_BACKEND_ROOT.parent)]),
     }
-    code = "import services.role_registry as r; print(sorted(r.MANIFEST_ERRORS)); print(len(r.DEFAULT_ROLES))"
+    code = (
+        "import services.role_registry as r; from services.role_manifest_errors import manifest_errors; "
+        "print(sorted(manifest_errors())); print(len(r.DEFAULT_ROLES))"
+    )
     done = subprocess.run(
         [sys.executable, "-c", code], cwd=_BACKEND_ROOT, env=env, capture_output=True, text=True, timeout=120
     )
