@@ -45,6 +45,7 @@ from models.secret import Secret
 from models.secret_dependency import SecretDependency
 from models.secret_grant import SecretGrant
 from models.session_collaboration import SessionCollaboration
+from models.session_share import SessionShare, SessionShareAdoption
 
 # Task delegation model (#1753)
 from models.task_delegation import TaskDelegation
@@ -68,6 +69,8 @@ __all__ = [
     "SecretDependency",
     "SecretGrant",
     "SessionCollaboration",
+    "SessionShare",
+    "SessionShareAdoption",
     # Central agent registry (#1754)
     "Agent",
     # Agent org hierarchy (#1405)

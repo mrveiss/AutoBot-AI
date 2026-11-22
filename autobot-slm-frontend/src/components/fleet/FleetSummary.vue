@@ -20,36 +20,36 @@ const stats = computed(() => [
     label: 'Total Nodes',
     value: summary.value.total_nodes,
     icon: 'server',
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-100',
+    color: 'text-autobot-text-secondary',
+    bgColor: 'bg-autobot-bg-tertiary',
   },
   {
     label: 'Healthy',
     value: summary.value.healthy_nodes,
     icon: 'check',
     color: 'text-success-600',
-    bgColor: 'bg-green-100',
+    bgColor: 'bg-autobot-pill-ok-bg',
   },
   {
     label: 'Degraded',
     value: summary.value.degraded_nodes,
     icon: 'warning',
     color: 'text-warning-600',
-    bgColor: 'bg-yellow-100',
+    bgColor: 'bg-autobot-pill-warn-bg',
   },
   {
     label: 'Unhealthy',
     value: summary.value.unhealthy_nodes,
     icon: 'error',
-    color: 'text-danger-600',
-    bgColor: 'bg-red-100',
+    color: 'text-error-600',
+    bgColor: 'bg-autobot-pill-bad-bg',
   },
   {
     label: 'Need Updates',
     value: fleetStore.nodesNeedingUpdates,
     icon: 'update',
-    color: 'text-amber-600',
-    bgColor: 'bg-amber-100',
+    color: 'text-autobot-warning',
+    bgColor: 'bg-autobot-pill-warn-bg',
   },
 ])
 </script>
@@ -90,8 +90,8 @@ const stats = computed(() => [
           </svg>
         </div>
         <div>
-          <p class="text-2xl font-bold text-gray-900">{{ stat.value }}</p>
-          <p class="text-sm text-gray-500">{{ stat.label }}</p>
+          <p class="text-2xl font-bold text-autobot-text-primary">{{ stat.value }}</p>
+          <p class="text-sm text-autobot-text-tertiary">{{ stat.label }}</p>
         </div>
       </div>
     </div>

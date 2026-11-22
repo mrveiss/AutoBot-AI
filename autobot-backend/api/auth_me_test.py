@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from api import auth_me
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
+from testkit.canonical_gate import canonical_resolver
 
 
 def _me(user_data):
@@ -23,16 +24,18 @@ def _me(user_data):
     middleware.get_user_from_request.return_value = user_data
     config = SimpleNamespace(mode=SimpleNamespace(value="single_company"))
     with (
-        patch.object(auth_me, "get_auth_middleware", return_value=middleware),
+        canonical_resolver("api.auth_me.resolve_human_user", middleware),
         patch("user_management.config.get_deployment_config", return_value=config),
     ):
         return TestClient(app, raise_server_exceptions=False).get("/api/auth/me")
 
 
-def test_a_superadmin_gets_no_granular_permissions_and_is_admin():
-    """The AC5 case. A frontend gating on ``permissions`` alone would hide everything from this caller."""
+def test_a_superadmin_gets_admins_permissions_and_is_admin():
+    """#19125: superadmin is the highest form of admin, so it gets admin's full set (a superset)."""
     body = _me({"username": "root", "role": "superadmin"}).json()
-    assert body["permissions"] == []
+    admin = _me({"username": "a", "role": "admin"}).json()
+    assert set(admin["permissions"]) <= set(body["permissions"])
+    assert body["permissions"]
     assert body["is_admin"] is True
 
 

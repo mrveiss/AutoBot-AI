@@ -14,13 +14,12 @@ import ipaddress
 import re
 import socket
 import time
-from pathlib import Path
 from typing import Any, Dict, Set
 from urllib.parse import urlparse
 
 import aiohttp
-import yaml
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -46,17 +45,8 @@ class DomainSecurityConfig:
         self.config = self._load_config()
 
     def _load_config(self) -> Dict[str, Any]:
-        """Load domain security configuration"""
-        config_file = Path(self.config_path)
-        if not config_file.exists():
-            return self._get_default_config()
-
-        try:
-            with open(config_file, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        except Exception as e:
-            logger.error("Failed to load domain security config: %s", e)
-            return self._get_default_config()
+        """Load domain security configuration (shared loader, never writes defaults, #17855)."""
+        return load_config_file(self.config_path, self._get_default_config, "Domain security").values
 
     def _get_default_blacklist(self) -> list:
         """Get default blacklist patterns."""

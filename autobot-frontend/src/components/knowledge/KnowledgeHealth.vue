@@ -242,7 +242,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTabs } from '@/composables/useTabs'
 import { formatFileSize, formatDateTime as formatDateTimeHelper } from '@/utils/formatHelpers'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeMaintenance } from '@/composables/knowledge/useKnowledgeMaintenance'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
@@ -397,7 +397,7 @@ onMounted(async () => {
   gap: var(--spacing-3);
 }
 
-.header-content h2 i {
+.header-content h2 .icon {
   color: var(--color-primary);
 }
 
@@ -462,10 +462,10 @@ onMounted(async () => {
   color: var(--text-tertiary);
 }
 
-.loading-state i,
-.empty-state i {
-  font-size: 2.5rem;
-  margin-bottom: var(--spacing-4);
+.loading-state .icon,
+.empty-state .icon {
+  width: 2.5rem; height: 2.5rem;
+  margin: 0 auto var(--spacing-4);
   display: block;
 }
 
@@ -697,7 +697,7 @@ onMounted(async () => {
   color: var(--color-info-dark);
 }
 
-.recommendation-list li i {
+.recommendation-list li .icon {
   color: var(--color-primary);
   margin-top: var(--spacing-0-5);
 }

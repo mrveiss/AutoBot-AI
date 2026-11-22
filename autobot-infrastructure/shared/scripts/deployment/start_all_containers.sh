@@ -103,7 +103,7 @@ echo "⏳ Waiting for all services to be ready..."
 # Check each service
 check_container_health "autobot-redis" "" 10
 check_container_health "autobot-npu-worker" "http://localhost:8081/health" 15
-check_container_health "autobot-playwright" "http://localhost:3000/health" 15
+check_container_health "autobot-playwright" "http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health" 15
 
 # If AI stack is running, check it too
 if docker ps --format '{{.Names}}' | grep -q '^autobot-ai-stack$'; then
@@ -123,7 +123,7 @@ echo "🌐 Service Endpoints:"
 echo "  • Redis:        localhost:6379"
 echo "  • RedisInsight: http://localhost:8002"  # Now on port 8002 internally too
 echo "  • NPU Worker:   http://localhost:8081"
-echo "  • Playwright:   http://localhost:3000"
+echo "  • Playwright:   http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 if docker ps --format '{{.Names}}' | grep -q '^autobot-ai-stack$'; then
     echo "  • AI Stack:     http://localhost:8080"
 fi

@@ -12,7 +12,7 @@
 -->
 <template>
   <div class="company-status-control">
-    <BaseBadge :variant="badgeVariant" size="sm">
+    <BaseBadge :variant="badgeVariant" size="sm" tone="solid">
       {{ t(`llcCompanyStatus.${status}`) }}
     </BaseBadge>
 
@@ -55,7 +55,7 @@
         <BaseButton variant="ghost" :disabled="isBusy" @click="cancelConfirm">
           {{ t('common.cancel') }}
         </BaseButton>
-        <BaseButton variant="danger" :disabled="isBusy" @click="runPending">
+        <BaseButton variant="error" :disabled="isBusy" @click="runPending">
           {{ t('llcCompanyStatus.confirm') }}
         </BaseButton>
       </template>
@@ -97,13 +97,13 @@ const BADGE_VARIANTS: Record<CompanyStatus, BadgeVariant> = {
   active: 'success',
   paused: 'warning',
   offboarding: 'warning',
-  archived: 'danger',
+  archived: 'error',
 }
 const badgeVariant = computed<BadgeVariant>(() => BADGE_VARIANTS[status.value] ?? 'neutral')
 
 function actionVariant(action: CompanyStatusAction): ButtonVariant {
   if (action === 'activate') return 'primary'
-  if (DESTRUCTIVE_ACTIONS.has(action)) return 'danger'
+  if (DESTRUCTIVE_ACTIONS.has(action)) return 'error'
   return 'secondary'
 }
 
@@ -157,7 +157,7 @@ async function apply(action: CompanyStatusAction): Promise<void> {
 .company-status-error {
   flex-basis: 100%;
   margin: 0;
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--color-danger);
 }
 

@@ -14,7 +14,7 @@ security regression) — plus the union of both pattern/key sets.
 
 import pytest
 
-from autobot_shared.security.redaction import redact_mapping, redact_text
+from autobot_shared.security.redaction import command_log_label, redact_mapping, redact_text
 
 # ---------------------------------------------------------------------------
 # redact_text — line/text level (former _redact_app_log_line)
@@ -150,3 +150,19 @@ class TestRedactMapping:
 
     def test_empty_mapping(self):
         assert redact_mapping({}) == {}
+
+
+@pytest.mark.parametrize(
+    ("command", "label"),
+    [
+        ('apt install --password="two words"', "apt (+3 args)"),  # pragma: allowlist secret
+        ("mysql -pHunter2 db", "mysql (+2 args)"),  # pragma: allowlist secret
+        ("ls", "ls (+0 args)"),
+        ("", "<empty command>"),
+        ("bad\nname x", "bad (+2 args)"),
+    ],
+)
+def test_command_log_label_names_the_program_only(command, label):
+    out = command_log_label(command)
+    assert out == label
+    assert "words" not in out and "Hunter2" not in out  # pragma: allowlist secret

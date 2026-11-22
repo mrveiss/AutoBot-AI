@@ -126,6 +126,8 @@ type Fixture = {
 
 function mockApi({ teams = TEAMS, teamsFail = false }: Fixture = {}) {
   get.mockImplementation((url: string) => {
+    // #21242: the canvas lists the company's workflows on entry; answer it explicitly.
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
     if (url === '/api/llc/companies/c1/org-chart') {
       return Promise.resolve({ nodes: structuredClone(ORG_NODES) })
     }

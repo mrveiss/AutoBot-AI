@@ -103,3 +103,12 @@ def detect_category(file_path: Path) -> str:
                 return category
 
     return "general"
+
+
+def category_of(file_path, root_dir: Path) -> str:
+    """Category of *file_path* judged by its path under *root_dir*, so a checkout that itself lives under
+    ``/api/`` or ``/testing/`` cannot skew the match (#17530)."""
+    try:
+        return detect_category(Path(file_path).relative_to(root_dir))
+    except ValueError:
+        return detect_category(Path(file_path))

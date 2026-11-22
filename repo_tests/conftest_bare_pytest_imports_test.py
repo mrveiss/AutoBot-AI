@@ -47,6 +47,8 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _CONFTEST = Path("repo_tests") / "conftest.py"
 
 #: This repo's own packages. Present on a bare-pytest runner because the repo is
@@ -141,7 +143,7 @@ def _offending_chains_from(entry: Path, label: str) -> list[str]:
         if path in seen:
             continue
         seen.add(path)
-        for dotted, line in _module_level_imports(ast.parse(path.read_text(encoding="utf-8"))):
+        for dotted, line in _module_level_imports(parse_cache.parse(path.read_text(encoding="utf-8"))):
             top = dotted.split(".")[0]
             if top in sys.stdlib_module_names:
                 continue
@@ -159,7 +161,7 @@ def _offending_chains_from(entry: Path, label: str) -> list[str]:
 
 def test_the_conftest_imports_nothing_a_bare_pytest_runner_lacks() -> None:
     entry = repo_root() / _CONFTEST
-    imports = _module_level_imports(ast.parse(entry.read_text(encoding="utf-8")))
+    imports = _module_level_imports(parse_cache.parse(entry.read_text(encoding="utf-8")))
 
     assert imports, "parsed no module-level imports at all -- the assertion below would be vacuous"
 
@@ -182,7 +184,7 @@ def test_the_import_scan_sees_a_function_level_import_as_safe() -> None:
     ``_module_level_imports`` that returned nothing for every input -- and the
     fix it guards is precisely "the same import, one indent level deeper".
     """
-    tree = ast.parse("import os\n\n\ndef f():\n    import httpx\n    return httpx\n")
+    tree = parse_cache.parse("import os\n\n\ndef f():\n    import httpx\n    return httpx\n")
 
     names = [name for name, _ in _module_level_imports(tree)]
 
@@ -197,7 +199,7 @@ def test_the_scan_keeps_the_submodule_it_used_to_discard() -> None:
     ``repo_tests.sdk_request_shared`` (which imports ``httpx`` at module scope)
     read as safe while CI died on it.
     """
-    tree = ast.parse("from repo_tests.sdk_request_shared import _BACKEND\n")
+    tree = parse_cache.parse("from repo_tests.sdk_request_shared import _BACKEND\n")
 
     assert _module_level_imports(tree) == [("repo_tests.sdk_request_shared", 1)]
 
@@ -210,7 +212,7 @@ def test_a_first_party_module_that_imports_httpx_is_reported_with_its_chain(tmp_
     is ever cleaned up, this test says so instead of silently passing.
     """
     reached = _module_level_imports(
-        ast.parse((repo_root() / "repo_tests" / "sdk_request_shared.py").read_text(encoding="utf-8"))
+        parse_cache.parse((repo_root() / "repo_tests" / "sdk_request_shared.py").read_text(encoding="utf-8"))
     )
     assert any(
         name == "httpx" for name, _ in reached
@@ -234,7 +236,7 @@ def test_an_import_inside_a_module_level_block_is_seen() -> None:
     }
 
     for label, source in sources.items():
-        names = [name for name, _ in _module_level_imports(ast.parse(source))]
+        names = [name for name, _ in _module_level_imports(parse_cache.parse(source))]
         assert "httpx" in names, f"an import inside a module-level {label} block was missed"
 
 
@@ -247,7 +249,7 @@ def test_a_type_checking_import_is_not_reported() -> None:
     """
     source = "from typing import TYPE_CHECKING\n\n" "if TYPE_CHECKING:\n    import httpx\n"
 
-    names = [name for name, _ in _module_level_imports(ast.parse(source))]
+    names = [name for name, _ in _module_level_imports(parse_cache.parse(source))]
 
     assert "httpx" not in names, "a TYPE_CHECKING-only import does not run at import time"
 
@@ -256,7 +258,7 @@ def test_the_else_branch_of_a_type_checking_block_is_still_seen() -> None:
     """Skipping the block must not skip the branch that DOES run."""
     source = "from typing import TYPE_CHECKING\n\n" "if TYPE_CHECKING:\n    import httpx\nelse:\n    import anyio\n"
 
-    names = [name for name, _ in _module_level_imports(ast.parse(source))]
+    names = [name for name, _ in _module_level_imports(parse_cache.parse(source))]
 
     # `typing` is in the list too: this scan reports every import and leaves the
     # stdlib filtering to `_offending_chains`.

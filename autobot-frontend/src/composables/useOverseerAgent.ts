@@ -17,6 +17,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
+import type { OverseerStepStatus } from '@/types/_generated/workflow'
 
 const logger = createLogger('useOverseerAgent')
 
@@ -44,7 +45,7 @@ export interface OverseerStep {
   total_steps: number
   description: string
   command?: string | null
-  status: 'pending' | 'running' | 'streaming' | 'explaining' | 'completed' | 'failed'
+  status: OverseerStepStatus
   command_explanation?: CommandExplanation | null
   output?: string
   output_explanation?: OutputExplanation | null

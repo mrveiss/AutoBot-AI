@@ -19,17 +19,19 @@ import aiohttp
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from api.codebase_analytics.source_scope import SourceIdQuery
 from api.schemas_analytics import (
     AnalyticsReportingReportResponse,
     AnalyticsReportingSummaryResponse,
     AnalyticsReportingTrendsResponse,
 )
 from api.schemas_common import DataResponse
+from api.source_scope import SourceIdQuery
 from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from code_intelligence.shared.scoring import get_grade_from_score
 
@@ -44,14 +46,13 @@ router = APIRouter(tags=["analytics"], dependencies=[Depends(get_current_user)])
 async def fetch_quality_health() -> Dict[str, Any]:
     """Fetch quality health score data via HTTP."""
     try:
-        from constants.network_constants import ServiceURLs
-
-        backend_url = ServiceURLs.BACKEND_API
+        backend_url = config.backend_url
         # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
         http_client = get_http_client()
         async with await http_client.get(
             f"{backend_url}/api/quality/health-score",
             timeout=aiohttp.ClientTimeout(total=10),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             if response.status == 200:
                 return await response.json()
@@ -99,15 +100,14 @@ async def fetch_codebase_charts(source_id: "str | None" = None) -> Dict[str, Any
     try:
         import aiohttp
 
-        from constants.network_constants import ServiceURLs
-
-        backend_url = ServiceURLs.BACKEND_API
+        backend_url = config.backend_url
         # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
         http_client = get_http_client()
         async with await http_client.get(
             f"{backend_url}/api/analytics/codebase/analytics/charts",
             params={"source_id": source_id},
             timeout=aiohttp.ClientTimeout(total=10),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             if response.status == 200:
                 return {**(await response.json()), "charts_available": True}
@@ -124,14 +124,13 @@ async def fetch_debt_summary() -> Dict[str, Any]:
     try:
         import aiohttp
 
-        from constants.network_constants import ServiceURLs
-
-        backend_url = ServiceURLs.BACKEND_API
+        backend_url = config.backend_url
         # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
         http_client = get_http_client()
         async with await http_client.get(
             f"{backend_url}/api/debt/summary",
             timeout=aiohttp.ClientTimeout(total=10),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             if response.status == 200:
                 return await response.json()
@@ -148,14 +147,13 @@ async def fetch_performance_summary() -> Dict[str, Any]:
     try:
         import aiohttp
 
-        from constants.network_constants import ServiceURLs
-
-        backend_url = ServiceURLs.BACKEND_API
+        backend_url = config.backend_url
         # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
         http_client = get_http_client()
         async with await http_client.get(
             f"{backend_url}/api/performance/summary",
             timeout=aiohttp.ClientTimeout(total=10),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             if response.status == 200:
                 return await response.json()

@@ -51,9 +51,10 @@ def _get_url_dev_fallback(host_override: str | None = None) -> str:
 
 
 def test_get_url_dev_fallback_default_host() -> None:
-    """Dev fallback without AUTOBOT_POSTGRES_HOST produces the historic default URL.
+    """Dev fallback without AUTOBOT_POSTGRES_HOST targets the compose users DB.
 
     Before (#11466): f"postgresql://autobot:autobot@autobot-postgres:5432/autobot"
+    #19320: the DB is ``autobot_users`` -- no provisioning path creates ``autobot``.
     """
     env_backup = os.environ.pop("AUTOBOT_POSTGRES_HOST", None)
     env_backup_db_url = os.environ.pop("AUTOBOT_DATABASE_URL", None)
@@ -65,7 +66,7 @@ def test_get_url_dev_fallback_default_host() -> None:
         if env_backup_db_url is not None:
             os.environ["AUTOBOT_DATABASE_URL"] = env_backup_db_url
 
-    assert result == "postgresql://autobot:autobot@autobot-postgres:5432/autobot"
+    assert result == "postgresql://autobot:autobot@autobot-postgres:5432/autobot_users"
 
 
 def test_get_url_dev_fallback_custom_host() -> None:
@@ -82,7 +83,7 @@ def test_get_url_dev_fallback_custom_host() -> None:
         if env_backup_db_url is not None:
             os.environ["AUTOBOT_DATABASE_URL"] = env_backup_db_url
 
-    assert result == "postgresql://autobot:autobot@my-custom-pg:5432/autobot"
+    assert result == "postgresql://autobot:autobot@my-custom-pg:5432/autobot_users"
 
 
 def test_get_url_dev_fallback_does_not_pick_up_other_pg_vars() -> None:
@@ -116,7 +117,7 @@ def test_get_url_dev_fallback_does_not_pick_up_other_pg_vars() -> None:
     # User/password/db/port must remain the hardcoded dev values
     assert "autobot:autobot@" in result
     assert ":5432/" in result
-    assert result.endswith("/autobot")
+    assert result.endswith("/autobot_users")
     assert "injected" not in result
 
 
