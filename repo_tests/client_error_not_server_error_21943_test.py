@@ -61,7 +61,8 @@ REACH = declare(
     roots=_ROOTS,
     what="non-test backend, SLM and shared modules scanned for a 4xx answered 'Internal server error'",
 )
-#: 4xx calls seen on the live tree (1957 measured 2026-11-21); keeps a detector that stopped matching from reading as clean.
+#: 4xx calls seen on the live tree (1957 measured 2026-11-21); growth 300 puts the pin mid-window. Declared below,
+#: so a detector that stopped matching fails as a reach error instead of reading as clean.
 _STATUS_SEEN_FLOOR = 1800
 
 
@@ -100,20 +101,45 @@ def _says_generic(call: ast.Call) -> bool:
     )
 
 
-def client_error_sites(source: str, rel: str) -> tuple[list[str], int]:
-    """`(offending sites, 4xx calls seen)` in *source*."""
+def client_error_sites(source: str, rel: str) -> tuple[list[str], list[str]]:
+    """`(offending sites, every 4xx call seen as "rel:line")` in *source*."""
     bad: list[str] = []
-    seen = 0
+    seen: list[str] = []
     for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Call):
             continue
         code = _call_status(node)
         if code is None or not 400 <= code < 500:
             continue
-        seen += 1
+        seen.append(f"{rel}:{node.lineno}")
         if _says_generic(node):
             bad.append(f"{rel}:{node.lineno}: {code} answered 'Internal server error'")
     return bad, seen
+
+
+def _scan(root: Path) -> tuple[list[str], list[str]]:
+    """Every offending site and every 4xx call seen across the scanned modules."""
+    bad: list[str] = []
+    seen: list[str] = []
+    for path in _modules(root):
+        found, calls = client_error_sites(path.read_text(encoding="utf-8"), path.relative_to(root).as_posix())
+        bad += found
+        seen += calls
+    return bad, seen
+
+
+def _status_calls(root: Path) -> list[str]:
+    """Every 4xx call the detector recognised, as "rel:line"; empty on an empty tree."""
+    return _scan(root)[1]
+
+
+STATUS_REACH = declare(
+    "client-error-4xx-calls-21943",
+    discover=_status_calls,
+    floor=_STATUS_SEEN_FLOOR,
+    growth=300,
+    what="4xx status calls the client-error detector recognised in the scanned modules",
+)
 
 
 def _wrap(call: str) -> str:
@@ -150,7 +176,7 @@ _QUIET = [
 @pytest.mark.parametrize(("name", "source"), _FIRES, ids=[n for n, _ in _FIRES])
 def test_the_scan_catches_a_planted_client_error_saying_server_error(name: str, source: str) -> None:
     bad, seen = client_error_sites(source, "planted.py")
-    assert (len(bad), seen) == (1, 1), f"{name}: the detector missed a planted bad site"
+    assert (len(bad), len(seen)) == (1, 1), f"{name}: the detector missed a planted bad site"
 
 
 @pytest.mark.parametrize(("name", "source"), _QUIET, ids=[n for n, _ in _QUIET])
@@ -165,15 +191,9 @@ def test_the_one_refusal_table_never_calls_a_client_error_a_server_error() -> No
 
 def test_no_4xx_says_internal_server_error_on_the_live_tree() -> None:
     root = repo_root()
-    files = REACH.examined(root)
-    bad: list[str] = []
-    seen = 0
-    for path in files:
-        found, count = client_error_sites(path.read_text(encoding="utf-8"), path.relative_to(root).as_posix())
-        bad += found
-        seen += count
-    REACH.completed(files)
-    assert seen >= _STATUS_SEEN_FLOOR, f"the scan saw only {seen} 4xx calls: the detector no longer matches"
+    REACH.completed(REACH.examined(root))
+    bad, seen = _scan(root)
+    STATUS_REACH.completed(seen)  # a detector that no longer matches fails here, not as a clean pass
     assert not bad, "answer a refusal with `autobot_shared.http_refusal.fixed_refusal(status)` (#21943): " + "; ".join(
         bad
     )
