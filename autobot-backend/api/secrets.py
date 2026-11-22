@@ -674,8 +674,8 @@ async def create_secret(
     """Create a new secret (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
     try:
+        checked_secret_name(request.name)  # #17850: the same fixed 409 as a rename, before any store is written
         _user = get_auth_middleware().get_user_from_request(http_request)
-
         if request.connector_id is not None:
             # #16428: bridged to ConnectorCredentialStore, never to this
             # store's own file -- #13632's one-store decision.

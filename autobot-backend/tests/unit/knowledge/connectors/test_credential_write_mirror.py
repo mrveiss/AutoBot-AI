@@ -167,3 +167,45 @@ async def test_marker_lookup_is_by_owning_vault_not_creator():
     where = captured["sql"].split("WHERE", 1)[1]
     assert "owner_vault" in where
     assert "owner_id" not in where
+
+
+def _session_answering(row):
+    """A session whose one marker query returns *row*; the recorded statement shows what that query asked."""
+    from testkit.fake_async_session import FakeAsyncSession, FakeResult
+
+    return FakeAsyncSession(results=[FakeResult([row])])
+
+
+def _assert_asked_for_the_vault(session, row):
+    """The marker query bound the owning vault and the marker, and never the creator's id."""
+    bound = set(map(str, session.statements[0].compile().params.values()))
+    assert {row.owner_vault, row.extra_data[cw._MARKER]} <= bound
+    assert str(row.owner_id) not in bound and str(_OWNER) not in bound
+
+
+def _adopted_row_by_another_actor():
+    """A row created by actor B (owner_id) in the user's vault, stamped with the marker."""
+    return SimpleNamespace(id=uuid.uuid4(), owner_id=uuid.uuid4(), owner_vault=_VAULT, extra_data={cw._MARKER: "sid-1"})
+
+
+async def test_rotation_by_the_vault_user_finds_a_row_created_by_another_actor(monkeypatch):
+    row = _adopted_row_by_another_actor()
+    svc = _svc(monkeypatch)
+    session = _session_answering(row)
+    await cw.mirror_in_session(session, "sid-1", str(_OWNER), "new-value", _ROOT)
+    _assert_asked_for_the_vault(session, row)
+    svc.rotate_value.assert_awaited_once()
+    assert svc.rotate_value.await_args.kwargs["secret_id"] == row.id
+    assert svc.rotate_value.await_args.kwargs["new_plaintext"] == b"new-value"
+    svc.create.assert_not_awaited()
+
+
+async def test_revocation_by_the_vault_user_removes_a_row_created_by_another_actor(monkeypatch):
+    row = _adopted_row_by_another_actor()
+    svc = _svc(monkeypatch)
+    svc.delete = AsyncMock()
+    session = _session_answering(row)
+    await cw.delete_in_session(session, "sid-1", str(_OWNER), _ROOT)
+    _assert_asked_for_the_vault(session, row)
+    svc.delete.assert_awaited_once()
+    assert svc.delete.await_args.kwargs["secret_id"] == row.id

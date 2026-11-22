@@ -189,3 +189,27 @@ def test_update_request_lets_a_reserved_rename_reach_the_409():
     assert caught.value.status_code == 409
     with pytest.raises(ValueError):
         SecretUpdateRequest(name="bad:name")
+
+
+def test_create_and_update_requests_share_one_reserved_name_rule():
+    from api.schemas_system import ChatSecretScope, SecretCreateRequest, SecretUpdateRequest
+
+    created = SecretCreateRequest(name=_NAME, type="api_key", scope=ChatSecretScope.GENERAL, value="v")
+    assert created.name == SecretUpdateRequest(name=_NAME).name == _NAME
+    with pytest.raises(ValueError):
+        SecretCreateRequest(name="bad:name", type="api_key", scope=ChatSecretScope.GENERAL, value="v")
+
+
+async def test_create_route_answers_a_reserved_name_with_the_fixed_409_and_writes_nothing(monkeypatch):
+    from api import secrets as secrets_api
+    from api.schemas_system import ChatSecretScope, SecretCreateRequest
+
+    request = SecretCreateRequest(name=_NAME, type="api_key", scope=ChatSecretScope.GENERAL, value="v")
+    writer = MagicMock()
+    monkeypatch.setattr(secrets_api, "check_rate_limit", AsyncMock())
+    monkeypatch.setattr(secrets_api.secrets_manager, "create_secret", writer)
+    monkeypatch.setattr(secrets_api, "audit_secret_op", AsyncMock())
+    with pytest.raises(HTTPException) as caught:
+        await secrets_api.create_secret(request, MagicMock(), True)
+    assert caught.value.status_code == 409
+    writer.assert_not_called()

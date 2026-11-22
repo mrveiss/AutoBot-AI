@@ -3251,6 +3251,11 @@ def _validate_secret_name(name: str) -> str:
     return name
 
 
+def _validate_request_secret_name(name: str) -> str:
+    """A request's secret name: a reserved one passes through to the route's fixed 409 (#17850), else the pattern."""
+    return name if is_reserved_secret_name(name) else _validate_secret_name(name)
+
+
 class ChatSecretScope(str, Enum):
     """Scope enumeration for the legacy Redis chat-secrets store (api/secrets.py).
 
@@ -3336,7 +3341,7 @@ class SecretCreateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        return _validate_secret_name(v)
+        return _validate_request_secret_name(v)
 
     @model_validator(mode="after")
     def _validate_value_or_connector_bridge(self) -> "SecretCreateRequest":
@@ -3398,9 +3403,7 @@ class SecretUpdateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str | None) -> str | None:
-        if v is None or is_reserved_secret_name(v):
-            return v  # a reserved name reaches the route's checked_secret_name: the fixed 409, not this 422 (#17850)
-        return _validate_secret_name(v)
+        return v if v is None else _validate_request_secret_name(v)
 
 
 class SecretTransferRequest(BaseModel):
