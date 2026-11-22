@@ -113,3 +113,30 @@ def test_the_run_route_defaults_to_the_genesis() -> None:
     with patch("api.audit.verify_chain", AsyncMock(return_value=_report())) as verify:
         assert _client().post("/api/audit/integrity/verify").status_code == 200
     verify.assert_awaited_once_with(None)
+
+
+@pytest.mark.parametrize("bad", [0, -1, 2**62 + 1])
+def test_from_seq_outside_its_bounds_is_refused_before_any_work(bad: int) -> None:
+    with patch("api.audit.verify_chain", AsyncMock()) as verify:
+        assert _client().post("/api/audit/integrity/verify", json={"from_seq": bad}).status_code == 422
+    verify.assert_not_awaited()
+
+
+def test_from_seq_at_its_bounds_is_accepted() -> None:
+    with patch("api.audit.verify_chain", AsyncMock(return_value=_report())):
+        for ok in (1, 2**62):
+            assert _client().post("/api/audit/integrity/verify", json={"from_seq": ok}).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_a_second_verification_while_one_runs_is_refused_and_the_lock_is_released() -> None:
+    import api.audit as audit_api
+
+    async with audit_api._verify_in_flight:
+        with patch("api.audit.verify_chain", AsyncMock()) as verify:
+            response = _client().post("/api/audit/integrity/verify")
+        verify.assert_not_awaited()
+    assert response.status_code == 409
+    with patch("api.audit.verify_chain", AsyncMock(return_value=_report())):
+        assert _client().post("/api/audit/integrity/verify").status_code == 200
+    assert not audit_api._verify_in_flight.locked()

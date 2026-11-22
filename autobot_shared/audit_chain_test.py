@@ -140,3 +140,25 @@ def test_the_version_byte_is_part_of_what_is_hashed(monkeypatch) -> None:
 def test_key_id_names_a_key_without_revealing_it() -> None:
     assert chain.key_id(KEY) != chain.key_id(OTHER_KEY)
     assert KEY.hex() not in chain.key_id(KEY) and len(chain.key_id(KEY)) == 16
+
+
+@pytest.mark.parametrize("field", ["prev_hash", "row_hash", "row_mac"])
+@pytest.mark.parametrize("bad", ["é" * 64, "A" * 64, "abc", "", None, "g" * 64])
+def test_a_malformed_stored_hash_is_reported_as_modified_and_never_crashes(field: str, bad) -> None:
+    rows, genesis = _chain(3)
+    setattr(rows[1], field, bad)
+    found = chain.verify_rows(rows, KEY, genesis=genesis)
+    assert (chain.MODIFIED, 2) in {(f.kind, f.seq) for f in found}
+
+
+def test_digest_format_and_comparison_are_safe_for_non_ascii() -> None:
+    assert chain.is_digest("a" * 64) and not chain.is_digest("é" * 64) and not chain.is_digest(None)
+    assert chain.same_digest("a" * 64, "a" * 64) and not chain.same_digest("é", "e")
+
+
+def test_details_hash_the_way_postgresql_returns_them() -> None:
+    """``1e+22`` comes back from JSONB as the integer 10**22; ``1.0`` and ``1e-07`` come back unchanged."""
+    assert chain.jsonb_form({"a": [1e22, 1.5e300, 1.0, 1e-07, 5, "x"]}) == {
+        "a": [10**22, int("15" + "0" * 299), 1.0, 1e-07, 5, "x"]
+    }
+    assert chain.canonical_bytes({"d": chain.jsonb_form({"v": 1e22})}) == chain.canonical_bytes({"d": {"v": 10**22}})

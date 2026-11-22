@@ -324,21 +324,41 @@ def test_audit_logs_rows_have_one_constructor() -> None:
 _RAW_AUDIT_LOGS_INSERT = re.compile(r"\binsert\s+into\s+(?:\w+\.)?audit_logs\b", re.IGNORECASE)
 
 
+_BULK_ORM_WRITES = frozenset({"bulk_save_objects", "bulk_insert_mappings"})
+
+
+def _table_aliases(tree: ast.AST) -> set[str]:
+    """Names bound to ``AuditLog.__table__`` (``_TABLE = AuditLog.__table__``), so ``insert(_TABLE)`` is seen."""
+    names = set()
+    for node in ast.walk(tree):
+        value = getattr(node, "value", None)
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and isinstance(value, ast.Attribute):
+            if value.attr == "__table__" and isinstance(value.value, ast.Name) and value.value.id == "AuditLog":
+                names.update(_target_names(node))
+    return names
+
+
 def _bypasses_chain_hook(source: str) -> bool:
-    """True when `source` inserts into `audit_logs` without going through the ORM unit of work."""
+    """True when `source` inserts into `audit_logs` without the ORM unit of work (which fires the listener)."""
     tree = parse_cache.parse(source)
+    aliases = _table_aliases(tree)
     for node in ast.walk(tree):
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and _RAW_AUDIT_LOGS_INSERT.search(node.value):
             return True
-        if _is_call(node, name="insert", attr_in=frozenset({"insert"})) and _names_audit_log_table(node):
+        if _is_call(node, name="insert", attr_in=frozenset({"insert"})) and _names_audit_log_table(node, aliases):
+            return True
+        if _is_call(node, attr_in=_BULK_ORM_WRITES) and _mentions(node, {"AuditLog"} | aliases):
             return True
     return False
 
 
-def _names_audit_log_table(call: ast.Call) -> bool:
-    """`insert(AuditLog)`, `sa.insert(AuditLog.__table__)` or `AuditLog.__table__.insert()`."""
-    parts = list(call.args) + [call.func]
-    return any(isinstance(n, ast.Name) and n.id == "AuditLog" for part in parts for n in ast.walk(part))
+def _mentions(node: ast.AST, names: set[str]) -> bool:
+    return any(isinstance(n, ast.Name) and n.id in names for n in ast.walk(node))
+
+
+def _names_audit_log_table(call: ast.Call, aliases: set[str] = frozenset()) -> bool:
+    """`insert(AuditLog)`, `sa.insert(AuditLog.__table__)`, `AuditLog.__table__.insert()` or `insert(<alias>)`."""
+    return _mentions(call, {"AuditLog"} | set(aliases))
 
 
 @pytest.mark.parametrize(
@@ -348,6 +368,12 @@ def _names_audit_log_table(call: ast.Call) -> bool:
         ("qualified core insert", "def f(s):\n    s.execute(sa.insert(AuditLog.__table__))\n", True),
         ("table insert method", "def f(s):\n    s.execute(AuditLog.__table__.insert())\n", True),
         ("raw sql insert", 'def f(c):\n    c.execute("INSERT INTO audit_logs (id) VALUES (1)")\n', True),
+        ("aliased table insert", "_TABLE = AuditLog.__table__\ndef f(s):\n    s.execute(insert(_TABLE))\n", True),
+        ("aliased table method", "T = AuditLog.__table__\ndef f(s):\n    s.execute(T.insert())\n", True),
+        ("bulk save of rows", "def f(s, rows):\n    s.bulk_save_objects([AuditLog(a=1)])\n", True),
+        ("bulk insert of mappings", "def f(s):\n    s.bulk_insert_mappings(AuditLog, [{}])\n", True),
+        ("bulk insert of another model", "def f(s):\n    s.bulk_insert_mappings(Other, [{}])\n", False),
+        ("an alias of another table", "T = Other.__table__\ndef f(s):\n    s.execute(insert(T))\n", False),
         ("orm add through the builder", "def f(s):\n    s.add(audit_row(action='x', resource_type='r'))\n", False),
         ("an insert into another table", "def f(s):\n    s.execute(insert(AuditChainAnchor))\n", False),
         ("a read of audit_logs", 'def f(c):\n    c.execute("SELECT 1 FROM audit_logs")\n', False),

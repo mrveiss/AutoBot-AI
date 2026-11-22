@@ -63,6 +63,16 @@ Limits:
 * A removed **tail** row is not detectable until the head is published somewhere else (#22005).
 * The database does not yet refuse an UPDATE or DELETE (#22004); the owning role could also disable a trigger.
 * An attacker with the database, the root key and a published head defeats the chain.
+* `key_id` is **not** covered by the hash: it names the key a row was MACed with, and the MAC itself binds the
+  row to that key. Key rotation (a second `key_id`, a rotation anchor) is batch 2 (#22005); today there is one key.
+* The chain lock is held from the insert's flush to the caller's commit, with a bounded wait
+  (`AUTOBOT_AUDIT_CHAIN_LOCK_TIMEOUT_MS`, 5 s). Keep a transaction that writes an audit row short: a slow one
+  stalls every other audit insert in that database, and a waiter past the bound fails its audit write.
+* The "last result" of `GET /api/audit/integrity` is held in memory, per process, so another worker may answer
+  with none. It becomes shared with the Redis head copy in batch 2 (#22005). `POST /api/audit/integrity/verify`
+  runs one verification at a time per process and answers 409 to a second.
+* A genesis anchor missing while chained rows exist, and a stored hash or MAC that is not 64 lowercase hex
+  characters, are reported as findings (`genesis_missing`, `modified_row`), never raised.
 * `actor` is hashed, so an actor id cannot be erased from a chained row without a re-anchor.
 * Chaining runs on PostgreSQL only; the in-memory SQLite of the unit tests writes complete, unchained rows.
 * The stores in rows 5, 10, 11 and 12 above are not chained until they are recorded through the canonical

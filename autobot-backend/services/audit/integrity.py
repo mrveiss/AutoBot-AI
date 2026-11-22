@@ -124,11 +124,14 @@ def _genesis_findings(genesis: Any, key: bytes) -> list[Finding]:
     """The anchor is itself covered: its hash binds the pre-chain count, its MAC the hash."""
     expected = audit_chain.genesis_hash(int(genesis.pre_chain_count), genesis.pre_chain_max_created_at)
     found = []
-    if expected != genesis.hash:
+    if not audit_chain.same_digest(expected, genesis.hash):
         found.append(
             Finding(audit_chain.MODIFIED, audit_chain.GENESIS_SEQ, "genesis hash does not match its recorded count")
         )
-    if audit_chain.row_mac(key, genesis.hash) != genesis.mac:
+    if not (
+        audit_chain.is_digest(genesis.hash)
+        and audit_chain.same_digest(audit_chain.row_mac(key, genesis.hash), genesis.mac)
+    ):
         found.append(
             Finding(audit_chain.MAC_INVALID, audit_chain.GENESIS_SEQ, "genesis mac does not verify under the key")
         )
@@ -156,6 +159,17 @@ async def _verify(session: Any, genesis: Any, from_seq: int) -> IntegrityReport:
     return report
 
 
+async def _without_genesis(session: Any) -> IntegrityReport:
+    """No genesis anchor: fine before the first chained insert, a finding once any row is chained."""
+    head_seq, head_hash = await current_head(session)
+    report = IntegrityReport(ok=True, checked_at=datetime.now(timezone.utc), head_seq=head_seq, head_hash=head_hash)
+    if head_seq:
+        detail = "genesis anchor missing although chained rows exist"
+        report.findings.append(Finding(audit_chain.GENESIS_MISSING, audit_chain.GENESIS_SEQ, detail))
+        report.ok = False
+    return report
+
+
 async def verify_chain(from_seq: int | None = None) -> IntegrityReport:
     """Verify the chain from *from_seq* (default: the genesis) and remember the result.
 
@@ -165,7 +179,7 @@ async def verify_chain(from_seq: int | None = None) -> IntegrityReport:
     async with db_session_context() as session:
         genesis = await _genesis(session)
         if genesis is None:
-            report = IntegrityReport(ok=True, checked_at=datetime.now(timezone.utc))
+            report = await _without_genesis(session)
         else:
             report = await _verify(session, genesis, from_seq or 1)
     _last_report = report

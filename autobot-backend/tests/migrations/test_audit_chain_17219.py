@@ -385,3 +385,25 @@ async def test_every_in_transaction_writer_produces_a_chained_verifying_row(migr
     row = await _scalar(sessions, "SELECT count(*) FROM audit_logs WHERE chain_seq IS NOT NULL AND row_mac IS NOT NULL")
     assert row == 1, f"{writer} wrote an unchained row"
     assert (await _verify()).ok
+
+
+async def test_a_row_sealed_in_a_rolled_back_savepoint_leaves_no_gap(migrated) -> None:
+    sessions, _ = migrated
+    async with sessions.begin() as session:
+        session.add(_row(actor="first"))
+        await session.flush()
+        nested = await session.begin_nested()
+        session.add(_row(actor="discarded"))
+        await session.flush()
+        await nested.rollback()
+        session.add(_row(actor="second"))
+    async with sessions() as session:
+        seqs = (await session.execute(text("SELECT chain_seq FROM audit_logs ORDER BY chain_seq"))).scalars().all()
+    assert seqs == [1, 2]
+    assert (await _verify()).ok
+
+
+async def test_float_details_with_an_exponent_keep_the_same_hash_after_jsonb(migrated) -> None:
+    sessions, _ = migrated
+    await _insert(sessions, 1, details={"big": 1e22, "huge": 1.5e300, "one": 1.0, "tiny": 1e-07, "n": [1e16, 2.5]})
+    assert (await _verify()).ok

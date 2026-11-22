@@ -19,6 +19,7 @@ Endpoints:
 - POST /api/audit/integrity/verify - Run the audit-chain verification (admin only, human only)
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -51,6 +52,9 @@ from utils.catalog_http_exceptions import (
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 logger = get_logger(__name__)
+
+#: One verification at a time per process: it streams the whole chain, so a second run only adds load (#17219).
+_verify_in_flight = asyncio.Lock()
 
 
 def _build_query_dict(
@@ -419,5 +423,8 @@ async def verify_audit_integrity(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Verify the audit hash chain now. A failed verification is reported, never enforced (#17219)."""
-    report = await verify_chain((body.from_seq if body else None))
+    if _verify_in_flight.locked():
+        raise HTTPException(status_code=409, detail="An audit chain verification is already running")
+    async with _verify_in_flight:
+        report = await verify_chain(body.from_seq if body else None)
     return report_summary(report)

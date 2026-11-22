@@ -212,6 +212,7 @@ async def test_a_modified_genesis_is_reported(chained) -> None:
 async def test_before_the_first_chained_insert_there_is_nothing_to_verify(chained) -> None:
     sessions, _ = chained
     await _mutate(sessions, delete(_ANCHORS))
+    await _mutate(sessions, delete(_AUDIT).where(_AUDIT.c.chain_seq.is_not(None)))  # no chained row either
     report = await integrity.verify_chain()
     assert report.ok and not report.chain_started and report.rows_checked == 0
 
@@ -295,3 +296,26 @@ def test_the_cli_exits_non_zero_and_names_the_tampered_row(tmp_path, monkeypatch
     report = json.loads(capsys.readouterr().out)
     assert report["ok"] is False
     assert report["findings"] == [{"kind": "modified_row", "seq": 3, "detail": report["findings"][0]["detail"]}]
+
+
+@pytest.mark.asyncio
+async def test_a_missing_genesis_with_chained_rows_is_a_finding(chained) -> None:
+    sessions, _ = chained
+    await _mutate(sessions, delete(_ANCHORS))
+    report = await integrity.verify_chain()
+    assert not report.ok and _found(report) == {(chain.GENESIS_MISSING, 0)} and report.head_seq == 5
+
+
+@pytest.mark.asyncio
+async def test_a_non_ascii_stored_hash_is_reported_not_raised(chained) -> None:
+    sessions, _ = chained
+    await _mutate(sessions, update(_AUDIT).where(_AUDIT.c.chain_seq == 4).values(row_hash="é" * 64))
+    report = await integrity.verify_chain()
+    assert not report.ok and (chain.MODIFIED, 4) in _found(report)
+
+
+@pytest.mark.asyncio
+async def test_a_non_ascii_genesis_is_reported_not_raised(chained) -> None:
+    sessions, _ = chained
+    await _mutate(sessions, update(_ANCHORS).values(mac="é" * 64))
+    assert (chain.MAC_INVALID, 0) in _found(await integrity.verify_chain())

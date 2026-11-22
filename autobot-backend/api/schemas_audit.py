@@ -4,7 +4,7 @@
 
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from type_defs.common import Metadata
 
@@ -79,4 +79,4 @@ class AuditIntegrityStatus(BaseModel):
 class AuditIntegrityRequest(BaseModel):
     """Body of the verify route: where to start (default: the genesis)."""
 
-    from_seq: Optional[int] = None
+    from_seq: Optional[int] = Field(default=None, ge=1, le=2**62)

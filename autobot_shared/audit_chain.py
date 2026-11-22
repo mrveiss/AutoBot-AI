@@ -24,9 +24,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Iterable, Mapping
 
 #: First byte of every serialization: the format can change without invalidating older rows.
@@ -61,6 +63,9 @@ GAP = "removed_row"
 REORDERED = "reordered_row"
 MAC_INVALID = "mac_invalid"
 UNCHAINED = "unchained_row"
+GENESIS_MISSING = "genesis_missing"
+
+_HEX_DIGEST = re.compile(r"[0-9a-f]{64}")
 
 
 def _scalar(value: Any) -> Any:
@@ -72,9 +77,36 @@ def _scalar(value: Any) -> Any:
     return value
 
 
+def jsonb_form(value: Any) -> Any:
+    """*value* as PostgreSQL JSONB hands it back, so the hash taken before the insert equals the one after the read.
+
+    JSONB stores numbers as ``numeric``: a float written with a positive exponent (``1e+22``) comes back as a plain
+    integer, while ``1.0`` keeps its scale and comes back as a float. Everything else round-trips unchanged.
+    """
+    if isinstance(value, dict):
+        return {k: jsonb_form(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [jsonb_form(v) for v in value]
+    if isinstance(value, float) and "e+" in repr(value):
+        return int(Decimal(repr(value)))
+    return value
+
+
 def covered_values(row: Any) -> dict[str, Any]:
     """The covered columns of *row* (an ORM row or any object with those attributes), normalised."""
-    return {name: _scalar(getattr(row, name, None)) for name in COVERED_FIELDS}
+    values = {name: _scalar(getattr(row, name, None)) for name in COVERED_FIELDS}
+    values["details"] = jsonb_form(values["details"])
+    return values
+
+
+def is_digest(value: Any) -> bool:
+    """True for a well-formed stored hash or MAC: 64 lowercase hex characters."""
+    return isinstance(value, str) and _HEX_DIGEST.fullmatch(value) is not None
+
+
+def same_digest(left: Any, right: Any) -> bool:
+    """Constant-time equality of two stored values; safe for any string, including non-ASCII."""
+    return hmac.compare_digest(str(left or "").encode("utf-8"), str(right or "").encode("utf-8"))
 
 
 def canonical_bytes(values: Mapping[str, Any]) -> bytes:
@@ -131,8 +163,13 @@ class ChainVerifier:
     def check(self, row: Any) -> list[Finding]:
         """Findings for *row*; the next row is judged against this row's STORED hash."""
         seq = int(row.chain_seq)
-        found = self._ordering(row, seq) + self._content(row, seq)
-        self._prev_seq, self._prev_hash = seq, row.row_hash
+        found = self._ordering(row, seq)
+        if all(is_digest(getattr(row, name)) for name in ("prev_hash", "row_hash", "row_mac")):
+            found += self._content(row, seq)
+        else:
+            found.append(Finding(MODIFIED, seq, "a stored hash or mac is not 64 lowercase hex characters"))
+        self._prev_seq = seq
+        self._prev_hash = row.row_hash if is_digest(row.row_hash) else ""
         self.rows_checked += 1
         return found
 
@@ -140,17 +177,16 @@ class ChainVerifier:
         found = []
         if seq != self._prev_seq + 1:
             found.append(Finding(GAP, self._prev_seq + 1, f"{seq - self._prev_seq - 1} sequence number(s) missing"))
-        if not hmac.compare_digest(str(row.prev_hash or ""), self._prev_hash):
+        if not same_digest(row.prev_hash, self._prev_hash):
             found.append(Finding(REORDERED, seq, "prev_hash does not link to the previous row"))
         return found
 
     def _content(self, row: Any, seq: int) -> list[Finding]:
-        digest = row_hash(str(row.prev_hash or ""), canonical_bytes(covered_values(row)))
-        stored = str(row.row_hash or "")
+        digest = row_hash(row.prev_hash, canonical_bytes(covered_values(row)))
         found = []
-        if not hmac.compare_digest(digest, stored):
+        if not same_digest(digest, row.row_hash):
             found.append(Finding(MODIFIED, seq, "row_hash does not match the stored columns"))
-        if not hmac.compare_digest(row_mac(self._key, stored), str(row.row_mac or "")):
+        if not same_digest(row_mac(self._key, row.row_hash), row.row_mac):
             found.append(Finding(MAC_INVALID, seq, "row_mac does not verify under the key"))
         return found
 
