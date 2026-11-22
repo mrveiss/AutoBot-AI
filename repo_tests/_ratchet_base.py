@@ -11,8 +11,10 @@ Nothing is hand-summed, so PRs that lower different entries touch different line
 
 The base is:
 - in CI (``GITHUB_ACTIONS``): ``AUTOBOT_RATCHET_BASE_SHA`` when ci.yml sets it -- a merge
-  group's ``base_sha``, or on a push to main the commit main pointed at before -- else
-  ``HEAD^1``. A pull_request run checks out the merge ref, whose first parent is the base tip.
+  group's ``base_sha``, on a push to main the commit main pointed at before, or on a pull
+  request into ``release`` the head's merge base with main (#19466: gates judge only commits
+  not already on main, so a promotion is not re-judged against the weeks-old release tip) --
+  else ``HEAD^1``. A pull_request run checks out the merge ref, whose first parent is the base tip.
   The checkout needs ``fetch-depth: 2``.
 - elsewhere: ``git merge-base HEAD <AUTOBOT_RATCHET_BASE_REF, default origin/main>``.
 
@@ -24,6 +26,11 @@ orphaned by a rebase -- which is why ci.yml passes it only for pushes.
 A table that moved path is read from its first path present at each base, so a rename PR lists
 the old path after the new one (``base_table(root, ("new.py", "old.py"), NAME)``).
 
+The size ratchets use it as a TIGHT gate, not only a tripwire (#19673): ``growth_over_base`` requires
+``lines(F@HEAD) <= min(KNOWN_LARGE[F], lines(F@base))``, with the base being the real merge base
+above. A shrinking PR therefore never edits the shared ceiling table; a ceiling above the measured
+size is harmless, and each checker's ``--repin-ceilings`` is an optional manual tidy.
+
 If the base cannot be read, :class:`BaseUnavailable` is raised. It is never treated as
 "nothing rose": a ratchet that cannot see its base has proved nothing.
 """
@@ -31,9 +38,11 @@ If the base cannot be read, :class:`BaseUnavailable` is raised. It is never trea
 from __future__ import annotations
 
 import ast
+import io
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from autobot_shared.paths import scrubbed_git_env
 
@@ -43,6 +52,14 @@ BASE_SHA_ENV = "AUTOBOT_RATCHET_BASE_SHA"
 
 class BaseUnavailable(RuntimeError):
     """The base commit (or a file at it) could not be read; the ratchet refuses to judge."""
+
+
+class BaseHasNoTable(BaseUnavailable):
+    """The base file was read, but holds no ``NAME = ...`` table: the table is new at this head (#21573).
+
+    Only this case reads as an empty table (``base_table(..., absent_as_empty=True)``); an unreadable
+    base is the parent error and is never an empty table.
+    """
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -93,26 +110,88 @@ def base_text(root: Path, rel: str, sha: str | None = None) -> str | None:
     raise BaseUnavailable(f"cannot read {rel} at the base {sha[:10]}: {out.stderr.strip()}")
 
 
+class _ModuleConstants(ast.NodeTransformer):
+    """Replaces a name with the module-level string constant it was assigned, so ``{KEY: 1}`` reads."""
+
+    def __init__(self, tree: ast.Module) -> None:
+        self.values = {
+            target.id: node.value.value
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        }
+
+    def visit_Name(self, node: ast.Name) -> ast.AST:
+        return ast.Constant(self.values[node.id]) if node.id in self.values else node
+
+
 def literal_in(source: str, name: str) -> object:
-    """The literal assigned to module-level *name* in *source* (``NAME = {...}`` or annotated)."""
-    for node in ast.parse(source).body:
+    """The literal assigned to module-level *name* in *source* (``NAME = {...}``, annotated, or ``frozenset({...})``).
+
+    A table may key its entries by a module-level string constant (``PINS = {NAMED: 24}``).
+    """
+    tree = ast.parse(source)
+    constants = _ModuleConstants(tree)
+    for node in tree.body:
         targets = (
             node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
         )
         if any(isinstance(t, ast.Name) and t.id == name for t in targets) and node.value is not None:
-            return ast.literal_eval(node.value)
-    raise BaseUnavailable(f"no literal {name} = ... in the base source")
+            value = constants.visit(node.value)
+            if isinstance(value, ast.Call) and getattr(value.func, "id", "") == "frozenset" and len(value.args) <= 1:
+                return frozenset(ast.literal_eval(value.args[0]) if value.args else ())
+            return ast.literal_eval(value)
+    raise BaseHasNoTable(f"no literal {name} = ... in the base source")
 
 
-def base_table(root: Path, rels: tuple[str, ...], name: str) -> dict[str, int]:
+def base_file_present(root: Path, rels: tuple[str, ...]) -> bool:
+    """Whether the base has any of *rels*; False means the ratchet itself is new at this head (#21573).
+
+    An empty table in a file the base has is present: its comparison must still run.
+    """
+    sha = base_commit(root)
+    return any(base_text(root, rel, sha) is not None for rel in rels)
+
+
+def base_table(root: Path, rels: tuple[str, ...], name: str, *, absent_as_empty: bool = False) -> Any:
     """The literal *name* at the base: the ratchet's reference.
 
     *rels* is the table's path, then any path it had before a move; the first one the base has
     is read. A base with none of them gives ``{}``, so every entry reads as an addition.
+
+    A base file that exists but has no *name* table raises :class:`BaseHasNoTable`; with
+    *absent_as_empty* it gives ``{}`` instead, so a table introduced by this change is compared
+    against nothing and every entry reads as a rise. Every other failure still raises.
     """
     sha = base_commit(root)
     src = next((s for s in (base_text(root, rel, sha) for rel in rels) if s is not None), None)
-    return literal_in(src, name) if src is not None else {}
+    if src is None:
+        return {}
+    try:
+        return literal_in(src, name)
+    except BaseHasNoTable:
+        if absent_as_empty:
+            return {}
+        raise
+
+
+def added_entries(current: frozenset[str], base: Any) -> list[str]:
+    """Exemption-list members the base does not have; ``{}`` from `base_table` makes them all additions."""
+    return sorted(current - set(base))
+
+
+def raised_known_entries(now: dict[str, int], base: dict[str, int]) -> dict[str, tuple[int, int]]:
+    """Entries the base already had that rose, ``{key: (base value, now)}``; a key the base lacks is ignored.
+
+    The convention for pins kept in a test file: "a measure the base did not have starts at its first
+    measurement" (#20004). A separate test pins every key to the real measurement, so a new key is already
+    tied to reality; this comparison only guards the keys that existed. Where an added entry must be refused,
+    use :func:`raised_entries`.
+    """
+    return {k: (base[k], v) for k, v in now.items() if k in base and v > base[k]}
 
 
 def raised_entries(now: dict[str, int], base: dict[str, int]) -> dict[str, tuple[int | None, int]]:
@@ -148,3 +227,71 @@ def base_tree_texts(root: Path, prefix: str, sha: str | None = None) -> dict[str
         texts[path] = data[header_end + 1 : header_end + 1 + size].decode("utf-8", errors="replace")
         pos = header_end + 1 + size + 1
     return texts
+
+
+def _lines(data: bytes) -> int:
+    """Line count with exactly ``tools.lint._file_size_guard.count_lines``' semantics (universal newlines)."""
+    return sum(1 for _ in io.TextIOWrapper(io.BytesIO(data), encoding="utf-8"))
+
+
+def base_line_counts(root: Path, rels: list[str], sha: str | None = None) -> dict[str, int | None]:
+    """``{path: line count at the base}``, ``None`` for a path the base did not have (#19673).
+
+    One ``git cat-file --batch`` call. Fails closed: an unreadable base, an object that is not a
+    blob, or content that does not decode raises :class:`BaseUnavailable`; none reads as "absent".
+    """
+    sha = _commit(root, sha, "base sha") if sha else base_commit(root)
+    if not rels:
+        return {}
+    batch = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "--batch"],
+        input="".join(f"{sha}:{p}\n" for p in rels).encode("utf-8"),
+        capture_output=True,
+        timeout=120,
+        env=scrubbed_git_env(),
+    )
+    if batch.returncode != 0:
+        raise BaseUnavailable(f"cannot read the base {sha[:10]}: {batch.stderr.decode(errors='replace').strip()}")
+    counts: dict[str, int | None] = {}
+    data, pos = batch.stdout, 0
+    for path in rels:
+        header_end = data.index(b"\n", pos)
+        header = data[pos:header_end].split()
+        if header[-1:] == [b"missing"]:
+            counts[path] = None
+            pos = header_end + 1
+            continue
+        if len(header) < 3 or header[1] != b"blob":
+            raise BaseUnavailable(f"unexpected object for {path} at the base: {data[pos:header_end]!r}")
+        size = int(header[2])
+        try:
+            counts[path] = _lines(data[header_end + 1 : header_end + 1 + size])
+        except UnicodeDecodeError as exc:
+            raise BaseUnavailable(f"{path} at the base {sha[:10]} does not decode as UTF-8: {exc}") from exc
+        pos = header_end + 1 + size + 1
+    return counts
+
+
+def growth_over_base(root: Path, ceilings: dict[str, int], sha: str | None = None) -> dict[str, str]:
+    """Files breaking ``lines(F@HEAD) <= min(ceiling[F], lines(F@base))``, ``{path: reason}`` (#19673).
+
+    The committed ceiling is a down-only upper bound; the base blob is the tight gate, so a PR that
+    shrinks a grandfathered file needs no edit to the shared table. A file the base did not have is
+    blocked outright (a new file never earns an exemption), and an unreadable head file is a finding,
+    not a skip. *root* is the checkout whose working tree is HEAD.
+    """
+    from tools.lint._file_size_guard import count_lines  # noqa: PLC0415 - keeps this module import-light
+
+    base = base_line_counts(root, sorted(ceilings), sha)
+    found: dict[str, str] = {}
+    for rel, ceiling in sorted(ceilings.items()):
+        head, then = count_lines(root / rel), base[rel]
+        if then is None:
+            found[rel] = (
+                "not at the base: a new file is never grandfathered -- split it (renamed? move its entry in the table)"
+            )
+        elif head is None:
+            found[rel] = "could not be read at HEAD, so it was never measured"
+        elif head > min(ceiling, then):
+            found[rel] = f"{head} lines at HEAD, over min(ceiling {ceiling}, base {then})"
+    return found

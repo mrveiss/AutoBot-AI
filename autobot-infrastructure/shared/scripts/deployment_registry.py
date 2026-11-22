@@ -48,7 +48,6 @@ Two divergences are preserved deliberately rather than flattened:
 from __future__ import annotations
 
 import asyncio
-import os
 import socket
 import subprocess
 import sys
@@ -71,9 +70,8 @@ from autobot_shared.service_registry_core import (  # noqa: E402 - follows the s
     SERVICE_DEFINITIONS,
     DeploymentMode,
     ServiceHealth,
-    detect_deployment_mode,
     join_service_path,
-    parse_deployment_mode,
+    resolve_deployment_mode,
 )
 from autobot_shared.status_enums import HealthStatus  # noqa: E402
 
@@ -108,13 +106,8 @@ class ServiceRegistry:
 
     @staticmethod
     def _detect_deployment_mode() -> DeploymentMode:
-        """Detect deployment mode from env, falling back to container heuristic."""
-        # Unset means "detect from /.dockerenv", not the backend's "distributed" (#18094).
-        raw = os.environ.get("AUTOBOT_DEPLOYMENT_MODE", "")  # ssot-config-exempt: unset -> container detection
-        explicit = parse_deployment_mode(raw, logger, "AUTOBOT_DEPLOYMENT_MODE")
-        return detect_deployment_mode(
-            explicit, in_container=os.path.exists("/.dockerenv"), kubernetes=False, distributed=False
-        )
+        """The shared resolver: AUTOBOT_DEPLOYMENT_MODE when set and valid, else detection (#19316)."""
+        return resolve_deployment_mode(logger)
 
     @staticmethod
     def _probe(url: str, timeout: float = 5.0) -> bool:

@@ -12,11 +12,12 @@ direct reports, reporting-line updates with cycle detection, and role defaults.
 import uuid
 from typing import Any, Callable, Dict, List
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from models.agent_org import AgentOrgNode, OrgRole
+from services.agent_activity_feed import get_agent_feeds, with_feed
 
 logger = get_logger(__name__)
 
@@ -77,6 +78,18 @@ def _normalise_company_id(company_id: "str | uuid.UUID | None") -> "uuid.UUID | 
     return company_id if isinstance(company_id, uuid.UUID) else uuid.UUID(str(company_id))
 
 
+def live_company_agents_clause():
+    """WHERE clause keeping platform agents and agents of live companies (#21942).
+
+    A soft-deleted (``Organization.deleted_at``) or missing company's agents are hidden from
+    every cross-company listing; their rows are kept, never deleted (#15907, #21934).
+    """
+    from user_management.models.organization import Organization
+
+    live = select(Organization.id).where(Organization.deleted_at.is_(None))
+    return or_(AgentOrgNode.company_id.is_(None), AgentOrgNode.company_id.in_(live))
+
+
 class AgentOrgService:
     """Service for agent organizational hierarchy operations (#1405)."""
 
@@ -88,6 +101,11 @@ class AgentOrgService:
     async def get_all_nodes(self) -> List[AgentOrgNode]:
         """Fetch all org nodes in one query. Helper to avoid N+1 (#1405)."""
         result = await self.session.execute(select(AgentOrgNode))
+        return list(result.scalars().all())
+
+    async def get_live_nodes(self) -> List[AgentOrgNode]:
+        """Org nodes of platform agents and live companies only, for cross-company listings (#21942)."""
+        result = await self.session.execute(select(AgentOrgNode).where(live_company_agents_clause()))
         return list(result.scalars().all())
 
     async def get_node(self, agent_id: str) -> AgentOrgNode | None:
@@ -122,17 +140,15 @@ class AgentOrgService:
         visible agents are kept, and a visible agent whose manager is hidden becomes a root
         rather than disappearing.
         """
-        nodes = [n for n in await self.get_all_nodes() if can_see(n.company_id)]
+        nodes = [n for n in await self.get_live_nodes() if can_see(n.company_id)]
         visible = {n.agent_id for n in nodes}
         roots = [n for n in nodes if n.reports_to is None or n.reports_to not in visible]
         return [self._subtree(root, nodes) for root in roots]
 
     @staticmethod
-    def _status_for_node(node: AgentOrgNode) -> str:
-        """Derive a runtime status string for the activity monitor (#10502)."""
-        if node.pre_pause_status is not None:
-            return "paused"
-        return "idle"
+    def _status_for_node(node: AgentOrgNode) -> str | None:
+        """The one status the org registry knows: paused. Anything else is unmeasured (#17514)."""
+        return "paused" if node.pre_pause_status is not None else None
 
     async def get_agent_statuses(self, *, can_see: Callable[[Any], bool]) -> List[Dict[str, Any]]:
         """Return all registered agents with runtime status (#10502).
@@ -142,22 +158,40 @@ class AgentOrgService:
         of agents. Sourced from the org registry so every registered agent
         is returned.
         """
-        nodes = [n for n in await self.get_all_nodes() if can_see(n.company_id)]  # #19246: caller's view
+        nodes = [n for n in await self.get_live_nodes() if can_see(n.company_id)]  # #19246: caller's view
+        names = await self._company_names({n.company_id for n in nodes if n.company_id})
+        # #17514: the registry measures no activity, so those fields are None ("not reported"),
+        # never a 0 that reads as observed. The company tells two same-role agents apart.
+        # #21270: the task feeds come from the analytics history, None when it is unreadable.
+        feeds = await get_agent_feeds([n.agent_id for n in nodes])
         return [
-            {
-                "id": node.agent_id,
-                "name": node.name,
-                "type": _ROLE_TO_ACTIVITY_TYPE.get(node.org_role, "worker"),
-                "status": self._status_for_node(node),
-                "currentTask": None,
-                "tasksCompleted": 0,
-                "uptime": 0,
-                "successRate": 0,
-                "recentTasks": [],
-                "activityTimeline": [],
-            }
+            with_feed(
+                {
+                    "id": node.agent_id,
+                    "name": node.name,
+                    "type": _ROLE_TO_ACTIVITY_TYPE.get(node.org_role, "worker"),
+                    "status": self._status_for_node(node),
+                    "companyId": str(node.company_id) if node.company_id else None,
+                    "companyName": names.get(node.company_id),
+                },
+                feeds[node.agent_id],
+            )
             for node in nodes
         ]
+
+    async def _company_names(self, company_ids: set) -> Dict[Any, str]:
+        """company_id -> display name, in one query, for companies already in the caller's view."""
+        if not company_ids:
+            return {}
+        from user_management.models.organization import Organization
+
+        # A soft-deleted company is not named (Organization.deleted_at, the canonical soft-delete).
+        rows = await self.session.execute(
+            select(Organization.id, Organization.name).where(
+                Organization.id.in_(company_ids), Organization.deleted_at.is_(None)
+            )
+        )
+        return {company_id: name for company_id, name in rows.all()}
 
     async def get_chain_of_command(self, agent_id: str) -> List[Dict[str, Any]]:
         """
@@ -318,6 +352,18 @@ class AgentOrgService:
 
     # -- Upsert ------------------------------------------------------------
 
+    async def assert_manager_in_company(self, reports_to: str | None, company_id: uuid.UUID) -> None:
+        """Raise ``ValueError`` unless *reports_to* is None or an agent of *company_id* (#15794).
+
+        The one manager check: ``upsert_node`` and the hire route both use it, so a hire cannot be placed
+        under another company's agent. A missing manager and one elsewhere read the same.
+        """
+        if reports_to is None:
+            return
+        manager = await self.get_node(reports_to)
+        if manager is None or manager.company_id != company_id:
+            raise ValueError(f"Manager not in this company: {reports_to!r}")
+
     async def upsert_node(
         self,
         agent_id: str,
@@ -347,12 +393,14 @@ class AgentOrgService:
         if company_uuid is not None:
             if node is not None and node.company_id != company_uuid:
                 raise ValueError(f"Agent not found in org hierarchy: {agent_id!r}")
-            if reports_to is not None:
-                manager = await self.get_node(reports_to)
-                if manager is None or manager.company_id != company_uuid:
-                    raise ValueError(f"Manager not in this company: {reports_to!r}")
+            await self.assert_manager_in_company(reports_to, company_uuid)
 
         if node is None:
+            if company_uuid is not None:
+                # A NEW node in a company that gates hires is a hire: it goes through the approval (#8214).
+                from llc.services.agent_hire_service import refuse_unapproved_hire  # noqa: PLC0415 -- llc layer
+
+                await refuse_unapproved_hire(self.session, company_uuid)
             node = AgentOrgNode(
                 id=uuid.uuid4(),
                 agent_id=agent_id,

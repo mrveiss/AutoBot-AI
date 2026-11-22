@@ -31,7 +31,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
-from config import cfg
+from config import config_manager as cfg
 
 # Import existing AutoBot components
 from knowledge.backends import get_default_client
@@ -42,7 +42,7 @@ from knowledge.index_embedding_space import (
     index_embedding_space,
     require_query_dim,
 )
-from knowledge.quarantine import servable_unquarantined
+from knowledge.quarantine import servable_unquarantined, with_quarantine
 from knowledge_factory import get_knowledge_base_async
 
 # Issue #387: GPU-accelerated vector search
@@ -342,11 +342,11 @@ class NPUSemanticSearch:
     ) -> Tuple[List[NpuSearchResult], str]:
         """Search the KB, which embeds the query with the model that built its index. #18185."""
         if self.knowledge_base.vector_store and self.knowledge_base.vector_index:
-            return await self._search_with_llamaindex(query, similarity_top_k), "knowledge_base"
+            return await self._search_with_llamaindex(query, similarity_top_k, filters), "knowledge_base"
 
         logger.warning("Vector store not available, using basic search fallback")
-        basic_results = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, mode="text")
-        return self._convert_basic_results(basic_results, "cpu_fallback"), "cpu_fallback"
+        hits = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, hardware_backend="cpu")
+        return self._convert_basic_results(hits, "cpu_fallback"), "cpu_fallback"  # KB.search gated it (#19144)
 
     def _hybrid_populated(self) -> bool:
         """True when the hybrid FAISS index holds vectors, so a search would be in its space. #18185."""
@@ -392,8 +392,8 @@ class NPUSemanticSearch:
     ) -> Tuple[List[NpuSearchResult], SearchMetrics]:
         """Handle search error with fallback."""
         logger.error("❌ Enhanced search failed: %s", error)
-        basic_results = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, mode="auto")
-        fallback_results = self._convert_basic_results(basic_results, "fallback")
+        hits = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, hardware_backend="cpu")
+        fallback_results = self._convert_basic_results(hits, "fallback")  # KB.search gated it (#19144)
         total_time = (time.time() - start_time) * 1000
 
         fallback_metrics = SearchMetrics(
@@ -414,15 +414,7 @@ class NPUSemanticSearch:
         search_time: float,
         device: str,
     ) -> None:
-        """Log search completion with timing details. Issue #620.
-
-        Args:
-            results: Search results list
-            total_time: Total search time in ms
-            embedding_time: Embedding generation time in ms
-            search_time: Similarity search time in ms
-            device: Device used for embedding
-        """
+        """Log search completion: result count, and total, embedding and search time in ms on *device*. Issue #620."""
         logger.info(
             f"✅ Search completed: {len(results)} results in {total_time:.2f}ms "
             f"(embedding: {embedding_time:.2f}ms, search: {search_time:.2f}ms) "
@@ -566,11 +558,15 @@ class NPUSemanticSearch:
         )
         return results
 
-    async def _search_with_llamaindex(self, query: str, top_k: int) -> List[NpuSearchResult]:
-        """Search the KB vector index; LlamaIndex embeds ``query`` with the index's model. #620, #18185."""
-        query_engine = self.knowledge_base.vector_index.as_query_engine(similarity_top_k=top_k, response_mode="no_text")
-        response = await asyncio.to_thread(query_engine.query, query)
-
+    async def _search_with_llamaindex(
+        self, query: str, top_k: int, filters: Dict[str, Any] | None = None
+    ) -> List[NpuSearchResult]:
+        """Search the KB vector index under the quarantine ``where`` (#19164); LlamaIndex embeds ``query``. #18185."""
+        store_kwargs = {"where": with_quarantine(filters)}  # the caller's filter only narrows it, never replaces it
+        engine = self.knowledge_base.vector_index.as_query_engine(
+            similarity_top_k=top_k, response_mode="no_text", vector_store_kwargs=store_kwargs
+        )
+        response = await asyncio.to_thread(engine.query, query)
         results = [
             NpuSearchResult(
                 content=node.node.text,
@@ -1072,9 +1068,6 @@ class NPUSemanticSearch:
             doc_metadata: Base metadata dictionary
             doc_id: Document ID
             modality: Source modality type
-
-        Returns:
-            None
         """
         if modality == "multimodal" or not self.ai_accelerator:
             return
@@ -1088,7 +1081,8 @@ class NPUSemanticSearch:
 
             multimodal_collection = self.collections.get("multimodal")
             if multimodal_collection:
-                multimodal_collection.add(
+                await asyncio.to_thread(  # leased write waits: keep it off the event loop (#20992)
+                    multimodal_collection.add,
                     embeddings=[embedding.tolist()],
                     metadatas=[fused_metadata],
                     documents=[str(content)],
@@ -1142,7 +1136,7 @@ class NPUSemanticSearch:
             doc_metadata = self._prepare_document_metadata(content, modality, metadata)
             doc_id = self._generate_document_id(modality, doc_id)
 
-            self._store_in_collection(modality, embedding, content, doc_metadata, doc_id)
+            await asyncio.to_thread(self._store_in_collection, modality, embedding, content, doc_metadata, doc_id)
             await self._store_in_multimodal_collection(embedding, content, doc_metadata, doc_id, modality)
 
             logger.info("✅ Stored %s content with ID: %s", modality, doc_id)
@@ -1230,7 +1224,8 @@ class NPUSemanticSearch:
             )
 
             collection = self.collections["code"]
-            collection.add(
+            await asyncio.to_thread(  # leased write waits: keep it off the event loop (#20992)
+                collection.add,
                 embeddings=[embedding.tolist()],
                 metadatas=[doc_metadata],
                 documents=[code_content],

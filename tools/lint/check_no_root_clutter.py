@@ -83,6 +83,7 @@ ALLOWED_ROOT_FILES: frozenset[str] = frozenset(
         "requirements-gpu.txt",
         "requirements-gpu-torch.txt",  # CUDA torch/torchvision extra, split from requirements-gpu.txt (#15162)
         "requirements-gpu-faiss.txt",  # GPU-built faiss extra, same shape as requirements-gpu-torch.txt (#15163)
+        "requirements-remote-test-node.txt",  # remote test node venv; constraints shipped with it (#20935)
     }
 )
 

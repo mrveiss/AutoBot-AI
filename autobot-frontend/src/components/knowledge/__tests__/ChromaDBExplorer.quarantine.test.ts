@@ -54,7 +54,8 @@ function arrange(): void {
 }
 
 async function openCollection() {
-  const wrapper = mount(ChromaDBExplorer)
+  // The template's own strings use the global $t; the badge goes through the mocked useI18n above.
+  const wrapper = mount(ChromaDBExplorer, { global: { mocks: { $t: (key: string) => key } } })
   await flushPromises()
   await wrapper.find('.collection-item, .collections-list button').trigger('click')
   await flushPromises()

@@ -41,7 +41,14 @@ from fastapi import HTTPException
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-from knowledge.serving import SERVING_TRUST_WHERE, _fact_field, is_servable, servable_response
+from knowledge.fact_redis_codec import _decode_redis_hash
+from knowledge.serving import (
+    SERVING_TRUST_WHERE,
+    _fact_field,
+    is_servable,
+    is_servable_unquarantined,
+    servable_response,
+)
 from knowledge.where_combine import and_where
 
 logger = get_logger(__name__)
@@ -96,6 +103,20 @@ def is_quarantined(fact_like: Any) -> bool:
 def not_quarantined(fact_like: Any) -> bool:
     """The per-hit keep predicate of the default read: everything but quarantined facts."""
     return not is_quarantined(fact_like)
+
+
+def is_quarantined_hash(fact_hash: Dict[str, Any]) -> bool:
+    """:func:`is_quarantined` for a decoded Redis fact hash, whose ``metadata`` is a JSON string (#16665).
+
+    ``get_facts_in_category`` rows and ``get_fact_relations`` target/source facts are read straight from
+    the hash, so the ``collection`` marker sits inside that string; it is parsed by the one codec first.
+    """
+    return is_quarantined({"metadata": _decode_redis_hash(fact_hash)["_parsed_metadata"]})
+
+
+def drop_quarantined_hashes(fact_hashes: Iterable[Dict[str, Any]]) -> list:
+    """The default read for raw fact hashes: everything but research-quarantined facts (#16665)."""
+    return [f for f in fact_hashes if not is_quarantined_hash(f)]
 
 
 def quarantined_ids(facts: Iterable[Any]) -> list[str]:
@@ -163,7 +184,7 @@ def keep_predicate(include_unservable: bool, include_quarantined: bool):
         return not_quarantined
     if include_quarantined:
         return is_servable
-    return lambda hit: is_servable(hit) and not_quarantined(hit)
+    return is_servable_unquarantined
 
 
 def response_hits(response: Any) -> list:

@@ -483,7 +483,7 @@ def test_npu_workers_cleanup_is_included_right_after_the_deletion_task_in_main_y
 
     def _includes_npu_cleanup(task: dict) -> bool:
         target = task.get("ansible.builtin.include_tasks") or task.get("include_tasks")
-        return target == "npu_workers_cleanup.yml"
+        return (target.get("file") if isinstance(target, dict) else target) == "npu_workers_cleanup.yml"  # #20941
 
     remove_index = _index_of(tasks[delete_index:], _includes_npu_cleanup)
     assert remove_index != -1, f"{_BACKEND_MAIN}: no npu_workers_cleanup.yml include after sync_deletions"

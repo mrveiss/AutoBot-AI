@@ -26,11 +26,16 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
-#: The service owns the pipeline; the shared helper is the section splitter it calls.
+#: The service owns the pipeline (``_SERVICE``); it does not cut headings itself since #20886 moved
+#: that into its own sibling module (a >600-line split, not a second chunker), which ``doc_indexer.py``
+#: imports. The shared helper is the other section splitter it calls. These two are the ONLY files
+#: allowed to split markdown on headings.
+_SERVICE = "autobot-backend/services/knowledge/doc_indexer.py"
 _ALLOWED = {
-    "autobot-backend/services/knowledge/doc_indexer.py",
+    "autobot-backend/services/knowledge/doc_markdown_chunks.py",
     "autobot_shared/doc_chunking.py",
 }
 _ENTRY_POINT = "tools/index_documentation.py"
@@ -47,7 +52,7 @@ def _is_heading_pattern(node: ast.AST) -> bool:
 
 def _splits_markdown_headings(source: str) -> bool:
     """True when `source` calls a `split` whose first argument is a heading pattern."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "split":
             if node.args and _is_heading_pattern(node.args[0]):
                 return True
@@ -70,8 +75,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "one-doc-indexer",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=3392,  # re-pinned mid-window (train 58): population 3542, window [3242, 3542]
     what="non-test python source",
     roots=_ROOTS,
     growth=300,
@@ -113,9 +116,14 @@ def test_the_matcher_tells_a_chunker_from_a_heading_test(label: str, source: str
 
 
 def test_the_scan_is_not_vacuous() -> None:
-    """The service and the shared splitter both cut on headings; fewer is a blind scan."""
+    """The service's chunker module and the shared splitter both cut on headings; fewer is a blind scan."""
     found, parsed = _chunkers()
     assert set(found) >= _ALLOWED, f"expected {sorted(_ALLOWED)} among {list(found)} ({parsed} parsed)"
+
+
+def test_the_service_imports_its_chunker_module() -> None:
+    """The allow-listed chunker is the service's own: the service must still import it."""
+    assert "services.knowledge.doc_markdown_chunks import" in _read(_SERVICE)
 
 
 def test_only_the_canonical_service_chunks_markdown() -> None:

@@ -64,7 +64,8 @@ def test_authenticate_ws_admin_fail_closed_on_error():
     """Any exception in the auth path denies (never leaks an open socket)."""
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch("auth_middleware.verify_internal_api_key", side_effect=RuntimeError("boom")),
+        # #16333: the key is no longer consulted here, so the error is injected into the session lookup.
+        patch("auth_middleware.resolve_human_user", new=AsyncMock(side_effect=RuntimeError("boom"))),
     ):
         assert asyncio.run(authenticate_ws_admin(_ws())) is False
 

@@ -26,7 +26,7 @@
 
 import { ref, computed, type DeepReadonly } from 'vue'
 import { BaseAlert } from '@autobot/ui'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import {
   useCodeSync,
   type FullTreeComponentDrift,
@@ -90,7 +90,7 @@ async function handleCheck(): Promise<void> {
 }
 
 function formatChecked(value: string | undefined): string {
-  return value ? formatDateTime(value) : '-'
+  return value ? formatFleetDateTime(value) : '-'
 }
 </script>
 

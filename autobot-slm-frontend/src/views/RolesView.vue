@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, HttpError, createLogger } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -14,13 +14,14 @@ import { BaseAlert, BaseModal } from '@autobot/ui'
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
+import { useFleetStore } from '@/stores/fleet'
 import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 import { joinSystemdUnits, parseSystemdUnits } from '@/composables/useRoles'
 
 const logger = createLogger('RolesView')
 const { t } = useI18n()
+const fleetStore = useFleetStore()
 
 // Types
 interface RoleDefinition {
@@ -150,7 +151,7 @@ async function apiFetch<T>(
     const response = await slmApiClient.rawRequest(path, options)
     if (!response.ok) {
       const body = await response.json().catch(() => ({}))
-      throw new Error(body.detail || `HTTP ${response.status}`)
+      throw HttpError.withDetail(response.status, response.statusText, body.detail || undefined)
     }
     return await response.json()
   } catch (err) {
@@ -179,10 +180,14 @@ async function fetchFleetHealth(): Promise<void> {
 }
 
 async function fetchNodes(): Promise<void> {
-  // GET /nodes answers NodeListResponse { nodes, total }, not a bare list (#19002 review):
-  // read as a list, the migrate dialog's target picker iterated the object's fields.
-  const result = await apiFetch<{ nodes: NodeSummary[] }>('/nodes')
-  if (result) nodes.value = result.nodes
+  // Every page of the fleet through the one node-list fetch (#21584), not the first 20.
+  try {
+    await fleetStore.fetchNodes() // a partial read is kept and announced once by the shell
+    nodes.value = fleetStore.nodeList
+  } catch (err) {
+    errorMessage.value = t('rolesView.requestFailed', { message: (err instanceof HttpError && err.detail) || (err instanceof Error ? err.message : t('rolesView.unknownError')) })
+    logger.error('Failed to load nodes:', err)
+  }
 }
 
 function openCreateForm(): void {

@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Dict
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 
 from autobot_shared.logging_manager import get_logger
+from utils.document_extractors import DocumentExtractor
+from utils.file_types import TEXT_FILE_EXTENSIONS
 
 if TYPE_CHECKING:
     from services.kb_folder_watcher import KBFolderWatcherService, WatchFolderConfig
@@ -31,7 +33,16 @@ logger = get_logger(__name__)
 
 DEBOUNCE_SECONDS = 2.0  # Wait for file to stabilize before ingesting
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".markdown", ".csv", ".html", ".htm"}
+# What the document extractor ingests: its own document formats plus the members
+# of the canonical text set it can read (DocumentExtractor.SUPPORTED_FORMATS).
+# Spreadsheets/presentations stay out: the watcher's per-folder file_types gate
+# has never offered them. NOT file_server's set (a plain-text reader).
+_EXTRACTOR_TEXT_SUFFIXES = frozenset(
+    suffix for group in ("text", "json", "html") for suffix in DocumentExtractor.SUPPORTED_FORMATS[group]
+)
+SUPPORTED_EXTENSIONS = frozenset(
+    DocumentExtractor.SUPPORTED_FORMATS["pdf"] + DocumentExtractor.SUPPORTED_FORMATS["docx"] + [".markdown"]
+) | (TEXT_FILE_EXTENSIONS & _EXTRACTOR_TEXT_SUFFIXES)
 
 
 class KBFolderChangeHandler(FileSystemEventHandler):

@@ -19,6 +19,7 @@ import {
   type LLMProviderConfig,
   type LLMTestResponse,
 } from '@/composables/useLlmConfigApi'
+import { autobotApiErrorMessage } from '@/composables/useAutobotApi'
 import ssotConfig from '@/config/ssot-config'
 
 const { t } = useI18n()
@@ -79,8 +80,7 @@ async function fetchConfig(): Promise<void> {
     Object.assign(config, resp.config)
     hasUnsavedChanges.value = false
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.failedToLoadLlmConfig')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.lLMSettings.failedToLoadLlmConfig'))
   } finally {
     loading.value = false
   }
@@ -95,8 +95,7 @@ async function saveConfig(): Promise<void> {
     hasUnsavedChanges.value = false
     showSuccessMsg(t('settings.admin.lLMSettings.configurationSaved'))
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.failedToSaveLlmConfig')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.lLMSettings.failedToSaveLlmConfig'))
   } finally {
     saving.value = false
   }
@@ -113,8 +112,7 @@ async function testProvider(provider: LLMProviderConfig): Promise<void> {
       model: provider.model,
     })
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.connectionTestFailed')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.lLMSettings.connectionTestFailed'))
   }
 }
 
@@ -133,8 +131,7 @@ async function applyToFleet(): Promise<void> {
       error.value = resp.message || t('settings.admin.lLMSettings.applyFailed')
     }
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.failedToApplyConfigToFleet')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.lLMSettings.failedToApplyConfigToFleet'))
   } finally {
     applying.value = false
   }
@@ -220,30 +217,30 @@ onMounted(fetchConfig)
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.lLMSettings.lLMConfiguration') }}</h2>
-        <p class="text-sm text-gray-500 mt-1">
+        <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('settings.admin.lLMSettings.lLMConfiguration') }}</h2>
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('settings.admin.lLMSettings.manageLLMProvidersModels') }}
         </p>
       </div>
       <div class="flex items-center gap-3">
-        <span v-if="hasUnsavedChanges" class="text-sm text-amber-600 font-medium">{{ $t('settings.admin.lLMSettings.unsavedChanges') }}</span>
+        <span v-if="hasUnsavedChanges" class="text-sm text-autobot-warning font-medium">{{ $t('settings.admin.lLMSettings.unsavedChanges') }}</span>
         <button
           :disabled="!hasUnsavedChanges || saving"
-          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
           @click="saveConfig"
         >
           {{ saving ? $t('settings.admin.lLMSettings.saving') : $t('settings.admin.lLMSettings.save') }}
         </button>
         <button
           :disabled="hasUnsavedChanges || applying"
-          class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
           @click="applyToFleet"
         >
           {{ applying ? $t('settings.admin.lLMSettings.applying') : $t('settings.admin.lLMSettings.applyToFleet') }}
         </button>
         <button
           :disabled="loading"
-          class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors text-sm"
+          class="px-3 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active disabled:opacity-50 transition-colors text-sm"
           @click="fetchConfig"
         >
           <svg :class="['w-4 h-4', { 'animate-spin': loading }]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,7 +252,7 @@ onMounted(fetchConfig)
     </div>
 
     <!-- Tabs -->
-    <div class="border-b border-gray-200">
+    <div class="border-b border-autobot-border">
       <nav class="-mb-px flex space-x-8">
         <button
           v-for="tab in [
@@ -268,8 +265,8 @@ onMounted(fetchConfig)
           :class="[
             'py-3 px-1 border-b-2 font-medium text-sm transition-colors',
             activeTab === tab.id
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              ? 'border-autobot-primary text-autobot-text-link'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
           {{ tab.label }}
@@ -279,96 +276,96 @@ onMounted(fetchConfig)
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-autobot-primary"></div>
     </div>
 
     <!-- Providers Tab -->
     <div v-else-if="activeTab === 'providers'" class="space-y-4">
-      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <BaseAlert variant="info" :icon="false">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-medium text-blue-800">{{ $t('settings.admin.lLMSettings.activeProvider') }}</span>
-          <span class="text-sm text-blue-700 font-mono">{{ config.active_provider }}</span>
+          <span class="text-sm font-medium">{{ $t('settings.admin.lLMSettings.activeProvider') }}</span>
+          <span class="text-sm font-mono">{{ config.active_provider }}</span>
         </div>
-      </div>
+      </BaseAlert>
 
       <div class="flex justify-end">
         <button
-          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors text-sm font-medium"
           @click="showAddProvider = !showAddProvider"
         >
           {{ showAddProvider ? $t('settings.admin.lLMSettings.cancel') : $t('settings.admin.lLMSettings.addProvider') }}
         </button>
       </div>
 
-      <div v-if="showAddProvider" class="bg-gray-50 border border-gray-200 rounded-lg p-5 space-y-4">
-        <h3 class="font-medium text-gray-900">{{ $t('settings.admin.lLMSettings.newProvider') }}</h3>
+      <div v-if="showAddProvider" class="bg-autobot-bg-secondary border border-autobot-border rounded-lg p-5 space-y-4">
+        <h3 class="font-medium text-autobot-text-primary">{{ $t('settings.admin.lLMSettings.newProvider') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.name') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.lLMSettings.name') }}</label>
             <input v-model="newProvider.name" type="text" :placeholder="$t('settings.admin.lLMSettings.eGOllamaOpenaiAnthropic')"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.model') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.lLMSettings.model') }}</label>
             <input v-model="newProvider.model" type="text" :placeholder="$t('settings.admin.lLMSettings.eGMistral7bInstruct')"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.endpoint') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.lLMSettings.endpoint') }}</label>
             <input v-model="newProvider.endpoint" type="url" :placeholder="$t('settings.admin.lLMSettings.httpsApiExampleComV1')"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.aPIKey') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.lLMSettings.aPIKey') }}</label>
             <input v-model="newProvider.api_key" type="password" :placeholder="$t('settings.admin.lLMSettings.aPIKeyEncryptedAtRest')"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono" />
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm font-mono" />
           </div>
         </div>
         <div class="flex justify-end">
           <button :disabled="!newProvider.name"
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
             @click="addProvider">
             {{ $t('settings.admin.lLMSettings.addProvider') }}
           </button>
         </div>
       </div>
 
-      <div v-if="config.providers.length === 0" class="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div v-if="config.providers.length === 0" class="text-center py-12 bg-autobot-bg-secondary rounded-lg border border-autobot-border">
+        <svg class="mx-auto h-12 w-12 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
-        <h3 class="mt-2 text-sm font-medium text-gray-900">{{ $t('settings.admin.lLMSettings.noProvidersConfigured') }}</h3>
-        <p class="mt-1 text-sm text-gray-500">{{ $t('settings.admin.lLMSettings.addAnLLMProvider') }}</p>
+        <h3 class="mt-2 text-sm font-medium text-autobot-text-primary">{{ $t('settings.admin.lLMSettings.noProvidersConfigured') }}</h3>
+        <p class="mt-1 text-sm text-autobot-text-tertiary">{{ $t('settings.admin.lLMSettings.addAnLLMProvider') }}</p>
       </div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div v-for="(provider, idx) in config.providers" :key="provider.name"
           class="border rounded-lg p-4"
-          :class="config.active_provider === provider.name ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white'">
+          :class="config.active_provider === provider.name ? 'border-autobot-primary-light bg-autobot-info-bg' : 'border-autobot-border bg-white'">
           <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
-              <span class="font-medium text-gray-900">{{ provider.name }}</span>
+              <span class="font-medium text-autobot-text-primary">{{ provider.name }}</span>
               <span v-if="config.active_provider === provider.name"
-                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{{ $t('settings.admin.lLMSettings.active') }}</span>
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-pill-info-bg text-autobot-pill-info-fg">{{ $t('settings.admin.lLMSettings.active') }}</span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                :class="provider.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'">
+                :class="provider.enabled ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg' : 'bg-autobot-bg-tertiary text-autobot-text-secondary'">
                 {{ provider.enabled ? $t('settings.admin.lLMSettings.enabled') : $t('settings.admin.lLMSettings.disabled') }}
               </span>
             </div>
-            <button class="text-red-500 hover:text-red-700 text-sm" @click="removeProvider(idx)">{{ $t('settings.admin.lLMSettings.remove') }}</button>
+            <button class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg text-sm" @click="removeProvider(idx)">{{ $t('settings.admin.lLMSettings.remove') }}</button>
           </div>
-          <div class="text-sm text-gray-600 space-y-1">
+          <div class="text-sm text-autobot-text-secondary space-y-1">
             <div v-if="provider.model"><span class="font-medium">{{ $t('settings.admin.lLMSettings.model1') }}</span> {{ provider.model }}</div>
             <div v-if="provider.endpoint"><span class="font-medium">{{ $t('settings.admin.lLMSettings.endpoint1') }}</span> {{ provider.endpoint }}</div>
             <div><span class="font-medium">{{ $t('settings.admin.lLMSettings.temperature') }}</span> {{ provider.temperature }}</div>
           </div>
-          <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
-            <button class="text-sm text-blue-600 hover:text-blue-800" @click="setActiveProvider(provider.name)">{{ $t('settings.admin.lLMSettings.setActive') }}</button>
-            <button class="text-sm text-gray-600 hover:text-gray-800" @click="toggleProvider(idx)">
+          <div class="flex items-center gap-2 mt-3 pt-3 border-t border-autobot-border-subtle">
+            <button class="text-sm text-autobot-text-link hover:bg-autobot-pill-info-bg hover:text-autobot-pill-info-fg" @click="setActiveProvider(provider.name)">{{ $t('settings.admin.lLMSettings.setActive') }}</button>
+            <button class="text-sm text-autobot-text-secondary hover:text-autobot-text-primary" @click="toggleProvider(idx)">
               {{ provider.enabled ? $t('settings.admin.lLMSettings.disable') : $t('settings.admin.lLMSettings.enable') }}
             </button>
-            <button class="text-sm text-green-600 hover:text-green-800" @click="testProvider(provider)">{{ $t('settings.admin.lLMSettings.test') }}</button>
+            <button class="text-sm text-autobot-success hover:bg-autobot-pill-ok-bg hover:text-autobot-pill-ok-fg" @click="testProvider(provider)">{{ $t('settings.admin.lLMSettings.test') }}</button>
           </div>
         </div>
       </div>
@@ -376,71 +373,71 @@ onMounted(fetchConfig)
 
     <!-- Server Settings Tab -->
     <div v-else-if="activeTab === 'server'" class="space-y-6">
-      <div class="bg-white border border-gray-200 rounded-lg p-6">
-        <h3 class="text-sm font-semibold text-gray-900 mb-4">{{ $t('settings.admin.lLMSettings.ollamaServer') }}</h3>
+      <div class="bg-white border border-autobot-border rounded-lg p-6">
+        <h3 class="text-sm font-semibold text-autobot-text-primary mb-4">{{ $t('settings.admin.lLMSettings.ollamaServer') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.listenHost') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.lLMSettings.listenHost') }}</label>
             <input v-model="config.ollama_host" type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm font-mono"
               @input="markDirty" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.port') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.lLMSettings.port') }}</label>
             <input v-model.number="config.ollama_port" type="number"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm font-mono"
               @input="markDirty" />
           </div>
         </div>
       </div>
 
-      <div class="bg-white border border-gray-200 rounded-lg p-6">
-        <h3 class="text-sm font-semibold text-gray-900 mb-4">{{ $t('settings.admin.lLMSettings.concurrency') }}</h3>
+      <div class="bg-white border border-autobot-border rounded-lg p-6">
+        <h3 class="text-sm font-semibold text-autobot-text-primary mb-4">{{ $t('settings.admin.lLMSettings.concurrency') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.maxLoadedModels') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.lLMSettings.maxLoadedModels') }}</label>
             <input v-model.number="config.max_loaded_models" type="number" min="1" max="20"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm"
               @input="markDirty" />
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.lLMSettings.modelsKeptHotIn') }}</p>
+            <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.admin.lLMSettings.modelsKeptHotIn') }}</p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.parallelRequests') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.lLMSettings.parallelRequests') }}</label>
             <input v-model.number="config.num_parallel" type="number" min="1" max="16"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm"
               @input="markDirty" />
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.lLMSettings.concurrentRequestsPerModel') }}</p>
+            <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.admin.lLMSettings.concurrentRequestsPerModel') }}</p>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.keepAlive') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.lLMSettings.keepAlive') }}</label>
             <input v-model="config.keep_alive" type="text" :placeholder="$t('settings.admin.lLMSettings.egTenMinutes')"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm font-mono"
               @input="markDirty" />
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.lLMSettings.idleTimeoutBeforeUnloading') }}</p>
+            <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.admin.lLMSettings.idleTimeoutBeforeUnloading') }}</p>
           </div>
         </div>
       </div>
 
-      <div class="bg-white border border-gray-200 rounded-lg p-6">
-        <h3 class="text-sm font-semibold text-gray-900 mb-4">{{ $t('settings.admin.lLMSettings.performance') }}</h3>
+      <div class="bg-white border border-autobot-border rounded-lg p-6">
+        <h3 class="text-sm font-semibold text-autobot-text-primary mb-4">{{ $t('settings.admin.lLMSettings.performance') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="flex items-center justify-between">
             <div>
-              <label class="text-sm font-medium text-gray-700">{{ $t('settings.admin.lLMSettings.flashAttention') }}</label>
-              <p class="text-xs text-gray-500">{{ $t('settings.admin.lLMSettings.fasterAttentionComputation') }}</p>
+              <label class="text-sm font-medium text-autobot-text-secondary">{{ $t('settings.admin.lLMSettings.flashAttention') }}</label>
+              <p class="text-xs text-autobot-text-tertiary">{{ $t('settings.admin.lLMSettings.fasterAttentionComputation') }}</p>
             </div>
             <button
               @click="config.flash_attention = !config.flash_attention; markDirty()"
               :class="['relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                config.flash_attention ? 'bg-blue-600' : 'bg-gray-300']">
+                config.flash_attention ? 'bg-autobot-primary' : 'bg-autobot-border-strong']">
               <span :class="['inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
                 config.flash_attention ? 'translate-x-6' : 'translate-x-1']" />
             </button>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.kVCacheType') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.lLMSettings.kVCacheType') }}</label>
             <select v-model="config.kv_cache_type"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm"
               @change="markDirty">
               <option value="q8_0">{{ $t('settings.admin.lLMSettings.q80QuantizedLess') }}</option>
               <option value="f16">{{ $t('settings.admin.lLMSettings.f16FullPrecision') }}</option>
@@ -453,25 +450,25 @@ onMounted(fetchConfig)
 
     <!-- Models Tab -->
     <div v-else-if="activeTab === 'models'" class="space-y-6">
-      <div class="bg-white border border-gray-200 rounded-lg p-6">
+      <div class="bg-white border border-autobot-border rounded-lg p-6">
         <div class="mb-4">
-          <h3 class="text-sm font-semibold text-gray-900">{{ $t('settings.admin.lLMSettings.gPUModels') }}</h3>
-          <p class="text-xs text-gray-500">{{ $t('settings.admin.lLMSettings.requireGPUForReasonable') }}</p>
+          <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('settings.admin.lLMSettings.gPUModels') }}</h3>
+          <p class="text-xs text-autobot-text-tertiary">{{ $t('settings.admin.lLMSettings.requireGPUForReasonable') }}</p>
         </div>
         <div class="flex gap-2 mb-3">
           <input v-model="newGpuModel" type="text" :placeholder="$t('settings.admin.lLMSettings.eGMistral7bInstruct')"
-            class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+            class="flex-1 px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm font-mono"
             @keyup.enter="addModel('gpu')" />
           <button :disabled="!newGpuModel"
-            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
+            class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-md hover:bg-autobot-primary-hover disabled:opacity-50 text-sm"
             @click="addModel('gpu')">{{ $t('settings.admin.lLMSettings.add') }}</button>
         </div>
-        <div v-if="config.gpu_models.length === 0" class="text-sm text-gray-500 py-4 text-center">{{ $t('settings.admin.lLMSettings.noGPUModelsConfigured') }}</div>
+        <div v-if="config.gpu_models.length === 0" class="text-sm text-autobot-text-tertiary py-4 text-center">{{ $t('settings.admin.lLMSettings.noGPUModelsConfigured') }}</div>
         <div v-else class="flex flex-wrap gap-2">
           <span v-for="(model, idx) in config.gpu_models" :key="model"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50 border border-purple-200 text-sm font-mono text-purple-800">
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-autobot-illus-2-tint border border-autobot-border-strong text-sm font-mono text-autobot-text-primary">
             {{ model }}
-            <button class="text-purple-400 hover:text-purple-700" @click="removeModel('gpu', idx)">
+            <button class="text-autobot-text-primary" @click="removeModel('gpu', idx)">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -480,25 +477,25 @@ onMounted(fetchConfig)
         </div>
       </div>
 
-      <div class="bg-white border border-gray-200 rounded-lg p-6">
+      <div class="bg-white border border-autobot-border rounded-lg p-6">
         <div class="mb-4">
-          <h3 class="text-sm font-semibold text-gray-900">{{ $t('settings.admin.lLMSettings.cPUModels') }}</h3>
-          <p class="text-xs text-gray-500">{{ $t('settings.admin.lLMSettings.lightweightModelsThatRun') }}</p>
+          <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('settings.admin.lLMSettings.cPUModels') }}</h3>
+          <p class="text-xs text-autobot-text-tertiary">{{ $t('settings.admin.lLMSettings.lightweightModelsThatRun') }}</p>
         </div>
         <div class="flex gap-2 mb-3">
           <input v-model="newCpuModel" type="text" :placeholder="$t('settings.admin.lLMSettings.eGNomicEmbedText')"
-            class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+            class="flex-1 px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm font-mono"
             @keyup.enter="addModel('cpu')" />
           <button :disabled="!newCpuModel"
-            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
+            class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-md hover:bg-autobot-primary-hover disabled:opacity-50 text-sm"
             @click="addModel('cpu')">{{ $t('settings.admin.lLMSettings.add') }}</button>
         </div>
-        <div v-if="config.cpu_models.length === 0" class="text-sm text-gray-500 py-4 text-center">{{ $t('settings.admin.lLMSettings.noCPUModelsConfigured') }}</div>
+        <div v-if="config.cpu_models.length === 0" class="text-sm text-autobot-text-tertiary py-4 text-center">{{ $t('settings.admin.lLMSettings.noCPUModelsConfigured') }}</div>
         <div v-else class="flex flex-wrap gap-2">
           <span v-for="(model, idx) in config.cpu_models" :key="model"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-sm font-mono text-blue-800">
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-autobot-illus-1-tint text-autobot-text-primary text-sm font-mono">
             {{ model }}
-            <button class="text-blue-400 hover:text-blue-700" @click="removeModel('cpu', idx)">
+            <button class="text-autobot-text-link hover:bg-autobot-pill-info-bg hover:text-autobot-pill-info-fg" @click="removeModel('cpu', idx)">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>

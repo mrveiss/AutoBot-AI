@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""One writer each for `data-theme` and `data-ui` on the user frontend (#18240).
+"""One writer each for `data-theme` and `data-ui` on the frontends (#18240).
 
 `data-theme` had two writers: `composables/useTheme.ts` and a second `applyTheme` in
 `stores/useUserStore.ts`, driven by the profile modal's own theme buttons. They disagreed about
@@ -12,14 +12,16 @@ interface mode (`data-ui`, Minimal / Full) its single owner from the start.
 
 Allowed writers, per attribute:
 
-* `data-theme` -- `composables/useTheme.ts` only.
+* `data-theme` -- `libs/autobot-ui/src/composables/themeScheme.ts` only (`applyThemeToDocument`). The
+  shared kit owns the write (#18239) so the user frontend (`composables/useTheme.ts` re-exports it)
+  and the SLM console (`composables/useSlmTheme.ts`) apply a theme through the one function.
 * `data-ui`    -- `composables/useUiMode.ts`, plus `theme-variant-init.ts`, the pre-mount bootstrap
   that sets the attribute before the bundle mounts so the first paint is not the wrong mode. It
   mirrors the composable's storage key (the same pattern as the theme variant beside it).
 
 A write is `setAttribute` / `removeAttribute` / `toggleAttribute` naming the attribute, or an
-assignment to `dataset.theme` / `dataset.ui`. The SLM console is its own application with its own
-theming and is out of scope; the embeddable widget sets `data-theme` on its own element, never on
+assignment to `dataset.theme` / `dataset.ui`. The scan reads the user frontend, the SLM console
+and the shared kit, so a second writer in any of them fails; the embeddable widget sets `data-theme` on its own element, never on
 `<html>`, and does so through a config lookup rather than these calls.
 """
 
@@ -35,11 +37,11 @@ from repo_tests._reach import declare
 from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
-_ROOT = "autobot-frontend/src"
+_ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src", "libs/autobot-ui/src")
 _SUFFIXES = (".ts", ".vue", ".js")
 
 _ALLOWED = {
-    "theme": ("autobot-frontend/src/composables/useTheme.ts",),
+    "theme": ("libs/autobot-ui/src/composables/themeScheme.ts",),
     "ui": (
         "autobot-frontend/src/composables/useUiMode.ts",
         "autobot-frontend/src/theme-variant-init.ts",
@@ -73,7 +75,7 @@ def _is_source(rel: str) -> bool:
 
 def _source_population(root):
     try:
-        tracked = tracked_paths(root, _ROOT)
+        tracked = tracked_paths(root, *_ROOTS)
     except EmptyEnumeration:
         return []
     return [rel for rel in tracked if _is_source(rel)]
@@ -82,10 +84,8 @@ def _source_population(root):
 REACH = declare(
     "single-attribute-writer-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=721,
-    what="user frontend source",
-    roots=(_ROOT,),
+    what="user frontend, SLM console and shared kit source",
+    roots=_ROOTS,
     growth=300,
 )
 

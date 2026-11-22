@@ -44,7 +44,9 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.secrets_vault import VaultKind, VaultRef
+from autobot_shared.user_management.login_eligibility import login_refusal
 from models.secret import Secret
 from models.secret_dependency import SecretDependency
 from models.secret_grant import SecretGrant
@@ -57,6 +59,7 @@ from services.secret_dependency_service import SecretDependencyService
 from services.secrets_access_audit import SecretAccessReport, describe_secret_access
 from services.secrets_access_log import record_secret_access
 from services.secrets_authz import PrincipalFacts, authorize
+from services.secrets_maintenance import MaintenanceActor, audit_maintenance
 from services.secrets_principal_resolver import resolve_principal_facts
 
 logger = logging.getLogger(__name__)
@@ -298,6 +301,21 @@ class SecretsCoordinator:
             raise SecretAccessError(f"not authorized to view dependencies for secret {secret_id}")
         return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
 
+    async def describe_dependencies_for_delete(
+        self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str], secret_id: uuid.UUID
+    ) -> list[SecretDependency]:
+        """What depends on *secret_id*, listed for a caller who may DELETE it (#20640).
+
+        Gated by ``write`` -- the same authority :meth:`delete` needs -- not the ``share`` authority of
+        :meth:`describe_dependencies`, so a write-only member can still delete a secret that has no
+        dependents and is told who depends on one that has.
+        """
+        facts = await self._facts(session, user_id, permissions)
+        owner = await self._owner_vault(session, secret_id)  # raises SecretNotFoundError when absent
+        if not authorize(facts, "write", owner):
+            raise SecretAccessError(f"not authorized to delete secrets in {owner.to_str()}")
+        return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
+
     async def register_dependency(
         self,
         session: AsyncSession,
@@ -434,6 +452,39 @@ class SecretsCoordinator:
         await self._service.delete(session, secret_id=secret_id)
 
     # ------------------------------------------------------------------
+    # Admin-maintenance principal (#17850): cross-vault, admin-only, attributable, audited first.
+    # See services/secrets_maintenance.py. Removal still needs its approval (#17038).
+    # ------------------------------------------------------------------
+
+    async def _load_maintenance_actor(self, session: AsyncSession, actor: MaintenanceActor) -> None:
+        """Refuse unless *actor* is an existing, eligible user whose STORED role is administrative.
+
+        The user is loaded by id from the database (never a caller-supplied role), refused through the login's
+        ``login_refusal`` (deleted / inactive / locked), and the role is the one login issues for the account
+        (``UserService.account_role``) judged by ``is_admin_role`` -- the decision ``check_admin_permission`` makes.
+        """
+        from user_management.models import User
+        from user_management.services.user_service import UserService
+
+        user = await session.get(User, actor.admin_id)
+        if user is None or login_refusal(user) is not None or not is_admin_role(UserService.account_role(user)):
+            raise SecretAccessError("secret maintenance is for an active administrator")
+
+    async def maintenance_read(self, session: AsyncSession, *, actor: MaintenanceActor, secret_id: uuid.UUID) -> bytes:
+        """Decrypt *secret_id* through its own owner vault for an administrator's maintenance action."""
+        await self._load_maintenance_actor(session, actor)
+        owner_vault = await self._owner_vault(session, secret_id)
+        await audit_maintenance("read", secret_id, actor)
+        return await self._service.read(session, secret_id=secret_id, accessible_vaults=[owner_vault])
+
+    async def maintenance_delete(self, session: AsyncSession, *, actor: MaintenanceActor, secret_id: uuid.UUID) -> None:
+        """Delete *secret_id* for an administrator's approved maintenance action (call inside ``guarded_delete``)."""
+        await self._load_maintenance_actor(session, actor)
+        await self._owner_vault(session, secret_id)  # absent or legacy row: not found
+        await audit_maintenance("delete", secret_id, actor)
+        await self._service.delete(session, secret_id=secret_id)
+
+    # ------------------------------------------------------------------
     # Service-principal operations (#10436): bypass user RBAC; scope is
     # STRICTLY the system vault — callers must already have enforced this
     # (see _require_system_vault in the API layer).  These methods exist
@@ -458,8 +509,7 @@ class SecretsCoordinator:
     ) -> Secret:
         """Create a system-vault secret on behalf of a service identity."""
         self._assert_system_vault(owner_vault)
-        logger.info("service_create system secret", extra={"service_id": service_id, "name": name})
-        return await self._service.create(
+        secret = await self._service.create(
             session,
             owner_vault=owner_vault,
             name=name,
@@ -467,6 +517,8 @@ class SecretsCoordinator:
             plaintext=plaintext,
             created_by=_SERVICE_OWNER_ID,
         )
+        logger.info("service_create system secret", extra={"service_id": service_id})
+        return secret
 
     async def service_read(self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef) -> bytes:
         """Read a system-vault secret value on behalf of a service identity."""
@@ -500,12 +552,24 @@ class SecretsCoordinator:
             session, secret_id=secret_id, new_root_key=new_root_key, actor_vaults={vault}
         )
 
-    async def service_delete(self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef) -> None:
-        """Delete a system-vault secret on behalf of a service identity."""
-        self._assert_system_vault(vault)
+    async def _require_system_owner(self, session: AsyncSession, secret_id: uuid.UUID, action: str) -> None:
+        """A service identity acts only on secrets the system vault owns (the one check for every service_* use)."""
         owner_vault = await self._owner_vault(session, secret_id)
         if owner_vault.kind is not VaultKind.SYSTEM:
             raise SecretAccessError(
-                f"service may only delete system-vault secrets; found owner {owner_vault.to_str()!r}"
+                f"service may only {action} system-vault secrets; found owner {owner_vault.to_str()!r}"
             )
+
+    async def service_describe_dependencies(
+        self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef
+    ) -> list[SecretDependency]:
+        """What depends on a system-vault secret, for a service identity's delete (#20640)."""
+        self._assert_system_vault(vault)
+        await self._require_system_owner(session, secret_id, "read dependents of")
+        return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
+
+    async def service_delete(self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef) -> None:
+        """Delete a system-vault secret on behalf of a service identity."""
+        self._assert_system_vault(vault)
+        await self._require_system_owner(session, secret_id, "delete")
         await self._service.delete(session, secret_id=secret_id)

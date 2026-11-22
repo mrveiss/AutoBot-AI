@@ -43,6 +43,8 @@ from repo_tests._reach import declare
 from repo_tests.hand_rolled_redis_pipeline_baseline_18991 import ALLOWLIST, FROZEN_TOTAL
 
 from autobot_shared.isolated_git import git, make_repo
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 CANONICAL = "autobot-backend/testkit/fake_redis_pipeline.py"
@@ -54,8 +56,7 @@ _LIFECYCLE = frozenset({"execute", "reset", "watch", "unwatch", "multi", "discar
 
 
 def _is_test_file(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py"
+    return is_test_filename(rel, include_js=False)
 
 
 def _is_scanned(rel: str) -> bool:
@@ -132,7 +133,7 @@ def _visit(node: ast.AST, enclosing: str, found: list[tuple[str, str]], bound: t
 def hand_rolled_pipelines(source: str) -> list[tuple[str, str]]:
     """`(enclosing function, class name)` for every hand-rolled pipeline double in `source`."""
     found: list[tuple[str, str]] = []
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     _visit(tree, "<module>", found, _canonical_bindings(tree))
     return found
 

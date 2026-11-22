@@ -106,7 +106,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
 import { BaseAlert, BaseButton, BaseInput, BaseModal } from '@autobot/ui'
 
@@ -139,9 +139,7 @@ const form = ref({ name: '', description: '' })
 
 const breadcrumb = computed<BreadcrumbItem[]>(() => [{ label: t('llcBrowser.portfolios.title') }])
 
-function formatDate(value: string): string {
-  return fmtDate(value) || '—'
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '—', invalidText: '—' })
 
 async function loadPortfolios(): Promise<void> {
   loading.value = true
@@ -220,14 +218,14 @@ onMounted(loadPortfolios)
 }
 
 .browser-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .browser-count {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -272,14 +270,14 @@ onMounted(loadPortfolios)
 }
 
 .card-name {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .card-desc {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0;
   display: -webkit-box;
@@ -290,7 +288,7 @@ onMounted(loadPortfolios)
 }
 
 .card-meta {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -332,7 +330,7 @@ onMounted(loadPortfolios)
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   resize: vertical;
 }
 </style>

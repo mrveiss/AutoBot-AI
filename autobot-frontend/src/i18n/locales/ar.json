@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "إرسال",
     "cancel": "إلغاء",
     "save": "حفظ",
@@ -103,7 +104,14 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "منخفض",
+      "medium": "متوسط",
+      "high": "مرتفع",
+      "critical": "Critical"
+    },
+    "logsLoadFailed": "فشل تحميل السجلات: {error}"
   },
   "chat": {
     "sendMessage": "أرسل رسالة...",
@@ -255,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "فشل الرفع (الحالة {status})",
+        "invalidResponse": "أرسل الخادم استجابة غير مقروءة",
+        "network": "خطأ في الشبكة أثناء الرفع",
+        "cancelled": "تم إلغاء الرفع",
+        "unknown": "فشل الرفع"
+      },
       "filesAttached": "{count} files attached",
       "clearAll": "Clear all",
       "removeFile": "Remove file",
@@ -299,7 +314,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "الملف \"{name}\" كبير جدًا (الحد الأقصى {max})",
+      "voiceUnsupported": "يتطلب الإدخال الصوتي Chrome أو Edge أو Safari 15+. النسخ الصوتي غير متاح في هذا المتصفح.",
+      "micDenied": "تم رفض الوصول إلى الميكروفون. يرجى السماح بالوصول إلى الميكروفون في إعدادات المتصفح."
     },
     "translate": {
       "title": "Translate Text",
@@ -515,6 +533,7 @@
         "pending": "في الانتظار",
         "running": "جارٍ التشغيل",
         "streaming": "Streaming",
+        "waiting_explanation": "في انتظار الشرح",
         "explaining": "Explaining",
         "completed": "مكتمل",
         "failed": "فشل"
@@ -558,6 +577,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "يتطلب تسجيل الدخول للعرض",
       "requireLoginHint": "يمكن للمستخدمين المسجلين فقط فتح هذا الرابط",
@@ -765,6 +791,16 @@
       "browser": "المتصفح",
       "novnc": "سطح المكتب البعيد",
       "ariaLabel": "أقسام المحادثة"
+    },
+    "attachmentNotice": {
+      "unavailable": "تعذّر العثور على ملف مرفق في هذه المحادثة، لذلك لم يُستخدم.",
+      "too_many": "تم استخدام أول {limit} من الملفات المرفقة فقط، وتم تجاهل الباقي.",
+      "image": "\"{filename}\" صورة ولا يمكن قراءتها كنص، لذلك لم تُستخدم.",
+      "unsupported": "\"{filename}\" ليس ملفًا نصيًا يستطيع المساعد قراءته، لذلك لم يُستخدم.",
+      "unreadable": "تعذّرت قراءة \"{filename}\"، لذلك لم يُستخدم.",
+      "empty": "لا يحتوي \"{filename}\" على نص قابل للقراءة، لذلك لم يُستخدم.",
+      "truncated": "\"{filename}\" طويل، لذلك استُخدمت بدايته فقط.",
+      "over_budget": "بلغت الملفات المرفقة حدّ الحجم، لذلك لم يُستخدم \"{filename}\"."
     }
   },
   "settings": {
@@ -777,15 +813,7 @@
     "logging": "السجلات",
     "prompts": "الأوامر",
     "backend": "الخادم",
-    "save": "حفظ الإعدادات",
     "reset": "إعادة الإعدادات الافتراضية",
-    "panelLoadFailed": "فشل تحميل لوحة الإعدادات",
-    "loadingSettings": "جارٍ تحميل الإعدادات...",
-    "backendOffline": "الخادم غير متاح — عرض الإعدادات المؤقتة",
-    "saving": "جارٍ الحفظ...",
-    "discardChanges": "تجاهل التغييرات",
-    "cacheApiUnavailable": "واجهة التخزين المؤقت غير متاحة",
-    "cachedSettings": "استخدام الإعدادات المؤقتة",
     "appearanceDesc": "خصّص مظهر مساحة عملك",
     "voiceDesc": "اضبط صوت تحويل النص إلى كلام",
     "languageDesc": "اختر لغتك المفضلة للواجهة",
@@ -795,31 +823,11 @@
     "languageChanged": "تم تحديث اللغة بنجاح",
     "languageChangeFailed": "فشل تحديث اللغة",
     "webResearch": {
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
       "title": "Web Research",
-      "methodLabel": "Search method",
-      "confirmationLabel": "Require confirmation",
-      "rateLimitRequests": "Requests",
-      "timeoutLabel": "Timeout (seconds)",
-      "enabledLabel": "Enable web research",
       "methodBasic": "Basic",
-      "thresholdLabel": "Auto-research threshold",
       "methodAdvanced": "Advanced",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "rateLimitLabel": "Rate limiting",
-      "methodHint": "Choose how web searches are performed",
-      "maxResultsLabel": "Max results",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodApiBased": "API-based",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "privacyLabel": "Privacy & storage",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "rateLimitWindow": "Window (s)",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitHint": "Limit how many requests are sent in a given time window"
+      "methodApiBased": "API-based"
     },
     "apiKeys": {
       "enterKey": "Enter API key...",
@@ -1123,7 +1131,6 @@
       "quality": {
         "title": "Code Quality",
         "overallScore": "Overall Score",
-        "testCoverage": "Test Coverage",
         "codeDuplicates": "Code Duplicates",
         "technicalDebt": "Technical Debt",
         "noMetrics": "No code quality metrics available."
@@ -1536,21 +1543,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -2224,14 +2226,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -2254,7 +2254,6 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
@@ -2275,7 +2274,6 @@
       "variable": "متغير",
       "value": "قيمة",
       "suggestedEnvVar": "متغير البيئة المقترح",
-      "showingOf": "عرض {shown} من {total}",
       "emptyMessage": "لم يتم اكتشاف قيم مشفرة ثابتة",
       "severityGroups": {
         "high": "خطورة عالية",
@@ -2290,7 +2288,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"
@@ -2322,7 +2319,6 @@
       "noCommunicationData": "No communication data available",
       "codeQuality": "Code Quality",
       "overallScore": "Overall Score",
-      "testCoverage": "Test Coverage",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
       "noQualityMetrics": "No quality metrics available",
@@ -2515,8 +2511,6 @@
         "docs": "Documentation"
       },
       "justNow": "Just now",
-      "minutesAgo": "{count}m ago",
-      "hoursAgo": "{count}h ago",
       "installSuccess": "Pre-commit hooks installed successfully",
       "installFailed": "Failed to install hooks",
       "uninstallSuccess": "Pre-commit hooks uninstalled",
@@ -3204,6 +3198,7 @@
       "reasonUnknown": "لم يُبلَّغ عن سبب"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "title": "Source Connectors",
       "addConnector": "Add Connector",
       "loadingConnectors": "Loading connectors...",
@@ -3835,10 +3830,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4247,6 +4243,9 @@
       "errorEnterBoth": "يرجى إدخال كيان المصدر وكيان الهدف معًا.",
       "notInGraph": "هذه الكيانات ليست بعد في رسم العلاقات البياني.",
       "notInGraphHint": "إنها موجودة لكن بلا روابط في الرسم البياني، لذا لا يمكن تتبع أي اتصال. أعد تشغيل استخراج الكيانات."
+    },
+    "chromaExplorer": {
+      "subtitle": "تصفح مجموعات المتجهات والبحث فيها"
     }
   },
   "workflow": {
@@ -4257,6 +4256,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "ث",
+      "durationMinutes": "د",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "مكتمل",
@@ -4372,7 +4373,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "جارٍ فتح الأتمتة الخاصة بشركتك…",
-      "companyRequired": "اختر شركة لفتح الأتمتة."
+      "companyRequired": "اختر شركة لفتح الأتمتة.",
+      "planBeforeBuilding": "خطط قبل البناء"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -4549,6 +4551,9 @@
       "stepApproved": "تمت الموافقة على الخطوة",
       "stepSkipped": "تم تخطي الخطوة",
       "rerunNotFound": "تعذر العثور على سير العمل لإعادة تشغيله",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "جارٍ إعادة تشغيل \"{name}\"",
       "rerunFailed": "فشلت إعادة تشغيل سير العمل",
       "notificationsSaved": "تم حفظ إعدادات الإشعارات"
@@ -4680,7 +4685,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "عنوان بريد إلكتروني غير صالح: {emails}",
+      "invalidUrl": "تنسيق URL غير صالح"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -5015,7 +5022,8 @@
       "emergencyKillFailed": "❌ فشل الإيقاف الطارئ: {message}",
       "interrupted": "^C (قاطع المستخدم العملية)",
       "error": "خطأ: {error}"
-    }
+    },
+    "urlCopied": "تم نسخ عنوان URL الخاص بالطرفية إلى الحافظة!"
   },
   "llm": {
     "unavailable": "Unavailable",
@@ -5883,6 +5891,7 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "بنفسجي — إبداع وأناقة",
       "system": "النظام",
       "highContrast": "تباين عالٍ",
       "monochrome": "أحادي اللون",
@@ -6006,6 +6015,7 @@
       "cleanupConfirm": "Delete Old Logs",
       "cancel": "إلغاء",
       "deleteOldLogs": "Delete Old Logs",
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data"
     },
     "browserAutomation": {
@@ -6191,48 +6201,11 @@
       "subtitle": "Code search, generation, and productivity tools",
       "actionsToday": "Actions Today",
       "error": "خطأ",
-      "quickSearch": "Quick Search",
-      "snippetsTab": "Snippets ({count})",
-      "templatesTab": "Templates ({count})",
-      "quickActions": "Quick Actions",
-      "quickCodeSearch": "Quick Code Search",
-      "searchPlaceholder": "Search for files, code, or symbols...",
-      "allTypes": "All Types",
-      "files": "Files",
-      "code": "الكود",
-      "symbols": "Symbols",
-      "search": "بحث",
-      "results": "Results ({count})",
-      "line": "Line {num}",
-      "score": "Score: {value}",
-      "noResults": "لا توجد نتائج",
-      "generateCodeSnippet": "Generate Code Snippet",
-      "language": "اللغة",
-      "description": "Description",
-      "snippetPlaceholder": "Describe what you want the code to do...",
-      "generateSnippet": "Generate Snippet",
       "copy": "نسخ",
-      "created": "Created: {date}",
-      "noSnippets": "No snippets yet. Generate your first one above!",
       "allCategories": "All Categories",
       "refresh": "تحديث",
       "variables": "Variables",
-      "noTemplates": "No templates available",
-      "quickCodeActions": "Quick Code Actions",
-      "action": "Action",
-      "suggestRefactorings": "Suggest Refactorings",
-      "optimizeCode": "Optimize Code",
-      "formatCode": "Format Code",
-      "fixLinting": "Fix Linting Issues",
-      "generateTests": "Generate Tests",
-      "codePlaceholder": "Paste your code here...",
-      "processing": "جارٍ المعالجة...",
-      "runAction": "Run Action",
-      "refactorSuggestions": "Refactor Suggestions ({count})",
-      "impact": "{level} impact",
-      "before": "Before",
-      "after": "After",
-      "generatedTests": "Generated Tests ({count})"
+      "noTemplates": "No templates available"
     },
     "plugins": {
       "title": "Plugin Manager",
@@ -6525,16 +6498,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "noParticipants": "No participants",
-      "participants": "Participants",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "التعاون",
       "invite": "دعوة",
@@ -6550,7 +6513,6 @@
       "sessionLabel": "الجلسة {id}",
       "invitedAt": "تمت الدعوة {time}",
       "justNow": "الآن",
-      "minutesAgo": "منذ {count} دقيقة",
       "accept": "قبول",
       "decline": "رفض",
       "respondError": "تعذّرت معالجة هذا الرد. حاول مرة أخرى.",
@@ -6640,9 +6602,6 @@
       "title": "Secret Audit Log",
       "allActions": "All Actions",
       "access": "Access",
-      "inject": "Inject",
-      "copy": "نسخ",
-      "reveal": "Reveal",
       "allUsers": "All Users",
       "by": "by",
       "details": "Details",
@@ -6653,8 +6612,10 @@
       "hoursAgo": "{hours}h ago",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "قائمة",
+      "transfer": "نقل",
+      "bulkDelete": "حذف جماعي"
     },
     "vault": {
       "title": "Secret Vault",
@@ -6860,12 +6821,6 @@
       "loadingValue": "جارٍ التحميل...",
       "timeJustNow": "الآن",
       "timeInAMoment": "in a moment",
-      "timeMinutesAgo": "{count}m ago",
-      "timeInMinutes": "in {count}m",
-      "timeHoursAgo": "{count}h ago",
-      "timeInHours": "in {count}h",
-      "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d",
       "categories": {
         "api_key": "مفاتيح API",
         "token": "رموز الوصول",
@@ -7001,6 +6956,7 @@
       "subtitle": "Discover and interact with UI elements on the current screen",
       "refresh": "تحديث",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "verifying": "Verifying...",
       "execute": "Execute",
       "details": "Details",
@@ -7388,7 +7344,16 @@
       "initComplete": "Initialization complete"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "قواعد التنبيه",
+      "overview": "نظرة عامة",
+      "slos": "أهداف مستوى الخدمة",
+      "traces": "التتبعات"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "تحديث",
@@ -7403,7 +7368,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "يرجى التحقق من حدود حجم الملف ومتطلبات التنسيق"
     },
     "header": {
       "title": "File Browser",
@@ -7592,13 +7558,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "النظام",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -7687,7 +7646,6 @@
       "vmName": "VM Name",
       "vmSource": "VM Source",
       "ipAddress": "IP Address",
-      "errorMessage": "Error Message",
       "details": "Details",
       "loading": "Loading audit logs...",
       "viewDetails": "View details"
@@ -8111,6 +8069,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "فشل تفعيل نافذة الصيانة",
+      "completeWindowFailed": "فشل إكمال نافذة الصيانة",
+      "deleteWindowFailed": "فشل حذف نافذة الصيانة",
+      "drainNodeFailed": "فشل تفريغ العقدة. يرجى المحاولة مرة أخرى.",
+      "resumeNodeFailed": "فشل استئناف العقدة. يرجى المحاولة مرة أخرى.",
+      "saveKeysFailed": "فشل حفظ مفاتيح API. تحقق من وحدة التحكم للحصول على التفاصيل.",
+      "addNodeFailed": "فشلت إضافة العقدة"
     }
   },
   "mobile": {
@@ -8622,7 +8589,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "معلومات الأدوات غير متاحة حاليًا — قد تكون هذه القائمة غير مكتملة.",
       "canvasNoToolsDefined": "لا توجد أدوات مرفقة بأي دور في هذه الشركة.",
-      "deepLinkNodeNotFound": "تشير هذه الوصلة إلى عقدة تعذر العثور عليها هنا. ربما تمت إزالتها، أو قد لا تملك صلاحية الوصول إليها."
+      "deepLinkNodeNotFound": "تشير هذه الوصلة إلى عقدة تعذر العثور عليها هنا. ربما تمت إزالتها، أو قد لا تملك صلاحية الوصول إليها.",
+      "viewPlanner": "مخطط سير العمل"
     },
     "executorRollup": {
       "title": "ملخص المنفذين",
@@ -8967,6 +8935,170 @@
         "unavailable": "تعذّر الوصول إلى السجل؛ لم يُرسل شيء.",
         "error": "حدث خطأ ولم يمكن تأكيد التسليم. حدّث الصفحة لمعرفة ما إذا كانت المطالبة لا تزال محجوزة."
       }
+    },
+    "workflowPlanner": {
+      "title": "مخطط سير العمل",
+      "plans": "الخطط",
+      "newPlan": "خطة جديدة",
+      "open": "فتح",
+      "back": "العودة إلى الخطط",
+      "retry": "إعادة المحاولة",
+      "loading": "جارٍ تحميل الخطط...",
+      "loadFailed": "تعذّر تحميل الخطة.",
+      "stale": {
+        "plan": "تعذّر تحديث هذه الخطة، لذا قد يكون المعروض قديماً. {reason}",
+        "gate": "تعذّر تحديث فحوص الجاهزية، لذا قد تكون قائمة ما ينقص قديمة. {reason}",
+        "both": "تعذّر تحديث الخطة وفحوص الجاهزية معاً، لذا قد يكون المعروض قديماً. {reason}"
+      },
+      "rereadRetry": "إعادة تحميل الخطة",
+      "saveFailed": "تعذّر حفظ التغيير.",
+      "createFailed": "تعذّر إنشاء الخطة.",
+      "emptyTitle": "لا توجد خطط بعد",
+      "emptyHint": "ابدأ خطة لرسم عملية واحدة وقياسها واختيار الرقم الواحد الذي تريد تحسينه.",
+      "unavailableTitle": "مخطط سير العمل غير متاح",
+      "unavailableHint": "هذه الميزة متوقفة في مساحة عملك، لذلك لا يوجد ما يُعرض هنا بعد.",
+      "statusFlow": "تقدّم الخطة",
+      "status": {
+        "draft": "مسودة",
+        "measured": "تم القياس",
+        "labeled": "تم الوسم",
+        "approved": "معتمدة",
+        "converted": "تم التحويل"
+      },
+      "col": {
+        "name": "الخطة",
+        "revision": "المراجعة",
+        "status": "الحالة",
+        "actions": "الإجراءات"
+      },
+      "form": {
+        "name": "اسم الخطة",
+        "startsAt": "أين تبدأ العملية",
+        "endsAt": "أين تنتهي العملية",
+        "create": "إنشاء خطة"
+      },
+      "steps": {
+        "map": "ارسمها",
+        "measure": "قِس",
+        "oneNumber": "اختر رقمًا واحدًا",
+        "label": "قسّم ووسم",
+        "convert": "إنشاء سير عمل"
+      },
+      "map": {
+        "empty": "لم يُرسم شيء بعد",
+        "emptyHint": "أضف أولًا من يشارك (المسارات) ثم خطوات كل منهم.",
+        "handoffs": "{count} عمليات تسليم",
+        "waitNote": "ما الذي ينتظر عند هذا التسليم؟",
+        "laneName": "اسم المسار",
+        "addLane": "إضافة مسار",
+        "stepLabel": "خطوة",
+        "stepLane": "مسار الخطوة",
+        "addStep": "إضافة خطوة"
+      },
+      "source": {
+        "self_reported": "ذكرتَ ذلك",
+        "email": "تم التحقق عبر البريد",
+        "calendar": "تم التحقق عبر التقويم"
+      },
+      "measure": {
+        "hint": "كم مرة تحدث كل خطوة وكم تستغرق؟",
+        "needSteps": "ارسم خطوة واحدة على الأقل أولًا.",
+        "perWeek": "في الأسبوع",
+        "duration": "المدة",
+        "unit": "وحدة المدة",
+        "save": "حفظ",
+        "clear": "مسح"
+      },
+      "unit": {
+        "minutes": "دقائق",
+        "hours": "ساعات",
+        "days": "أيام"
+      },
+      "oneNumber": {
+        "hint": "الخطوات التي قسّتها، الأطول انتظارًا أولًا. أنت تقرر أيها يهم.",
+        "needMetrics": "قِس خطوة واحدة على الأقل أولًا.",
+        "rate": "{freq} في الأسبوع، {dur} {unit}",
+        "title": "سمِّ هذا الرقم",
+        "returnKind": "ما الذي تستعيده",
+        "target": "الهدف",
+        "save": "حفظ كرقمي الواحد"
+      },
+      "returnKind": {
+        "hours_back": "ساعات مستعادة",
+        "more_yeses": "موافقات أكثر",
+        "money_sooner": "مال أسرع"
+      },
+      "label": {
+        "needNumber": "اختر رقمك الواحد أولًا؛ خطوته هي ما تُقسّمه هنا.",
+        "subStep": "خطوة فرعية",
+        "addSubStep": "إضافة خطوة فرعية",
+        "unlabel": "إزالة الوسم",
+        "edgeCase": "حالة حدّية: {text}",
+        "byHandNote": "هذه تبقى للأشخاص. الذكاء الاصطناعي لا يتصرف فيها أبدًا.",
+        "acknowledge": "قرأتُ قائمة اليدوي",
+        "acknowledged": "تمت قراءة قائمة اليدوي"
+      },
+      "labels": {
+        "ai": "ذكاء اصطناعي",
+        "automation": "أتمتة",
+        "by_hand": "يدوي"
+      },
+      "gate": {
+        "missing": "لا يزال ناقصًا",
+        "title": "هل أنت جاهز للإنشاء؟",
+        "unknown": "فحص آخر",
+        "state": {
+          "met": "مستوفى",
+          "open": "مفتوح",
+          "pending": "لم يُفحص بعد"
+        },
+        "name": {
+          "G1": "الخريطة صالحة",
+          "G2": "كل خطوة مقيسة",
+          "G3": "الخطوة المختارة مفصّلة",
+          "G4": "كل خطوة فرعية وحالة حدّية موسومة",
+          "G5": "قُرئت قائمة «يدويًا» وغُطّيت خطوات الذكاء الاصطناعي بموافقات",
+          "G6": "المعاينة بلا أخطاء",
+          "G7": "وافقت على هذه الخطة",
+          "converted": "تم إنشاء سير العمل"
+        }
+      },
+      "readOnly": "حالة هذه الخطة: {status}، لذا فإن الخطوات من 1 إلى 4 للقراءة فقط.",
+      "firstProcess": {
+        "title": "شركتك جاهزة",
+        "body": "خطط لأول عملية لديك: ارسمها وقِسها واختر الرقم الواحد الذي تريد تحسينه.",
+        "plan": "خطط لأول عملية لدي",
+        "later": "لاحقًا"
+      },
+      "convert": {
+        "notReady": "أكمل الخطوات من 1 إلى 4 أولًا. تُظهر الفحوص أعلاه ما يزال ناقصًا.",
+        "previewTitle": "ما الذي سيُنشأ (معاينة، لا شيء موجود بعد)",
+        "createdTitle": "ما الذي أُنشئ",
+        "counts": "سير العمل: {workflows}. العمليات: {processes}.",
+        "ownerLane": "المسؤول: {lane}",
+        "errors": "أخطاء يجب إصلاحها قبل الموافقة",
+        "warnings": "تحذيرات",
+        "documented": "محفوظ كنص دليل ولم يُبنَ:",
+        "failedProposals": "تعذّر تقديم {count} من مقترحات سطور الذكاء الاصطناعي. أعد المحاولة لتقديمها.",
+        "turnOnNotAvailable": "تشغيل سير العمل غير متاح بعد: لا شيء ينفّذ سير العمل هذا حتى ذلك الحين.",
+        "openWorkflows": "فتح سير العمل",
+        "unavailable": "هذا الإجراء غير متاح: مخطط سير العمل معطّل في مساحة عملك، أو لم تعد الخطة موجودة.",
+        "blocked": "لم يصبح جاهزًا بعد. تُظهر الفحوص أعلاه ما هو ناقص.",
+        "approvedBy": "وافق عليها {by} في {at}.",
+        "preview": "معاينة ما سيُنشأ",
+        "previewAgain": "تحديث المعاينة",
+        "approve": "موافقة",
+        "create": "إنشاء سير العمل",
+        "retry": "إعادة محاولة مقترحات سطور الذكاء الاصطناعي",
+        "approveTitle": "هل توافق على هذه الخطة؟",
+        "approveMessage": "أنت توافق على المعاينة المعروضة. أي تعديل لاحق على الخطة يلغي هذه الموافقة.",
+        "previewFailed": "تعذّر إنشاء المعاينة.",
+        "approveFailed": "تعذّرت الموافقة على الخطة.",
+        "approveBlocked": "الموافقة محجوبة إلى أن يتم حل ما يلي:",
+        "approveDetail": "تفاصيل من الخادم: {detail}",
+        "convertFailed": "تعذّر إنشاء سير العمل.",
+        "retryFailed": "تعذّرت إعادة محاولة مقترحات سطور الذكاء الاصطناعي."
+      }
     }
   },
   "code": {
@@ -8979,13 +9111,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
@@ -9372,6 +9501,11 @@
       "subtitle": "مفردات صلاحيات دقيقة وحزم نطاقات لمفاتيح API",
       "comingSoonTitle": "قادم في إصدار لاحق",
       "comingSoonMessage": "نطاقات الصلاحيات الدقيقة — مفردات الصلاحيات، وحزم النطاقات، وإنفاذ نطاقات مفاتيح API — غير متوفرة في هذا الإصدار. ستتيح لك هذه الصفحة تحديدها وتعيينها بمجرد إطلاقها."
+    },
+    "layout": {
+      "title": "الإدارة",
+      "subtitle": "أدوات الواجهة الخلفية للمسؤولين",
+      "ariaLabel": "قسم الإدارة"
     }
   },
   "components": {

@@ -61,6 +61,7 @@ from typing import Any
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_utils import delete_if_value
 
 logger = get_logger(__name__)
 
@@ -91,15 +92,6 @@ _COMPLETE_SCRIPT = """
 if redis.call('GET', KEYS[1]) == ARGV[1] then
   redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
   return 1
-end
-return 0
-"""
-
-#: Compare-and-delete, for the same reason: a request whose claim already
-#: lapsed must not delete the claim its successor now holds.
-_RELEASE_SCRIPT = """
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-  return redis.call('DEL', KEYS[1])
 end
 return 0
 """
@@ -209,8 +201,7 @@ async def release_key(redis: Any, key: str, token: str) -> bool:
     Bounded by the same fencing token, so a lapsed request cannot delete the
     claim a live one now holds.
     """
-    dropped = await redis.eval(_RELEASE_SCRIPT, 1, key, _marker(token))
-    return _truthy(dropped)
+    return await delete_if_value(redis, key, _marker(token))
 
 
 def _truthy(reply: Any) -> bool:

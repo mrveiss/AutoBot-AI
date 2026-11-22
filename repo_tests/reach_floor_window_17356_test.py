@@ -43,7 +43,7 @@ def _reach(*, floor: int, population: int, growth: int, skips: int = 0) -> Reach
     return Reach(
         name=f"synthetic-{floor}-of-{population}-g{growth}-s{skips}",
         discover=lambda _root: list(range(population)),
-        floor=floor,
+        pinned_floor=floor,
         what="synthetic items",
         growth=growth,
         skips=skips,

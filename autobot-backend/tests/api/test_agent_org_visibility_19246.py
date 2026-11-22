@@ -30,6 +30,7 @@ from llc.tests import _e2e_harness as harness  # noqa: F401
 from models.agent_org import AgentOrgNode
 from models.task_delegation import TaskDelegation
 from user_management.models.base import Base
+from user_management.models.organization import Organization
 
 COMPANY_A = uuid.uuid4()
 COMPANY_B = uuid.uuid4()
@@ -42,7 +43,8 @@ async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:"
     )
-    tables = [AgentOrgNode.__table__, TaskDelegation.__table__]
+    # organizations: /status names each agent's company (#17514)
+    tables = [AgentOrgNode.__table__, TaskDelegation.__table__, Organization.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)
@@ -52,6 +54,11 @@ async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
         engine, expire_on_commit=False, class_=AsyncSession
     )
     async with made() as session:
+        # Both companies are live: the listings show only agents of live companies (#21942).
+        session.add_all(
+            [Organization(id=COMPANY_A, name="A", slug="a"), Organization(id=COMPANY_B, name="B", slug="b")]
+        )
+        await session.flush()
         for agent_id, company, reports_to, role in [
             ("platform", None, None, "manager"),
             ("a-mgr", COMPANY_A, None, "manager"),

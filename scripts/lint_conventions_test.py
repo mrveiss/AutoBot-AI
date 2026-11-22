@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -34,7 +35,8 @@ LIB_DIR = Path(__file__).resolve().parent / "lib"
 # sources". A fixture that ships only *.sh gives the script an unreadable rule
 # file, and the script then dies at load -- which these tests would read as a
 # missing message rather than as a fixture that is not a checkout.
-_SOURCED_LIB = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere))")
+# #19645: .py too -- the commit-msg mode runs lib/outward_wording.py.
+_SOURCED_LIB = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere|py))")
 
 
 def _required_libs() -> list[str]:
@@ -62,6 +64,8 @@ def repo(tmp_path: Path) -> Path:
     (r / "scripts" / "lib").mkdir(parents=True)
     for name in _required_libs():
         (r / "scripts" / "lib" / name).write_bytes((LIB_DIR / name).read_bytes())
+    # #21163: the hook interpreter resolver reads the required version from the checkout.
+    (r / ".python-version").write_bytes((LIB_DIR.parent.parent / ".python-version").read_bytes())
     make_repo(r, default_branch="main")
     _git(r, "add", "-A")
     _git(r, "commit", "-q", "-m", "chore(init): base (#1)")
@@ -69,7 +73,8 @@ def repo(tmp_path: Path) -> Path:
 
 
 def run(repo: Path, *args: str, denylist: str | None = None) -> subprocess.CompletedProcess:
-    env = {"PATH": "/usr/bin:/bin", "HOME": str(repo)}
+    # The running interpreter dir leads PATH: the resolver needs a conforming python (#21163).
+    env = {"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin", "HOME": str(repo)}
     if denylist is not None:
         p = repo / "denylist.txt"
         p.write_text(denylist, encoding="utf-8")
@@ -190,6 +195,9 @@ def test_research_doc_with_issue_link_passes(repo: Path) -> None:
         # remains a failure, which is the one real violation in the last 400.
         ("Consolidate the thing (#1234)", 1),
         ("-bad(x): type may not start with a dash (#1234)", 1),
+        # #19645: no automation session ids or internal process roles in a subject.
+        ("ci(wording): queued for train 85l (#19645)", 1),
+        ("ci(wording): rebased onto a0b1c2d3e4 for the merge train (#19645)", 0),
     ],
 )
 def test_commit_msg_mode(repo: Path, subject: str, expected: int) -> None:

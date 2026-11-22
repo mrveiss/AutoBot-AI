@@ -76,7 +76,7 @@ def _chosen_run_ids(company_id: str) -> "Select":
 
 
 async def distinct_company_ids_with_agents(session: AsyncSession) -> list[str]:
-    """Every company that has at least one org-chart agent (#16965).
+    """Every live company that has at least one org-chart agent (#16965).
 
     The presence-sync background task has no per-request tenant to scope
     to -- it is the one caller that legitimately needs every tenant, once
@@ -85,6 +85,8 @@ async def distinct_company_ids_with_agents(session: AsyncSession) -> list[str]:
     from sqlalchemy import select
 
     from models.agent_org import AgentOrgNode
+    from services.agent_org_service import live_company_agents_clause
 
-    result = await session.execute(select(AgentOrgNode.company_id).distinct())
+    # #21942: a soft-deleted company is no longer synced, so its agents fall out of the presence view.
+    result = await session.execute(select(AgentOrgNode.company_id).where(live_company_agents_clause()).distinct())
     return [str(company_id) for company_id in result.scalars().all()]

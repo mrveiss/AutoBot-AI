@@ -22,6 +22,7 @@ import pytest
 
 from autobot_shared.ssot_config import config
 from testkit.auth_middleware_stub import install_auth_middleware_stub
+from testkit.celery_stub import install_celery_stub
 
 # Ensure autobot-backend and autobot_shared are importable
 project_root = Path(__file__).parent.parent
@@ -39,10 +40,11 @@ sys.path.insert(0, str(backend_root))
 # #16483: both moved to testkit/module_stubs.py — reusable, not conftest-specific
 # (78 call sites across this file alone); keeps this file under the file-size
 # ratchet without a raised ceiling every time a new module needs real-loading.
+from testkit.llm_failover_modules import load_coordinator as _load_coordinator
 from testkit.module_stubs import make_pkg_stub as _make_pkg_stub
 from testkit.module_stubs import real_load_and_bind as _real_load_and_bind
 from testkit.provider_key_vault_state import empty_reachable_provider_key_vault  # noqa: F401 -- autouse
-from testkit.singleton_state import reset_feature_flags_singleton  # noqa: F401 -- autouse
+from testkit.singleton_state import fake_session_lease, reset_feature_flags_singleton  # noqa: F401 -- autouse
 
 # Stub chromadb before it is imported. chromadb hangs at import time on
 # machines without a local Chroma server (it fires gRPC keep-alive probes via
@@ -113,49 +115,9 @@ if isinstance(_torch_stub, MagicMock):
     _torch_stub.cuda.get_device_capability.return_value = (0, 0)
     sys.modules["torch.cuda"] = _torch_stub.cuda
 
-# Celery stub — issue #4455. When celery isn't installed in the dev venv,
-# provide a tiny shim so modules that do ``@celery_app.task`` import cleanly.
-# The real package is used on production nodes; tests never rely on Beat.
-try:
-    import celery as _celery_real  # noqa: F401
-except ImportError:
-    _celery_stub = types.ModuleType("celery")
-
-    class _StubCelery:
-        def __init__(self, *args, **kwargs) -> None:
-            self.conf = types.SimpleNamespace(
-                update=lambda **_k: None,
-                beat_schedule={},
-            )
-
-        def task(self, *_args, **_kwargs):
-            def decorator(fn):
-                fn.update_state = lambda *a, **k: None
-                return fn
-
-            return decorator
-
-        def autodiscover_tasks(self, *_args, **_kwargs) -> None:
-            return None
-
-    _celery_stub.Celery = _StubCelery
-    sys.modules["celery"] = _celery_stub
-
-    _schedules_stub = types.ModuleType("celery.schedules")
-
-    class _StubCrontab:
-        def __init__(self, **fields) -> None:
-            def _parse(v):
-                try:
-                    return {int(v)}
-                except (TypeError, ValueError):
-                    return set()
-
-            self.minute = _parse(fields.get("minute", 0))
-            self.hour = _parse(fields.get("hour", 0))
-
-    _schedules_stub.crontab = _StubCrontab
-    sys.modules["celery.schedules"] = _schedules_stub
+# Celery stub — issue #4455; the shim lives in testkit/celery_stub.py (it grew past this
+# file's ceiling when `shared_task` and `Task` joined it, #19582).
+install_celery_stub()
 
 # celery_app stub — issue #7766.  The production celery_app.py pulls in the
 # full Redis / config dependency chain which causes a circular import in the
@@ -544,11 +506,11 @@ if "llm_shared" not in sys.modules:
     # multimodal_processor + vision/voice, incremental_trainer). No deps beyond
     # stdlib threading — safe to real-load unconditionally, early.
     _real_load_and_bind("llm_shared.torch_loader", _llm_root / "torch_loader.py")
-    # #11520: canonical JSON parser and schema-typed extraction helper — lightweight,
-    # no heavy deps; load real so tests importing them don't hit the stub.
+    # #11520: canonical JSON parser / schema extraction helper (lightweight; load real, not the stub).
     _real_load_and_bind("llm_shared.json_utils", _llm_root / "json_utils.py")
     # #17307/#17308: shared validated loop + decision seam, imported at module level by five call sites.
     _real_load_and_bind("llm_shared.validated_llm", _llm_root / "validated_llm.py")
+    _real_load_and_bind("llm_shared.quality_judgment", _llm_root / "quality_judgment.py")  # #16133
     _real_load_and_bind("llm_shared.decisions", _llm_root / "decisions.py")
     _real_load_and_bind("llm_shared.structured_ops", _llm_root / "structured_ops.py")
     _real_load_and_bind("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
@@ -566,7 +528,7 @@ if "llm_shared" not in sys.modules:
     # model_fallback_coordinator, which imports it at module level. events.bus
     # / events.event_types are unstubbed lightweight modules, safe to import here.
     _real_load_and_bind("llm_shared.fallback_events", _llm_root / "fallback_events.py")
-    _real_load_and_bind("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
+    _load_coordinator(_llm_root)  # #19753: the coordinator + the failover modules it imports (testkit)
     # #9017: chat_workflow.manager imports reasoning_effort at module level -- real, not the providers stub.
     _real_load_and_bind("llm_shared.providers.reasoning_effort", _llm_root / "providers" / "reasoning_effort.py")
     # #9037: per-run credential primitives (ContextVar + RunCredentialContext); #19241: the LLM sign-in
@@ -588,7 +550,6 @@ if "llm_shared" not in sys.modules:
     # so base_provider (and then provider_registry) load real.
     _real_load_and_bind("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
     _real_load_and_bind("llm_shared.observability", _llm_root / "observability" / "__init__.py")
-    _real_load_and_bind("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
     # #15026: header -> headroom-window mapping, imported at module level by base_provider.
     _real_load_and_bind("llm_shared.rate_limit_headers", _llm_root / "rate_limit_headers.py")
     # #11541: pre-request cumulative token budget gate — base_provider imports it
@@ -930,10 +891,10 @@ sys.modules["code_intelligence.anti_pattern_detector"] = _ci_anti_stub
 # and code_intelligence.shared.scoring — it bypasses code_intelligence/__init__.py, which
 # stays stubbed. _real_load_and_bind falls back to a package stub if the load ever fails,
 # so import-time behaviour for api/*.py is never worse than the old hand-written stub.
-_real_load_and_bind(
-    "code_intelligence.merge_conflict_resolver",
-    backend_root / "code_intelligence" / "merge_conflict_resolver.py",
-)
+# #21004: merge_conflict_resolver imports the canonical code_intelligence.python_files, so that
+# leaf is real-loaded first (the real package __init__ stays unexecuted).
+for _leaf in ("python_files", "merge_conflict_resolver"):
+    _real_load_and_bind(f"code_intelligence.{_leaf}", backend_root / "code_intelligence" / f"{_leaf}.py")
 
 # NOTE (#13111): every entry below that also owns a colocated ``<name>_test.py`` is
 # real-loaded again by code_intelligence/conftest.py, which runs after this file and
@@ -1132,8 +1093,7 @@ if "models" not in sys.modules:
     # Create a lightweight 'models' namespace package to hold the sub-module,
     # then real-load infrastructure.py onto it (#11661: canonical helper; it
     # also performs the parent bind this block previously did by hand).
-    _models_pkg = _make_pkg_stub("models")
-    _models_pkg.__path__ = [str(backend_root / "models")]
+    _models_pkg = _make_pkg_stub("models", real_dir=backend_root / "models")
     _real_load_and_bind("models.infrastructure", backend_root / "models" / "infrastructure.py")
 
 
@@ -1265,7 +1225,7 @@ def set_test_environment():
     original_env = dict(os.environ)
 
     config.test_mode = "true"
-    config.env = "test"
+    config.environment = "test"  # #19315: AUTOBOT_ENV and AUTOBOT_ENVIRONMENT are one setting
 
     yield
 

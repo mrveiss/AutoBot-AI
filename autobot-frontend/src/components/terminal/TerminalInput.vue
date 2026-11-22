@@ -328,7 +328,7 @@ defineExpose({
 }
 
 .footer-button.workflow-test {
-  background-color: var(--color-info);
+  background-color: var(--color-info-solid);
   border-color: var(--color-info-hover);
   color: var(--text-on-primary);
   font-weight: var(--font-semibold);

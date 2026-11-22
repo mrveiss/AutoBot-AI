@@ -17,9 +17,10 @@
 
 import { ref, computed, readonly, reactive } from 'vue'
 import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
+import { errorText } from '@/utils/errorText'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 import type {
   ServiceDefinition,
   ServiceActionRequest,
@@ -158,7 +159,7 @@ export function useOrchestrationManagement() {
   // Service Definitions API (from useOrchestration)
   // ===========================================================================
 
-  async function fetchServiceDefinitions(): Promise<ServiceDefinition[]> {
+  async function fetchServiceDefinitions(): Promise<ServiceDefinition[] | null> {
     loading.value = true
     error.value = null
 
@@ -170,7 +171,7 @@ export function useOrchestrationManagement() {
     } catch (e) {
       error.value = extractErrorMessage(e, 'Failed to fetch service definitions')
       logger.error('Failed to fetch service definitions:', e)
-      return []
+      return null
     } finally {
       loading.value = false
     }
@@ -241,11 +242,8 @@ export function useOrchestrationManagement() {
       // status + body are logged and the text status is dropped.
       const httpError = e as { response?: { status?: number; data?: unknown } }
       if (httpError?.response?.status !== undefined) {
-        logger.error('Fleet services API error:', {
-          status: httpError.response.status,
-          data: httpError.response.data,
-          message: e instanceof Error ? e.message : String(e),
-        })
+        const { status, data } = httpError.response
+        logger.error('Fleet services API error:', { status, data, message: errorText(e) })
       } else {
         logger.error('Failed to fetch fleet services:', e)
       }

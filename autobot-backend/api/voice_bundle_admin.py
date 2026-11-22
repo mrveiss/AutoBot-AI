@@ -16,8 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.voice_bundle_constants import VALID_BUNDLES, BundleAssignRequest
-from auth_middleware import get_current_user
-from auth_rbac import require_role
+from api.voice_bundle_helpers import voice_bundle_user_id
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from services.audit.audit import ComplianceEventType, emit_compliance
@@ -67,7 +67,7 @@ async def get_my_bundle(
     from api.redis_mcp.rbac import resolve_bundle_for_user  # noqa: PLC0415
     from api.voice_bundle_user import _count_tools_for_bundle  # noqa: PLC0415
 
-    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
+    user_id = voice_bundle_user_id(current_user)
     role = current_user.get("role", "user")
     is_admin = is_admin_role(role)  # #12717: superadmin must not see a reduced tool count
 
@@ -90,7 +90,7 @@ async def get_my_bundle(
 async def get_user_bundle(
     user_id: str,
     request: Request,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> BundleAssignmentResponse:
     """Return the explicit bundle assignment for a user (admin only)."""
     try:
@@ -123,7 +123,7 @@ async def set_user_bundle(
     body: BundleAssignRequest,
     request: Request,
     admin_user: dict = Depends(get_current_user),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> BundleAssignmentResponse:
     """Assign or clear a voice bundle override for a user (admin only)."""
     if body.bundle_name is not None and body.bundle_name not in VALID_BUNDLES:
@@ -132,7 +132,7 @@ async def set_user_bundle(
             detail=f"Invalid bundle_name '{body.bundle_name}'. Valid: {sorted(VALID_BUNDLES)}",
         )
 
-    admin_id = admin_user.get("user_id") or admin_user.get("sub") or admin_user.get("username") or "unknown"
+    admin_id = voice_bundle_user_id(admin_user) or "unknown"
 
     try:
         from sqlalchemy import text  # noqa: PLC0415

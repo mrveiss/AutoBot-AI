@@ -48,9 +48,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _scan_helpers import EmptyEnumeration, GitEnumerationFailed, tracked_paths  # noqa: E402
 
 _FALLBACK = re.compile(r"\$\{(AUTOBOT_[A-Z0-9_]*PORT):-([0-9]+)\}")
-_SSOT_FIELD = re.compile(r'Field\(\s*default=(\d+)[^)]*alias="(AUTOBOT_[A-Z0-9_]*PORT)"')
+_SSOT_FIELD = re.compile(r'Field\(\s*default=(\d+|_pg\.[A-Z0-9_]+)[^)]*alias="(AUTOBOT_[A-Z0-9_]*PORT)"')
 
 _SSOT_PATH = Path("autobot_shared/ssot_config.py")
+#: #19320: Postgres defaults have one home, which ssot_config imports as ``_pg``; a ``_pg.NAME``
+#: default resolves to that module's literal ``NAME = <int>``.
+_PG_IDENTITY_PATH = Path("autobot_shared/postgres_identity.py")
 
 # Files whose *point* is to exercise a diverging literal. The shell library's
 # own self-test asserts that sourcing it overrides `${AUTOBOT_BROWSER_SERVICE_PORT:-3000}`
@@ -83,12 +86,23 @@ def _repo_root() -> Path:
         sys.exit(f"FATAL: cannot locate the repo root: {exc}")
 
 
+def _resolve(root: Path, default: str) -> str:
+    """A literal default as is; ``_pg.NAME`` as postgres_identity's ``NAME = <int>``, or die (#19320)."""
+    if not default.startswith("_pg."):
+        return default
+    name = default.removeprefix("_pg.")
+    found = re.search(rf"^{name} = (\d+)$", (root / _PG_IDENTITY_PATH).read_text(encoding="utf-8"), re.M)
+    if found is None:
+        sys.exit(f"FATAL: {default} has no literal `{name} = <int>` in {_PG_IDENTITY_PATH}")
+    return found.group(1)
+
+
 def _ssot_ports(root: Path) -> dict[str, str]:
     """Map every AUTOBOT_*_PORT alias to its SSOT default, or die."""
     path = root / _SSOT_PATH
     if not path.is_file():
         sys.exit(f"FATAL: {_SSOT_PATH} not found — refusing to report clean without the SSOT")
-    parsed = {m.group(2): m.group(1) for m in _SSOT_FIELD.finditer(path.read_text(encoding="utf-8"))}
+    parsed = {m.group(2): _resolve(root, m.group(1)) for m in _SSOT_FIELD.finditer(path.read_text(encoding="utf-8"))}
     if not parsed:
         sys.exit(f"FATAL: no AUTOBOT_*_PORT fields parsed from {_SSOT_PATH} — the pattern has drifted")
     # `default=0` is a "not configured" sentinel, not a port. `AUTOBOT_POSTGRES_PORT`

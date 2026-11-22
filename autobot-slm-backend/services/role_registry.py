@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-Role Registry Service (Issue #779, #1129).
+"""Role Registry Service (Issue #779, #1129).
 
 Manages role definitions and provides default roles for code distribution.
 See docs/developer/ROLES.md for the authoritative role specification including
@@ -17,7 +16,9 @@ from typing import Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
 from autobot_shared.fleet_constants import FLEET_AGENT_DIR, FLEET_INSTALL_ROOT
+from autobot_shared.ssot_config import config
 from models.database import Role, SyncType
 from services.role_manifest_shape import default_roles_for
 
@@ -54,15 +55,11 @@ _SLM_ROLES = [
         "name": "slm-backend",
         "display_name": "SLM Backend",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-slm-backend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "autobot-slm-backend",
         "auto_restart": True,
         "health_check_port": 8000,
         "health_check_path": "/api/health",
-        # #16889: routed through build-filtered-requirements.sh -- same
-        # rationale as the backend role's post_sync_cmd above; a bare
-        # `pip install -r` can't resolve this file's constraints include.
+        # #16889: the filtered install; why is in _filtered_pip_install's docstring.
         # #14275: venv/bin, not bare (see the backend role below).
         "post_sync_cmd": _filtered_pip_install(
             "autobot-slm-backend", "slm-backend", then=" && venv/bin/alembic upgrade head"
@@ -80,8 +77,6 @@ _SLM_ROLES = [
         "name": "slm-frontend",
         "display_name": "SLM Frontend",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-slm-frontend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "nginx",
         "auto_restart": False,
         "health_check_port": 443,
@@ -97,8 +92,6 @@ _SLM_ROLES = [
         "name": "slm-database",
         "display_name": "SLM Database",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "postgresql",
         "auto_restart": False,
         "required": True,
@@ -109,8 +102,6 @@ _SLM_ROLES = [
         "name": "slm-monitoring",
         "display_name": "SLM Monitoring",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "prometheus",
         "auto_restart": False,
         "health_check_port": 9090,
@@ -129,8 +120,6 @@ _BACKEND_ROLES = [
         "name": "backend",
         "display_name": "Backend API",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-backend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "autobot-backend",
         "auto_restart": True,
         "health_check_port": 8443,
@@ -173,8 +162,6 @@ _BACKEND_ROLES = [
         "name": "celery",
         "display_name": "Celery Worker",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-backend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "autobot-celery",
         "auto_restart": True,
         "required": True,
@@ -186,8 +173,6 @@ _BACKEND_ROLES = [
         "name": "scheduler",
         "display_name": "Celery Beat Scheduler",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-backend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "autobot-celery-beat",
         "auto_restart": True,
         "required": True,
@@ -205,8 +190,6 @@ _FRONTEND_ROLES = [
         "name": "frontend",
         "display_name": "Frontend UI",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-frontend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "nginx",
         "auto_restart": False,
         "health_check_port": 443,
@@ -228,8 +211,6 @@ _DATABASE_ROLES = [
         "name": "redis",
         "display_name": "Redis Stack",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "redis-stack-server",
         "auto_restart": True,
         "required": True,
@@ -240,12 +221,9 @@ _DATABASE_ROLES = [
         "name": "postgres",
         "display_name": "PostgreSQL",
         "sync_type": None,
-        "source_paths": [],
-        # /var/lib/postgresql is the standard Debian/Ubuntu postgres data dir.
-        # Providing a non-empty target_path lets role_detector.py:76-77 skip its
-        # early-exit guard and activate path-existence + systemd checks, so a
-        # bare-metal postgres node can turn green when the service is running.
-        "target_path": "/var/lib/postgresql",
+        # source_paths / target_path: derived from autobot-database/manifest.yml (#16025). Its postgres
+        # service's sync_target (the standard postgres data dir) is non-empty so role_detector.py does not
+        # take its early exit and runs the path + systemd checks.
         "systemd_service": "postgresql",
         "auto_restart": True,
         "required": True,
@@ -270,8 +248,6 @@ _AI_STACK_ROLES = [
         # `autobot-ai-stack/`, which holds a placeholder README and nothing else.
         # Pointed at that placeholder, a sync delivered one README and reported
         # success — the update never happened.
-        "source_paths": ["autobot-infrastructure/shared/docker/ai-stack/"],
-        "target_path": f"{_BASE_DIR}/autobot-ai-stack",
         "systemd_service": "autobot-ai-stack",
         "auto_restart": True,
         "health_check_port": 8080,
@@ -294,12 +270,10 @@ _AI_STACK_ROLES = [
         "name": "chromadb",
         "display_name": "ChromaDB",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "autobot-chromadb",
         "auto_restart": True,
-        "health_check_port": 8100,  # #16025: was 8000/v1 -- ssot_config (#3094) + ai-stack ansible use 8100/v2
-        "health_check_path": "/api/v2/heartbeat",
+        "health_check_port": config.port.chromadb,  # #16025 /v2 heartbeat; #19321: the SSOT port, not a copy
+        "health_check_path": CHROMADB_HEARTBEAT_PATH,  # #19423
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-ai-stack.yml",
@@ -314,11 +288,9 @@ _OPTIONAL_ROLES = [
         "name": "npu-worker",
         "display_name": "NPU Worker",
         "sync_type": SyncType.PACKAGE.value,
-        "source_paths": ["autobot-npu-worker/"],
-        "target_path": f"{_BASE_DIR}/autobot-npu-worker",
         "systemd_service": "autobot-npu-worker",
         "auto_restart": True,
-        "health_check_port": 8081,
+        "health_check_port": config.port.npu,
         "health_check_path": "/health",
         # #14275: routed through the canonical
         # scripts/build-filtered-requirements.sh rather than a bare
@@ -342,17 +314,10 @@ _OPTIONAL_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-tts-worker",
         "systemd_service": "autobot-tts-worker",
         "auto_restart": True,
-        "health_check_port": 8082,
+        # #19325: was 8082, the Windows NPU worker's port; the TTS worker listens on port.tts (8083, #3431).
+        "health_check_port": config.port.tts,
         "health_check_path": "/health",
-        # #14275: routed through the canonical
-        # scripts/build-filtered-requirements.sh rather than a bare
-        # `pip install -r requirements.txt`. This file's requirements carries a
-        # sibling-relative `-c ../constraints/shared.txt` (#10524) that does not
-        # resolve from the deployed directory, and pip aborts the whole sync:
-        #   ERROR: Could not open constraint file: '/constraints/shared.txt'
-        # The backend entry above has delegated to this script since #11134; the
-        # ansible half of the same defect was #14272. Same script, so the two
-        # deploy paths cannot drift apart again.
+        # #14275: the canonical filtered install, for the reason the npu-worker entry above states.
         "post_sync_cmd": _filtered_pip_install("autobot-tts-worker", "tts-worker"),
         "required": False,
         "degraded_without": ["Voice synthesis — TTS features unavailable"],
@@ -362,11 +327,9 @@ _OPTIONAL_ROLES = [
         "name": "browser-service",
         "display_name": "Browser Automation",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-browser-worker/"],
-        "target_path": f"{_BASE_DIR}/autobot-browser-worker",
         "systemd_service": "autobot-playwright",
         "auto_restart": True,
-        "health_check_port": 9001,  # #16025: was 3000/status -- browser ansible role defaults declare 9001 (#4662)
+        "health_check_port": config.port.browser,  # #16025/#19324: SSOT port the browser role binds (#4662)
         "health_check_path": "/health",
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-browser-worker && npm install"),
         "required": False,
@@ -377,8 +340,6 @@ _OPTIONAL_ROLES = [
         "name": "autobot-llm-cpu",
         "display_name": "LLM CPU Node",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "ollama",
         "auto_restart": True,
         "health_check_port": 11434,
@@ -391,8 +352,6 @@ _OPTIONAL_ROLES = [
         "name": "autobot-llm-gpu",
         "display_name": "LLM GPU Node",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "ollama",
         "auto_restart": True,
         "health_check_port": 11434,
@@ -436,10 +395,9 @@ _INFRA_ROLES = [
     },
     {
         "name": "autobot_shared",
+        "multi_node": True,
         "display_name": "Shared Library",
         "sync_type": SyncType.PACKAGE.value,
-        "source_paths": ["autobot_shared/"],
-        "target_path": f"{_BASE_DIR}/autobot_shared",
         "auto_restart": False,
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot_shared && pip install -e ."),
         "required": True,
@@ -455,10 +413,9 @@ _INFRA_ROLES = [
     },
     {
         "name": "slm-agent",
+        "multi_node": True,
         "display_name": "SLM Agent",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-slm-backend/slm/agent/"],
-        "target_path": _SLM_AGENT_DIR,
         "systemd_service": "slm-agent",
         "auto_restart": True,
         # #14278: the agent's venv, not system pip, and the SAME package set the
@@ -476,7 +433,8 @@ _INFRA_ROLES = [
 ]
 
 DEFAULT_ROLES: List[Dict] = default_roles_for(  # #16025: manifest-augmented, see role_manifest_shape.py
-    _SLM_ROLES + _BACKEND_ROLES + _FRONTEND_ROLES + _DATABASE_ROLES + _AI_STACK_ROLES + _OPTIONAL_ROLES + _INFRA_ROLES
+    _SLM_ROLES + _BACKEND_ROLES + _FRONTEND_ROLES + _DATABASE_ROLES + _AI_STACK_ROLES + _OPTIONAL_ROLES + _INFRA_ROLES,
+    {"base_dir": _BASE_DIR, "agent_dir": _SLM_AGENT_DIR},
 )
 # ---------------------------------------------------------------------------
 # Role → Ansible inventory group mapping  (#1346)
@@ -513,8 +471,7 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "postgres": "database",
     "npu-worker": "npu_worker",
     # #14460: was "browser_automation". `role_browser_active` gates on
-    # `browser`/`browser_worker`; group_vars/browser.yml exists, none for the
-    # old spelling.
+    # `browser`/`browser_worker`; group_vars/browser.yml exists, none for the old spelling.
     "browser-service": "browser",
     "autobot-llm-cpu": "llm_nodes",
     "autobot-llm-gpu": "llm_nodes",
@@ -641,8 +598,8 @@ async def list_roles(db: AsyncSession) -> List[Role]:
     return list(result.scalars().all())
 
 
-# Infra roles allowed on multiple nodes simultaneously (#1389)
-MULTI_NODE_ROLES = {"autobot_shared", "slm-agent"}
+# Roles allowed on several nodes at once: the role's own "multi_node" flag (#1389, #19706).
+MULTI_NODE_ROLES = frozenset(r["name"] for r in DEFAULT_ROLES if r.get("multi_node"))
 
 # Control-plane roles (#12083): the slm_server group in _SLM_ROLES, already brought
 # current by update-all's slm_self_update stage (its Ansible run targets
@@ -661,7 +618,7 @@ async def check_role_uniqueness(
     """Check if a role is already assigned to another node (#1389).
 
     Returns the node_id that currently owns the role, or None if available.
-    Infra roles (autobot_shared, slm-agent) are exempt.
+    Roles flagged multi_node are exempt.
     """
     if role_name in MULTI_NODE_ROLES:
         return None
@@ -675,23 +632,7 @@ async def check_role_uniqueness(
             NodeRole.status.in_(["active", "installed", "not_installed"]),
         )
     )
-    return result.scalar_one_or_none()
-
-
-async def get_role_owners(db: AsyncSession) -> Dict[str, str]:
-    """Return mapping of role_name -> node_id for all assigned roles (#1389).
-
-    Only includes non-infra roles with active/installed status.
-    """
-    from models.database import NodeRole
-
-    result = await db.execute(
-        select(NodeRole.role_name, NodeRole.node_id).where(
-            NodeRole.role_name.notin_(list(MULTI_NODE_ROLES)),
-            NodeRole.status.in_(["active", "installed", "not_installed"]),
-        )
-    )
-    return {row.role_name: row.node_id for row in result.all()}
+    return result.scalars().first()
 
 
 async def get_role_definitions() -> List[Dict]:

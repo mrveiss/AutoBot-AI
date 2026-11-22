@@ -110,7 +110,7 @@ defineEmits<Emits>()
   font-size: var(--text-lg);
 }
 
-.section-header h3 i {
+.section-header h3 .icon {
   margin-right: var(--spacing-2-5);
   color: var(--color-info);
 }

@@ -1,0 +1,187 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+// AutoBot - AI-Powered Automation Platform
+// Author: mrveiss
+
+/**
+ * Approval cards that come from the chat graph's own interrupt (#20195).
+ *
+ * The graph pauses at `request_approval` and streams a `command_approval_request` whose metadata carries the
+ * `calls` the person is being asked about. That pause is answered ONLY by `POST /chats/{id}/resume`; the
+ * terminal approval route (`/agent-terminal/sessions/{id}/approve`, `useCommandApproval`) cannot reach the
+ * graph. So a card with `metadata.calls` posts its decision to resume and feeds the SSE reply through the chat
+ * controller's one stream consumer, into the same chat. Terminal cards keep their path unchanged.
+ */
+
+import { getApiBase } from '@/config/ssot-config'
+import { useChatController } from '@/models/controllers'
+import { useChatStore, type ChatMessage } from '@/stores/useChatStore'
+import { useNotificationBus } from '@/composables/useNotificationBus'
+import i18n from '@/i18n'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('GraphApproval')
+
+type Metadata = ChatMessage['metadata'] | undefined
+
+/** True for a card raised by the graph interrupt (it names the calls asked about); false for a terminal card. */
+export function isGraphApproval(metadata: Metadata): boolean {
+  return Array.isArray((metadata as Record<string, unknown> | undefined)?.calls)
+}
+
+type TerminalApprove = (
+  terminalSessionId: string,
+  approved: boolean,
+  comment?: string,
+  commandId?: string,
+  onUpdate?: (sessionId: string, status: string, comment?: string) => void,
+  commandInfo?: { command: string; risk_level: string }
+) => Promise<unknown> | unknown
+
+/** What a paused chat graph is resumed with: an approval decision, or the answer to a stall question (#21022). */
+export type ResumeBody = { approved: boolean; reason: string } | { answer: string; question_id?: string }
+
+/** The server refused the resume request; `status` tells the card why (400: blocked by policy, 409: no longer pending). */
+export class ResumeRejectedError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code?: string,
+    cause?: unknown
+  ) {
+    super(`resume failed: ${status}`, cause === undefined ? undefined : { cause })
+  }
+}
+
+/** The `detail.code` the resume route puts on its "nothing to resume" 409 (backend: `NOTHING_TO_RESUME_CODE`). Its other 409s differ. */
+export const NOTHING_TO_RESUME_CODE = 'nothing_to_resume'
+
+/** The refusal's machine-readable code, or the failure to read it: a body that cannot be parsed is kept as the error's `cause`. */
+async function refusalDetail(response: Response): Promise<{ code?: string; cause?: unknown }> {
+  try {
+    const body = await response.json()
+    return { code: typeof body?.detail?.code === 'string' ? body.detail.code : undefined }
+  } catch (cause) {
+    return { cause }
+  }
+}
+
+/** Thrown when the server accepted a resume (HTTP 200) but its stream reported an error: the graph did not move on. */
+export class ResumeStreamError extends Error {}
+
+/** #21357: the chat a card belongs to: the id its metadata names, else the chat open when it is answered. */
+function cardChatId(message: ChatMessage, openChatId: string | null): string {
+  return String((message.metadata as Record<string, unknown> | undefined)?.session_id || openChatId || '')
+}
+
+/** The one POST to `/chats/{id}/resume`, whose SSE reply the chat controller's stream consumer renders. */
+function useResumePost() {
+  const store = useChatStore()
+  const controller = useChatController()
+
+  return async function postResume(
+    message: ChatMessage,
+    body: ResumeBody,
+    hooks: { onAccepted?: () => void; onStreamError?: () => void } = {}
+  ): Promise<void> {
+    const chatId = cardChatId(message, store.currentSessionId)
+    if (store.currentSessionId === chatId) store.setTyping(true) // #21357: only the chat resumed shows typing
+    let accepted = false
+    try {
+      // #21357: counted as streaming from the POST on, so switching away and back mid-request keeps the indicator
+      await controller.withActiveStream(chatId, async () => {
+        const response = await fetchWithAuth(`${getApiBase()}/chats/${encodeURIComponent(chatId)}/resume`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!response.ok) {
+          const { code, cause } = await refusalDetail(response)
+          throw new ResumeRejectedError(response.status, code, cause)
+        }
+        accepted = true
+        hooks.onAccepted?.()
+        if ((await controller.handleStreamingResponse(response, chatId, true)) === true) {
+          hooks.onStreamError?.() // HTTP 200 is not the graph resuming: the question is still open
+          throw new ResumeStreamError('resume stream reported an error')
+        }
+      })
+    } catch (error) {
+      logger.error('Resuming the chat failed:', error)
+      // A stream that reported an error already restored the card; a read that threw has not (#21022).
+      if (accepted && !(error instanceof ResumeStreamError)) hooks.onStreamError?.()
+      throw error
+    }
+  }
+}
+
+/** Answer the question a stalled turn asked; an empty answer stops the turn. The card stays answered only if the server accepted the request AND its stream did not report an error (#21022). */
+export function useStallAnswer() {
+  const store = useChatStore()
+  const postResume = useResumePost()
+  return async function answerStallQuestion(message: ChatMessage, answer: string): Promise<void> {
+    const questionId = (message.metadata as Record<string, unknown> | undefined)?.question_id
+    const cardChat = cardChatId(message, store.currentSessionId)
+    const body: ResumeBody = { answer, ...(typeof questionId === 'string' ? { question_id: questionId } : {}) }
+    await postResume(message, body, {
+      onAccepted: () => store.updateMessageMetadata(message.id, { answered: true, answer_text: answer }, cardChat),
+      onStreamError: () => store.updateMessageMetadata(message.id, { answered: false, answer_text: '' }, cardChat),
+    })
+  }
+}
+
+export function useApprovalRouting(terminalApprove: TerminalApprove) {
+  const store = useChatStore()
+  const { showToast } = useNotificationBus()
+  const postResume = useResumePost()
+
+  const findPending = (sessionId: string) =>
+    store.currentMessages.find(
+      (msg) => msg.metadata?.terminal_session_id === sessionId && msg.metadata?.requires_approval === true
+    )
+
+  async function resumeGraph(message: ChatMessage, approved: boolean, comment?: string): Promise<void> {
+    const before = message.metadata as Record<string, unknown> | undefined
+    const previous = { approval_status: before?.approval_status, approval_comment: before?.approval_comment }
+    const cardChat = cardChatId(message, store.currentSessionId)
+    const wasPending = store.isPendingApproval(cardChat)
+    store.updateMessageMetadata(message.id, { approval_status: approved ? 'approved' : 'denied', approval_comment: comment }, cardChat)
+    store.setPendingApproval(false, cardChat) // #21357: the card's chat, whichever is open
+    try {
+      await postResume(message, { approved, reason: comment || '' })
+    } catch (error) {
+      if (error instanceof ResumeRejectedError && error.code === NOTHING_TO_RESUME_CODE) {
+        // #21939: nothing is waiting on this card (a double click, a stale card, a turn that ended): not a failure.
+        store.updateMessageMetadata(message.id, { approval_status: 'handled' }, cardChat)
+        showToast(i18n.global.t('chat.interface.approvalAlreadyHandled'), 'info', 3000)
+        return
+      }
+      // The graph is still waiting: give the person the controls back so the decision can be retried (#21022).
+      store.updateMessageMetadata(message.id, previous, cardChat)
+      store.setPendingApproval(wasPending, cardChat)
+      throw error
+    }
+  }
+
+  /** Same signature as the terminal approve; a graph card goes to resume, any other card to the terminal route. */
+  return (
+    terminalSessionId: string,
+    approved: boolean,
+    comment?: string,
+    commandId?: string,
+    commandInfo?: { command: string; risk_level: string }
+  ) => {
+    const pending = findPending(terminalSessionId)
+    if (pending && isGraphApproval(pending.metadata)) return resumeGraph(pending, approved, comment)
+    const onUpdate = (sessionId: string, status: string, updateComment?: string) => {
+      const target = findPending(sessionId)
+      if (target?.metadata) {
+        target.metadata.approval_status = status
+        target.metadata.approval_comment = updateComment
+      } else {
+        logger.warn('Could not find message to update approval status')
+      }
+    }
+    return terminalApprove(terminalSessionId, approved, comment, commandId, onUpdate, commandInfo)
+  }
+}

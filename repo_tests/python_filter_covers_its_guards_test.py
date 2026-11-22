@@ -37,6 +37,7 @@ from repo_tests.python_filter_uncovered_reads import (
 )
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 yaml = pytest.importorskip("yaml")
 
@@ -99,7 +100,7 @@ def _composed_reads(source: str) -> set[str]:
     written yet composes that way too.
     """
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return set()
 
@@ -142,6 +143,39 @@ def _filter_patterns() -> list[str]:
     return [str(pattern) for pattern in document["python"]]
 
 
+#: One glob token, tried in this order: a `**/` that opens a segment (zero or more directories), a
+#: trailing `/**` (the subtree and the directory itself), a pattern that is only `**`, any other
+#: `**` (inside a segment, so it is a plain `*`), then `*` and `?`.
+_GLOB_TOKEN = re.compile(
+    r"(?P<lead>(?<![^/])\*\*/)|(?P<tail>/\*\*\Z)|(?P<whole>\A\*\*\Z)|(?P<mid>\*\*)|(?P<star>\*)|(?P<one>\?)"
+)
+_GLOB_REGEX = {
+    "lead": "(?:.*/)?",
+    "tail": "(?:/.*)?",
+    "whole": ".*",
+    "mid": "[^/]*",
+    "star": "[^/]*",
+    "one": "[^/]",
+}
+
+
+def _double_star_regex(pattern: str) -> re.Pattern[str]:
+    """The regex for a pattern containing `**`, with `*` and `?` confined to one segment.
+
+    Only a trailing `/**` covers a whole subtree, and `**/` spans zero or more directories; a `*`
+    after either is still a single-segment `*`, so `**/requirements*.txt` does not cover
+    `a/b/requirements/c.txt` (#21555). Every other character is literal. Dot-files match like any
+    other name: agreement with the CI action's dot default is not established from the repository.
+    """
+    out, last = [], 0
+    for token in _GLOB_TOKEN.finditer(pattern):
+        out.append(re.escape(pattern[last : token.start()]))
+        out.append(_GLOB_REGEX[token.lastgroup])
+        last = token.end()
+    out.append(re.escape(pattern[last:]))
+    return re.compile("".join(out))
+
+
 def _is_covered(path: str, patterns: list[str]) -> bool:
     """Whether the filter runs the suite for a change to *path*.
 
@@ -156,12 +190,32 @@ def _is_covered(path: str, patterns: list[str]) -> bool:
     for pattern in patterns:
         if pattern == path:
             return True
-        head, sep, tail = pattern.partition("/**")
-        if sep and (path == head or path.startswith(f"{head}/")):
-            return True
-        if fnmatch.fnmatch(path, pattern.replace("**/", "*/").replace("**", "*")):
+        if "**" in pattern:
+            if _double_star_regex(pattern).fullmatch(path):
+                return True
+            continue
+        # A pattern with no `**` is single-segment per `*`, as in the real filter: `docs/*.md`
+        # must not "cover" `docs/a/b.md` just because fnmatch's `*` crosses `/` (#17930).
+        if path.count("/") == pattern.count("/") and fnmatch.fnmatch(path, pattern):
             return True
     return False
+
+
+def test_a_leading_double_star_covers_the_repository_root_too() -> None:
+    assert _is_covered("Dockerfile.x", ["**/Dockerfile*"])
+    assert _is_covered("docker/slm/Dockerfile", ["**/Dockerfile*"])
+    assert not _is_covered("notes/Dockerfile.md", ["**/*.Dockerfile"])
+
+
+def test_a_remainder_after_a_double_star_is_matched_not_skipped() -> None:
+    suffixed = ["repo_tests/**/*.json"]
+    assert _is_covered("repo_tests/fixtures/a.json", suffixed)
+    assert _is_covered("repo_tests/a.json", suffixed)
+    assert not _is_covered("repo_tests/fixtures/a.txt", suffixed)
+    assert not _is_covered("repo_tests/a.txt", suffixed)
+    assert not _is_covered("repo_tests/dir.json/a.txt", suffixed)
+    assert _is_covered("repo_tests/fixtures/a.txt", ["repo_tests/**"])
+    assert _is_covered("repo_tests/a.json", ["repo_tests/**"])
 
 
 def _record(candidate: str, guard: str, patterns: list[str], reads: dict[str, set[str]]) -> None:
@@ -206,7 +260,7 @@ def workflow_reads(workflow: dict) -> dict[str, set[str]]:
     """Literal repo-path tokens read by each job gated on the python filter output."""
     reads: dict[str, set[str]] = {}
     for job, spec in (workflow.get("jobs") or {}).items():
-        if not isinstance(spec, dict) or "outputs.python" not in str(spec.get("if", "")):
+        if not isinstance(spec, dict) or "outputs.run_python_suite" not in str(spec.get("if", "")):
             continue
         steps = spec.get("steps") or []
         text = " ".join(
@@ -218,7 +272,9 @@ def workflow_reads(workflow: dict) -> dict[str, set[str]]:
 
 
 def _gated_jobs(workflow: dict) -> list[str]:
-    return [j for j, spec in (workflow.get("jobs") or {}).items() if "outputs.python" in str(spec.get("if", ""))]
+    return [
+        j for j, spec in (workflow.get("jobs") or {}).items() if "outputs.run_python_suite" in str(spec.get("if", ""))
+    ]
 
 
 def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
@@ -405,8 +461,9 @@ COVERAGE_CONTRASTS = (
     ("autobot-backend/main.py", True),
     # #15713 widened the filter to this tree; a role default is covered now.
     ("autobot-slm-backend/ansible/roles/backend/defaults/main.yml", True),
-    # A workflow the filter does NOT name -- the shape the record exists for.
-    (".github/workflows/code-quality.yml", False),
+    # A workflow the filter does NOT name -- the shape the record exists for. (#21713: actionlint.yml,
+    # the earlier example, is named now as the promotion-base guard's dedicated workflow.)
+    (".github/workflows/pr-template-check.yml", False),
     # A generated frontend type a guard compares against.
     ("autobot-slm-frontend/openapi.json", False),
 )
@@ -455,7 +512,7 @@ def test_a_composition_off_an_unknown_base_is_collected_then_dropped() -> None:
     assert "docker/with-secrets.sh" in collected, "composition off any base must be collected"
 
     reads: dict[str, set[str]] = {}
-    _record("nonexistent-tree-xyz/made-up.sh", "fixture.py", reads, _filter_patterns())
+    _record("nonexistent-tree-xyz/made-up.sh", "fixture.py", _filter_patterns(), reads)
     assert not reads, "a candidate that is not a real path must be dropped, not reported"
 
 
@@ -509,7 +566,7 @@ def test_a_workflow_read_absent_from_the_filter_is_reported() -> None:
     workflow = {
         "jobs": {
             "gated": {
-                "if": "needs.changes.outputs.python == 'true'",
+                "if": "needs.changes.outputs.run_python_suite == 'true'",
                 "steps": [{"run": "pytest --shard-durations .test_durations_slm"}],
             },
             "ungated": {"steps": [{"run": "cat pytest.ini"}]},
