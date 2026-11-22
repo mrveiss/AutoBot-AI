@@ -36,6 +36,7 @@ from plugin_enable_state import (
     SYSTEM_ACTOR,
     PluginEnableStore,
     audit_decision,
+    clear_disabled_in_this_process,
     disabled_in_this_process,
 )
 from plugin_paths import plugin_search_dirs, trusted_plugin_roots
@@ -134,6 +135,7 @@ class DatabaseEnableGate:
         self._core_roots = core_roots
 
     async def admit(self, manifests: List[PluginManifest], locations: Mapping[str, Path]) -> List[PluginManifest]:
+        clear_disabled_in_this_process()  # the table read below is the truth at boot start
         roots = self._core_roots if self._core_roots is not None else trusted_plugin_roots()
         bundled = [m for m in manifests if m.name in locations and is_under_trusted_root(locations[m.name], roots)]
         if not manifests:

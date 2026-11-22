@@ -56,6 +56,11 @@ _decision_locks: dict[str, asyncio.Lock] = {}
 _disabled_here: set[str] = set()
 
 
+def clear_disabled_in_this_process() -> None:
+    """Forget the in-process disables: a new admission reads the table, which already holds them."""
+    _disabled_here.clear()
+
+
 def disabled_in_this_process(plugin_name: str) -> bool:
     """True when an admin disabled *plugin_name* since this process started (and has not re-enabled it)."""
     return plugin_name in _disabled_here

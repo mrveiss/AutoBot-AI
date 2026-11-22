@@ -26,6 +26,7 @@ import plugin_enable_gate as peg
 import plugin_enable_state as pes
 import plugin_manager as plugin_routes
 from auth_middleware import check_admin_permission
+from autobot_shared.eventually import eventually
 from autobot_shared.plugin_sdk import PluginLoader, PluginManager
 from autobot_shared.plugin_sdk.base import PluginRegistry
 from autobot_shared.plugin_sdk.hooks import HookRegistry
@@ -287,10 +288,7 @@ async def test_gate_failure_loads_nothing_then_retries_without_a_restart(store, 
     manager = PluginManager([root], enable_gate=peg.DatabaseEnableGate(_FlakyStore(store, failures=2)))
     await peg.start_plugin_manager(manager)
     assert "gate_old_a" not in PluginRegistry().get_all_plugins(), "fail closed"
-    for _ in range(300):
-        if "gate_old_a" in PluginRegistry().get_all_plugins():
-            break
-        await asyncio.sleep(0.02)
+    await eventually(lambda: "gate_old_a" in PluginRegistry().get_all_plugins(), deadline=6.0)
     assert "gate_old_a" in PluginRegistry().get_all_plugins(), "loaded once the database answered"
     assert manager.get_load_report()["completed"]
     await manager.shutdown()
