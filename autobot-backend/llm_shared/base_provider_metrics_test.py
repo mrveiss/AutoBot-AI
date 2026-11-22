@@ -255,3 +255,60 @@ class TestChatCompletionSetsSelectedProvider:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class _RateLimitedOnceProvider(_ScriptedProvider):
+    """Answers a provider rate limit once, then the scripted success (#21929)."""
+
+    def __init__(self, name: str, response: LLMResponse) -> None:
+        super().__init__(name, response)
+        self.calls = 0
+
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
+        self.calls += 1
+        if self.calls == 1:
+            return LLMResponse(content="", provider=self.provider_name, error="429 Too Many Requests")
+        return await super()._chat_completion_impl(request)
+
+
+class _RetryOnRateLimit:
+    """The backoff handler's contract without its sleep: a RateLimitError is retried as a new attempt."""
+
+    async def execute_with_retry(self, fn, provider=None):  # noqa: ANN001, ANN201
+        from .rate_limit_backoff import RateLimitError
+
+        try:
+            return await fn()
+        except RateLimitError:
+            return await fn()
+
+
+async def test_a_rate_limit_then_success_leaves_the_real_in_flight_gauge_at_zero(monkeypatch):
+    """#21929 AC3: the real recorder, not a spy -- one error, one completion, and the gauge back where it began."""
+    from autobot_shared.monitoring.prometheus_metrics import PrometheusMetricsManager
+
+    from . import base_provider, rate_limit_backoff
+
+    manager = PrometheusMetricsManager()  # its own registry, so the global one is untouched
+    monkeypatch.setattr("autobot_shared.monitoring.prometheus_metrics.get_metrics_manager", lambda: manager)
+    monkeypatch.setattr("services.llm_cost_tracker.get_cost_tracker", lambda: _FakeCostTracker())
+    monkeypatch.setattr(base_provider, "get_backoff_handler", lambda: _RetryOnRateLimit())
+    monkeypatch.setattr(rate_limit_backoff, "_persist_headroom_from_429", lambda *a: None)
+    name = "cbtest-metrics-21929"
+    provider = _RateLimitedOnceProvider(name, LLMResponse(content="ok", provider=name, model="m"))
+
+    response = await _run_and_flush(provider.chat_completion(_request()))
+
+    def total(metric: str) -> float:
+        """Sum one counter's samples for this provider, whatever its other labels."""
+        return sum(
+            s.value
+            for family in manager.registry.collect()
+            for s in family.samples
+            if s.name == metric and s.labels.get("provider") == name
+        )
+
+    assert response.content == "ok" and provider.calls == 2
+    assert manager.registry.get_sample_value("autobot_llm_requests_in_flight", {"provider": name}) == 0
+    assert total("autobot_llm_errors_total") == 1  # the 429 stays visible as an error
+    assert total("autobot_llm_requests_total") == 1  # only the successful attempt completes
