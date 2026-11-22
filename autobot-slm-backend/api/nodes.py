@@ -807,12 +807,12 @@ async def _run_preflight(node_id: str, role_name: str, db: AsyncSession) -> Pref
     Checks port conflicts, hard manifest conflicts, and soft warnings.
     """
     from services.manifest_loader import get_manifest_loader
+    from services.role_manifest_errors import manifest_errors, no_manifest_preflight
 
     loader = get_manifest_loader()
     candidate = loader.load(role_name)
-
-    if candidate is None:
-        return PreflightResult(allowed=True, role_name=role_name, node_id=node_id, manifest_found=False)
+    if candidate is None or role_name in manifest_errors():  # #22067: a failed manifest refuses
+        return no_manifest_preflight(node_id, role_name)
 
     candidate_ports = set(candidate.port_numbers())
     hard_conflicts = set(candidate.hard_conflicts())

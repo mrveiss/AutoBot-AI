@@ -19,6 +19,7 @@ from __future__ import annotations
 #: Compared as a SET in both directions. Adding a scoped declaration means adding a line here, and that is the point --
 #: the scope is a decision, so it is written twice on purpose.
 DECLARED_SCOPES = {
+    "env-alias-registry-gap": ("autobot_shared",),
     "edge-configs-proxying-api-20046": ("autobot-infrastructure", "autobot-slm-backend", "docker"),
     "inline-lazy-singleton": (
         ".claude",
@@ -186,7 +187,7 @@ DECLARED_SCOPES = {
         "libs",
         "docs",
     ),
-    "single-attribute-writer-scan": ("autobot-frontend/src",),
+    "single-attribute-writer-scan": ("autobot-frontend/src", "autobot-slm-frontend/src", "libs/autobot-ui/src"),
     "single-constant-time-compare": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "torch-pair-literals": (
         ".github",

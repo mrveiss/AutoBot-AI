@@ -6,9 +6,9 @@
 
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +26,7 @@ from llc.services.accessors import get_budget_service
 from llc.services.approval import ApprovalService
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.budget import BudgetService
+from llc.services.budget_idempotency import IngestInFlight
 from llc.services.budget_raise import (
     BudgetRaisePending,
     company_requires_budget_approval,
@@ -274,6 +275,28 @@ async def get_budget(
     return _build_response(row, remaining, is_over, alert)
 
 
+async def _ingest_or_refuse(
+    session: AsyncSession, agent_id: str, company_id: str, body: IngestRequest, key: Optional[str]
+) -> Decimal:
+    """Charge one cost event; each service refusal becomes its HTTP answer (402, 409, 422)."""
+    try:
+        return await get_budget_service().ingest_cost_event(
+            session, agent_id, company_id, body.tokens_in, body.tokens_out, body.model, idempotency_key=key
+        )
+    except IngestInFlight as exc:  # same key still being charged (#21332): retry later, nothing double-charges
+        raise HTTPException(
+            status_code=409, detail="A cost event with this Idempotency-Key is still in flight"
+        ) from exc
+    except BudgetExhausted as exc:
+        # A budget the caller exhausted is client-actionable: 402, not "Internal server error".
+        logger.warning("Budget exhausted for agent %s: %s", agent_id, safe_log_text(repr(exc)))
+        raise http_refusal(402, exc, scope="budget.ingest_cost") from None
+    except UnpricedModel as exc:
+        # #15860: the same condition is 422 from POST /agent/cost-events; the two routes must agree.
+        logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, safe_log_text(repr(exc)))
+        raise http_refusal(422, exc, scope="budget.ingest_cost") from None
+
+
 @router.post("/{agent_id}/ingest", response_model=IngestResponse)
 async def ingest_cost(
     agent_id: str,
@@ -281,10 +304,10 @@ async def ingest_cost(
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
+    idempotency_key: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
 ) -> IngestResponse:
-    # The row the tenant check already loaded carries the company this slug belongs
-    # to; the result was previously discarded. Binding it avoids a second lookup and
-    # supplies the company the ingest now requires (#15812).
+    # A repeat of an Idempotency-Key answers 200 with the first cost; the service layer is the authority.
+    # The loaded row carries the company the slug belongs to (#15812), so no second lookup.
     row = await load_authorized(
         session,
         LLCAgentBudget,
@@ -293,27 +316,8 @@ async def ingest_cost(
         id_attr="agent_id",
         not_found_detail=f"No budget row for agent {agent_id}",
     )
-    svc = get_budget_service()
-    try:
-        cost = await svc.ingest_cost_event(
-            session, agent_id, row.company_id, body.tokens_in, body.tokens_out, body.model
-        )
-    except BudgetExhausted as exc:
-        # 402 is right; the detail was not. It said "Internal server error" for a
-        # budget the caller had exhausted, which is a client-actionable condition
-        # reported as a server fault.
-        logger.warning("Budget exhausted for agent %s: %s", agent_id, safe_log_text(repr(exc)))
-        raise http_refusal(402, exc, scope="budget.ingest_cost") from None
-    except UnpricedModel as exc:
-        # #15860 gave `ingest_cost_event` a second failure mode, and this route
-        # is its other caller. Without this the same condition that returns 422
-        # from POST /agent/cost-events returns 500 here -- two routes disagreeing
-        # about one service call from the day the condition was introduced.
-        logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, safe_log_text(repr(exc)))
-        raise http_refusal(422, exc, scope="budget.ingest_cost") from None
-    # `get_async_session` commits in its teardown, which FastAPI (>=0.118) runs AFTER the response has been
-    # sent: the caller can read a 200 before the charge is visible to another session, read the old
-    # remainder and charge it again (#21332). The 200 says "recorded", so commit before producing it.
+    cost = await _ingest_or_refuse(session, agent_id, row.company_id, body, idempotency_key)
+    # `get_async_session` commits after the response is sent (FastAPI >=0.118): commit first (#21332).
     await commit_and_run_post_commit(session)
     return IngestResponse(cost=cost)
 

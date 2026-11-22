@@ -10,8 +10,8 @@ import pytest
 
 from agents.kb_librarian_agent import KBLibrarianAgent
 from api.workflow import _handle_librarian_step, _prepare_workflow_data
-from knowledge.read_path_fakes_16665 import PRIVATE_A, FakeKB
 from models.task_context import WorkflowStepContext
+from testkit.read_path_fakes_16665 import PRIVATE_A, FakeKB
 
 
 def _ctx(user_id):

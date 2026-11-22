@@ -55,7 +55,8 @@ def _exhaust(api, agent_id: str) -> None:
     )
     left = _remaining(api, agent_id)
     assert left > 0, f"no headroom after setting the limit: {api.call('GET', f'/budget/{agent_id}')}"
-    api.call("POST", f"/budget/{agent_id}/ingest", json={"tokens_in": left, "tokens_out": 0, "model": MODEL})
+    ingested = api.call("POST", f"/budget/{agent_id}/ingest", json={"tokens_in": left, "tokens_out": 0, "model": MODEL})
+    assert "cost" in ingested, f"the ingest answered without recording a cost: {ingested}"
     assert (
         _remaining(api, agent_id) <= 0
     ), f"budget row does not read exhausted: {api.call('GET', f'/budget/{agent_id}')}"

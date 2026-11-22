@@ -208,13 +208,17 @@ def _seed_pricing_cache():
 # ---------------------------------------------------------------------------
 
 
-async def _seed_agent(session_factory, company_id: str) -> str:  # noqa: ANN001
-    """Seed an AgentOrgNode (the "hired" agent) and return its agent_id."""
+async def _seed_agent(session_factory, company_id: str) -> tuple[str, str]:  # noqa: ANN001
+    """Seed an AgentOrgNode (the "hired" agent); return its ``agent_id`` slug and its node ``id``.
+
+    Dual keyspace (#10032): the slug keys budgets and runs, the node id is what a work item's assignee holds.
+    """
     agent_id = str(uuid.uuid4())
+    node_id = uuid.uuid4()
     async with session_factory() as session:
         session.add(
             AgentOrgNode(
-                id=uuid.uuid4(),
+                id=node_id,
                 agent_id=agent_id,
                 name="Worker One",
                 org_role=OrgRole.WORKER.value,
@@ -223,7 +227,7 @@ async def _seed_agent(session_factory, company_id: str) -> str:  # noqa: ANN001
             )
         )
         await session.commit()
-    return agent_id
+    return agent_id, str(node_id)
 
 
 async def _seed_project(session_factory, company_id: str) -> str:  # noqa: ANN001
@@ -297,7 +301,7 @@ async def test_llc_core_loop_end_to_end(app, client, session_factory):  # noqa: 
     assert get_resp.json()["id"] == company_id
 
     # ---- 2. hire agent (SEEDED — see module docstring) --------------------
-    agent_id = await _seed_agent(session_factory, company_id)
+    agent_id, node_id = await _seed_agent(session_factory, company_id)
 
     # ---- 3. create work item (PUBLIC: POST /api/llc/work-items) -----------
     project_id = await _seed_project(session_factory, company_id)
@@ -348,11 +352,11 @@ async def test_llc_core_loop_end_to_end(app, client, session_factory):  # noqa: 
     # 5a. agent checks the item out (PUBLIC) → IN_PROGRESS, assigned to agent.
     checkout_resp = await client.post(
         f"/api/llc/work-items/{work_item_id}/checkout",
-        json={"agent_id": agent_id, "run_id": run_id},
+        json={"agent_id": node_id, "run_id": run_id},  # the node id, not the slug (#10032)
     )
     assert checkout_resp.status_code == 200, checkout_resp.text
     assert checkout_resp.json()["status"] == "in_progress"
-    assert checkout_resp.json()["assignee_agent_id"] == agent_id
+    assert checkout_resp.json()["assignee_agent_id"] == node_id
 
     # 5b. agent hands off to a human reviewer (PUBLIC) → IN_REVIEW.
     handoff_resp = await client.post(
