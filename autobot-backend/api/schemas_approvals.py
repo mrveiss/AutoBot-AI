@@ -30,7 +30,7 @@ class CreateApprovalRequest(BaseModel):
     title: str
     approval_type: ApprovalType
     description: str | None = None
-    requested_by_agent: str | None = None
+    requested_by_agent: str | None = Field(None, max_length=255)  # a display label only (#20521)
     workflow_id: str | None = None
     workflow_step: str | None = None
     context: Dict[str, Any] | None = None
