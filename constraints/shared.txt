@@ -153,4 +153,5 @@ uvicorn>=0.54.0
 # watchdog 7.x held (#21472); CI resolves through this file, so this cap keeps it out (#21471).
 watchdog>=6.0.0,<7
 weasyprint>=70.0
+xxhash>=4.0.2  # LLM cache hashing (autobot-backend); also imported by the fast guards on the remote test node (#20935)
 yt-dlp>=2026.10.26

@@ -577,6 +577,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "Connexion requise pour consulter",
       "requireLoginHint": "Seuls les utilisateurs connectés peuvent ouvrir ce lien",
@@ -6490,16 +6497,6 @@
       "roleEditor": "Editor",
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
-    },
-    "presence": {
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "noParticipants": "No participants",
-      "participants": "Participants",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status"
     },
     "panel": {
       "title": "Espace collaboratif",

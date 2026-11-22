@@ -291,7 +291,7 @@ async def delete_company(
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
-        await svc.delete(company_id)
+        await svc.delete(company_id, actor_user_id=_current_user_id(_current_user))
         await svc.session.commit()
         # #13920: drop the three collections a company's writes can make
         # (base, agents, decisions). Derived from the same constants

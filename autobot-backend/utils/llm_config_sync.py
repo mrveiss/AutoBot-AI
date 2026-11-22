@@ -19,6 +19,7 @@ import asyncio
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from services.config_manager_writer import set_nested_and_save
 from type_defs.common import Metadata
 
 # Import network constants
@@ -216,10 +217,7 @@ class LLMConfigurationSynchronizer:
             logger.info("Found %s available models: %s", len(model_names), model_names)
 
             # Update the configuration with available models
-            config_instance.set_nested("backend.llm.local.providers.ollama.models", model_names)
-
-            # Save the configuration
-            config_instance.save_settings()
+            set_nested_and_save(config_instance, "backend.llm.local.providers.ollama.models", model_names)
 
             logger.info("✅ Models list populated successfully")
             return {

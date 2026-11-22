@@ -73,11 +73,14 @@ def _as_dict(message: Any) -> Dict[str, Any]:
 
 
 def _final_text(state: Dict[str, Any], messages: List[Dict[str, Any]]) -> str:
+    """What the user was left with: the graph's own fallback reply when it replaced an unusable one (#21843)."""
+    replies = [m for m in messages if m.get("type") == "response"]
+    if replies and (replies[-1].get("metadata") or {}).get("parse_fallback"):
+        return replies[-1].get("content", "")
     for text in reversed(state.get("all_llm_responses") or []):
         if text and text.strip():
             return text
-    replies = [m.get("content", "") for m in messages if m.get("type") == "response"]
-    return replies[-1] if replies else ""
+    return replies[-1].get("content", "") if replies else ""
 
 
 def _status(state: Dict[str, Any]) -> str:

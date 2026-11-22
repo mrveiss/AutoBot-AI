@@ -31,6 +31,7 @@ const KILLED: CodebaseRunState = {
   partial: true,
   reason: 'killed by the hard timeout: run exceeded 1800s',
   started_at: '2026-11-01T14:25:50+00:00',
+  ordered_at: '2026-11-01T14:25:50+00:00',
   finished_at: '2026-11-01T14:54:53+00:00',
   last_completed_at: '2026-10-30T09:00:00+00:00',
 }
@@ -110,11 +111,11 @@ describe('useRunState (#21003)', () => {
     })
   })
 
-  // #21474: run ids are uuid4s with no order; `started_at` is the generation. Pre-fix: the older
+  // #21474: run ids are uuid4s with no order; `ordered_at` is the generation (#21621). Pre-fix: the older
   // run's `completed` replaced the newer run's `running`, and the partial warning went away.
   describe('a snapshot of an older run (the requests are not ordered)', () => {
-    const R1_COMPLETED = { ...KILLED, run_id: 'r1', status: 'completed', partial: false, reason: '', started_at: '2026-11-01T10:00:00+00:00' }
-    const R2_RUNNING = { ...KILLED, run_id: 'r2', status: 'running', reason: '', finished_at: '', started_at: '2026-11-01T14:25:50+00:00' }
+    const R1_COMPLETED = { ...KILLED, run_id: 'r1', status: 'completed', partial: false, reason: '', started_at: '2026-11-01T10:00:00+00:00', ordered_at: '2026-11-01T10:00:00+00:00' }
+    const R2_RUNNING = { ...KILLED, run_id: 'r2', status: 'running', reason: '', finished_at: '', started_at: '2026-11-01T14:25:50+00:00', ordered_at: '2026-11-01T14:25:50+00:00' }
 
     it('a delayed `completed` of an earlier run does not replace a later run that is still going', () => {
       const state = useRunState(withSource, () => 'autobot')
@@ -130,11 +131,23 @@ describe('useRunState (#21003)', () => {
       expect(state.run.value).toEqual(R2_RUNNING)
     })
 
-    it('a run with no recorded start cannot be ordered and is applied, as before', () => {
+    // #21621: the backend orders a run whose start was lost by its end, so it is never unordered.
+    it('a run with no recorded start is still ordered, by its end', () => {
       const state = useRunState(withSource, () => 'autobot')
+      const r1NoStart = { ...R1_COMPLETED, started_at: '', ordered_at: '2026-11-01T10:30:00+00:00' }
       state.applyRunFields({ run: R2_RUNNING })
-      state.applyRunFields({ run: { ...R1_COMPLETED, started_at: '' } })
-      expect(state.run.value?.run_id).toBe('r1')
+      state.applyRunFields({ run: r1NoStart }) // older than r2 by `ordered_at`
+      expect(state.run.value).toEqual(R2_RUNNING)
+    })
+
+    it('a run with no recorded start replaces an earlier run, and is not replaced by it', () => {
+      const state = useRunState(withSource, () => 'autobot')
+      const r2NoStart = { ...R2_RUNNING, started_at: '', ordered_at: '2026-11-01T14:54:53+00:00' }
+      state.applyRunFields({ run: R1_COMPLETED })
+      state.applyRunFields({ run: r2NoStart })
+      expect(state.run.value).toEqual(r2NoStart)
+      state.applyRunFields({ run: R1_COMPLETED }) // r1 arrives again, late
+      expect(state.run.value).toEqual(r2NoStart)
     })
   })
 

@@ -61,6 +61,8 @@ class AuditAction(str, Enum):
     SESSION_CREATE = "session.create"
     SESSION_DELETE = "session.delete"
     SESSION_EXPORT = "session.export"
+    SESSION_SHARE = "session.share"  # #18890: an owner shared a chat with participants
+    SESSION_UNSHARE = "session.unshare"  # #18890: an owner removed a participant
     SESSION_OWNER_ASSIGN = "session.owner_assign"
     SESSION_REASSIGN = "session.reassign"  # #20029: a removed user's chat session handed to a successor
     KNOWLEDGE_ADD = "knowledge.add"
@@ -72,6 +74,12 @@ class AuditAction(str, Enum):
     KNOWLEDGE_ADMIN_READ = "kb.admin_read"  # #16665: an admin's read of any fact through an explicit read API
     KNOWLEDGE_WIPE = "knowledge.wipe"  # #21048: the knowledge-base wipe, run after an approval
     KNOWLEDGE_WIPE_REFRESH = "knowledge.wipe.refresh"  # #21048: a pending wipe plan re-proposed; nothing deleted
+    KNOWLEDGE_CLAUDE_MD_REINDEX_REFRESH = "knowledge.claude_md_reindex.refresh"  # #21383: a pending plan re-proposed
+    KNOWLEDGE_CLAUDE_MD_REINDEX = "knowledge.claude_md_reindex"  # #21383: CLAUDE.md chunks deleted after an approval
+    KNOWLEDGE_COLLECTION_DELETE = "knowledge.collection.delete"  # #21383: a collection deleted after an approval
+    KNOWLEDGE_COLLECTION_DELETE_REFRESH = "knowledge.collection.delete.refresh"  # #21383: pending plan re-proposed
+    KNOWLEDGE_COLLECTION_BULK_DELETE = "knowledge.collection.bulk_delete"  # #21383: a collection's facts deleted
+    KNOWLEDGE_COLLECTION_BULK_DELETE_REFRESH = "knowledge.collection.bulk_delete.refresh"  # #21383: plan re-proposed
     API_KEY_CREATE = "api_key.create"  # pragma: allowlist secret -- an action name, not a key
     API_KEY_REVOKE = "api_key.revoke"  # pragma: allowlist secret -- an action name, not a key
     USER_CREATE = "user.create"
@@ -101,6 +109,7 @@ class AuditAction(str, Enum):
     ELEVATION_EXECUTE = "elevation.execute"  # #18716
     CONFIG_UPDATE = "config.update"  # #18716: was config.change; the writers and the dashboard say update
     ADMIN_ACTION = "admin.action"
+    VERIFIER_DEGRADED = "verifier.degraded"  # #21844: an action ran with no verifier reading
     RUN_JWT_MINT = "run_jwt.mint"
     RUN_JWT_REVOKE = "run_jwt.revoke"
     RUN_JWT_REFRESH = "run_jwt.refresh"
@@ -140,6 +149,7 @@ class AuditAction(str, Enum):
         "node.ssh_password.delete"  # nosec B105  # pragma: allowlist secret -- #20046: an action name
     )
     CLEANUP_ENV_COPIES = "cleanup.env_copies"  # #20567: old .env.*~ copies removed after approval
+    CLEANUP_PROPOSAL_LOST_RACE = "cleanup.proposal_lost_race"  # #20992: a creation row whose insert lost to the winner
     APPROVAL_APPROVE = "approval.approve"  # #20046: a non-admin refused on an admin-only approval
     ROLE_CREATE = "role.create"
     ROLE_UPDATE = "role.update"
@@ -149,6 +159,10 @@ class AuditAction(str, Enum):
     CODE_ROLLBACK = "code.rollback"  # #20214: the SLM updater deploys an earlier commit the operator chose
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
+    CODE_SOURCE_RUN_RECORD_CLEANUP = "code_source.run_record_cleanup"  # #21417: approved run-record removal
+    SECRET_DUPLICATE_CLEANUP = (
+        "secret.duplicate_cleanup"  # nosec B105  # pragma: allowlist secret -- an action name (#17850)
+    )
     BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
     LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
     # #21136: heartbeat control routes record the verified principal who paused, resumed or terminated an agent.

@@ -16,10 +16,10 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from api.chat_session_sharing import validate_session_owner
 from auth_middleware import resolve_human_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
-from security.session_ownership import validate_session_ownership
 
 logger = get_logger(__name__)
 
@@ -89,7 +89,7 @@ async def verbatim_search(
 async def delete_session_verbatim(
     session_id: str,
     request: Request,
-    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership (#16701)
+    ownership: Dict = Depends(validate_session_owner),  # SECURITY: owner-only (#16701, #21898)
 ) -> Dict[str, Any]:
     """Delete all verbatim chunks for a session.
 

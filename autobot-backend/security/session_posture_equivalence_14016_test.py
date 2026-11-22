@@ -167,6 +167,9 @@ def _drive(monkeypatch, c):
         AsyncMock(return_value=ResolvedEnforcementMode(c["mode"])),
     )
     monkeypatch.setattr("autobot_shared.redis_client.get_redis_client", AsyncMock(return_value=redis))
+    # #18890: share access is the durable table, not Redis; adoption of legacy shares is out of scope here.
+    monkeypatch.setattr("security.session_shares.ensure_adopted", AsyncMock())
+    monkeypatch.setattr("security.session_shares.durable_is_participant", AsyncMock(return_value=c["shared"]))
     monkeypatch.setattr("services.feature_flags.get_feature_flags", AsyncMock(return_value=MagicMock()))
     monkeypatch.setattr("services.access_control_metrics.get_metrics_service", AsyncMock(return_value=None))
     return redis
