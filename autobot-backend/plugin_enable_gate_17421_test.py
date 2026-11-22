@@ -81,14 +81,18 @@ def audit(monkeypatch):
 @pytest.fixture
 def plugin_root(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(tmp_path))
-    before = set(sys.modules)
+    before = dict(sys.modules)
     names: list[str] = []
     yield tmp_path, names
     for name in names:
         PluginRegistry().unregister(name)
         HookRegistry().unregister_plugin(name)
-    for key in set(sys.modules) - before:
+    for key in set(sys.modules) - set(before):
         del sys.modules[key]
+    # canonicalise_plugin_sdk() REPLACES existing entries with aliases; put every replaced value back.
+    for key, module in before.items():
+        if sys.modules.get(key) is not module:
+            sys.modules[key] = module
 
 
 def _add_plugin(root, names, name):

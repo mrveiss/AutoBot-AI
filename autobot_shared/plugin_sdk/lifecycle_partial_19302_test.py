@@ -50,6 +50,10 @@ def _restore_sys_modules():
     yield
     for key in set(sys.modules) - set(before):
         del sys.modules[key]
+    # canonicalise_plugin_sdk() REPLACES existing entries with aliases; put every replaced value back.
+    for key, module in before.items():
+        if sys.modules.get(key) is not module:
+            sys.modules[key] = module
 
 
 def _plugin(tmp_path, monkeypatch, *, initialize="pass", enable="pass", shutdown="pass"):

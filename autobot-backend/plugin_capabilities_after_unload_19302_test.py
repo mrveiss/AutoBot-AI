@@ -45,12 +45,16 @@ def loader_and_manifest(tmp_path, monkeypatch):
         entry_point=name,
         capabilities=[PluginCapability.NETWORK_OUTBOUND],
     )
-    before = set(sys.modules)
+    before = dict(sys.modules)
     yield PluginLoader([]), manifest
     CapabilityChecker().revoke_capabilities(name)
     PluginRegistry().unregister(name)
-    for key in set(sys.modules) - before:
+    for key in set(sys.modules) - set(before):
         del sys.modules[key]
+    # canonicalise_plugin_sdk() REPLACES existing entries with aliases; put every replaced value back.
+    for key, module in before.items():
+        if sys.modules.get(key) is not module:
+            sys.modules[key] = module
 
 
 @pytest.mark.asyncio
