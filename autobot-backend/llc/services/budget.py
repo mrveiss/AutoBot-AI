@@ -15,7 +15,7 @@ import json
 import logging
 import uuid
 from decimal import Decimal
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
@@ -24,18 +24,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.local_models import is_local_model
 from autobot_shared.redis_client import get_async_redis_client
 from llc.config import DEFAULT_BUDGET_LIMIT
-from llc.exceptions import BudgetExhausted, UnpricedModel, WorkItemNotInCompany
+from llc.exceptions import BudgetExhausted, CostEventAlreadyRecorded, UnpricedModel, WorkItemNotInCompany
 from llc.models.budget import LLCAgentBudget, token_limit_blocks
-from llc.models.company_os_cost import CompanyOsCostEvent
+from llc.models.company_os_cost import COST_EVENT_IDEMPOTENCY_INDEX, CompanyOsCostEvent
 from llc.models.work_item import LLCWorkItem
 
 from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
 from .base import LLCServiceBase
+from .budget_idempotency import charge_once
 
 logger = logging.getLogger(__name__)
 
 #: The constraint a cost event breaks when its work item no longer exists (``CompanyOsCostEvent.work_item_id``).
 WORK_ITEM_FK = "fk_company_os_cost_events_work_item"
+
+#: Postgres sqlstate of a unique-constraint violation.
+UNIQUE_VIOLATION_SQLSTATE = "23505"
 
 _tracker = AgentBudgetTracker()  # noqa: SRB001 — canonical SharedRuntimeBag consumer
 
@@ -57,7 +61,12 @@ def _for_agent(agent_id: str, company_id: str):
 
 
 async def _record_event(
-    session: AsyncSession, agent_id: str, company_id: str, work_item_id: Optional[str], usage: tuple
+    session: AsyncSession,
+    agent_id: str,
+    company_id: str,
+    work_item_id: Optional[str],
+    usage: tuple,
+    idempotency_key: Optional[str] = None,
 ) -> None:
     """Add the per-event cost row (#16016); a work item must be in ``company_id``.
 
@@ -85,14 +94,15 @@ async def _record_event(
         tokens_in=tokens_in,
         tokens_out=tokens_out,
         cost=cost,
+        idempotency_key=idempotency_key,
     )
-    if item_id is None:
+    if item_id is None and idempotency_key is None:
         session.add(event)
     else:
         await _add_event(session, event, work_item_id)
 
 
-async def _add_event(session: AsyncSession, event: CompanyOsCostEvent, work_item_id: str) -> None:
+async def _add_event(session: AsyncSession, event: CompanyOsCostEvent, work_item_id: Optional[str]) -> None:
     """Insert the event now, so an item deleted since the ownership check is a refusal, not a 500 later (#20168).
 
     The foreign key would otherwise fail on the caller's next statement. The add and flush sit in one savepoint,
@@ -104,10 +114,38 @@ async def _add_event(session: AsyncSession, event: CompanyOsCostEvent, work_item
             session.add(event)
             await session.flush()
     except IntegrityError as exc:
+        if event.idempotency_key is not None and _is_key_violation(exc):
+            raise CostEventAlreadyRecorded(event.idempotency_key) from None
         if WORK_ITEM_FK not in str(exc.orig):
             raise
         logger.info("cost event refused: work item %s was deleted after the ownership check", work_item_id)
         raise WorkItemNotInCompany(work_item_id) from None
+
+
+def _is_key_violation(exc: IntegrityError) -> bool:
+    """The unique (company, agent, key) row was already written.
+
+    Postgres reports sqlstate 23505 and names the index; only a driver that gives no sqlstate (SQLite) is matched
+    by the message, where the column name stands in for the index name.
+    """
+    sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(getattr(exc.orig, "__cause__", None), "sqlstate", None)
+    message = str(exc.orig)
+    if sqlstate:
+        return sqlstate == UNIQUE_VIOLATION_SQLSTATE and COST_EVENT_IDEMPOTENCY_INDEX in message
+    return COST_EVENT_IDEMPOTENCY_INDEX in message or "idempotency_key" in message
+
+
+async def _stored_cost(session: AsyncSession, agent_id: str, company_id: str, key: str) -> Optional[Decimal]:
+    """The cost already recorded for (company, agent, key) -- what a repeat is told -- or None."""
+    row = await session.execute(
+        select(CompanyOsCostEvent.cost).where(
+            CompanyOsCostEvent.company_id == uuid.UUID(str(company_id)),
+            CompanyOsCostEvent.agent_id == agent_id,
+            CompanyOsCostEvent.idempotency_key == key,
+        )
+    )
+    cost = row.scalar_one_or_none()
+    return None if cost is None else Decimal(str(cost))
 
 
 def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Decimal:
@@ -218,6 +256,51 @@ class BudgetService(LLCServiceBase):
         model: str,
         work_item_id: Optional[str] = None,
         bill_dollars: bool = True,
+        idempotency_key: Optional[str] = None,
+    ) -> Decimal:
+        """Record token cost and enforce limits; see ``_charge_cost_event`` for the charge itself (GH#8215).
+
+        ``idempotency_key`` (#21332): a repeat with the same key for the same agent charges once and
+        returns the first result (``budget_idempotency`` has the policies). With a key the charge is
+        committed here before the result is recorded; ``IngestInFlight`` is raised for a concurrent repeat.
+        """
+        args = (session, agent_id, company_id, tokens_in, tokens_out, model, work_item_id, bill_dollars)
+        if not idempotency_key:
+            return await self._charge_cost_event(*args)
+        return await charge_once(
+            session, agent_id, company_id, idempotency_key, lambda: self._charge_once_in_db(*args, idempotency_key)
+        )
+
+    async def _charge_once_in_db(self, *args: Any) -> Decimal:
+        """Charge, or -- when the unique (company, agent, key) row already exists -- return the first cost (#21972).
+
+        A replay is answered from the stored row BEFORE pricing or work-item checks run, so a repeat of a charge
+        that already happened never fails on a cold price cache; the unique row still decides a concurrent first.
+        """
+        *charge_args, key = args
+        session, agent_id, company_id = charge_args[:3]
+        stored = await _stored_cost(session, agent_id, company_id, key)
+        if stored is not None:
+            return stored
+        try:
+            return await self._charge_cost_event(*charge_args, idempotency_key=key)
+        except CostEventAlreadyRecorded:
+            winner = await _stored_cost(session, agent_id, company_id, key)  # the conflict means it committed
+            if winner is None:
+                raise
+            return winner
+
+    async def _charge_cost_event(
+        self,
+        session: AsyncSession,
+        agent_id: str,
+        company_id: str,
+        tokens_in: int,
+        tokens_out: int,
+        model: str,
+        work_item_id: Optional[str] = None,
+        bill_dollars: bool = True,
+        idempotency_key: Optional[str] = None,
     ) -> Decimal:
         """Record token cost for an agent and enforce budget limits (GH#8215, GH#8997).
 
@@ -245,7 +328,9 @@ class BudgetService(LLCServiceBase):
         cost = _cost_of(model, agent_id, tokens_in, tokens_out) if bill_dollars else Decimal("0")
 
         total_tokens = tokens_in + tokens_out
-        await _record_event(session, agent_id, company_id, work_item_id, (model, tokens_in, tokens_out, cost))
+        await _record_event(
+            session, agent_id, company_id, work_item_id, (model, tokens_in, tokens_out, cost), idempotency_key
+        )
 
         # Atomic increment — prevents lost-update across concurrent workers
         # Always update both dollar and token counters for analytics (GH#8997)

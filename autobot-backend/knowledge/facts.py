@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from autobot_shared.content_digest import fact_dedup_key
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
+from knowledge.category_quarantine import sync_fact_quarantine
 from knowledge.embedding_space_binding import current_space
 from knowledge.fact_projection import FactProjectionMixin
 from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable here
@@ -1092,7 +1093,6 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                 return {"status": "error", "message": "Fact not found"}
             decoded, current_metadata = current
             previous = await guard_update(self, fact_id, current_metadata)  # #16663 filed-under now; #19517
-
             # #13708 round 4 review (BLOCK 2): stays None for a metadata-only update, so
             # _durable_update_or_adopt/fact_store fall back to hashing the (unchanged)
             # stored content instead.
@@ -1117,7 +1117,6 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                 metadata = sanitize_update_metadata(metadata)  # #19517: also drops caller-set ownership
                 current_metadata.update(metadata)
             current_metadata["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
-
             # #15663: durable row first, then projection — an update that only reached Redis is one a restart undoes.
             if not await self._durable_update_or_adopt(
                 fact_id, decoded["content"], current_metadata, hash_content=raw_new_content
@@ -1132,6 +1131,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                     "timestamp": decoded.get("timestamp", ""),
                 },
             )
+            await sync_fact_quarantine(self.redis_client, fact_id, current_metadata)  # #21957
             if ownership_changed(previous, current_metadata) and getattr(self, "ownership_manager", None):
                 await reindex_ownership(self.ownership_manager, fact_id, previous, current_metadata)
 
