@@ -61,9 +61,9 @@ REACH = declare(
     roots=_ROOTS,
     what="non-test backend, SLM and shared modules scanned for a 4xx answered 'Internal server error'",
 )
-#: 4xx calls seen on the live tree (1957 measured 2026-11-21); growth 300 puts the pin mid-window. Declared below,
-#: so a detector that stopped matching fails as a reach error instead of reading as clean.
-_STATUS_SEEN_FLOOR = 1800
+#: 4xx calls seen on the live tree (2242 measured by the reach-floor check, 2026-11-22); growth 300 puts the pin
+#: mid-window (2242 - 150). Declared below, so a detector that stopped matching fails as a reach error, not a clean pass.
+_STATUS_SEEN_FLOOR = 2092
 
 
 def _status_of(node: ast.AST) -> int | None:
