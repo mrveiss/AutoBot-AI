@@ -34,6 +34,7 @@ import psutil
 from autobot_shared.logging_manager import get_logger
 
 from ..config import AGENT_API_BASE_URL, AGENT_API_KEY_PLACEHOLDER
+from ..credential_env import inject_role_credentials, redact_role_credentials
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .rate_limit_markers import _RL_KEYWORDS, is_rate_limit_output
@@ -243,8 +244,10 @@ def serialize_invoke_context(context: dict) -> str:
 
     The real ``agent_api_key`` is forwarded only via the dedicated
     ``AUTOBOT_LLC_API_KEY`` env var (GH#9623); it must not be duplicated inside
-    the JSON context blob, which is broader and more likely to be logged.
+    the JSON context blob, which is broader and more likely to be logged. Role
+    credential values (#20533) are masked for the same reason.
     """
+    context = redact_role_credentials(context)
     if context.get("agent_api_key") and context["agent_api_key"] != AGENT_API_KEY_PLACEHOLDER:
         context = {**context, "agent_api_key": AGENT_API_KEY_PLACEHOLDER}
     return json.dumps(context, default=str)
@@ -256,7 +259,8 @@ def inject_agent_credentials(env: dict, context: dict) -> None:
     Forwards ``context["agent_api_key"]`` as ``AUTOBOT_LLC_API_KEY`` and the API
     base as ``AUTOBOT_LLC_API_BASE`` so the subprocess can authenticate LLC API
     calls (GH#9623, GH#9789). The build-time placeholder / empty values are
-    skipped — only a real injected key is forwarded.
+    skipped — only a real injected key is forwarded. The role's active credentials
+    (``context["role_credentials"]``) are injected under their validated names (#20533).
     """
     api_key: Any = context.get("agent_api_key")
     if api_key and api_key != AGENT_API_KEY_PLACEHOLDER:
@@ -264,6 +268,7 @@ def inject_agent_credentials(env: dict, context: dict) -> None:
     api_base = context.get("api_base") or context.get("api_base_url") or AGENT_API_BASE_URL
     if api_base:
         env["AUTOBOT_LLC_API_BASE"] = api_base
+    inject_role_credentials(env, context)
 
 
 async def spawn_detached(*cmd: str, **kwargs: Any) -> asyncio.subprocess.Process:
@@ -378,6 +383,12 @@ def probe_pid_identity(pid: int, expected_create_time: float | None) -> AdapterR
         _logger.warning("probe_pid_identity: could not verify PID %d, falling back to plain probe: %s", pid, exc)
         return probe_pid(pid)
     if actual != expected_create_time:
+        _logger.warning(
+            "probe_pid_identity: PID %d exists but its identity differs (expected=%r actual=%r); reporting COMPLETED",
+            pid,
+            expected_create_time,
+            actual,
+        )
         return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
     return AdapterRunStatus(status=LLCRunStatus.RUNNING)
 

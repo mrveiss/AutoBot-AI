@@ -38,6 +38,8 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _BACKEND = repo_root() / "autobot-backend"
 
 #: The spellings that reach the event bus. `publish_event_safe` is
@@ -117,9 +119,9 @@ _KNOWN_TENANT_KEYS_ON_GLOBAL = frozenset(
         "worker_node.py:397",
         "worker_node.py:413",
         "services/autoresearch/auto_research_agent.py:1096",
-        "agent_loop/loop.py:369",
-        "agent_loop/loop.py:654",
-        "agent_loop/loop.py:1787",
+        "agent_loop/loop.py:370",
+        "agent_loop/loop.py:655",
+        "agent_loop/loop.py:1783",
     }
 )
 
@@ -189,7 +191,7 @@ def _scan_source(source: str, label: str) -> tuple[list[str], int, int]:
     offenders: list[str] = []
     opaque = 0
     seen = 0
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     names = _local_publish_names(tree)
     for node in ast.walk(tree):
         if not _is_global_publish(node, names):

@@ -3,8 +3,8 @@
 /**
  * @autobot/ui — shared Prometheus/monitoring metric shapes (#14907).
  *
- * Each app has its own metrics composable (`useInstallMetrics` in
- * `autobot-frontend`, `useFleetMetrics` in `autobot-slm-frontend`; both were
+ * Each reader is its own composable (`useInstallMetricsApi`, this install's main backend, and
+ * `useFleetMetrics`, the fleet, both in `autobot-slm-frontend` since #19484; both were
  * `usePrometheusMetrics` until #18225) because the surrounding polling/transport logic is
  * legitimately different per app (see each composable's own docs). But eight
  * type names were declared IDENTICALLY-NAMED, near-identically-shaped in
@@ -115,7 +115,7 @@ export interface OptimizationRecommendation {
   expected_improvement: string
 }
 
-/** Options accepted by `useInstallMetrics()` and `useFleetMetrics()`. */
+/** Options accepted by `useFleetMetrics()`. */
 export interface UsePrometheusMetricsOptions {
   /** Auto-fetch on mount (default: true) */
   autoFetch?: boolean

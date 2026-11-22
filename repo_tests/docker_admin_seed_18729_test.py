@@ -41,6 +41,7 @@ def _run_generator(tmp: Path) -> tuple[str, dict[str, str]]:
         pytest.skip("bash and openssl are needed to run generate-secrets.sh")
     script = tmp / "generate-secrets.sh"
     shutil.copy(_GENERATOR, script)
+    shutil.copy(_GENERATOR.parent / "write-redis-acl.sh", tmp)
     # #17793: generate-secrets refuses a DB password when docker cannot say no Postgres volume
     # exists; a stub docker that lists no volumes stands for a fresh host.
     bin_dir = tmp / "bin"
@@ -141,8 +142,13 @@ def test_install_md_pulls_the_models_docker_env_names() -> None:
 
 
 #: A default or example naming the retired mode (#10636): `AUTOBOT_USER_MODE=single_user`,
-#: `${AUTOBOT_USER_MODE:-single_user}`, or a shell branch on it.
-_RETIRED_MODE = re.compile(r"AUTOBOT_USER_MODE(?:=|:-)\s*[\"']?single_user|USER_MODE[\"']?\s*!?=+\s*[\"']?single_user")
+#: `${AUTOBOT_USER_MODE:-single_user}`, a shell branch on it, or a YAML mapping or list entry
+#: (`AUTOBOT_USER_MODE: single_user`, `- AUTOBOT_USER_MODE: 'single_user'`, a quoted key; #21797).
+_RETIRED_MODE = re.compile(
+    r"AUTOBOT_USER_MODE[\"']?\s*(?:=|:-|-|:)\s*[\"']?single_user|USER_MODE[\"']?\s*!?=+\s*[\"']?single_user"
+    # a default taken through another variable: `AUTOBOT_USER_MODE: ${DEPLOYMENT_MODE:-single_user}` (#21797)
+    r"|AUTOBOT_USER_MODE[\"']?\s*[=:]\s*[\"']?\$\{\w+:?-[\"']?single_user"
+)
 
 
 def retired_mode_sites(files: dict[str, str]) -> list[str]:
@@ -165,8 +171,6 @@ def _mode_carriers(root: Path) -> list[str]:
 REACH = declare(
     "user-mode-default-carriers-18729",
     discover=_mode_carriers,
-    # Mid-window from REACH.window(): population 15, window (11, 15) -> 13.
-    floor=13,
     growth=4,
     what="compose files, Docker entrypoints and env templates",
     roots=(".env", "autobot-frontend/", "autobot-slm-backend/", "docker-compose", "docker/"),
@@ -192,8 +196,31 @@ def test_the_retired_mode_check_sees_every_shape() -> None:
         "f": 'AUTOBOT_USER_MODE="single_user"',
         "g": "USER_MODE=\"${AUTOBOT_USER_MODE:-'single_user'}\"",
         "h": "if [ \"$USER_MODE\" != 'single_user' ]; then",
+        "i": "      AUTOBOT_USER_MODE: single_user",
+        "j": "      - AUTOBOT_USER_MODE: 'single_user'",
+        "k": '      "AUTOBOT_USER_MODE": "single_user"',
+        "l": "      AUTOBOT_USER_MODE: ${AUTOBOT_USER_MODE:-team}",
+        "m": "      AUTOBOT_USER_MODE: ${AUTOBOT_USER_MODE-single_user}",
+        "n": "      AUTOBOT_USER_MODE: ${AUTOBOT_USER_MODE-team}",
+        "o": "      AUTOBOT_USER_MODE: ${DEPLOYMENT_MODE:-single_user}",
+        "p": "      - AUTOBOT_USER_MODE=${DEPLOYMENT_MODE-'single_user'}",
+        "q": "      AUTOBOT_USER_MODE: ${DEPLOYMENT_MODE:-team}",
     }
-    assert retired_mode_sites(shapes) == ["a:1", "b:1", "c:1", "e:1", "f:1", "g:1", "h:1"]
+    assert retired_mode_sites(shapes) == [
+        "a:1",
+        "b:1",
+        "c:1",
+        "e:1",
+        "f:1",
+        "g:1",
+        "h:1",
+        "i:1",
+        "j:1",
+        "k:1",
+        "m:1",
+        "o:1",
+        "p:1",
+    ]
 
 
 # --- the entrypoint's migration retry is safe only if non-transactional migrations resume ---
@@ -211,7 +238,6 @@ def _migrations(root: Path) -> list[str]:
 MIGRATIONS_REACH = declare(
     "backend-migrations-resume-safe-18729",
     discover=_migrations,
-    floor=97,  # mid-window: population 107, window (87, 107)
     growth=20,
     what="backend alembic migrations",
     roots=(_MIGRATIONS,),

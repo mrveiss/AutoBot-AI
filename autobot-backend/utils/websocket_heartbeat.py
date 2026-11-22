@@ -14,8 +14,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, FrozenSet, Set
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, is_client_disconnect, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
@@ -184,7 +185,7 @@ class WebSocketManager:
             self.connection_states[connection_id] = WebSocketConnectionState.ERROR
 
         # Clean up on serious errors
-        if isinstance(error, WebSocketDisconnect):
+        if is_client_disconnect(error):
             await self.disconnect(connection_id)
 
     async def connect(self, websocket: WebSocket, connection_id: str) -> bool:
@@ -420,8 +421,8 @@ async def create_websocket_handler(websocket: WebSocket, connection_id: str):
                 if not await websocket_manager.handle_message(connection_id, message):
                     break  # Handler indicated connection should close
 
-            except WebSocketDisconnect:
-                logger.info("🔌 WebSocket disconnected normally: %s", connection_id)
+            except PEER_CLOSED_ERRORS as disconnect:
+                log_client_disconnect(logger, disconnect, "create_websocket_handler")
                 break
 
             except Exception as e:

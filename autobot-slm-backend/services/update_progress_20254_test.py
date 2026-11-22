@@ -53,6 +53,18 @@ def test_a_live_run_reports_its_play_task_and_times(progress, tmp_path) -> None:
     assert out["last_line_at"].startswith("2026-10-31T10:29:55")
 
 
+def test_polling_a_live_run_logs_no_warning(progress, tmp_path) -> None:
+    """The progress poll says the run is alive, so the reader must not read it as 'unknown' (#19770)."""
+    reader = sys.modules["services.self_update_log_reader"]
+    from unittest.mock import patch
+
+    with patch.object(reader.logger, "warning") as warning, patch.object(reader.logger, "error") as error:
+        for _ in range(3):
+            progress.build_update_progress(_log(tmp_path, _RUNNING), True, now=_NOW)
+    warning.assert_not_called()
+    error.assert_not_called()
+
+
 def test_a_live_run_with_a_quiet_log_says_so(progress, tmp_path) -> None:
     log = _log(tmp_path, _RUNNING, age_seconds=progress.STALL_SECONDS + 1)
     assert progress.build_update_progress(log, True, now=_NOW)["state"] == "quiet"

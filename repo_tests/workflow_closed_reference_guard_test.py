@@ -6,7 +6,7 @@
 
 This is the second occurrence of the exact same defect. #15252's dead
 integration-test path survived because its comment attributed the gap to
-closed #734; #15333 found ``code-quality.yml`` attributing 4133 + 1281
+closed #734; #15333 found ``_gate-code-quality.yml`` attributing 4133 + 1281
 suppressed mypy errors to closed #7105. Both read, at a glance, like a
 tracked and accepted state — a reader checking whether the gap is accounted
 for finds a closed ticket and moves on.
@@ -62,7 +62,7 @@ GRAPHQL_CHUNK_SIZE = 50
 # guard's scope. Recorded here, not silently dropped: both entries carry the
 # tracking issue and must be removed once #15346 lands its fix.
 DELIBERATELY_EXEMPT = {
-    (".github/workflows/code-quality.yml", 5263): "#15346 — 'After #5263 closes, swap to full-scan mode'",
+    (".github/workflows/_gate-code-quality.yml", 5263): "#15346 — 'After #5263 closes, swap to full-scan mode'",
     (".github/workflows/ssot-coverage.yml", 14371): "#15346 — hardcoded-values baseline backlog",
 }
 

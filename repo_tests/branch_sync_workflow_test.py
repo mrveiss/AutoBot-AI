@@ -30,6 +30,8 @@ import re
 import yaml
 from repo_tests._paths import repo_root
 
+from autobot_shared.regex_whitespace import NOT_WS, WS
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_text
 
 _REPO_ROOT = repo_root()
@@ -41,7 +43,7 @@ _RETIRED = (
 )
 
 # `git rebase` as a command, not the substring.
-_REBASE = re.compile(r"\bgit\s+(?:-\S+\s+)*rebase\b")
+_REBASE = re.compile(rf"\bgit{WS}+(?:-{NOT_WS}+{WS}+)*rebase\b")
 _FORCE_PUSH = re.compile(r"\bgit\s+push\b[^\n]*?(?:--force\b|--force-with-lease\b|\s-f\b|\s\+)")
 _EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", re.S)
 _SECRET = re.compile(r"\bsecrets\.([A-Za-z_][A-Za-z0-9_]*)")
@@ -67,7 +69,7 @@ def _shell_bodies() -> list[str]:
 
 def _code_strings(path) -> list[str]:
     """Every string constant in a script except docstrings: the argv lives here."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     docstrings = {
         id(node.body[0].value)
         for node in ast.walk(tree)
@@ -182,7 +184,8 @@ def test_permissions_are_exactly_what_the_sync_needs() -> None:
     assert spec.get("permissions") == {}, "workflow-level permissions must be empty; the job declares its own"
     (job,) = spec["jobs"].values()
     # contents: read -- the PAT pushes; GITHUB_TOKEN only reads the clone, lists PRs, labels and comments.
-    assert job["permissions"] == {"contents": "read", "pull-requests": "write", "issues": "write"}
+    # actions: read -- the start_ci_for_pr request lists a head's workflow runs (#21577); nothing else uses it.
+    assert job["permissions"] == {"contents": "read", "pull-requests": "write", "issues": "write", "actions": "read"}
     assert job.get("timeout-minutes"), "a sync over ~150 branches needs an explicit timeout"
     assert job["runs-on"] == "ubuntu-latest", "never the singleton self-hosted runner (#13401)"
 

@@ -6,6 +6,9 @@
  * Issue #2861: Replaces `catch (err: any)` patterns with type-safe extraction.
  */
 
+import { RequestTimeoutError } from '@autobot/ui'
+import i18n from '@/i18n'
+
 interface AxiosLikeError {
   response?: {
     data?: {
@@ -42,6 +45,12 @@ export function extractErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error) return err.message
   if (typeof err === 'string') return err
   return fallback
+}
+
+/** True for the API client's typed timeout and for a fetch aborted by AbortSignal.timeout(). Never reads message text. */
+export function isRequestTimeout(error: unknown): boolean {
+  if (error instanceof RequestTimeoutError) return true
+  return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'TimeoutError'
 }
 
 // ==================== Failed-response bodies (#17528) ====================
@@ -134,14 +143,31 @@ export async function extractResponseErrorDetail(response: Response): Promise<st
 /**
  * The message to throw for a failed response: the status line, then the reason.
  *
- * The status line stays FIRST and verbatim because 16 call sites branch on it —
- * `ErrorHandler.js` maps 400/401/403/404/429/5xx to user-facing copy, `ApiClient.ts:425`
- * decides retries on `includes('HTTP 4')`, and `useLlcCompanyStore.ts` uses
- * `startsWith('HTTP 503')`. Appending keeps every one of those matching; replacing the
- * message would have broken them all with nothing failing to say so.
+ * The status line stays FIRST and verbatim: it is the message users and logs see, and the kit
+ * client's `HttpError` formats the same `HTTP <status>: <reason>` line. Appending the reason keeps
+ * that line intact; no caller decides on its text, they read the typed `status`.
  */
 export async function describeFailedResponse(response: Response): Promise<string> {
   const statusLine = `HTTP ${response.status}: ${response.statusText}`
   const detail = await extractResponseErrorDetail(response)
   return detail ? `${statusLine} — ${detail}` : statusLine
+}
+
+/** A streamed `error` event's chat text: its own translation when it names one (#16845), else the raw error. */
+export function streamErrorText(data: {
+  content?: string
+  message?: string
+  metadata?: {
+    i18n_key?: string
+    i18n_params?: Record<string, unknown>
+    i18n_param_keys?: Record<string, string> // params whose values are themselves i18n keys
+  }
+}): string {
+  const key = data.metadata?.i18n_key
+  if (!key) return `Error: ${data.content || data.message || 'Unknown error'}`
+  const params: Record<string, unknown> = { ...data.metadata?.i18n_params }
+  for (const [name, paramKey] of Object.entries(data.metadata?.i18n_param_keys ?? {})) {
+    params[name] = i18n.global.t(paramKey)
+  }
+  return i18n.global.t(key, params) as string
 }

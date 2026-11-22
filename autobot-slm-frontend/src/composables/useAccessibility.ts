@@ -9,121 +9,15 @@
  * Provides:
  * - useFocusTrap: re-exported from the shared kit (restoreFocus / initialFocus / listenOnDocument options)
  * - useKeyboardNav: arrow key navigation for lists/grids
- * - useHighContrast: high contrast mode toggle with localStorage
  * - useAnnounce: screen reader announcements via aria-live
  *
  * Issue #754: Accessibility audit and improvements.
  */
 
 import { ref, type Ref } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
 
-const logger = createLogger('Accessibility')
-
-// ─── High Contrast Mode ───────────────────────────────────────
-
-const CONTRAST_STORAGE_KEY = 'autobot-high-contrast'
-
-/** Shared reactive state for high contrast mode across all consumers. */
-const highContrastEnabled = ref(false)
-
-/**
- * Apply or remove the high-contrast data attribute on the root element.
- *
- * Helper for useHighContrast (Issue #754).
- */
-function applyHighContrast(enabled: boolean): void {
-  if (enabled) {
-    document.documentElement.setAttribute('data-theme', 'high-contrast')
-  } else {
-    document.documentElement.removeAttribute('data-theme')
-  }
-}
-
-/**
- * High contrast mode composable with localStorage persistence.
- *
- * Issue #754: Accessibility audit and improvements.
- */
-export function useHighContrast() {
-  function toggle(): void {
-    highContrastEnabled.value = !highContrastEnabled.value
-    localStorage.setItem(CONTRAST_STORAGE_KEY, String(highContrastEnabled.value))
-    applyHighContrast(highContrastEnabled.value)
-    logger.info('High contrast mode:', highContrastEnabled.value ? 'enabled' : 'disabled')
-  }
-
-  function init(): void {
-    const stored = localStorage.getItem(CONTRAST_STORAGE_KEY)
-    if (stored === 'true') {
-      highContrastEnabled.value = true
-      applyHighContrast(true)
-    }
-  }
-
-  return {
-    enabled: highContrastEnabled,
-    toggle,
-    init,
-  }
-}
-
-
-// ─── Dark Mode ───────────────────────────────────────────────
-
-const DARK_MODE_STORAGE_KEY = 'autobot-dark-mode'
-
-/** Shared reactive state for dark mode across all consumers. */
-const darkModeEnabled = ref(false)
-
-/**
- * Apply or remove the dark-mode data attribute on the root element.
- * High-contrast takes priority — dark mode will not override it.
- */
-function applyDarkMode(enabled: boolean): void {
-  if (enabled) {
-    if (document.documentElement.getAttribute('data-theme') !== 'high-contrast') {
-      document.documentElement.setAttribute('data-theme', 'dark')
-    }
-  } else {
-    if (document.documentElement.getAttribute('data-theme') === 'dark') {
-      document.documentElement.removeAttribute('data-theme')
-    }
-  }
-}
-
-/**
- * Dark mode composable with localStorage persistence.
- *
- * Issue #3305: Wire dark mode setting to CSS class.
- */
-export function useDarkMode() {
-  function set(enabled: boolean): void {
-    darkModeEnabled.value = enabled
-    localStorage.setItem(DARK_MODE_STORAGE_KEY, String(enabled))
-    applyDarkMode(enabled)
-    logger.info('Dark mode:', enabled ? 'enabled' : 'disabled')
-  }
-
-  function toggle(): void {
-    set(!darkModeEnabled.value)
-  }
-
-  function init(): void {
-    const stored = localStorage.getItem(DARK_MODE_STORAGE_KEY)
-    if (stored === 'true') {
-      darkModeEnabled.value = true
-      applyDarkMode(true)
-    }
-  }
-
-  return {
-    enabled: darkModeEnabled,
-    set,
-    toggle,
-    init,
-  }
-}
+// Theme switching (light / dark / contrast / mono) lives in ./useSlmTheme (#18239); the former
+// high-contrast and dark-mode toggles here are folded into it.
 
 
 // ─── Keyboard Navigation ──────────────────────────────────────

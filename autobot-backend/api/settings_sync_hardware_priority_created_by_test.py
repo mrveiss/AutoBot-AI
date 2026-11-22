@@ -18,7 +18,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api import settings_config
 from api.settings import router
 from api.user_management.dependencies import get_db_session
 
@@ -45,17 +44,21 @@ class TestSyncRecordsItsAuthor:
             patch("api.settings.ConfigService.clear_cache"),
             patch("api.settings.ConfigRevisionService", revisions),
             patch("api.settings._atomic_write_json", AsyncMock()),
-            patch.object(settings_config, "verify_internal_api_key", return_value=internal_key),
         ):
-            response = _client().post("/api/settings/sync", json={"settings": {"hardware": {}}})
+            response = _client().post(
+                "/api/settings/sync",
+                json={"settings": {"hardware": {}}},
+                headers={"X-Internal-API-Key": "k"} if internal_key else {},
+            )
         assert response.status_code == 200, response.text
         return revisions.return_value.create_revision.await_args.kwargs["created_by"]
 
     def test_an_admin_session_is_recorded_by_username(self):
         assert self._recorded_author(internal_key=False) == "test-user"
 
-    def test_the_internal_service_key_is_recorded_as_the_service(self):
-        assert self._recorded_author(internal_key=True) == settings_config.INTERNAL_SERVICE_ACTOR
+    def test_the_admin_is_recorded_even_when_the_proxy_sends_the_key(self):
+        """#16333: the key is not an admin, so a key-bearing write is the session's admin's."""
+        assert self._recorded_author(internal_key=True) == "test-user"
 
 
 class TestHardwarePriorityRecordsItsAuthor:
@@ -74,11 +77,11 @@ class TestHardwarePriorityRecordsItsAuthor:
             patch("api.settings.ConfigService.save_full_config", return_value={"status": "ok"}),
             patch("api.settings.ConfigRevisionService", revisions),
             patch("hardware_acceleration.get_hardware_acceleration_manager", return_value=mock_hw),
-            patch.object(settings_config, "verify_internal_api_key", return_value=internal_key),
         ):
             response = _client().patch(
                 "/api/settings/hardware-priority",
                 json={"priority_order": ["npu", "gpu", "cpu"]},
+                headers={"X-Internal-API-Key": "k"} if internal_key else {},
             )
         assert response.status_code == 200, response.text
         return revisions.return_value.create_revision.await_args.kwargs["created_by"]
@@ -86,5 +89,6 @@ class TestHardwarePriorityRecordsItsAuthor:
     def test_an_admin_session_is_recorded_by_username(self):
         assert self._recorded_author(internal_key=False) == "test-user"
 
-    def test_the_internal_service_key_is_recorded_as_the_service(self):
-        assert self._recorded_author(internal_key=True) == settings_config.INTERNAL_SERVICE_ACTOR
+    def test_the_admin_is_recorded_even_when_the_proxy_sends_the_key(self):
+        """#16333: the key is not an admin, so a key-bearing write is the session's admin's."""
+        assert self._recorded_author(internal_key=True) == "test-user"

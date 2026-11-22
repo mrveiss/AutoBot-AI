@@ -96,7 +96,7 @@ class TestLLMConfig:
 
     def test_default_llm_models(self) -> None:
         """Test that default LLM models are correct when no env is set."""
-        from autobot_shared.ssot_config import LLMConfig
+        from autobot_shared.ssot_config import LLMConfig, TimeoutConfig
 
         # Note: Since Pydantic reads from .env file, we test that values are present
         # not necessarily the hardcoded defaults
@@ -106,11 +106,11 @@ class TestLLMConfig:
             assert isinstance(config.default_model, str)
             assert len(config.default_model) > 0
             assert isinstance(config.provider, str)
-            assert config.timeout > 0
+            assert TimeoutConfig(_env_file=None).llm > 0  # AUTOBOT_LLM_TIMEOUT is bound once, here (#17419)
 
     def test_llm_config_from_env(self) -> None:
         """Test that LLM config reads from environment variables."""
-        from autobot_shared.ssot_config import LLMConfig
+        from autobot_shared.ssot_config import LLMConfig, TimeoutConfig
 
         test_env = {
             "AUTOBOT_DEFAULT_LLM_MODEL": "llama3.2:1b",
@@ -119,7 +119,7 @@ class TestLLMConfig:
         with patch.dict(os.environ, test_env, clear=True):
             config = LLMConfig(_env_file=None)
             assert config.default_model == "llama3.2:1b"
-            assert config.timeout == 60
+            assert TimeoutConfig(_env_file=None).llm == 60
 
 
 class TestTimeoutConfig:
@@ -654,16 +654,16 @@ class TestAuditLogFileLazyDefault:
     default here was never falsy.
     """
 
-    def test_resolves_under_the_checkout_when_unset(self, monkeypatch) -> None:
+    def test_resolves_in_the_logs_dir_when_unset(self, monkeypatch, tmp_path) -> None:
+        """#20894: the default follows the one log-dir resolver, never the checkout's logs/."""
         from autobot_shared.paths import project_root
         from autobot_shared.ssot_config import MiscConfig
 
         monkeypatch.delenv("AUTOBOT_AUDIT_LOG_FILE", raising=False)
-
+        monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path / "logs"))
         cfg = MiscConfig(_env_file=None)
-
-        assert cfg.audit_log_file == str(project_root() / "logs" / "audit.log")
-        assert not cfg.audit_log_file.startswith("/opt/autobot")
+        assert cfg.audit_log_file == str(tmp_path / "logs" / "audit.log")
+        assert not Path(cfg.audit_log_file).is_relative_to(project_root())
 
     def test_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
         from autobot_shared.ssot_config import MiscConfig

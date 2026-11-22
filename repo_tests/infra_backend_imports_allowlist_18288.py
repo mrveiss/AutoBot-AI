@@ -89,6 +89,8 @@ BACKEND_TOOLS: dict[str, str] = {
     + "migrations/migrate_sessions_608.py": (
         "backend tool: migrates chat sessions through the backend's ChatHistoryManager and memory graph"
     ),
+    _P + "claude_md_reindex_cli.py": "backend tool: proposes the CLAUDE.md chunk deletion, re-indexes the KB",
+    _P + "kb_wipe_cli.py": "backend tool: raises the backend's #17038 knowledge-wipe proposal for the KB reset scripts",
     _P + "profile_backend.py": ("backend tool: profiles the backend's app_factory startup"),
     _P + "profile_startup.py": ("backend tool: profiles the backend's startup sequence (app_factory)"),
     _P
@@ -124,7 +126,6 @@ UNCLASSIFIED: frozenset[str] = frozenset(
         "autobot-infrastructure/shared/scripts/populate_knowledge_base.py",
         "autobot-infrastructure/shared/scripts/quick_populate_kb.py",
         "autobot-infrastructure/shared/scripts/reset_kb_dimensions.py",
-        "autobot-infrastructure/shared/scripts/reset_knowledge_base.py",
         "autobot-infrastructure/shared/scripts/security/seed_enforcement_mode.py",
         "autobot-infrastructure/shared/scripts/sync_kb_docs.py",
         "autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py",

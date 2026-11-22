@@ -15,9 +15,9 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { formatFleetDateTime } from '@/composables/useTimezone'
-import { createLogger } from '@/utils/debugUtils'
+import { errorText } from '@/utils/errorText'
 import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, BlueGreenStatus, NodeRole } from '@/types/slm'
-import { BaseAlert, BaseModal, useToast } from '@autobot/ui'
+import { BaseAlert, BaseModal, useToast, createLogger } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 const { showToast } = useToast()
@@ -398,9 +398,8 @@ async function handleCreateBgDeployment(): Promise<void> {
     await fetchBgDeployments()
   } catch (err: unknown) {
     logger.error('Failed to create blue-green deployment:', err)
-    const errorMessage = err instanceof Error ? err.message : String(err)
     const axiosError = err as { response?: { data?: { detail?: string }; status?: number } }
-    const detail = axiosError?.response?.data?.detail || errorMessage
+    const detail = axiosError?.response?.data?.detail || errorText(err)
     const status = axiosError?.response?.status
     if (status === 403) {
       showToast(t('deploymentsView.accessDeniedBlueGreenDeploymentsRequireAdmin'), 'error')
@@ -533,9 +532,8 @@ async function handleCreateDeployment(): Promise<void> {
     fetchRoleOwners()
   } catch (err: unknown) {
     logger.error('Failed to create deployment:', err)
-    const errorMessage = err instanceof Error ? err.message : String(err)
     const axiosError = err as { response?: { data?: { detail?: string } } }
-    const detail = axiosError?.response?.data?.detail || errorMessage
+    const detail = axiosError?.response?.data?.detail || errorText(err)
     showToast(t('deploymentsView.failedToCreateDeployment', { detail }), 'error')
   } finally {
     isCreatingDeployment.value = false

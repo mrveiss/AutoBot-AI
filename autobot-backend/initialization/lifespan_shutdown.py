@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 
 from autobot_shared.logging_manager import get_logger
+from initialization.mesh_reembed_startup import stop_mesh_reembed_consumer
 
 if TYPE_CHECKING:
     from initialization.lifespan import _ShutdownReport
@@ -223,6 +224,11 @@ async def drain_llc_monitors_and_mesh_scheduler(app: FastAPI, report: "_Shutdown
             logger.info("✅ MeshBrainScheduler stopped")
         except Exception as mesh_stop_error:
             report.failed("MeshBrainScheduler stop", mesh_stop_error)
+    # #20535: stop the mesh re-embed consumer and free its lease for another worker.
+    try:
+        await stop_mesh_reembed_consumer(app)
+    except Exception as reembed_stop_error:
+        report.failed("Mesh re-embed consumer stop", reembed_stop_error)
     # GH#9026: Stop LLC session checkpointer (#13085: drained, see above)
     if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
         try:
@@ -261,6 +267,11 @@ async def stop_periodic_schedulers(app: FastAPI, report: "_ShutdownReport") -> N
     if reconciler is not None and not reconciler.done():
         reconciler.cancel()
         await report.run("LLC schedule reconciler stop", asyncio.gather(reconciler, return_exceptions=True))
+
+    # #18412: drain the approval expiry sweep (bounded, shielded via aclose())
+    from services.approval_expiry_scheduler import stop_approval_expiry_scheduler
+
+    await report.run("Approval expiry scheduler drain", stop_approval_expiry_scheduler(app))
 
     # GH#8229: Stop LLC routine scheduler
     if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
@@ -465,7 +476,13 @@ async def shutdown_extensions(app: FastAPI, report: "_ShutdownReport") -> None:
 
 
 async def flush_llm_observers(report: "_ShutdownReport") -> None:
-    """Flush the LangFuse / LangSmith observer buffers."""
+    """Flush the LangFuse / LangSmith observer buffers and the in-flight verifier spend recordings (#21844)."""
+    try:
+        from autobot_shared.verifier_model import drain_spend_tasks
+
+        await drain_spend_tasks()
+    except Exception as spend_err:
+        report.failed("verifier spend drain", spend_err)
     # GH#9012: Flush LangFuse / LangSmith observer buffers before exit
     try:
         from llm_shared.observability.registry import _registry

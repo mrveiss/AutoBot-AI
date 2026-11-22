@@ -11,17 +11,16 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert } from '@autobot/ui'
+import { PollingPausedAlert, createLogger, createDateFormatter } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
-import { createLogger } from '@/utils/debugUtils'
 import { getTimezoneOption } from '@/composables/useTimezone'
+import { errorText } from '@/utils/errorText'
 import type { AppLogEntry } from '@/types/api-responses'
-import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('LogViewer')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 /**
  * Row rendered by this viewer — a client-side VIEW-MODEL, not a wire shape.
@@ -90,18 +89,18 @@ const filteredLogs = computed(() => {
 // Log level styling
 function getLevelClass(level: string): string {
   switch (level) {
-    case 'debug': return 'bg-gray-100 text-gray-600'
-    case 'info': return 'bg-blue-100 text-blue-700'
-    case 'warning': return 'bg-yellow-100 text-yellow-700'
-    case 'error': return 'bg-red-100 text-red-700'
-    case 'critical': return 'bg-red-200 text-red-800 font-semibold'
-    default: return 'bg-gray-100 text-gray-600'
+    case 'debug': return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
+    case 'info': return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
+    case 'warning': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
+    case 'error': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
+    case 'critical': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg font-semibold'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
   }
 }
 
-const formatTimestamp = createDateFormatter({ kind: 'time', locale: 'en-US', intl: () => ({ hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', ...getTimezoneOption() }) })
+const formatTimestamp = createDateFormatter({ kind: 'time', locale: () => locale.value, intl: () => ({ hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', ...getTimezoneOption() }) })
 
-const formatDate = createDateFormatter({ kind: 'date', locale: 'en-US', intl: () => ({ month: 'short', day: 'numeric', ...getTimezoneOption() }) })
+const formatDate = createDateFormatter({ kind: 'date', locale: () => locale.value, intl: () => ({ month: 'short', day: 'numeric', ...getTimezoneOption() }) })
 
 const severityToLevel: Record<string, LogRow['level']> = {
   debug: 'debug',
@@ -131,7 +130,7 @@ async function fetchLogs(): Promise<boolean> {
   } catch (err) {
     // #19887: keep the last good rows; a failed read is not an empty result
     logger.error('Failed to fetch logs:', err)
-    logLoadError.value = err instanceof Error ? err.message : String(err)
+    logLoadError.value = errorText(err)
     return false
   } finally {
     isLoading.value = false
@@ -213,7 +212,7 @@ async function fetchAppLogs() {
     logger.error('Failed to fetch application logs:', err)
     appLogEntries.value = []
     appLogTotal.value = 0
-    appLogError.value = err instanceof Error ? err.message : String(err)
+    appLogError.value = errorText(err)
   } finally {
     isAppLogLoading.value = false
   }
@@ -249,7 +248,7 @@ onMounted(() => {
     <PollingPausedAlert :poller="logsPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="logsPoller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.logViewer.logViewer') }}</h2>
+      <h2 class="text-xl font-bold text-autobot-text-primary">{{ $t('monitoring.logViewer.logViewer') }}</h2>
       <div v-if="activeSubTab === 'fleetEvents'" class="flex items-center gap-2">
         <button
           @click="toggleAutoRefresh"
@@ -257,22 +256,22 @@ onMounted(() => {
             'px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
             isAutoRefresh
               ? 'bg-success-100 text-success-700'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
           ]"
         >
-          <span :class="['w-2 h-2 rounded-full', isAutoRefresh ? 'bg-success-500 animate-pulse' : 'bg-gray-400']"></span>
+          <span :class="['w-2 h-2 rounded-full', isAutoRefresh ? 'bg-success-500 animate-pulse' : 'bg-autobot-dot-idle']"></span>
           {{ isAutoRefresh ? $t('monitoring.logViewer.live') : $t('monitoring.logViewer.paused') }}
         </button>
         <button
           @click="refreshLogs"
           :disabled="isLoading"
-          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50"
         >
           {{ $t('monitoring.logViewer.refresh') }}
         </button>
         <button
           @click="clearLogs"
-          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('monitoring.logViewer.clear') }}
         </button>
@@ -281,14 +280,14 @@ onMounted(() => {
         v-else
         @click="fetchAppLogs"
         :disabled="isAppLogLoading || !appLogNodeId"
-        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50"
       >
         {{ $t('monitoring.logViewer.appLogs.refresh') }}
       </button>
     </div>
 
     <!-- Sub-tabs: fleet events (NodeEvent-backed) vs application logs (#11302) -->
-    <div class="flex gap-1 mb-4 border-b border-gray-200" role="tablist">
+    <div class="flex gap-1 mb-4 border-b border-autobot-border" role="tablist">
       <button
         role="tab"
         :aria-selected="activeSubTab === 'fleetEvents'"
@@ -297,7 +296,7 @@ onMounted(() => {
           'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
           activeSubTab === 'fleetEvents'
             ? 'border-primary-500 text-primary-600'
-            : 'border-transparent text-gray-500 hover:text-gray-700'
+            : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary'
         ]"
       >
         {{ $t('monitoring.logViewer.appLogs.fleetEvents') }}
@@ -310,7 +309,7 @@ onMounted(() => {
           'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
           activeSubTab === 'appLogs'
             ? 'border-primary-500 text-primary-600'
-            : 'border-transparent text-gray-500 hover:text-gray-700'
+            : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary'
         ]"
       >
         {{ $t('monitoring.logViewer.appLogs.applicationLogs') }}
@@ -319,7 +318,7 @@ onMounted(() => {
 
     <template v-if="activeSubTab === 'fleetEvents'">
     <!-- Filters -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-4">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 mb-4">
       <div class="flex flex-wrap items-center gap-4">
         <!-- Search -->
         <div class="flex-1 min-w-[200px]">
@@ -327,16 +326,16 @@ onMounted(() => {
             v-model="searchQuery"
             type="text"
             :placeholder="$t('monitoring.logViewer.searchLogs')"
-            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
 
         <!-- Level Filter -->
         <div class="flex items-center gap-2">
-          <label class="text-sm text-gray-600">{{ $t('monitoring.logViewer.level') }}</label>
+          <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.logViewer.level') }}</label>
           <select
             v-model="selectedLevel"
-            class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
           >
             <option v-for="level in logLevels" :key="level" :value="level">
               {{ level === 'all' ? $t('monitoring.logViewer.allLevels') : level.charAt(0).toUpperCase() + level.slice(1) }}
@@ -346,10 +345,10 @@ onMounted(() => {
 
         <!-- Source Filter -->
         <div class="flex items-center gap-2">
-          <label class="text-sm text-gray-600">{{ $t('monitoring.logViewer.source') }}</label>
+          <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.logViewer.source') }}</label>
           <select
             v-model="selectedSource"
-            class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
           >
             <option v-for="source in logSources" :key="source" :value="source">
               {{ source === 'all' ? $t('monitoring.logViewer.allSources') : source }}
@@ -368,52 +367,52 @@ onMounted(() => {
       {{ $t('monitoring.logViewer.loadError', { error: logLoadError }) }}
     </div>
 
-    <div class="text-sm text-gray-500 mb-2">{{ $t('monitoring.logViewer.showingCountOfCount2Entries', { count: filteredLogs.length, count2: logs.length }) }}</div>
+    <div class="text-sm text-autobot-text-tertiary mb-2">{{ $t('monitoring.logViewer.showingCountOfCount2Entries', { count: filteredLogs.length, count2: logs.length }) }}</div>
 
     <!-- Log Table -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border overflow-hidden">
       <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50 sticky top-0">
+        <table class="min-w-full divide-y divide-autobot-border">
+          <thead class="bg-autobot-bg-secondary sticky top-0">
             <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+              <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider w-24">
                 {{ $t('monitoring.logViewer.time') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+              <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider w-20">
                 {{ $t('monitoring.logViewer.level1') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+              <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider w-32">
                 {{ $t('monitoring.logViewer.source1') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">
                 {{ $t('monitoring.logViewer.message') }}
               </th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
+          <tbody class="bg-white divide-y divide-autobot-border">
             <tr
               v-for="(log, index) in filteredLogs"
               :key="index"
-              class="hover:bg-gray-50"
+              class="hover:bg-autobot-bg-hover"
             >
-              <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-500">
+              <td class="px-4 py-2 whitespace-nowrap text-xs text-autobot-text-tertiary">
                 <div>{{ formatTimestamp(log.timestamp) }}</div>
-                <div class="text-gray-400">{{ formatDate(log.timestamp) }}</div>
+                <div class="text-autobot-text-tertiary">{{ formatDate(log.timestamp) }}</div>
               </td>
               <td class="px-4 py-2 whitespace-nowrap">
                 <span :class="['px-2 py-0.5 text-xs rounded-sm', getLevelClass(log.level)]">
                   {{ log.level.toUpperCase() }}
                 </span>
               </td>
-              <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-600">
+              <td class="px-4 py-2 whitespace-nowrap text-sm text-autobot-text-secondary">
                 {{ log.source }}
               </td>
-              <td class="px-4 py-2 text-sm text-gray-900 font-mono">
+              <td class="px-4 py-2 text-sm text-autobot-text-primary font-mono">
                 {{ log.message }}
               </td>
             </tr>
             <tr v-if="filteredLogs.length === 0">
-              <td colspan="4" class="px-4 py-8 text-center text-gray-500">
+              <td colspan="4" class="px-4 py-8 text-center text-autobot-text-tertiary">
                 {{ isLoading ? $t('monitoring.logViewer.loadingLogs') : logLoadError ? $t('monitoring.logViewer.loadError', { error: logLoadError }) : $t('monitoring.logViewer.noLogsFound') }}
               </td>
             </tr>
@@ -426,14 +425,14 @@ onMounted(() => {
     <!-- Application logs (Issue #11302) -->
     <template v-else>
       <!-- Filters -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-4">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 mb-4">
         <div class="flex flex-wrap items-end gap-4">
           <div class="flex flex-col gap-1">
-            <label class="text-sm text-gray-600">{{ $t('monitoring.logViewer.appLogs.node') }}</label>
+            <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.logViewer.appLogs.node') }}</label>
             <select
               v-model="appLogNodeId"
               @change="applyAppLogFilters"
-              class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 min-w-[180px]"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 min-w-[180px]"
             >
               <option value="">{{ $t('monitoring.logViewer.appLogs.selectNode') }}</option>
               <option v-for="node in fleetStore.nodeList" :key="node.node_id" :value="node.node_id">
@@ -443,33 +442,33 @@ onMounted(() => {
           </div>
 
           <div class="flex flex-col gap-1">
-            <label class="text-sm text-gray-600">{{ $t('monitoring.logViewer.appLogs.service') }}</label>
+            <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.logViewer.appLogs.service') }}</label>
             <select
               v-model="appLogService"
               @change="applyAppLogFilters"
-              class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             >
               <option v-for="svc in appLogServices" :key="svc" :value="svc">{{ svc }}</option>
             </select>
           </div>
 
           <div v-if="appLogService === 'mcp-bridge'" class="flex flex-col gap-1">
-            <label class="text-sm text-gray-600">{{ $t('monitoring.logViewer.appLogs.mcpInstance') }}</label>
+            <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.logViewer.appLogs.mcpInstance') }}</label>
             <input
               v-model="appLogMcpInstance"
               type="text"
               :placeholder="$t('monitoring.logViewer.appLogs.mcpInstancePlaceholder')"
               @change="applyAppLogFilters"
-              class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 w-32"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 w-32"
             />
           </div>
 
           <div class="flex flex-col gap-1">
-            <label class="text-sm text-gray-600">{{ $t('monitoring.logViewer.appLogs.severity') }}</label>
+            <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.logViewer.appLogs.severity') }}</label>
             <select
               v-model="appLogSeverity"
               @change="applyAppLogFilters"
-              class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             >
               <option value="">{{ $t('monitoring.logViewer.appLogs.allSeverities') }}</option>
               <option v-for="sev in appLogSeverities" :key="sev" :value="sev">{{ severityLabel(sev) }}</option>
@@ -477,26 +476,26 @@ onMounted(() => {
           </div>
 
           <div class="flex flex-col gap-1">
-            <label class="text-sm text-gray-600">{{ $t('monitoring.logViewer.appLogs.hours') }}</label>
+            <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.logViewer.appLogs.hours') }}</label>
             <input
               v-model.number="appLogHours"
               type="number"
               min="1"
               max="168"
               @change="applyAppLogFilters"
-              class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 w-24"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 w-24"
             />
           </div>
 
           <div class="flex-1 min-w-[200px] flex flex-col gap-1">
-            <label class="text-sm text-gray-600">{{ $t('monitoring.logViewer.appLogs.search') }}</label>
+            <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.logViewer.appLogs.search') }}</label>
             <input
               v-model="appLogQuery"
               type="text"
               :placeholder="$t('monitoring.logViewer.appLogs.search')"
               @keyup.enter="applyAppLogFilters"
               @blur="applyAppLogFilters"
-              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              class="w-full px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
         </div>
@@ -513,24 +512,24 @@ onMounted(() => {
 
       <!-- Log Count + Pagination -->
       <div class="flex items-center justify-between mb-2">
-        <div class="text-sm text-gray-500">
+        <div class="text-sm text-autobot-text-tertiary">
           {{ $t('monitoring.logViewer.appLogs.showingCountOfTotalEntries', { count: appLogEntries.length, total: appLogTotal }) }}
         </div>
         <div v-if="appLogNodeId" class="flex items-center gap-2">
           <button
             @click="goToAppLogPage(-1)"
             :disabled="appLogPage <= 1"
-            class="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            class="px-3 py-1 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50"
           >
             {{ $t('monitoring.logViewer.appLogs.previous') }}
           </button>
-          <span class="text-sm text-gray-500">
+          <span class="text-sm text-autobot-text-tertiary">
             {{ $t('monitoring.logViewer.appLogs.pageOfTotal', { page: appLogPage, totalPages: appLogTotalPages }) }}
           </span>
           <button
             @click="goToAppLogPage(1)"
             :disabled="appLogPage >= appLogTotalPages"
-            class="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            class="px-3 py-1 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50"
           >
             {{ $t('monitoring.logViewer.appLogs.next') }}
           </button>
@@ -538,25 +537,25 @@ onMounted(() => {
       </div>
 
       <!-- Application Log Table -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border overflow-hidden">
         <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50 sticky top-0">
+          <table class="min-w-full divide-y divide-autobot-border">
+            <thead class="bg-autobot-bg-secondary sticky top-0">
               <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider w-24">
                   {{ $t('monitoring.logViewer.appLogs.time') }}
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+                <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider w-20">
                   {{ $t('monitoring.logViewer.appLogs.severity') }}
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">
                   {{ $t('monitoring.logViewer.appLogs.message') }}
                 </th>
               </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="entry in appLogEntries" :key="entry.line_number" class="hover:bg-gray-50">
-                <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-500">
+            <tbody class="bg-white divide-y divide-autobot-border">
+              <tr v-for="entry in appLogEntries" :key="entry.line_number" class="hover:bg-autobot-bg-hover">
+                <td class="px-4 py-2 whitespace-nowrap text-xs text-autobot-text-tertiary">
                   {{ entry.timestamp ? formatTimestamp(entry.timestamp) : '—' }}
                 </td>
                 <td class="px-4 py-2 whitespace-nowrap">
@@ -567,12 +566,12 @@ onMounted(() => {
                     {{ entry.severity }}
                   </span>
                 </td>
-                <td class="px-4 py-2 text-sm text-gray-900 font-mono">
+                <td class="px-4 py-2 text-sm text-autobot-text-primary font-mono">
                   {{ entry.message }}
                 </td>
               </tr>
               <tr v-if="appLogEntries.length === 0">
-                <td colspan="3" class="px-4 py-8 text-center text-gray-500">
+                <td colspan="3" class="px-4 py-8 text-center text-autobot-text-tertiary">
                   {{
                     isAppLogLoading
                       ? $t('monitoring.logViewer.appLogs.loadingLogs')

@@ -22,9 +22,6 @@ hand-copied mirror function would not catch.
 from __future__ import annotations
 
 import ast
-from pathlib import Path
-
-from repo_tests._paths import repo_root
 
 import pytest
 from fastapi import FastAPI
@@ -32,6 +29,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
+from repo_tests._paths import repo_root
+
+from tools.lint import _parse_cache as parse_cache
 
 #: Lives in repo_tests/ (#17134): the tree this server sits in is in no pytest
 #: testpaths entry and in no CI pytest invocation, so a test placed next to it
@@ -43,7 +43,7 @@ _LEAKED_MARKER = "not-a-real-value-but-must-never-appear-in-a-422"  # pragma: al
 
 def _extract_handler_source() -> str:
     source = _SERVER_PATH.read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     lines = source.splitlines()
     for node in ast.walk(tree):
         if isinstance(node, ast.AsyncFunctionDef) and node.name == "_validation_error_without_input":

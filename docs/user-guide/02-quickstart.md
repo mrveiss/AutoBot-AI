@@ -14,7 +14,7 @@ Get started with AutoBot after you have completed the [Installation Guide](01-in
 ### Docker install
 
 1. Check that the containers are up: `docker compose --env-file docker/.env.docker --env-file docker/.env.secrets ps`.
-2. Open http://localhost for the main app, or http://localhost/slm/ for SLM Admin.
+2. Open http://localhost for the main app, or http://localhost:8080/slm/ for SLM Admin.
 3. Log in as `admin`. The password is `AUTOBOT_ADMIN_PASSWORD` in `docker/.env.secrets`:
 
    ```bash
@@ -23,7 +23,7 @@ Get started with AutoBot after you have completed the [Installation Guide](01-in
 
    Change it after the first login.
 
-If you started only the SLM GUI (`--profile slm`), http://localhost/slm/ is the only page; add the rest from the Setup Wizard.
+If you started only the SLM GUI (`up -d autobot-slm-gui`), http://localhost:8080/slm/ is the only page; add the rest from the Setup Wizard.
 
 ## Check Health
 
@@ -32,7 +32,7 @@ If you started only the SLM GUI (`--profile slm`), http://localhost/slm/ is the 
 | Bare-metal | `curl -sk https://127.0.0.1/slm/api/health` | SLM backend, through nginx |
 | Bare-metal | `curl -sk https://127.0.0.1/api/system/health` | Main backend, once the Setup Wizard has provisioned it |
 | Docker (full stack) | `curl -s http://localhost/api/system/health` | Backend, through the frontend proxy |
-| Docker (`--profile slm`) | `curl -s http://localhost/slm/api/health` | SLM backend |
+| Docker (`up -d autobot-slm-gui`) | `curl -s http://localhost:8080/slm/api/health` | SLM backend |
 
 Do not use `localhost:8001` on a Docker host: the backend publishes no host port, and host port 8001 is RedisInsight.
 

@@ -12,9 +12,8 @@
  */
 
 import { ref, watch } from 'vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, createLogger } from '@autobot/ui'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { createLogger } from '@/utils/debugUtils'
 
 const props = withDefaults(
   defineProps<{
@@ -67,22 +66,22 @@ watch(
     :close-label="$t('fleet.serviceLogsModal.close')"
     @close="emit('close')"
   >
-    <div class="overflow-auto p-4 bg-gray-900 rounded">
-      <div v-if="isLoading" class="flex items-center justify-center py-12 text-gray-400">
+    <div class="overflow-auto p-4 bg-autobot-bg-tertiary rounded">
+      <div v-if="isLoading" class="flex items-center justify-center py-12 text-autobot-text-tertiary">
         <svg class="w-6 h-6 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
         </svg>
         {{ $t('fleet.serviceLogsModal.loading') }}
       </div>
-      <p v-else-if="loadFailed" class="text-sm text-red-300">{{ $t('fleet.serviceLogsModal.loadFailed') }}</p>
-      <pre v-else class="text-sm text-green-400 font-mono whitespace-pre-wrap">{{ logsContent }}</pre>
+      <p v-else-if="loadFailed" class="text-sm text-autobot-error">{{ $t('fleet.serviceLogsModal.loadFailed') }}</p>
+      <pre v-else class="text-sm text-autobot-success font-mono whitespace-pre-wrap">{{ logsContent }}</pre>
     </div>
 
     <template #actions>
       <button
         @click="emit('close')"
-        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover"
       >
         {{ $t('fleet.serviceLogsModal.close') }}
       </button>

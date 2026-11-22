@@ -16,14 +16,15 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
+
 SLM = repo_root() / "autobot-slm-backend"
 USERS_DB_ACCESS = re.compile(r"\bget_autobot_(?:db|session|session_maker|engine)\b")
 ALLOWED = {"user_management/database.py", "api/autobot_users.py", "api/autobot_teams.py"}
 
 
 def _is_test(relative: str) -> bool:
-    name = relative.rsplit("/", 1)[-1]
-    return relative.startswith("tests/") or name.endswith("_test.py") or name.startswith("test_")
+    return relative.startswith("tests/") or is_test_filename(relative, include_js=False, include_conftest=False)
 
 
 def users_db_readers(sources: dict[str, str]) -> set[str]:
@@ -43,7 +44,6 @@ def _source_paths(root: Path) -> list[str]:
 REACH = declare(
     "slm-users-db-scan",
     discover=_source_paths,
-    floor=310,  # mid-window: population 310, window (310, 310)
     what="non-test SLM python source",
     roots=(SLM.name,),
 )

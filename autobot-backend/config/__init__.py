@@ -129,17 +129,12 @@ def _lazy_import_manager():
     try:
         from config.manager import (
             ConfigManager,
-            UnifiedConfigManager,
             get_config_manager,
-            get_unified_config_manager,
         )
 
         _lazy_cache["manager"] = {
             "ConfigManager": ConfigManager,
             "get_config_manager": get_config_manager,
-            # Deprecated aliases
-            "UnifiedConfigManager": UnifiedConfigManager,
-            "get_unified_config_manager": get_unified_config_manager,
         }
         _lazy_cache["config_manager"] = get_config_manager()
     finally:
@@ -165,36 +160,25 @@ def _get_cached_config_manager():
 def _lazy_import_settings():
     """Lazily import the settings module."""
     if "settings" not in _lazy_cache:
-        from config.settings import ConfigSettings, UnifiedConfigSettings
+        from config.settings import ConfigSettings
 
         _lazy_cache["settings"] = {
             "ConfigSettings": ConfigSettings,
-            # Deprecated alias
-            "UnifiedConfigSettings": UnifiedConfigSettings,
         }
     return _lazy_cache["settings"]
 
 
 def __getattr__(name: str):
     """Lazy attribute lookup for module-level imports."""
-    # Manager-related attributes (new names + deprecated aliases)
-    if name in (
-        "ConfigManager",
-        "get_config_manager",
-        "UnifiedConfigManager",
-        "get_unified_config_manager",
-    ):
+    # Manager-related attributes (canonical names)
+    if name in ("ConfigManager", "get_config_manager"):
         return _lazy_import_manager()[name]
 
-    if name in ("config_manager", "unified_config_manager"):
+    if name == "config_manager":
         return _get_cached_config_manager()
 
-    # Backward compatibility aliases
-    if name in ("global_config_manager", "config", "cfg"):
-        return _get_cached_config_manager()
-
-    # Settings (new name + deprecated alias)
-    if name in ("ConfigSettings", "UnifiedConfigSettings"):
+    # Settings
+    if name == "ConfigSettings":
         return _lazy_import_settings()[name]
 
     raise AttributeError(f"module 'src.config' has no attribute '{name}'")
@@ -269,18 +253,11 @@ __all__ = [
     "ConfigManager",
     "config_manager",
     "get_config_manager",
-    # Deprecated aliases (remove after one release cycle)
-    "UnifiedConfigManager",
-    "unified_config_manager",
-    "get_unified_config_manager",
     # Settings
     "ConfigSettings",
-    # Deprecated alias (remove after one release cycle)
-    "UnifiedConfigSettings",
-    # Backward compatibility aliases
-    "global_config_manager",
+    # The SSOT proxy bound by the module-level `from autobot_shared.ssot_config import config`;
+    # NOT an alias of config_manager (#21533). `cfg` was the alias and is gone.
     "config",
-    "cfg",
     # Convenience functions
     "get_config_value",
     "get_config_section",

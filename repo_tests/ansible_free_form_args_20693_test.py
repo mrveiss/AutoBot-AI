@@ -36,3 +36,23 @@ def test_the_check_refuses_a_stray_quote_and_passes_the_tree(tmp_path) -> None:
     assert check_tree(tmp_path)[1], "the known-bad control must be refused"
     examined, refused = check_tree(_ROOT / "autobot-slm-backend/ansible")
     assert examined > 100 and refused == []
+
+
+def _walk():
+    import sys
+
+    sys.path.insert(0, str(_ROOT / "tools/lint"))
+    from check_ansible_free_form_args import blocks_in
+
+    return blocks_in
+
+
+def test_a_variable_named_like_a_module_is_not_a_task() -> None:
+    """#20705: `shell: /bin/bash` in group_vars is a variable, not a shell block to split."""
+    blocks_in = _walk()
+    variables = yaml.safe_load('shell: "it\'s a variable"\ncommand: x\nnested:\n  raw: y\n')
+    assert list(blocks_in(variables)) == []
+    tasks = yaml.safe_load(
+        "- name: t\n  shell: echo hi\n- block:\n    - name: inner\n      ansible.builtin.command: ls\n"
+    )
+    assert [name for name, _ in blocks_in(tasks)] == ["t", "inner"]

@@ -12,7 +12,6 @@ provider registry and the degradation store are doubles; the coordinator is the 
 from __future__ import annotations
 
 import asyncio
-import json
 from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -25,6 +24,7 @@ from chat_workflow.manager import ChatWorkflowManager
 from chat_workflow.models import LLMIterationContext
 from llm_shared.fallback_chain import FallbackChain, FallbackChainManager
 from llm_shared.models import LLMResponse
+from testkit.fake_http_client import FakeHttpClient, FakeReply, FakeStreamBody, ollama_chunk
 
 COORDINATOR = "llm_shared.model_fallback_coordinator"
 SEAM = "chat_workflow.llm_failover"
@@ -40,57 +40,6 @@ class _Store:
 
     async def is_degraded(self, provider, model=None):
         return (provider, model) in self.degraded
-
-
-class _Body:
-    """The streamed response body: ``lines`` then, optionally, an exception mid-stream."""
-
-    def __init__(self, lines, then_raise=None):
-        self._lines, self._then_raise = list(lines), then_raise
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        if self._lines:
-            return self._lines.pop(0)
-        if self._then_raise is not None:
-            raise self._then_raise
-        raise StopAsyncIteration
-
-
-class _Reply:
-    def __init__(self, status=200, body=None):
-        self.status = status
-        self.content = body or _Body([])
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-
-class _Http:
-    """``post`` returns ``reply`` or raises ``error``; counts calls and ``decrement_active``."""
-
-    def __init__(self, reply=None, error=None):
-        self.reply, self.error = reply, error
-        self.posts: list[dict] = []
-        self.decrements = 0
-
-    async def post(self, url, json=None, **kwargs):  # noqa: A002
-        self.posts.append(json)
-        if self.error is not None:
-            raise self.error
-        return self.reply
-
-    async def decrement_active(self):
-        self.decrements += 1
-
-
-def _chunk(text, done=False):
-    return json.dumps({"response": text, "done": done}).encode() + b"\n"
 
 
 def _registry(answer="backup answer", model="backup-model"):
@@ -163,7 +112,7 @@ def _texts(items):
 
 @pytest.mark.asyncio
 async def test_a_503_from_the_primary_is_followed_by_a_completed_answer_from_the_backup():
-    http, registry = _Http(_Reply(503)), _registry()
+    http, registry = FakeHttpClient(FakeReply(503)), _registry()
     with _world(registry) as world:
         items = await _run(http, _ctx())
 
@@ -188,13 +137,13 @@ async def test_the_backup_gets_the_same_prompt_the_primary_got():
 
     provider.chat_completion = spy
     with _world(registry):
-        await _run(_Http(_Reply(503)), _ctx())
+        await _run(FakeHttpClient(FakeReply(503)), _ctx())
     assert seen == [[{"role": "system", "content": "be brief"}, {"role": "user", "content": "hello"}]]
 
 
 @pytest.mark.asyncio
 async def test_a_connection_failure_before_any_output_fails_over():
-    http, registry = _Http(error=aiohttp.ClientConnectionError("refused")), _registry()
+    http, registry = FakeHttpClient(error=aiohttp.ClientConnectionError("refused")), _registry()
     with _world(registry) as world:
         items = await _run(http, _ctx())
     assert items[-1] == ("backup answer", [])
@@ -203,7 +152,7 @@ async def test_a_connection_failure_before_any_output_fails_over():
 
 @pytest.mark.asyncio
 async def test_a_timeout_before_any_output_fails_over():
-    http, registry = _Http(error=asyncio.TimeoutError()), _registry()
+    http, registry = FakeHttpClient(error=asyncio.TimeoutError()), _registry()
     with _world(registry) as world:
         items = await _run(http, _ctx())
     assert items[-1] == ("backup answer", [])
@@ -212,7 +161,7 @@ async def test_a_timeout_before_any_output_fails_over():
 
 @pytest.mark.asyncio
 async def test_a_healthy_primary_never_touches_the_backup():
-    http = _Http(_Reply(200, _Body([_chunk("hi "), _chunk("there", done=True)])))
+    http = FakeHttpClient(FakeReply(200, FakeStreamBody([ollama_chunk("hi "), ollama_chunk("there", done=True)])))
     registry = _registry()
     with _world(registry):
         items = await _run(http, _ctx())
@@ -227,7 +176,7 @@ async def test_a_healthy_primary_never_touches_the_backup():
 
 @pytest.mark.asyncio
 async def test_a_turn_that_already_ran_a_tool_does_not_fail_over():
-    http, registry = _Http(_Reply(503)), _registry()
+    http, registry = FakeHttpClient(FakeReply(503)), _registry()
     ctx = _ctx(execution_history=[{"tool": "run_shell", "status": "success"}])
     with _world(registry) as world:
         items = await _run(http, ctx, iteration=2)
@@ -240,7 +189,7 @@ async def test_a_turn_that_already_ran_a_tool_does_not_fail_over():
 
 @pytest.mark.asyncio
 async def test_a_tool_history_alone_blocks_failover_even_on_the_first_iteration():
-    http, registry = _Http(_Reply(503)), _registry()
+    http, registry = FakeHttpClient(FakeReply(503)), _registry()
     with _world(registry):
         items = await _run(http, _ctx(execution_history=[{"tool": "x"}]), iteration=1)
     assert _texts(items) == ["LLM service error: 503"]
@@ -249,7 +198,7 @@ async def test_a_tool_history_alone_blocks_failover_even_on_the_first_iteration(
 
 @pytest.mark.asyncio
 async def test_a_later_iteration_does_not_fail_over():
-    http, registry = _Http(_Reply(503)), _registry()
+    http, registry = FakeHttpClient(FakeReply(503)), _registry()
     with _world(registry):
         items = await _run(http, _ctx(), iteration=2)
     assert _texts(items) == ["LLM service error: 503"]
@@ -258,7 +207,7 @@ async def test_a_later_iteration_does_not_fail_over():
 
 @pytest.mark.asyncio
 async def test_a_message_already_shown_this_turn_blocks_failover():
-    http, registry = _Http(_Reply(503)), _registry()
+    http, registry = FakeHttpClient(FakeReply(503)), _registry()
     shown = WorkflowMessage(type="thought", content="thinking", metadata={})
     with _world(registry):
         items = await _run(http, _ctx(workflow_messages=[shown]))
@@ -268,8 +217,8 @@ async def test_a_message_already_shown_this_turn_blocks_failover():
 
 @pytest.mark.asyncio
 async def test_a_failure_after_text_was_streamed_is_surfaced_not_replayed():
-    body = _Body([_chunk("partial ")], then_raise=aiohttp.ClientPayloadError("cut off"))
-    http, registry = _Http(_Reply(200, body)), _registry()
+    body = FakeStreamBody([ollama_chunk("partial ")], then_raise=aiohttp.ClientPayloadError("cut off"))
+    http, registry = FakeHttpClient(FakeReply(200, body)), _registry()
     got = []
     with _world(registry), pytest.raises(aiohttp.ClientPayloadError):
         manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
@@ -282,7 +231,7 @@ async def test_a_failure_after_text_was_streamed_is_surfaced_not_replayed():
 
 @pytest.mark.asyncio
 async def test_an_error_nobody_can_fix_by_switching_model_is_surfaced():
-    http, registry = _Http(_Reply(400)), _registry()
+    http, registry = FakeHttpClient(FakeReply(400)), _registry()
     with _world(registry):
         items = await _run(http, _ctx())
     assert _texts(items) == ["LLM service error: 400"]
@@ -291,7 +240,7 @@ async def test_an_error_nobody_can_fix_by_switching_model_is_surfaced():
 
 @pytest.mark.asyncio
 async def test_a_failover_that_itself_fails_surfaces_the_original_error():
-    http, registry = _Http(_Reply(503)), _registry()
+    http, registry = FakeHttpClient(FakeReply(503)), _registry()
     registry.get_provider_for_request = AsyncMock(side_effect=RuntimeError("registry down"))
     with _world(registry):
         items = await _run(http, _ctx())
@@ -305,7 +254,7 @@ async def test_a_failover_that_itself_fails_surfaces_the_original_error():
 
 @pytest.mark.asyncio
 async def test_a_primary_inside_its_skip_window_is_not_called_at_all():
-    http, registry = _Http(_Reply(200, _Body([_chunk("x", done=True)]))), _registry()
+    http, registry = FakeHttpClient(FakeReply(200, FakeStreamBody([ollama_chunk("x", done=True)]))), _registry()
     with _world(registry, store=_Store(degraded={("ollama", "primary-model")})) as world:
         items = await _run(http, _ctx())
     assert http.posts == []
@@ -315,7 +264,10 @@ async def test_a_primary_inside_its_skip_window_is_not_called_at_all():
 
 @pytest.mark.asyncio
 async def test_the_primary_is_used_again_once_its_hold_ends():
-    http, registry = _Http(_Reply(200, _Body([_chunk("primary again", done=True)]))), _registry()
+    http, registry = (
+        FakeHttpClient(FakeReply(200, FakeStreamBody([ollama_chunk("primary again", done=True)]))),
+        _registry(),
+    )
     with _world(registry, store=_Store()):  # nothing degraded: the mark expired
         items = await _run(http, _ctx())
     assert items[-1][0] == "primary again"
@@ -325,7 +277,7 @@ async def test_the_primary_is_used_again_once_its_hold_ends():
 
 @pytest.mark.asyncio
 async def test_a_hand_picked_model_is_still_tried_even_inside_its_skip_window():
-    http, registry = _Http(_Reply(200, _Body([_chunk("mine", done=True)]))), _registry()
+    http, registry = FakeHttpClient(FakeReply(200, FakeStreamBody([ollama_chunk("mine", done=True)]))), _registry()
     with _world(registry, store=_Store(degraded={("ollama", "primary-model")})):
         items = await _run(http, _ctx(), hand_picked=True)
     assert items[-1][0] == "mine"
@@ -334,7 +286,7 @@ async def test_a_hand_picked_model_is_still_tried_even_inside_its_skip_window():
 
 @pytest.mark.asyncio
 async def test_a_primary_held_out_does_not_skip_once_the_turn_has_acted():
-    http = _Http(_Reply(200, _Body([_chunk("still primary", done=True)])))
+    http = FakeHttpClient(FakeReply(200, FakeStreamBody([ollama_chunk("still primary", done=True)])))
     registry = _registry()
     with _world(registry, store=_Store(degraded={("ollama", "primary-model")})):
         items = await _run(http, _ctx(execution_history=[{"tool": "x"}]), iteration=2)
@@ -349,7 +301,7 @@ async def test_a_primary_held_out_does_not_skip_once_the_turn_has_acted():
 
 @pytest.mark.asyncio
 async def test_a_local_primary_never_fails_over_to_an_external_provider_on_a_default_chain():
-    http, registry = _Http(_Reply(503)), _registry()
+    http, registry = FakeHttpClient(FakeReply(503)), _registry()
     with _world(registry, mgr=_chains(provider="openai", operator=False)):
         items = await _run(http, _ctx())
     assert _texts(items) == ["LLM service error: 503"]
@@ -358,7 +310,7 @@ async def test_a_local_primary_never_fails_over_to_an_external_provider_on_a_def
 
 @pytest.mark.asyncio
 async def test_a_local_primary_fails_over_to_an_external_provider_on_an_operator_chain():
-    http, registry = _Http(_Reply(503)), _registry()
+    http, registry = FakeHttpClient(FakeReply(503)), _registry()
     with _world(registry, mgr=_chains(provider="openai", operator=True)):
         items = await _run(http, _ctx())
     assert items[-1] == ("backup answer", [])
@@ -371,7 +323,7 @@ async def test_a_local_primary_fails_over_to_an_external_provider_on_an_operator
 
 @pytest.mark.asyncio
 async def test_a_hand_picked_model_never_fails_over_silently_and_is_not_marked():
-    http, registry = _Http(_Reply(503)), _registry()
+    http, registry = FakeHttpClient(FakeReply(503)), _registry()
     with _world(registry) as world:
         items = await _run(http, _ctx(), hand_picked=True)
     assert _texts(items) == ["LLM service error: 503"]
@@ -383,7 +335,7 @@ async def test_a_hand_picked_model_never_fails_over_silently_and_is_not_marked()
 
 @pytest.mark.asyncio
 async def test_a_hand_picked_model_whose_connection_fails_raises_as_before():
-    http, registry = _Http(error=aiohttp.ClientConnectionError("refused")), _registry()
+    http, registry = FakeHttpClient(error=aiohttp.ClientConnectionError("refused")), _registry()
     with _world(registry) as world, pytest.raises(aiohttp.ClientConnectionError):
         await _run(http, _ctx(), hand_picked=True)
     assert registry.asked == []
@@ -398,7 +350,7 @@ async def test_a_turn_carrying_a_screenshot_surfaces_because_a_screenshot_means_
     assert _extract_latest_tool_screenshot(history) == "AAAA"
     assert _extract_latest_tool_screenshot([]) is None  # no tool, no image: it cannot exist on a fresh turn
 
-    http, registry = _Http(_Reply(503)), _registry()
+    http, registry = FakeHttpClient(FakeReply(503)), _registry()
     with _world(registry):
         items = await _run(http, _ctx(execution_history=history))
     assert _texts(items) == ["LLM service error: 503"]
@@ -421,7 +373,7 @@ async def test_the_backup_request_carries_the_primarys_temperature_and_top_p_and
     options = {"temperature": 0.123, "top_p": 0.456, "num_ctx": 99999}
     payload = patch.object(ChatWorkflowManager, "_get_llm_request_payload", return_value={"options": options})
     with _world(registry), payload:
-        await _run(_Http(_Reply(503)), _ctx())
+        await _run(FakeHttpClient(FakeReply(503)), _ctx())
     (request,) = seen
     assert (request.temperature, request.top_p) == (0.123, 0.456)
     assert request.stream is False and not request.tools and request.json_schema is None
@@ -433,9 +385,9 @@ async def test_one_users_local_failure_leaves_the_next_users_route_unchanged():
     registry = _registry()
     with _world(registry) as world:
         await _run(
-            _Http(_Reply(503)), _ctx(session_id="user-a")
+            FakeHttpClient(FakeReply(503)), _ctx(session_id="user-a")
         )  # user A's request fails and is answered by the backup
-        healthy = _Http(_Reply(200, _Body([_chunk("b's answer", done=True)])))
+        healthy = FakeHttpClient(FakeReply(200, FakeStreamBody([ollama_chunk("b's answer", done=True)])))
         items = await _run(healthy, _ctx(session_id="user-b"))
     assert world.store.marks == []
     assert len(healthy.posts) == 1  # user B still goes to the primary
@@ -446,7 +398,7 @@ async def test_one_users_local_failure_leaves_the_next_users_route_unchanged():
 async def test_a_callers_rejected_credential_surfaces_on_the_chat_path():
     from llm_shared.run_credentials import llm_principal_scope
 
-    http, registry = _Http(_Reply(401)), _registry()
+    http, registry = FakeHttpClient(FakeReply(401)), _registry()
     with _world(registry) as world, llm_principal_scope("u1", "o1"):
         items = await _run(http, _ctx())
     assert _texts(items) == ["LLM service error: 401"]

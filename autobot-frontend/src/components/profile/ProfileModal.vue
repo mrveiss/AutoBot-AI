@@ -201,6 +201,7 @@ import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.v
 import DeviceManagementPanel from '@/components/profile/DeviceManagementPanel.vue'
 import { usePreferences } from '@/composables/usePreferences'
 import { BaseModal } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { useTabs } from '@/composables/useTabs'
 
 defineProps<{
@@ -308,11 +309,7 @@ function showError(msg: string): void {
   setTimeout(() => { errorMessage.value = null }, 5000)
 }
 
-function formatDate(dateValue: Date | string | undefined | null): string {
-  if (!dateValue) return t('profile.never')
-  const date = dateValue instanceof Date ? dateValue : new Date(dateValue)
-  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
-}
+const formatDate = createDateFormatter({ emptyText: () => t('profile.never') })
 </script>
 
 <style scoped>

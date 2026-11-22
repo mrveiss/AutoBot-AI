@@ -24,11 +24,13 @@ from auth_middleware import get_auth_middleware
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_30_DAYS
+from security import session_shares
 from security.enforcement_mode import (
     ResolvedEnforcementMode,
     resolve_enforcement_mode,
     resolve_enforcement_mode_for_request,
 )
+from security.session_owner_claim import take_or_refresh
 from security.session_posture import (
     SessionPosture,
     authenticated_user,
@@ -37,6 +39,7 @@ from security.session_posture import (
     unowned_access,
     validate_strict,
 )
+from security.session_share_audit import share_audited, unshare_audited
 
 logger = get_logger(__name__)
 
@@ -136,16 +139,12 @@ class SessionOwnershipValidator:
             # ownership check on it. Refreshing one's own ownership (TTL refresh) is still allowed.
             existing = await self.get_session_owner(session_id)
             if existing and existing != username and not force:
-                logger.warning(
-                    "Refusing to reassign session %s... from %s to %s without force",
-                    session_id[:8],
-                    existing,
-                    username,
-                )
+                refusal = "Refusing to reassign session %s... from %s to %s without force"
+                logger.warning(refusal, session_id[:8], existing, username)
                 return False
 
-            ownership_key = self._get_ownership_key(session_id)
-            await self.redis.set(ownership_key, username, ex=self.ownership_ttl)
+            if not await take_or_refresh(self, session_id, existing, username, force):
+                return False
             for previous in {existing, previous_owner} - {None, username}:  # #20029: their list stops showing it
                 await self.redis.srem(self._get_user_sessions_key(previous), session_id)
 
@@ -527,7 +526,9 @@ class SessionOwnershipValidator:
         if (decided := await unowned_access(session_id, user_data, request)) is not None:
             return username, decided
         logger.warning("Session %s... has no owner anywhere (legacy session)", session_id[:8])
-        await self.set_session_owner(session_id, username, org_id=user_data.get("org_id"), team_id=None)
+        if not await self.set_session_owner(session_id, username, org_id=user_data.get("org_id"), team_id=None):
+            # Another writer took it first (#20030): the normal comparison refuses; unknown is no owner, not "free"
+            return await self.get_session_owner(session_id) or "", None
         return username, {"authorized": True, "user_data": user_data, "reason": "legacy_migration"}
 
     async def _resolve_ownership(
@@ -616,18 +617,12 @@ class SessionOwnershipValidator:
             username: Owner username
 
         Returns:
-            List of session IDs
+            List of session IDs. A Redis error propagates (#21664): "could not
+            read" must never look like "owns nothing" to a caller.
         """
-        try:
-            user_sessions_key = self._get_user_sessions_key(username)
-            sessions = await self.redis.smembers(user_sessions_key)
-            if not sessions:
-                return []
-            # Handle both bytes and str responses from Redis
-            return [s.decode() if isinstance(s, bytes) else s for s in sessions]
-        except Exception as e:
-            logger.error("Failed to get user sessions: %s", e)
-            return []
+        sessions = await self.redis.smembers(self._get_user_sessions_key(username))
+        # Handle both bytes and str responses from Redis
+        return [s.decode() if isinstance(s, bytes) else s for s in sessions or ()]
 
     async def get_org_sessions(self, org_id: str) -> list[str]:
         """Get all sessions for an organization (#684)."""
@@ -658,66 +653,55 @@ class SessionOwnershipValidator:
     # =========================================================================
 
     def _get_shared_session_key(self, session_id: str) -> str:
-        """Redis key for users a session is shared with (#689)."""
-        return "session:shared_with:%s" % session_id
+        """Legacy Redis key for users a session is shared with (#689); adoption input only (#18890)."""
+        return session_shares.SESSION_KEY % session_id
 
     def _get_user_shared_sessions_key(self, user_id: str) -> str:
-        """Redis key for sessions shared WITH a user (#689)."""
-        return "user:shared_sessions:%s" % user_id
+        """Legacy Redis key for sessions shared WITH a user (#689); adoption input only (#18890)."""
+        return session_shares.USER_KEY % user_id
 
     async def share_session(
         self,
         session_id: str,
         shared_with_ids: list[str],
         shared_by: str,
+        actor: dict | None = None,
     ) -> bool:
-        """Share a session with other users (#689).
+        """Share a session until the owner unshares it (#689, #18890).
 
-        Args:
-            session_id: Session to share
-            shared_with_ids: User IDs to share with
-            shared_by: Username of the person sharing
-
-        Returns:
-            True if successful
+        The table is the only store. False = not recorded. The audit record is written first and is required:
+        ``ShareAuditError`` propagates and nothing is shared.
         """
-        try:
-            shared_key = self._get_shared_session_key(session_id)
-            for user_id in shared_with_ids:
-                await self.redis.sadd(shared_key, user_id)
-                user_key = self._get_user_shared_sessions_key(user_id)
-                await self.redis.sadd(user_key, session_id)
-                await self.redis.expire(user_key, TTL_30_DAYS)  # 30 days
+        return await share_audited(self.redis, session_id, shared_with_ids, shared_by, actor)
 
-            await self.redis.expire(shared_key, TTL_30_DAYS)  # 30 days
-            logger.info(
-                "Session %s... shared by %s with %d users",
-                session_id[:8],
-                shared_by,
-                len(shared_with_ids),
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to share session: %s", e)
-            return False
+    async def unshare_session(self, session_id: str, user_id: str, actor: dict) -> bool:
+        """Remove one participant; they lose read access at once (#18890).
+
+        True when the user was a participant. A failure raises: "could not remove" must not read as removed.
+        The ``attempted`` audit record is required: ``ShareAuditError`` propagates and nothing is removed.
+        """
+        return await unshare_audited(self.redis, session_id, user_id, actor)
 
     async def is_shared_with_user(self, session_id: str, user_id: str) -> bool:
-        """Check if a session is shared with a user (#689)."""
+        """Is the session shared with the user? Decided from the table (#18890).
+
+        Redis is consulted only to import legacy Redis-only shares until that import is recorded in the table;
+        a Redis outage after that changes nothing. Fails closed.
+        """
+        if not await session_shares.adopted_or_denied(self.redis):
+            return False
         try:
-            shared_key = self._get_shared_session_key(session_id)
-            return bool(await self.redis.sismember(shared_key, user_id))
+            return await session_shares.durable_is_participant(session_id, user_id)
         except Exception as e:
             logger.error("Failed to check shared status: %s", e)
             return False
 
     async def get_shared_sessions(self, user_id: str) -> list[str]:
-        """Get all sessions shared with a user (#689)."""
+        """Every session shared with a user, from the table after adopting legacy shares (#689, #18890)."""
+        if not await session_shares.adopted_or_denied(self.redis):
+            return []
         try:
-            key = self._get_user_shared_sessions_key(user_id)
-            sessions = await self.redis.smembers(key)
-            if not sessions:
-                return []
-            return [s.decode() if isinstance(s, bytes) else s for s in sessions]
+            return await session_shares.durable_sessions_for(user_id)
         except Exception as e:
             logger.error("Failed to get shared sessions: %s", e)
             return []

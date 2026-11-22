@@ -11,9 +11,8 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { SshTerminal } from '@autobot/terminal'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger } from '@autobot/ui'
 import { getSlmApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
 import { useAuthStore } from '@/stores/auth'
 import { useFleetStore } from '@/stores/fleet'
 
@@ -109,18 +108,18 @@ function onError(message: string) {
 
 <template>
   <div class="p-6 h-full flex flex-col">
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 flex-1 flex flex-col overflow-hidden">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
-      <div class="bg-gray-100 border-b border-gray-200 px-4 py-2 flex items-center justify-between">
+      <div class="bg-autobot-bg-tertiary border-b border-autobot-border px-4 py-2 flex items-center justify-between">
         <div class="flex items-center gap-4">
           <div class="flex gap-1.5">
-            <div class="w-3 h-3 bg-red-500 rounded-full"></div>
-            <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
-            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+            <div class="w-3 h-3 bg-autobot-dot-bad rounded-full"></div>
+            <div class="w-3 h-3 bg-autobot-dot-warn rounded-full"></div>
+            <div class="w-3 h-3 bg-autobot-dot-ok rounded-full"></div>
           </div>
 
           <div class="flex items-center gap-2 text-sm">
-            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-autobot-text-link" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             <span class="font-medium">{{ $t('tools.admin.terminalTool.systemTerminal') }}</span>
@@ -129,24 +128,24 @@ function onError(message: string) {
           <select
             v-model="selectedHostId"
             :disabled="isConnected || nodeListState !== 'ready'"
-            class="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+            class="text-sm px-3 py-1 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
           >
             <option v-for="host in hosts" :key="host.id" :value="host.id">
               {{ host.name }} ({{ host.ip }})
             </option>
           </select>
 
-          <span v-if="nodeListState === 'loading'" class="text-xs text-gray-500">
+          <span v-if="nodeListState === 'loading'" class="text-xs text-autobot-text-tertiary">
             {{ $t('tools.admin.terminalTool.loadingNodes') }}
           </span>
-          <span v-else-if="nodeListState === 'empty'" class="text-xs text-gray-500">
+          <span v-else-if="nodeListState === 'empty'" class="text-xs text-autobot-text-tertiary">
             {{ $t('tools.admin.terminalTool.noNodesEnrolled') }}
           </span>
         </div>
 
         <div class="flex items-center gap-1.5 text-xs">
-          <div class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-green-500' : 'bg-red-500'"></div>
-          <span class="text-gray-600">{{ isConnected ? $t('tools.admin.terminalTool.connected') : $t('tools.admin.terminalTool.disconnected') }}</span>
+          <div class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-autobot-dot-ok' : 'bg-autobot-dot-bad'"></div>
+          <span class="text-autobot-text-secondary">{{ isConnected ? $t('tools.admin.terminalTool.connected') : $t('tools.admin.terminalTool.disconnected') }}</span>
         </div>
       </div>
 
@@ -163,7 +162,7 @@ function onError(message: string) {
       >
         <template #actions>
           <button
-            class="px-2 py-1 text-xs border border-amber-300 rounded-sm hover:bg-amber-100 transition-colors"
+            class="px-2 py-1 text-xs border border-autobot-warning-light rounded-sm hover:bg-autobot-pill-warn-bg transition-colors"
             :disabled="fleet.isLoading"
             @click="loadNodes"
           >
@@ -185,7 +184,7 @@ function onError(message: string) {
           @disconnected="onDisconnected"
           @error="onError"
         />
-        <div v-else class="h-full flex items-center justify-center text-gray-500 text-sm">
+        <div v-else class="h-full flex items-center justify-center text-autobot-text-tertiary text-sm">
           <span v-if="nodeListState === 'loading'">{{ $t('tools.admin.terminalTool.loadingNodes') }}</span>
           <span v-else-if="nodeListState === 'failed'">{{ $t('tools.admin.terminalTool.nodeListUnavailable') }}</span>
           <span v-else-if="nodeListState === 'empty'">{{ $t('tools.admin.terminalTool.noNodesEnrolled') }}</span>
@@ -194,13 +193,13 @@ function onError(message: string) {
       </div>
     </div>
 
-    <div v-if="currentHost" class="mt-4 p-4 bg-gray-100 rounded-lg">
+    <div v-if="currentHost" class="mt-4 p-4 bg-autobot-bg-tertiary rounded-lg">
       <div class="flex items-center justify-between">
         <div>
-          <h3 class="font-medium text-gray-900">{{ currentHost.name }}</h3>
-          <p class="text-sm text-gray-600">{{ currentHost.description }}</p>
+          <h3 class="font-medium text-autobot-text-primary">{{ currentHost.name }}</h3>
+          <p class="text-sm text-autobot-text-secondary">{{ currentHost.description }}</p>
         </div>
-        <code class="text-sm bg-gray-200 px-2 py-1 rounded-sm">{{ currentHost.ip }}</code>
+        <code class="text-sm bg-autobot-bg-active px-2 py-1 rounded-sm">{{ currentHost.ip }}</code>
       </div>
     </div>
   </div>
