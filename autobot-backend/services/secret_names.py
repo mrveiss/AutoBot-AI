@@ -14,6 +14,7 @@ left untouched: the check runs on a NEW name only, never on read, list or delete
 from __future__ import annotations
 
 import unicodedata
+from collections.abc import Callable
 
 from services.credential_write import CONNECTOR_NAME_PREFIX
 
@@ -32,3 +33,11 @@ def refuse_reserved_secret_name(name: str | None) -> None:
     """Raise :class:`ReservedSecretNameError` when a user-supplied *name* is reserved."""
     if is_reserved_secret_name(name):
         raise ReservedSecretNameError("secret name prefix is reserved")
+
+
+def reserved_or_validated(name: str, validate: Callable[[str], str]) -> str:
+    """A request secret name: a reserved one passes unchanged (the route answers 409), else *validate*.
+
+    The one rule both the create and the update request use, so a reserved name is refused the same way on every route.
+    """
+    return name if is_reserved_secret_name(name) else validate(name)

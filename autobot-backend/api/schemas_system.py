@@ -20,7 +20,7 @@ from api.system_health import HealthStatus
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
 from services.feature_flags import EnforcementMode
-from services.secret_names import is_reserved_secret_name
+from services.secret_names import reserved_or_validated
 from type_defs.common import Metadata
 
 # ---------------------------------------------------------------------------
@@ -3251,11 +3251,6 @@ def _validate_secret_name(name: str) -> str:
     return name
 
 
-def _validate_request_secret_name(name: str) -> str:
-    """A request's secret name: a reserved one passes through to the route's fixed 409 (#17850), else the pattern."""
-    return name if is_reserved_secret_name(name) else _validate_secret_name(name)
-
-
 class ChatSecretScope(str, Enum):
     """Scope enumeration for the legacy Redis chat-secrets store (api/secrets.py).
 
@@ -3341,7 +3336,7 @@ class SecretCreateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        return _validate_request_secret_name(v)
+        return reserved_or_validated(v, _validate_secret_name)
 
     @model_validator(mode="after")
     def _validate_value_or_connector_bridge(self) -> "SecretCreateRequest":
@@ -3403,7 +3398,7 @@ class SecretUpdateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str | None) -> str | None:
-        return v if v is None else _validate_request_secret_name(v)
+        return v if v is None else reserved_or_validated(v, _validate_secret_name)
 
 
 class SecretTransferRequest(BaseModel):
