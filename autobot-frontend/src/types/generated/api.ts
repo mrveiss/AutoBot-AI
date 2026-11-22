@@ -19251,7 +19251,7 @@ export interface paths {
         put?: never;
         /**
          * Enable Plugin
-         * @description Enable a plugin.
+         * @description Enable a plugin: audited, persisted across restarts, and applied to the loaded plugin (#17421).
          *
          *     Args:
          *         plugin_name: Plugin name
@@ -19277,7 +19277,7 @@ export interface paths {
         put?: never;
         /**
          * Disable Plugin
-         * @description Disable a plugin.
+         * @description Disable a plugin: audited, persisted across restarts, and applied to the loaded plugin (#17421).
          *
          *     Args:
          *         plugin_name: Plugin name
@@ -53198,8 +53198,8 @@ export interface paths {
         put?: never;
         /**
          * Release Work Item
-         * @description Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
-         *     person is refused (409). Not enforced: that the caller IS that agent (open, #20521).
+         * @description Enforced: ``agent_id`` is an agent UUID of this company named by its owner or admin (403 otherwise, #20521),
+         *     equal to the stored assignee when there is one; an item held by a person is refused (409).
          */
         post: operations["release_work_item_api_llc_work_items__work_item_id__release_post"];
         delete?: never;

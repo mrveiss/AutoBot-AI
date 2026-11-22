@@ -26,14 +26,14 @@ const emit = defineEmits<{
 const statusColor = computed(() => {
   switch (props.node.status) {
     case 'online':
-      return 'bg-green-100 text-green-800'
+      return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'degraded':
-      return 'bg-yellow-100 text-yellow-800'
+      return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
     case 'offline':
     case 'error':
-      return 'bg-red-100 text-red-800'
+      return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 })
 
@@ -52,24 +52,24 @@ const deviceTypeLabel = computed(() => {
 })
 
 const deviceTypeColor = computed(() => {
-  if (!props.npuStatus?.capabilities?.deviceType) return 'bg-gray-100 text-gray-600'
+  if (!props.npuStatus?.capabilities?.deviceType) return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
   switch (props.npuStatus.capabilities.deviceType) {
     case 'intel-npu':
-      return 'bg-blue-100 text-blue-700'
+      return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
     case 'nvidia-gpu':
-      return 'bg-green-100 text-green-700'
+      return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'amd-gpu':
-      return 'bg-red-100 text-red-700'
+      return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
     default:
-      return 'bg-gray-100 text-gray-600'
+      return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
   }
 })
 
 const utilizationColor = computed(() => {
   const util = props.npuStatus?.capabilities?.utilization ?? 0
-  if (util >= 80) return 'bg-red-500'
-  if (util >= 60) return 'bg-yellow-500'
-  return 'bg-green-500'
+  if (util >= 80) return 'bg-autobot-dot-bad'
+  if (util >= 60) return 'bg-autobot-dot-warn'
+  return 'bg-autobot-dot-ok'
 })
 
 const modelsCount = computed(() => {
@@ -93,13 +93,13 @@ const detectionStatus = computed(() => {
 <template>
   <div
     @click="emit('select')"
-    class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
+    class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
   >
     <!-- Header -->
     <div class="flex items-start justify-between mb-3">
       <div>
-        <h3 class="font-medium text-gray-900">{{ node.hostname }}</h3>
-        <p class="text-sm text-gray-500">{{ node.ip_address }}</p>
+        <h3 class="font-medium text-autobot-text-primary">{{ node.hostname }}</h3>
+        <p class="text-sm text-autobot-text-tertiary">{{ node.ip_address }}</p>
       </div>
       <span :class="['px-2 py-1 rounded-full text-xs font-medium', statusColor]">
         {{ node.status }}
@@ -113,13 +113,13 @@ const detectionStatus = computed(() => {
       </span>
       <span
         v-if="detectionStatus === 'pending'"
-        class="ml-2 px-2 py-1 rounded-sm text-xs font-medium bg-yellow-100 text-yellow-700"
+        class="ml-2 px-2 py-1 rounded-sm text-xs font-medium bg-autobot-pill-warn-bg text-autobot-pill-warn-fg"
       >
         {{ $t('fleet.nPUNodeCard.detecting') }}
       </span>
       <span
         v-else-if="detectionStatus === 'failed'"
-        class="ml-2 px-2 py-1 rounded-sm text-xs font-medium bg-red-100 text-red-700"
+        class="ml-2 px-2 py-1 rounded-sm text-xs font-medium bg-autobot-pill-bad-bg text-autobot-pill-bad-fg"
       >
         {{ $t('fleet.nPUNodeCard.detectionFailed') }}
       </span>
@@ -127,23 +127,23 @@ const detectionStatus = computed(() => {
 
     <!-- Stats -->
     <div class="grid grid-cols-2 gap-3 mb-3">
-      <div class="text-center p-2 bg-gray-50 rounded-sm">
-        <p class="text-lg font-semibold text-gray-900">{{ loadedModelsCount }}/{{ modelsCount }}</p>
-        <p class="text-xs text-gray-500">{{ $t('fleet.nPUNodeCard.modelsLoaded') }}</p>
+      <div class="text-center p-2 bg-autobot-bg-secondary rounded-sm">
+        <p class="text-lg font-semibold text-autobot-text-primary">{{ loadedModelsCount }}/{{ modelsCount }}</p>
+        <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUNodeCard.modelsLoaded') }}</p>
       </div>
-      <div class="text-center p-2 bg-gray-50 rounded-sm">
-        <p class="text-lg font-semibold text-gray-900">{{ npuStatus?.queueDepth ?? 0 }}</p>
-        <p class="text-xs text-gray-500">{{ $t('fleet.nPUNodeCard.queueDepth') }}</p>
+      <div class="text-center p-2 bg-autobot-bg-secondary rounded-sm">
+        <p class="text-lg font-semibold text-autobot-text-primary">{{ npuStatus?.queueDepth ?? 0 }}</p>
+        <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUNodeCard.queueDepth') }}</p>
       </div>
     </div>
 
     <!-- Utilization Bar -->
     <div>
-      <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+      <div class="flex items-center justify-between text-xs text-autobot-text-tertiary mb-1">
         <span>{{ $t('fleet.nPUNodeCard.utilization') }}</span>
         <span>{{ utilization }}%</span>
       </div>
-      <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+      <div class="w-full h-2 bg-autobot-bg-active rounded-full overflow-hidden">
         <div
           :class="['h-full transition-all', utilizationColor]"
           :style="{ width: `${utilization}%` }"
@@ -152,6 +152,6 @@ const detectionStatus = computed(() => {
     </div>
 
     <!-- Memory Info -->
-    <div v-if="npuStatus?.capabilities?.memoryGB" class="mt-3 text-xs text-gray-500">{{ $t('fleet.nPUNodeCard.value0GBMemoryMaxValue1Concurrent', { value0: npuStatus.capabilities.memoryGB, value1: npuStatus.capabilities.maxConcurrent }) }}</div>
+    <div v-if="npuStatus?.capabilities?.memoryGB" class="mt-3 text-xs text-autobot-text-tertiary">{{ $t('fleet.nPUNodeCard.value0GBMemoryMaxValue1Concurrent', { value0: npuStatus.capabilities.memoryGB, value1: npuStatus.capabilities.maxConcurrent }) }}</div>
   </div>
 </template>

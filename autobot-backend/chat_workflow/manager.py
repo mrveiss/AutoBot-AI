@@ -35,6 +35,7 @@ from chat_workflow.reply_persistence import (
     later_respond_entries,
     stamp_model,
 )
+from chat_workflow.step_outcome import executed_count, not_run_note
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
 from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
 from chat_workflow.tool_call_grammar import (
@@ -1757,7 +1758,7 @@ class ChatWorkflowManager(
         cmd = result.get("command") or result.get("tool") or "unknown"
         stdout = _as_output_text(result.get("stdout"))
         stderr = _as_output_text(result.get("stderr"))
-        status = result.get("status", "unknown")
+        status = f"{result.get('status', 'unknown')}{not_run_note(result)}"  # #21959
 
         # `stdout` first so a shell result is unchanged; the others only fill a
         # gap, never override it. `error`/`reason` last: a failure that says
@@ -1862,7 +1863,7 @@ before summarizing.
         """
         history_parts = [self._format_execution_step(i, result) for i, result in enumerate(execution_history, 1)]
         history_text = "\n\n".join(history_parts)
-        steps_completed = len(execution_history)
+        steps_completed = executed_count(execution_history)  # #21959: a step that did not run is not completed
         instructions = self._get_continuation_instructions(
             original_message, steps_completed, consecutive_invalid_tool_calls
         )
@@ -2806,7 +2807,7 @@ before summarizing.
         logger.info(
             "[Issue #651] Built continuation prompt: %d chars, %d executed steps",
             len(current_prompt),
-            len(execution_history),
+            executed_count(execution_history),
         )
         instructions_start = current_prompt.find("MULTI-STEP TASK CONTINUATION")
         if instructions_start > -1:
@@ -2819,9 +2820,7 @@ before summarizing.
     def _log_task_complete(self, iteration: int, history_count: int) -> None:
         """Issue #665: Extracted from _run_llm_iterations to reduce function length."""
         logger.info(
-            "[Issue #651] Task complete after %d iteration(s). Executed %d command(s) total.",
-            iteration,
-            history_count,
+            "[Issue #651] Task complete after %d iteration(s). Executed %d command(s) total.", iteration, history_count
         )
 
     def _log_max_iterations_warning(self, iteration: int) -> None:

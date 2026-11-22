@@ -11,10 +11,10 @@ import { BaseAlert, BaseSwitch } from '@autobot/ui'
  * NTP sync triggers Ansible time_sync role across all fleet nodes.
  */
 
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useDarkMode } from '@/composables/useAccessibility'
+import { useSlmTheme, SLM_THEME_LABEL_KEYS, type SlmTheme } from '@/composables/useSlmTheme'
 // #13140: settings/setup endpoints live beside the canonical SLM client
 // (ADR-008 rule 3). `TimeConfig`/`TimeSyncResult`/`WizardStatus` are the
 // generated contract types re-exported from there (#13138).
@@ -31,7 +31,8 @@ import {
   type WizardStatus,
 } from '@/utils/slmSettingsApi'
 
-const darkMode = useDarkMode()
+// #18239: the theme is a browser-side choice (localStorage), applied on change and not part of Save.
+const theme = useSlmTheme()
 
 const router = useRouter()
 const { t } = useI18n()
@@ -45,14 +46,8 @@ const syncResult = ref<TimeSyncResult | null>(null)
 const settings = ref({
   system_name: 'AutoBot Production',
   default_timezone: 'UTC',
-  dark_mode: true,
   auto_refresh: true,
   refresh_interval: '30',
-})
-
-// Issue #3305: Apply dark mode immediately when the toggle changes
-watch(() => settings.value.dark_mode, (enabled: boolean) => {
-  darkMode.set(Boolean(enabled))
 })
 
 const timeConfig = ref<TimeConfig>({
@@ -334,13 +329,20 @@ onMounted(() => {
             </select>
           </div>
 
-          <!-- Dark Mode -->
+          <!-- Theme (#18239) -->
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.darkMode') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.useDarkThemeFor') }}</p>
+              <label for="slm-theme" class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.theme') }}</label>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.themeHint') }}</p>
             </div>
-            <BaseSwitch v-model="settings.dark_mode" :label="$t('settings.generalSettings.darkMode')" />
+            <select
+              id="slm-theme"
+              :value="theme.theme.value"
+              class="w-64 px-3 py-2 border border-autobot-border rounded-lg focus:ring-2 focus:ring-primary-500"
+              @change="theme.set(($event.target as HTMLSelectElement).value as SlmTheme)"
+            >
+              <option v-for="name in theme.availableThemes" :key="name" :value="name">{{ $t(SLM_THEME_LABEL_KEYS[name]) }}</option>
+            </select>
           </div>
 
           <!-- Auto Refresh -->

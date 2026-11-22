@@ -16,8 +16,10 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
-from .base import PluginRegistry, PluginStatus
+from .base import PluginManifest, PluginRegistry, PluginStatus
+from .enable_gate import EnableGate
 from .hooks import HookRegistry
+from .lifecycle import enable_attributed
 from .loader import PluginLoader
 
 logger = logging.getLogger(__name__)
@@ -36,6 +38,7 @@ class PluginManager:
         plugin_dirs: List[Path] | None = None,
         credential_resolvers: Dict[str, Callable[[str], str]] | None = None,
         trusted_roots: List[Path] | None = None,
+        enable_gate: EnableGate | None = None,
     ) -> None:
         """
         Initialize plugin manager.
@@ -47,7 +50,13 @@ class PluginManager:
             credential_resolvers: plugin name -> scoped resolver (#18094).
             trusted_roots: built-in plugin roots; a resolver is injected only
                            into a plugin whose real path lies under one.
+            enable_gate: when given, only the plugins it admits are imported at
+                         startup (#17421); the rest are discovered but never loaded.
         """
+        self._enable_gate = enable_gate
+        self._gated: List[str] = []
+        #: The host's background start-retry task (#17421); cancelled by ``shutdown()``.
+        self.start_retry_task: asyncio.Task[Any] | None = None
         self._loader = PluginLoader(plugin_dirs or [], credential_resolvers, trusted_roots)
         self._registry = PluginRegistry()
         self._hook_registry = HookRegistry()
@@ -63,6 +72,7 @@ class PluginManager:
             "loaded": 0,
             "failed": [],
             "conflicts": [],
+            "gated": [],
             "started": False,
             # #13677 review: `started` alone made a CRASHED discovery
             # indistinguishable from an empty tree — both reported
@@ -105,8 +115,9 @@ class PluginManager:
         # The LOADER dedupes now, because it also owns `_manifest_dirs` — the map
         # that decides which code runs. Deduping in two places with opposite
         # precedence is what let one plugin's code run under another's manifest.
-        manifests = self._loader.discover_plugins()
-        logger.info("PluginManager: discovered %d plugin(s)", len(manifests))
+        discovered = self._loader.discover_plugins()
+        logger.info("PluginManager: discovered %d plugin(s)", len(discovered))
+        manifests = await self._admit(discovered)
 
         loaded: List[str] = []
         failed: List[str] = []
@@ -126,9 +137,13 @@ class PluginManager:
                 logger.info("PluginManager: '%s' is already registered — not re-initialising", manifest.name)
                 continue
             try:
+                if not await self._still_admitted(manifest.name):
+                    continue
                 plugin = await self._loader.load_plugin(manifest)
-                if plugin:
-                    await plugin.enable()
+                if plugin and not await self._still_admitted(manifest.name):
+                    await self._loader.unload_plugin(manifest.name)  # disabled while it loaded (#17421)
+                elif plugin:
+                    await enable_attributed(plugin)
                     loaded.append(manifest.name)
                     logger.info(
                         "PluginManager: loaded and enabled '%s' v%s",
@@ -155,13 +170,37 @@ class PluginManager:
                     exc_info=True,
                 )
 
-        self._record_load_report(manifests, loaded, failed)
+        self._record_load_report(discovered, loaded, failed)
 
         await self._hook_registry.call_hook("on_startup")
         logger.info(
             "PluginManager: startup complete — %d plugin(s) active",
             len(self._registry.get_enabled_plugins()),
         )
+
+    async def _admit(self, discovered: List[PluginManifest]) -> List[PluginManifest]:
+        """The discovered plugins an operator has enabled; the rest are never imported (#17421)."""
+        if self._enable_gate is None:
+            return discovered
+        admitted = await self._enable_gate.admit(discovered, dict(self._loader._manifest_dirs))
+        kept = {m.name for m in admitted}
+        self._gated = sorted(m.name for m in discovered if m.name not in kept)
+        if self._gated:
+            logger.info("PluginManager: %d plugin(s) not enabled, not imported: %s", len(self._gated), self._gated)
+        return admitted
+
+    async def _still_admitted(self, name: str) -> bool:
+        """False when the gate says an operator disabled *name* after admission; it is then gated, not loaded."""
+        if self._enable_gate is None or await self._enable_gate.still_admitted(name):
+            return True
+        if name not in self._gated:
+            self._gated = sorted([*self._gated, name])
+        logger.info("PluginManager: '%s' was disabled during startup; not loaded", name)
+        return False
+
+    def get_gated_plugins(self) -> List[str]:
+        """Discovered plugins held back because no operator has enabled them (#17421)."""
+        return list(self._gated)
 
     async def shutdown(self) -> None:
         """
@@ -170,6 +209,9 @@ class PluginManager:
         Called during application shutdown.  Errors are logged and do not
         prevent other plugins from shutting down.
         """
+        if self.start_retry_task is not None:
+            self.start_retry_task.cancel()
+            self.start_retry_task = None
         await self._hook_registry.call_hook("on_shutdown")
 
         for name in list(self._registry.get_all_plugins()):
@@ -192,6 +234,7 @@ class PluginManager:
             "loaded": 0,
             "failed": [],
             "conflicts": [],
+            "gated": [],
             "started": False,
             "completed": False,
         }
@@ -200,6 +243,11 @@ class PluginManager:
     # ------------------------------------------------------------------
     # Accessors
     # ------------------------------------------------------------------
+
+    @property
+    def started(self) -> bool:
+        """True from ``startup()`` until ``shutdown()``, including a start that failed and awaits a retry."""
+        return self._started
 
     @property
     def hook_registry(self) -> HookRegistry:
@@ -232,6 +280,8 @@ class PluginManager:
             # Direct attribute access, not getattr-with-default: a duck-typed
             # loader missing it would have rendered as a clean "no conflicts".
             "conflicts": sorted(set(self._loader.name_conflicts)),
+            # #17421: discovered but not imported because no operator enabled them -- neither loaded nor failed.
+            "gated": list(self._gated),
             "started": True,
             "completed": True,
         }
@@ -240,7 +290,7 @@ class PluginManager:
             logger.info("PluginManager: no plugins discovered — nothing to load")
             return
 
-        if not loaded:
+        if not loaded and len(self._gated) < len(manifests):
             logger.critical(
                 "PluginManager: loaded 0 of %d plugin(s) — the plugin subsystem is " "delivering nothing. Failed: %s",
                 len(manifests),
