@@ -8,9 +8,10 @@
  * Issue #896 - SLM Metrics Dashboard
  */
 
+import { formatFleetTime } from '@/composables/useTimezone'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert, createLogger } from '@autobot/ui'
+import { PollingPausedAlert, createLogger, saveTextFile } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import FleetMetricsCard from '@/components/monitoring/FleetMetricsCard.vue'
@@ -47,13 +48,7 @@ async function loadMetrics() {
 async function downloadPrometheusMetrics() {
   await fetchPrometheusExport()
   if (prometheusExport.value) {
-    const blob = new Blob([prometheusExport.value], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `prometheus-metrics-${Date.now()}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
+    saveTextFile(prometheusExport.value, `prometheus-metrics-${Date.now()}.txt`, 'text/plain')
   }
 }
 
@@ -83,10 +78,10 @@ onMounted(() => metricsPoller.start(''))
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-bold text-gray-900">{{ $t('monitoring.metricsDetailsView.metricsDetails') }}</h2>
-        <p class="text-sm text-gray-500 mt-1">
+        <h2 class="text-2xl font-bold text-autobot-text-primary">{{ $t('monitoring.metricsDetailsView.metricsDetails') }}</h2>
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('monitoring.metricsDetailsView.realTimeFleetAnd') }}
-          <span v-if="lastUpdate" class="ml-2">{{ $t('monitoring.metricsDetailsView.lastUpdatedValue0', { value0: lastUpdate.toLocaleTimeString() }) }}</span>
+          <span v-if="lastUpdate" class="ml-2">{{ $t('monitoring.metricsDetailsView.lastUpdatedValue0', { value0: formatFleetTime(lastUpdate) }) }}</span>
         </p>
       </div>
       <div class="flex gap-2">
@@ -107,7 +102,7 @@ onMounted(() => metricsPoller.start(''))
         </button>
         <button
           @click="downloadPrometheusMetrics"
-          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -141,29 +136,29 @@ onMounted(() => metricsPoller.start(''))
     />
 
     <!-- Performance Metrics Panel -->
-    <div v-if="performanceOverview" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('monitoring.metricsDetailsView.performanceMetrics') }}</h3>
+    <div v-if="performanceOverview" class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+      <h3 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('monitoring.metricsDetailsView.performanceMetrics') }}</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.avgResponseTime') }}</div>
-          <div class="text-3xl font-bold text-gray-900">
+          <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.metricsDetailsView.avgResponseTime') }}</div>
+          <div class="text-3xl font-bold text-autobot-text-primary">
             {{ performanceOverview.avg_response_time_ms.toFixed(0) }}ms
           </div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.p95ResponseTime') }}</div>
-          <div class="text-3xl font-bold text-gray-900">
+          <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.metricsDetailsView.p95ResponseTime') }}</div>
+          <div class="text-3xl font-bold text-autobot-text-primary">
             {{ performanceOverview.p95_response_time_ms.toFixed(0) }}ms
           </div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.requestRate') }}</div>
-          <div class="text-3xl font-bold text-gray-900">
+          <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.metricsDetailsView.requestRate') }}</div>
+          <div class="text-3xl font-bold text-autobot-text-primary">
             {{ performanceOverview.request_rate.toFixed(1) }}/s
           </div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.errorRate') }}</div>
+          <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.metricsDetailsView.errorRate') }}</div>
           <div
             :class="[
               'text-3xl font-bold',
@@ -178,31 +173,31 @@ onMounted(() => metricsPoller.start(''))
     </div>
 
     <!-- NPU Metrics Panel (conditional) -->
-    <div v-if="showNPUMetrics && npuFleetMetrics" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('monitoring.metricsDetailsView.nPUFleetMetrics') }}</h3>
+    <div v-if="showNPUMetrics && npuFleetMetrics" class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+      <h3 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('monitoring.metricsDetailsView.nPUFleetMetrics') }}</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.nPUNodes') }}</div>
-          <div class="text-3xl font-bold text-gray-900">
+          <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.metricsDetailsView.nPUNodes') }}</div>
+          <div class="text-3xl font-bold text-autobot-text-primary">
             {{ npuFleetMetrics.online_npu_nodes }}/{{ npuFleetMetrics.total_npu_nodes }}
           </div>
-          <div class="text-xs text-gray-600">{{ $t('monitoring.metricsDetailsView.online') }}</div>
+          <div class="text-xs text-autobot-text-secondary">{{ $t('monitoring.metricsDetailsView.online') }}</div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.activeWorkers') }}</div>
-          <div class="text-3xl font-bold text-gray-900">
+          <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.metricsDetailsView.activeWorkers') }}</div>
+          <div class="text-3xl font-bold text-autobot-text-primary">
             {{ npuFleetMetrics.active_workers }}/{{ npuFleetMetrics.total_workers }}
           </div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.avgUtilization') }}</div>
+          <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.metricsDetailsView.avgUtilization') }}</div>
           <div class="text-3xl font-bold text-primary-600">
             {{ npuFleetMetrics.avg_utilization_percent.toFixed(1) }}%
           </div>
         </div>
         <div class="space-y-2">
-          <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.metricsDetailsView.totalInferences') }}</div>
-          <div class="text-3xl font-bold text-gray-900">
+          <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.metricsDetailsView.totalInferences') }}</div>
+          <div class="text-3xl font-bold text-autobot-text-primary">
             {{ npuFleetMetrics.total_inferences.toLocaleString() }}
           </div>
         </div>
@@ -213,7 +208,7 @@ onMounted(() => metricsPoller.start(''))
     <div v-if="isLoading && !fleetMetrics" class="flex items-center justify-center py-12">
       <div class="text-center">
         <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-        <p class="text-gray-500 mt-4">{{ $t('monitoring.metricsDetailsView.loadingMetrics') }}</p>
+        <p class="text-autobot-text-tertiary mt-4">{{ $t('monitoring.metricsDetailsView.loadingMetrics') }}</p>
       </div>
     </div>
   </div>

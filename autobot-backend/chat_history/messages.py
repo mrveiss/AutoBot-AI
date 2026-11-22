@@ -21,7 +21,9 @@ import uuid
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from chat_history.message_times import distinct_ordered_times, message_timestamp
 from chat_history.session_lease import SessionLeaseError
+from chat_history.session_merge import MESSAGE_STAMP_FIELD
 
 logger = get_logger(__name__)
 
@@ -63,6 +65,8 @@ class MessagesMixin:
         tool_markers: List[Dict[str, Any]] | None,
         author_id: str | None = None,
         sources: List[Dict[str, Any]] | None = None,
+        message_id: str | None = None,
+        created_at: float | None = None,
     ) -> Dict[str, Any]:
         """
         Build a message dictionary with standard fields.
@@ -81,6 +85,8 @@ class MessagesMixin:
             author_id: Optional user ID for multi-user attribution (Issue #3282).
             sources: Optional RAG retrieval sources for citation display (Issue #4448).
                 Each entry is {title, path, score, chunk_id}.
+            message_id: The id the message was streamed under; a new uuid when absent (#21846).
+            created_at: Epoch seconds the message was created; now when absent (#21846).
 
         Returns:
             Constructed message dictionary.
@@ -88,7 +94,7 @@ class MessagesMixin:
         Issue #620.
         """
         message = {
-            "id": str(uuid.uuid4()),
+            "id": message_id or str(uuid.uuid4()),
             "sender": sender,
             "text": text,
             "messageType": message_type,
@@ -99,7 +105,7 @@ class MessagesMixin:
             # truthiness test, because ``0``/``""``/``[]`` are metadata a caller
             # chose to pass and must survive the round-trip.
             "metadata": raw_data if raw_data is not None else {},
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": message_timestamp(created_at),
             "sources": sources if sources is not None else [],
         }
         if tool_markers:
@@ -151,6 +157,7 @@ class MessagesMixin:
         """
         if not messages:
             return True
+        distinct_ordered_times(messages)  # #21846: steps persisted at one instant keep distinct, ordered times
         try:
             await self.save_session(session_id, messages=messages, append=True)
             logger.debug(
@@ -338,6 +345,7 @@ class MessagesMixin:
         if not message.get("metadata"):
             message["metadata"] = {}
         message["metadata"].update(metadata_updates)
+        message[MESSAGE_STAMP_FIELD] = time.time()
 
     async def update_message_metadata(
         self,
@@ -438,7 +446,7 @@ class MessagesMixin:
             tool_marker = {
                 "tool_type": tool_type,
                 "tool_action": tool_action,
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": message_timestamp(),
             }
 
             # Add any additional marker data

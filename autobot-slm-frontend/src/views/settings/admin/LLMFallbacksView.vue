@@ -61,7 +61,7 @@ const formatRecent = createRecencyFormatter({
   style: 'narrow',
   maxUnit: 'day',
   olderThanMs: 3_600_000,
-  older: createDateFormatter({ kind: 'time' }),
+  older: createDateFormatter({ locale: () => locale.value, kind: 'time' }),
 })
 
 // #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
@@ -80,10 +80,10 @@ onMounted(() => statusPoller.start(''))
     />
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">
+        <h1 class="text-2xl font-bold text-autobot-text-primary">
           {{ $t('llmFallbacks.title') }}
         </h1>
-        <p class="text-sm text-gray-500 mt-1">
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('llmFallbacks.subtitle') }}
         </p>
       </div>
@@ -116,39 +116,39 @@ onMounted(() => statusPoller.start(''))
 
     <!-- Configured Fallback Chains Section -->
     <div class="mb-8">
-      <h2 class="text-xl font-semibold text-gray-900 mb-4">
+      <h2 class="text-xl font-semibold text-autobot-text-primary mb-4">
         {{ $t('llmFallbacks.configuredChains') }}
       </h2>
       <div class="bg-white rounded-lg shadow overflow-x-auto">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+          <thead class="bg-autobot-bg-secondary text-autobot-text-tertiary uppercase text-xs">
             <tr>
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.primaryModel') }}</th>
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.fallbackChain') }}</th>
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.provider') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y divide-autobot-border-subtle">
             <tr v-if="loading && configuredChains.length === 0">
-              <td colspan="3" class="px-4 py-8 text-center text-gray-400">
+              <td colspan="3" class="px-4 py-8 text-center text-autobot-text-tertiary">
                 {{ $t('llmFallbacks.loading') }}
               </td>
             </tr>
             <tr v-else-if="configuredChains.length === 0">
-              <td colspan="3" class="px-4 py-8 text-center text-gray-400">
+              <td colspan="3" class="px-4 py-8 text-center text-autobot-text-tertiary">
                 {{ $t('llmFallbacks.noChains') }}
               </td>
             </tr>
             <tr
               v-for="chain in configuredChains"
               :key="chain.primary_model"
-              class="hover:bg-gray-50"
+              class="hover:bg-autobot-bg-hover"
             >
               <td class="px-4 py-3 font-mono text-xs">{{ chain.primary_model }}</td>
-              <td class="px-4 py-3 text-gray-600">{{ chain.fallback_chain }}</td>
+              <td class="px-4 py-3 text-autobot-text-secondary">{{ chain.fallback_chain }}</td>
               <td class="px-4 py-3">
                 <span
-                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"
+                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary"
                 >
                   {{ chain.provider }}
                 </span>
@@ -162,16 +162,16 @@ onMounted(() => statusPoller.start(''))
     <!-- Active Fallbacks Section -->
     <div>
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-semibold text-gray-900">
+        <h2 class="text-xl font-semibold text-autobot-text-primary">
           {{ $t('llmFallbacks.activeFallbacks') }}
         </h2>
-        <span class="text-sm text-gray-500">
+        <span class="text-sm text-autobot-text-tertiary">
           {{ $t('llmFallbacks.autoRefresh') }}
         </span>
       </div>
       <div class="bg-white rounded-lg shadow overflow-x-auto">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+          <thead class="bg-autobot-bg-secondary text-autobot-text-tertiary uppercase text-xs">
             <tr>
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.conversationId') }}</th>
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.primaryModel') }}</th>
@@ -181,44 +181,44 @@ onMounted(() => statusPoller.start(''))
               <th class="px-4 py-3 text-left">{{ $t('llmFallbacks.time') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y divide-autobot-border-subtle">
             <tr v-if="loading && activeFallbacks.length === 0">
-              <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+              <td colspan="6" class="px-4 py-8 text-center text-autobot-text-tertiary">
                 {{ $t('llmFallbacks.loading') }}
               </td>
             </tr>
             <tr v-else-if="activeFallbacks.length === 0">
-              <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+              <td colspan="6" class="px-4 py-8 text-center text-autobot-text-tertiary">
                 {{ $t('llmFallbacks.noActiveFallbacks') }}
               </td>
             </tr>
             <tr
               v-for="(fallback, index) in activeFallbacks"
               :key="`${fallback.conversation_id}-${fallback.timestamp}-${index}`"
-              class="hover:bg-gray-50"
+              class="hover:bg-autobot-bg-hover"
             >
               <td class="px-4 py-3 font-mono text-xs">{{ fallback.conversation_id }}</td>
-              <td class="px-4 py-3 font-mono text-xs text-red-600">
+              <td class="px-4 py-3 font-mono text-xs text-autobot-error">
                 {{ fallback.primary_model }}
               </td>
-              <td class="px-4 py-3 font-mono text-xs text-green-600">
+              <td class="px-4 py-3 font-mono text-xs text-autobot-success">
                 {{ fallback.fallback_model }}
               </td>
               <td class="px-4 py-3">
                 <span
-                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700"
+                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-bg-tertiary text-autobot-text-secondary"
                 >
                   {{ fallback.primary_provider }}
                 </span>
               </td>
               <td class="px-4 py-3">
                 <span
-                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"
+                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary"
                 >
                   {{ fallback.fallback_provider }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-xs text-gray-500">
+              <td class="px-4 py-3 text-xs text-autobot-text-tertiary">
                 {{ formatRecent(fallback.timestamp * 1000) }}
               </td>
             </tr>

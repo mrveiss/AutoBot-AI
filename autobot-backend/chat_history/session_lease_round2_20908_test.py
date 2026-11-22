@@ -421,3 +421,63 @@ async def test_control_without_the_silent_limit_the_same_store_waits_out_the_bou
 
 
 bound_async_tests(globals())
+
+
+def test_a_stale_snapshot_does_not_undo_a_committed_approval():
+    pending = {"id": "m1", "content": "run ls", "metadata": {"approval_status": "pending"}}
+    approved = {**pending, "metadata": {"approval_status": "approved"}, "last_modified": 200.0}
+    stale = {**pending, "last_modified": 100.0}
+    assert merge_snapshot([approved], [stale]) == [approved]
+    assert merge_snapshot([approved], [dict(pending)]) == [approved]
+
+
+def test_a_snapshot_taken_after_the_approval_still_updates_the_message():
+    approved = {"id": "m1", "content": "run ls", "last_modified": 200.0}
+    edited = {**approved, "content": "run ls -la"}
+    assert merge_snapshot([approved], [edited]) == [edited]
+
+
+@pytest.mark.asyncio
+async def test_a_raw_store_error_while_allocating_the_generation_is_a_lease_store_error(monkeypatch):
+    from chat_history import session_lease
+    from chat_history.session_lease import LeaseStoreUnavailable, SessionLease
+
+    async def _broken(database):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(session_lease, "_lease_client", _broken)
+    with pytest.raises(LeaseStoreUnavailable) as caught:
+        await SessionLease.begin(type("L", (), {"generation": 0, "session_id": "s1", "generation_key": "k"})(), 0)
+    assert isinstance(caught.value.__cause__, ConnectionError)
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_during_replace_waits_for_the_executor_job(tmp_path):
+    import asyncio
+    import threading
+
+    from chat_history.file_io import _replace
+
+    started, release = threading.Event(), threading.Event()
+
+    async def run(func, *args):
+        def job():
+            started.set()
+            release.wait(5)
+            return func(*args)
+
+        return await asyncio.get_running_loop().run_in_executor(None, job)
+
+    src, dst = tmp_path / "a", tmp_path / "b"
+    await asyncio.to_thread(src.write_text, "x", encoding="utf-8")
+    task = asyncio.ensure_future(_replace(str(src), str(dst), run))
+    while not started.is_set():
+        await asyncio.sleep(0)
+    task.cancel()
+    for _ in range(20):  # let the cancellation propagate; the executor job is still blocked
+        await asyncio.sleep(0)
+    assert not task.done(), "the cancelled replace returned before its executor job finished"
+    release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert await asyncio.to_thread(dst.read_text, encoding="utf-8") == "x"

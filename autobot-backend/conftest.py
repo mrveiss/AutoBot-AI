@@ -506,11 +506,11 @@ if "llm_shared" not in sys.modules:
     # multimodal_processor + vision/voice, incremental_trainer). No deps beyond
     # stdlib threading — safe to real-load unconditionally, early.
     _real_load_and_bind("llm_shared.torch_loader", _llm_root / "torch_loader.py")
-    # #11520: canonical JSON parser and schema-typed extraction helper — lightweight,
-    # no heavy deps; load real so tests importing them don't hit the stub.
+    # #11520: canonical JSON parser / schema extraction helper (lightweight; load real, not the stub).
     _real_load_and_bind("llm_shared.json_utils", _llm_root / "json_utils.py")
     # #17307/#17308: shared validated loop + decision seam, imported at module level by five call sites.
     _real_load_and_bind("llm_shared.validated_llm", _llm_root / "validated_llm.py")
+    _real_load_and_bind("llm_shared.quality_judgment", _llm_root / "quality_judgment.py")  # #16133
     _real_load_and_bind("llm_shared.decisions", _llm_root / "decisions.py")
     _real_load_and_bind("llm_shared.structured_ops", _llm_root / "structured_ops.py")
     _real_load_and_bind("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
@@ -891,10 +891,10 @@ sys.modules["code_intelligence.anti_pattern_detector"] = _ci_anti_stub
 # and code_intelligence.shared.scoring — it bypasses code_intelligence/__init__.py, which
 # stays stubbed. _real_load_and_bind falls back to a package stub if the load ever fails,
 # so import-time behaviour for api/*.py is never worse than the old hand-written stub.
-_real_load_and_bind(
-    "code_intelligence.merge_conflict_resolver",
-    backend_root / "code_intelligence" / "merge_conflict_resolver.py",
-)
+# #21004: merge_conflict_resolver imports the canonical code_intelligence.python_files, so that
+# leaf is real-loaded first (the real package __init__ stays unexecuted).
+for _leaf in ("python_files", "merge_conflict_resolver"):
+    _real_load_and_bind(f"code_intelligence.{_leaf}", backend_root / "code_intelligence" / f"{_leaf}.py")
 
 # NOTE (#13111): every entry below that also owns a colocated ``<name>_test.py`` is
 # real-loaded again by code_intelligence/conftest.py, which runs after this file and
@@ -1093,8 +1093,7 @@ if "models" not in sys.modules:
     # Create a lightweight 'models' namespace package to hold the sub-module,
     # then real-load infrastructure.py onto it (#11661: canonical helper; it
     # also performs the parent bind this block previously did by hand).
-    _models_pkg = _make_pkg_stub("models")
-    _models_pkg.__path__ = [str(backend_root / "models")]
+    _models_pkg = _make_pkg_stub("models", real_dir=backend_root / "models")
     _real_load_and_bind("models.infrastructure", backend_root / "models" / "infrastructure.py")
 
 

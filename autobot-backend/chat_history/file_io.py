@@ -228,12 +228,22 @@ async def _stage_temp(file_path: str, content: str, run: Callable[..., Awaitable
 
 async def _replace(temp_path: str, file_path: str, run: Callable[..., Awaitable[Any]]) -> bool:
     """Rename *temp_path* over *file_path*; False when the filesystem refuses (OSError)."""
+    replacing = asyncio.ensure_future(run(os.replace, temp_path, file_path))
     try:
-        await run(os.replace, temp_path, file_path)
+        await _await_through_cancel(replacing)
     except OSError as e:
         logger.warning("Atomic replace of %s failed, will write in place: %s", file_path, e)
         return False
     return True
+
+
+async def _await_through_cancel(replacing: "asyncio.Future[Any]") -> None:
+    """Await *replacing*; on cancel wait for the executor job to finish first, so the lock outlives it."""
+    try:
+        await asyncio.shield(replacing)
+    except asyncio.CancelledError:
+        await asyncio.wait({replacing})
+        raise
 
 
 async def _write_in_place(file_path: str, content: str) -> None:

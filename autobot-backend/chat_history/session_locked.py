@@ -300,6 +300,7 @@ class SessionLockMixin:
                 await lease.begin(await self._peek_generation(session_id, chats_directory))
                 await lease.fence({}, await self._peek_generation(session_id, chats_directory))
                 async with session_file_lock(chat_file):  # the sidecar is unlinked only while its flock is held
+                    await lease.fence({}, await self._peek_generation(session_id, chats_directory))
                     deleted = await self._delete_session_files(session_id, chats_directory)
                     await self._delete_companion_files(session_id, chats_directory)
                     await run_in_chat_io_executor(remove_session_lock, f"{session_id}_chat.json", chats_directory)

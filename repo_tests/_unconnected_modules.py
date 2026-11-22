@@ -99,8 +99,7 @@ def _statements(text: str):
         stripped = line.lstrip()
         if not stripped.startswith(("from ", "import ")):
             continue
-        if "(" in stripped:
-            stripped = stripped.split("#", 1)[0].rstrip()
+        stripped = stripped.split("#", 1)[0].strip()
         while "(" in stripped and ")" not in stripped:
             stripped += " " + next(lines, ")").split("#", 1)[0].strip()
         yield stripped
@@ -111,7 +110,6 @@ def import_refs(rel: str, text: str) -> set[str]:
     refs: set[str] = set()
     pkg = _package_parts(rel)
     for stmt in _statements(text):
-        stmt = stmt.split("#", 1)[0]
         if stmt.startswith("import "):
             for item in stmt[len("import ") :].split(","):
                 word = item.strip().split(" ")[0]

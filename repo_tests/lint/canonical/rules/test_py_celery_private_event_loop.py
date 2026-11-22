@@ -47,14 +47,14 @@ def test_waiver_is_honoured():
 
 
 def test_alias_table_resolves_module_and_from_import_aliases():
-    tree = ast.parse("import asyncio as aio\nfrom asyncio import run as r, new_event_loop\n")
+    tree = parse_cache.parse("import asyncio as aio\nfrom asyncio import run as r, new_event_loop\n")
     table = rule.alias_table(tree)
     assert (
         table["aio"] == "asyncio"
         and table["r"] == "asyncio.run"
         and table["new_event_loop"] == "asyncio.new_event_loop"
     )
-    names = {n for _, n in rule.private_loop_calls(ast.parse("import asyncio as aio\naio.run(x)\n"))}
+    names = {n for _, n in rule.private_loop_calls(parse_cache.parse("import asyncio as aio\naio.run(x)\n"))}
     assert names == {"asyncio.run"}
 
 
@@ -146,7 +146,7 @@ def _census() -> set[str]:
 def _rule_population(census: set[str]) -> set[str]:
     out = set()
     for rel in census:
-        tree = ast.parse((REPO / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((REPO / rel).read_text(encoding="utf-8"))
         if rule.in_scope(rel, tree):
             out.add(rel)
     return out
@@ -166,8 +166,8 @@ def test_rule_population_covers_the_independent_census():
 
 
 def test_rule_can_fail_on_a_known_bad_control_string():
-    assert rule.private_loop_calls(ast.parse("import asyncio\nasyncio.run(x)\n"))
-    assert not rule.private_loop_calls(ast.parse("x = 'asyncio.run(y)'\n"))
+    assert rule.private_loop_calls(parse_cache.parse("import asyncio\nasyncio.run(x)\n"))
+    assert not rule.private_loop_calls(parse_cache.parse("x = 'asyncio.run(y)'\n"))
 
 
 def test_repo_has_no_private_loops_in_scope():
@@ -210,7 +210,7 @@ def _closure(start: set[str]) -> set[str]:
         if rel in seen:
             continue
         seen.add(rel)
-        tree = ast.parse((REPO / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((REPO / rel).read_text(encoding="utf-8"))
         for mod in _module_level_imports(tree):
             f = _module_file(mod)
             if f is not None:
@@ -229,8 +229,111 @@ def test_no_task_module_imports_a_helper_that_creates_a_private_loop():
     for rel in sorted(reachable):
         if rel in rule.ALLOWLIST or rel in _HELPERS or rel.endswith("_test.py"):
             continue
-        calls = rule.private_loop_calls(ast.parse((REPO / rel).read_text(encoding="utf-8")))
+        calls = rule.private_loop_calls(parse_cache.parse((REPO / rel).read_text(encoding="utf-8")))
         names = [n for _, n in calls if not n.endswith("run_or_schedule")]  # run_or_schedule is worker-aware
         if names:
             offenders[rel] = names
     assert offenders == {}, offenders
+
+
+def _calls(src: str) -> set[str]:
+    return {n for _, n in rule.private_loop_calls(parse_cache.parse(src))}
+
+
+def test_import_alias_in_one_function_does_not_leak_into_another():
+    src = "def a():\n    import asyncio as aio\n    aio.run(x)\n\n" "def b():\n    aio.run(y)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(3, "asyncio.run")]
+
+
+def test_function_alias_shadows_module_alias_only_inside_that_function():
+    src = "import asyncio as aio\n" "def a():\n    import json as aio\n    aio.run(x)\n\n" "def b():\n    aio.run(y)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(7, "asyncio.run")]
+
+
+def test_decorator_alias_from_import_is_resolved_as_a_task():
+    src = "from celery import shared_task as task\n\n@task\ndef f():\n    pass\n"
+    assert rule.is_task_module(parse_cache.parse(src))
+    src = "import celery as c\n\n@c.shared_task(bind=True)\ndef f(self):\n    pass\n"
+    assert rule.is_task_module(parse_cache.parse(src))
+
+
+def test_unrelated_decorator_alias_is_not_a_task():
+    src = "from functools import cache as task\n\n@task\ndef f():\n    pass\n"
+    assert not rule.is_task_module(parse_cache.parse(src))
+
+
+def test_decorator_alias_imported_inside_a_helper_function_is_a_task():
+    src = "def helper():\n    from celery import shared_task as task\n\n    @task\n    def inner():\n        pass\n"
+    assert rule.is_task_module(parse_cache.parse(src))
+
+
+def test_decorator_alias_in_one_function_does_not_mark_a_sibling_as_a_task():
+    src = (
+        "def a():\n    from celery import shared_task as task\n\n    @task\n    def inner():\n        pass\n\n"
+        "def b():\n    @task\n    def other():\n        pass\n"
+    )
+    names = [fn.name for fn in rule.task_functions(parse_cache.parse(src))]
+    assert names == ["inner"]
+
+
+def test_class_level_decorator_alias_is_a_task():
+    src = "class K:\n    from celery import shared_task as task\n\n    @task\n    def f():\n        pass\n"
+    assert rule.is_task_module(parse_cache.parse(src))
+
+
+def test_class_level_import_is_seen_in_the_class_body_but_not_in_methods():
+    src = "class K:\n    import asyncio as aio\n    X = aio.run(c)\n\n    def m(self):\n        aio.run(d)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(3, "asyncio.run")]
+
+
+def test_lambda_parameter_shadows_an_import_alias():
+    src = "import asyncio as aio\nf = lambda aio: aio.run(1)\ng = lambda: aio.run(2)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(3, "asyncio.run")]
+
+
+def test_nested_function_inherits_enclosing_imports():
+    src = (
+        "def outer():\n    import asyncio as aio\n    from celery import shared_task as task\n\n"
+        "    @task\n    def inner():\n        aio.run(x)\n"
+    )
+    tree = parse_cache.parse(src)
+    assert rule.is_task_module(tree)
+    assert [name for _, name in rule.private_loop_calls(tree)] == ["asyncio.run"]
+
+
+def test_decorator_match_is_on_whole_components_not_a_suffix():
+    src = "import webapp as router\n\n@router.task\ndef f():\n    pass\n"
+    assert not rule.is_task_module(parse_cache.parse(src))
+
+
+def test_deeply_nested_expression_does_not_overflow_the_stack():
+    src = "x = " + "(" * 90 + "1" + ")" * 90 + "\nasyncio_value = " + "-" * 400 + "1\n"
+    assert _calls(src) == set()
+
+
+def test_global_declared_name_is_not_rebound_by_a_function_local_import():
+    src = "import asyncio as aio\n\ndef f():\n    global aio\n    aio.run(x)\n    import json as aio\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(5, "asyncio.run")]
+
+
+def test_global_declared_import_binds_in_the_function_and_at_module_scope():
+    src = "def f():\n    global aio\n    import asyncio as aio\n    aio.run(x)\n\ndef g():\n    aio.run(y)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(4, "asyncio.run"), (7, "asyncio.run")]
+
+
+def test_global_rebind_to_another_target_is_a_known_limit():
+    # Known limit (rule docstring): the module-level import wins; execution order is not modelled.
+    src = "import json as aio\n\ndef f():\n    global aio\n    import asyncio as aio\n    aio.run(x)\n"
+    assert rule.private_loop_calls(parse_cache.parse(src)) == []
+
+
+def test_function_parameter_shadows_an_import_alias():
+    src = "import asyncio as aio\n\ndef f(aio):\n    aio.run(1)\n\ndef g():\n    aio.run(2)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(7, "asyncio.run")]

@@ -33,12 +33,14 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from autobot_shared.ssot_config import config
-from config import unified_config_manager
+from config import config_manager
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR
 from conversation_file_cleanup import deleted_file_stats, pending_cleanup_stats
 from conversation_file_quota import UploadRefused, abandon, file_too_large, insert_within_quota, resize_within_quota
-from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi
+from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi, with_extension
+from conversation_file_schema_upgrades import apply_schema_upgrades
+from conversation_file_schema_version import query_schema_version
 from conversation_file_upload_info import UploadInfo
 from utils.chat_utils import validate_chat_session_id
 
@@ -81,7 +83,7 @@ class ConversationFileManager(ConversationFileRouteApi):
 
     def _init_redis_config(self, redis_host: str | None, redis_port: int | None) -> None:
         """Initialize Redis configuration from params or unified config."""
-        redis_config = unified_config_manager.get_redis_config()
+        redis_config = config_manager.get_redis_config()
         self.redis_host = redis_host or redis_config.get("host")
         self.redis_port = redis_port or redis_config.get("port")
         self._redis_manager = None
@@ -182,6 +184,7 @@ class ConversationFileManager(ConversationFileRouteApi):
         created_by: str | None = None,
         file_type: str = "generated",
         metadata: Dict[str, Any] | None = None,
+        quota_owner: str | None = None,
     ) -> Dict[str, Any]:
         """Create a file programmatically in a session (Issue #70).
 
@@ -196,6 +199,7 @@ class ConversationFileManager(ConversationFileRouteApi):
             created_by: Username of creator (agent name or user)
             file_type: Type tag ('generated', 'created', 'edited')
             metadata: Optional additional metadata
+            quota_owner: Who the bytes are charged to (#20678); defaults to ``created_by``
 
         Returns:
             Dict with file information
@@ -211,6 +215,7 @@ class ConversationFileManager(ConversationFileRouteApi):
             mime_type=mime_type,
             uploaded_by=created_by,
             metadata=combined_metadata,
+            quota_owner=quota_owner,
         )
 
     async def _lookup_session_file(self, connection, session_id: str, file_id: str):
@@ -220,7 +225,7 @@ class ConversationFileManager(ConversationFileRouteApi):
         """
         async with connection.execute(
             """
-            SELECT cf.file_id, cf.original_filename, cf.file_path, cf.mime_type, cf.uploaded_by
+            SELECT cf.file_id, cf.original_filename, cf.file_path, cf.mime_type, cf.uploaded_by, cf.quota_owner
             FROM conversation_files cf
             JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
             WHERE cf.file_id = ? AND sfa.session_id = ? AND cf.is_deleted = 0
@@ -436,6 +441,7 @@ class ConversationFileManager(ConversationFileRouteApi):
                 raise ValueError("Schema SQL file is empty")
 
             connection.executescript(schema_sql)
+            apply_schema_upgrades(connection)  # a table made by an older release gains what it lacks
             logger.info("✅ Database schema initialized successfully")
 
         except Exception as e:
@@ -540,15 +546,7 @@ class ConversationFileManager(ConversationFileRouteApi):
         return connection
 
     def _compute_file_hash(self, file_content: bytes) -> str:
-        """
-        Compute SHA-256 hash of file content for deduplication.
-
-        Args:
-            file_content: File content bytes
-
-        Returns:
-            str: Hex-encoded SHA-256 hash
-        """
+        """Hex SHA-256 of *file_content*, the deduplication key."""
         return hashlib.sha256(file_content).hexdigest()
 
     def _generate_stored_filename(self, original_filename: str, file_hash: str) -> str:
@@ -682,9 +680,9 @@ class ConversationFileManager(ConversationFileRouteApi):
 
         await self._log_access(
             existing_file_id,
-            "upload",  # the CHECK on file_access_log has no 'reference'; the metadata says it was one (#20225)
+            "reference",  # a dedup is a reference to an existing file, not an upload (#21404)
             file_info.uploaded_by,
-            {"session_id": file_info.session_id, "deduplication": True, "reference": True},
+            {"session_id": file_info.session_id, "deduplication": True},
         )
         await self._invalidate_session_cache(file_info.session_id)
 
@@ -714,7 +712,7 @@ class ConversationFileManager(ConversationFileRouteApi):
 
     async def _insert_file_record(self, connection, file_info: UploadInfo) -> None:
         """Insert the file record unless its owner would pass the quota (#20217, #375)."""
-        await insert_within_quota(connection, file_info.to_db_tuple(), file_info.uploaded_by, file_info.file_size)
+        await insert_within_quota(connection, file_info.to_db_tuple(), file_info.charged_to, file_info.file_size)
 
     async def _insert_file_metadata(self, connection, file_id: str, metadata: Dict[str, Any]) -> None:
         """Insert file metadata records into database."""
@@ -768,7 +766,7 @@ class ConversationFileManager(ConversationFileRouteApi):
         Helper for add_file (Issue #70, #375).
         """
         file_size = self._validate_file_size(file_content)
-        file_hash = self._compute_file_hash(file_content)
+        file_hash = kwargs.get("file_hash") or self._compute_file_hash(file_content)
         file_id = str(uuid.uuid4())
         stored_filename = self._generate_stored_filename(original_filename, file_hash)
         return UploadInfo(
@@ -781,6 +779,7 @@ class ConversationFileManager(ConversationFileRouteApi):
             file_hash=file_hash,
             mime_type=kwargs.get("mime_type"),
             uploaded_by=kwargs.get("uploaded_by"),
+            quota_owner=kwargs.get("quota_owner"),
             message_id=kwargs.get("message_id"),
             metadata=kwargs.get("metadata"),
             deduplicated=False,
@@ -795,8 +794,10 @@ class ConversationFileManager(ConversationFileRouteApi):
         uploaded_by: str | None = None,
         message_id: str | None = None,
         metadata: Dict[str, Any] | None = None,
+        quota_owner: str | None = None,
+        file_hash: str | None = None,
     ) -> Dict[str, Any]:
-        """Add a file to the conversation file system."""
+        """Add a file to the conversation file system; *file_hash* is its SHA-256 if the caller already computed it."""
         async with self._lock:
             file_info = self._prepare_file_info(
                 session_id,
@@ -804,8 +805,10 @@ class ConversationFileManager(ConversationFileRouteApi):
                 original_filename,
                 mime_type=mime_type,
                 uploaded_by=uploaded_by,
+                quota_owner=quota_owner,
                 message_id=message_id,
                 metadata=metadata,
+                file_hash=file_hash,
             )
 
             connection = await self._get_async_db_connection()
@@ -853,7 +856,7 @@ class ConversationFileManager(ConversationFileRouteApi):
             (session_id, page_size, offset),
         ) as cursor:
             rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+        return [with_extension(dict(row)) for row in rows]
 
     async def list_files(self, session_id: str, page: int = 1, page_size: int = 50) -> Dict[str, Any]:
         """
@@ -1052,7 +1055,7 @@ class ConversationFileManager(ConversationFileRouteApi):
 
         Args:
             file_id: File identifier
-            access_type: Type of access ('upload', 'download', 'view', 'delete')
+            access_type: Type of access ('upload', 'download', 'view', 'delete', 'restore', 'reference')
             accessed_by: User identifier
             metadata: Additional metadata for log entry
         """
@@ -1129,22 +1132,7 @@ class ConversationFileManager(ConversationFileRouteApi):
 
     def _query_schema_version_sync(self) -> str:
         """Thread-safe database query for schema version (sync helper)."""
-        connection = sqlite3.connect(
-            str(self.db_path),
-            timeout=TimingConstants.SHORT_TIMEOUT,
-            check_same_thread=False,
-        )
-        cursor = connection.cursor()
-        try:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
-            if not cursor.fetchone():
-                return "unknown"
-            cursor.execute("SELECT version FROM schema_migrations ORDER BY migration_id DESC LIMIT 1")
-            result = cursor.fetchone()
-            return result[0] if result else "unknown"
-        finally:
-            cursor.close()
-            connection.close()
+        return query_schema_version(self.db_path)
 
     async def get_schema_version(self) -> str:
         """Get current database schema version for health checks."""
