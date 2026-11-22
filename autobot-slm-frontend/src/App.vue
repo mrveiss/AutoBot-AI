@@ -19,7 +19,7 @@ import UpdateNotification from '@/components/UpdateNotification.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
-import { useHighContrast, useDarkMode } from '@/composables/useAccessibility'
+import { useSlmTheme } from '@/composables/useSlmTheme'
 import { ensureTimezone } from '@/composables/useTimezone'
 import { provideToast } from '@/composables/useToast'
 import FleetIncompleteNotice from '@/components/FleetIncompleteNotice.vue'
@@ -30,8 +30,7 @@ const route = useRoute()
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 const ws = useSlmWebSocket()
-const highContrast = useHighContrast()
-const darkMode = useDarkMode()
+const theme = useSlmTheme()
 
 const isLoginPage = computed(() => route.name === 'login')
 
@@ -69,10 +68,8 @@ async function initializeApp(): Promise<void> {
 }
 
 onMounted(async () => {
-  // Issue #754: Initialize high contrast preference from localStorage
-  highContrast.init()
-  // Issue #3305: Initialize dark mode preference from localStorage
-  darkMode.init()
+  // #18239: restore the saved theme (light / dark / contrast / mono) from localStorage
+  theme.init()
 
   if (authStore.isAuthenticated) {
     await initializeApp()

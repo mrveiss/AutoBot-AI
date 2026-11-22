@@ -40,7 +40,7 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import i18n from '@/i18n'
 import { errorText } from '@/utils/errorText'
 import { PartialListError } from '@/utils/fetchAllPages'
-import { incompleteOf, reconcileUpdateSummary, toNodeMap } from './fleetHelpers'
+import { incompleteOf, nodeNotFoundError, reconcileUpdateSummary, toNodeMap } from './fleetHelpers'
 import type { NodeListIncomplete } from './fleetHelpers'
 
 export const useFleetStore = defineStore('fleet', () => {
@@ -457,7 +457,7 @@ export const useFleetStore = defineStore('fleet', () => {
   async function testConnection(nodeId: string): Promise<ConnectionTestResult> {
     const node = nodes.value.get(nodeId)
     if (!node) {
-      throw new Error(`Node ${nodeId} not found`)
+      throw nodeNotFoundError(nodeId)
     }
 
     try {
@@ -676,7 +676,7 @@ export const useFleetStore = defineStore('fleet', () => {
   async function assignNpuRole(nodeId: string): Promise<SLMNode> {
     const node = nodes.value.get(nodeId)
     if (!node) {
-      throw new Error(`Node ${nodeId} not found`)
+      throw nodeNotFoundError(nodeId)
     }
 
     try {
@@ -712,7 +712,7 @@ export const useFleetStore = defineStore('fleet', () => {
   async function removeNpuRole(nodeId: string): Promise<SLMNode> {
     const node = nodes.value.get(nodeId)
     if (!node) {
-      throw new Error(`Node ${nodeId} not found`)
+      throw nodeNotFoundError(nodeId)
     }
 
     try {

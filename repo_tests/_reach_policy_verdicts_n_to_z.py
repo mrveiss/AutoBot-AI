@@ -101,7 +101,7 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
     "single-attribute-writer-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
-        "Non-test .ts/.vue/.js source is a subset of tracked files under the user frontend; test share drifts.",
+        "Non-test .ts/.vue/.js source is a subset of tracked files under the frontends and kit; test share drifts.",
     ),
     "one-playwright-server-scan": (
         ABSOLUTE,

@@ -61,6 +61,7 @@ from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..services.timeline import compute_critical_path, duration_days
 from ._common import actor_id
+from ._named_agent import require_member_targets
 from .sprint_access import require_sprint_in_org
 
 logger = get_logger(__name__)
@@ -242,12 +243,8 @@ class SprintCloseRequest(BaseModel):
 # ------------------------------------------------------------------ Portfolio routes
 
 
-# ---------------------------------------------------------------------------
-# Card-enrichment aggregation helpers (#10232)
-#
-# Each returns a {parent_id: value} map computed with a single grouped query so
-# list endpoints stay O(1) queries — never N+1 per card.
-# ---------------------------------------------------------------------------
+# Card-enrichment aggregation helpers (#10232): each returns a {parent_id: value} map from ONE grouped query,
+# so list endpoints stay O(1) queries -- never N+1 per card.
 _OPEN_WORK_ITEM_STATUSES = [s.value for s in WorkItemStatus if s not in (WorkItemStatus.DONE, WorkItemStatus.CANCELLED)]
 
 
@@ -570,6 +567,7 @@ async def create_project(
     prog = (await session.execute(select(LLCProgram).where(LLCProgram.id == program_id))).scalar_one_or_none()
     if prog is None or str(prog.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Program not found")
+    await require_member_targets(session, prog.company_id, body.lead_user_id, body.lead_agent_id)
     project = LLCProject(
         # #10261: derive tenant from the validated parent, never trust body.company_id.
         company_id=prog.company_id,
@@ -692,6 +690,7 @@ async def update_project(
     # IDOR guard (#10148).
     if project is None or str(project.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
+    await require_member_targets(session, project.company_id, body.lead_user_id, body.lead_agent_id)
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(project, field, value)
     await session.commit()

@@ -16,9 +16,9 @@
  * Refined tokens, merged with the neutral parts they inherit, so this app
  * does not import the user frontend's stylesheets.
  *
- * Themes: no data-theme / "light", "dark", "contrast", "mono". The legacy
- * data-theme="high-contrast" (useAccessibility.ts) keeps its own palette in
- * main.css and is excluded from the mapping at the end of this file.
+ * Themes: no data-theme / "light", "dark", "contrast", "mono", switched by
+ * composables/useSlmTheme.ts. The legacy data-theme="high-contrast" palette is folded
+ * into "contrast" (#18239); one high-contrast theme.
  */
 
 /* ===== Identity bar (every theme) ===== */
@@ -42,7 +42,7 @@
 :root {
   /* #21567: hover and ink follow the active scheme's primary pair. The base state
      (no scheme: sky --primary from main.css) takes black ink, 7.6:1 on #0ea5e9
-     where white is 2.8:1; every scheme and high-contrast redefine the pair. Hover and
+     where white is 2.8:1; every scheme redefines the pair. Hover and
      pressed fall back to sky-600 (5.1:1 under black ink; sky-700 would be 3.5:1). */
   --on-primary: var(--color-black);
   --color-primary-hover: var(--primary-h, var(--color-primary-600));
@@ -389,7 +389,7 @@
 /* ===== Shared token names (the contract with the user frontend) =====
    Identical mapping to autobot-frontend css/themes/refined-map.css: the
    existing semantic names resolve to the Refined name of the active theme. */
-/* Table metrics the kit adapter reads (#14778), in every theme including high-contrast. */
+/* Table metrics the kit adapter reads (#14778), in every theme. */
 :root[data-app='slm'] {
   --tbl-font-size: 13px;
   --tbl-row-h: 44px;
@@ -404,7 +404,12 @@
   --tbl-num: tabular-nums;
 }
 
-/* Input metrics the kit adapter reads (#14778), in every theme including high-contrast. */
+/* Card padding the kit adapter reads (#17564): the 1.25rem the kit card always used, as a token. */
+:root[data-app='slm'] {
+  --card-padding: var(--spacing-5);
+}
+
+/* Input metrics the kit adapter reads (#14778), in every theme. */
 :root[data-app='slm'] {
   --input-height-sm: 32px;
   --input-height-md: 40px;
@@ -412,21 +417,7 @@
   --input-padding-x: var(--spacing-3);
 }
 
-/* High-contrast table colours come from the accessibility palette (main.css, #754). */
-:root[data-app='slm'][data-theme='high-contrast'] {
-  --tbl-head-bg: var(--a11y-bg-muted);
-  --tbl-head-fg: var(--a11y-text);
-  --tbl-head-border: 1px solid var(--a11y-border);
-  --tbl-border: 1px solid var(--a11y-border);
-  --tbl-row-hover: var(--a11y-bg-muted);
-  --tbl-row-selected: var(--a11y-bg-muted);
-  --tbl-selected-edge: 3px solid var(--a11y-focus-ring);
-  --tbl-zebra-bg: var(--a11y-bg-surface);
-  --input-bg: var(--a11y-bg-surface);
-  --input-border: var(--a11y-border);
-}
-
-:root[data-app='slm']:not([data-theme='high-contrast']) {
+:root[data-app='slm'] {
   --bg-primary: var(--bg);
   --bg-secondary: var(--surface);
   --bg-tertiary: var(--surface2);
