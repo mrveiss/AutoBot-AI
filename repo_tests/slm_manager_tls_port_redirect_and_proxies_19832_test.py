@@ -124,25 +124,49 @@ def _task(fragment: str) -> dict:
     return next(t for n, t in _tasks().items() if fragment in n)
 
 
-def _lookup(entry: str, out: str) -> dict:
-    """One `getent ahosts` loop result: the entry and its stdout (empty and rc 2 when it did not resolve)."""
-    return {"item": entry, "rc": 0 if out else 2, "stdout_lines": out.splitlines()}
+def _module_facts(entry: str, rc: int, out: str = "") -> dict:
+    """The loop result `ansible.builtin.getent` (database ahosts, fail_key false) returns, built by the module's own logic.
+
+    Mirrors ansible-core 2.17 modules/getent.py: rc 0 keys each output line by its first field (a repeated key
+    becomes a list of records); rc 2 with fail_key false returns {entry: None} plus a `msg` and SUCCEEDS; any other
+    rc (and a missing binary) makes the module FAIL, so no result reaches the asserts at all.
+    """
+    if rc == 2:
+        return {
+            "item": entry,
+            "msg": "One or more supplied key could not be found in the database.",
+            "ansible_facts": {"getent_ahosts": {entry: None}},
+        }
+    assert rc == 0, "a failing module produces no registered result; the task itself fails"
+    facts: dict = {}
+    seen: dict[str, int] = {}
+    for line in out.splitlines():
+        record = line.split(None)
+        if record[0] in seen:
+            if seen[record[0]] == 1:
+                facts[record[0]] = [facts[record[0]]]
+            facts[record[0]].append(record[1:])
+            seen[record[0]] += 1
+        else:
+            facts[record[0]] = record[1:]
+            seen[record[0]] = 1
+    return {"item": entry, "ansible_facts": {"getent_ahosts": facts}}
 
 
-def _host_error(entry: str, rc: int, stderr: str = "", msg: str | None = None) -> dict:
-    """A loop result for a getent that did not run properly (a missing binary reports rc 2 WITH `msg`)."""
-    result = {"item": entry, "rc": rc, "stdout_lines": [], "stderr": stderr}
-    return {**result, "msg": msg} if msg else result
+def _found(entry: str, *addresses: str) -> dict:
+    """`getent ahosts` for a name: every address once per socket type (STREAM, DGRAM, RAW)."""
+    out = "\n".join(f"{ip:<15} {kind:<6} name.test" for ip in addresses for kind in ("STREAM", "DGRAM", "RAW"))
+    return _module_facts(entry, 0, out)
 
 
-def _getent(ip: str) -> str:
-    return f"{ip:<15} STREAM name.test\n{ip:<15} DGRAM\n{ip:<15} RAW"
+def _not_found(entry: str) -> dict:
+    return _module_facts(entry, 2)
 
 
 def _env() -> jinja2.Environment:
     env = _proxy_env()
     env.filters["flatten"] = lambda seq: [x for sub in seq for x in sub]
-    env.filters["regex_replace"] = lambda v, pat, rep: re.sub(pat, rep, str(v))
+    env.filters["dict2items"] = lambda d: [{"key": k, "value": v} for k, v in d.items()]
     return env
 
 
@@ -159,13 +183,6 @@ def _assert_holds(addrs: str, results: list[dict]) -> tuple[bool, str]:
     return ok, env.from_string(task["fail_msg"]).render(**ctx)
 
 
-def _getent_ran(results: list[dict]) -> tuple[bool, str]:
-    task = _task("assert getent itself ran")["ansible.builtin.assert"]
-    env = _env()
-    ctx = {"_slm_frontend_lookup": {"results": results}}
-    return all(env.compile_expression(c)(**ctx) for c in task["that"]), env.from_string(task["fail_msg"]).render(**ctx)
-
-
 def test_the_lookup_runs_in_check_mode_too() -> None:
     assert _task("resolve the frontend trusted-proxy entries")["check_mode"] is False
 
@@ -174,56 +191,48 @@ def test_the_resolve_assert_and_fact_carry_every_tag_of_the_unit_task() -> None:
     """Under --tags backend or systemd the unit renders, so the resolution must run too (#19832)."""
     units = yaml.safe_load((ROLE / "tasks" / "service_units.yml").read_text(encoding="utf-8"))
     unit = next(t for t in units if t.get("name") == "SLM | Deploy backend systemd service")
-    for fragment in (
-        "resolve the frontend trusted-proxy",
-        "assert getent itself ran",
-        "assert every frontend entry",
-        "trust the resolved",
-    ):
+    for fragment in ("resolve the frontend trusted-proxy", "assert every frontend entry", "trust the resolved"):
         assert set(unit["tags"]) <= set(_task(fragment)["tags"]), fragment
 
 
-def test_a_missing_getent_or_resolver_outage_blames_the_host_not_the_inventory() -> None:
-    ok, _ = _getent_ran([_lookup("192.0.2.50", _getent("192.0.2.50")), _lookup("gone.example.test", "")])
-    assert ok, "rc 2 with no msg is plain not-found"
-    ok, message = _getent_ran([_host_error("fe.example.test", 2, msg="[Errno 2] No such file or directory: 'getent'")])
-    assert not ok and "fe.example.test" in message and "No such file" in message
-    ok, message = _getent_ran([_host_error("fe.example.test", 1, stderr="resolver down")])
-    assert not ok and "rc=1" in message and "inventory problem" in message
+def test_the_lookup_is_the_getent_module_whose_host_faults_fail_the_task() -> None:
+    """A missing getent binary or a resolver fault must FAIL the task (host blamed), never reach the inventory assert.
 
-
-def test_the_lookup_runs_getent_with_argv_and_only_where_a_frontend_exists() -> None:
+    That holds only while the task is the getent module with fail_key false and nothing swallows its failure.
+    """
     task = _task("resolve the frontend trusted-proxy entries")
-    assert task["ansible.builtin.command"]["argv"][:2] == ["getent", "ahosts"]
+    assert task["ansible.builtin.getent"] == {"database": "ahosts", "key": "{{ item }}", "fail_key": False}
+    for swallowed in ("failed_when", "ignore_errors"):
+        assert swallowed not in task, f"{swallowed} would turn a host fault into an inventory finding"
     assert "frontend_slm_remote" in task["when"] and "groups['frontend']" in task["when"]
 
 
 def test_a_hostname_is_trusted_by_the_ip_it_resolves_to() -> None:
-    assert _resolved([_lookup("fe.example.test", _getent("192.0.2.50"))]) == "192.0.2.50"
-    assert _assert_holds("fe.example.test", [_lookup("fe.example.test", _getent("192.0.2.50"))])[0]
+    results = [_found("fe.example.test", "192.0.2.50")]
+    assert _resolved(results) == "192.0.2.50"
+    assert _assert_holds("fe.example.test", results)[0]
 
 
 def test_an_ipv6_frontend_is_accepted() -> None:
-    results = [_lookup("2001:db8::7", _getent("2001:db8::7")), _lookup("192.0.2.50", _getent("192.0.2.50"))]
+    results = [_found("2001:db8::7", "2001:db8::7"), _found("192.0.2.50", "192.0.2.50")]
     assert _resolved(results) == "2001:db8::7,192.0.2.50"
     assert _assert_holds("2001:db8::7,192.0.2.50", results)[0]
 
 
-def test_an_unresolvable_entry_fails_and_is_named() -> None:
-    results = [_lookup("192.0.2.50", _getent("192.0.2.50")), _lookup("gone.example.test", "")]
+def test_a_not_found_entry_reaches_the_inventory_assert_and_is_named() -> None:
+    """getent rc 2 succeeds with {entry: None} and a msg; the assert must fail naming exactly that entry."""
+    results = [_found("192.0.2.50", "192.0.2.50"), _not_found("gone.example.test")]
+    assert "msg" in results[1], "the real not-found result carries a msg, as the command module's did"
     ok, message = _assert_holds("192.0.2.50,gone.example.test", results)
     assert not ok
     assert "gone.example.test" in message and "192.0.2.50," not in message
+    assert _resolved(results) == "192.0.2.50", "an unresolved entry is never trusted"
 
 
 def test_a_dual_stack_multi_record_host_yields_each_address_once() -> None:
-    """Realistic `getent ahosts` output: every address repeated for STREAM, DGRAM and RAW, both families."""
-    out = (
-        "2001:db8::7     STREAM fe.example.test\n2001:db8::7     DGRAM  \n2001:db8::7     RAW    \n"
-        "192.0.2.50      STREAM \n192.0.2.50      DGRAM  \n192.0.2.50      RAW    \n"
-        "192.0.2.51      STREAM \n192.0.2.51      DGRAM  \n192.0.2.51      RAW    "
-    )
-    results = [_lookup("fe.example.test", out)]
+    """Realistic `getent ahosts` output: both families, STREAM/DGRAM/RAW triplicates; keys are the addresses."""
+    results = [_found("fe.example.test", "2001:db8::7", "192.0.2.50", "192.0.2.51")]
+    assert set(results[0]["ansible_facts"]["getent_ahosts"]) == {"2001:db8::7", "192.0.2.50", "192.0.2.51"}
     assert _resolved(results) == "2001:db8::7,192.0.2.50,192.0.2.51"
     assert _assert_holds("fe.example.test", results)[0]
 

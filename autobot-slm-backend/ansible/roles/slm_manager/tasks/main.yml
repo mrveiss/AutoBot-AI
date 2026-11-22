@@ -16,44 +16,34 @@
 
 # #19832: SLM_TRUSTED_PROXIES replaces the backend's built-in list, so a frontend that is missing
 # from it collapses every client into one login rate-limit bucket. The backend matches peer IPs,
-# so a frontend named by DNS is resolved here (getent ahosts: IPv4 and IPv6; an IP resolves to
-# itself) and the unit carries the addresses. An entry that does not resolve fails the run.
+# so a frontend named by DNS is resolved here and the unit carries the addresses.
+#
+# ansible.builtin.getent, not a raw command: its failure modes are distinct by construction. A
+# missing getent binary (get_bin_path required) or a resolver fault (getent rc 1 or 3) FAILS the task
+# with the module's own message, which blames the host. A name that is not in the database (getent
+# rc 2) is not a failure with fail_key: false; the module returns {<entry>: None}, which the assert
+# below names as an inventory problem. Keys of a found entry are the addresses (IPv4 and IPv6).
+# Do not add failed_when or ignore_errors here: that would blur the two again.
 - name: "SLM | #19832: resolve the frontend trusted-proxy entries to IP addresses"
-  ansible.builtin.command:
-    argv: ["getent", "ahosts", "{{ item }}"]
+  ansible.builtin.getent:
+    database: ahosts
+    key: "{{ item }}"
+    fail_key: false
   loop: "{{ slm_trusted_frontend_addrs.split(',') | select | list }}"
   register: _slm_frontend_lookup
-  changed_when: false
-  failed_when: false
-  check_mode: false  # read-only; under --check the items would otherwise carry no rc and every entry would fail
+  check_mode: false  # read-only
   when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
   tags: ['slm', 'backend', 'systemd', 'config']
 
-# getent exits 2 for "not found"; any other rc, or a task-level error (a missing binary also reports
-# rc 2 but carries `msg`), is the host or its resolver, not the inventory.
-- name: "SLM | #19832: assert getent itself ran"
-  ansible.builtin.assert:
-    that:
-      - _slm_frontend_lookup.results | selectattr('msg', 'defined') | list | length == 0
-      - _slm_frontend_lookup.results | rejectattr('rc', 'in', [0, 2]) | list | length == 0
-    fail_msg: >-
-      getent failed on the SLM host for a reason other than "not found" (a missing binary or a resolver
-      outage, not an inventory problem):
-      {% for r in _slm_frontend_lookup.results | default([]) if r.msg is defined or r.rc not in [0, 2] %}{{ r.item }}
-      (rc={{ r.rc | default('n/a') }}, {{ r.msg | default(r.stderr | default('')) }}){{ ', ' if not loop.last }}{% endfor %}
-    quiet: true
-  when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
-  tags: ['slm', 'backend', 'systemd', 'config']
-
-- name: "SLM | #19832: assert every frontend entry resolved, then trust the resolved addresses"
+- name: "SLM | #19832: assert every frontend entry resolved"
   ansible.builtin.assert:
     that:
       - slm_trusted_frontend_addrs | length > 0
-      - _slm_frontend_lookup.results | selectattr('rc', 'equalto', 2) | list | length == 0
+      - _slm_frontend_lookup.results | map(attribute='ansible_facts.getent_ahosts') | map('dict2items') | flatten | selectattr('value', 'none') | list | length == 0
     fail_msg: >-
       A frontend is deployed (frontend_slm_remote is true or the inventory has a `frontend` group)
       but these frontend entries did not resolve to an IP address on the SLM host:
-      {{ _slm_frontend_lookup.results | default([]) | selectattr('rc', 'equalto', 2) | map(attribute='item') | join(', ') }}.
+      {{ _slm_frontend_lookup.results | default([]) | map(attribute='ansible_facts.getent_ahosts') | map('dict2items') | flatten | selectattr('value', 'none') | map(attribute='key') | join(', ') }}.
       Set frontend_host or give every `frontend` group host an ansible_host (an IPv4 address, an IPv6
       address or a resolvable DNS name); otherwise the SLM sees all clients as one address.
     quiet: true
@@ -63,8 +53,8 @@
 - name: "SLM | #19832: trust the resolved frontend addresses"
   ansible.builtin.set_fact:
     slm_trusted_frontend_resolved: >-
-      {{ _slm_frontend_lookup.results | map(attribute='stdout_lines') | flatten
-         | map('regex_replace', ' .*$', '') | reject('equalto', '') | unique | join(',') }}
+      {{ _slm_frontend_lookup.results | map(attribute='ansible_facts.getent_ahosts') | map('dict2items') | flatten
+         | rejectattr('value', 'none') | map(attribute='key') | unique | join(',') }}
   when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
   tags: ['slm', 'backend', 'systemd', 'config']
 
