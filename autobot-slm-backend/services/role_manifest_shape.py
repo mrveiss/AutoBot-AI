@@ -24,10 +24,14 @@ NOT derived, and still declared only in ``role_registry.py``: ``display_name``, 
 
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Mapping, Tuple
 from urllib.parse import urlparse
 
 from models.manifest import RoleManifest, ServiceType
+from services.role_manifest_errors import MANIFEST_ERRORS
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_HTTPS_PORT = 443
 _DEFAULT_HTTP_PORT = 80
@@ -181,7 +185,11 @@ class RoleManifestMissingError(RuntimeError):
     """A role that declares no ``source_paths`` / ``target_path`` of its own resolved to no loaded manifest (#16025)."""
 
 
-def default_roles_for(static_roles: List[Dict], placeholders: Mapping[str, str] | None = None) -> List[Dict]:
+def default_roles_for(
+    static_roles: List[Dict],
+    placeholders: Mapping[str, str] | None = None,
+    degrade: bool = False,
+) -> List[Dict]:
     """Memoized ``role_registry.DEFAULT_ROLES``: static_roles, each manifest-augmented.
 
     A shallow ``dict(role)`` copy per entry -- ``apply_manifest_shape`` mutates
@@ -189,6 +197,10 @@ def default_roles_for(static_roles: List[Dict], placeholders: Mapping[str, str] 
     Cached process-wide per placeholder set: manifest loading is file I/O. A build that raises
     (a manifest-backed role with no loaded manifest) caches nothing, and nothing is cached from an
     empty manifest set, so a failed early load is retried rather than served forever.
+
+    ``degrade`` (#22067): a role that cannot resolve is left out and logged, and its message is recorded in
+    ``MANIFEST_ERRORS`` (read by /api/health and the deploy refusals), instead of the whole build raising.
+    The caller is the import of the SLM, which must come up degraded rather than not at all.
     """
     key = tuple(sorted((placeholders or {}).items()))
     if key in _default_roles_cache:
@@ -196,8 +208,20 @@ def default_roles_for(static_roles: List[Dict], placeholders: Mapping[str, str] 
     from services.manifest_loader import get_manifest_loader
 
     manifests = get_manifest_loader().load_all()
-    roles = [apply_manifest_shape(dict(role), manifests, placeholders) for role in static_roles]
-    if manifests:
+    errors: Dict[str, str] = {}
+    roles = []
+    for role in static_roles:
+        try:
+            roles.append(apply_manifest_shape(dict(role), manifests, placeholders))
+        except RoleManifestMissingError as exc:
+            if not degrade:
+                raise
+            logger.error("Role %s is unavailable, its manifest did not resolve: %s", role["name"], exc)
+            errors[role["name"]] = str(exc)
+    if degrade:
+        MANIFEST_ERRORS.clear()
+        MANIFEST_ERRORS.update(errors)
+    if manifests and not errors:
         _default_roles_cache[key] = roles
     return roles
 
