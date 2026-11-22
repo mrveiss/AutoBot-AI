@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // #18432: app glue for the schedule picker.
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 import { routineSpec, schedulePayload } from '../useSchedule'
 

@@ -97,7 +97,7 @@ class MessagePriority(Enum):
     CRITICAL = 4
 
 
-class CommunicationPattern(Enum):
+class AgentCommunicationPattern(Enum):
     """Communication patterns between agents"""
 
     SYNCHRONOUS = "sync"  # Direct call with immediate response
@@ -117,7 +117,7 @@ class AgentIdentity:
     instance_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     version: str = "1.0.0"
     capabilities: List[str] = field(default_factory=list)
-    supported_patterns: List[CommunicationPattern] = field(default_factory=list)
+    supported_patterns: List[AgentCommunicationPattern] = field(default_factory=list)
     health_status: str = "healthy"
     last_heartbeat: float = field(default_factory=time.time)
     # #16947: additive shared-identity fields (design on #16946) -- every existing caller is unaffected.

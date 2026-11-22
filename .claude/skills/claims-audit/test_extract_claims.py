@@ -4,19 +4,14 @@
 """Unit tests for claim extraction."""
 
 import json
+import re
 import tempfile
 from pathlib import Path
 
-# Loaded by path, not by name: `extract-claims.py` is not a Python identifier,
-# so no import statement can name it. spec_from_file_location does not consult
-# sys.path and does not depend on what collected first, which is what makes it
-# the right loader here rather than a shim (#14986).
-import importlib.util
-
-spec = importlib.util.spec_from_file_location("extract_claims", Path(__file__).parent / "extract-claims.py")
-extract_claims_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(extract_claims_module)
-ClaimExtractor = extract_claims_module.ClaimExtractor
+# `extract_claims` resolves through pytest.ini's `pythonpath`, like the other
+# claims-audit modules (#14986). It was `extract-claims.py`, which no import
+# statement could name, until the skill moved to one naming style (#20805).
+from extract_claims import ClaimExtractor
 
 
 def test_infrastructure_patterns():
@@ -142,9 +137,8 @@ def test_feature_patterns():
             found = any(
                 c["type"] == expected_type and expected_match.lower() in c["matched_text"].lower() for c in claims
             )
-            assert (
-                found
-            ), f"Expected match '{expected_match}' of type '{expected_type}' not found in claims: {[{'type': c['type'], 'matched': c['matched_text']} for c in claims]}"
+            seen = [{"type": c["type"], "matched": c["matched_text"]} for c in claims]
+            assert found, f"Expected match '{expected_match}' of type '{expected_type}' not found in claims: {seen}"
 
     print("✓ Feature pattern tests passed")
 
@@ -204,9 +198,8 @@ def test_api_patterns():
             found = any(
                 c["type"] == expected_type and expected_match.lower() in c["matched_text"].lower() for c in claims
             )
-            assert (
-                found
-            ), f"Expected match '{expected_match}' of type '{expected_type}' not found in claims: {[{'type': c['type'], 'matched': c['matched_text']} for c in claims]}"
+            seen = [{"type": c["type"], "matched": c["matched_text"]} for c in claims]
+            assert found, f"Expected match '{expected_match}' of type '{expected_type}' not found in claims: {seen}"
 
     print("✓ API pattern tests passed")
 
@@ -266,9 +259,8 @@ def test_architecture_patterns():
             found = any(
                 c["type"] == expected_type and expected_match.lower() in c["matched_text"].lower() for c in claims
             )
-            assert (
-                found
-            ), f"Expected match '{expected_match}' of type '{expected_type}' not found in claims: {[{'type': c['type'], 'matched': c['matched_text']} for c in claims]}"
+            seen = [{"type": c["type"], "matched": c["matched_text"]} for c in claims]
+            assert found, f"Expected match '{expected_match}' of type '{expected_type}' not found in claims: {seen}"
 
     print("✓ Architecture pattern tests passed")
 
@@ -328,6 +320,76 @@ def test_deduplication():
         assert len(unique) == 2, f"Expected 2 unique claims, got {len(unique)}"
 
     print("✓ Deduplication tests passed")
+
+
+_PATTERNS_DIR = Path(__file__).parent / "patterns"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+# Overlapping matches, URLs, badges, code blocks, short headers, short matches
+# and lines no pattern matches -- every branch the extraction loop takes.
+_SAMPLE_DOC = """# Title
+The backend uses Redis and PostgreSQL on port 8001 with 4 uvicorn workers.
+See https://example.com/api/v1/redis for the REST API docs.
+[docs](https://example.com/redis)
+https://example.com/only-a-url
+![build](https://example.com/badge.svg)
+```
+Redis inside a code block is ignored
+```
+GET /api/users returns JSON with a JWT token; integrates with Ollama.
+Supports streaming voice and multi-modal input via WebSocket.
+The control plane runs separate from autobot-backend as an async event bus.
+Nothing to see on this line at all.
+## A header that is long enough to be scanned, mentioning Docker and Kubernetes and Ansible too
+"""
+
+
+def _reference_extract(extractor, file_path):
+    """The extraction loop as it was before #20805: per-line recompiling scan."""
+    claims, in_code_block = [], False
+    for line_num, line in enumerate(file_path.read_text(encoding="utf-8").split("\n"), start=1):
+        if line.strip().startswith("```"):
+            in_code_block = not in_code_block
+            continue
+        stripped = line.strip()
+        if in_code_block or not stripped:
+            continue
+        if extractor._is_url_line(line) or extractor._is_badge_line(line):
+            continue
+        if stripped.startswith("#") and len(stripped) < 100:
+            continue
+        for category, pattern_data in extractor.patterns.items():
+            for pattern_def in pattern_data.get("patterns", []):
+                for match in re.finditer(pattern_def["pattern"], line, re.IGNORECASE):
+                    urls = re.finditer(r"https?://[^\s\)]+", line)
+                    if any(u.start() <= match.start() < u.end() for u in urls):
+                        continue
+                    if len(match.group(0).strip()) < 2:
+                        continue
+                    claims.append(extractor._claim(category, pattern_def, line, match, line_num, file_path))
+    return claims
+
+
+def test_compiled_scan_matches_the_reference_scan():
+    """The precompiled, prefiltered scan yields exactly the old claims, in order (#20805)."""
+    extractor = ClaimExtractor(_PATTERNS_DIR, _REPO_ROOT)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sample = Path(tmpdir) / "sample.md"
+        sample.write_text(_SAMPLE_DOC, encoding="utf-8")
+        expected = _reference_extract(extractor, sample)
+        assert len(expected) > 20, "control: the sample must exercise many patterns"
+        assert extractor.extract_from_file(sample) == expected
+    for doc in (_REPO_ROOT / "README.md", _REPO_ROOT / "CLAUDE.md"):
+        if doc.exists():
+            assert extractor.extract_from_file(doc) == _reference_extract(extractor, doc), doc
+
+
+def test_a_line_no_pattern_matches_yields_no_claims():
+    """The combined prefilter skips a line only when no single pattern matches it."""
+    extractor = ClaimExtractor(_PATTERNS_DIR)
+    line = "Nothing to see on this line at all."
+    assert not any(regex.search(line) for _, _, regex in extractor._compiled)
+    assert extractor._claims_in_line(line, 1, Path("x.md")) == []
 
 
 if __name__ == "__main__":

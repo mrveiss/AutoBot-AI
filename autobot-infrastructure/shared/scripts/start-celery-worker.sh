@@ -58,38 +58,15 @@ if [ -f ".env" ]; then
     set +a
 fi
 
-# Set default Celery configuration if not in .env
-# Redis password must be URL-encoded if present
-REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
-REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
-REDIS_PASSWORD="${AUTOBOT_REDIS_PASSWORD:-}"
-# #16626: optional ACL username; empty keeps the password-only AUTH
-REDIS_USERNAME="${AUTOBOT_REDIS_USERNAME:-}"
-# DB numbers from env vars — defaults match redis-databases.yaml SSOT (#2670)
-CELERY_BROKER_DB="${AUTOBOT_REDIS_DB_CELERY_BROKER:-14}"
-CELERY_RESULTS_DB="${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}"
-
-if [ -n "$REDIS_PASSWORD" ]; then
-    # URL-encode the password (handle +, /, =, etc.)
-    ENCODED_PASSWORD=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$REDIS_PASSWORD', safe=''))")
-    # Passed through the environment, not interpolated into the Python source
-    ENCODED_USERNAME=$(REDIS_USERNAME="$REDIS_USERNAME" python3 -c "import os, urllib.parse; print(urllib.parse.quote(os.environ['REDIS_USERNAME'], safe=''))")
-    # An empty username renders ":<password>", today's password-only form
-    USERINFO="${ENCODED_USERNAME}:${ENCODED_PASSWORD}"
-    DEFAULT_BROKER="redis://${USERINFO}@${REDIS_HOST}:${REDIS_PORT}/${CELERY_BROKER_DB}"
-    DEFAULT_BACKEND="redis://${USERINFO}@${REDIS_HOST}:${REDIS_PORT}/${CELERY_RESULTS_DB}"
-else
-    DEFAULT_BROKER="redis://${REDIS_HOST}:${REDIS_PORT}/${CELERY_BROKER_DB}"
-    DEFAULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/${CELERY_RESULTS_DB}"
-fi
-
-export CELERY_BROKER_URL="${CELERY_BROKER_URL:-$DEFAULT_BROKER}"
-export CELERY_RESULT_BACKEND="${CELERY_RESULT_BACKEND:-$DEFAULT_BACKEND}"
+# Broker and result backend: celery_app builds both from the ONE Redis endpoint
+# resolver and the ONE database table (redis-databases.yaml + AUTOBOT_REDIS_DB_*),
+# #19232. This script used to compose its own URLs with 14/15 literal defaults --
+# a second resolution path -- and echoed them, password included. An explicit
+# CELERY_BROKER_URL / CELERY_RESULT_BACKEND in the environment still wins there.
 export ANSIBLE_PRIVATE_DATA_DIR="${ANSIBLE_PRIVATE_DATA_DIR:-/tmp/ansible-runner}"
 
 echo "[3/4] Celery configuration:"
-echo "  Broker: $CELERY_BROKER_URL"
-echo "  Result Backend: $CELERY_RESULT_BACKEND"
+echo "  Broker / Result Backend: resolved by celery_app (redis-databases.yaml, #19232)"
 echo "  Ansible Data Dir: $ANSIBLE_PRIVATE_DATA_DIR"
 echo ""
 

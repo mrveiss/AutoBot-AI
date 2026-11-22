@@ -659,7 +659,7 @@ export function useInterval(
  *       return await fetch(url)
  *     } catch (error) {
  *       if (i < retries - 1) {
- *         await useSleep(1000 * Math.pow(2, i)) // Exponential backoff
+ *         await useSleep(backoffDelay(i, { base: 1000 })) // @autobot/ui (#15402)
  *       }
  *     }
  *   }

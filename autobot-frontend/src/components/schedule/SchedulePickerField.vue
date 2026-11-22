@@ -16,6 +16,8 @@ defineProps<{
   modelValue: ScheduleSpec | null
   /** The company's IANA zone, once the company record carries one. */
   companyTimezone?: string
+  /** Zones the consumer can actually run (kit `timezones`); default every zone. */
+  timezones?: readonly string[]
 }>()
 const emit = defineEmits<{
   'update:modelValue': [spec: ScheduleSpec]
@@ -32,6 +34,7 @@ const { translate, locale } = useScheduleI18n()
     :locale="locale"
     :company-timezone="companyTimezone"
     :default-timezone="companyTimezone ?? 'UTC'"
+    :timezones="timezones"
     @update:model-value="emit('update:modelValue', $event)"
     @update:valid="emit('update:valid', $event)"
   />

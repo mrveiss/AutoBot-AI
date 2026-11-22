@@ -153,3 +153,64 @@ class TestReturnDictPhoneMasking:
         result = await whatsapp_integration.check_opt_in_status({"phone_number": "+1234567890"})
         assert result["phone_number"] == "***7890"
         assert "+1234567890" not in str(result)
+
+
+class TestSendTemplateMessage:
+    """Characterization of send_template_message (#21924): payload and result shapes."""
+
+    @pytest.mark.asyncio
+    async def test_success_builds_payload_with_components(self, whatsapp_integration):
+        whatsapp_integration.check_opt_in_status = AsyncMock(return_value={"opted_in": True})
+        whatsapp_integration._make_request = AsyncMock(
+            return_value={"status_code": 200, "body": {"messages": [{"id": "wamid.tpl1"}]}}
+        )
+        components = [{"type": "body", "parameters": [{"type": "text", "text": "x"}]}]
+
+        result = await whatsapp_integration.send_template_message(
+            {"to": "+1234567890", "template_name": "welcome", "language_code": "lv", "components": components}
+        )
+
+        assert result == {"ok": True, "message_id": "wamid.tpl1", "to": "***7890", "template_name": "welcome"}
+        kwargs = whatsapp_integration._make_request.call_args.kwargs
+        assert kwargs["json_data"] == {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": "+1234567890",
+            "type": "template",
+            "template": {"name": "welcome", "language": {"code": "lv"}, "components": components},
+        }
+        assert kwargs["headers"]["Content-Type"] == "application/json"
+
+    @pytest.mark.asyncio
+    async def test_default_language_and_no_components_key(self, whatsapp_integration):
+        whatsapp_integration.check_opt_in_status = AsyncMock(return_value={"opted_in": True})
+        whatsapp_integration._make_request = AsyncMock(
+            return_value={"status_code": 200, "body": {"messages": [{"id": "m"}]}}
+        )
+        await whatsapp_integration.send_template_message({"to": "+1234567890", "template_name": "t"})
+        template = whatsapp_integration._make_request.call_args.kwargs["json_data"]["template"]
+        assert template == {"name": "t", "language": {"code": "en"}}
+
+    @pytest.mark.asyncio
+    async def test_not_opted_in_skips_request(self, whatsapp_integration):
+        whatsapp_integration.check_opt_in_status = AsyncMock(return_value={"opted_in": False})
+        whatsapp_integration._make_request = AsyncMock()
+        result = await whatsapp_integration.send_template_message({"to": "+1234567890", "template_name": "t"})
+        assert result == {"ok": False, "error": "recipient_not_opted_in", "to": "***7890"}
+        whatsapp_integration._make_request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_api_error_and_exception_paths(self, whatsapp_integration):
+        whatsapp_integration.check_opt_in_status = AsyncMock(return_value={"opted_in": True})
+        whatsapp_integration._make_request = AsyncMock(
+            return_value={"status_code": 400, "body": {"error": {"message": "bad template"}}}
+        )
+        result = await whatsapp_integration.send_template_message({"to": "+1234567890", "template_name": "t"})
+        assert result == {"ok": False, "error": "bad template", "to": "***7890"}
+
+        whatsapp_integration._make_request = AsyncMock(return_value={"status_code": 500})
+        result = await whatsapp_integration.send_template_message({"to": "+1234567890", "template_name": "t"})
+        assert result["error"] == "Unknown error"
+
+        result = await whatsapp_integration.send_template_message({"to": "+1234567890"})
+        assert result["ok"] is False and result["error"] == "'template_name'" and result["to"] == "***7890"

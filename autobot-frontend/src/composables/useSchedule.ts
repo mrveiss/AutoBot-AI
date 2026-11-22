@@ -20,6 +20,13 @@ import {
 } from '@autobot/ui'
 
 /**
+ * Zones a routine can run in: the routine API stores only `cron_schedule` and the
+ * scheduler evaluates it in UTC, so UTC until the zone is persisted end to end
+ * (#18432's backend half).
+ */
+export const ROUTINE_ZONES = ['UTC'] as const
+
+/**
  * Existing routines carry a bare cron string that the scheduler evaluates in
  * UTC today — it is read as {cron, UTC}, NOT the company zone, so nothing
  * silently shifts. A stored spec, once the backend provides one, wins.

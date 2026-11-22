@@ -165,8 +165,12 @@ SCRUB_HELPER = "scrubbed_git_env"
 #: strictly safer than one passing ``scrubbed_git_env``.
 STRICT_SCRUB_HELPER = "strict_git_env"
 
-#: Both spellings a call may pass, and both a local wrapper may be built from.
-SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER})
+#: ``autobot_shared.isolated_git.isolated_git_env`` -- the scrub plus the global/system config cut-off
+#: for throwaway-repo fixtures (#18940). Built on :func:`scrubbed_git_env`, so accepted equally.
+ISOLATED_SCRUB_HELPER = "isolated_git_env"
+
+#: Every spelling a call may pass, and every one a local wrapper may be built from.
+SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER, ISOLATED_SCRUB_HELPER})
 
 #: The shell-side equivalent, ``scripts/lib/git-root.sh``'s function of the
 #: same shape (#15245). A ``.sh`` line naming this is read as scrubbed even
@@ -228,6 +232,8 @@ INHERITED_ENV_MESSAGE = (
 
 from _git_scrub_allowlist import ALLOWLIST  # noqa: E402
 
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+
 
 def subprocess_names(tree: ast.AST) -> Tuple[Set[str], Set[str]]:
     """``(module aliases, directly imported entry points)`` bound in *tree*.
@@ -288,8 +294,7 @@ def is_production_path(rel: str) -> bool:
     code has no reason to inherit a git environment it never set. Production is
     also where all four recurrences landed with nothing watching.
     """
-    name = rel.rsplit("/", 1)[-1]
-    if name.endswith("_test.py") or name.startswith("test_"):
+    if is_test_filename(rel, include_js=False, include_conftest=False):
         return rel == "scripts/test_first_remediation.py"  # real tool, no fixture (#16179)
     return "/tests/" not in f"/{rel}"
 

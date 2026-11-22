@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 _REPO_ROOT = repo_root()
 _INSTALLER = _REPO_ROOT / "scripts" / "install-git-hooks.sh"
@@ -39,11 +39,9 @@ _MANAGED = ("pre-commit", "pre-push", "commit-msg")
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
-    """#15246: env scrubbed -- an inherited GIT_DIR would point these calls,
-    including `worktree add`/`worktree remove`, at the real repository
-    instead of the throwaway one under tmp_path.
-    """
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, env=scrubbed_git_env())
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would point these calls at
+    the real repository instead of the throwaway one under tmp_path."""
+    return git(cwd, *args, check=True)
 
 
 def _seed_repo(tmp_path: Path) -> Path:
@@ -55,9 +53,7 @@ def _seed_repo(tmp_path: Path) -> Path:
         target = repo / "tools" / "git-hooks" / name
         target.write_bytes((_TEMPLATES / name).read_bytes())
     (repo / "scripts" / "install-git-hooks.sh").write_bytes(_INSTALLER.read_bytes())
-    _git(repo.parent, "init", "--quiet", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
+    make_repo(repo)
     _git(repo, "add", "-A")
     _git(repo, "commit", "--quiet", "--no-verify", "-m", "seed")
     return repo
@@ -154,7 +150,7 @@ def _hooks_path_values(repo: Path) -> list[str]:
         cwd=repo,
         capture_output=True,
         text=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     return [line for line in result.stdout.splitlines() if line.strip()]
 
@@ -209,3 +205,23 @@ def test_the_hooks_still_land_when_a_hooks_path_was_removed(seeded: Path) -> Non
         installed = seeded / ".git" / "hooks" / name
         assert installed.is_file(), f"{name} was not installed"
         assert os.access(installed, os.X_OK), f"{name} is not executable"
+
+
+def test_a_reinstall_replaces_the_hook_by_rename_so_a_running_shell_keeps_its_file(seeded: Path) -> None:
+    """#18921: another worktree's push may be executing the shared hook during a reinstall.
+
+    An in-place write keeps the inode and changes the bytes under that shell; a rename gives
+    the path a new inode while an already-open handle keeps reading the old content.
+    """
+    hook = seeded / ".git" / "hooks" / "pre-push"
+    assert _install_from(seeded, seeded).returncode == 0
+    with hook.open("rb") as running:
+        old_bytes, old_inode = running.read(), os.fstat(running.fileno()).st_ino
+        template = seeded / "tools" / "git-hooks" / "pre-push"
+        template.write_bytes(template.read_bytes() + b"\n# a newer revision of the hook\n")
+        assert _install_from(seeded, seeded).returncode == 0
+        running.seek(0)
+        assert running.read() == old_bytes, "the running shell's file changed under it"
+    assert hook.stat().st_ino != old_inode, "the hook was rewritten in place, not replaced"
+    assert hook.read_bytes().endswith(b"# a newer revision of the hook\n")
+    assert not (hook.parent / "pre-push.new").exists(), "the temp file was left behind"

@@ -13,7 +13,7 @@ Endpoints:
 - GET /api/service-messages/chain/{correlation_id} — full correlation chain
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from api.schemas_system import (
     CorrelationChainResponse,
@@ -21,51 +21,20 @@ from api.schemas_system import (
     ServiceMessageResponse,
     SingleMessageResponse,
 )
-from auth_middleware import get_auth_middleware
-from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.message_bus import get_message_bus
-from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
+from security.human_admin import HUMAN_ADMIN_DEPENDENCIES
+from utils.catalog_http_exceptions import raise_server_error
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/service-messages", tags=["service-messages"])
+router = APIRouter(prefix="/service-messages", tags=["service-messages"], dependencies=HUMAN_ADMIN_DEPENDENCIES)
 
 
 # ------------------------------------------------------------------
 # Response models
 # ------------------------------------------------------------------
-
-
-# ------------------------------------------------------------------
-# Auth helper
-# ------------------------------------------------------------------
-
-
-def _check_admin(request: Request) -> bool:
-    """Require admin role for service-message access."""
-    try:
-        user_data = get_auth_middleware().get_user_from_request(request)
-        if not user_data:
-            raise_auth_error(
-                "AUTH_0002",
-                "Authentication required for service message access",
-            )
-        user_role = user_data.get("role")
-        if not user_role:
-            raise_auth_error("AUTH_0002", "User role not assigned - access denied")
-        if not is_admin_role(user_role):
-            raise_auth_error(
-                "AUTH_0003",
-                "Admin permission required for service message access",
-            )
-        return True
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Permission check failed: %s", e)
-        raise_server_error("API_0003", "Permission check error")
 
 
 def _msg_to_response(msg) -> ServiceMessageResponse:
@@ -99,7 +68,6 @@ async def get_latest_messages(
     sender: str | None = Query(None, description="Filter by sender"),
     receiver: str | None = Query(None, description="Filter by receiver"),
     msg_type: str | None = Query(None, description="Filter by type"),
-    _admin: bool = Depends(_check_admin),
 ):
     """Return the most recent cross-service messages.
 
@@ -134,7 +102,6 @@ async def get_latest_messages(
 async def get_correlation_chain(
     request: Request,
     correlation_id: str,
-    _admin: bool = Depends(_check_admin),
 ):
     """Return all messages sharing a correlation ID, sorted by timestamp.
 
@@ -169,7 +136,6 @@ async def get_correlation_chain(
 async def get_message(
     request: Request,
     msg_id: str,
-    _admin: bool = Depends(_check_admin),
 ):
     """Return a single service message by its ID."""
     try:

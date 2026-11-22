@@ -44,6 +44,7 @@ import pytest
 
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_memory_graph.core import AutoBotMemoryGraphCore
+from autobot_memory_graph.owner_scope import OwnerScope
 
 _ENTITIES = Path(__file__).with_name("entities.py")
 _CORE = Path(__file__).with_name("core.py")
@@ -134,6 +135,7 @@ async def test_create_entity_completes_without_attributeerror() -> None:
         entity_type="DECISION",
         name="ZZPROBE",
         observations=["probe"],
+        owner=OwnerScope.for_user("user-a"),
     )
     assert entity["name"] == "ZZPROBE"
     assert entity["type"] == "DECISION"
@@ -147,7 +149,9 @@ async def test_the_redis_write_and_the_return_now_agree() -> None:
     skipped the write, so the write is asserted to have happened too.
     """
     graph = _graph_without_hand_fed_state()
-    await graph.create_entity(entity_type="DECISION", name="ZZPROBE2", observations=["probe"])
+    await graph.create_entity(
+        entity_type="DECISION", name="ZZPROBE2", observations=["probe"], owner=OwnerScope.for_user("user-a")
+    )
     graph.redis_client.json().set.assert_awaited()
 
 
@@ -163,7 +167,9 @@ async def test_the_property_graph_mirror_runs_and_carries_name_and_type() -> Non
     reproduces the original symptom exactly.
     """
     graph = _graph_without_hand_fed_state()
-    await graph.create_entity(entity_type="DECISION", name="ZZPROBE3", observations=["probe"])
+    await graph.create_entity(
+        entity_type="DECISION", name="ZZPROBE3", observations=["probe"], owner=OwnerScope.for_user("user-a")
+    )
 
     graph._property_graph.add_node.assert_awaited()
     props = graph._property_graph.add_node.await_args.kwargs.get("properties")

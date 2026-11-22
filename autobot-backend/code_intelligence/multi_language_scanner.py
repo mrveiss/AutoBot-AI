@@ -175,23 +175,9 @@ class CodebaseScanner:
             root_path = Path.cwd()
 
         # Default exclusions for the AutoBot project
-        default_excludes = [
-            "**/node_modules/**",
-            "**/__pycache__/**",
-            "**/.venv/**",
-            "**/venv/**",
-            "**/.git/**",
-            "**/dist/**",
-            "**/build/**",
-            "**/*.min.js",
-            "**/*.min.css",
-            "**/coverage/**",
-            "**/.pytest_cache/**",
-            "**/.mypy_cache/**",
-            "**/htmlcov/**",
-            "**/logs/**",
-            "**/backups/**",
-        ]
+        # Directory names in ``SKIP_DIRS`` and minified bundles are already
+        # excluded by discovery (#21004); only the log tree is project-specific.
+        default_excludes = ["**/logs/**"]
 
         all_excludes = default_excludes + (exclude_patterns or [])
 
@@ -337,7 +323,7 @@ def scan_directory(directory: str, recursive: bool = True) -> MultiLangResult:
     return scanner.scan_directory(Path(directory), recursive=recursive)
 
 
-def scan_codebase(root_path: str | None = None) -> MultiLangResult:
+def scan_multilang_codebase(root_path: str | None = None) -> MultiLangResult:
     """Quick scan the entire codebase.
 
     Args:

@@ -2,38 +2,48 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""CommentWakeService — triggers agent heartbeat runs on work item comments (GH#9624).
+"""CommentWakeService — a comment on a work item wakes its assignee (GH#9624, #19582).
 
-When a comment is added to a work item:
-1. Check if assignee is a claude_code agent
-2. Check if no run is currently active for that agent
-3. Build wake payload with comment context
-4. Create heartbeat run with WORK_ITEM_COMMENTED source
-5. Dispatch adapter with wake_reason and wake_comment_id in context
+The comment-specific rules live here; the wake itself is the one dispatcher,
+``llc.scheduler.event_wake.wake_agent``:
 
-Dedup guard: only trigger if no RUNNING or QUEUED run exists for the agent.
+1. The work item has an agent assignee (in the comment's company).
+2. The commenter is not that assignee (an agent's own comment never wakes it).
+3. The wake carries the comment as context and ``work_item_commented`` as its reason.
+
+Whether the agent is woken at all -- its status, an already active run, its adapter --
+is the dispatcher's decision. #19582 removed the two gates this service had of its own:
+``adapter_type == "claude_code"`` (which skipped every NULL-adapter, in-process agent)
+and ``heartbeat_enabled`` (which gates only the periodic tick).
 """
 
-import logging
 import uuid
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.agent_org import AgentOrgNode
+from autobot_shared.logging_manager import get_logger
 
-from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
-from ..models.heartbeat_run import LLCHeartbeatRun
+from ..models.enums import HeartbeatInvocationSource
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-_ACTIVE_RUN_STATUSES = {LLCRunStatus.QUEUED.value, LLCRunStatus.RUNNING.value}
+
+def _comment_context(comment: LLCWorkItemComment) -> Dict[str, Any]:
+    return {
+        "wake_comment_id": str(comment.id),
+        "work_item_id": str(comment.work_item_id),
+        "comment_body": comment.body,
+        "comment_author_agent_id": str(comment.author_agent_id) if comment.author_agent_id else None,
+        "comment_author_user_id": str(comment.author_user_id) if comment.author_user_id else None,
+        "comment_created_at": comment.created_at.isoformat() if comment.created_at else None,
+    }
 
 
 class CommentWakeService:
-    """Service to trigger agent wakes when work item comments are added."""
+    """Wakes a work item's agent assignee when someone else comments on it."""
 
     async def trigger_comment_wake(
         self,
@@ -41,132 +51,39 @@ class CommentWakeService:
         work_item_id: str,
         comment_id: str,
     ) -> Optional[uuid.UUID]:
-        """Trigger a heartbeat run for the work item's assignee if applicable.
-
-        Returns:
-            The created run ID if a wake was triggered, None otherwise.
-        """
-        # Fetch work item and assignee info
+        """Wake for the comment *comment_id*; the created run's id, or ``None``."""
         result = await session.execute(
-            select(LLCWorkItem.assignee_agent_id, LLCWorkItem.company_id).where(
-                LLCWorkItem.id == uuid.UUID(work_item_id)
+            select(LLCWorkItemComment).where(
+                LLCWorkItemComment.id == uuid.UUID(str(comment_id)),
+                LLCWorkItemComment.work_item_id == uuid.UUID(str(work_item_id)),
             )
         )
-        row = result.first()
-        if not row or not row.assignee_agent_id:
-            logger.debug("Work item %s has no agent assignee — skipping comment wake", work_item_id)
+        comment = result.scalar_one_or_none()
+        if comment is None:
+            logger.warning("Comment %s not found on work item %s — no comment wake", comment_id, work_item_id)
             return None
+        return await self.wake_for_comment(session, comment)
 
-        # GH#10032: assignee_agent_id is the AgentOrgNode UUID PK. Resolve the
-        # node by PK (via the ORM, so the UUID binds correctly across dialects)
-        # and use its agent_id slug — the keyspace heartbeat runs / scheduler
-        # dispatch are keyed on (LLCHeartbeatRun.agent_id).
-        assignee_node_pk = row.assignee_agent_id
-        company_id = row.company_id
+    async def wake_for_comment(self, session: AsyncSession, comment: LLCWorkItemComment) -> Optional[uuid.UUID]:
+        """Wake the assignee of *comment*'s work item unless it wrote the comment."""
+        from ..scheduler.event_wake import wake_agent
 
-        # Check if assignee is a claude_code agent
-        agent_result = await session.execute(
-            select(
-                AgentOrgNode.agent_id,
-                AgentOrgNode.adapter_type,
-                AgentOrgNode.adapter_config,
-                AgentOrgNode.context_mode,
-                AgentOrgNode.heartbeat_enabled,
-                AgentOrgNode.org_role,
-            ).where(AgentOrgNode.id == assignee_node_pk)
-        )
-        agent_row = agent_result.mappings().first()
-        if not agent_row:
-            logger.debug("Agent node %s not found — skipping comment wake", assignee_node_pk)
-            return None
-
-        agent_slug = agent_row.get("agent_id")
-
-        adapter_type = agent_row.get("adapter_type")
-        if adapter_type != "claude_code":
-            logger.debug(
-                "Agent %s adapter type is %s (not claude_code) — skipping comment wake",
-                agent_slug,
-                adapter_type,
-            )
-            return None
-
-        if not agent_row.get("heartbeat_enabled"):
-            logger.debug("Agent %s heartbeat disabled — skipping comment wake", agent_slug)
-            return None
-
-        # Dedup: check for active runs
-        active_run = await self._find_active_run(session, agent_slug)
-        if active_run:
-            logger.info(
-                "Agent %s already has active run %s — queuing comment %s for next heartbeat",
-                agent_slug,
-                active_run.id,
-                comment_id,
-            )
-            return None
-
-        # Fetch comment body for context
-        comment_result = await session.execute(
-            select(LLCWorkItemComment).where(LLCWorkItemComment.id == uuid.UUID(comment_id))
-        )
-        comment = comment_result.scalar_one_or_none()
-        if not comment:
-            logger.warning("Comment %s not found — cannot build wake context", comment_id)
-            return None
-
-        # Build wake context
-        context = {
-            "wake_reason": "work_item_commented",
-            "wake_comment_id": comment_id,
-            "work_item_id": work_item_id,
-            "comment_body": comment.body,
-            "comment_author_agent_id": str(comment.author_agent_id) if comment.author_agent_id else None,
-            "comment_author_user_id": str(comment.author_user_id) if comment.author_user_id else None,
-            "comment_created_at": comment.created_at.isoformat() if comment.created_at else None,
-        }
-
-        # Create heartbeat run
-        run = LLCHeartbeatRun(
-            id=uuid.uuid4(),
-            company_id=company_id,
-            agent_id=agent_slug,
-            invocation_source=HeartbeatInvocationSource.WORK_ITEM_COMMENTED.value,
-            status=LLCRunStatus.QUEUED.value,
-            context_snapshot=context,
-        )
-        session.add(run)
-        await session.flush()
-
-        logger.info(
-            "Created comment-triggered run %s for agent %s (work_item=%s, comment=%s)",
-            run.id,
-            agent_slug,
-            work_item_id,
-            comment_id,
-        )
-
-        # Build agent config for dispatch
-        agent_config = {
-            "agent_id": agent_slug,
-            "adapter_type": adapter_type,
-            "adapter_config": agent_row.get("adapter_config") or {},
-            "context_mode": agent_row.get("context_mode"),
-            "company_id": str(company_id),
-            # #16950: the dispatch bounds the run by this role, and refuses it without one.
-            "org_role": agent_row.get("org_role"),
-        }
-
-        return run.id, agent_config, context
-
-    async def _find_active_run(self, session: AsyncSession, agent_id: str) -> Optional[LLCHeartbeatRun]:
-        """Find any QUEUED or RUNNING run for the given agent."""
         result = await session.execute(
-            select(LLCHeartbeatRun)
-            .where(
-                LLCHeartbeatRun.agent_id == agent_id,
-                LLCHeartbeatRun.status.in_(_ACTIVE_RUN_STATUSES),
+            select(LLCWorkItem.assignee_agent_id).where(
+                LLCWorkItem.id == comment.work_item_id, LLCWorkItem.company_id == comment.company_id
             )
-            .limit(1)
         )
-        return result.scalar_one_or_none()
+        assignee = result.scalar_one_or_none()
+        if assignee is None:
+            logger.debug("Work item %s has no agent assignee — no comment wake", comment.work_item_id)
+            return None
+        if comment.author_agent_id is not None and comment.author_agent_id == assignee:
+            logger.debug("Comment %s is the assignee's own — no comment wake", comment.id)
+            return None
+        return await wake_agent(
+            session,
+            company_id=comment.company_id,
+            agent_ref=assignee,
+            reason=HeartbeatInvocationSource.WORK_ITEM_COMMENTED,
+            context=_comment_context(comment),
+        )

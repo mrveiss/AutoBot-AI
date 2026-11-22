@@ -115,7 +115,7 @@ const {
   align-items: center;
   gap: var(--spacing-3);
   padding: var(--spacing-4);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
@@ -228,8 +228,9 @@ const {
   opacity: 1;
 }
 
-.preview-overlay i {
-  font-size: var(--text-2xl);
+.preview-overlay .icon {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 /* Actions */
@@ -261,7 +262,7 @@ const {
 }
 
 .btn-vnc {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 

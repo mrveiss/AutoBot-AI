@@ -246,3 +246,14 @@ describe('SchedulePicker expert mode', () => {
     expect(w.emitted('update:modelValue')?.length ?? 0).toBe(before)
   })
 })
+
+describe('timezones (#18432 review: routines run in UTC)', () => {
+  it('offers only the zones a consumer can run, when it says so', () => {
+    const w = make(cron('0 9 * * *'), { timezones: ['UTC'] })
+    expect(w.findAll('select[id$="-zone"] option').map((o) => o.text())).toEqual(['UTC'])
+  })
+
+  it('offers every zone by default', () => {
+    expect(make(cron('0 9 * * *')).findAll('select[id$="-zone"] option').length).toBeGreaterThan(1)
+  })
+})

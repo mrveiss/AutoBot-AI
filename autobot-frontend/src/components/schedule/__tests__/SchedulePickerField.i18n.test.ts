@@ -47,15 +47,16 @@ describe('SchedulePickerField i18n (#18432)', () => {
     }
   })
 
-  it.each(Object.keys(locales))('%s: every summary and the picker chrome render as prose, not keys', async (code) => {
+  // One mount per test: a locale's 11 rules in one test was ~5 s unloaded and
+  // outran the 10 s timeout under pre-push load (#18254).
+  const CASES = Object.keys(locales).flatMap((code) => RULES.map((rule) => [code, JSON.stringify(rule), rule] as const))
+  it.each(CASES)('%s: %s summary and the picker chrome render as prose, not keys', async (code, label, rule) => {
     const i18n = createI18n({ legacy: false, locale: code, fallbackLocale: 'en', missingWarn: false, messages: locales as never })
-    for (const rule of RULES) {
-      const wrapper = mount(SchedulePickerField, { props: { modelValue: compilePickerRule(rule, 'UTC') }, global: { plugins: [i18n] } })
-      await flushPromises()
-      expect(wrapper.find('.aui-sched__summary').text(), JSON.stringify(rule)).not.toMatch(/schedule\.|\{|\}/)
-      expect(wrapper.text(), JSON.stringify(rule)).not.toMatch(/schedule\.[a-zA-Z_]+/)
-      wrapper.unmount()
-    }
+    const wrapper = mount(SchedulePickerField, { props: { modelValue: compilePickerRule(rule, 'UTC') }, global: { plugins: [i18n] } })
+    await flushPromises()
+    expect(wrapper.find('.aui-sched__summary').text(), label).not.toMatch(/schedule\.|\{|\}/)
+    expect(wrapper.text(), label).not.toMatch(/schedule\.[a-zA-Z_]+/)
+    wrapper.unmount()
   })
 
   it.each(Object.keys(locales))('%s: server error codes render as prose', async (code) => {

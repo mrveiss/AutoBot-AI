@@ -9,14 +9,14 @@
   hosts: autobot-host
   gather_facts: false
   vars:
-    local_autobot_root: "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+    local_autobot_root: "${AUTOBOT_PROJECT_ROOT:-{{ autobot.base_dir }}/code_source}"
     backend_user: "autobot"
     # #13539/B3: this play never renders roles/backend templates, but the
     # var name backend_install_dir is reserved elsewhere in this repo for the
     # BACKEND COMPONENT directory (roles/backend/defaults/main.yml) -- using it
     # here for the deploy root is exactly the two-meanings hazard B3 exists to
     # remove, so this play names the root explicitly instead.
-    backend_deployed_root: "/opt/autobot"
+    backend_deployed_root: "{{ autobot.base_dir }}"
     backend_host: "{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}"
 
   tasks:
@@ -29,7 +29,7 @@
 
     - name: Clean up problematic symlinks
       ansible.builtin.file:
-        path: "/opt/autobot/autobot-backend/{{ item }}"
+        path: "{{ autobot.base_dir }}/autobot-backend/{{ item }}"
         state: absent
       loop:
         - autobot_shared
@@ -39,7 +39,7 @@
 
     - name: Sync code using direct sudo rsync
       ansible.builtin.shell: |
-        sudo rsync -a --delete \
+        sudo rsync -a --chmod=o-w --delete \
           --exclude=.git \
           --exclude=__pycache__ \
           --exclude='*.pyc' \
@@ -51,7 +51,7 @@
           {{ local_autobot_root }}/autobot-backend/ \
           {{ backend_deployed_root }}/autobot-backend/
 
-        sudo rsync -a --delete \
+        sudo rsync -a --chmod=o-w --delete \
           --exclude=.git \
           --exclude=__pycache__ \
           --exclude='*.pyc' \

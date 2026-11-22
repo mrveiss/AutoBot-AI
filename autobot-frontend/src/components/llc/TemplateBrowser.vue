@@ -376,7 +376,7 @@ onMounted(() => {
 
 .filter-btn.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
 }
 
@@ -593,7 +593,7 @@ onMounted(() => {
 .btn-select.selected {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 /* Preview Panel */
@@ -608,7 +608,7 @@ onMounted(() => {
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  z-index: 100;
+  z-index: var(--z-dropdown);
 }
 
 .preview-header {
@@ -786,7 +786,7 @@ onMounted(() => {
 .btn-primary {
   flex: 1;
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .btn-primary:hover {

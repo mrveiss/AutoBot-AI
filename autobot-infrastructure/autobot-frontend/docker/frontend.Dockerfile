@@ -1,5 +1,7 @@
 # Frontend Dockerfile
-FROM node:18-alpine
+# Node.js major: pinned to the repo-root .nvmrc by repo_tests/node_major_one_home_19328_test.py (#19328).
+ARG NODE_MAJOR=22
+FROM node:${NODE_MAJOR}-alpine
 
 WORKDIR /app
 

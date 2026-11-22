@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 
 from api.schemas_pricing import PricingOverrideRequest
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission
 
 router = APIRouter(prefix="/admin")
 
@@ -26,7 +26,7 @@ async def override_model_pricing(
     provider: str,
     model: str,
     body: PricingOverrideRequest,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> dict:
     """Store an emergency pricing override; it outranks the refreshed price until removed."""
     from autobot_shared.logging_manager import get_logger
@@ -67,7 +67,7 @@ async def override_model_pricing(
 async def delete_model_pricing_override(
     provider: str,
     model: str,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> dict:
     """Remove a pricing override; the refreshed price applies again."""
     from llm_shared.pricing.redis_store import PricingRedisStore
@@ -78,7 +78,7 @@ async def delete_model_pricing_override(
 
 
 @router.get("/pricing/status")
-async def get_pricing_refresh_status(_admin: bool = Depends(require_role("admin", "superadmin"))) -> dict:
+async def get_pricing_refresh_status(_admin: bool = Depends(check_admin_permission)) -> dict:
     """Return the last refresh timestamp and success/failure per provider."""
     from llm_shared.pricing.redis_store import PricingRedisStore
 
@@ -88,7 +88,7 @@ async def get_pricing_refresh_status(_admin: bool = Depends(require_role("admin"
 
 
 @router.post("/pricing/refresh")
-async def refresh_pricing_now(_admin: bool = Depends(require_role("admin", "superadmin"))) -> dict:
+async def refresh_pricing_now(_admin: bool = Depends(check_admin_permission)) -> dict:
     """Refresh pricing on demand and report the per-source result (#16231)."""
     from services.pricing_refresh import refresh_all
 
