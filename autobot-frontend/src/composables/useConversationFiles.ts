@@ -187,16 +187,22 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     // The token only gates the shared progress display; the reload and the error belong to the session.
     const owns = (): boolean => uploadRequest.isCurrent(token) && inSession()
     try {
-      const formData = new FormData()
-      Array.from(fileList).forEach((file) => formData.append('files', file))
-      const data = await api.post<{ success: boolean }>(`${conversationApi()}/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (progressEvent: UploadProgressEvent) => {
-          if (progressEvent.total && owns()) {
-            uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+      // The route takes ONE file per request, in the form field `file` (#22015): N files are N requests.
+      const batch = Array.from(fileList)
+      let data: { success: boolean } | undefined
+      for (const [index, file] of batch.entries()) {
+        const formData = new FormData()
+        formData.append('file', file)
+        data = await api.post<{ success: boolean }>(`${conversationApi()}/upload`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (progressEvent: UploadProgressEvent) => {
+            if (progressEvent.total && owns()) {
+              uploadProgress.value = Math.round(((index + progressEvent.loaded / progressEvent.total) * 100) / batch.length)
+            }
           }
-        }
-      })
+        })
+        if (!data?.success) break
+      }
       if (data?.success) {
         if (inSession()) await loadFiles()
         if (owns()) uploadProgress.value = 100
