@@ -24,7 +24,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security.human_admin import refuse_service_principal, require_human_operator
-from services.redis_service_manager import RedisConnectionError, RedisServiceManager
+from services.redis_service_manager import SLM_REFUSALS, RedisConnectionError, RedisServiceManager
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["Redis Service Management"])
@@ -67,6 +67,31 @@ async def get_service_manager() -> RedisServiceManager:
     return _service_manager
 
 
+def _operation_response(result) -> ServiceOperationResponse:
+    """The API answer for a start/stop/restart result."""
+    return ServiceOperationResponse(
+        success=result.success,
+        operation=result.operation,
+        message=result.message,
+        duration_seconds=result.duration_seconds,
+        timestamp=result.timestamp,
+        new_status=result.new_status,
+        error=result.error,
+    )
+
+
+def _operation_error(exc: Exception, failure: str) -> HTTPException:
+    """503 with the reason when the SLM cannot be asked (#22030) or Redis is unreachable; else 500 ``failure``."""
+    if isinstance(exc, SLM_REFUSALS):
+        logger.error("Redis service cannot reach the SLM: %s", exc)
+        return HTTPException(status_code=503, detail=str(exc))
+    if isinstance(exc, RedisConnectionError):
+        logger.error("Redis connection error: %s", exc)
+        return HTTPException(status_code=503, detail="Cannot connect to Redis VM")
+    logger.error("%s: %s", failure, exc)
+    return HTTPException(status_code=500, detail=failure)
+
+
 # API Endpoints
 @router.post("/start", response_model=ServiceOperationResponse)
 @with_error_handling(
@@ -93,24 +118,12 @@ async def start_redis_service(
         # Execute start operation
         result = await manager.start_service(user_id=user_id)
 
-        return ServiceOperationResponse(
-            success=result.success,
-            operation=result.operation,
-            message=result.message,
-            duration_seconds=result.duration_seconds,
-            timestamp=result.timestamp,
-            new_status=result.new_status,
-            error=result.error,
-        )
+        return _operation_response(result)
 
     except HTTPException:
         raise
-    except RedisConnectionError as e:
-        logger.error("Redis connection error: %s", e)
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
     except Exception as e:
-        logger.error("Start service error: %s", e)
-        raise HTTPException(status_code=500, detail="Service start failed")
+        raise _operation_error(e, "Service start failed") from e
 
 
 @router.post("/stop", response_model=ServiceOperationResponse)
@@ -142,24 +155,12 @@ async def stop_redis_service(
         # Execute stop operation
         result = await manager.stop_service(user_id=user_id)
 
-        return ServiceOperationResponse(
-            success=result.success,
-            operation=result.operation,
-            message=result.message,
-            duration_seconds=result.duration_seconds,
-            timestamp=result.timestamp,
-            new_status=result.new_status,
-            error=result.error,
-        )
+        return _operation_response(result)
 
     except HTTPException:
         raise
-    except RedisConnectionError as e:
-        logger.error("Redis connection error: %s", e)
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
     except Exception as e:
-        logger.error("Stop service error: %s", e)
-        raise HTTPException(status_code=500, detail="Service stop failed")
+        raise _operation_error(e, "Service stop failed") from e
 
 
 @router.post("/restart", response_model=ServiceOperationResponse)
@@ -187,24 +188,12 @@ async def restart_redis_service(
         # Execute restart operation
         result = await manager.restart_service(user_id=user_id)
 
-        return ServiceOperationResponse(
-            success=result.success,
-            operation=result.operation,
-            message=result.message,
-            duration_seconds=result.duration_seconds,
-            timestamp=result.timestamp,
-            new_status=result.new_status,
-            error=result.error,
-        )
+        return _operation_response(result)
 
     except HTTPException:
         raise
-    except RedisConnectionError as e:
-        logger.error("Redis connection error: %s", e)
-        raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
     except Exception as e:
-        logger.error("Restart service error: %s", e)
-        raise HTTPException(status_code=500, detail="Service restart failed")
+        raise _operation_error(e, "Service restart failed") from e
 
 
 @router.get("/status", response_model=ServiceStatusResponse)
@@ -232,6 +221,9 @@ async def get_redis_status(
             last_check=status.last_check,
         )
 
+    except SLM_REFUSALS as e:
+        logger.error("Get status error: %s", e)  # #16346: say what failed instead of answering 200 "unknown"
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error("Get status error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get status")
