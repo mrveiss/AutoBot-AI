@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 from autobot_shared.ssot_config import config
 from npu_semantic_search import NPUSemanticSearch
-from tools.lint import _parse_cache as parse_cache
 
 HELD = {"collection": config.research_quarantine_collection}
 CASES = {"good": {}, "held": HELD}
@@ -95,7 +94,7 @@ def _unpinned_kb_search_calls(src: str) -> tuple:
     """
     calls = [
         n
-        for n in ast.walk(parse_cache.parse(src))
+        for n in ast.walk(ast.parse(src))
         if isinstance(n, ast.Call)
         and isinstance(n.func, ast.Attribute)
         and n.func.attr == "search"
