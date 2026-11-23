@@ -38,6 +38,18 @@ _NAMESPACE = "AUTOBOT_"
 _AGENT_PROVIDER_OVERRIDE = re.compile(r"AUTOBOT_[A-Z0-9]+(?:_[A-Z0-9]+)*_PROVIDER")
 
 
+class UnknownEnvKeysRefused(RuntimeError):
+    """Startup aborted: ``.env`` carries unknown ``AUTOBOT_*`` keys and the policy is ``refuse`` (#17419)."""
+
+
+def refuse_notice(deadline: date = UNKNOWN_KEY_REFUSE_AFTER) -> str:
+    """The one line docs state about the refuse date; the date is read from *deadline*, never retyped."""
+    return (
+        f"Unknown `{_NAMESPACE}*` keys in `.env` are refused at backend startup on and after "
+        f"{deadline.isoformat()}; before then they only warn."
+    )
+
+
 def is_agent_provider_override(key: str) -> bool:
     """True for a per-agent provider override: supported at runtime though no model field declares it."""
     return _AGENT_PROVIDER_OVERRIDE.fullmatch(key) is not None
