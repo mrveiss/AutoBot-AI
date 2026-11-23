@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Backend-to-SLM client AUTOBOT_* environment variable registrations (#22030).
 
-Sibling module chained from ``env_registry_slm_rollback`` because ``env_registry.py`` is closed to new entries.
+Sibling module imported by ``env_registry.py``'s grouped block; it holds no registrations, which stay out of it.
 Registration contract (import side effect, ordering): see ``env_registry`` (#16415).
 """
 
