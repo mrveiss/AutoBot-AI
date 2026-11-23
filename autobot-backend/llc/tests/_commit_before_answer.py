@@ -27,6 +27,7 @@ from pathlib import Path
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute
 
+from autobot_shared.api_routing.router_routes import effective_routes
 from autobot_shared.testfile_names import is_test_filename
 from llc.deps import get_session
 from user_management.database import get_async_session
@@ -59,8 +60,9 @@ OWN_SESSION_HANDLERS: dict[tuple[str, str], str] = {
 
 
 def llc_write_routes(router) -> list[APIRoute]:  # noqa: ANN001
-    """The write routes of *router* (the aggregated `llc.api.router`), flattened by `include_router`."""
-    return [r for r in router.routes if isinstance(r, APIRoute) and r.methods & WRITE_METHODS]
+    """The write routes of *router* (the aggregated `llc.api.router`), on either `include_router` shape (#15093)."""
+    routes = (mounted.route for mounted in effective_routes(router))
+    return [r for r in routes if isinstance(r, APIRoute) and r.methods & WRITE_METHODS]
 
 
 def route_key(route: APIRoute, root: Path = REPO_ROOT) -> tuple[str, str]:
