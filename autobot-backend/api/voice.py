@@ -501,6 +501,7 @@ async def voice_transcribe_api(
     request: Request,
     audio: UploadFile = File(...),
     language: str = Form(""),
+    current_user: dict = Depends(get_current_user),
 ):
     """Transcribe audio blob to text via Whisper (#1030, #1329).
 
@@ -508,7 +509,8 @@ async def voice_transcribe_api(
         language: BCP-47 language hint (e.g. "en", "de"). Empty = auto-detect.
     """
     security_layer = request.app.state.security_layer
-    if not security_layer.check_permission("user", "allow_voice_listen"):
+    user_role = role_value(current_user.get("role"))
+    if not security_layer.check_permission(user_role, "allow_voice_listen"):
         return JSONResponse(
             status_code=403,
             content={"text": "", "error": "Permission denied."},
@@ -527,11 +529,11 @@ async def voice_transcribe_api(
     try:
         result = await _transcribe_with_whisper(audio_bytes, audio.content_type or "audio/webm", language)
     except TranscriptionFailed as exc:
-        security_layer.audit_log("voice_transcribe", "user", "failure", {"reason": str(exc)})
+        security_layer.audit_log("voice_transcribe", user_role, "failure", {"reason": str(exc)})
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     security_layer.audit_log(
         "voice_transcribe",
-        "user",
+        user_role,
         "success",
         {"text_preview": result.get("text", "")[:50]},
     )

@@ -4202,7 +4202,6 @@
         "uploadFile": "Prześlij plik"
       },
       "voiceTool": {
-        "aI": "AI",
         "autoListenAfterResponse": "Auto-listen after response",
         "chineseSimplified": "Chinese (Simplified)",
         "clear": "Wyczyść",
@@ -4235,6 +4234,7 @@
         "tips": "Tips",
         "tryDifferentLanguagesFor": "Try different languages for multilingual support",
         "useAQuietEnvironment": "Use a quiet environment for best results",
+        "voiceId": "ID głosu",
         "voiceInterface": "Voice Interface",
         "voiceSettings": "Ustawienia głosu",
         "you": "You",

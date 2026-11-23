@@ -1189,7 +1189,6 @@
 1|other|autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue|https://oauth2.googleapis.com/token
 1|other|autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue|https://openidconnect.googleapis.com/v1/userinfo
 2|other|autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue|'user'
-3|other|autobot-slm-frontend/src/views/tools/admin/VoiceTool.vue|'user'
 1|other|autobot_shared/auth/mcp_tool_permissions.py|"user"
 1|other|autobot_shared/env_registry.py|http://10.0.0.4:9090
 1|other|autobot_shared/env_registry.py|http://10.255.255.254:8001

@@ -4202,7 +4202,6 @@
         "uploadFile": "Carregar arquivo"
       },
       "voiceTool": {
-        "aI": "AI",
         "autoListenAfterResponse": "Auto-listen after response",
         "chineseSimplified": "Chinese (Simplified)",
         "clear": "Limpar",
@@ -4235,6 +4234,7 @@
         "tips": "Tips",
         "tryDifferentLanguagesFor": "Try different languages for multilingual support",
         "useAQuietEnvironment": "Use a quiet environment for best results",
+        "voiceId": "ID da voz",
         "voiceInterface": "Voice Interface",
         "voiceSettings": "Configurações de voz",
         "you": "You",

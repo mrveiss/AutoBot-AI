@@ -968,9 +968,11 @@ export function useAutobotApi() {
   }
 
   /** `POST /voice/speak` answers `audio/wav` (#17779), never JSON, so this returns the audio itself (#17784). */
-  async function voiceSpeak(text: string): Promise<Blob> {
+  async function voiceSpeak(text: string, options: { language?: string; voiceId?: string } = {}): Promise<Blob> {
     const formData = new FormData()
     formData.append('text', text)
+    if (options.language) formData.append('language', options.language)
+    if (options.voiceId) formData.append('voice_id', options.voiceId)
     const response = await client.rawRequest('/voice/speak', { method: 'POST', body: formData })
     if (!response.ok) throw await httpErrorFrom(response)
     return response.blob()

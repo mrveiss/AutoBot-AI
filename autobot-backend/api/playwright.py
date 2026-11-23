@@ -307,7 +307,7 @@ async def navigate_to_url(request: PlaywrightNavigateRequest):
     """
     Navigate to a URL using Playwright on Browser VM
 
-    Forwards navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+    Forwards navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
     """
     try:
         logger.info("Navigate request: %s", request.url)
@@ -355,7 +355,7 @@ async def reload_page(request: PlaywrightReloadRequest):
     """
     Reload the current page using Playwright on Browser VM
 
-    Forwards reload request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+    Forwards reload request to Browser VM (ServiceURLs.BROWSER_SERVICE)
     """
     try:
         logger.info("Reload request")
@@ -400,7 +400,7 @@ async def go_back(request: PlaywrightSessionRequest | None = None):
     """
     Navigate back in browser history using Playwright on Browser VM
 
-    Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+    Forwards back navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
     Issue #11539: threads session_id so this routes to the caller's isolated context.
     """
@@ -445,7 +445,7 @@ async def go_forward(request: PlaywrightSessionRequest | None = None):
     """
     Navigate forward in browser history using Playwright on Browser VM
 
-    Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+    Forwards forward navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
     Issue #11539: threads session_id so this routes to the caller's isolated context.
     """

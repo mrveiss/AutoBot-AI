@@ -8,12 +8,15 @@
 ``user_role`` form field, so any caller could name itself ``admin``. Each now ignores that field.
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.voice import router as voice_router
 from auth_middleware import check_admin_permission, get_current_user
+from testkit.canonical_gate import no_user_middleware, real_admin_gate
 
 _AUTHENTICATED_ROLE = "readonly"
 _CLAIMED_ROLE = "admin"
@@ -50,6 +53,7 @@ _ROUTES = [
     ("/api/voice/speak", {"text": "hi"}, None),
     ("/api/voice/synthesize", {"text": "hi"}, None),
     ("/api/voice/clone-voice", {"text": "hi"}, {"reference_audio": ("r.wav", b"RIFF", "audio/wav")}),
+    ("/api/voice/transcribe", {}, {"audio": ("a.webm", b"x", "audio/webm")}),
 ]
 
 
@@ -59,3 +63,37 @@ def test_non_admin_claiming_admin_is_refused(harness, path, data, files):
     response = client.post(path, data={**data, "user_role": _CLAIMED_ROLE}, files=files)
     assert response.status_code == 403
     assert layer.asked == [_AUTHENTICATED_ROLE]
+
+
+def test_admin_session_is_allowed_and_audited_as_admin(harness):
+    """The converse: the session role is what is consulted, so an admin session is not refused."""
+    client, layer = harness
+    client.app.dependency_overrides[get_current_user] = lambda: {"user_id": "a1", "role": "admin"}
+    response = client.post("/api/voice/listen", data={"user_role": "readonly"})
+    assert response.status_code != 403
+    assert layer.asked == ["admin"]
+
+
+def _real_gate_client(user):
+    """A client whose ``check_admin_permission`` is the REAL gate, seeing *user* (None = anonymous)."""
+    app = FastAPI()
+    app.include_router(voice_router, prefix="/api/voice")
+    app.state.security_layer = _RecordingSecurityLayer()
+    app.state.voice_interface = object()
+    if user is None:
+        middleware = no_user_middleware()
+    else:
+        middleware = MagicMock()
+        middleware.get_user_from_request.side_effect = lambda request: user
+    app.dependency_overrides[get_current_user] = lambda: user
+    return app, middleware
+
+
+@pytest.mark.parametrize(("user", "status"), [(None, 401), ({"user_id": "u", "role": "user"}, 403)])
+def test_real_admin_gate_refuses_anonymous_and_non_admin(user, status):
+    app, middleware = _real_gate_client(user)
+    with real_admin_gate(middleware) as wire:
+        client = wire(TestClient(app))
+        response = client.post("/api/voice/speak", data={"text": "hi", "user_role": _CLAIMED_ROLE})
+    assert response.status_code == status
+    assert app.state.security_layer.asked == []

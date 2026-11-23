@@ -77,9 +77,22 @@ describe('VoiceTool speaks the transcript through the audio route', () => {
     expect(path).toBe('/voice/speak')
     expect((options.body as FormData).get('text')).toBe('hello there')
     expect((options.body as FormData).has('user_role')).toBe(false)
+    expect((options.body as FormData).get('language')).toBe('en-US')
+    expect((options.body as FormData).has('voice_id')).toBe(false)
     expect(play).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('hello there')
     expect(wrapper.text()).not.toContain('No response received')
+  })
+
+  it('sends the chosen voice id with the language', async () => {
+    backendClient.rawRequest.mockResolvedValue(new Response(new Blob(['RIFF'], { type: 'audio/wav' }), { status: 200 }))
+    const wrapper = mount(VoiceTool, { global: { plugins: [i18n] } })
+    await wrapper.get('input[type="text"]').setValue(' voice-7 ')
+    await wrapper.get('button').trigger('click')
+    FakeRecognition.last?.onresult?.({ resultIndex: 0, results: { length: 1, 0: { isFinal: true, 0: { transcript: 'hi' } } } })
+    FakeRecognition.last?.onend?.()
+    await flushPromises()
+    expect((backendClient.rawRequest.mock.calls[0][1].body as FormData).get('voice_id')).toBe('voice-7')
   })
 
   it('shows the localised failure with the status, and plays nothing, when the route refuses', async () => {

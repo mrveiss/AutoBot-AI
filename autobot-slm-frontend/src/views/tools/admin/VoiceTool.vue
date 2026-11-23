@@ -10,7 +10,7 @@ import { BaseAlert } from '@autobot/ui'
  *
  * Dictation with spoken read-back. What you say is recognised by the browser, then spoken by the
  * canonical text-to-speech route (`POST /voice/speak`), which answers `audio/wav`; the tool plays
- * that audio. It does not produce an AI reply, and never read one from that route (#17784).
+ * that audio, in the chosen language and voice. It does not produce an AI reply, and never read one from that route (#17784).
  * Migrated from main AutoBot frontend - Issue #729.
  */
 
@@ -38,12 +38,12 @@ interface VoiceSettings {
 
 const settings = ref<VoiceSettings>({
   language: 'en-US',
-  voice: 'default',
+  voice: '',
   speed: 1.0,
   autoListen: false
 })
 
-const conversationHistory = ref<{ role: 'user' | 'assistant'; text: string; timestamp: Date }[]>([])
+const conversationHistory = ref<{ text: string; timestamp: Date }[]>([])
 
 // Speech Recognition browser API types
 interface SpeechRecognitionResult {
@@ -156,7 +156,7 @@ async function processVoiceInput(): Promise<void> {
   const text = transcript.value.trim()
   if (!text) return
 
-  conversationHistory.value.push({ role: 'user', text, timestamp: new Date() })
+  conversationHistory.value.push({ text, timestamp: new Date() })
   loading.value = true
   try {
     spokenText.value = text
@@ -190,7 +190,7 @@ function finishPlayback(): void {
 
 /** Fetch the synthesized `audio/wav` for *text* and play it; resolves once playback has started. */
 async function speakText(text: string): Promise<void> {
-  const audio = await api.voiceSpeak(text)
+  const audio = await api.voiceSpeak(text, { language: settings.value.language, voiceId: settings.value.voice.trim() })
   releasePlayer()
   playerUrl = URL.createObjectURL(audio)
   player = new Audio(playerUrl)
@@ -345,13 +345,10 @@ onUnmounted(() => {
             <div
               v-for="(msg, index) in conversationHistory"
               :key="index"
-              :class="[
-                'p-2 rounded-sm text-sm',
-                msg.role === 'user' ? 'bg-autobot-bg-tertiary ml-8' : 'bg-autobot-bg-secondary mr-8'
-              ]"
+              class="p-2 rounded-sm text-sm bg-autobot-bg-tertiary ml-8"
             >
               <p class="text-xs text-autobot-text-tertiary mb-1">
-                {{ msg.role === 'user' ? $t('tools.admin.voiceTool.you') : $t('tools.admin.voiceTool.aI') }} -
+                {{ $t('tools.admin.voiceTool.you') }} -
                 {{ formatFleetTime(msg.timestamp) }}
               </p>
               <p class="text-autobot-text-primary">{{ msg.text }}</p>
@@ -393,6 +390,16 @@ onUnmounted(() => {
               max="2"
               step="0.1"
               class="w-full"
+            />
+          </div>
+
+          <!-- Voice id: empty uses the active personality's voice -->
+          <div>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.voiceTool.voiceId') }}</label>
+            <input
+              v-model="settings.voice"
+              type="text"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
             />
           </div>
 
