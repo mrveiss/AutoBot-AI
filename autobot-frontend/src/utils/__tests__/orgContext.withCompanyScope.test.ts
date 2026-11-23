@@ -3,7 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 import { beforeEach, describe, expect, it } from 'vitest'
-import { withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
+import { withCompanyScope } from '@/utils/orgContext'
 
 const COMPANY = '11111111-1111-4111-8111-111111111111'
 

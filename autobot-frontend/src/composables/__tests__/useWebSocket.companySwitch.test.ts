@@ -35,6 +35,7 @@ describe('useWebSocket company switch (#21997)', () => {
     expect(socket.isConnected.value).toBe(true)
     expect(MockWebSocket.getLatestInstance()!.url).not.toContain('company_id')
 
+    await vi.dynamicImportSettled()
     useLlcCompanyStore().selectedCompanyId = COMPANY
     await nextTick()
     await vi.advanceTimersByTimeAsync(500)

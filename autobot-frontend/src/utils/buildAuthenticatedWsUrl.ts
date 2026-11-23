@@ -21,10 +21,6 @@
  */
 
 import { useUserStore } from '@/stores/useUserStore'
-import { getSelectedCompanyId } from '@/utils/orgContext'
-import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
-import { getActivePinia } from 'pinia'
-import { watch, type WatchStopHandle } from 'vue'
 
 function getWsAuthToken(): string | null {
   return useUserStore().authState.token || null
@@ -47,27 +43,4 @@ export function buildAuthenticatedWsUrl(baseUrl: string): string | null {
 export function buildAuthenticatedWsSubprotocols(): string[] | null {
   const token = getWsAuthToken()
   return token ? ['bearer', token] : null
-}
-
-/**
- * A WebSocket URL naming the selected company in the `company_id` query parameter. A browser WebSocket cannot
- * set the `X-Organization-Id` header, so this is how a socket tells the backend its active company; the backend
- * checks the caller's membership exactly as it does for the header. Unchanged when no company is selected or the
- * URL already names one.
- */
-export function withCompanyScope(url: string): string {
-  const companyId = getSelectedCompanyId()
-  if (!companyId || /[?&]company_id=/.test(url)) return url
-  return `${url}${url.includes('?') ? '&' : '?'}company_id=${encodeURIComponent(companyId)}`
-}
-
-/**
- * Run `reconnect` whenever the selected company changes, so a socket opened under the old company reopens with a
- * URL rebuilt by `withCompanyScope` (its `company_id` is fixed at connect). The one mechanism every chat-reaching
- * socket uses. A no-op until Pinia is active (a socket created before the app mounts reads the company at connect).
- */
-export function onCompanySwitch(reconnect: () => void): WatchStopHandle {
-  if (!getActivePinia()) return () => {}
-  const store = useLlcCompanyStore()
-  return watch(() => store.selectedCompanyId, (id, previous) => id !== previous && reconnect())
 }

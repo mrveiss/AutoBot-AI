@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
-import { onCompanySwitch } from '@/utils/buildAuthenticatedWsUrl'
+import { onCompanySwitch } from '@/utils/companyScopedSocket'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
 
 const COMPANY = '11111111-1111-4111-8111-111111111111'
@@ -16,6 +16,7 @@ describe('onCompanySwitch (#21997)', () => {
   it('runs the reconnect when the selected company changes, not before', async () => {
     const reconnect = vi.fn()
     onCompanySwitch(reconnect)
+    await vi.dynamicImportSettled()
     await nextTick()
     expect(reconnect).not.toHaveBeenCalled()
 
@@ -27,6 +28,7 @@ describe('onCompanySwitch (#21997)', () => {
   it('stops reacting once the returned handle is called', async () => {
     const reconnect = vi.fn()
     onCompanySwitch(reconnect)()
+    await vi.dynamicImportSettled()
     useLlcCompanyStore().selectedCompanyId = COMPANY
     await nextTick()
     expect(reconnect).not.toHaveBeenCalled()

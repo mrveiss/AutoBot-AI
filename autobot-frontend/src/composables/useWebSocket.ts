@@ -14,7 +14,7 @@ import { backoffDelay } from '@autobot/ui'
 import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, toValue, toRaw, type Ref, type MaybeRefOrGetter } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
-import { onCompanySwitch, withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
+import { onCompanySwitch, withCompanyScope } from '@/utils/companyScopedSocket'
 
 // Create scoped logger for useWebSocket
 const logger = createLogger('useWebSocket')

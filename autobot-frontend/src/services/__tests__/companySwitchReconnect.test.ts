@@ -40,6 +40,7 @@ describe.each([
     expect(before).toBeGreaterThan(0)
     expect(MockWebSocket.getLatestInstance()!.url).not.toContain('company_id')
 
+    await vi.dynamicImportSettled()
     useLlcCompanyStore().selectedCompanyId = COMPANY
     await nextTick()
     await vi.advanceTimersByTimeAsync(2500)

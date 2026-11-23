@@ -36,9 +36,7 @@ vi.mock('@/config/ssot-config', () => ({
 
 // #16457: the token travels as a subprotocol, not embedded in the URL.
 vi.mock('@/utils/buildAuthenticatedWsUrl', () => ({
-  buildAuthenticatedWsSubprotocols: () => ['bearer', 'fake-test-token'],
-  withCompanyScope: (url: string) => url,
-  onCompanySwitch: () => () => {},
+  buildAuthenticatedWsSubprotocols: () => ['bearer', 'fake-test-token']
 }))
 
 const inviteToSession = vi.fn()

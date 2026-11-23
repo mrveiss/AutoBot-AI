@@ -3,7 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 import { getApiBase, getBackendWsUrl } from '@/config/ssot-config'
-import { withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
+import { withCompanyScope } from '@/utils/orgContext'
 
 /**
  * The presence WebSocket URL for a session, naming the selected company (#21997).
