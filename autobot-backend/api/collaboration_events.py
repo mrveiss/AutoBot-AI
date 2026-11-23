@@ -35,11 +35,12 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from models.collaboration_event import CollaborationEvent
 from models.session_collaboration import PermissionLevel, SessionCollaboration
+from security.session_company import require_session_company
 from user_management.database import get_async_session
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/sessions", tags=["collaboration"])
+router = APIRouter(prefix="/sessions", tags=["collaboration"], dependencies=[Depends(require_session_company)])
 
 
 async def _list_my_invitations(user_id: uuid.UUID, db: AsyncSession) -> list[dict]:

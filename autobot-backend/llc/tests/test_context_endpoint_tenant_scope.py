@@ -43,7 +43,7 @@ def _make_app(caller_org_id: str, item: MagicMock):
     # Deferred imports: must not be at module level (see test_suggest_ac_endpoint.py).
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
     from llc.api.context import router as context_router  # noqa: PLC0415
-    from user_management.database import get_async_session  # noqa: PLC0415
+    from llc.deps import get_session  # noqa: PLC0415
 
     app = FastAPI()
     app.include_router(context_router)
@@ -57,7 +57,7 @@ def _make_app(caller_org_id: str, item: MagicMock):
     def _fake_tenant() -> TenantContext:
         return TenantContext(org_id=uuid.UUID(caller_org_id), user_id=_USER_ID, is_platform_admin=False)
 
-    app.dependency_overrides[get_async_session] = _fake_session
+    app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_current_user] = _fake_user
     app.dependency_overrides[require_org_context] = _fake_tenant
 

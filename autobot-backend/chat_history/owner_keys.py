@@ -21,8 +21,9 @@ OWNER_IDENTITY_KEYS = ("owner", "username")
 GRAPH_OWNER_KEYS = ("user_id", *OWNER_IDENTITY_KEYS)
 
 #: Metadata keys the server alone writes (``build_owner_metadata``) and ownership checks read.
-#: Client-supplied metadata must never carry them.
-SERVER_CONTROLLED_METADATA_KEYS = frozenset((*GRAPH_OWNER_KEYS, "org_id", "team_id"))
+#: Client-supplied metadata must never carry them. ``company_id`` is one (#21997): it is stamped at creation from
+#: the verified active company, or set by the audited assign-company route, never by a metadata merge.
+SERVER_CONTROLLED_METADATA_KEYS = frozenset((*GRAPH_OWNER_KEYS, "org_id", "team_id", "company_id"))
 
 
 def _first_set(metadata, keys):

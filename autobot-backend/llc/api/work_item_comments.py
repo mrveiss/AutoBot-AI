@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
-from llc.deps import get_session, service_dep
+from llc.deps import SESSION_DEP, service_dep
 from user_management.services import TenantContext
 
 from ..models.work_item import LLCWorkItemComment
@@ -57,7 +57,7 @@ async def list_comments(
     work_item_id: str,
     limit: int = Query(COMMENTS_PAGE_DEFAULT, ge=1, le=COMMENTS_PAGE_MAX),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:

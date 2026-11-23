@@ -19,6 +19,7 @@ from auth_middleware import get_current_user as _canonical_get_current_user
 from auth_middleware import resolve_human_user as _canonical_resolve_human_user
 from autobot_shared.auth.permissions import Permission, is_admin_role, role_has_permission
 from autobot_shared.coordination.claim_company import set_company
+from security.named_company import named_company, parse_uuid
 from user_management.database import get_async_session
 from user_management.services import (
     OrganizationService,
@@ -114,45 +115,17 @@ def get_current_user_id(
         ) from exc
 
 
-def _parse_uuid_safe(value: Optional[str]) -> Optional[uuid.UUID]:
-    """Parse a string as UUID, returning None on failure (no error raised)."""
-    if not value:
-        return None
-    try:
-        return uuid.UUID(str(value))
-    except (ValueError, TypeError):
-        return None
+_parse_uuid_safe = parse_uuid  # one UUID parser, shared with the chat company scope (#21997)
 
 
 def _extract_request_org_id(request: Request) -> Optional[uuid.UUID]:
     """Extract org_id from the request using precedence rules (#10750 A5).
 
-    Precedence (first non-None valid UUID wins):
-      1. ``X-Organization-Id`` request header
-      2. ``company_id`` path parameter (e.g. /companies/{company_id}/...)
-      3. ``company_id`` query parameter (?company_id=...)
-
-    Returns None if no parseable org UUID is found in any location.
+    Precedence (first non-None valid UUID wins): the ``X-Organization-Id`` header, the ``company_id`` / ``id``
+    path parameter (e.g. /companies/{company_id}/portfolios), then the ``company_id`` query parameter. The one
+    definition is ``security.named_company``. Returns None if no parseable org UUID is found.
     """
-    # 1. Header takes highest priority
-    header_val = request.headers.get("X-Organization-Id")
-    parsed = _parse_uuid_safe(header_val)
-    if parsed is not None:
-        return parsed
-
-    # 2. Path param (present on routes like /companies/{company_id}/portfolios)
-    path_val = request.path_params.get("company_id") or request.path_params.get("id")
-    parsed = _parse_uuid_safe(path_val)
-    if parsed is not None:
-        return parsed
-
-    # 3. Query param (?company_id=...)
-    query_val = request.query_params.get("company_id")
-    parsed = _parse_uuid_safe(query_val)
-    if parsed is not None:
-        return parsed
-
-    return None
+    return named_company(request, from_path=True)
 
 
 def _is_service_principal(current_user: dict) -> bool:

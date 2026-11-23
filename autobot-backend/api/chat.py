@@ -325,7 +325,7 @@ logger.info(
 
 # Include session management router
 from api.chat_sessions import delete_session as _canonical_delete_session
-from api.chat_sessions import list_user_sessions, log_request_context
+from api.chat_sessions import list_user_sessions, log_request_context, resolve_company_scope
 from api.chat_sessions import router as sessions_router
 
 router.include_router(sessions_router)
@@ -974,8 +974,8 @@ async def list_chats(
             details={"component": "chat_history_manager"},
         )
 
-    # #21664: the caller's own sessions through the one shared listing, never the instance-wide list
-    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"))
+    company = await resolve_company_scope(request, current_user)  # #21664 own sessions only; #21997 active company
+    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"), company)
     return create_chat_response(
         data=sessions,
         message="Chat sessions retrieved successfully",

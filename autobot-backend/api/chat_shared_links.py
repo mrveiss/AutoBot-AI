@@ -47,6 +47,7 @@ from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.time_utils import now_utc
 from chat_history.message_schema import message_role, message_text
 from models.chat_shared_link import ChatSharedLink
+from security.session_company import require_session_company
 from security.session_ownership import SessionOwnershipValidator
 from user_management.services.user_service import UserService
 from utils.chat_utils import get_chat_history_manager, validate_chat_session_id
@@ -54,7 +55,9 @@ from utils.response_helpers import create_success_response
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["chat-shared-links"])
+# #21997: the owner routes (create, revoke, list) name a chat session, so another company's chat is refused. The public
+# token routes name none and are exempt: a link holder acts as no company member, and the owner chose to share it.
+router = APIRouter(tags=["chat-shared-links"], dependencies=[Depends(require_session_company)])
 
 _DEFAULT_TTL_ENV = "AUTOBOT_SHARED_LINK_DEFAULT_TTL"
 _DEFAULT_TTL_SECONDS: int = env_int(_DEFAULT_TTL_ENV, 0)

@@ -26,6 +26,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_version_url
 from autobot_shared.ssot_config import config as _ssot
 
 logger = get_logger(__name__)
@@ -93,7 +94,7 @@ async def get_service_statuses() -> Dict[str, Any]:
     """
     npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
     browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
-    ollama_url = f"{_ssot.ollama_url}/api/version"
+    ollama_url = ollama_version_url(_ssot.ollama_url)
     chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}{CHROMADB_HEARTBEAT_PATH}"  # #3461, #19321
 
     (
