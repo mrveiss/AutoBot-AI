@@ -29,6 +29,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from integrations.base import IntegrationConfig
 from integrations.monitoring_integration import DatadogIntegration, NewRelicIntegration
@@ -138,7 +139,7 @@ async def list_hosts(
 
         return result
     except ValueError:
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except Exception:
         logger.exception("Failed to list hosts for %s", provider)
         raise HTTPException(status_code=500, detail="Failed to list hosts")
@@ -182,7 +183,7 @@ async def query_metrics(
 
         return result
     except ValueError:
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except Exception:
         logger.exception("Failed to query metrics for %s", provider)
         raise HTTPException(status_code=500, detail="Failed to query metrics")
@@ -224,7 +225,7 @@ async def list_alerts(
 
         return result
     except ValueError:
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except Exception:
         logger.exception("Failed to list alerts for %s", provider)
         raise HTTPException(status_code=500, detail="Failed to list alerts")
@@ -273,7 +274,7 @@ async def get_events(
 
         return result
     except ValueError:
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except Exception:
         logger.exception("Failed to get events for %s", provider)
         raise HTTPException(status_code=500, detail="Failed to get events")
