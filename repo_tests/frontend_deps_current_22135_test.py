@@ -44,6 +44,8 @@ def test_absent_package_fails_and_names_it(tmp_path):
     result = _run(_workspace(tmp_path, {"a": "2.0.0", "reka-ui": None}))
     assert result.returncode == 1
     assert "reka-ui: installed (absent)" in result.stdout
+    # The fix command comes before the package list so a head-truncated report still carries it.
+    assert result.stdout.index("npm --prefix") < result.stdout.index("reka-ui")
 
 
 def test_older_version_than_lockfile_fails(tmp_path):

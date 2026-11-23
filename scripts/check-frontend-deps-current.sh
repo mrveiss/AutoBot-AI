@@ -41,8 +41,8 @@ for (const n of names) {
 }
 if (bad.length) {
   console.log("STALE -- " + ws + "/node_modules does not match its lockfile (" + bad.length + " of " + names.length + "):");
-  console.log(bad.join("\n"));
   console.log("reconcile it: npm --prefix " + ws + " ci");
+  console.log(bad.join("\n"));
   process.exit(1);
 }
 console.log(ws + "/node_modules matches the lockfile (" + names.length + " declared packages)");

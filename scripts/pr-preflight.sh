@@ -736,7 +736,7 @@ CQEOF
     # #22135: a stale install is a FAIL, not a skip -- a green local run on missing packages (reka-ui) said nothing.
     # Same path filter as the gate it replaces, so a docs-only diff is not failed for a stale install.
     if selected "Unit & Integration Tests" && { [ "$FULL" = "1" ] || [ "${#CHANGED[@]}" -eq 0 ] || printf '%s\n' "${CHANGED[@]}" | grep -qE '^autobot-frontend/'; }; then
-      fail "Unit & Integration Tests -- node_modules is stale or could not be checked"
+      fail "Unit & Integration Tests -- node_modules is stale or could not be checked: npm --prefix autobot-frontend ci"
       printf '%s\n' "$FRONTEND_STALE" | head -12 | sed 's/^/        /'
     fi
   fi
