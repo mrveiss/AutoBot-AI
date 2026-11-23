@@ -17,6 +17,7 @@ from api import secrets as secrets_module
 from api import secrets_audit, secrets_guarded_delete, secrets_system_vault
 from api.secrets_defects_20557_test import _outcome, _trail, _with_dependents
 from api.secrets_system_vault_17731_test import _SECRET_ID, client_and_vault  # noqa: F401 -- fixture
+from services.audit import outcome
 
 
 def _results(ops: AsyncMock) -> list:
@@ -113,7 +114,7 @@ def test_an_unwritable_intent_gets_no_second_record(client_and_vault, monkeypatc
     monkeypatch.setattr(secrets_module, "audit_secret_op", secrets_audit.audit_secret_op)
     monkeypatch.setattr(secrets_audit, "_actor", lambda _r: "admin")
     record = AsyncMock(return_value=False)
-    monkeypatch.setattr(secrets_audit, "audit_log", record)
+    monkeypatch.setattr(outcome, "record_committed", record)
 
     response = client.delete(f"/api/secrets/{_SECRET_ID}")
 
