@@ -4,13 +4,14 @@
 # Author: mrveiss
 """#19163: the NPU engine's retrieval paths that bypass KB.search withhold research-quarantined facts."""
 
+import ast
 import asyncio
-import re
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from autobot_shared.ssot_config import config
 from npu_semantic_search import NPUSemanticSearch
+from tools.lint import _parse_cache as parse_cache
 
 HELD = {"collection": config.research_quarantine_collection}
 CASES = {"good": {}, "held": HELD}
@@ -86,11 +87,39 @@ def test_error_fallback_goes_through_kb_search_on_the_cpu_leg():
     assert obj.knowledge_base.search.await_args.kwargs == {"top_k": 5, "filters": None, "hardware_backend": "cpu"}
 
 
-_KB_SEARCH_CALL = re.compile(r"knowledge_base\.search\(([^\n]*)\)")
+def _unpinned_kb_search_calls(src: str) -> tuple:
+    """(all, unpinned) ``knowledge_base.search(...)`` calls in ``src``, read from the AST (#21794).
+
+    A call is pinned when it carries ``hardware_backend="cpu"`` as a keyword, wherever its
+    arguments wrap; a line-bound regex saw only calls written on one line.
+    """
+    calls = [
+        n
+        for n in ast.walk(parse_cache.parse(src))
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "search"
+        and isinstance(n.func.value, ast.Attribute)
+        and n.func.value.attr == "knowledge_base"
+    ]
+    pinned = [
+        c
+        for c in calls
+        if any(
+            k.arg == "hardware_backend" and ast.literal_eval(k.value) == "cpu"
+            for k in c.keywords
+            if isinstance(k.value, ast.Constant)
+        )
+    ]
+    return calls, [c for c in calls if c not in pinned]
 
 
-def _unpinned_kb_search_calls(src: str) -> list:
-    return [args for args in _KB_SEARCH_CALL.findall(src) if 'hardware_backend="cpu"' not in args]
+def test_the_detector_sees_wrapped_calls_and_flags_unpinned_ones():
+    wrapped_pinned = 'await self.knowledge_base.search(\n    q,\n    top_k=5,\n    hardware_backend="cpu",\n)'
+    wrapped_unpinned = "await self.knowledge_base.search(\n    q,\n    top_k=5,\n)"
+    assert [len(x) for x in _unpinned_kb_search_calls(wrapped_pinned)] == [1, 0]
+    assert [len(x) for x in _unpinned_kb_search_calls(wrapped_unpinned)] == [1, 1]
+    assert [len(x) for x in _unpinned_kb_search_calls("self.knowledge_base.search(q, top_k=5)")] == [1, 1]
 
 
 def test_npu_module_calls_kb_search_only_on_the_cpu_leg():
@@ -99,7 +128,6 @@ def test_npu_module_calls_kb_search_only_on_the_cpu_leg():
 
     import npu_semantic_search as mod
 
-    src = inspect.getsource(mod)
-    assert len(_KB_SEARCH_CALL.findall(src)) == 2  # both fallbacks: a zero would mean the matcher is blind
-    assert _unpinned_kb_search_calls(src) == []
-    assert _unpinned_kb_search_calls("self.knowledge_base.search(q, top_k=5)") == ["q, top_k=5"]  # control
+    calls, unpinned = _unpinned_kb_search_calls(inspect.getsource(mod))
+    assert calls, "no knowledge_base.search call found: the detector would be blind"
+    assert unpinned == []
