@@ -34,7 +34,7 @@ const HEARTBEAT_INTERVAL_MS = 30000
 export interface DesktopControlLockState {
   success: boolean
   session_id: string
-  owner: string | null
+  owner?: string | null
   human_active: boolean
   message: string
 }
@@ -94,7 +94,7 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
         '/api/vnc-proxy/{vnc_type}/control/status',
         { path, query: { session_id: sessionId } }
       )
-      owner.value = result.owner
+      owner.value = result.owner ?? null
       humanActive.value = result.human_active
       // Resume the heartbeat if we discover (e.g. after a page reload/remount)
       // that we already hold the lock -- otherwise its idle-TTL silently
@@ -125,7 +125,7 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
         '/api/vnc-proxy/{vnc_type}/control/acquire',
         { path, body: { session_id: sessionId } }
       )
-      owner.value = result.owner
+      owner.value = result.owner ?? null
       humanActive.value = result.human_active
       if (!result.success) {
         error.value = result.message
@@ -165,7 +165,7 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
         '/api/vnc-proxy/{vnc_type}/control/release',
         { path, body: { session_id: sessionId } }
       )
-      owner.value = result.owner
+      owner.value = result.owner ?? null
       humanActive.value = result.human_active
       if (!result.success) {
         error.value = result.message
