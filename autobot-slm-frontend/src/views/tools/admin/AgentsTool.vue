@@ -18,9 +18,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import { useAgentsApi } from '@/composables/useAgentsApi'
 import type { AgentOrgStatusItem, AvailableAgent } from '@/types/agents'
 
 const api = useAutobotApi()
+const agentsApi = useAgentsApi()
 const { t } = useI18n()
 
 // State
@@ -131,7 +133,7 @@ function joinAgents(
 
 // The stats are supplementary: a failure there leaves them "not reported" instead of blanking the tab.
 async function loadSupplement(): Promise<{ org: AgentOrgStatusItem[]; types: Record<string, string> }> {
-  const [org, status] = await Promise.allSettled([api.getAgentOrgStatus(), api.getAgentsStatus()])
+  const [org, status] = await Promise.allSettled([agentsApi.getAgentOrgStatus(), agentsApi.getAgentsStatus()])
   if (org.status === 'rejected') logger.error('Failed to load agent stats:', org.reason)
   if (status.status === 'rejected') logger.error('Failed to load agent status:', status.reason)
   const types = Object.fromEntries(
@@ -146,7 +148,7 @@ async function loadAgents(): Promise<void> {
 
   try {
     // Issue #835 - use named function from useAutobotApi
-    const [data, supplement] = await Promise.all([api.getAvailableAgents(), loadSupplement()])
+    const [data, supplement] = await Promise.all([agentsApi.getAvailableAgents(), loadSupplement()])
     agents.value = joinAgents(data.agents ?? [], supplement.org, supplement.types)
     stats.value = summarise(agents.value, data.total_agents ?? agents.value.length)
   } catch (e) {
