@@ -217,6 +217,20 @@ describe('BaseButton', () => {
     expect(states.every((s) => s.includes(":not([aria-disabled='true'])"))).toBe(true)
   })
 
+  it('passes aria-pressed through and styles the pressed state', () => {
+    // fails if aria-pressed is swallowed or the pressed rule leaves the kit
+    const wrapper = mount(BaseButton, { attrs: { 'aria-pressed': 'true' }, slots: { default: 'Voice' } })
+    expect(wrapper.attributes('aria-pressed')).toBe('true')
+    expect(buttonSource).toMatch(/\.aui-btn\[aria-pressed='true'\]/)
+  })
+
+  it('keeps the contrast text on a pressed primary button while hovered or active', () => {
+    // fails if the pressed rule's dark text wins over the primary hover fill
+    expect(buttonSource).toMatch(
+      /\.aui-btn--primary\[aria-pressed='true'\]:hover[^{]*\{[^}]*color: var\(--aui-color-primary-contrast\)/,
+    )
+  })
+
   it('styles through kit tokens only: no literal colour or box-shadow in the source', () => {
     // fails if a raw palette value or a shadow enters the component (design system: tokens, no shadows)
     expect(buttonSource).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|box-shadow/)

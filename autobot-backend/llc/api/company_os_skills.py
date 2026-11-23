@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import get_session
+from llc.deps import SESSION_DEP
 from llc.services.authz import NotAuthorisedError
 from llc.services.company_os.errors import CompanyOsError
 from llc.services.company_os.role_skills import RoleSkillService
@@ -62,7 +62,7 @@ async def _view(session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID
 @router.get("/{role_id}/skills", response_model=RoleSkillsResponse)
 async def get_role_skills(
     role_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> RoleSkillsResponse:
@@ -77,7 +77,7 @@ async def get_role_skills(
 async def grant_role_skill(
     role_id: uuid.UUID,
     body: RoleSkillGrant,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GrantResponse:
@@ -100,7 +100,7 @@ async def grant_role_skill(
 async def revoke_role_skill(
     role_id: uuid.UUID,
     grant_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

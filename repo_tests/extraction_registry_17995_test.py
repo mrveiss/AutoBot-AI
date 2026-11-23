@@ -62,7 +62,7 @@ REACH = declare(
     discover=_source_population,
     # Mid-window, from REACH.window() (population 7316, growth 300); pinned because the
     # guard is new in this PR. Dropped once the guard is on main.
-    floor=7166,
+    floor=7359,  # mid-window: population 7509, window (7209, 7509)
     what="python source and tests",
     roots=_ROOTS,
     growth=300,

@@ -44,6 +44,8 @@ appears, when an overlay repeats a `.env.base` key with the same value, or when 
 appears outside the known overlays.
 
 <!-- BEGIN_AUTOGEN_ENV_DOCS -->
+Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2027-03-01; before then they only warn.
+
 | Name | Component | Type | Default | Description |
 |---|---|---|---|---|
 | `AUTOBOT_A2A_CAPABILITY_TTL` | a2a | int | `300` | How long a fetched remote A2A capability descriptor is cached before the next check re-fetches it. Raising it reduces repeated cross-agent capability lookups; lowering it makes a capability change on the remote side (e.g. a tool removed) visible sooner (a2a/capability_verifier.py). |
@@ -99,6 +101,7 @@ appears outside the known overlays.
 | `AUTOBOT_BUDGET_INGEST_RETRY_MAX_DELAY_SECONDS` | backend | float | `10.0` | Cap, in seconds, on any single sleep between retries of an in-flight cost ingest, so the doubling backoff stays bounded (llc/services/budget_idempotency.py, #21332). |
 | `AUTOBOT_CACHE_DIR` | backend | str | *(none)* | Root for every regenerable cache (autobot_shared.paths.cache_root, #19553). Unset: $XDG_CACHE_HOME/autobot, else ~/.cache/autobot; a value inside the code tree is skipped. A container whose HOME is under the project root should mount a volume here. |
 | `AUTOBOT_CALL_GRAPH_SCAN_BUDGET_SECONDS` | analytics | float | `30.0` | Seconds the call-graph AST scan may run before it stops and reports the scope it covered. Default 30 -- half the tightest /api/ proxy_read_timeout the repo ships (60s in the container config and user template; 300s from the bare-metal installer), because a scan that outlives the gateway returns 504 to the browser while the backend keeps working, so the route's own files_scanned/files_total/truncated reporting never reaches the client. Non-positive means unbounded, which is the pre-#17651 behaviour. |
+| `AUTOBOT_CALL_GRAPH_SUMMARY_TTL` | analytics | int | `2592000` | Seconds the persisted per-source call-graph summary (#20945) is kept after the last build. Unlike the 5-minute call-graph cache it outlives it, so the knowledge graph can report a codebase's size without rebuilding the graph; a rebuild overwrites it. Clamped to 3600-7776000. Range: 3600–7776000. |
 | `AUTOBOT_CHANNEL_SEQ_KEY_PREFIX` | events | str | `'autobot:events:seq:'` | Redis key prefix for per-channel live-event sequence counters. |
 | `AUTOBOT_CHANNEL_STREAM_KEY_PREFIX` | events | str | `'autobot:events:channel:'` | Redis key prefix for per-channel live-event replay streams. |
 | `AUTOBOT_CHANNEL_STREAM_MAX_ENTRIES` | events | int | `1000` | Events retained per channel for reconnect replay. A client whose last_event_id has fallen outside this window is told to resync rather than handed a partial history. Range: 1–1000000. |
@@ -468,6 +471,7 @@ appears outside the known overlays.
 | `AUTOBOT_PROMETHEUS_PORT` | monitoring | str | `'9090'` | TCP port of the Prometheus instance. Also declared in ssot_config.py. |
 | `AUTOBOT_PROMETHEUS_SCRAPE_TOKEN` | security | str | `""` | Read-only bearer token Prometheus presents to /api/metrics/prometheus (#16375). Seeded by the SLM into its secret store and rendered by the deploy roles into backend.env and Prometheus' bearer_token_file. Unset refuses every scrape. |
 | `AUTOBOT_PROMETHEUS_URL` | monitoring | str | `'http://10.0.0.4:9090'` | Base URL of the Prometheus metrics server. |
+| `AUTOBOT_PROOF_SCAN_MAX_CHARS` | chat_workflow | int | `200000` | Most characters of one tool step's output (or of an answer) that the answer-proof check reads for quotable values (#21976). More is read up to this size and the proof is marked partial. |
 | `AUTOBOT_PROVIDER_DEGRADATION_TTL_SECONDS` | ai | int | `300` | Seconds a provider stays marked degraded after a failure before traffic is offered to it again. |
 | `AUTOBOT_PROVIDER_KEY_HYDRATION_TIMEOUT_S` | security | int | `30` | Seconds a process waits for its one-time provider-key vault hydration before treating the vault as unreachable (#18094). On timeout every vault-resolved key is refused (fail closed); a hydration that finishes later still swaps its result in. |
 | `AUTOBOT_PROVIDER_KEY_REHYDRATE_BACKOFF_S` | security | int | `30` | First delay before a process whose provider-key vault was unreachable tries to hydrate again on a later key resolution (#18094). Doubles after each failed retry, capped at 20x this value; a successful hydration resets it. Until a retry succeeds, keys stay refused, never served from env. |
@@ -485,6 +489,7 @@ appears outside the known overlays.
 | `AUTOBOT_REDIS_DB_KNOWLEDGE` | redis | int | *(none)* | Redis DB number for knowledge-base vectors; unset uses redis-databases.yaml (#19232). Range: 0–15. |
 | `AUTOBOT_REDIS_DB_MAIN` | redis | int | *(none)* | Redis DB number for primary application data; unset uses redis-databases.yaml (#19232). Range: 0–15. |
 | `AUTOBOT_REDIS_HOST` | redis | str | `'127.0.0.1'` | Redis server hostname or IP address. |
+| `AUTOBOT_REDIS_NODE_CACHE_TTL` | backend | int | `60` | Seconds the backend's Redis service manager reuses the Redis node it resolved from the SLM's `redis` role owner before asking again (autobot-backend/services/redis_service_errors.py, #22030). Range: 0–3600. |
 | `AUTOBOT_REDIS_PASSWORD` | redis | str | *(none)* | Redis AUTH password (omit or leave blank for unauthenticated servers). |
 | `AUTOBOT_REDIS_PORT` | redis | int | `6379` | Redis server TCP port (plain connection). Range: 1–65535. |
 | `AUTOBOT_REDIS_SCAN_COUNT` | knowledge | int | `1000` | COUNT hint for every pattern walk through autobot_shared/redis_scan.py: keys the server examines per SCAN call. redis-py defaults to 10, which turns a 1500-key keyspace into ~150 round trips per walk (#18999). Range: 10–100000. |
@@ -564,6 +569,7 @@ appears outside the known overlays.
 | `AUTOBOT_SLM_KEY_FINDING_CHECK_INTERVAL_S` | slm | float | `60.0` | Seconds between database checks when the backend refuses the SLM's internal API key: a burst of refused calls records the one key-mismatch finding without a query per call (#20750). Range: 1–86400. |
 | `AUTOBOT_SLM_KEY_PROBE_TIMEOUT_SECONDS` | slm | float | `10.0` | Wall-clock ceiling on the SSH key-access probe that runs before a stored SSH password's deletion is proposed (inline in enrollment) and again before it is deleted (#20046). The probe is killed at the ceiling and counts as failed, so a hung node delays enrollment by at most this long and the proposal waits for a later enrollment. Range: 2.0–60.0. |
 | `AUTOBOT_SLM_REFUSED_SESSION_AUDIT_WINDOW_S` | slm | int | `300` | Seconds between audit records of one person's refused non-admin SLM sessions (#20664). Range: 1–86400. |
+| `AUTOBOT_SLM_REQUEST_TIMEOUT` | backend | float | `15.0` | Seconds one backend request to the SLM's role-owner and node-service API may take in total (autobot-backend/services/slm_node_services.py, #22030). Range: 1.0–300.0. |
 | `AUTOBOT_SLM_RESTART_FLUSH_DELAY_SECONDS` | slm | float | `1.0` | Seconds the deferred SLM service restart waits for the HTTP response to flush before it starts killing the services that carried it. Too short and the caller sees a dropped connection instead of its 202; too long and the restart is needlessly delayed, so the right value follows the deployment's network rather than anything fixed (services/service_restart.py, #15611). Range: 0.0–60.0. |
 | `AUTOBOT_SLM_RESTART_SSH_TIMEOUT_SECONDS` | slm | float | `30.0` | Seconds a single `systemctl restart` over SSH may take before it is abandoned and reported as failed. A slow node restarting a heavy unit legitimately exceeds a value that is generous on a fast one, so this belongs to the deployment (services/service_restart.py, #15611). Range: 1.0–600.0. |
 | `AUTOBOT_SLM_UPDATE_REPORT_DEPLOY_RUNS` | slm | int | `50` | Newest role deploys listed in the update report (api/update_report.py, #19962). Range: 1–500. |

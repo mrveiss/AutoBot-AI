@@ -29,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from autobot_shared.env_registry import REGISTRY, EnvVarSpec  # noqa: E402
+from autobot_shared.env_unknown_keys import refuse_notice  # noqa: E402
 
 DOCS_PATH = REPO_ROOT / "docs" / "developer" / "ENV_VARS.md"
 
@@ -69,7 +70,7 @@ def build_table(registry: dict) -> str:
 
     header = "| Name | Component | Type | Default | Description |\n" "|---|---|---|---|---|"
     table_body = "\n".join(rows)
-    return f"{header}\n{table_body}\n"
+    return f"{refuse_notice()}\n\n{header}\n{table_body}\n"
 
 
 def rewrite_docs(docs_path: Path, table: str) -> None:

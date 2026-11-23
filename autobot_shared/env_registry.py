@@ -83,6 +83,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_rate_limit,
     env_registry_security,
     env_registry_slm,
+    env_registry_slm_client,
     env_registry_slm_health,
     env_registry_slm_rollback,
     env_registry_terminal,
@@ -139,9 +140,7 @@ register_env_var(
     )
 )
 
-# --- backend ----------------------------------------------------------------
-
-# --- chat -------------------------------------------------------------------
+# --- backend: env_registry_backend.py (#22030: folded to make room for the slm_client import) --- chat ---
 
 register_env_var(
     EnvVarSpec(

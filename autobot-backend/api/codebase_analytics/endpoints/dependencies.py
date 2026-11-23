@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-_REDIS_PREFIX = "dep_task:"
+DEPENDENCIES_TASK_PREFIX = "dep_task:"
 
 # Combined set for fast lookup during import extraction (#1197)
 _EXTERNAL_MODULES = STDLIB_MODULES | COMMON_THIRD_PARTY
@@ -510,7 +510,7 @@ async def get_dependencies(
 @bounded(60.0)
 async def get_cached_dependency_result(source_id: SourceIdQuery):
     """Return the latest completed dependency analysis result (#1540)."""
-    return await cached_task_result(_REDIS_PREFIX, source_id)
+    return await cached_task_result(DEPENDENCIES_TASK_PREFIX, source_id)
 
 
 @router.post("/analytics/dependencies/analyze")
@@ -518,7 +518,7 @@ async def get_cached_dependency_result(source_id: SourceIdQuery):
 async def start_dependency_analysis(source_id: SourceIdQuery):
     """Enqueue dependency analysis as a Celery task (GH#6505)."""
     result = run_dependency_analysis.delay(source_id)
-    await store_latest_task_id(source_scoped_prefix(_REDIS_PREFIX, source_id), result.id)
+    await store_latest_task_id(source_scoped_prefix(DEPENDENCIES_TASK_PREFIX, source_id), result.id)
     return {"task_id": result.id, "status": "pending"}
 
 

@@ -5,8 +5,8 @@
 """Shared FastAPI dependency helpers for LLC API routers (GH#9843).
 
 Eliminates per-router copy-paste of:
-  - ``get_session`` — bare async session (no auto-commit; callers manage
-    transactions explicitly via ``session.begin()`` / ``session.commit()``)
+  - ``get_session`` / ``SESSION_DEP`` — the request session, committed before the response is
+    sent (#21332)
   - ``_service()`` / ``lazy_singleton`` boilerplate — replaced by
     ``service_dep(SvcClass)`` which returns a cacheable Depends-compatible
     factory per service class.
@@ -17,7 +17,7 @@ circular import when a router is loaded in isolation via importlib (e.g. tests).
 
 Usage::
 
-    from llc.deps import get_session, service_dep
+    from llc.deps import service_dep, SESSION_DEP
     from llc.services.my_service import MyService
 
     router = APIRouter(...)
@@ -25,7 +25,7 @@ Usage::
 
     @router.get("/")
     async def handler(
-        session: AsyncSession = Depends(get_session),
+        session: AsyncSession = SESSION_DEP,
         svc: MyService = Depends(_my_svc_dep),
     ) -> ...:
         ...
@@ -39,10 +39,11 @@ import traceback
 import uuid
 from typing import Any, AsyncGenerator, Callable, Set, Type, TypeVar
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.db_session import async_session_scope
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text, sanitize_log_value
 from autobot_shared.singleton_factory import lazy_singleton
@@ -59,20 +60,25 @@ MEMBERSHIP_LOOKUP_FAILED_DETAIL = "Membership lookup failed"
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """Bare async DB session — no auto-commit or auto-rollback.
+    """Company OS request session: commits on success, rolls back on error (#21332).
 
-    Callers are responsible for explicit transaction management
-    (``session.begin()`` / ``session.commit()``).  This mirrors the
-    pre-refactor per-router ``get_session`` implementations exactly so that
-    endpoint behaviour is unchanged.
+    Built on the canonical ``async_session_scope``. Resolved through ``SESSION_DEP`` (function scope) it
+    exits after the route body and BEFORE the response is sent, so a 2xx means the write is committed,
+    a failing commit never reaches the client as a 2xx, and a raising route rolls back.
 
     Because every LLC router shares this single function object, a test's
     ``app.dependency_overrides[get_session]`` overrides the session for ALL
     migrated llc routers mounted on that app, not just one module.
     """
-    factory = get_async_session_factory()
-    async with factory() as session:
+    async with async_session_scope(get_async_session_factory()) as session:
         yield session
+
+
+#: THE session dependency of every LLC route (parameter default, sub-dependencies included). FastAPI's
+#: ``scope="function"`` ends the yield dependency after the path operation function and before the response is
+#: sent. A plain ``Depends(get_session)`` is request-scoped and would commit after the response: the llc guard
+#: (``llc/tests/test_commit_before_answer_guard_21332.py``) fails on it.
+SESSION_DEP = Depends(get_session, scope="function")
 
 
 # ``functools.lru_cache`` does not lock a miss: two threads can both build the
@@ -269,4 +275,5 @@ __all__ = [
     "load_owned_project",
     "require_board_role",
     "service_dep",
+    "SESSION_DEP",
 ]
