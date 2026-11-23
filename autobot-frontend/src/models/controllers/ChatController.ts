@@ -625,14 +625,7 @@ export class ChatController {
           // #9724: the store needs isActive. Dates are taken as the repository
           // mapped them (#20865) — re-deriving them from snake_case fields the
           // repository does not return produced Invalid Date.
-          this.chatStore.importSession({
-            id: session.id,
-            title: session.title ?? '',
-            messages: session.messages,
-            createdAt: session.createdAt,
-            updatedAt: session.updatedAt,
-            isActive: false,
-          })
+          this.chatStore.importSession({ ...session, title: session.title ?? '', isActive: false })
         })
         logger.debug(`Loaded ${sessions.length} chat sessions`)
       } else {
