@@ -91,12 +91,12 @@ async function assignRole(): Promise<void> {
 
       <!-- Node Selection -->
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
           {{ $t('fleet.assignNPURoleModal.selectNode') }}
         </label>
         <select
           v-model="selectedNodeId"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
         >
           <option value="">{{ $t('fleet.assignNPURoleModal.selectANode') }}</option>
           <option
@@ -110,24 +110,24 @@ async function assignRole(): Promise<void> {
       </div>
 
       <!-- Selected Node Info -->
-      <div v-if="selectedNode" class="bg-gray-50 rounded-lg p-4">
-        <h4 class="text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.assignNPURoleModal.nodeDetails') }}</h4>
+      <div v-if="selectedNode" class="bg-autobot-bg-secondary rounded-lg p-4">
+        <h4 class="text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('fleet.assignNPURoleModal.nodeDetails') }}</h4>
         <dl class="space-y-1 text-sm">
           <div class="flex justify-between">
-            <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.hostname') }}</dt>
-            <dd class="text-gray-900">{{ selectedNode.hostname }}</dd>
+            <dt class="text-autobot-text-tertiary">{{ $t('fleet.assignNPURoleModal.hostname') }}</dt>
+            <dd class="text-autobot-text-primary">{{ selectedNode.hostname }}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.iPAddress') }}</dt>
-            <dd class="text-gray-900">{{ selectedNode.ip_address }}</dd>
+            <dt class="text-autobot-text-tertiary">{{ $t('fleet.assignNPURoleModal.iPAddress') }}</dt>
+            <dd class="text-autobot-text-primary">{{ selectedNode.ip_address }}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.status') }}</dt>
-            <dd class="text-gray-900">{{ selectedNode.status }}</dd>
+            <dt class="text-autobot-text-tertiary">{{ $t('fleet.assignNPURoleModal.status') }}</dt>
+            <dd class="text-autobot-text-primary">{{ selectedNode.status }}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.currentRoles') }}</dt>
-            <dd class="text-gray-900">
+            <dt class="text-autobot-text-tertiary">{{ $t('fleet.assignNPURoleModal.currentRoles') }}</dt>
+            <dd class="text-autobot-text-primary">
               {{ selectedNode.roles.length > 0 ? selectedNode.roles.join(', ') : 'None' }}
             </dd>
           </div>
@@ -142,7 +142,7 @@ async function assignRole(): Promise<void> {
     <template #actions>
       <button
         @click="close"
-        class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+        class="px-4 py-2 text-autobot-text-secondary hover:bg-autobot-bg-hover rounded-lg transition-colors"
       >
         {{ $t('fleet.assignNPURoleModal.cancel') }}
       </button>

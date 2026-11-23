@@ -67,9 +67,9 @@ const sloCompliance = computed(() => overview.value?.slo_compliance_percent ?? 0
  */
 function complianceColor(): string {
   const pct = sloCompliance.value
-  if (pct >= 99) return 'text-green-600'
-  if (pct >= 95) return 'text-amber-600'
-  return 'text-red-600'
+  if (pct >= 99) return 'text-autobot-success'
+  if (pct >= 95) return 'text-autobot-warning'
+  return 'text-autobot-error'
 }
 </script>
 
@@ -85,23 +85,23 @@ function complianceColor(): string {
     <template #header-end>
       <!-- Quick Stats Bar -->
       <div class="flex items-center gap-6 text-sm" role="status" :aria-label="$t('performanceView.performanceSummary')">
-        <div class="flex items-center gap-2 text-gray-600">
-          <span class="text-gray-400">{{ $t('performanceView.avgLatency') }}</span>
+        <div class="flex items-center gap-2 text-autobot-text-secondary">
+          <span class="text-autobot-text-tertiary">{{ $t('performanceView.avgLatency') }}</span>
           <span class="font-semibold">{{ avgLatency.toFixed(1) }}ms</span>
         </div>
-        <div class="flex items-center gap-2 text-gray-600">
-          <span class="text-gray-400">{{ $t('performanceView.errorRate') }}</span>
+        <div class="flex items-center gap-2 text-autobot-text-secondary">
+          <span class="text-autobot-text-tertiary">{{ $t('performanceView.errorRate') }}</span>
           <span
             :class="[
               'font-semibold',
-              errorRate > 5 ? 'text-red-600' : errorRate > 1 ? 'text-amber-600' : 'text-green-600'
+              errorRate > 5 ? 'text-autobot-error' : errorRate > 1 ? 'text-autobot-warning' : 'text-autobot-success'
             ]"
           >
             {{ errorRate.toFixed(2) }}%
           </span>
         </div>
-        <div class="flex items-center gap-2 text-gray-600">
-          <span class="text-gray-400">{{ $t('performanceView.sLOCompliance') }}</span>
+        <div class="flex items-center gap-2 text-autobot-text-secondary">
+          <span class="text-autobot-text-tertiary">{{ $t('performanceView.sLOCompliance') }}</span>
           <span :class="['font-semibold', complianceColor()]">
             {{ sloCompliance.toFixed(1) }}%
           </span>
@@ -109,7 +109,7 @@ function complianceColor(): string {
         <button
           @click="poller.start('')"
           :disabled="loading"
-          class="p-1.5 text-gray-400 hover:text-gray-600 rounded-sm transition-colors"
+          class="p-1.5 text-autobot-text-tertiary hover:text-autobot-text-secondary rounded-sm transition-colors"
           :aria-label="$t('performanceView.refreshPerformanceData')"
         >
           <svg
