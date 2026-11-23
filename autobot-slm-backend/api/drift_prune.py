@@ -21,6 +21,7 @@ Registers onto the SAME ``APIRouter`` ``api.code_sync`` builds (imported from
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
@@ -30,14 +31,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.code_sync import router
 from api.security import create_audit_log
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.security.path_http import require_contained_relative_path
 from services.auth import require_permission
 from services.database import get_db
 from services.deploy_activity import read_deploy_activity
+from services.deployed_dir_resolver import get_live_dir
 from services.drift_checker import VISIBILITY_COMPONENTS
 from services.drift_prune import (
     PruneResult,
     apply_prune,
-    is_prunable_component,
+    canonical_component,
     plan_prune,
 )
 
@@ -79,12 +82,31 @@ class DriftPruneResponse(BaseModel):
     failed: dict[str, str]
 
 
-def _require_component(component: str) -> None:
-    if not is_prunable_component(component):
+def _require_component(component: str) -> str:
+    """The allowlisted component name for *component*, or 400."""
+    known = canonical_component(component)
+    if known is None:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid component '{component}'. Must be one of: {sorted(VISIBILITY_COMPONENTS)}",
         )
+    return known
+
+
+def _require_contained_paths(component: str, paths: list[str]) -> None:
+    """400 for any path that is not a plain file name under *component*'s deployed tree.
+
+    The parent directory goes through the canonical containment check (absolute, ``..``
+    and a symlinked parent that leaves the tree all refuse). The leaf is not resolved: a
+    symlink leaf is removed as a link, never followed (``services/drift_prune.py``).
+    """
+    base = get_live_dir(component)
+    for path in paths:
+        pure = PurePosixPath(path)
+        if pure.name in ("", ".", "..") or path.startswith("/") or "\x00" in path:
+            raise HTTPException(status_code=400, detail="Invalid path")
+        if str(pure.parent) != ".":
+            require_contained_relative_path(str(pure.parent), base)
 
 
 async def _refuse_unless_deploy_idle() -> None:
@@ -145,12 +167,12 @@ async def preview_drift_prune(
     _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
 ) -> DriftPrunePreview:
     """List exactly the deployed files git proves were deleted from source (#22082)."""
-    _require_component(request.component)
-    plan = await plan_prune(request.component)
+    component = _require_component(request.component)
+    plan = await plan_prune(component)
     if plan.error:
-        raise HTTPException(status_code=409, detail=f"Cannot preview {request.component}: {plan.error}")
+        raise HTTPException(status_code=409, detail=f"Cannot preview {component}: {plan.error}")
     return DriftPrunePreview(
-        component=request.component,
+        component=component,
         files=[DriftPruneFile(path=p, detail=d) for p, d in plan.files],
     )
 
@@ -166,11 +188,12 @@ async def confirm_drift_prune(
     Anything else in *paths* -- a host_state, artifact or modified file, or one
     that stopped being eligible since the preview -- is refused and left alone.
     """
-    _require_component(request.component)
+    component = _require_component(request.component)
+    _require_contained_paths(component, request.paths)
     await _refuse_unless_deploy_idle()
-    log = await _audit_pending(db, user, request.component, request.paths)
+    log = await _audit_pending(db, user, component, request.paths)
     try:
-        result = await apply_prune(request.component, request.paths, before_delete=_refuse_unless_deploy_idle)
+        result = await apply_prune(component, request.paths, before_delete=_refuse_unless_deploy_idle)
     except Exception as exc:
         await _audit_outcome(db, log, None, f"{type(exc).__name__}: {exc}")
         raise

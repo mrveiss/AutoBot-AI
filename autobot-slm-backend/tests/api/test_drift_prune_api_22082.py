@@ -49,7 +49,7 @@ class _Db(FakeAsyncSession):
 
 
 @pytest.fixture
-def env(monkeypatch):
+def env(monkeypatch, tmp_path):
     state = SimpleNamespace(
         admin=True,
         in_progress=False,
@@ -59,6 +59,7 @@ def env(monkeypatch):
         events=[],
         rows=[],
         apply_calls=[],
+        root=tmp_path / "live",
     )
 
     async def _gate() -> dict:
@@ -95,6 +96,12 @@ def env(monkeypatch):
             raise RuntimeError("boom")
         return _Result(component, ["a.py"], {"b.py": "not removed_from_source"}, {})
 
+    def _contained(segment, base):
+        # The real helper is covered by autobot_shared/security/path_http_test.py; here only the wiring.
+        if ".." in Path(segment).parts or Path(segment).is_absolute():
+            raise HTTPException(status_code=400, detail="Invalid path")
+        return Path(base) / segment
+
     async def _plan(component, repo_root=None):
         return SimpleNamespace(error=None, files=[("a.py", "abc123")])
 
@@ -118,8 +125,11 @@ def env(monkeypatch):
         PruneResult=_Result,
         apply_prune=_apply,
         plan_prune=_plan,
-        is_prunable_component=lambda c: c in {"plugins", "autobot-backend"},
+        canonical_component=lambda c: c if c in {"plugins", "autobot-backend"} else None,
     )
+    _module(monkeypatch, "autobot_shared.security")
+    _module(monkeypatch, "autobot_shared.security.path_http", require_contained_relative_path=_contained)
+    _module(monkeypatch, "services.deployed_dir_resolver", get_live_dir=lambda _c: str(state.root))
     spec = importlib.util.spec_from_file_location("_drift_prune_api_under_test_22082", _BACKEND / "api/drift_prune.py")
     mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     monkeypatch.setitem(sys.modules, "_drift_prune_api_under_test_22082", mod)
@@ -238,3 +248,20 @@ def test_a_failing_apply_marks_the_row_aborted(env) -> None:
 def test_the_module_is_registered_from_full_tree_drift() -> None:
     registrar = (_BACKEND / "api" / "full_tree_drift.py").read_text(encoding="utf-8")
     assert "from api import drift_prune" in registrar
+
+
+@pytest.mark.parametrize("bad", ["../x", "a/../../x", "/etc/passwd", "..", "", "a\x00b"])
+def test_an_escaping_or_malformed_path_is_400_and_nothing_is_audited_or_removed(env, bad) -> None:
+    resp = env.client.post("/code-sync/drift/prune", json={"component": "plugins", "paths": ["a.py", bad]})
+
+    assert resp.status_code == 400
+    assert env.apply_calls == [] and env.rows == []
+
+
+def test_a_contained_nested_path_still_reaches_apply(env) -> None:
+    (env.root / "sub").mkdir(parents=True)
+
+    resp = env.client.post("/code-sync/drift/prune", json={"component": "plugins", "paths": ["sub/a.py"]})
+
+    assert resp.status_code == 200
+    assert env.apply_calls == [["sub/a.py"]]

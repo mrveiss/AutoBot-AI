@@ -203,6 +203,12 @@ async def test_a_traversal_or_symlinked_parent_never_leaves_the_deployed_tree(tm
     assert _read(outside / "gone.py") == "precious"
 
 
+def test_canonical_component_returns_the_allowlist_element_or_none() -> None:
+    assert _dp.canonical_component("plugins") == "plugins"
+    for bad in ("../plugins", "plugins/", "Plugins", "", "/etc"):
+        assert _dp.canonical_component(bad) is None
+
+
 async def test_a_component_that_cannot_be_judged_removes_nothing(tmp_path, monkeypatch) -> None:
     repo, deployed = _setup(tmp_path, monkeypatch, "autobot-browser-worker")
     monkeypatch.setattr(_ftd, "get_live_dir", lambda c: str(tmp_path / "nowhere"))  # not colocated: skipped

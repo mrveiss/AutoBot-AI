@@ -75,7 +75,17 @@ class PruneResult:
 
 def is_prunable_component(component: str) -> bool:
     """Every drift-check component, including the read-only extras such as ``plugins``."""
-    return component in VISIBILITY_COMPONENTS
+    return canonical_component(component) is not None
+
+
+def canonical_component(component: str) -> str | None:
+    """The drift-check component name equal to *component*, taken from the trusted set.
+
+    Returns the allowlist's own element, never the caller's string, so everything
+    that builds a filesystem path from the result holds a value the request cannot
+    shape. ``None`` when *component* names no drift-check component.
+    """
+    return next((known for known in sorted(VISIBILITY_COMPONENTS) if known == component), None)
 
 
 def _plan_from_drift(drift: ComponentDrift) -> PrunePlan:
