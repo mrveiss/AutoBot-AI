@@ -32,6 +32,7 @@ from api.schemas_workflows import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_principal_id
 from services.workflow_secret_service import (
     WorkflowSecretService,
     get_workflow_secret_service,
@@ -88,7 +89,7 @@ async def create_workflow_secret(
 
     Issue #2153, #2303.
     """
-    owner_id = current_user.get("user_id", "")
+    owner_id = resolve_principal_id(current_user) or ""
     try:
         result = _svc().create_secret(
             name=request.name,
@@ -137,7 +138,7 @@ async def list_workflow_secrets(
 
     Issue #2153, #2303.
     """
-    owner_id = current_user.get("user_id", "")
+    owner_id = resolve_principal_id(current_user) or ""
     try:
         rows = _svc().list_secrets(owner_id=owner_id, workflow_id=workflow_id)
     except Exception as exc:
@@ -170,7 +171,7 @@ async def update_workflow_secret(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Request failed") from exc
 
-    owner_id = current_user.get("user_id", "")
+    owner_id = resolve_principal_id(current_user) or ""
     try:
         updated = _svc().update_secret(
             name=name,
@@ -218,7 +219,7 @@ async def delete_workflow_secret(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Request failed") from exc
 
-    owner_id = current_user.get("user_id", "")
+    owner_id = resolve_principal_id(current_user) or ""
     try:
         deleted = _svc().delete_secret(name=name, owner_id=owner_id)
     except Exception as exc:

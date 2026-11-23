@@ -12,9 +12,8 @@ it ran ``automation_control`` (pause, resume, cancel, approve_step, skip_step) o
 - The caller is authenticated before the socket is accepted (``open_authenticated_ws``).
 - The session slot is claimed for that user. Another user's live slot is refused,
   and a disconnect frees only the caller's own socket.
-- ``automation_control`` runs only for an admin or the workflow's recorded owner.
-  No workflow creator records ``owner_id`` today, so in practice this is admin-only
-  until the owner model lands (#17014).
+- ``automation_control`` runs only for an admin or the workflow's recorded owner, the principal
+  ``resolve_principal_id`` gave its creator (#17014, #21655); a username never matches.
 """
 
 import json

@@ -242,12 +242,12 @@ _SCRIPT_PATTERNS = (
     re.compile(r"\b[A-Z_]+_DB\s*:\s*\d"),
     re.compile(r"\bdatabase\s*:\s*\d"),
 )
-#: Known, recorded, and NOT silently excluded: the MCP tracker stores its own data in DB 10,
-#: which redis-databases.yaml assigns to the security audit log. Moving that data is a decision
-#: (no agent moves stored data on its own), so these stay listed until it is made.
 _TRACKER = "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/"
 #: Per-file count of known script literals. SHRINK-ONLY: a live count above its baseline is a new
 #: copy; a live count below it means the baseline must be lowered to match (a file at 0 is dropped).
+#: Known, recorded, and NOT silently excluded: the MCP tracker stores its own data in DB 10,
+#: which redis-databases.yaml assigns to the security audit log. Moving that data is a decision
+#: (no agent moves stored data on its own), so these stay listed until it is made.
 _SCRIPT_KNOWN = {
     _TRACKER + "src/index.ts": 1,
     _TRACKER + "correlate-unfinished-tasks.cjs": 1,
