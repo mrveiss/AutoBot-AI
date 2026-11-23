@@ -15,7 +15,7 @@ import pytest
 from autobot_shared.install_paths import overlaps, safe_relative_dir
 from models.manifest import ManifestDeploy, RoleManifest
 from services.manifest_loader import ManifestLoader
-from services.role_removal_dir import detected_roles_if_fresh, removal_path, role_removal_path
+from services.role_removal_dir import detected_roles_if_fresh, record_role_report, removal_path, role_removal_path
 from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
 ROOT = "/opt/autobot"
@@ -149,8 +149,10 @@ def test_every_registry_role_alone_or_with_every_other_role_removes_nothing_unsa
             ), (role, got)
 
 
-def _node(detected, beat):
-    return SimpleNamespace(detected_roles=detected, last_heartbeat=beat)
+def _node(detected, received, beat=None):
+    """*received* is when the role report arrived; *beat* the last heartbeat (which a report-less beat renews)."""
+    extra = {"role_report_at": received.isoformat()} if received else {}
+    return SimpleNamespace(detected_roles=detected, extra_data=extra, last_heartbeat=beat or received)
 
 
 def test_detected_roles_are_trusted_only_when_a_fresh_report_names_the_removed_role():
@@ -160,6 +162,33 @@ def test_detected_roles_are_trusted_only_when_a_fresh_report_names_the_removed_r
     assert detected_roles_if_fresh(_node(["backend"], None), now, 90, "backend") is None
     assert detected_roles_if_fresh(_node(["backend"], now - timedelta(seconds=91)), now, 90, "backend") is None
     assert detected_roles_if_fresh(None, now, 90, "backend") is None
+
+
+def test_a_heartbeat_without_a_role_report_does_not_renew_an_old_report():
+    now = datetime(2026, 11, 22, 12, 0, tzinfo=timezone.utc)
+    stale_report = now - timedelta(seconds=600)
+    node = _node(["backend"], stale_report, beat=now - timedelta(seconds=5))
+    assert detected_roles_if_fresh(node, now, 90, "backend") is None
+    node.extra_data = {"role_report_at": "not a time"}
+    assert detected_roles_if_fresh(node, now, 90, "backend") is None
+    record_role_report(node, ["backend"], now - timedelta(seconds=5))  # contrast: a new report renews it
+    assert detected_roles_if_fresh(node, now, 90, "backend") == {"backend"}
+
+
+def test_recording_a_report_keeps_the_rest_of_extra_data():
+    node = SimpleNamespace(detected_roles=[], extra_data={"gpu": 1})
+    record_role_report(node, ["backend"])
+    assert node.detected_roles == ["backend"] and node.extra_data["gpu"] == 1 and "role_report_at" in node.extra_data
+
+
+def test_a_role_located_at_the_install_root_overlaps_every_directory(manifests):
+    own = f"{ROOT}/app"
+    assert removal_path("x", ["y"], {}, {"x": own, "y": ROOT}) is None
+    assert removal_path("x", ["y"], {}, {"x": own, "y": ROOT + "/"}) is None
+    assert removal_path("y", ["x"], {}, {"x": own, "y": ROOT}) is None  # and the other direction: y is the root
+    assert removal_path("x", ["y"], {}, {"x": own, "y": "/usr/bin/Xtigervnc"}) == "app"  # unrelated dirs stay eligible
+    assert removal_path("x", ["y"], {}, {"x": own, "y": ""}) == "app"
+    assert removal_path("x", ["y"], {}, {"x": own, "y": f"{ROOT}/other"}) == "app"
 
 
 def test_a_node_whose_agent_never_sent_a_role_report_is_not_known_to_run_nothing():

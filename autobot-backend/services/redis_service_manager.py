@@ -178,15 +178,18 @@ class RedisServiceManager:
         client = self._slm_client()
         node_id = await resolve_redis_node_id(client, self.slm_node_id)
         try:
-            data = await client.list_node_services(node_id, search=self.service_name, per_page=1)
+            data = await client.list_node_services(node_id, search=self.service_name)
         except aiohttp.ClientResponseError as exc:
             clear_resolved_node()
             raise access_error(exc) or RedisConnectionError(f"SLM status query failed: HTTP {exc.status}") from exc
         except Exception:
             clear_resolved_node()  # a timeout or connection error may mean the node moved; ask again next time
             raise
-        services = data.get("services", [])
-        return services[0].get("status", "unknown") if services else "unknown"
+        # ``search`` is a substring match (``backup-redis-stack-server`` also hits): take the exact name only.
+        for row in data.get("services", []):
+            if row.get("service_name") == self.service_name:
+                return row.get("status", "unknown")
+        return "unknown"
 
     def _already_in_state_result(self, operation: str, target_status: str, duration: float) -> ServiceOperationResult:
         """
@@ -556,7 +559,10 @@ class RedisServiceManager:
             ServiceHealthReport with comprehensive health information
         """
         try:
-            status = await self.get_service_status(use_cache=False)
+            try:
+                status = await self.get_service_status(use_cache=False)
+            except SLM_REFUSALS:  # refusal already recorded; the PING still says whether Redis is up
+                status = ManagedServiceStatus(status="unknown", last_check=datetime.now(tz=timezone.utc))
             service_running = status.status == "running"
 
             connectivity, response_time_ms = await self._check_redis_connectivity()

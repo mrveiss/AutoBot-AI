@@ -29,6 +29,7 @@ async def test_an_operation_route_answers_503_with_the_reason(route, method, ext
         await route(request=MagicMock(), manager=manager, **extra)
     assert caught.value.status_code == 503
     assert caught.value.detail == str(error)
+    getattr(manager, method).assert_awaited_once_with(user_id="u")
 
 
 @pytest.mark.asyncio
@@ -38,3 +39,4 @@ async def test_the_status_route_answers_503_with_the_reason():
     with pytest.raises(HTTPException) as caught:
         await redis_service.get_redis_status(manager=manager, current_user={"username": "u"})
     assert (caught.value.status_code, caught.value.detail) == (503, "refused")
+    manager.get_service_status.assert_awaited_once_with()

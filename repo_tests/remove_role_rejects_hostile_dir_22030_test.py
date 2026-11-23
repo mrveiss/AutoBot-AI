@@ -48,6 +48,14 @@ def test_a_hostile_directory_fails_the_run_at_the_first_task(tmp_path: Path, val
     assert "Validate required variables" not in out, "a later task ran"
 
 
+def test_a_valid_directory_passes_both_checks_and_reaches_the_later_tasks(tmp_path: Path) -> None:
+    """Contrast: the refusals above are the validation's doing, not a playbook that fails for any value."""
+    (tmp_path / "root").mkdir()
+    _code, out = _run(tmp_path, "roles/x")
+    assert _SHAPE not in out and _ESCAPE not in out, out[-600:]
+    assert "Validate required variables" in out, out[-600:]
+
+
 def test_a_symlink_out_of_the_install_root_fails_the_realpath_check(tmp_path: Path) -> None:
     (tmp_path / "root").mkdir()
     (tmp_path / "outside").mkdir()

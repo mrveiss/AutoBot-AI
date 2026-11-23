@@ -52,7 +52,7 @@ def _units_of(services: list[dict], role: str | None) -> list[str]:
     return [
         s.get("system_service") or s["name"]
         for s in services
-        if s.get("type") == "systemd" and (role is None or role in (s.get("slm_roles") or []))
+        if s.get("type", "systemd") == "systemd" and (role is None or role in (s.get("slm_roles") or []))
     ]
 
 

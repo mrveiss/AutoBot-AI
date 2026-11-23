@@ -85,7 +85,7 @@ from services.database import get_db
 from services.encryption import encrypt_data
 from services.node_events import create_node_event, enrollment_details
 from services.reconciler import reconciler_service
-from services.role_removal_dir import role_removal_path
+from services.role_removal_dir import record_role_report, role_removal_path
 from services.ssh_utils import build_ssh_base_cmd
 from services.temp_inventory import write_linked_inventory
 
@@ -1890,7 +1890,7 @@ async def _apply_heartbeat_reports(db: AsyncSession, node_id: str, heartbeat: He
     if heartbeat.role_report:
         try:
             await _process_role_report(db, node_id, heartbeat.role_report)
-            node.detected_roles = _detected_role_names(heartbeat.role_report)
+            record_role_report(node, _detected_role_names(heartbeat.role_report))
             node.role_versions = {
                 name: report.version for name, report in heartbeat.role_report.items() if report.version
             }

@@ -187,7 +187,9 @@ def test_health_derivation_is_skipped_for_the_excluded_role():
 
 def test_a_role_with_no_health_check_gains_none_from_a_shared_manifest():
     """celery runs from the backend manifest, whose one health endpoint is the backend's, not celery's."""
-    manifest = _manifest("autobot-backend", services=[_svc("autobot-celery")], health_endpoint="https://x:8443/x")
+    manifest = _manifest(
+        "autobot-backend", services=[_svc("autobot-celery", slm_roles=["celery"])], health_endpoint="https://x:8443/x"
+    )
     role_data = {"name": "celery", "systemd_service": "autobot-celery"}
     result = rms.apply_manifest_shape(role_data, {"autobot-backend": manifest})
     assert "health_check_port" not in result
@@ -468,6 +470,19 @@ def _registry_role_fields() -> dict[str, set[str]]:
     return roles
 
 
+def _registry_unit_literals() -> dict[str, object]:
+    """``role name -> the systemd_service literal`` (str or list) the registry source holds."""
+    tree = ast.parse(_REGISTRY_SOURCE.read_text(encoding="utf-8"))
+    found = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            fields = {k.value: v for k, v in zip(node.keys, node.values) if isinstance(k, ast.Constant)}
+            name, unit = fields.get("name"), fields.get("systemd_service")
+            if isinstance(name, ast.Constant) and "display_name" in fields and unit is not None:
+                found[name.value] = ast.literal_eval(unit)
+    return found
+
+
 def test_the_registry_restates_no_health_a_manifest_provides():
     declared = {n for n, f in _registry_role_fields().items() if f & {"health_check_port", "health_check_path"}}
     owned = rms.HEALTH_DERIVED_ROLES | set(rms.HEALTH_OWN_BIND)
@@ -482,7 +497,9 @@ def test_the_registry_restates_no_unit_a_manifest_declares():
     for name, fields in _registry_role_fields().items():
         if "systemd_service" not in fields or name in _LITERAL_UNIT_ROLES:
             continue
-        shaped = rms.apply_manifest_shape({"name": name, "source_paths": [], "target_path": "/x"}, manifests)
+        shaped = rms.apply_manifest_shape(
+            {"name": name, "source_paths": [], "target_path": "/x"}, manifests, _PLACEHOLDERS
+        )
         if shaped.get("systemd_service"):
             restated.append(name)
     assert not restated, f"role_registry.py still declares the unit of manifest-backed roles: {restated}"
@@ -491,7 +508,9 @@ def test_the_registry_restates_no_unit_a_manifest_declares():
 def test_the_literal_unit_roles_have_no_manifest_unit():
     manifests = _real_manifests()
     for name in _LITERAL_UNIT_ROLES:
-        shaped = rms.apply_manifest_shape({"name": name, "source_paths": [], "target_path": "/x"}, manifests)
+        shaped = rms.apply_manifest_shape(
+            {"name": name, "source_paths": [], "target_path": "/x"}, manifests, _PLACEHOLDERS
+        )
         assert not shaped.get("systemd_service"), f"{name} now has a manifest unit; drop its registry literal"
 
 
@@ -499,7 +518,9 @@ def test_every_derived_health_equals_what_the_registry_declared_before():
     manifests = _real_manifests()
     got = {}
     for name in _EXPECTED_HEALTH:
-        shaped = rms.apply_manifest_shape({"name": name, "source_paths": [], "target_path": "/x"}, manifests)
+        shaped = rms.apply_manifest_shape(
+            {"name": name, "source_paths": [], "target_path": "/x"}, manifests, _PLACEHOLDERS
+        )
         got[name] = (shaped.get("health_check_port"), shaped.get("health_check_path"))
     assert got == _EXPECTED_HEALTH
 
@@ -519,9 +540,21 @@ def test_the_static_unit_reader_in_repo_tests_agrees_with_the_runtime_projection
 
     manifests = _real_manifests()
     static = registry_role_units(_REPO_ROOT)
+    literals = _registry_unit_literals()
     for name, units in static.items():
-        shaped = rms.apply_manifest_shape({"name": name, "source_paths": [], "target_path": "/x"}, manifests)
+        role = {"name": name, "source_paths": [], "target_path": "/x"}
+        if name in literals:
+            role["systemd_service"] = literals[name]
+        shaped = rms.apply_manifest_shape(role, manifests, _PLACEHOLDERS)
         assert units == (shaped.get("systemd_service") or []), name
+
+
+def test_the_static_unit_reader_defaults_a_missing_type_to_systemd_like_the_manifest_model():
+    from repo_tests._registry_role_units import _units_of
+
+    services = [{"name": "untyped"}, {"name": "built", "type": "oneshot"}, {"name": "typed", "type": "systemd"}]
+    assert _units_of(services, None) == ["untyped", "typed"]
+    assert ManifestService(name="untyped").type == ServiceType.SYSTEMD
 
 
 # ---------------------------------------------------------------------------

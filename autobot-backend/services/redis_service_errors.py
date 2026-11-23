@@ -39,10 +39,14 @@ REDIS_NODE_CACHE_TTL_S = _resolve_node_cache_ttl()
 _resolved: tuple[str, float] | None = None  # (node id, monotonic expiry) of the last role-owner lookup
 
 
+_cache_epoch = 0  # bumped by every clear, so a lookup that overlapped one cannot re-cache its stale answer
+
+
 def clear_resolved_node() -> None:
     """Forget the cached node id (a role moved, or a test)."""
-    global _resolved
+    global _resolved, _cache_epoch
     _resolved = None
+    _cache_epoch += 1
 
 
 #: The SLM role whose owner node runs the Redis Stack service (``role_registry``'s ``redis``).
@@ -91,6 +95,7 @@ async def resolve_redis_node_id(client, configured: str) -> str:
         return configured
     if _resolved is not None and time.monotonic() < _resolved[1]:
         return _resolved[0]
+    epoch = _cache_epoch
     try:
         owners = (await client.get_role_owners()).get(REDIS_ROLE) or []
     except aiohttp.ClientResponseError as exc:
@@ -103,5 +108,6 @@ async def resolve_redis_node_id(client, configured: str) -> str:
         )
     if len(owners) > 1:
         logger.warning("Several nodes hold the '%s' role (%s); using %s", REDIS_ROLE, owners, owners[0])
-    _resolved = (owners[0], time.monotonic() + REDIS_NODE_CACHE_TTL_S)
+    if epoch == _cache_epoch:  # a clear during the await means this answer may already be stale
+        _resolved = (owners[0], time.monotonic() + REDIS_NODE_CACHE_TTL_S)
     return owners[0]

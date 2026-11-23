@@ -13,11 +13,13 @@ delete the install root, a ``.`` / ``..`` path, a path outside the root, or a di
 * a role no manifest resolves to keeps its own ``target_path`` only when that path is strictly inside the root;
 * a ``deploy_to_all`` manifest (``autobot_shared``, the SLM agent) and a ``required`` role are never removed with
   their directory -- the other roles import from, or are managed by, them;
+* another role located AT the install root itself overlaps every directory below it, so nothing is removed;
 * a directory that is, contains or sits inside the directory of any other role on the node is kept. "Other roles" are
   the node's ``NodeRole`` rows plus its detected roles (``Node.detected_roles``, filled from the agent's heartbeat
-  role report); the roles count as known only when that list is non-empty, contains the role being removed and is
-  fresh (an empty list is the column default and what an agent without role definitions sends), otherwise
-  nothing is removed, because a role running on the node but missing from ``NodeRole`` would be invisible.
+  role report); the roles count as known only when that list is non-empty, contains the role being removed and the
+  role report that wrote it was RECEIVED recently -- a heartbeat without a report does not renew it (an empty list
+  is the column default and what an agent without role definitions sends), otherwise nothing is removed,
+  because a role running on the node but missing from ``NodeRole`` would be invisible.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterable, Mapping
 
-from autobot_shared.install_paths import overlaps, relative_to_root
+from autobot_shared.install_paths import FLEET_INSTALL_ROOT, overlaps, relative_to_root
 from models.manifest import RoleManifest
 from services.role_manifest_shape import find_role_manifest
 
@@ -37,6 +39,13 @@ def _install_dir(role_name: str, manifests: Dict[str, RoleManifest], target_path
         return relative_to_root(manifest.deploy.destination), owns_whole, manifest.deploy_to_all
     rel = relative_to_root(target_paths.get(role_name))
     return rel, rel is not None, False
+
+
+def _at_install_root(name: str, manifests: Dict[str, RoleManifest], target_paths: Mapping[str, str | None]) -> bool:
+    """Whether a role is located at the install root itself, i.e. overlaps every removable directory."""
+    manifest = find_role_manifest(name, manifests)[0]
+    path = manifest.deploy.destination if manifest is not None else target_paths.get(name)
+    return isinstance(path, str) and path.rstrip("/") == FLEET_INSTALL_ROOT.rstrip("/")
 
 
 def removal_path(
@@ -63,9 +72,31 @@ def removal_path(
         return None
     for other in other_roles:
         theirs = _install_dir(other, manifests, target_paths)[0]
-        if theirs is not None and overlaps(rel, theirs):
+        if _at_install_root(other, manifests, target_paths) or (theirs is not None and overlaps(rel, theirs)):
             return None
     return rel
+
+
+#: ``Node.extra_data`` key holding when the node's last heartbeat ROLE REPORT was received (ISO 8601, UTC).
+ROLE_REPORT_AT_KEY = "role_report_at"
+
+
+def record_role_report(node, detected: list[str], now: datetime | None = None) -> None:
+    """Store a heartbeat's detected roles together with the time that report arrived (extra_data is reassigned)."""
+    node.detected_roles = detected
+    stamp = (now or datetime.now(timezone.utc)).isoformat()
+    node.extra_data = {**(getattr(node, "extra_data", None) or {}), ROLE_REPORT_AT_KEY: stamp}
+
+
+def _role_report_time(node) -> datetime | None:
+    """When the node's role report was received, or None when never recorded or unreadable."""
+    from services.node_health_status import as_utc
+
+    raw = (getattr(node, "extra_data", None) or {}).get(ROLE_REPORT_AT_KEY)
+    try:
+        return as_utc(datetime.fromisoformat(raw)) if isinstance(raw, str) else None
+    except ValueError:
+        return None
 
 
 def detected_roles_if_fresh(node, now: datetime, timeout_s: float, role_name: str):
@@ -73,15 +104,14 @@ def detected_roles_if_fresh(node, now: datetime, timeout_s: float, role_name: st
 
     ``Node.detected_roles`` defaults to ``[]`` and the agent sends ``{}`` when it has no role definitions, so an empty
     list means "never reported", not "runs nothing". A report is trusted only when it is a non-empty list that
-    CONTAINS ``role_name`` (the agent reports a role it runs) and the last heartbeat is within ``timeout_s``.
+    CONTAINS ``role_name`` (the agent reports a role it runs) and the report itself -- not merely a later heartbeat,
+    which leaves ``detected_roles`` untouched -- was received within ``timeout_s``.
     """
-    from services.node_health_status import as_utc
-
-    beat = as_utc(getattr(node, "last_heartbeat", None))
+    received = _role_report_time(node)
     detected = getattr(node, "detected_roles", None)
-    if not isinstance(detected, list) or role_name not in detected or beat is None:
+    if not isinstance(detected, list) or role_name not in detected or received is None:
         return None
-    return set(detected) if beat >= now - timedelta(seconds=timeout_s) else None
+    return set(detected) if received >= now - timedelta(seconds=timeout_s) else None
 
 
 async def role_removal_path(db, node_id: str, role_name: str) -> str | None:

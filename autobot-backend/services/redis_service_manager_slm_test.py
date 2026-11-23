@@ -160,7 +160,22 @@ class TestSlmGetServiceStatus:
         client = _client(services={"services": [{"service_name": "redis-stack-server", "status": "running"}]})
         with _patched(client):
             assert await manager._slm_get_service_status() == "running"
-        client.list_node_services.assert_awaited_once_with("04-Databases", search="redis-stack-server", per_page=1)
+        client.list_node_services.assert_awaited_once_with("04-Databases", search="redis-stack-server")
+
+    @pytest.mark.asyncio
+    async def test_a_lookalike_unit_listed_first_is_not_the_service(self, manager) -> None:
+        rows = [
+            {"service_name": "backup-redis-stack-server", "status": "failed"},
+            {"service_name": "redis-stack-server", "status": "running"},
+        ]
+        with _patched(_client(services={"services": rows})):
+            assert await manager._slm_get_service_status() == "running"
+
+    @pytest.mark.asyncio
+    async def test_only_a_lookalike_unit_means_unknown(self, manager) -> None:
+        rows = [{"service_name": "backup-redis-stack-server", "status": "running"}]
+        with _patched(_client(services={"services": rows})):
+            assert await manager._slm_get_service_status() == "unknown"
 
     @pytest.mark.asyncio
     async def test_returns_unknown_only_when_the_slm_does_not_track_the_service(self, manager) -> None:
@@ -306,8 +321,85 @@ class TestAMovedRoleIsNotHitUntilTheCacheExpires:
     @pytest.mark.asyncio
     async def test_a_success_keeps_the_cached_node(self) -> None:
         mgr = RedisServiceManager(slm_node_id="")
-        client = _client(owners={"redis": ["old"]}, services={"services": [{"status": "running"}]})
+        client = _client(
+            owners={"redis": ["old"]},
+            services={"services": [{"service_name": "redis-stack-server", "status": "running"}]},
+        )
         with _patched(client):
             await mgr._slm_get_service_status()
             await mgr._slm_get_service_status()
         assert client.get_role_owners.await_count == 1
+
+
+class TestAClearDuringTheLookupIsNotUndone:
+    """A clear that lands while the role lookup is in flight must not be overwritten by its stale answer (#22030)."""
+
+    @pytest.mark.asyncio
+    async def test_the_overlapping_lookup_does_not_re_cache(self) -> None:
+        client = _client()
+        answers = iter([{"redis": ["stale"]}, {"redis": ["fresh"]}])
+
+        async def _owners():
+            if "stale" not in seen:
+                seen.append("stale")
+                clear_resolved_node()  # the role moved while this request was in flight
+            return next(answers)
+
+        seen: list[str] = []
+        client.get_role_owners = AsyncMock(side_effect=_owners)
+        assert await resolve_redis_node_id(client, "") == "stale"  # the caller still gets its answer
+        assert await resolve_redis_node_id(client, "") == "fresh"  # but it was not cached
+
+    @pytest.mark.asyncio
+    async def test_a_lookup_without_an_overlapping_clear_is_cached(self) -> None:
+        client = _client(owners={"redis": ["n1"]})
+        await resolve_redis_node_id(client, "")
+        await resolve_redis_node_id(client, "")
+        assert client.get_role_owners.await_count == 1
+
+
+class TestARefusalOnTheActionAfterAPermittingStatus:
+    """The status allowed the action, then the SLM refused it: the refusal is raised, not folded (#22030)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "operation,status,action", [("start_service", "stopped", "start"), ("stop_service", "running", "stop")]
+    )
+    @pytest.mark.parametrize("error_status", [401, 403])
+    async def test_a_refusal_on_the_action_is_raised(self, manager, operation, status, action, error_status) -> None:
+        client = _client(services={"services": [{"service_name": "redis-stack-server", "status": status}]})
+        client.node_service_action = AsyncMock(side_effect=_http_error(error_status))
+        with _patched(client), pytest.raises(RedisSlmAccessError):
+            await getattr(manager, operation)()
+        client.node_service_action.assert_awaited_once_with("04-Databases", "redis-stack-server", action)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "operation,status,action", [("start_service", "stopped", "start"), ("stop_service", "running", "stop")]
+    )
+    async def test_an_unresolved_node_on_the_action_is_raised(self, manager, operation, status, action) -> None:
+        client = _client(services={"services": [{"service_name": "redis-stack-server", "status": status}]})
+        client.node_service_action = AsyncMock(side_effect=RedisNodeUnresolvedError("moved"))
+        with _patched(client), pytest.raises(RedisNodeUnresolvedError):
+            await getattr(manager, operation)()
+        client.node_service_action.assert_awaited_once_with("04-Databases", "redis-stack-server", action)
+
+
+class TestHealthSurvivesARefusedStatusLookup:
+    """A refused status lookup leaves the status unknown; the PING still decides health (#22030)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("error", [_http_error(401), _http_error(403)])
+    async def test_a_working_ping_is_degraded_not_critical(self, manager, error) -> None:
+        pinged = AsyncMock(return_value=(True, 5.0))
+        with _patched(_client(error=error)), patch.object(manager, "_check_redis_connectivity", pinged):
+            report = await manager.get_health()
+        pinged.assert_awaited_once()
+        assert (report.overall_status, report.connectivity) == ("degraded", True)
+
+    @pytest.mark.asyncio
+    async def test_a_failing_ping_is_critical(self, manager) -> None:
+        pinged = AsyncMock(return_value=(False, 0.0))
+        with _patched(_client(error=_http_error(401))), patch.object(manager, "_check_redis_connectivity", pinged):
+            report = await manager.get_health()
+        assert report.overall_status == "critical"
