@@ -49,7 +49,7 @@ def _make_app(session_factory, caller_org_id: str, is_platform_admin: bool = Fal
     from fastapi import FastAPI
 
     from llc.api import budget as budget_api
-    from user_management.database import get_async_session
+    from llc.deps import get_session
     from user_management.services import TenantContext
 
     application = FastAPI()
@@ -66,7 +66,7 @@ def _make_app(session_factory, caller_org_id: str, is_platform_admin: bool = Fal
                 await session.rollback()
                 raise
 
-    application.dependency_overrides[get_async_session] = _override_session
+    application.dependency_overrides[get_session] = _override_session
 
     def _override_current_user() -> dict:
         return {"id": str(_FIXED_USER_ID), "user_id": str(_FIXED_USER_ID)}

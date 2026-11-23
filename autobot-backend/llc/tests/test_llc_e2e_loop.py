@@ -101,6 +101,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
     from llc.api import budget as budget_api
     from llc.api import companies as companies_api
     from llc.api import work_items as work_items_api
+    from llc.deps import get_session
     from user_management.database import get_async_session
     from user_management.services import TenantContext
 
@@ -123,10 +124,9 @@ async def app(session_factory):  # noqa: ANN001, ANN201
                 await session.rollback()
                 raise
 
-    # companies + budget routers depend on get_async_session;
-    # work_items router uses its own get_session helper.
+    # companies still depends on get_async_session; the budget and work_items routers use llc.deps.get_session.
     application.dependency_overrides[get_async_session] = _override_session
-    application.dependency_overrides[work_items_api.get_session] = _override_session
+    application.dependency_overrides[get_session] = _override_session
 
     # Auth + tenant overrides: a fixed admin user whose org context == company.
     # company_id is set on the holder so require_org_context returns it.

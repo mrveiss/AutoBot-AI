@@ -173,7 +173,7 @@ def _client(session: AsyncSession, org: str, *, is_admin: bool = False):
     from api.user_management.dependencies import get_current_user, require_org_context
     from autobot_shared.user_management.base_service import TenantContext
     from llc.api.goals import router
-    from user_management.database import get_async_session
+    from llc.deps import get_session
 
     app = FastAPI()
     app.include_router(router, prefix="/api/llc")
@@ -181,7 +181,7 @@ def _client(session: AsyncSession, org: str, *, is_admin: bool = False):
     async def _fake_session():
         yield session
 
-    app.dependency_overrides[get_async_session] = _fake_session
+    app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(uuid.uuid4())}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=uuid.UUID(org), user_id=uuid.uuid4(), is_platform_admin=is_admin

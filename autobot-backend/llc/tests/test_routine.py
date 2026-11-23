@@ -270,6 +270,7 @@ async def test_api_create_routine() -> None:
     # spec_from_file_location + sys.modules.setdefault hack leaked a half-loaded
     # module into the global registry.
     import llc.api.routines as mod
+    import llc.deps as llc_deps
 
     router = mod.router
 
@@ -284,7 +285,7 @@ async def test_api_create_routine() -> None:
     async def _override_session():
         yield mock_session
 
-    app.dependency_overrides[mod.get_session] = _override_session
+    app.dependency_overrides[llc_deps.get_session] = _override_session
 
     with patch.object(mod, "_service", lambda: mock_svc_create):
         client = TestClient(app, raise_server_exceptions=True)
@@ -313,6 +314,7 @@ async def test_api_trigger() -> None:
     from fastapi import FastAPI
 
     import llc.api.routines as mod
+    import llc.deps as llc_deps
 
     router = mod.router
 
@@ -333,9 +335,12 @@ async def test_api_trigger() -> None:
     async def _override_session():
         yield mock_session
 
-    app.dependency_overrides[mod.get_session] = _override_session
+    app.dependency_overrides[llc_deps.get_session] = _override_session
 
-    with patch.object(mod, "_service", lambda: mock_svc):
+    with (
+        patch.object(mod, "_service", lambda: mock_svc),
+        patch.object(mod, "get_async_redis_client", AsyncMock(return_value=AsyncMock())),
+    ):
         client = TestClient(app, raise_server_exceptions=True)
         # #12215: /routines/{routine_id} has no company_id path param, so tenant
         # context must come from the X-Organization-Id header.

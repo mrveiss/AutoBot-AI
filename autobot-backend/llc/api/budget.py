@@ -14,12 +14,11 @@ from sqlalchemy import and_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
-from autobot_shared.db_session import commit_and_run_post_commit
 from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from llc.config import DEFAULT_BUDGET_LIMIT
-from llc.deps import assert_company_access, load_authorized
+from llc.deps import SESSION_DEP, assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget, token_limit_blocks
 from llc.services.accessors import get_budget_service
@@ -35,7 +34,6 @@ from llc.services.budget_raise import (
     raises_limit,
 )
 from models.agent_org import AgentOrgNode
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 logger = get_logger(__name__)
@@ -182,7 +180,7 @@ async def provision_budget(
     agent_id: str,
     body: ProvisionBudgetRequest,
     response: Response,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
 ) -> Union[BudgetResponse, BudgetRaisePending]:
@@ -215,7 +213,7 @@ async def provision_budget(
         return await _file_raise(session, row, {"budget_limit": body.budget_limit}, ctx)
 
     # Every write route commits before it answers: the dependency's own commit runs after the response (#21332).
-    await commit_and_run_post_commit(session)
+    await session.commit()
     remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
 
@@ -223,7 +221,7 @@ async def provision_budget(
 @router.get("", response_model=List[Dict[str, Any]])
 async def list_budgets(
     company_id: str = Query(..., description="Filter by company UUID"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -255,7 +253,7 @@ async def list_budgets(
 @router.get("/{agent_id}", response_model=BudgetResponse)
 async def get_budget(
     agent_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
 ) -> BudgetResponse:
@@ -301,7 +299,7 @@ async def _ingest_or_refuse(
 async def ingest_cost(
     agent_id: str,
     body: IngestRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
     idempotency_key: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
@@ -317,8 +315,8 @@ async def ingest_cost(
         not_found_detail=f"No budget row for agent {agent_id}",
     )
     cost = await _ingest_or_refuse(session, agent_id, row.company_id, body, idempotency_key)
-    # `get_async_session` commits after the response is sent (FastAPI >=0.118): commit first (#21332).
-    await commit_and_run_post_commit(session)
+    # Commit here so the direct-call regression test sees the write; SESSION_DEP commits before the response (#21332).
+    await session.commit()
     return IngestResponse(cost=cost)
 
 
@@ -379,7 +377,7 @@ async def update_limit(
     agent_id: str,
     body: UpdateLimitRequest,
     response: Response,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
 ) -> Union[BudgetResponse, BudgetRaisePending]:
@@ -420,7 +418,7 @@ async def update_limit(
     )
     # Commit before the cache is dropped and before the response: the dependency's own commit runs after the
     # response is sent, so a reader that re-populated the cache (or a caller reading back) saw the old limit (#21332).
-    await commit_and_run_post_commit(session)
+    await session.commit()
     await session.refresh(row)
 
     # Drop the tracker cache so readers (watchdog, check_budget) see the new
@@ -440,7 +438,7 @@ async def update_limit(
 async def list_cost_events(
     company_id: str = Query(..., description="Filter by company UUID"),
     limit: int = Query(100, ge=1, le=500),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -545,7 +543,7 @@ class AgentModelCostRow(BaseModel):
 )
 async def costs_by_agent_model(
     company_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentModelCostRow]:

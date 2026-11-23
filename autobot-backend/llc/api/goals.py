@@ -25,8 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.singleton_factory import lazy_singleton
-from llc.deps import assert_company_access
-from user_management.database import get_async_session
+from llc.deps import SESSION_DEP, assert_company_access
 from user_management.services import TenantContext
 
 from ..models.goal import GoalLevel, GoalStatus, LLCGoal
@@ -150,7 +149,7 @@ def _build_goal_forest(goals: list) -> List["GoalTreeNode"]:
 async def list_goals(
     company_id: str = Query(..., description="Company ID to filter goals"),
     parent_goal_id: Optional[uuid.UUID] = Query(None),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[GoalResponse]:
@@ -162,7 +161,7 @@ async def list_goals(
 @router.post("", response_model=GoalResponse, status_code=201)
 async def create_goal(
     body: GoalCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
@@ -189,7 +188,7 @@ async def create_goal(
 @router.get("/tree", response_model=List[GoalTreeNode])
 async def get_goal_tree(
     company_id: str = Query(..., description="Company ID to build the goal tree for"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[GoalTreeNode]:
@@ -208,7 +207,7 @@ async def get_goal_tree(
 @router.get("/{goal_id}", response_model=GoalResponse)
 async def get_goal(
     goal_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
@@ -220,7 +219,7 @@ async def get_goal(
 async def update_goal(
     goal_id: uuid.UUID,
     body: GoalUpdate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
@@ -236,7 +235,7 @@ async def update_goal(
 @router.delete("/{goal_id}", status_code=204)
 async def delete_goal(
     goal_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -249,7 +248,7 @@ async def delete_goal(
 @router.get("/{goal_id}/children", response_model=List[GoalResponse])
 async def list_goal_children(
     goal_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[GoalResponse]:
@@ -262,7 +261,7 @@ async def list_goal_children(
 @router.get("/{goal_id}/ancestors", response_model=List[GoalResponse])
 async def get_ancestors(
     goal_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[GoalResponse]:
@@ -278,7 +277,7 @@ async def get_ancestors(
 @router.get("/{goal_id}/tasks", response_model=List[WorkItemSummaryResponse])
 async def list_tasks_for_goal(
     goal_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[WorkItemSummaryResponse]:

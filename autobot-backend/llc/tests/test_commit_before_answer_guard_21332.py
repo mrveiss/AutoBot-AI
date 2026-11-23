@@ -32,6 +32,7 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_file_present, base_table
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.db_session import POST_COMMIT_CALLBACKS
 from llc.api import router as llc_router
 from llc.deps import SESSION_DEP, get_session
 from llc.tests._commit_before_answer import (
@@ -109,6 +110,16 @@ def _app(events: list) -> FastAPI:
         events.append("handler")
         return {"ok": True}
 
+    @app.post("/callback-fails")
+    async def callback_fails(session: AsyncSession = SESSION_DEP) -> dict:
+        events.append("handler")
+
+        async def _broken_follow_up() -> None:
+            raise OSError("follow-up unavailable")
+
+        session.info[POST_COMMIT_CALLBACKS].append(_broken_follow_up)
+        return {"ok": True}
+
     @app.post("/refused")
     async def refused(session: AsyncSession = SESSION_DEP) -> dict:
         events.append("handler")
@@ -171,6 +182,17 @@ async def test_a_refusing_route_rolls_back_and_never_commits() -> None:
     events, status, _ = await _call("/refused")
     assert status == 409 and "commit" not in events, (status, events)
     assert events[:2] == ["handler", "rollback"], events
+
+
+@pytest.mark.asyncio
+async def test_a_failing_post_commit_callback_answers_2xx_and_is_logged_as_a_warning() -> None:
+    """Owner decision 2026-11-22: the change is saved, so the caller is never told "failed"; the alert is the log."""
+    with patch("llc.deps.logger") as log:
+        events, status, error = await _call("/callback-fails")
+    assert (status, error) == (200, None), (status, error, events)
+    assert events.index("commit") < events.index("http.response.start"), events
+    log.warning.assert_called_once()
+    assert "OSError" in log.warning.call_args.args[1] and "follow-up unavailable" in log.warning.call_args.args[1]
 
 
 # ---------------------------------------------------------------------------

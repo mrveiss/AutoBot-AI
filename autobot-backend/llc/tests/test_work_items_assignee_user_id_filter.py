@@ -78,6 +78,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
     from fastapi import FastAPI
 
     from llc.api import work_items as work_items_api
+    from llc.deps import get_session
     from user_management.services import TenantContext
 
     application = FastAPI()
@@ -92,7 +93,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
                 await session.rollback()
                 raise
 
-    application.dependency_overrides[work_items_api.get_session] = _override_session
+    application.dependency_overrides[get_session] = _override_session
 
     holder = {"company_id": None}
 

@@ -42,7 +42,7 @@ def _goal(company_id: str, parent=None, title="Goal", level="vision", gid=None) 
 def _client(all_goals=None, children=None, focus_goal=None, caller_org=_ORG) -> TestClient:
     from api.user_management.dependencies import get_current_user, require_org_context
     from llc.api.goals import router
-    from user_management.database import get_async_session
+    from llc.deps import get_session
 
     app = FastAPI()
     app.include_router(router, prefix="/api/llc")
@@ -53,7 +53,7 @@ def _client(all_goals=None, children=None, focus_goal=None, caller_org=_ORG) -> 
     async def _fake_session():
         yield session
 
-    app.dependency_overrides[get_async_session] = _fake_session
+    app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(_USER)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=uuid.UUID(caller_org), user_id=_USER, is_platform_admin=False

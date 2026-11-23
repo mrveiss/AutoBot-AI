@@ -39,7 +39,7 @@ def _app(session_factory, user_id: uuid.UUID):  # noqa: ANN001, ANN202
 
     from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
     from llc.api import budget as budget_api
-    from user_management.database import get_async_session
+    from llc.deps import get_session
     from user_management.services import TenantContext
 
     app = FastAPI()
@@ -51,7 +51,7 @@ def _app(session_factory, user_id: uuid.UUID):  # noqa: ANN001, ANN202
             await session.commit()
 
     ctx = TenantContext(org_id=_ORG, user_id=user_id, is_platform_admin=False)
-    app.dependency_overrides[get_async_session] = _session
+    app.dependency_overrides[get_session] = _session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(user_id), "auth_method": "session"}
     app.dependency_overrides[get_tenant_context] = lambda: ctx
     app.dependency_overrides[require_org_context] = lambda: ctx
