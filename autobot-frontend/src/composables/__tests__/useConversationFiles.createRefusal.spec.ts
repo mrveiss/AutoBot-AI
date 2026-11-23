@@ -17,6 +17,10 @@ import { extractApiErrorMessage } from '@/utils/errorExtract'
 
 const tooLarge = { code: 'conversation_file_too_large', message: 'File too large. Maximum size: 50MB', max_bytes: 52428800 }
 
+// #22015: a rejected upload names the file that failed; the other operations act on one known file.
+const rejectionText = (operation: string, text: string): string =>
+  operation === 'uploadFiles' ? `a.txt: ${text}` : text
+
 describe('createFile refusal', () => {
   it('maps a client HttpError 413 code to the translated key with its figures', async () => {
     post.mockRejectedValueOnce(Object.assign(new Error('HTTP 413'), { status: 413, details: { detail: tooLarge } }))
@@ -67,7 +71,7 @@ describe('write refusals beyond create (#20723)', () => {
     post.mockRejectedValueOnce(refused())
     const files = useConversationFiles('s1')
     expect(await files.uploadFiles([new File(['x'], 'a.txt')] as unknown as FileList)).toBe(false)
-    expect(files.error.value).toBe(quotaText)
+    expect(files.error.value).toBe(`a.txt: ${quotaText}`) // #22015: a failed upload names its file
   })
 
   it('still shows the server message for a non-refusal failure', async () => {
@@ -88,7 +92,7 @@ describe('write refusals beyond create (#20723)', () => {
     post.mockRejectedValueOnce({ response: { status: 500, data: { detail: 'boom' } } })
     const files = useConversationFiles('s1')
     expect(await files.uploadFiles([new File(['x'], 'a.txt')] as unknown as FileList)).toBe(false)
-    expect(files.error.value).toBe('boom')
+    expect(files.error.value).toBe('a.txt: boom')
   })
 
   it.each([
@@ -100,7 +104,7 @@ describe('write refusals beyond create (#20723)', () => {
     mock.mockRejectedValueOnce({ response: { status: 500, data: {} } })
     const files = useConversationFiles('s1')
     expect(await run(files)).toBe(false)
-    expect(files.error.value).toBe(`${key}|{}`)
+    expect(files.error.value).toBe(rejectionText(_name, `${key}|{}`))
   })
 })
 
@@ -121,7 +125,7 @@ describe('empty and resolved-failure write results (#21185)', () => {
     mock.mockRejectedValueOnce(new Error(''))
     const files = useConversationFiles('s1')
     expect(await run(files)).toBe(false)
-    expect(files.error.value).toBe(`${key}|{}`)
+    expect(files.error.value).toBe(rejectionText(_name, `${key}|{}`))
   })
 
   it.each(cases)('%s sets the operation error when the request resolves with success false', async (_name, key, mock, run) => {

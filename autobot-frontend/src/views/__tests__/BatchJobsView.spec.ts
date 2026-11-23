@@ -31,6 +31,7 @@ vi.mock('@autobot/ui', () => ({
   BaseAlert: { props: ['message'], template: '<p role="alert">{{ message }}</p>' },
   BaseSelectMenu: { props: ['modelValue', 'options', 'label'], template: '<select />' },
   BaseSpinner: { props: ['label'], template: '<span>{{ label }}</span>' },
+  BaseProgress: { props: ['value', 'variant', 'label'], template: '<div role="progressbar" :aria-label="label" :aria-valuenow="value" />' },
   BaseModal: { props: ['modelValue', 'title'], template: '<div v-if="modelValue"><slot /><slot name="actions" /></div>' },
   BaseInput: { props: ['modelValue', 'label'], template: '<input />' },
   EmptyState: { props: ['title', 'description'], template: '<div><p>{{ title }}</p><p>{{ description }}</p><slot name="actions" /></div>' },

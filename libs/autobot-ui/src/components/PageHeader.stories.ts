@@ -62,3 +62,12 @@ export const WithToolbar: Story = {
     template: `<PageHeader v-bind="args"><input type="search" placeholder="Search" /></PageHeader>`,
   }),
 }
+
+export const WithEyebrow: Story = {
+  args: { title: 'Fleet health check' },
+  render: (args) => ({
+    components: { PageHeader },
+    setup: () => ({ args }),
+    template: `<PageHeader v-bind="args"><template #eyebrow>Overseer on · started 10:42</template></PageHeader>`,
+  }),
+}

@@ -16,6 +16,8 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
+import { extractResponseErrorDetail } from '@/utils/errorExtract'
+import i18n from '@/i18n'
 
 // ==================== Types ====================
 
@@ -45,6 +47,34 @@ export interface FileBrowserTreeNode {
 }
 
 // ==================== Composable ====================
+
+/** Form fields of POST /files/upload; the contract test pins these against the route signature (#22015). */
+export const UPLOAD_FORM_FIELDS = { file: 'file', path: 'path', overwrite: 'overwrite' } as const
+
+export interface UploadOutcome {
+  uploaded: string[]
+  failed: Array<{ name: string; reason: string }>
+}
+
+/** Upload one file; null on success, else the reason it failed (the server's client-safe `detail`, or a hint). */
+async function uploadOne(file: File, path: string, overwrite: boolean): Promise<string | null> {
+  const formData = new FormData()
+  formData.append(UPLOAD_FORM_FIELDS.file, file)
+  formData.append(UPLOAD_FORM_FIELDS.path, path)
+  formData.append(UPLOAD_FORM_FIELDS.overwrite, String(overwrite))
+  try {
+    const response = await fetchWithAuth(`${getApiBase()}/files/upload`, { // fetchWithAuth retained: FormData body — exempt from Wave 5 (#6224)
+      method: 'POST',
+      body: formData,
+    })
+    if (response.ok) return null
+    // 409: the API's text says to send overwrite=true, which this UI cannot do.
+    if (response.status === 409) return i18n.global.t('fileBrowser.browser.uploadAlreadyExists')
+    return (await extractResponseErrorDetail(response)) || i18n.global.t('fileBrowser.browser.uploadFailedHint')
+  } catch {
+    return i18n.global.t('fileBrowser.browser.uploadFailedHint')
+  }
+}
 
 export function useFileBrowser() {
   const files = ref<FileBrowserItem[]>([])
@@ -80,16 +110,18 @@ export function useFileBrowser() {
   )
 
   // ---- POST /files/upload ----
+  // The route takes ONE file per request (form field `file`, plus `path` and `overwrite`), so a
+  // selection of N files is N requests. Each file is judged by the route's own validation; a refused
+  // file is reported with the server's reason and never stops the others (#22015).
   const { execute: uploadFiles, loading: isUploadingFiles } = useAsyncHandler(
-    async (fileList: FileList, path: string) => {
-      const formData = new FormData()
-      Array.from(fileList).forEach((file) => { formData.append('files', file) })
-      formData.append('path', path)
-      const response = await fetchWithAuth(`${getApiBase()}/files/upload`, { // fetchWithAuth retained: FormData body — exempt from Wave 5 (#6224)
-        method: 'POST',
-        body: formData,
-      })
-      if (!response.ok) throw new HttpError(response.status, response.statusText)
+    async (fileList: FileList, path: string, overwrite = false): Promise<UploadOutcome> => {
+      const outcome: UploadOutcome = { uploaded: [], failed: [] }
+      for (const file of Array.from(fileList)) {
+        const reason = await uploadOne(file, path, overwrite)
+        if (reason === null) outcome.uploaded.push(file.name)
+        else outcome.failed.push({ name: file.name, reason })
+      }
+      return outcome
     },
     {
       logErrors: true,

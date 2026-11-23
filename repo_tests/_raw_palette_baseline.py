@@ -66,7 +66,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-purple-900": 1,
     "bg-red-100": 9,
     "bg-red-400/10": 1,
-    "bg-red-50": 3,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 3)
+    "bg-red-50": 2,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 3)
     "bg-red-500": 9,
     "bg-red-500/10": 5,
     "bg-red-500/20": 1,
@@ -104,7 +104,6 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "border-purple-200": 1,
     "border-purple-300": 1,
     "border-purple-500/30": 1,
-    "border-red-200": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
     "border-red-500": 1,
     "border-red-500/20": 3,
     "border-red-500/50": 1,
@@ -117,7 +116,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "ring-indigo-500": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
     "ring-offset-gray-800": 1,
     "ring-purple-500": 1,
-    "ring-red-500": 2,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
+    "ring-red-500": 1,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
     "text-amber-400": 2,
     "text-amber-600": 2,
     "text-amber-950": 1,
@@ -145,7 +144,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-green-300": 2,
     "text-green-400": 12,  # #16253 SystemStatusNotification severities onto theme tokens (15 -> 14)
     "text-green-500": 13,
-    "text-green-600": 17,  # #16253 SystemStatusNotification severities onto theme tokens (20 -> 18)
+    "text-green-600": 16,  # #16253 SystemStatusNotification severities onto theme tokens (20 -> 18)
     "text-green-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "text-green-800": 4,
     "text-green-900": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
@@ -163,15 +162,15 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-purple-800": 1,
     "text-red-200": 2,
     "text-red-300": 3,
-    "text-red-400": 18,  # #16253 SystemStatusNotification severities onto theme tokens (19 -> 18)
-    "text-red-500": 8,  # #18819: 9 -> 8, hand-rolled notices moved to the kit BaseAlert
-    "text-red-600": 23,  # #16253 SystemStatusNotification severities onto theme tokens (27 -> 23)
+    "text-red-400": 16,  # #16253 SystemStatusNotification severities onto theme tokens (19 -> 18)
+    "text-red-500": 7,  # #18819: 9 -> 8, hand-rolled notices moved to the kit BaseAlert
+    "text-red-600": 21,  # #16253 SystemStatusNotification severities onto theme tokens (27 -> 23)
     "text-red-700": 5,  # #16253 SystemStatusNotification severities onto theme tokens (6 -> 5)
     "text-red-800": 5,
     "text-yellow-200": 2,
     "text-yellow-300": 1,
     "text-yellow-400": 6,  # #16253 SystemStatusNotification severities onto theme tokens (7 -> 6)
-    "text-yellow-600": 9,  # #16253 SystemStatusNotification severities onto theme tokens (11 -> 9)
+    "text-yellow-600": 8,  # #16253 SystemStatusNotification severities onto theme tokens (11 -> 9)
     "text-yellow-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "text-yellow-800": 4,
     # The SLM control plane (#17566).
