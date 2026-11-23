@@ -390,7 +390,7 @@ class TestDispatchRegistryAdapterRateLimitTranslation:
             with pytest.raises(AdapterRunFailed):
                 await _dispatch_registry_adapter(adapter, agent, {})
 
-        ingest.assert_awaited_once_with(agent, spent)
+        ingest.assert_awaited_once_with(agent, spent, "fake-run-id")  # the run id dedupes a retry (#21332)
 
 
 # ---------------------------------------------------------------------------

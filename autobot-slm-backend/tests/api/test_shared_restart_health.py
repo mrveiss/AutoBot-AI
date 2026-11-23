@@ -313,7 +313,11 @@ def test_restart_component_services_honours_services_override() -> None:
         return proc
 
     steps: list[str] = []
-    with patch("api.code_sync.asyncio.create_subprocess_exec", side_effect=_fake_exec):
+    # record_backend_start (#17421) has its own tests; here only the restart chain's subprocesses count.
+    with (
+        patch("api.code_sync.record_backend_start", new=AsyncMock()),
+        patch("api.code_sync.asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
         _run(cs._restart_component_services(_SHARED, steps, services=["autobot-backend"]))
 
     assert restarted == ["autobot-backend"]

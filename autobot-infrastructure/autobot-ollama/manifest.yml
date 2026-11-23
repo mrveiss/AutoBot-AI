@@ -6,6 +6,8 @@ target_node: backend
 deploy:
   source: autobot-ollama/
   destination: /opt/autobot/autobot-ollama/
+  sync: false   # #16025: provisioned, no repo code of its own to rsync
+  sync_target: ""   # #16025: what role_registry rsyncs INTO (not `destination`)
   shared: false
   infrastructure: true
 

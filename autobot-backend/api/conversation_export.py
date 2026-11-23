@@ -66,14 +66,19 @@ def _validate_format_or_raise(export_format: str) -> None:
     """Raise ValidationError when the requested format is not supported."""
     if export_format not in _VALID_EXPORT_FORMATS:
         _, _, _, ValidationError, _ = get_exceptions_lazy()
-        raise ValidationError(f"Invalid format {export_format!r}. Supported: json, markdown")
+        raise ValidationError(
+            f"Invalid format {export_format!r}. Supported: json, markdown",
+            client_message=f"Invalid format {export_format!r}. Supported: json, markdown",
+        )
 
 
 def _validate_session_id_or_raise(session_id: str) -> None:
     """Raise ValidationError when session_id is not well-formed."""
     if not validate_chat_session_id(session_id):
         _, _, _, ValidationError, _ = get_exceptions_lazy()
-        raise ValidationError(f"Invalid session_id: {session_id!r}")
+        raise ValidationError(
+            f"Invalid session_id: {session_id!r}", client_message=f"Invalid session_id: {session_id!r}"
+        )
 
 
 def _validate_on_conflict_or_raise(on_conflict: str) -> None:

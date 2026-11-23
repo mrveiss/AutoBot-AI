@@ -12,7 +12,7 @@ Contains decorators for function-level error boundaries and API error handling.
 import asyncio
 import functools
 import time
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable, Dict, Optional, cast
 
 from fastapi import HTTPException
 from starlette.websockets import WebSocket, WebSocketDisconnect
@@ -231,6 +231,29 @@ def error_boundary(
     return decorator
 
 
+# #21998: categories a caller caused, logged at WARNING rather than ERROR.
+_CLIENT_FAULT_CATEGORIES = frozenset(
+    {
+        ErrorCategory.VALIDATION,
+        ErrorCategory.USER_INPUT,
+        ErrorCategory.AUTHENTICATION,
+        ErrorCategory.AUTHORIZATION,
+        ErrorCategory.NOT_FOUND,
+        ErrorCategory.CONFLICT,
+        ErrorCategory.RATE_LIMIT,
+    }
+)
+
+
+def _error_details(e: Exception, func_operation: str) -> Dict[str, Any]:
+    """Response details. An exception that declares ``error_category`` also supplies its
+    ``safe_message`` (its client-safe contract); ``str(e)`` is never returned (#13740)."""
+    details: Dict[str, Any] = {"operation": func_operation}
+    if getattr(e, "error_category", None) is not None:
+        details["reason"] = getattr(e, "safe_message", None)
+    return details
+
+
 def _create_api_error_response(
     e: Exception,
     category: ErrorCategory,
@@ -249,6 +272,9 @@ def _create_api_error_response(
     Returns:
         APIErrorResponse object
     """
+    declared = getattr(e, "error_category", None)
+    category = declared or category
+    client_fault = category in _CLIENT_FAULT_CATEGORIES
     trace_id = f"{func_operation}_{int(time.time() * 1000)}"
     error_code = f"{error_code_prefix}_{abs(hash(type(e).__name__)) % 10000:04d}"
     status_code = APIErrorResponse.get_status_code_for_category(category)
@@ -258,7 +284,8 @@ def _create_api_error_response(
     # internals verbatim to the caller. They are logged here — where the
     # exception is still in scope — against the same trace_id the client
     # receives, so a report of "trace_id X" still resolves to the real cause.
-    logger.error(
+    # A client fault (#21998) is the caller's mistake, not a server fault: WARNING.
+    (logger.warning if client_fault else logger.error)(
         "Error in %s: %s: %s (trace_id: %s, code: %s)",
         func_operation,
         type(e).__name__,
@@ -273,7 +300,7 @@ def _create_api_error_response(
         message=APIErrorResponse.get_client_message_for_category(category),
         code=error_code,
         status_code=status_code,
-        details={"operation": func_operation},
+        details=_error_details(e, func_operation),
         trace_id=trace_id,
     )
 

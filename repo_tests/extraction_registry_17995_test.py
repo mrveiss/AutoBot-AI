@@ -62,7 +62,7 @@ REACH = declare(
     discover=_source_population,
     # Mid-window, from REACH.window() (population 7316, growth 300); pinned because the
     # guard is new in this PR. Dropped once the guard is on main.
-    floor=7166,
+    floor=7359,  # mid-window: population 7509, window (7209, 7509)
     what="python source and tests",
     roots=_ROOTS,
     growth=300,
@@ -74,12 +74,16 @@ REACH = declare(
 _UNPARSABLE: dict[str, str] = {}
 
 
-def _sweep() -> tuple[list[str], list[str]]:
-    """``(offenders, unreadable)``: files carrying a private copy, and files that could not be parsed."""
-    root = repo_root()
+def _sweep(root: Path | None = None, population: list[str] | None = None) -> tuple[list[str], list[str]]:
+    """``(offenders, unreadable)``: files carrying a private copy, and files that could not be parsed.
+
+    *root* and *population* default to the repository and its examined population; a negative
+    control passes a scratch tree so the real sweep body runs over a planted copy.
+    """
+    root = root or repo_root()
     found: list[str] = []
     unreadable: list[str] = []
-    for rel in REACH.examined(root):
+    for rel in REACH.examined(root) if population is None else population:
         try:
             tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError):
@@ -127,6 +131,57 @@ def test_no_module_outside_the_canonical_site_carries_a_registered_concept() -> 
         + "\n  ".join(offenders)
         + "\n\nCall the canonical symbol instead (#17995)."
     )
+
+
+_CANONICAL_SHARED = "autobot-backend/api/codebase_analytics/endpoints/shared.py"
+
+
+def _canonical_resolver_source() -> str:
+    """The real ``resolve_source_root`` body, read from the canonical module (behaviour, not a name)."""
+    text = (repo_root() / _CANONICAL_SHARED).read_text(encoding="utf-8")
+    node = next(n for n in parse_cache.parse(text).body if getattr(n, "name", "") == "resolve_source_root")
+    return "from pathlib import Path\n\n\n" + ast.get_source_segment(text, node) + "\n"
+
+
+_TERNARY_RESOLVER = (
+    "from pathlib import Path\n\n\nasync def where(sid):\n"
+    "    src = await get_source(sid)\n    return Path(src.clone_path) if src and src.clone_path else None\n"
+)
+_LOOKALIKE = "async def read(sid):\n    src = await get_source(sid)\n    return src.clone_path\n"
+
+
+@pytest.mark.parametrize(
+    ("label", "planted"),
+    [
+        ("verbatim copy of resolve_source_root under another name", lambda: _canonical_resolver_source().replace("resolve_source_root", "second_resolver")),
+        ("conditional-return spelling of the same behaviour", lambda: _TERNARY_RESOLVER),
+    ],
+)  # fmt: skip
+def test_sweep_flags_a_reinlined_source_root_resolver(tmp_path: Path, label: str, planted) -> None:
+    """AC4 (#17995): re-inlining ``resolve_source_root`` into a second module fails the SWEEP.
+
+    The contrast pairs above only prove the detector. This plants the copy in a scratch tree and runs
+    ``_sweep`` itself over it, so a sweep that skipped the file (wrong roots, a filter that drops it,
+    the canonical-site allowance matching too widely) is caught -- a guard that checks only the
+    already-migrated sites would pass here without the fix.
+    """
+    offender = "autobot-backend/services/second_resolver.py"
+    clean = "autobot-backend/services/reads_only.py"
+    for rel, body in ((offender, planted()), (clean, _LOOKALIKE)):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(body, encoding="utf-8")
+    found, unreadable = _sweep(tmp_path, [offender, clean])
+    assert unreadable == [], label
+    flagged = [line for line in found if "source-root resolution" in line]
+    assert [line.split(":")[0] for line in flagged] == [offender], f"{label}: {found}"
+
+
+def test_sweep_negative_control_is_clean_without_the_planted_copy(tmp_path: Path) -> None:
+    """Remove the planted copy and the same sweep reports nothing: the flag above is caused by the copy."""
+    clean = "autobot-backend/services/reads_only.py"
+    (tmp_path / clean).parent.mkdir(parents=True)
+    (tmp_path / clean).write_text(_LOOKALIKE, encoding="utf-8")
+    assert _sweep(tmp_path, [clean]) == ([], [])
 
 
 def test_every_allowance_still_matches_its_detector() -> None:

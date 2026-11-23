@@ -21,7 +21,7 @@ lowered here when its file shrinks.
 from __future__ import annotations
 
 KNOWN_LARGE: dict[str, int] = {
-    "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
+    "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 756,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 721,
     "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 896,
@@ -49,9 +49,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
     "autobot-frontend/src/components/chat/ChatInput.vue": 1619,  # #20133: 1672 -> 1631; #20195: 1628; 1620; 1619
-    "autobot-frontend/src/components/chat/ChatInterface.vue": 1514,
+    "autobot-frontend/src/components/chat/ChatInterface.vue": 1457,
     "autobot-frontend/src/components/chat/ChatMessages.vue": 2097,  # #20195: 2118 -> 2097 (approval routing moved out)
-    "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
     "autobot-frontend/src/components/chat/DocumentationSearchSidebar.vue": 766,
     "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 693,
     "autobot-frontend/src/components/chat/VisualBrowserPanel.vue": 632,

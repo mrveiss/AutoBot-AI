@@ -11,12 +11,20 @@
   the app.
 
     props  : items, label, modelValue (v-model) | defaultValue, variant (underline | pill),
-             size (sm | md), orientation, activationMode, dir
-    slots  : `panel-<value>` — the content of the tab with that value
+             size (sm | md), orientation, activationMode, dir, listOnly
+    slots  : `panel-<value>` — the content of the tab with that value;
+             `icon` — scoped by `{ item }`, rendered before each tab's text
+    item   : `class` reaches the trigger; `id` and `controls` replace the trigger's generated
+             id and aria-controls, in `listOnly` mode only (a caller-owned panel); with kit panels the
+             generated ids stay, so a panel never references a trigger id that is gone
+    listOnly: renders the tablist only. The caller owns the tabpanel (it is routed content, not
+             a slot), so the kit emits no `tabpanel` of its own.
     emits  : update:modelValue
+    style  : a screen with its own tab metrics sets `--aui-tabs-trigger-height`,
+             `--aui-tabs-font-size` and `--aui-tabs-trigger-pad-x` on the tabs; unset, the kit sizes apply
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { resolveDirection, type KitDirection } from '../utils/direction'
 
@@ -26,6 +34,12 @@ export interface TabItem {
   value: string
   label: string
   disabled?: boolean
+  /** Extra class on this tab's trigger (e.g. a ui-mode class). */
+  class?: string
+  /** Replaces the trigger's generated id. */
+  id?: string
+  /** Replaces the trigger's aria-controls: the id of a tabpanel the caller owns. */
+  controls?: string
 }
 
 const props = withDefaults(
@@ -41,6 +55,8 @@ const props = withDefaults(
     /** `automatic` selects a tab as it takes focus; `manual` waits for Enter or Space. */
     activationMode?: 'automatic' | 'manual'
     dir?: KitDirection
+    /** Render the tablist only; the caller supplies the `role="tabpanel"`. */
+    listOnly?: boolean
   }>(),
   {
     modelValue: undefined,
@@ -50,6 +66,7 @@ const props = withDefaults(
     orientation: 'horizontal',
     activationMode: 'automatic',
     dir: undefined,
+    listOnly: false,
   },
 )
 
@@ -59,15 +76,39 @@ const direction = computed(() => resolveDirection(props.dir))
 // Uncontrolled use keeps the chosen tab here, so items that arrive after mount still get a
 // selection and a default never lands on a disabled first item (#20382).
 const chosen = ref(props.defaultValue)
+// A controlled value that changes from outside (the parent moved the selection itself) supersedes
+// whatever a pick left in `chosen`, or the click guard below would swallow a click on that old pick.
+watch(() => props.modelValue, (value) => {
+  if (value !== undefined) chosen.value = value
+})
 const active = computed(() => {
   if (props.modelValue !== undefined) return props.modelValue
   const kept = props.items.some((item) => item.value === chosen.value)
   return kept ? chosen.value : props.items.find((item) => !item.disabled)?.value
 })
 
+/** Overrides for the generated id / aria-controls; a list-only trigger controls no kit panel. */
+function triggerAttrs(item: TabItem): Record<string, string | undefined> {
+  // A kit-owned panel is labelled by Reka's generated trigger id and cannot be pointed elsewhere, so
+  // `id` and `controls` apply only when the caller owns the panel (`listOnly`).
+  if (!props.listOnly) return {}
+  const attrs: Record<string, string | undefined> = {}
+  if (item.id !== undefined) attrs.id = item.id
+  attrs['aria-controls'] = item.controls
+  return attrs
+}
+
 function onSelect(value: string | number): void {
   chosen.value = String(value)
   emit('update:modelValue', chosen.value)
+}
+
+// Reka selects on mousedown, keydown and focus but not click, so an assistive-technology click
+// on an inactive tab would select nothing. A pointer or key activation has already gone through
+// onSelect (it set `chosen`), so only a click that nothing else handled emits here.
+function onTriggerClick(item: TabItem): void {
+  if (item.disabled || item.value === active.value || item.value === chosen.value) return
+  onSelect(item.value)
 }
 </script>
 
@@ -82,18 +123,23 @@ function onSelect(value: string | number): void {
     @update:model-value="onSelect"
   >
     <TabsList class="aui-tabs__list" :aria-label="label">
-      <TabsTrigger
-        v-for="item in items"
-        :key="item.value"
-        class="aui-tabs__trigger"
-        :value="item.value"
-        :disabled="item.disabled"
-      >
-        {{ item.label }}
+      <!-- as-child: Reka merges its roles and roving focus onto this button, and the button's own
+           id / aria-controls win -- which is how an item names a panel the caller owns. -->
+      <TabsTrigger v-for="item in items" :key="item.value" :value="item.value" :disabled="item.disabled" as-child>
+        <button
+          type="button"
+          class="aui-tabs__trigger"
+          :class="item.class"
+          v-bind="triggerAttrs(item)"
+          @click="onTriggerClick(item)"
+        >
+          <slot name="icon" :item="item" />
+          {{ item.label }}
+        </button>
       </TabsTrigger>
     </TabsList>
     <TabsContent
-      v-for="item in items"
+      v-for="item in listOnly ? [] : items"
       :key="item.value"
       class="aui-tabs__panel"
       :value="item.value"
@@ -135,14 +181,18 @@ function onSelect(value: string | number): void {
 }
 
 .aui-tabs__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--aui-space-2);
   --aui-tabs-pad-y: var(--aui-space-2);
-  --aui-tabs-pad-x: var(--aui-space-4);
+  --aui-tabs-pad-x: var(--aui-tabs-trigger-pad-x, var(--aui-space-4));
   padding: var(--aui-tabs-pad-y) var(--aui-tabs-pad-x);
+  min-block-size: var(--aui-tabs-trigger-height, auto);
   border: 0;
   background: transparent;
   color: var(--aui-color-text-muted);
   font: inherit;
-  font-size: var(--aui-text-sm);
+  font-size: var(--aui-tabs-font-size, var(--aui-text-sm));
   font-weight: var(--aui-font-weight-medium);
   cursor: pointer;
   transition: color var(--aui-transition-fast), background-color var(--aui-transition-fast);
@@ -150,7 +200,7 @@ function onSelect(value: string | number): void {
 
 .aui-tabs--sm .aui-tabs__trigger {
   --aui-tabs-pad-y: var(--aui-space-1);
-  --aui-tabs-pad-x: var(--aui-space-3);
+  --aui-tabs-pad-x: var(--aui-tabs-trigger-pad-x, var(--aui-space-3));
   font-size: var(--aui-text-xs);
 }
 

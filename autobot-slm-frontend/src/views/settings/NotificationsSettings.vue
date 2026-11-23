@@ -102,57 +102,57 @@ onMounted(fetchSettings)
       <BaseAlert v-if="success" variant="success" class="mb-4" :message="success" />
 
       <!-- Alert Types -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6 mb-6">
         <h2 class="text-lg font-semibold mb-6">{{ $t('settings.notificationsSettings.alertTypes') }}</h2>
-        <p class="text-sm text-gray-500 mb-6">
+        <p class="text-sm text-autobot-text-tertiary mb-6">
           {{ $t('settings.notificationsSettings.chooseWhichTypesOf') }}
         </p>
 
         <div class="space-y-4">
-          <div class="flex items-center justify-between py-3 border-b border-gray-100">
+          <div class="flex items-center justify-between py-3 border-b border-autobot-border-subtle">
             <div>
-              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.nodeHealthAlerts') }}</p>
-              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.getNotifiedWhenNodes') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('settings.notificationsSettings.nodeHealthAlerts') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.notificationsSettings.getNotifiedWhenNodes') }}</p>
             </div>
             <BaseSwitch v-model="notifications.node_health_alerts" :label="$t('settings.notificationsSettings.nodeHealthAlerts')" />
           </div>
 
-          <div class="flex items-center justify-between py-3 border-b border-gray-100">
+          <div class="flex items-center justify-between py-3 border-b border-autobot-border-subtle">
             <div>
-              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.deploymentNotifications') }}</p>
-              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.notificationsForDeploymentProgress') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('settings.notificationsSettings.deploymentNotifications') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.notificationsSettings.notificationsForDeploymentProgress') }}</p>
             </div>
             <BaseSwitch v-model="notifications.deployment_notifications" :label="$t('settings.notificationsSettings.deploymentNotifications')" />
           </div>
 
-          <div class="flex items-center justify-between py-3 border-b border-gray-100">
+          <div class="flex items-center justify-between py-3 border-b border-autobot-border-subtle">
             <div>
-              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.backupCompletionAlerts') }}</p>
-              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.getNotifiedWhenBackups') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('settings.notificationsSettings.backupCompletionAlerts') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.notificationsSettings.getNotifiedWhenBackups') }}</p>
             </div>
             <BaseSwitch v-model="notifications.backup_completion_alerts" :label="$t('settings.notificationsSettings.backupCompletionAlerts')" />
           </div>
 
-          <div class="flex items-center justify-between py-3 border-b border-gray-100">
+          <div class="flex items-center justify-between py-3 border-b border-autobot-border-subtle">
             <div>
-              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.maintenanceReminders') }}</p>
-              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.remindersForScheduledMaintenance') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('settings.notificationsSettings.maintenanceReminders') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.notificationsSettings.remindersForScheduledMaintenance') }}</p>
             </div>
             <BaseSwitch v-model="notifications.maintenance_reminders" :label="$t('settings.notificationsSettings.maintenanceReminders')" />
           </div>
 
-          <div class="flex items-center justify-between py-3 border-b border-gray-100">
+          <div class="flex items-center justify-between py-3 border-b border-autobot-border-subtle">
             <div>
-              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.securityAlerts') }}</p>
-              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.criticalSecurityNotifications') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('settings.notificationsSettings.securityAlerts') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.notificationsSettings.criticalSecurityNotifications') }}</p>
             </div>
             <BaseSwitch v-model="notifications.security_alerts" :label="$t('settings.notificationsSettings.securityAlerts')" />
           </div>
 
           <div class="flex items-center justify-between py-3">
             <div>
-              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.performanceWarnings') }}</p>
-              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.alertsForPerformanceDegradation') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('settings.notificationsSettings.performanceWarnings') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.notificationsSettings.alertsForPerformanceDegradation') }}</p>
             </div>
             <BaseSwitch v-model="notifications.performance_warnings" :label="$t('settings.notificationsSettings.performanceWarnings')" />
           </div>
@@ -160,31 +160,31 @@ onMounted(fetchSettings)
       </div>
 
       <!-- Email Notifications -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <h2 class="text-lg font-semibold mb-6">{{ $t('settings.notificationsSettings.emailNotifications') }}</h2>
 
         <div class="space-y-4">
-          <div class="flex items-center justify-between py-3 border-b border-gray-100">
+          <div class="flex items-center justify-between py-3 border-b border-autobot-border-subtle">
             <div>
-              <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.enableEmail') }}</p>
-              <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.sendNotificationsViaEmail') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('settings.notificationsSettings.enableEmail') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.notificationsSettings.sendNotificationsViaEmail') }}</p>
             </div>
             <BaseSwitch v-model="notifications.email_notifications" :label="$t('settings.notificationsSettings.enableEmail')" />
           </div>
 
           <div v-if="notifications.email_notifications" class="py-3">
-            <label class="block text-sm font-medium text-gray-900 mb-2">{{ $t('settings.notificationsSettings.emailAddress') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-primary mb-2">{{ $t('settings.notificationsSettings.emailAddress') }}</label>
             <input
               v-model="notifications.email_address"
               type="email"
               :placeholder="$t('settings.notificationsSettings.adminExampleCom')"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
         </div>
 
         <!-- Save Button -->
-        <div class="mt-6 pt-6 border-t border-gray-200 flex justify-end">
+        <div class="mt-6 pt-6 border-t border-autobot-border flex justify-end">
           <button
             @click="saveSettings"
             :disabled="saving"

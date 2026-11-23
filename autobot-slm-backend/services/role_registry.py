@@ -55,8 +55,6 @@ _SLM_ROLES = [
         "name": "slm-backend",
         "display_name": "SLM Backend",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-slm-backend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "autobot-slm-backend",
         "auto_restart": True,
         "health_check_port": 8000,
@@ -79,8 +77,6 @@ _SLM_ROLES = [
         "name": "slm-frontend",
         "display_name": "SLM Frontend",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-slm-frontend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "nginx",
         "auto_restart": False,
         "health_check_port": 443,
@@ -96,8 +92,6 @@ _SLM_ROLES = [
         "name": "slm-database",
         "display_name": "SLM Database",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "postgresql",
         "auto_restart": False,
         "required": True,
@@ -108,8 +102,6 @@ _SLM_ROLES = [
         "name": "slm-monitoring",
         "display_name": "SLM Monitoring",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "prometheus",
         "auto_restart": False,
         "health_check_port": 9090,
@@ -128,8 +120,6 @@ _BACKEND_ROLES = [
         "name": "backend",
         "display_name": "Backend API",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-backend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "autobot-backend",
         "auto_restart": True,
         "health_check_port": 8443,
@@ -172,8 +162,6 @@ _BACKEND_ROLES = [
         "name": "celery",
         "display_name": "Celery Worker",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-backend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "autobot-celery",
         "auto_restart": True,
         "required": True,
@@ -185,8 +173,6 @@ _BACKEND_ROLES = [
         "name": "scheduler",
         "display_name": "Celery Beat Scheduler",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-backend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "autobot-celery-beat",
         "auto_restart": True,
         "required": True,
@@ -204,8 +190,6 @@ _FRONTEND_ROLES = [
         "name": "frontend",
         "display_name": "Frontend UI",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-frontend/"],
-        "target_path": _BASE_DIR,
         "systemd_service": "nginx",
         "auto_restart": False,
         "health_check_port": 443,
@@ -227,8 +211,6 @@ _DATABASE_ROLES = [
         "name": "redis",
         "display_name": "Redis Stack",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "redis-stack-server",
         "auto_restart": True,
         "required": True,
@@ -239,12 +221,9 @@ _DATABASE_ROLES = [
         "name": "postgres",
         "display_name": "PostgreSQL",
         "sync_type": None,
-        "source_paths": [],
-        # /var/lib/postgresql is the standard Debian/Ubuntu postgres data dir.
-        # Providing a non-empty target_path lets role_detector.py:76-77 skip its
-        # early-exit guard and activate path-existence + systemd checks, so a
-        # bare-metal postgres node can turn green when the service is running.
-        "target_path": "/var/lib/postgresql",
+        # source_paths / target_path: derived from autobot-database/manifest.yml (#16025). Its postgres
+        # service's sync_target (the standard postgres data dir) is non-empty so role_detector.py does not
+        # take its early exit and runs the path + systemd checks.
         "systemd_service": "postgresql",
         "auto_restart": True,
         "required": True,
@@ -269,8 +248,6 @@ _AI_STACK_ROLES = [
         # `autobot-ai-stack/`, which holds a placeholder README and nothing else.
         # Pointed at that placeholder, a sync delivered one README and reported
         # success — the update never happened.
-        "source_paths": ["autobot-infrastructure/shared/docker/ai-stack/"],
-        "target_path": f"{_BASE_DIR}/autobot-ai-stack",
         "systemd_service": "autobot-ai-stack",
         "auto_restart": True,
         "health_check_port": 8080,
@@ -293,8 +270,6 @@ _AI_STACK_ROLES = [
         "name": "chromadb",
         "display_name": "ChromaDB",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "autobot-chromadb",
         "auto_restart": True,
         "health_check_port": config.port.chromadb,  # #16025 /v2 heartbeat; #19321: the SSOT port, not a copy
@@ -313,8 +288,6 @@ _OPTIONAL_ROLES = [
         "name": "npu-worker",
         "display_name": "NPU Worker",
         "sync_type": SyncType.PACKAGE.value,
-        "source_paths": ["autobot-npu-worker/"],
-        "target_path": f"{_BASE_DIR}/autobot-npu-worker",
         "systemd_service": "autobot-npu-worker",
         "auto_restart": True,
         "health_check_port": config.port.npu,
@@ -354,8 +327,6 @@ _OPTIONAL_ROLES = [
         "name": "browser-service",
         "display_name": "Browser Automation",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-browser-worker/"],
-        "target_path": f"{_BASE_DIR}/autobot-browser-worker",
         "systemd_service": "autobot-playwright",
         "auto_restart": True,
         "health_check_port": config.port.browser,  # #16025/#19324: SSOT port the browser role binds (#4662)
@@ -369,8 +340,6 @@ _OPTIONAL_ROLES = [
         "name": "autobot-llm-cpu",
         "display_name": "LLM CPU Node",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "ollama",
         "auto_restart": True,
         "health_check_port": 11434,
@@ -383,8 +352,6 @@ _OPTIONAL_ROLES = [
         "name": "autobot-llm-gpu",
         "display_name": "LLM GPU Node",
         "sync_type": None,
-        "source_paths": [],
-        "target_path": "",
         "systemd_service": "ollama",
         "auto_restart": True,
         "health_check_port": 11434,
@@ -431,8 +398,6 @@ _INFRA_ROLES = [
         "multi_node": True,
         "display_name": "Shared Library",
         "sync_type": SyncType.PACKAGE.value,
-        "source_paths": ["autobot_shared/"],
-        "target_path": f"{_BASE_DIR}/autobot_shared",
         "auto_restart": False,
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot_shared && pip install -e ."),
         "required": True,
@@ -451,8 +416,6 @@ _INFRA_ROLES = [
         "multi_node": True,
         "display_name": "SLM Agent",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-slm-backend/slm/agent/"],
-        "target_path": _SLM_AGENT_DIR,
         "systemd_service": "slm-agent",
         "auto_restart": True,
         # #14278: the agent's venv, not system pip, and the SAME package set the
@@ -468,9 +431,10 @@ _INFRA_ROLES = [
         "ansible_playbook": "playbooks/deploy-slm-agent.yml",
     },
 ]
-
 DEFAULT_ROLES: List[Dict] = default_roles_for(  # #16025: manifest-augmented, see role_manifest_shape.py
-    _SLM_ROLES + _BACKEND_ROLES + _FRONTEND_ROLES + _DATABASE_ROLES + _AI_STACK_ROLES + _OPTIONAL_ROLES + _INFRA_ROLES
+    _SLM_ROLES + _BACKEND_ROLES + _FRONTEND_ROLES + _DATABASE_ROLES + _AI_STACK_ROLES + _OPTIONAL_ROLES + _INFRA_ROLES,
+    {"base_dir": _BASE_DIR, "agent_dir": _SLM_AGENT_DIR},
+    degrade=True,  # #22067: a role without a manifest is left out and reported, never an import-time crash
 )
 # ---------------------------------------------------------------------------
 # Role → Ansible inventory group mapping  (#1346)

@@ -355,7 +355,9 @@ class TestFinalReplyCarriesModelAndCitations:
 
         persisted = await store.load_session(SESSION_ID)
         sources = _assistant_turns(persisted)[0]["sources"]
-        assert sources == [{"title": "Runbook", "path": "kb/runbook.md", "score": 0.91, "chunk_id": "chunk-1"}]
+        assert [(s["type"], s["title"], s["source"], s["score"], s["id"]) for s in sources] == [
+            ("knowledge_base", "Runbook", "kb/runbook.md", 0.91, "chunk-1")
+        ]
 
     @pytest.mark.asyncio
     async def test_citations_omitted_when_knowledge_was_not_used(self, store):
@@ -371,4 +373,5 @@ class TestFinalReplyCarriesModelAndCitations:
         )
 
         persisted = await store.load_session(SESSION_ID)
-        assert _assistant_turns(persisted)[0]["sources"] == []
+        # No retrieval and no tool step fed the answer, so the one honest source is the model (#21976)
+        assert [s["type"] for s in _assistant_turns(persisted)[0]["sources"]] == ["llm_training"]
