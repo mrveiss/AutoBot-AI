@@ -175,6 +175,11 @@ def test_non_string_dict_keys_hash_as_the_strings_jsonb_returns() -> None:
     )
 
 
+def test_non_finite_float_keys_hash_as_json_dumps_writes_them() -> None:
+    form = chain.jsonb_form({float("inf"): 1, float("-inf"): 2, float("nan"): 3, 1.5: 4})
+    assert set(form) == {"Infinity", "-Infinity", "NaN", "1.5"}
+
+
 def test_mixed_string_and_integer_keys_canonicalise_instead_of_raising() -> None:
     form = chain.jsonb_form({2: "a", "b": 1, 10: "c"})
     assert form == {"2": "a", "b": 1, "10": "c"}

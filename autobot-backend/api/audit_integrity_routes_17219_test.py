@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from api.audit import check_admin_permission, refuse_service_principal, router
 from autobot_shared.audit_chain import Finding
+from autobot_shared.audit_chain_writer import ChainKeyUnavailable
 from services.audit.integrity import IntegrityReport
 
 
@@ -107,6 +108,13 @@ def test_the_run_route_reports_findings_and_never_locks_anything_out() -> None:
     assert response.status_code == 200 and response.json()["findings"] == [
         {"kind": "removed_row", "seq": 3, "detail": "gap"}
     ]
+
+
+def test_the_run_route_answers_503_when_the_chain_key_is_unavailable() -> None:
+    with patch("api.audit.verify_chain", AsyncMock(side_effect=ChainKeyUnavailable("secret detail"))):
+        response = _client().post("/api/audit/integrity/verify")
+    assert response.status_code == 503
+    assert response.json()["detail"] == "The audit chain key is unavailable"
 
 
 def test_the_run_route_defaults_to_the_genesis() -> None:

@@ -37,6 +37,7 @@ from api.schemas_system import (
     AuditStatisticsResponse,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.audit_chain_writer import ChainKeyUnavailable
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
@@ -426,5 +427,9 @@ async def verify_audit_integrity(
     if _verify_in_flight.locked():
         raise HTTPException(status_code=409, detail="An audit chain verification is already running")
     async with _verify_in_flight:
-        report = await verify_chain(body.from_seq if body else None)
+        try:
+            report = await verify_chain(body.from_seq if body else None)
+        except ChainKeyUnavailable as exc:
+            logger.error("Audit chain verification cannot run: the chain key is unavailable")
+            raise HTTPException(status_code=503, detail="The audit chain key is unavailable") from exc
     return report_summary(report)

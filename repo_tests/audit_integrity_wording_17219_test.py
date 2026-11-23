@@ -23,14 +23,15 @@ from repo_tests._reach import declare
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CLAIMS = re.compile(r"tamper[- ]?(?:resistant|proof)|immutable|append[- ]only", re.IGNORECASE)
-#: The mechanism, or the denial, that makes a sentence containing a claim honest.
+#: The mechanism that makes a whole sentence honest.
 _NAMES_MECHANISM = re.compile(
     r"hash[- ]chain|audit_chain|chain_seq|row_mac|\bHMAC\b|tamper-evident|by convention|"
-    r"\b(?:not|never|no|nor|without|isn't|doesn't|cannot)\b\W+(?:\w+\W+){0,3}?"
-    r"(?:tamper[- ]?(?:resistant|proof)|immutable|append[- ]only)|"
     r"\b(?:called|call|calls|claimed|claims)\W+(?:it\W+)?(?:as\W+)?(?:tamper|immutable|append)",
     re.IGNORECASE,
 )
+#: A denial applies to the one claim it directly precedes, not to the rest of the sentence.
+_DENIES = re.compile(r"\b(?:not|never|no|nor|without|isn't|doesn't|cannot)\b\W+(?:\w+\W+){0,3}?$", re.IGNORECASE)
+_CLAUSE_BREAK = re.compile(r"[,;]|\b(?:but|and|or|yet|however|while|although)\b", re.IGNORECASE)
 _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 _AUDIT_PATH = re.compile(r"(?:^|/)(?:services/audit/|[^/]*audit[^/]*\.py$)")
 
@@ -63,9 +64,34 @@ def _sentences(text: str) -> list[str]:
 
 
 def _comments(source: str) -> list[str]:
-    """Comment text only: a ``#`` inside a string literal is runtime data, not a comment."""
-    tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-    return [tok.string.lstrip("#") for tok in tokens if tok.type == tokenize.COMMENT]
+    """Comment text only: a ``#`` inside a string literal is runtime data, not a comment.
+
+    Consecutive full-line comments are one text, so a sentence wrapped over lines stays whole.
+    """
+    lines = source.splitlines()
+    blocks: list[tuple[int, str]] = []
+    for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+        if tok.type != tokenize.COMMENT:
+            continue
+        row, text = tok.start[0], tok.string.lstrip("#")
+        if lines[row - 1].lstrip().startswith("#") and blocks and blocks[-1][0] == row - 1:
+            blocks[-1] = (row, blocks[-1][1] + "\n" + text)
+        else:
+            blocks.append((row, text))
+    return [text for _, text in blocks]
+
+
+def _is_dishonest(sentence: str) -> bool:
+    """A claim is honest when the sentence names a mechanism or a denial directly precedes that claim."""
+    if _NAMES_MECHANISM.search(sentence):
+        return False
+    start = 0
+    for claim in _CLAIMS.finditer(sentence):
+        before = _CLAUSE_BREAK.split(sentence[start : claim.start()])[-1]
+        if not _DENIES.search(before):
+            return True
+        start = claim.end()
+    return False
 
 
 def dishonest_claims(source: str) -> list[str]:
@@ -73,7 +99,7 @@ def dishonest_claims(source: str) -> list[str]:
     scopes = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
     texts = [ast.get_docstring(n) or "" for n in ast.walk(ast.parse(source)) if isinstance(n, scopes)]
     texts += _comments(source)
-    return [s.strip() for t in texts for s in _sentences(t) if _CLAIMS.search(s) and not _NAMES_MECHANISM.search(s)]
+    return [s.strip() for t in texts for s in _sentences(t) if _CLAIMS.search(s) and _is_dishonest(s)]
 
 
 @pytest.mark.parametrize(
@@ -86,6 +112,10 @@ def dishonest_claims(source: str) -> list[str]:
         ("a bare claim after a negation elsewhere", '"""Rows are not deleted. The table is immutable."""\n', 1),
         ("claim in a comment", "x = 1  # append-only table\n", 1),
         ("claim in a string literal that holds a hash", 'message = "# immutable"\n', 0),
+        ("a claim wrapped over comment lines", "# Append-only via the\n# hash chain.\nx = 1\n", 0),
+        ("unrelated comment blocks stay apart", "# Append-only\nx = 1\n# via the hash chain.\n", 1),
+        ("a denial for one claim, a bare second claim", '"""This table is not append-only but is immutable."""\n', 1),
+        ("a denial covering both claims", '"""This table is not append-only nor immutable."""\n', 0),
         ("no claim", '"""Audit rows are sealed on insert."""\n', 0),
     ],
 )

@@ -81,9 +81,9 @@ def _json_key(key: Any) -> str:
     """A dict key as ``json.dumps`` writes it: JSONB keys are always strings, and they sort as strings."""
     if isinstance(key, str):
         return key
-    if key is None or isinstance(key, bool):
-        return json.dumps(key)
-    return repr(key) if isinstance(key, float) else str(key)
+    if key is None or isinstance(key, (bool, float)):
+        return json.dumps(key)  # floats too: ``Infinity``/``NaN`` as written, finite ones equal ``repr``
+    return str(key)
 
 
 def jsonb_form(value: Any) -> Any:
