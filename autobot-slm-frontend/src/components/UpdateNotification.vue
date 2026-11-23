@@ -119,8 +119,8 @@ function goToCodeSync(): void {
 
 <style scoped>
 .update-notification {
-  background: #fef3c7;
-  border-bottom: 1px solid #f59e0b;
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--color-warning);
   padding: 0.75rem 1.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
