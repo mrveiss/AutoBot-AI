@@ -13,6 +13,7 @@ import json
 from datetime import datetime, timezone
 
 from autobot_shared.logging_manager import get_logger
+from services.audit.taxonomy import AuditAction
 from services.redis_service_errors import clear_resolved_node
 from type_defs.common import Metadata
 
@@ -40,4 +41,5 @@ async def record_refusal(manager, operation: str, error: Exception, user_id: str
     logger.error("Redis %s cannot reach the SLM service API: %s", operation, error)
     clear_resolved_node()  # the role may have moved; the next call must ask again, not wait out the cache TTL
     await manager._record_error()
-    manager._audit_log(f"redis_service_{operation}_refused", {"error": type(error).__name__}, user_id=user_id)
+    detail = {"operation": operation, "error": type(error).__name__}
+    manager._audit_log(AuditAction.REDIS_SERVICE_REFUSED.value, detail, user_id=user_id)

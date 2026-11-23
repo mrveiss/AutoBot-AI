@@ -210,11 +210,9 @@ class ServiceDiscoveryCache:
         logger.debug("Cleared service discovery cache")
 
 
-# #14039: the direct-uvicorn-vs-nginx decision now lives in
-# autobot_shared/slm_rest_url.py, so the call sites holding a bare URL string
-# (dag_executor, redis_service_manager, skill_proposer, daily_health_check) can
-# import it without dragging this module's redis/aiohttp/config weight — or a
-# second copy of the decision — along with it. Re-exported under the private
+# #14039: the direct-uvicorn-vs-nginx decision lives in autobot_shared/slm_rest_url.py, so call sites
+# holding a bare URL string (dag_executor, skill_proposer, daily_health_check) import it without this
+# module's redis/aiohttp/config weight or a second copy of the decision. Re-exported under the private
 # name this module has always used so its own call sites read unchanged.
 from autobot_shared.slm_rest_url import is_direct_uvicorn_url as _is_direct_uvicorn_url
 from autobot_shared.slm_rest_url import rest_url

@@ -174,6 +174,7 @@ class AuditAction(str, Enum):
     AGENT_TERMINATE = "agent.terminate"
     # #16333: the internal service key was admitted on a route that names its caller (service_opt_in).
     SERVICE_KEY_ADMITTED = "auth.service_key_admitted"  # pragma: allowlist secret -- an action name, not a key
+    REDIS_SERVICE_REFUSED = "redis.service.refused"  # #16346: the SLM refused or could not resolve a Redis operation
     # #20750: re-aligning the backend's AUTOBOT_INTERNAL_API_KEY to the SLM's, one record per step.
     INTERNAL_KEY_REALIGN_PROPOSED = "credential.internal_key.realign_proposed"  # pragma: allowlist secret
     INTERNAL_KEY_REALIGN_CLAIMED = "credential.internal_key.realign_claimed"  # pragma: allowlist secret

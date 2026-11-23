@@ -345,7 +345,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/skill_management/skill_distillation_scheduler.py": 717,
     # 1090 -> 1043 (#14039): the direct-uvicorn-vs-nginx predicate moved to
     # autobot_shared/slm_rest_url.py so the standalone REST callers could import it.
-    "autobot-backend/services/slm_client.py": 979,
+    "autobot-backend/services/slm_client.py": 975,
     "autobot-backend/services/slm_client_test.py": 659,
     "autobot-backend/services/temporal_invalidation_service.py": 997,
     "autobot-backend/services/tool_output_filter.py": 639,
