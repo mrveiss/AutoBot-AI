@@ -70,12 +70,12 @@ class TestPersistHealthSnapshot:
     async def test_writes_one_entry_to_sorted_set(self):
         redis = _make_redis_mock()
         with patch(_PATCH_TARGET, new=AsyncMock(return_value=redis)):
-            await _persist_health_snapshot(78.5, _SAMPLE_METRICS)
+            await _persist_health_snapshot(78.5, _SAMPLE_METRICS, "s1")
 
         redis.zadd.assert_awaited_once()
         call_args = redis.zadd.call_args
         key = call_args.args[0]
-        assert key == _HEALTH_HISTORY_KEY
+        assert key == f"{_HEALTH_HISTORY_KEY}:s1"
         payload_map: dict = call_args.args[1]
         assert len(payload_map) == 1
         raw_payload = list(payload_map.keys())[0]
@@ -88,11 +88,11 @@ class TestPersistHealthSnapshot:
     async def test_caps_sorted_set_with_zremrangebyrank(self):
         redis = _make_redis_mock()
         with patch(_PATCH_TARGET, new=AsyncMock(return_value=redis)):
-            await _persist_health_snapshot(78.5, _SAMPLE_METRICS)
+            await _persist_health_snapshot(78.5, _SAMPLE_METRICS, "s1")
 
         redis.zremrangebyrank.assert_awaited_once()
         args = redis.zremrangebyrank.call_args.args
-        assert args[0] == _HEALTH_HISTORY_KEY
+        assert args[0] == f"{_HEALTH_HISTORY_KEY}:s1"
         assert args[1] == 0
         assert args[2] == -(QUALITY_HISTORY_MAX_POINTS + 1)
 
@@ -104,7 +104,7 @@ class TestPersistHealthSnapshot:
             new=AsyncMock(side_effect=RuntimeError("connection refused")),
         ):
             # Should not raise
-            await _persist_health_snapshot(78.5, _SAMPLE_METRICS)
+            await _persist_health_snapshot(78.5, _SAMPLE_METRICS, "s1")
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +121,7 @@ class TestBuildQualityTrends:
         ]
         redis = _make_redis_mock(zrange_entries=entries)
         with patch(_PATCH_TARGET, new=AsyncMock(return_value=redis)):
-            result = await _build_quality_trends(_SAMPLE_METRICS, days=30)
+            result = await _build_quality_trends(_SAMPLE_METRICS, "s1", days=30)
 
         assert len(result) == 2
         assert result[0]["score"] == pytest.approx(72.0)
@@ -132,7 +132,7 @@ class TestBuildQualityTrends:
     async def test_falls_back_to_flat_when_history_empty(self):
         redis = _make_redis_mock(zrange_entries=[])
         with patch(_PATCH_TARGET, new=AsyncMock(return_value=redis)):
-            result = await _build_quality_trends(_SAMPLE_METRICS, days=7)
+            result = await _build_quality_trends(_SAMPLE_METRICS, "s1", days=7)
 
         expected_score = _flat_score(_SAMPLE_METRICS)
         assert len(result) == 8  # days=7 → range(7, -1, -1) → 8 points
@@ -145,7 +145,7 @@ class TestBuildQualityTrends:
             _PATCH_TARGET,
             new=AsyncMock(side_effect=RuntimeError("redis down")),
         ):
-            result = await _build_quality_trends(_SAMPLE_METRICS, days=7)
+            result = await _build_quality_trends(_SAMPLE_METRICS, "s1", days=7)
 
         assert len(result) == 8
         expected_score = _flat_score(_SAMPLE_METRICS)
@@ -156,7 +156,7 @@ class TestBuildQualityTrends:
     async def test_returns_dict_with_date_and_score_keys(self):
         redis = _make_redis_mock(zrange_entries=[])
         with patch(_PATCH_TARGET, new=AsyncMock(return_value=redis)):
-            result = await _build_quality_trends(_SAMPLE_METRICS)
+            result = await _build_quality_trends(_SAMPLE_METRICS, "s1")
 
         for point in result:
             assert "date" in point
@@ -170,7 +170,7 @@ class TestBuildQualityTrends:
         ]
         redis = _make_redis_mock(zrange_entries=entries)
         with patch(_PATCH_TARGET, new=AsyncMock(return_value=redis)):
-            result = await _build_quality_trends(_SAMPLE_METRICS, days=30)
+            result = await _build_quality_trends(_SAMPLE_METRICS, "s1", days=30)
 
         # Only the valid entry should survive; malformed one is skipped
         assert len(result) == 1

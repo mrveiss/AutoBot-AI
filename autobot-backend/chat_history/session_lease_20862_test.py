@@ -522,3 +522,21 @@ async def test_a_failed_fallback_raises(manager, tmp_path, monkeypatch):
 
 
 bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here
+
+
+async def test_set_metadata_if_unset_is_a_compare_and_set(manager, tmp_path):
+    """#21997: two concurrent writers of one key, exactly one wins and the file holds the winner's value."""
+    await manager.save_session("s9", messages=[_msg("first", "t0")])
+    results = await asyncio.gather(
+        manager.set_metadata_if_unset("s9", "company_id", "co-a"),
+        manager.set_metadata_if_unset("s9", "company_id", "co-b"),
+    )
+    assert sorted(results) == [False, True]
+    assert _on_disk(tmp_path, "s9")["metadata"]["company_id"] == ("co-a" if results[0] else "co-b")
+    assert await manager.get_session_company("s9") == _on_disk(tmp_path, "s9")["metadata"]["company_id"]
+    assert await manager.set_metadata_if_unset("s9", "company_id", "co-c") is False  # once set, never moved
+
+
+async def test_set_metadata_if_unset_on_an_absent_session_writes_nothing(manager, tmp_path):
+    assert await manager.set_metadata_if_unset("nope", "company_id", "co-a") is False
+    assert not (tmp_path / "nope_chat.json").exists()

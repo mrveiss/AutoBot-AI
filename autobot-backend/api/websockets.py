@@ -24,6 +24,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from chat_history.message_schema import ATTACHMENT_NOTICE_TYPE
 from events.bus import get_event_bus
+from security.session_company import connection_company, session_in_company
 from type_defs.common import BROADCAST_EVENT_TYPES, SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
 logger = get_logger(__name__)
@@ -511,7 +512,7 @@ def register_chat_history_persistence() -> None:
         logger.error("Failed to register chat-history persistence hook: %s", e)
 
 
-async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache: dict) -> bool:
+async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache: dict, company=None) -> bool:
     """Decide whether one broadcast event may be shown to this connection.
 
     Issue #14814 made ``/ws`` delivery additive so several clients could receive
@@ -555,6 +556,8 @@ async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache
             # #17428: unresolved owner withholds unless the type is declared.
             declared = event_data.get("type") in BROADCAST_EVENT_TYPES
             allowed = declared if owner is None else str(owner) == current_user_id
+            if allowed and owner is not None and company is not None:  # #21997: another company's chat is withheld
+                allowed = await session_in_company(manager, session_id, company)
     except Exception as exc:
         logger.warning("Could not resolve session owner for %s, withholding: %s", session_id, exc)
         allowed = False
@@ -563,15 +566,10 @@ async def _event_is_for_user(event_data: dict, current_user_id: str, owner_cache
     return allowed
 
 
-async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_manager, current_user_id: str = ""):
+async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_manager, current_user_id="", company=None):
     """Create broadcast event handler function (Issue #315 - extracted).
 
-    Args:
-        websocket: The WebSocket connection
-        chat_history_manager: Chat history manager instance
-
-    Returns:
-        Async function that broadcasts events
+    *company* is the connection's active company (#21997); events of a chat in another one are withheld.
     """
     # Per-connection memo so a burst on one session costs a single lookup.
     owner_cache: dict[str, bool] = {}
@@ -587,7 +585,7 @@ async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_man
         try:
             # #14814 follow-up: this endpoint has no channel scoping, so filter
             # per event rather than shipping every user's traffic to everyone.
-            if not await _event_is_for_user(event_data, current_user_id, owner_cache):
+            if not await _event_is_for_user(event_data, current_user_id, owner_cache, company):
                 return
             await websocket.send_json(event_data)
         except RuntimeError as e:
@@ -810,6 +808,8 @@ async def websocket_endpoint(websocket: WebSocket):
         await accept_websocket(websocket)
         await websocket.close(code=4001, reason="Authentication required")
         return
+    if (company := await connection_company(websocket, user)) is None:  # #21997: the active company, once
+        return
 
     # Extract stable user ID for ownership checks (mirrors canvas.py _user_id())
     current_user_id: str = user.get("user_id") or user.get("id") or user.get("username", "")
@@ -831,7 +831,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # Issue #665: Use helper for chat history manager access
     chat_history_manager = _get_chat_history_manager(websocket)
 
-    broadcast_event = await _create_broadcast_event_handler(websocket, chat_history_manager, current_user_id)
+    broadcast_event = await _create_broadcast_event_handler(websocket, chat_history_manager, current_user_id, company)
 
     # Issue #665: Use helper for event manager registration
     _register_event_manager_broadcast(broadcast_event)

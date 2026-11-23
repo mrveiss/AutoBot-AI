@@ -42,8 +42,13 @@ export function useChatSidebarSessions() {
   const searchQuery = ref('')
   const filteredSessions = computed(() => {
     const q = searchQuery.value.trim().toLowerCase()
-    if (!q) return store.sessions
-    return store.sessions.filter((s) => (s.title || getSessionPreview(s)).toLowerCase().includes(q))
+    const matches = (s: ChatSession) => !q || (s.title || getSessionPreview(s)).toLowerCase().includes(q)
+    return store.sessions.filter((s) => !s.unassigned && matches(s))
+  })
+  // #21997: chats that carry no company stay apart, in the Unassigned group, until a person assigns one.
+  const unassignedSessions = computed(() => {
+    const q = searchQuery.value.trim().toLowerCase()
+    return store.sessions.filter((s) => s.unassigned && (!q || (s.title || getSessionPreview(s)).toLowerCase().includes(q)))
   })
   const clearSearch = (): void => {
     searchQuery.value = ''
@@ -214,7 +219,7 @@ export function useChatSidebarSessions() {
 
   return {
     getSessionPreview,
-    searchQuery, filteredSessions, clearSearch,
+    searchQuery, filteredSessions, unassignedSessions, clearSearch,
     selectionMode, sessionSelection, enableSelectionMode, cancelSelection, deleteSelectedSessions,
     showEditModal, editingName, editSessionName, saveSessionName, cancelEdit,
     showShareDialog, shareTargetSessionId, openShareDialog, handleShareComplete,
