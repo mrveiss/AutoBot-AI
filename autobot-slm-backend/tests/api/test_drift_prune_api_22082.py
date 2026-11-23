@@ -135,8 +135,10 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "_drift_prune_api_under_test_22082", mod)
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
 
+    code_sync_router = sys.modules["api.code_sync"].router
+    code_sync_router.include_router(mod.router)  # the nesting api.full_tree_drift does in production
     app = FastAPI()
-    app.include_router(sys.modules["api.code_sync"].router)
+    app.include_router(code_sync_router)
     state.client = TestClient(app, raise_server_exceptions=False)
     return state
 
@@ -245,9 +247,10 @@ def test_a_failing_apply_marks_the_row_aborted(env) -> None:
     assert env.rows[0].extra_data["status"] == "aborted"
 
 
-def test_the_module_is_registered_from_full_tree_drift() -> None:
+def test_the_module_is_nested_into_the_code_sync_router_by_full_tree_drift() -> None:
     registrar = (_BACKEND / "api" / "full_tree_drift.py").read_text(encoding="utf-8")
-    assert "from api import drift_prune" in registrar
+    assert "from api.drift_prune import router as drift_prune_router" in registrar
+    assert "router.include_router(drift_prune_router)" in registrar
 
 
 @pytest.mark.parametrize("bad", ["../x", "a/../../x", "/etc/passwd", "..", "", "a\x00b"])

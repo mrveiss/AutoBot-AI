@@ -15,8 +15,10 @@ same class the updater's own ``sync_deletions`` pass removes unattended, so it i
 not routed through the approval queue. It is admin-only, previewed, confirmed
 by the exact path list, refused while a deploy runs, and audited.
 
-Registers onto the SAME ``APIRouter`` ``api.code_sync`` builds (imported from
-``api.full_tree_drift``, itself imported at the bottom of ``code_sync``).
+Declares its own ``APIRouter``, nested into the ``code_sync`` router by
+``api.full_tree_drift`` (``router.include_router``): served at ``/api/code-sync/drift/prune``.
+A route borrowed onto another file's router is judged by the unconnected-code gate at the
+wrong prefix; the nested include is the form it resolves (``_unconnected_app_mounts``).
 """
 
 from __future__ import annotations
@@ -24,11 +26,10 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.code_sync import router
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.security.path_http import require_contained_relative_path
 from services.auth import require_permission
@@ -42,6 +43,8 @@ from services.drift_prune import (
     canonical_component,
     plan_prune,
 )
+
+router = APIRouter(tags=["code-sync"])
 
 _MAX_PATHS = 5000
 

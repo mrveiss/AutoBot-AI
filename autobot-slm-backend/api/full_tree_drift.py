@@ -100,4 +100,6 @@ async def get_full_tree_drift(
     )
 
 
-from api import drift_prune  # noqa: E402,F401 -- registers POST /drift/prune[/preview] onto `router` (#22082)
+from api.drift_prune import router as drift_prune_router  # noqa: E402
+
+router.include_router(drift_prune_router)  # POST /drift/prune[/preview] under /code-sync (#22082)
