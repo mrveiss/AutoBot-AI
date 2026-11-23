@@ -44,7 +44,7 @@ from services.drift_prune import (
     plan_prune,
 )
 
-router = APIRouter(tags=["code-sync"])
+router = APIRouter()
 
 _MAX_PATHS = 5000
 
