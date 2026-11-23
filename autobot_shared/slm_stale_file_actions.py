@@ -1,0 +1,60 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""The contract between the SLM and the backend for removing stale files left under the old code-sync targets (#22033).
+
+Before #22030 the code-sync rsynced four roles into the install root itself and the agent into the agent
+directory; each now has its own directory, so the old copies stay behind. They are removed only after a human
+approves a proposal in the backend's one approval queue (#17038):
+
+1. an admin asks the SLM to propose for a node; the SLM lists the files read-only and POSTs ``PROPOSAL_PATH``
+   (one proposal per old sync location per node, at most ``MAX_FILES_PER_PROPOSAL`` files);
+2. a human approves it in the Approvals inbox, whose description lists every file (path, size, age);
+3. the backend's ``server_only`` executor calls the SLM's ``removal_path`` route;
+4. the SLM lists afresh, claims the approval at ``claim_path`` (verified as a human's, spent once) and removes
+   only the approved files that are still stale.
+
+The claim is the generic ``slm_credential_claim`` one, driven by :data:`STALE_SYNC_FILES_CLEANUP`.
+Both services read the names and the paths from here, so the two ends cannot drift.
+"""
+
+from __future__ import annotations
+
+from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.slm_credential_actions import SlmApprovalAction
+
+STALE_SYNC_FILES_CLEANUP = SlmApprovalAction(
+    name="slm_node_stale_sync_files_cleanup",
+    credential_kind="stale_sync_files",  # nosec B106  # pragma: allowlist secret -- a kind label, not a credential
+    proposer_prefix="slm-code-sync",
+)
+
+#: The most files one proposal lists; the cap counts items and never shortens a path (#22033, owner D5).
+MAX_FILES_PER_PROPOSAL = env_int_clamped("SLM_STALE_SYNC_FILES_MAX_PER_PROPOSAL", 200, 1, 1000)
+
+#: The backend path a proposal is POSTed to (internal key only).
+PROPOSAL_PATH = "/api/internal/slm/stale-file-proposals"
+#: The backend path that verifies and spends an approval, before any file is removed (internal key only).
+CLAIM_PATH_TEMPLATE = "/api/internal/slm/stale-file-approvals/{approval_id}/claim"
+#: The SLM path the backend POSTs to once approved (internal key only); the approval id is the query parameter.
+REMOVAL_PATH_TEMPLATE = "/api/internal/nodes/{node_id}/stale-sync-files/removal"
+
+#: ``result`` of one file in a removal report; only ``removed`` means the file is gone.
+RESULT_REMOVED = "removed"
+RESULTS = frozenset({RESULT_REMOVED, "refused", "changed", "absent", "no_longer_stale", "failed"})
+
+
+def claim_path(approval_id: str) -> str:
+    """The backend path that verifies and spends *approval_id*."""
+    return CLAIM_PATH_TEMPLATE.format(approval_id=approval_id)
+
+
+def removal_path(node_id: str) -> str:
+    """The SLM path that removes the approved stale files of *node_id*."""
+    return REMOVAL_PATH_TEMPLATE.format(node_id=node_id)
+
+
+def api_relative(path: str) -> str:
+    """*path* without its ``/api/`` prefix, the form ``call_main_backend`` takes."""
+    return path.removeprefix("/api/")

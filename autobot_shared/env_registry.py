@@ -85,6 +85,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_slm_client,
     env_registry_slm_health,
     env_registry_slm_rollback,
+    env_registry_slm_stale_files,
     env_registry_terminal,
     env_registry_testing,
     env_registry_tls,
@@ -140,7 +141,6 @@ register_env_var(
 )
 
 # --- backend: env_registry_backend.py (#22030: folded to make room for the slm_client import) --- chat ---
-
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_CHATS_DIRECTORY",
