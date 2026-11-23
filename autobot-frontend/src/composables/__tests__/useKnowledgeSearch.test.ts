@@ -65,6 +65,44 @@ describe('useKnowledgeSearch', () => {
     expect(s.isSearching.value).toBe(false)
   })
 
+  it('a late completion after clearResults writes no results, response or error', async () => {
+    let release!: (r: unknown) => void
+    let fail!: (e: Error) => void
+    ragSearch.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+    const s = useKnowledgeSearch(ref(null))
+    s.useRagSearch.value = true
+    s.searchQuery.value = 'x'
+    const ok = s.handleSearch()
+    s.clearResults()
+    release({ results: [{ document: { id: '1' } }] })
+    await ok
+    expect([s.searchResults.value, s.ragResponse.value, s.ragError.value]).toEqual([[], null, null])
+    ragSearch.mockReturnValueOnce(new Promise((_, reject) => { fail = reject }))
+    searchKnowledge.mockResolvedValue([{ document: { id: 'late' } }])
+    const bad = s.handleSearch()
+    s.clearResults()
+    fail(new Error('late'))
+    await bad
+    expect([s.searchResults.value, s.ragError.value]).toEqual([[], null])
+    expect(searchKnowledge).not.toHaveBeenCalled()
+  })
+
+  it('a slow search A finishing after a newer search B leaves the results of B', async () => {
+    let releaseA!: (r: unknown) => void
+    searchKnowledge
+      .mockReturnValueOnce(new Promise((resolve) => { releaseA = resolve }))
+      .mockResolvedValueOnce([{ document: { id: 'B' } }])
+    const s = useKnowledgeSearch(ref(null))
+    s.searchQuery.value = 'a'
+    const a = s.handleSearch()
+    s.searchQuery.value = 'b'
+    await s.handleSearch()
+    releaseA([{ document: { id: 'A' } }])
+    await a
+    expect(s.searchResults.value).toEqual([{ document: { id: 'B' } }])
+    expect(s.lastSearchQuery.value).toBe('b')
+  })
+
   it('clearResults resets search state', async () => {
     searchKnowledge.mockResolvedValue([{ document: { id: '1' } }])
     const s = useKnowledgeSearch(ref(null))
