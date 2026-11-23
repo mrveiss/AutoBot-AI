@@ -4,14 +4,21 @@
  * AdvancedAreaNotice (#18244): carries `only-min` so the shared CSS shows it only in
  * Minimal mode; "Show all features" switches to Full mode through useUiMode.
  */
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import AdvancedAreaNotice from '../AdvancedAreaNotice.vue'
 import componentsCss from '@/assets/css/components.css?raw'
-import baseCardSource from '../../../../../libs/autobot-ui/src/components/BaseCard.vue?raw'
 import { useUiMode } from '@/composables/useUiMode'
+
+// Real kit source read via node:fs (Vite's `?raw` fs allow-list denies files outside the app root).
+const baseCardSource = readFileSync(
+  resolve(__dirname, '../../../../../libs/autobot-ui/src/components/BaseCard.vue'),
+  'utf-8',
+)
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const mountNotice = () =>
