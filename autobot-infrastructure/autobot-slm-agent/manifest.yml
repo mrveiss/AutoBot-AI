@@ -23,6 +23,7 @@ system_dependencies:
 services:
   - name: autobot-slm-agent
     type: systemd
+    system_service: slm-agent   # #16025: the unit roles/slm_agent installs (/etc/systemd/system/slm-agent.service)
     start_order: 1
     user: autobot-slm-agent
 

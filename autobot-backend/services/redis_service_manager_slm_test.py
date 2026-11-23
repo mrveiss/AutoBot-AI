@@ -377,11 +377,16 @@ class TestARefusalOnTheActionAfterAPermittingStatus:
     @pytest.mark.parametrize(
         "operation,status,action", [("start_service", "stopped", "start"), ("stop_service", "running", "stop")]
     )
-    async def test_an_unresolved_node_on_the_action_is_raised(self, manager, operation, status, action) -> None:
+    async def test_a_transport_failure_on_the_action_fails_the_operation(
+        self, manager, operation, status, action
+    ) -> None:
+        """The node resolves before the action, so the action cannot be "unresolved"; a dropped call fails it."""
         client = _client(services={"services": [{"service_name": "redis-stack-server", "status": status}]})
-        client.node_service_action = AsyncMock(side_effect=RedisNodeUnresolvedError("moved"))
-        with _patched(client), pytest.raises(RedisNodeUnresolvedError):
-            await getattr(manager, operation)()
+        client.node_service_action = AsyncMock(side_effect=aiohttp.ClientConnectionError("down"))
+        with _patched(client):
+            result = await getattr(manager, operation)()
+        assert result.success is False
+        assert redis_service_errors._resolved is None, "a failed action must drop the cached node"
         client.node_service_action.assert_awaited_once_with("04-Databases", "redis-stack-server", action)
 
 
