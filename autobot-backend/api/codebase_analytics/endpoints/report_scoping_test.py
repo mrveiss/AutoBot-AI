@@ -343,6 +343,8 @@ class TestEveryAnalysisIsBounded:
                 include_cross_language_analysis=False,
                 include_pattern_analysis=False,
                 use_semantic=False,
+                source_id="A",
+                scan_root=Path("/tmp/does-not-need-to-exist"),
             ),
             timeout=10,
         )
@@ -372,6 +374,8 @@ class TestEveryAnalysisIsBounded:
                     include_cross_language_analysis=False,
                     include_pattern_analysis=False,
                     use_semantic=False,
+                    source_id="A",
+                    scan_root=Path("/tmp/does-not-need-to-exist"),
                 ),
                 timeout=10,
             )

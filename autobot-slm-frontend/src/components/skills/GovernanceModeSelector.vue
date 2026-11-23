@@ -3,7 +3,7 @@
 <!-- Author: mrveiss -->
 <template>
   <div class="governance-mode-selector flex items-center gap-4">
-    <label class="text-sm text-gray-400 whitespace-nowrap">{{ $t('skills.governanceModeSelector.governanceMode') }}</label>
+    <label class="text-sm text-autobot-text-tertiary whitespace-nowrap">{{ $t('skills.governanceModeSelector.governanceMode') }}</label>
     <div class="flex gap-1">
       <button
         v-for="m in modes"
@@ -11,15 +11,15 @@
         :class="[
           'px-3 py-1.5 rounded-sm text-sm border transition-colors',
           modelValue === m.value
-            ? 'bg-blue-600 border-blue-500 text-white'
-            : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
+            ? 'bg-autobot-primary border-autobot-primary text-autobot-text-on-primary'
+            : 'bg-autobot-bg-card border-autobot-border text-autobot-text-secondary hover:border-autobot-border-strong',
         ]"
         @click="$emit('update:modelValue', m.value)"
       >
         {{ m.label }}
       </button>
     </div>
-    <p v-if="currentMode" class="text-xs text-gray-500 max-w-xs">
+    <p v-if="currentMode" class="text-xs text-autobot-text-tertiary max-w-xs">
       {{ currentMode.description }}
     </p>
   </div>

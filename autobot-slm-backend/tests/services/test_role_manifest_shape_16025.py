@@ -12,6 +12,9 @@ exists only for ``role_registry.py``'s own ``models.database``/``sqlalchemy``
 imports, which this module does not have).
 """
 
+import ast
+from pathlib import Path
+
 import pytest
 
 from models.manifest import (
@@ -182,9 +185,12 @@ def test_health_derivation_is_skipped_for_the_excluded_role():
     assert result["health_check_port"] == 8000, "the internal bind port must survive, not the external nginx URL"
 
 
-def test_a_role_with_no_health_field_today_gains_none_from_the_manifest():
-    manifest = _manifest("autobot-backend", services=[_svc("autobot-backend")], health_endpoint="https://x:8443/x")
-    role_data = {"name": "backend", "systemd_service": "autobot-backend"}
+def test_a_role_with_no_health_check_gains_none_from_a_shared_manifest():
+    """celery runs from the backend manifest, whose one health endpoint is the backend's, not celery's."""
+    manifest = _manifest(
+        "autobot-backend", services=[_svc("autobot-celery", slm_roles=["celery"])], health_endpoint="https://x:8443/x"
+    )
+    role_data = {"name": "celery", "systemd_service": "autobot-celery"}
     result = rms.apply_manifest_shape(role_data, {"autobot-backend": manifest})
     assert "health_check_port" not in result
 
@@ -274,17 +280,18 @@ _BASE = "/opt/autobot"
 _AGENT = "/opt/autobot/autobot-slm-agent"
 _PLACEHOLDERS = {"base_dir": _BASE, "agent_dir": _AGENT}
 
-#: (source_paths, target_path) every manifest-backed role declared in role_registry.py before the move, with the
-#: default AUTOBOT_BASE_DIR / SLM_AGENT_DIR. A change here is a change to what the code-sync does on a node.
+#: (source_paths, target_path) every manifest-backed role syncs, with the default AUTOBOT_BASE_DIR / SLM_AGENT_DIR.
+#: A change here is a change to what the code-sync does on a node. #21974: the six roles that synced into the install
+#: root and the agent that synced into the agent directory now sync into the directory their unit runs from.
 _BEFORE_THE_MOVE = {
-    "slm-backend": (["autobot-slm-backend/"], _BASE),
-    "slm-frontend": (["autobot-slm-frontend/"], _BASE),
+    "slm-backend": (["autobot-slm-backend/"], f"{_BASE}/autobot-slm-backend"),
+    "slm-frontend": (["autobot-slm-frontend/"], f"{_BASE}/autobot-slm-frontend"),
     "slm-database": ([], ""),
     "slm-monitoring": ([], ""),
-    "backend": (["autobot-backend/"], _BASE),
-    "celery": (["autobot-backend/"], _BASE),
-    "scheduler": (["autobot-backend/"], _BASE),
-    "frontend": (["autobot-frontend/"], _BASE),
+    "backend": (["autobot-backend/"], f"{_BASE}/autobot-backend"),
+    "celery": (["autobot-backend/"], f"{_BASE}/autobot-backend"),
+    "scheduler": (["autobot-backend/"], f"{_BASE}/autobot-backend"),
+    "frontend": (["autobot-frontend/"], f"{_BASE}/autobot-frontend"),
     "redis": ([], ""),
     "postgres": ([], "/var/lib/postgresql"),
     "chromadb": ([], ""),
@@ -294,7 +301,7 @@ _BEFORE_THE_MOVE = {
     "autobot-llm-cpu": ([], ""),
     "autobot-llm-gpu": ([], ""),
     "autobot_shared": (["autobot_shared/"], f"{_BASE}/autobot_shared"),
-    "slm-agent": (["autobot-slm-backend/slm/agent/"], _AGENT),
+    "slm-agent": (["autobot-slm-backend/slm/agent/"], f"{_AGENT}/slm/agent"),
 }
 
 
@@ -304,7 +311,7 @@ def _real_manifests():
     return ManifestLoader(infra_base=repo_root() / "autobot-infrastructure").load_all()
 
 
-def test_derived_sync_fields_equal_what_the_registry_declared_before():
+def test_derived_sync_fields_equal_the_pinned_table():
     manifests = _real_manifests()
     for role_name, expected in _BEFORE_THE_MOVE.items():
         derived = rms.apply_manifest_shape({"name": role_name}, manifests, _PLACEHOLDERS)
@@ -317,9 +324,9 @@ def test_the_environment_override_still_decides_the_roots():
     backend = rms.apply_manifest_shape({"name": "backend"}, manifests, placeholders)
     shared = rms.apply_manifest_shape({"name": "autobot_shared"}, manifests, placeholders)
     agent = rms.apply_manifest_shape({"name": "slm-agent"}, manifests, placeholders)
-    assert backend["target_path"] == "/srv/ab"
+    assert backend["target_path"] == "/srv/ab/autobot-backend"
     assert shared["target_path"] == "/srv/ab/autobot_shared"
-    assert agent["target_path"] == "/srv/agent"
+    assert agent["target_path"] == "/srv/agent/slm/agent"
 
 
 def test_every_real_manifest_declares_its_sync_fields_explicitly():
@@ -422,3 +429,155 @@ def test_a_failed_load_is_not_cached_and_the_cache_keys_on_the_placeholders(monk
     other = rms.default_roles_for(static, {"base_dir": "/srv/ab", "agent_dir": "/srv/ag"})[0]["target_path"]
     assert (first, other) == ("/opt/autobot", "/srv/ab")
     rms._default_roles_cache.clear()
+
+
+# ---------------------------------------------------------------------------
+# #16025 AC1 -- role shape is declared in one place: the registry restates none of it
+# ---------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REGISTRY_SOURCE = _REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py"
+
+#: Roles whose registry literal unit is the ONLY declaration: no manifest names a systemd unit for them.
+_LITERAL_UNIT_ROLES = frozenset({"slm-frontend", "tts-worker", "vnc"})
+
+#: The health every derived role had before the registry stopped restating it (#16025 AC1) -- the registry literal
+#: and the manifest agreed for all of them, so dropping the literal changes nothing a consumer sees.
+_EXPECTED_HEALTH = {
+    "slm-frontend": (443, "/"),
+    "slm-monitoring": (9090, "/-/healthy"),
+    "backend": (8443, "/api/health"),
+    "frontend": (443, "/api/health"),
+    "ai-stack": (8080, "/health"),
+    "chromadb": (8100, "/api/v2/heartbeat"),
+    "npu-worker": (8081, "/health"),
+    "browser-service": (9001, "/health"),
+    "autobot-llm-cpu": (11434, "/api/tags"),
+    "autobot-llm-gpu": (11434, "/api/tags"),
+    "slm-backend": (8000, "/api/health"),
+}
+
+
+def _registry_role_fields() -> dict[str, set[str]]:
+    tree = ast.parse(_REGISTRY_SOURCE.read_text(encoding="utf-8"))
+    roles = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            fields = {k.value: v for k, v in zip(node.keys, node.values) if isinstance(k, ast.Constant)}
+            name = fields.get("name")
+            if isinstance(name, ast.Constant) and "display_name" in fields:
+                roles[name.value] = set(fields)
+    return roles
+
+
+def _registry_unit_literals() -> dict[str, object]:
+    """``role name -> the systemd_service literal`` (str or list) the registry source holds."""
+    tree = ast.parse(_REGISTRY_SOURCE.read_text(encoding="utf-8"))
+    found = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            fields = {k.value: v for k, v in zip(node.keys, node.values) if isinstance(k, ast.Constant)}
+            name, unit = fields.get("name"), fields.get("systemd_service")
+            if isinstance(name, ast.Constant) and "display_name" in fields and unit is not None:
+                found[name.value] = ast.literal_eval(unit)
+    return found
+
+
+def test_the_registry_restates_no_health_a_manifest_provides():
+    declared = {n for n, f in _registry_role_fields().items() if f & {"health_check_port", "health_check_path"}}
+    owned = rms.HEALTH_DERIVED_ROLES | set(rms.HEALTH_OWN_BIND)
+    assert (
+        not declared & owned
+    ), f"role_registry.py restates health the manifest/own-bind table owns: {declared & owned}"
+
+
+def test_the_registry_restates_no_unit_a_manifest_declares():
+    manifests = _real_manifests()
+    restated = []
+    for name, fields in _registry_role_fields().items():
+        if "systemd_service" not in fields or name in _LITERAL_UNIT_ROLES:
+            continue
+        shaped = rms.apply_manifest_shape(
+            {"name": name, "source_paths": [], "target_path": "/x"}, manifests, _PLACEHOLDERS
+        )
+        if shaped.get("systemd_service"):
+            restated.append(name)
+    assert not restated, f"role_registry.py still declares the unit of manifest-backed roles: {restated}"
+
+
+def test_the_literal_unit_roles_have_no_manifest_unit():
+    manifests = _real_manifests()
+    for name in _LITERAL_UNIT_ROLES:
+        shaped = rms.apply_manifest_shape(
+            {"name": name, "source_paths": [], "target_path": "/x"}, manifests, _PLACEHOLDERS
+        )
+        assert not shaped.get("systemd_service"), f"{name} now has a manifest unit; drop its registry literal"
+
+
+def test_every_derived_health_equals_what_the_registry_declared_before():
+    manifests = _real_manifests()
+    got = {}
+    for name in _EXPECTED_HEALTH:
+        shaped = rms.apply_manifest_shape(
+            {"name": name, "source_paths": [], "target_path": "/x"}, manifests, _PLACEHOLDERS
+        )
+        got[name] = (shaped.get("health_check_port"), shaped.get("health_check_path"))
+    assert got == _EXPECTED_HEALTH
+
+
+def test_the_ssot_ports_still_match_the_manifest_health_ports():
+    """The #19321 / #19324 one-home rule: the manifest's port is the SSOT port, now that no registry literal says so."""
+    from autobot_shared.ssot_config import config
+
+    ports = {name: port for name, (port, _path) in _EXPECTED_HEALTH.items()}
+    assert ports["chromadb"] == config.port.chromadb
+    assert ports["npu-worker"] == config.port.npu
+    assert ports["browser-service"] == config.port.browser
+
+
+def test_the_static_unit_reader_in_repo_tests_agrees_with_the_runtime_projection():
+    from repo_tests._registry_role_units import registry_role_units
+
+    manifests = _real_manifests()
+    static = registry_role_units(_REPO_ROOT)
+    literals = _registry_unit_literals()
+    for name, units in static.items():
+        role = {"name": name, "source_paths": [], "target_path": "/x"}
+        if name in literals:
+            role["systemd_service"] = literals[name]
+        shaped = rms.apply_manifest_shape(role, manifests, _PLACEHOLDERS)
+        assert units == (shaped.get("systemd_service") or []), name
+
+
+def test_the_static_unit_reader_defaults_a_missing_type_to_systemd_like_the_manifest_model():
+    from repo_tests._registry_role_units import _units_of
+
+    services = [{"name": "untyped"}, {"name": "built", "type": "oneshot"}, {"name": "typed", "type": "systemd"}]
+    assert _units_of(services, None) == ["untyped", "typed"]
+    assert ManifestService(name="untyped").type == ServiceType.SYSTEMD
+
+
+# ---------------------------------------------------------------------------
+# #21974 AC3 -- the sync target is the install layout: what the unit runs from, which is the manifest's destination
+# ---------------------------------------------------------------------------
+
+
+def test_every_syncing_manifest_syncs_into_its_install_directory():
+    """`deploy.sync_target` resolves to `deploy.destination`, so a code-sync updates the files the service loads.
+
+    The install directory is what every unit's WorkingDirectory/ExecStart names (ansible/roles/*/templates, the
+    SLM agent's `python -m slm.agent.agent` with PYTHONPATH on the agent directory) and where Ansible places the code.
+    Source directories are rsynced by CONTENTS, so a target one level up (the install root, or the agent directory
+    instead of its `slm/agent` package) writes files nothing loads.
+    """
+    from autobot_shared.fleet_constants import FLEET_AGENT_DIR, FLEET_INSTALL_ROOT
+
+    placeholders = {"base_dir": FLEET_INSTALL_ROOT, "agent_dir": FLEET_AGENT_DIR}
+    checked = []
+    for role, manifest in _real_manifests().items():
+        if not manifest.deploy.sync:
+            continue
+        target = manifest.deploy.sync_target.format_map(placeholders)
+        assert target == manifest.deploy.destination.rstrip("/"), role
+        checked.append(role)
+    assert len(checked) >= 9, f"only {checked} were examined"
