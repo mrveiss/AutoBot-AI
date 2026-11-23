@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from api import knowledge_search_aggregator as aggregator
 from auth_middleware import get_current_user
-from knowledge.read_path_fakes_16665 import PRIVATE_A, RESEARCH, SHARED, FakeKB, QuarantineGatedKB
+from testkit.read_path_fakes_16665 import PRIVATE_A, RESEARCH, SHARED, FakeKB, QuarantineGatedKB
 
 ALICE = {"user_id": "alice", "role": "user"}
 BOB = {"user_id": "bob", "role": "user"}

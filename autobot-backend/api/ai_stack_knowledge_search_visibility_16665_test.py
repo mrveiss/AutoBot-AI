@@ -18,7 +18,7 @@ from api import ai_stack_integration
 from auth_middleware import check_admin_permission, get_current_user
 from dependencies import provide_knowledge_base
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
-from knowledge.read_path_fakes_16665 import PRIVATE_A, RESEARCH, SHARED, FakeKB, QuarantineGatedKB, all_facts
+from testkit.read_path_fakes_16665 import PRIVATE_A, RESEARCH, SHARED, FakeKB, QuarantineGatedKB, all_facts
 
 ALICE = {"user_id": "alice", "role": "user"}
 BOB = {"user_id": "bob", "role": "user"}

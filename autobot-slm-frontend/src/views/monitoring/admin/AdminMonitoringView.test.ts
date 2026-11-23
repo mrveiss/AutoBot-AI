@@ -63,21 +63,21 @@ describe('AdminMonitoringView health vocabulary (#16245)', () => {
   it('colours an ok backend green', async () => {
     await mountView()
 
-    expect(statusBar().classes()).toContain('bg-green-100')
+    expect(statusBar().classes()).toContain('bg-autobot-pill-ok-bg')
   })
 
   it('colours a degraded backend yellow', async () => {
     api.getSystemHealth.mockResolvedValue({ status: 'degraded', services: [] })
     await mountView()
 
-    expect(statusBar().classes()).toContain('bg-yellow-100')
+    expect(statusBar().classes()).toContain('bg-autobot-pill-warn-bg')
   })
 
   it('colours a down backend red', async () => {
     api.getSystemHealth.mockResolvedValue({ status: 'down', services: [] })
     await mountView()
 
-    expect(statusBar().classes()).toContain('bg-red-100')
+    expect(statusBar().classes()).toContain('bg-autobot-pill-bad-bg')
   })
 
   it('colours each service by the healthy or unhealthy the backend sends', async () => {
@@ -90,8 +90,8 @@ describe('AdminMonitoringView health vocabulary (#16245)', () => {
     })
     await mountView()
 
-    expect(badge('healthy').classes()).toContain('bg-green-100')
-    expect(badge('unhealthy').classes()).toContain('bg-red-100')
+    expect(badge('healthy').classes()).toContain('bg-autobot-pill-ok-bg')
+    expect(badge('unhealthy').classes()).toContain('bg-autobot-pill-bad-bg')
   })
 
   it('drops the last report instead of showing it as current when a refresh fails', async () => {

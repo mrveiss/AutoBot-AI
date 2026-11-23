@@ -38,6 +38,9 @@ Environment="PYTHONUNBUFFERED=1"
 # Tell it explicitly — it already is /opt/autobot here, but that must be
 # said, not assumed.
 Environment="AUTOBOT_PROJECT_ROOT={{ slm_base_dir }}"
+# #22067: the git code source, the tree the code-sync updates -- and so the one canonical place the role manifests are
+# read from. Unset, it falls back to the project root above, whose own autobot-infrastructure copy no update refreshes.
+Environment="AUTOBOT_CODE_SOURCE={{ slm_code_source_dir }}"
 # #20894: without it the log directory resolves to the service user's XDG state dir. The application directory,
 # not slm_log_dir where StandardOutput= appends the same file names (see the role defaults).
 Environment="AUTOBOT_LOGS_DIR={{ slm_app_log_dir }}"
@@ -51,6 +54,8 @@ Environment="SLM_BACKEND_SERVICE_USER={{ backend_user | default(slm_backend_user
 # explicitly, the same way slm-agent's own unit already does.
 Environment="REDIS_HOST={{ slm_manager_redis_host }}"
 Environment="AUTOBOT_REDIS_HOST={{ slm_manager_redis_host }}"
+# #19832: reverse proxies trusted for X-Forwarded-For (see slm_trusted_proxies in defaults).
+Environment="SLM_TRUSTED_PROXIES={{ slm_trusted_proxies }}"
 EnvironmentFile=-{{ postgresql_credentials_dir | default('/etc/autobot') }}/{{ postgresql_credentials_file | default('db-credentials.env') }}
 EnvironmentFile=-{{ slm_credentials_dir }}/{{ slm_credentials_file }}
 # #11668: bound uvicorn's SIGTERM shutdown (see autobot-backend.service.j2) so the

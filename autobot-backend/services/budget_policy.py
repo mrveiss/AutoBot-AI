@@ -22,7 +22,7 @@ from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.time_utils import now_utc
-from models.heartbeat import AgentRuntimeState, AgentWakeupRequest
+from models.heartbeat import AgentRuntimeState, AgentWakeupRequest, new_control_id
 
 logger = get_logger(__name__)
 
@@ -363,6 +363,7 @@ async def pause_agent(agent_id: str, reason: str, paused_by: str = "budget_polic
                     paused_reason=reason,
                     paused_at=now_utc(),
                     paused_by=paused_by,
+                    control_id=new_control_id(),
                 )
                 session.add(state)
             else:
@@ -370,6 +371,7 @@ async def pause_agent(agent_id: str, reason: str, paused_by: str = "budget_polic
                 state.paused_reason = reason
                 state.paused_at = now_utc()
                 state.paused_by = paused_by
+                state.control_id = new_control_id()
 
             # Drain un-consumed wakeup requests so the agent doesn't wake immediately
             await session.execute(
@@ -427,6 +429,7 @@ async def resume_agent(agent_id: str, approved_by: str) -> bool:
             state.paused_reason = None
             state.paused_at = None
             state.paused_by = None
+            state.control_id = new_control_id()
             await session.commit()
 
         logger.info("Agent %s RESUMED by %s", agent_id, approved_by)

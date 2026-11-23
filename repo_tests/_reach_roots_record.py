@@ -115,6 +115,7 @@ REACH_ROOTS = {
         "autobot_shared",
     ),
     "repo_tests/embedding_model_preserved_15502_test.py": ("autobot-slm-backend/ansible",),
+    "repo_tests/env_aliases_are_registered_17419_test.py": ("autobot_shared",),
     "repo_tests/env_file_family_18555_test.py": (".env", "autobot-frontend/", "autobot-slm-backend/", "docker/"),
     "repo_tests/env_fork_guard_18094_test.py": (
         "autobot-backend",
@@ -495,6 +496,10 @@ REACH_ROOTS = {
     "repo_tests/slm_backend_no_embedded_playbook_18606_test.py": ("autobot-slm-backend",),
     "repo_tests/slm_backend_port_one_name_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/slm_login_needs_no_users_db_19406_test.py": ("autobot-slm-backend",),
+    "repo_tests/slm_manager_tls_port_redirect_and_proxies_19832_test.py": (
+        "autobot-slm-backend/ansible",
+        "autobot-slm-backend/ansible/roles/slm_manager",
+    ),
     "repo_tests/slm_node_enum_members_exist_test.py": ("autobot-slm-backend",),
     "repo_tests/ssot_rehardcode_19730_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/store_fact_chokepoint_guard_test.py": ("autobot-backend/", "autobot_shared/"),

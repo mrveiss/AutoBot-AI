@@ -57,10 +57,10 @@ from chat_workflow.compose_tool_handler import (
 )
 from chat_workflow.interpretation_turn_mixin import InterpretationTurnMixin
 from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
+from chat_workflow.step_evidence import begin_step
 from chat_workflow.step_outcome import exit_code_field
 from chat_workflow.tool_call_args import parse_tool_args
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
-from chat_workflow.tool_call_loop import stamp_call_fingerprint
 from chat_workflow.tool_dispatch_guards import (
     COMMAND_APPROVED_KEY,
     COMMAND_FORCE_APPROVAL_KEY,
@@ -3544,7 +3544,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         role = ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE
 
         for tool_call in tool_calls:
-            results_before = len(execution_results)
+            results_before, step = len(execution_results), begin_step()  # #21976
             async for result in self._dispatch_tool_call(
                 tool_call,
                 session_id,
@@ -3559,10 +3559,10 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                 if isinstance(result, tuple):
                     break_loop_requested, respond_content = result
                 else:
-                    yield result
+                    yield step.tag(result)
                     # #19951: a held call has no result, so another model call could only guess at one.
                     held = held or is_held_message(result)
-            stamp_call_fingerprint(execution_results[results_before:], tool_call)  # #19715
+            step.finish(execution_results[results_before:], tool_call)  # #19715, #21976
             if held:
                 break
 

@@ -37,3 +37,12 @@ describe('withoutRepeatedNarration', () => {
     expect(visibleMessages(list)).toEqual([list[0], list[3]])
   })
 })
+
+describe('a tool call is no words (#21880)', () => {
+  const call = `<TOOL_CALL name="respond" params='{"text":"Riga is 4 degrees."}'>Task complete</TOOL_CALL>`
+  it('drops narration that is the answer plus the respond call, live as on reload', () => {
+    const out = withoutRepeatedNarration([user('weather?'), narration(`Riga is 4 degrees. ${call}`), respond('Riga is 4 degrees.')])
+    expect(out.map((m) => m.sender)).toEqual(['user', 'assistant'])
+    expect(out[1].metadata).toEqual({ message_type: 'respond_tool' })
+  })
+})
