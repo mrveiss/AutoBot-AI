@@ -9,6 +9,7 @@ Centralized configuration for the standalone SLM backend.
 PostgreSQL replaces SQLite for all database operations (Issue #786).
 """
 
+import json
 import logging
 import os
 import secrets
@@ -16,10 +17,10 @@ import socket
 import stat
 from functools import cached_property
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 from pydantic import ConfigDict, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, NoDecode
 
 from autobot_shared import postgres_identity as pg
 from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
@@ -94,6 +95,11 @@ def _get_local_ip() -> str:
         return "127.0.0.1"
 
 
+def _split_csv(raw: str) -> list:
+    """Split a comma-separated env value into stripped, non-empty entries."""
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 def _get_cors_origins() -> list:
     """Build CORS origins from env var or infrastructure SSOT.
 
@@ -106,7 +112,7 @@ def _get_cors_origins() -> list:
     """
     env_origins = os.getenv("SLM_CORS_ORIGINS", "")
     if env_origins:
-        return [o.strip() for o in env_origins.split(",") if o.strip()]
+        return _split_csv(env_origins)
 
     try:
         from autobot_shared.network_constants import NetworkConstants
@@ -138,7 +144,7 @@ def _get_trusted_proxies() -> list:
     """
     env_proxies = os.getenv("SLM_TRUSTED_PROXIES", "")
     if env_proxies:
-        return [ip.strip() for ip in env_proxies.split(",") if ip.strip()]
+        return _split_csv(env_proxies)
 
     proxies = ["127.0.0.1", "::1"]
     try:
@@ -490,14 +496,31 @@ class Settings(RedactedReprMixin, BaseSettings):
         return resolve_deployment_mode() is DeploymentMode.DOCKER_LOCAL
 
     # CORS settings
-    cors_origins: list = _get_cors_origins()
+    cors_origins: Annotated[list, NoDecode] = _get_cors_origins()
 
     # Trusted reverse-proxy IPs (Issue #2239, #2862).
     # X-Forwarded-For is only honoured when the direct TCP connection comes
     # from one of these addresses.  Override with SLM_TRUSTED_PROXIES
     # (comma-separated).  The default is derived from NetworkConstants so the
     # ConfigRegistry SSOT is respected; no IPs are hardcoded here.
-    trusted_proxies: list = _get_trusted_proxies()
+    trusted_proxies: Annotated[list, NoDecode] = _get_trusted_proxies()
+
+    @field_validator("cors_origins", "trusted_proxies", mode="before")
+    @classmethod
+    def _parse_csv_list(cls, value):
+        """Comma-separated is the one env format for these list fields (#22116).
+
+        ``NoDecode`` stops pydantic-settings JSON-decoding the env value, so a
+        string reaches here and is split by ``_split_csv`` (same helper the
+        default factories use). A JSON array string (leading ``[``) is also
+        accepted for backward compatibility; lists pass through unchanged.
+        """
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                return json.loads(text)
+            return _split_csv(text)
+        return value
 
     # External URL - remote nodes use nginx reverse proxy.
     # Issue #2758: derive dynamically from local IP when SLM_EXTERNAL_URL is
