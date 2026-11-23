@@ -1,37 +1,31 @@
 <template>
-  <div
-    v-if="hasData"
-    class="ctx-indicator"
-    :class="{
-      'ctx-indicator--warning': isWarning && !isCritical && !isSummarizing,
-      'ctx-indicator--critical': isCritical && !isSummarizing,
-      'ctx-indicator--summarizing': isSummarizing,
-    }"
-    :title="tooltip"
-    role="meter"
-    :aria-valuenow="usagePercent"
-    :aria-valuemin="0"
-    :aria-valuemax="100"
-    :aria-label="$t('chat.contextWindow.ariaLabel', { used: formattedUsed, max: formattedMax })"
-  >
-    <!-- Token count text -->
-    <span class="ctx-indicator__text">
-      {{ isSummarizing ? t('chat.contextWindow.summarizing') : `${formattedUsed} / ${formattedMax}` }}
-    </span>
-    <!-- Progress bar -->
-    <div class="ctx-indicator__bar-track" aria-hidden="true">
-      <div
-        class="ctx-indicator__bar-fill"
-        :class="{ 'ctx-indicator__bar-fill--animating': isSummarizing }"
-        :style="{ width: `${usagePercent}%` }"
-      />
-    </div>
+  <div v-if="hasData"><!-- A plain outer element: the header's responsive classes (hidden sm:flex) must not land on BaseTooltip, whose own display wins. -->
+    <BaseTooltip :text="tooltip" placement="bottom">
+      <template #default="{ describedby }">
+        <!-- Text stacked above the bar, a column at least 120px wide (mockup) -->
+        <div class="ctx-indicator flex min-w-[7.5rem] select-none flex-col gap-1" tabindex="0" :aria-describedby="describedby">
+          <span class="whitespace-nowrap font-mono text-xs" :class="textClass">
+            {{ isSummarizing ? t('chat.contextWindow.summarizing') : `${formattedUsed} / ${formattedMax}` }}
+          </span>
+          <!-- BaseProgress fills its container; the wrapper sets the 6px thickness token. -->
+          <div class="w-full [--aui-progress-block-size:0.375rem]" :class="{ 'animate-pulse': isSummarizing }">
+            <BaseProgress
+              :variant="variant"
+              :value="usagePercent"
+              :label="t('chat.contextWindow.ariaLabel', { used: formattedUsed, max: formattedMax })"
+            />
+          </div>
+        </div>
+      </template>
+    </BaseTooltip>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { BaseProgress, BaseTooltip } from '@autobot/ui'
+import type { SemanticVariant } from '@autobot/ui'
 
 interface Props {
   tokensUsed: number
@@ -52,6 +46,20 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
+/** Summarizing wins over the usage band; otherwise warning and critical map onto the kit variants. */
+const variant = computed<SemanticVariant>(() => {
+  if (props.isSummarizing) return 'info'
+  if (props.isCritical) return 'error'
+  return props.isWarning ? 'warning' : 'success'
+})
+
+const TEXT_CLASS: Record<string, string> = {
+  warning: 'text-[var(--aui-color-warning)]',
+  error: 'text-[var(--aui-color-error)]',
+  info: 'text-[var(--aui-color-info)]',
+}
+const textClass = computed(() => TEXT_CLASS[variant.value] ?? 'text-[var(--aui-color-text-muted)]')
+
 const formattedUsed = computed(() => formatTokens(props.tokensUsed))
 const formattedMax = computed(() => formatTokens(props.contextWindow))
 
@@ -63,66 +71,3 @@ const tooltip = computed(() =>
   }),
 )
 </script>
-
-<style scoped>
-@reference "../../assets/tailwind.css";
-
-.ctx-indicator {
-  @apply flex items-center gap-1.5 px-2 py-1 rounded-md text-xs select-none;
-  color: var(--text-tertiary);
-  background: var(--bg-tertiary);
-  min-width: 0;
-}
-
-.ctx-indicator__text {
-  @apply font-mono whitespace-nowrap shrink-0;
-}
-
-.ctx-indicator__bar-track {
-  @apply rounded-full overflow-hidden shrink-0;
-  width: 48px;
-  height: 4px;
-  background: var(--border-light);
-}
-
-.ctx-indicator__bar-fill {
-  height: 4px;
-  border-radius: 9999px;
-  background: var(--color-success);
-  transition: width 0.4s ease, background 0.3s ease;
-}
-
-.ctx-indicator--warning .ctx-indicator__text {
-  color: var(--color-warning);
-}
-.ctx-indicator--warning .ctx-indicator__bar-fill {
-  background: var(--color-warning);
-}
-
-.ctx-indicator--critical .ctx-indicator__text {
-  color: var(--color-error);
-}
-.ctx-indicator--critical .ctx-indicator__bar-fill {
-  background: var(--color-error);
-}
-
-.ctx-indicator--summarizing .ctx-indicator__text {
-  color: var(--color-info);
-}
-.ctx-indicator--summarizing .ctx-indicator__bar-fill {
-  background: var(--color-info);
-}
-
-.ctx-indicator__bar-fill--animating {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-</style>

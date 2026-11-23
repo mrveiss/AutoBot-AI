@@ -91,3 +91,10 @@ export const Link: Story = {
     template: '<BaseButton as="a" href="#docs" variant="link">Documentation</BaseButton>',
   }),
 }
+
+export const Pressed: Story = {
+  render: () => ({
+    components: { BaseButton },
+    template: '<BaseButton variant="ghost" aria-pressed="true">Voice chat</BaseButton>',
+  }),
+}
