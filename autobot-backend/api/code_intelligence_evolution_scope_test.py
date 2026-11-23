@@ -11,9 +11,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from api import code_intelligence as mod
-from api.codebase_analytics.endpoints import shared
 from autobot_shared.paths import scrubbed_git_env
+
+
+def _mod():
+    """Imported inside the tests, never at collection: a module-level import would bind the root conftest's
+    stub of `code_intelligence.redis_optimizer` into `api.code_intelligence` before the real one loads."""
+    import api.code_intelligence as mod
+
+    return mod
+
+
+def _shared():
+    from api.codebase_analytics.endpoints import shared
+
+    return shared
+
 
 _ROUTES = ("analyze", "patterns", "refactorings", "timeline", "report")
 
@@ -25,10 +38,10 @@ def _client(real_access: bool = False):
     from auth_middleware import check_admin_permission
 
     app = FastAPI()
-    app.include_router(mod.router, prefix="/evolution-test")
+    app.include_router(_mod().router, prefix="/evolution-test")
     app.dependency_overrides[check_admin_permission] = lambda: True
     if not real_access:
-        app.dependency_overrides[shared.require_source_access] = lambda: None
+        app.dependency_overrides[_shared().require_source_access] = lambda: None
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -42,7 +55,7 @@ def _call(client, route, **params):
 
 def test_each_evolution_route_requires_source_id_and_takes_no_path():
     seen = 0
-    for route in mod.router.routes:
+    for route in _mod().router.routes:
         if "/evolution/" not in getattr(route, "path", ""):
             continue
         query = {q.name: q for q in route.dependant.query_params}
@@ -59,7 +72,7 @@ def test_a_request_without_source_id_is_a_422(route):
 
 @pytest.mark.parametrize("route", _ROUTES)
 def test_a_source_with_no_checkout_is_a_404(route):
-    with patch.object(shared, "resolve_source_root", AsyncMock(return_value=None)):
+    with patch.object(_shared(), "resolve_source_root", AsyncMock(return_value=None)):
         assert _call(_client(), route, source_id="missing").status_code == 404
 
 
@@ -71,7 +84,7 @@ def test_a_foreign_private_source_is_a_404_with_access_enforcement_left_real(rou
     with (
         patch("auth_middleware.get_current_user", AsyncMock(return_value={"id": "mallory"})),
         patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=private)),
-        patch.object(shared, "resolve_source_root", AsyncMock(return_value=tmp_path)),
+        patch.object(_shared(), "resolve_source_root", AsyncMock(return_value=tmp_path)),
     ):
         assert _call(_client(real_access=True), route, source_id="x").status_code == 404
 
@@ -81,8 +94,8 @@ def test_analyze_runs_the_miner_on_the_sources_checkout_only(tmp_path):
     miner = MagicMock()
     miner.return_value.analyze_evolution.return_value = {}
     with (
-        patch.object(shared, "resolve_source_root", AsyncMock(return_value=tmp_path)),
-        patch.object(mod, "CodeEvolutionMiner", miner),
+        patch.object(_shared(), "resolve_source_root", AsyncMock(return_value=tmp_path)),
+        patch.object(_mod(), "CodeEvolutionMiner", miner),
     ):
         response = _call(_client(), "analyze", source_id="src-1")
     assert response.status_code == 200
@@ -102,8 +115,8 @@ def _gitfile_checkout(tmp_path):
 def test_a_checkout_whose_git_is_a_gitfile_is_rejected_before_any_history_is_read(route, tmp_path):
     miner = MagicMock()
     with (
-        patch.object(shared, "resolve_source_root", AsyncMock(return_value=_gitfile_checkout(tmp_path))),
-        patch.object(mod, "CodeEvolutionMiner", miner),
+        patch.object(_shared(), "resolve_source_root", AsyncMock(return_value=_gitfile_checkout(tmp_path))),
+        patch.object(_mod(), "CodeEvolutionMiner", miner),
     ):
         response = _call(_client(), route, source_id="src-1")
     assert response.status_code == 400
@@ -119,8 +132,8 @@ def test_a_symlinked_checkout_root_is_rejected_before_any_history_is_read(route,
     root.symlink_to(other, target_is_directory=True)
     miner = MagicMock()
     with (
-        patch.object(shared, "resolve_source_root", AsyncMock(return_value=root)),
-        patch.object(mod, "CodeEvolutionMiner", miner),
+        patch.object(_shared(), "resolve_source_root", AsyncMock(return_value=root)),
+        patch.object(_mod(), "CodeEvolutionMiner", miner),
     ):
         response = _call(_client(), route, source_id="src-1")
     assert response.status_code == 400
