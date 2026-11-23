@@ -14,7 +14,7 @@ that guard's reader: it parses the registry and the manifests (neither is import
 The rule is ``services/role_manifest_shape.py``'s ``find_role_manifest`` + ``systemd_units``: a manifest whose
 ``role`` is the canonical spelling of the role owns all its systemd services; otherwise a manifest whose service
 lists the role in ``slm_roles`` contributes just those services; a manifest with no systemd service leaves the
-registry literal in force. ``autobot-slm-backend/tests/services/test_role_manifest_shape_16025.py`` pins this
+registry literal in force. ``autobot-slm-backend/tests/services/role_manifest_shape_test.py`` pins this
 reader to the runtime function.
 """
 

@@ -13,6 +13,7 @@ imports, which this module does not have).
 """
 
 import ast
+import sys
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,9 @@ from models.manifest import (
 )
 from services import role_manifest_shape as rms
 from services.manifest_loader import ManifestLoader
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _role_manifest_fixtures import REGISTRY_SOURCE, REPO_ROOT, real_manifests, registry_role_fields  # noqa: E402
 
 _UNCHECKED = RoleHealthCheck(checked=False)
 
@@ -313,21 +317,15 @@ _BEFORE_THE_MOVE = {
 }
 
 
-def _real_manifests():
-    from repo_tests._paths import repo_root
-
-    return ManifestLoader(infra_base=repo_root() / "autobot-infrastructure").load_all()
-
-
 def test_derived_sync_fields_equal_the_pinned_table():
-    manifests = _real_manifests()
+    manifests = real_manifests()
     for role_name, expected in _BEFORE_THE_MOVE.items():
         derived = rms.apply_manifest_shape({"name": role_name}, manifests, _PLACEHOLDERS)
         assert (derived["source_paths"], derived["target_path"]) == expected, role_name
 
 
 def test_the_environment_override_still_decides_the_roots():
-    manifests = _real_manifests()
+    manifests = real_manifests()
     placeholders = {"base_dir": "/srv/ab", "agent_dir": "/srv/agent"}
     backend = rms.apply_manifest_shape({"name": "backend"}, manifests, placeholders)
     shared = rms.apply_manifest_shape({"name": "autobot_shared"}, manifests, placeholders)
@@ -338,7 +336,7 @@ def test_the_environment_override_still_decides_the_roots():
 
 
 def test_every_real_manifest_declares_its_sync_fields_explicitly():
-    for role, manifest in _real_manifests().items():
+    for role, manifest in real_manifests().items():
         raw = manifest.deploy.model_fields_set
         assert "sync_target" in raw, f"{role}: deploy.sync_target not declared"
         assert manifest.deploy.sync or "sync" in raw, role
@@ -447,28 +445,13 @@ def test_a_failed_load_is_not_cached_and_the_cache_keys_on_the_placeholders(monk
 # #16025 AC1 -- role shape is declared in one place: the registry restates none of it
 # ---------------------------------------------------------------------------
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_REGISTRY_SOURCE = _REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py"
-
 #: Roles whose registry literal unit is the ONLY declaration: no manifest names a systemd unit for them.
 _LITERAL_UNIT_ROLES = frozenset({"slm-frontend", "tts-worker", "vnc"})
 
 
-def _registry_role_fields() -> dict[str, set[str]]:
-    tree = ast.parse(_REGISTRY_SOURCE.read_text(encoding="utf-8"))
-    roles = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Dict):
-            fields = {k.value: v for k, v in zip(node.keys, node.values) if isinstance(k, ast.Constant)}
-            name = fields.get("name")
-            if isinstance(name, ast.Constant) and "display_name" in fields:
-                roles[name.value] = set(fields)
-    return roles
-
-
 def _registry_unit_literals() -> dict[str, object]:
     """``role name -> the systemd_service literal`` (str or list) the registry source holds."""
-    tree = ast.parse(_REGISTRY_SOURCE.read_text(encoding="utf-8"))
+    tree = ast.parse(REGISTRY_SOURCE.read_text(encoding="utf-8"))
     found = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Dict):
@@ -480,9 +463,9 @@ def _registry_unit_literals() -> dict[str, object]:
 
 
 def test_the_registry_restates_no_unit_a_manifest_declares():
-    manifests = _real_manifests()
+    manifests = real_manifests()
     restated = []
-    for name, fields in _registry_role_fields().items():
+    for name, fields in registry_role_fields().items():
         if "systemd_service" not in fields or name in _LITERAL_UNIT_ROLES:
             continue
         shaped = rms.apply_manifest_shape(
@@ -494,7 +477,7 @@ def test_the_registry_restates_no_unit_a_manifest_declares():
 
 
 def test_the_literal_unit_roles_have_no_manifest_unit():
-    manifests = _real_manifests()
+    manifests = real_manifests()
     for name in _LITERAL_UNIT_ROLES:
         shaped = rms.apply_manifest_shape(
             {"name": name, "source_paths": [], "target_path": "/x"}, manifests, _PLACEHOLDERS
@@ -505,8 +488,8 @@ def test_the_literal_unit_roles_have_no_manifest_unit():
 def test_the_static_unit_reader_in_repo_tests_agrees_with_the_runtime_projection():
     from repo_tests._registry_role_units import registry_role_units
 
-    manifests = _real_manifests()
-    static = registry_role_units(_REPO_ROOT)
+    manifests = real_manifests()
+    static = registry_role_units(REPO_ROOT)
     literals = _registry_unit_literals()
     for name, units in static.items():
         role = {"name": name, "source_paths": [], "target_path": "/x"}
@@ -541,7 +524,7 @@ def test_every_syncing_manifest_syncs_into_its_install_directory():
 
     placeholders = {"base_dir": FLEET_INSTALL_ROOT, "agent_dir": FLEET_AGENT_DIR}
     checked = []
-    for role, manifest in _real_manifests().items():
+    for role, manifest in real_manifests().items():
         if not manifest.deploy.sync:
             continue
         target = manifest.deploy.sync_target.format_map(placeholders)

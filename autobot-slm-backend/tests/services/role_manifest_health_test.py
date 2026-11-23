@@ -10,14 +10,17 @@ of roles (``HEALTH_DERIVED_ROLES``) plus one own-bind exception (``HEALTH_OWN_BI
 manifest's ``role_health`` entry for the role is the only declaration, validated by ``RoleHealthCheck``.
 """
 
-import ast
+import sys
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from models.manifest import ManifestService, RoleHealthCheck, RoleManifest
 from services import role_manifest_shape as rms
-from services.manifest_loader import ManifestLoader
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _role_manifest_fixtures import PLACEHOLDERS, real_manifests, registry_role_fields  # noqa: E402
 
 #: Each manifest-backed role's resolved (health port, health path) BEFORE #22032, derived from the opt-in list, the
 #: own-bind table and the manifests' ``health.endpoint`` of that commit; None is "no health check". The change is
@@ -46,46 +49,20 @@ _BEFORE = {
 _NO_MANIFEST_ROLES = frozenset({"tts-worker", "vnc", "docker"})
 
 
-def _manifests():
-    from repo_tests._paths import repo_root
-
-    return ManifestLoader(infra_base=repo_root() / "autobot-infrastructure").load_all()
-
-
-#: The real manifests' sync targets carry these tokens; ``sync_from_manifest`` refuses an unknown one.
-_PLACEHOLDERS = {"base_dir": "/b", "agent_dir": "/a"}
-
-
 def _resolved(name: str, manifests) -> tuple[int, str] | None:
-    shaped = rms.apply_manifest_shape({"name": name, "source_paths": [], "target_path": "/x"}, manifests, _PLACEHOLDERS)
+    shaped = rms.apply_manifest_shape({"name": name, "source_paths": [], "target_path": "/x"}, manifests, PLACEHOLDERS)
     port, path = shaped.get("health_check_port"), shaped.get("health_check_path")
     return None if port is None and path is None else (port, path)
 
 
 def test_every_role_resolves_to_the_health_it_had_before_the_field_existed():
-    manifests = _manifests()
+    manifests = real_manifests()
     assert {name: _resolved(name, manifests) for name in _BEFORE} == _BEFORE
 
 
-def _registry_role_names() -> set[str]:
-    from repo_tests._paths import repo_root
-
-    from tools.lint import _parse_cache
-
-    source = (repo_root() / "autobot-slm-backend" / "services" / "role_registry.py").read_text(encoding="utf-8")
-    names = set()
-    for node in ast.walk(_parse_cache.parse(source)):
-        if isinstance(node, ast.Dict):
-            fields = {k.value: v for k, v in zip(node.keys, node.values) if isinstance(k, ast.Constant)}
-            name = fields.get("name")
-            if isinstance(name, ast.Constant) and "display_name" in fields:
-                names.add(name.value)
-    return names
-
-
 def test_the_pin_names_every_registry_role_a_manifest_resolves_to():
-    manifests = _manifests()
-    resolving = {n for n in _registry_role_names() if rms.find_role_manifest(n, manifests)[0] is not None}
+    manifests = real_manifests()
+    resolving = {n for n in set(registry_role_fields()) if rms.find_role_manifest(n, manifests)[0] is not None}
     assert resolving == set(_BEFORE), f"pin out of step with the registry: {resolving ^ set(_BEFORE)}"
     assert not _NO_MANIFEST_ROLES & resolving
 
@@ -94,7 +71,7 @@ def test_every_manifest_declares_role_health_and_the_static_reader_agrees_with_t
     from repo_tests._paths import repo_root
     from repo_tests._registry_role_units import manifest_role_health
 
-    manifests = _manifests()
+    manifests = real_manifests()
     assert all(m.role_health for m in manifests.values()), [r for r, m in manifests.items() if not m.role_health]
     static = manifest_role_health(repo_root())
     assert static == _BEFORE
@@ -192,7 +169,7 @@ def _undeclared(manifests: dict, role_names: set[str]) -> list[str]:
 
 
 def test_every_real_manifest_declares_health_for_every_role_it_serves():
-    assert _undeclared(_manifests(), _registry_role_names()) == []
+    assert _undeclared(real_manifests(), set(registry_role_fields())) == []
 
 
 def test_a_synthetic_manifest_missing_an_entry_is_flagged_and_a_complete_one_passes():
