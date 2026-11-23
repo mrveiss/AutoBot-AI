@@ -87,7 +87,7 @@ describe('FullTreeDriftPanel prune (#22082)', () => {
     await wrapper.find('[data-testid="drift-prune-confirm-button"]').trigger('click')
     await flushPromises()
 
-    expect(post).toHaveBeenLastCalledWith('post', '/api/code-sync/drift/prune', {
+    expect(post).toHaveBeenNthCalledWith(2, 'post', '/api/code-sync/drift/prune', {
       body: { component: 'plugins', paths: ['core-plugins/x/plugin.py'] },
     })
     expect(fetchFullTreeDrift).toHaveBeenCalledTimes(1)

@@ -10015,5 +10015,17 @@
     "invalid_generic": "Este agendamento não é válido.",
     "conflicting_fields": "Um agendamento é salvo como cron ou como regra de calendário ou execução única, nunca ambos.",
     "gatedNote": "O último dia, o dia da semana do mês, os dias 29 a 31 e as execuções únicas ficam disponíveis quando o agendador for atualizado."
+  },
+  "driftPrune": {
+    "batch": "Lote de {count} de {total} arquivo(s); confirme para remover este lote, o próximo será exibido em seguida",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar a remoção de {count} arquivo(s)",
+    "intro": "O Git comprova que estes arquivos foram excluídos da origem e ainda estão implantados. Somente estes arquivos são removidos. O estado do host, os pacotes de build e os arquivos modificados nunca são tocados.",
+    "previewAction": "Visualizar remoção",
+    "previewing": "Carregando visualização…",
+    "removing": "Removendo…",
+    "requestFailed": "Falha na solicitação de limpeza de divergências",
+    "result": "{removed} arquivo(s) removido(s); {left} mantido(s) no lugar",
+    "title": "{count} arquivo(s) seriam removidos de {component}"
   }
 }

@@ -17,13 +17,23 @@
  */
 
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import slmApiClient from '@/utils/ApiClient'
 import type { components } from '@/types/generated/api'
 
 export type DriftPrunePreview = components['schemas']['DriftPrunePreview']
 export type DriftPruneResponse = components['schemas']['DriftPruneResponse']
 
+/**
+ * Most paths one confirm may send. Mirrors `_MAX_PATHS` (the `max_length` of
+ * `DriftPruneRequest.paths`) in autobot-slm-backend/api/drift_prune.py; the API
+ * schema does not expose the number, so a larger list is cut into batches here
+ * instead of coming back 422.
+ */
+export const DRIFT_PRUNE_MAX_PATHS = 5000
+
 export function useDriftPrune() {
+  const { t } = useI18n()
   const previews = ref<Record<string, DriftPrunePreview>>({})
   const results = ref<Record<string, DriftPruneResponse>>({})
   const busyComponent = ref<string | null>(null)
@@ -35,35 +45,51 @@ export function useDriftPrune() {
     try {
       return await call()
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Drift prune request failed'
+      error.value = e instanceof Error ? e.message : t('fullTreeDriftPanel.prune.requestFailed')
       return null
     } finally {
       busyComponent.value = null
     }
   }
 
-  async function preview(component: string): Promise<DriftPrunePreview | null> {
+  async function fetchPreview(component: string): Promise<DriftPrunePreview | null> {
     const data = await run(component, () =>
       slmApiClient.call('post', '/api/code-sync/drift/prune/preview', { body: { component } }),
     )
-    if (data) {
-      previews.value = { ...previews.value, [component]: data }
-      delete results.value[component]
-    }
+    if (data) previews.value = { ...previews.value, [component]: data }
     return data
   }
 
+  async function preview(component: string): Promise<DriftPrunePreview | null> {
+    const data = await fetchPreview(component)
+    if (data) delete results.value[component]
+    return data
+  }
+
+  /** The files one confirm covers: the first batch of the previewed list, and the full total. */
+  function batch(component: string): { files: DriftPrunePreview['files']; total: number } {
+    const all = previews.value[component]?.files ?? []
+    return { files: all.slice(0, DRIFT_PRUNE_MAX_PATHS), total: all.length }
+  }
+
+  /** "batch of N of total M" while the preview is cut into batches, else null. */
+  function batchNote(component: string): string | null {
+    const { files, total } = batch(component)
+    return total > files.length ? t('fullTreeDriftPanel.prune.batch', { count: files.length, total }) : null
+  }
+
   async function confirm(component: string): Promise<DriftPruneResponse | null> {
-    const shown = previews.value[component]
-    if (!shown || shown.files.length === 0) return null
-    const paths = shown.files.map((file) => file.path)
+    const paths = batch(component).files.map((file) => file.path)
+    if (paths.length === 0) return null
     const data = await run(component, () =>
       slmApiClient.call('post', '/api/code-sync/drift/prune', { body: { component, paths } }),
     )
-    if (data) {
-      results.value = { ...results.value, [component]: data }
-      delete previews.value[component]
-    }
+    if (!data) return null
+    results.value = { ...results.value, [component]: data }
+    delete previews.value[component]
+    // Re-preview so the next batch (or anything left in place) is shown for its own confirm.
+    const next = await fetchPreview(component)
+    if (next && next.files.length === 0) delete previews.value[component]
     return data
   }
 
@@ -71,5 +97,5 @@ export function useDriftPrune() {
     delete previews.value[component]
   }
 
-  return { previews, results, busyComponent, error, preview, confirm, cancel }
+  return { previews, results, busyComponent, error, preview, confirm, cancel, batch, batchNote }
 }

@@ -10015,5 +10015,17 @@
     "invalid_generic": "Dieser Zeitplan ist ungültig.",
     "conflicting_fields": "Ein Zeitplan wird entweder als Cron oder als Kalenderregel bzw. einmalige Ausführung gespeichert, nie beides.",
     "gatedNote": "Letzter Tag, Wochentag im Monat, die Tage 29 bis 31 und einmalige Ausführungen stehen zur Verfügung, sobald der Scheduler aktualisiert ist."
+  },
+  "driftPrune": {
+    "batch": "Stapel von {count} von {total} Datei(en); bestätigen Sie, um diesen Stapel zu entfernen, danach wird der nächste angezeigt",
+    "cancel": "Abbrechen",
+    "confirm": "Entfernung von {count} Datei(en) bestätigen",
+    "intro": "Git belegt, dass diese Dateien aus dem Quellcode gelöscht wurden und noch bereitgestellt sind. Nur diese Dateien werden entfernt. Host-Zustand, Build-Bundles und geänderte Dateien werden nie angetastet.",
+    "previewAction": "Entfernung in der Vorschau anzeigen",
+    "previewing": "Vorschau wird geladen…",
+    "removing": "Wird entfernt…",
+    "requestFailed": "Anfrage zur Bereinigung der Abweichungen fehlgeschlagen",
+    "result": "{removed} Datei(en) entfernt; {left} unverändert belassen",
+    "title": "{count} Datei(en) würden aus {component} entfernt"
   }
 }

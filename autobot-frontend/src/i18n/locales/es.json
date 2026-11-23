@@ -10015,5 +10015,17 @@
     "invalid_generic": "Esta programación no es válida.",
     "conflicting_fields": "Una programación se guarda como cron o como regla de calendario o ejecución única, nunca ambas.",
     "gatedNote": "El último día, el día de la semana del mes, los días 29 a 31 y las ejecuciones únicas estarán disponibles cuando se actualice el planificador."
+  },
+  "driftPrune": {
+    "batch": "Lote de {count} de {total} archivo(s); confirme para eliminar este lote, después se mostrará el siguiente",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar la eliminación de {count} archivo(s)",
+    "intro": "Git demuestra que estos archivos se eliminaron del código fuente y siguen desplegados. Solo se eliminan estos archivos. El estado del host, los paquetes de compilación y los archivos modificados nunca se tocan.",
+    "previewAction": "Previsualizar eliminación",
+    "previewing": "Cargando vista previa…",
+    "removing": "Eliminando…",
+    "requestFailed": "Falló la solicitud de limpieza de desviaciones",
+    "result": "Se eliminaron {removed} archivo(s); {left} se dejaron en su lugar",
+    "title": "Se eliminarían {count} archivo(s) de {component}"
   }
 }

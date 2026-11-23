@@ -11049,5 +11049,17 @@
       "analysis": "The image could not be analysed.",
       "analysisUnsuccessful": "The analysis did not succeed: {detail}"
     }
+  },
+  "driftPrune": {
+    "batch": "Batch of {count} of {total} file(s); confirm to remove this batch, the next one is shown afterwards",
+    "cancel": "Cancel",
+    "confirm": "Confirm removal of {count} file(s)",
+    "intro": "Git proves these files were deleted from source and they are still deployed. Only these files are removed. Host state, build bundles and modified files are never touched.",
+    "previewAction": "Preview removal",
+    "previewing": "Loading preview…",
+    "removing": "Removing…",
+    "requestFailed": "Drift prune request failed",
+    "result": "Removed {removed} file(s); {left} left in place",
+    "title": "{count} file(s) would be removed from {component}"
   }
 }

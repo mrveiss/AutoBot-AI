@@ -2232,12 +2232,14 @@
     "noDrift": "No drift — nothing to remove or report",
     "noReportYet": "No report yet — click \"Check All Files\" to run a full-tree drift check",
     "prune": {
+      "batch": "Batch of {count} of {total} file(s); confirm to remove this batch, the next one is shown afterwards",
       "cancel": "Cancel",
       "confirm": "Confirm removal of {count} file(s)",
       "intro": "Git proves these files were deleted from source and they are still deployed. Only these files are removed. Host state, build bundles and modified files are never touched.",
       "previewAction": "Preview removal",
       "previewing": "Loading preview…",
       "removing": "Removing…",
+      "requestFailed": "Drift prune request failed",
       "result": "Removed {removed} file(s); {left} left in place",
       "resultDetail": "{path}: {reason}",
       "title": "{count} file(s) would be removed from {component}"

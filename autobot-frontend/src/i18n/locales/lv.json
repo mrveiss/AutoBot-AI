@@ -10015,5 +10015,17 @@
     "invalid_generic": "Šis grafiks nav derīgs.",
     "conflicting_fields": "Grafiks tiek saglabāts vai nu kā cron, vai kā kalendāra noteikums vai vienreizēja izpilde, nekad abi.",
     "gatedNote": "Pēdējā diena, nedēļas diena mēnesī, 29.–31. datums un vienreizējas izpildes būs pieejamas pēc plānotāja atjaunināšanas."
+  },
+  "driftPrune": {
+    "batch": "{count} failu(-u) partija no {total}; apstipriniet, lai noņemtu šo partiju, nākamā tiks parādīta pēc tam",
+    "cancel": "Atcelt",
+    "confirm": "Apstiprināt {count} failu(-u) noņemšanu",
+    "intro": "Git pierāda, ka šie faili ir izdzēsti no pirmkoda un joprojām ir izvietoti. Tiek noņemti tikai šie faili. Resursdatora stāvoklis, būvējuma pakotnes un mainītie faili netiek skarti nekad.",
+    "previewAction": "Priekšskatīt noņemšanu",
+    "previewing": "Notiek priekšskatījuma ielāde…",
+    "removing": "Notiek noņemšana…",
+    "requestFailed": "Neatbilstību tīrīšanas pieprasījums neizdevās",
+    "result": "Noņemti {removed} failu(-u); {left} atstāti vietā",
+    "title": "No {component} tiktu noņemti {count} failu(-u)"
   }
 }

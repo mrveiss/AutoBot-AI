@@ -207,11 +207,14 @@ function formatChecked(value: string | undefined): string {
               </button>
               <div v-else class="rounded-md border border-red-200 bg-red-50 p-3" data-testid="drift-prune-confirm">
                 <div class="text-xs font-medium text-red-800 mb-1">
-                  {{ $t('fullTreeDriftPanel.prune.title', { count: prune.previews.value[component.component].files.length, component: component.component }) }}
+                  {{ $t('fullTreeDriftPanel.prune.title', { count: prune.batch(component.component).files.length, component: component.component }) }}
                 </div>
+                <p v-if="prune.batchNote(component.component)" class="text-xs font-medium text-red-800 mb-1" data-testid="drift-prune-batch">
+                  {{ prune.batchNote(component.component) }}
+                </p>
                 <p class="text-xs text-gray-600 mb-2">{{ $t('fullTreeDriftPanel.prune.intro') }}</p>
                 <ul class="text-xs font-mono text-gray-700 space-y-0.5 mb-2" data-testid="drift-prune-files">
-                  <li v-for="file in prune.previews.value[component.component].files" :key="file.path">{{ file.path }}</li>
+                  <li v-for="file in prune.batch(component.component).files" :key="file.path">{{ file.path }}</li>
                 </ul>
                 <div class="flex items-center gap-2">
                   <button
@@ -220,7 +223,7 @@ function formatChecked(value: string | undefined): string {
                     class="btn btn-primary text-sm"
                     data-testid="drift-prune-confirm-button"
                   >
-                    {{ prune.busyComponent.value === component.component ? $t('fullTreeDriftPanel.prune.removing') : $t('fullTreeDriftPanel.prune.confirm', { count: prune.previews.value[component.component].files.length }) }}
+                    {{ prune.busyComponent.value === component.component ? $t('fullTreeDriftPanel.prune.removing') : $t('fullTreeDriftPanel.prune.confirm', { count: prune.batch(component.component).files.length }) }}
                   </button>
                   <button @click="prune.cancel(component.component)" class="btn btn-secondary text-sm">
                     {{ $t('fullTreeDriftPanel.prune.cancel') }}

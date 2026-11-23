@@ -10015,5 +10015,17 @@
     "invalid_generic": "Cette planification n'est pas valide.",
     "conflicting_fields": "Une planification est enregistrée soit en cron, soit en règle de calendrier ou exécution unique, jamais les deux.",
     "gatedNote": "Le dernier jour, le jour de la semaine du mois, les jours 29 à 31 et les exécutions uniques seront disponibles une fois le planificateur mis à jour."
+  },
+  "driftPrune": {
+    "batch": "Lot de {count} sur {total} fichier(s) ; confirmez pour supprimer ce lot, le suivant s'affichera ensuite",
+    "cancel": "Annuler",
+    "confirm": "Confirmer la suppression de {count} fichier(s)",
+    "intro": "Git prouve que ces fichiers ont été supprimés de la source et qu'ils sont toujours déployés. Seuls ces fichiers sont supprimés. L'état de l'hôte, les bundles de build et les fichiers modifiés ne sont jamais touchés.",
+    "previewAction": "Prévisualiser la suppression",
+    "previewing": "Chargement de l'aperçu…",
+    "removing": "Suppression…",
+    "requestFailed": "Échec de la requête de nettoyage des écarts",
+    "result": "{removed} fichier(s) supprimé(s) ; {left} laissé(s) en place",
+    "title": "{count} fichier(s) seraient supprimés de {component}"
   }
 }
