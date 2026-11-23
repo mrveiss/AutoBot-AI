@@ -30,7 +30,8 @@ vi.mock('@/composables/analytics/useCodeEvolutionData', () => ({
     fetchExport: async () => null,
   }),
 }))
-vi.mock('@autobot/ui', () => ({
+vi.mock('@autobot/ui', async importOriginal => ({
+  ...(await importOriginal<typeof import('@autobot/ui')>()),
   BaseButton: { template: '<button><slot /></button>' },
   saveBlob: vi.fn(),
 }))
