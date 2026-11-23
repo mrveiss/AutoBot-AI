@@ -227,7 +227,8 @@ def app_client():
     """Minimal FastAPI app wiring only the backlog router for route-level tests."""
     from fastapi import FastAPI
 
-    from llc.api.backlog import get_session, router
+    from llc.api.backlog import router
+    from llc.deps import get_session
 
     app = FastAPI()
     app.include_router(router, prefix="/api/llc")
@@ -259,7 +260,8 @@ class TestBacklogRoute:
             # Override the session dependency
             from fastapi import FastAPI
 
-            from llc.api.backlog import get_session, router
+            from llc.api.backlog import router
+            from llc.deps import get_session
 
             app = FastAPI()
 
@@ -290,7 +292,8 @@ class TestBacklogRoute:
         from fastapi import FastAPI
         from fastapi.testclient import TestClient as TC
 
-        from llc.api.backlog import get_session, router
+        from llc.api.backlog import router
+        from llc.deps import get_session
 
         app = FastAPI()
 

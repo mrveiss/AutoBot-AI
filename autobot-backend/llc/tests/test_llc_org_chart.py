@@ -80,7 +80,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
     from fastapi import FastAPI
 
     from llc.api import companies as companies_api
-    from user_management.database import get_async_session
+    from llc.deps import get_session
     from user_management.services import TenantContext
 
     application = FastAPI()
@@ -95,7 +95,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
                 await session.rollback()
                 raise
 
-    application.dependency_overrides[get_async_session] = _override_session
+    application.dependency_overrides[get_session] = _override_session
 
     # Mutable tenant holder — the test rewrites it to flip org_id / admin flag.
     tenant = {"org_id": None, "is_platform_admin": True}

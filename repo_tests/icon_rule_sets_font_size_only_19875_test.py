@@ -32,10 +32,11 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_file_present, base_table, raised_entries
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import strip_html_comments
+
 _FRONTEND_SRC = "autobot-frontend/src"
 _TEMPLATE = re.compile(r"<template>(.*)</template>", re.S)
 _RENDERS_ICON = re.compile(r"<Icon[\s>/]")
-_HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
 _STYLE = re.compile(r"<style[^>]*>(.*?)</style>", re.S)
 _COMMENT = re.compile(r"/\*.*?\*/", re.S)
 _RULE = re.compile(r"([^{}]+)\{([^{}]*)\}")
@@ -66,7 +67,7 @@ def font_size_only_icon_rules(root: Path) -> dict[str, int]:
     for path in vue_files(root):
         source = path.read_text(encoding="utf-8")
         template = _TEMPLATE.search(source)
-        if template is None or not _RENDERS_ICON.search(_HTML_COMMENT.sub("", template.group(1))):
+        if template is None or not _RENDERS_ICON.search(strip_html_comments(template.group(1))):
             continue
         for css in _STYLE.findall(source):
             for selector, body in _RULE.findall(_COMMENT.sub("", css)):
