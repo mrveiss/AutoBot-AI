@@ -20,7 +20,9 @@ workflow); locally run e.g.::
     export AUTOBOT_MIGRATION_TEST_ADMIN_URL=postgresql+asyncpg://migtest:migtest@127.0.0.1:5499/postgres
 """
 
+import base64
 import os
+import secrets
 import subprocess
 import sys
 import uuid
@@ -63,6 +65,21 @@ if _db_required():
     requires_postgres = pytest.mark.usefixtures("_require_admin_url")
 else:
     requires_postgres = pytest.mark.skipif(not os.environ.get(ADMIN_URL_ENV), reason=_missing_db_message())
+
+
+@pytest.fixture(autouse=True)
+def _audit_chain_root_key(monkeypatch):
+    """Give every test a per-run random secrets root key (#17219).
+
+    The audit chain key is HKDF-derived from ``AUTOBOT_SECRETS_ROOT_KEY`` and the writer fails
+    closed without it, so any test that commits an audited change needs one. Generated fresh per
+    test (never a literal); a key the environment already provides is left alone. Tests that
+    exercise the missing-key path delete it themselves.
+    """
+    from autobot_shared.secrets_envelope import ROOT_KEY_ENV
+
+    if not os.environ.get(ROOT_KEY_ENV):
+        monkeypatch.setenv(ROOT_KEY_ENV, base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii"))
 
 
 @pytest.fixture
