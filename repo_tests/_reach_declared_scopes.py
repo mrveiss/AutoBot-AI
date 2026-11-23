@@ -19,6 +19,7 @@ from __future__ import annotations
 #: Compared as a SET in both directions. Adding a scoped declaration means adding a line here, and that is the point --
 #: the scope is a decision, so it is written twice on purpose.
 DECLARED_SCOPES = {
+    "env-alias-registry-gap": ("autobot_shared",),
     "edge-configs-proxying-api-20046": ("autobot-infrastructure", "autobot-slm-backend", "docker"),
     "inline-lazy-singleton": (
         ".claude",
@@ -64,6 +65,8 @@ DECLARED_SCOPES = {
     ),
     "llc-exception-text-sweep-files-21579": ("autobot-backend/llc",),
     "slm-users-db-scan": ("autobot-slm-backend",),
+    "slm-manager-no-literal-tls-port-19832": ("autobot-slm-backend/ansible/roles/slm_manager",),
+    "slm-backend-unit-renderers-19832": ("autobot-slm-backend/ansible",),
     "test-name-predicate-single-home-21078": (
         "autobot-backend",
         "autobot-infrastructure",
@@ -274,6 +277,7 @@ DECLARED_SCOPES = {
     "llc-api-acting-identity": ("autobot-backend/llc/api",),
     "docker-smoke-context-publishers": (".github/workflows",),
     "cache-never-in-repo": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "client-error-detail-sweep-21943": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "node-major-literals": (
         ".github",
         "autobot-slm-backend/ansible",

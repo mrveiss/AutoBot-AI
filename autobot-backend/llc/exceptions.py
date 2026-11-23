@@ -39,6 +39,14 @@ class BudgetExhausted(PublicMessageMixin, Exception):
         super().__init__(f"Agent {agent_id} budget exhausted: spent={spent:.6f} limit={limit:.6f}")
 
 
+class CostEventAlreadyRecorded(Exception):
+    """A cost event with this (company, agent, idempotency key) is already stored (#21332, #21972).
+
+    Raised by the insert that lost the unique-row race, BEFORE any spend was changed: the loser's charge never
+    started, so the caller replays the winner's result instead of charging.
+    """
+
+
 class UnpricedModel(Exception):
     """Raised when a cost event names a model the live pricing catalogue cannot price (#16230).
 

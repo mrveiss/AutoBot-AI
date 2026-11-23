@@ -66,6 +66,18 @@
     "redundant": true
   },
   {
+    "name": "narration plus the respond call itself (#21880)",
+    "narration": "Riga is 4 degrees. <TOOL_CALL name=\"respond\" params='{\"text\":\"Riga is 4 degrees.\"}'>Task complete</TOOL_CALL>",
+    "answer": "Riga is 4 degrees.",
+    "redundant": true
+  },
+  {
+    "name": "a call-only narration says nothing",
+    "narration": "<TOOL_CALL name=\"respond\" params='{\"text\":\"Riga is 4 degrees.\"}'>Task complete</TOOL_CALL>",
+    "answer": "Riga is 4 degrees.",
+    "redundant": false
+  },
+  {
     "name": "earlier iteration narration is covered by a later iteration respond",
     "narration": "Riga is 4 degrees.",
     "answer": "Riga is 4 degrees and cloudy.",

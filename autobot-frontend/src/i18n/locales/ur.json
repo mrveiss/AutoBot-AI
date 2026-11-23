@@ -7277,7 +7277,8 @@
       "refreshAriaLabel": "Refresh files",
       "errorRenamingFile": "Error renaming file",
       "errorLoadingContents": "Error loading contents",
-      "uploadFailedHint": "براہ کرم فائل کے سائز کی حدود اور فارمیٹ کی ضروریات چیک کریں"
+      "uploadFailedHint": "براہ کرم فائل کے سائز کی حدود اور فارمیٹ کی ضروریات چیک کریں",
+      "uploadAlreadyExists": "A file with this name already exists"
     },
     "fileTypes": {
       "shell": "Shell Script",

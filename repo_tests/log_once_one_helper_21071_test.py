@@ -100,7 +100,7 @@ def _swept_paths(root: Path) -> list[str]:
 REACH = declare(
     "log-once-hand-rolled-sweep-21071",
     discover=_swept_paths,
-    floor=3951,  # mid-window: population 4101, window [3801, 4101]
+    floor=4093,  # mid-window: population 4243, window (3943, 4243)
     growth=300,
     what="tracked non-test Python files, swept for hand-rolled log-once state",
 )

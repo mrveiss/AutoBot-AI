@@ -42,7 +42,6 @@ module:autobot-backend/knowledge/backends/_chromadb_support.py	#10603
 module:autobot-backend/knowledge/memory_graph/hybrid_scorer.py	#10603
 module:autobot-backend/knowledge/memory_graph/query_processor.py	#10603
 module:autobot-backend/knowledge/pipeline/cognifiers/entity_resolver.py	#10603
-module:autobot-backend/knowledge/read_path_fakes_16665.py	#10603
 module:autobot-backend/knowledge/search_components/context_tracker.py	#10603
 module:autobot-backend/llc/adapters/http_adapter.py	#10603
 module:autobot-backend/llc/adapters/process_adapter.py	#10603
