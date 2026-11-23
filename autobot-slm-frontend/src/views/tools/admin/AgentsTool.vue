@@ -3,10 +3,9 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, PollingPausedAlert, createLogger } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, getEnvPositiveInt } from '@autobot/ui'
 
-const logger = createLogger('AgentsTool')
-const REFRESH_INTERVAL_MS = 30000
+const REFRESH_INTERVAL_MS = getEnvPositiveInt(import.meta.env, 'VITE_AGENTS_REFRESH_INTERVAL_MS', 30_000)
 /**
  * AgentsTool - Agent Registry Manager
  *
@@ -18,35 +17,27 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatFleetDateTime } from '@/composables/useTimezone'
+import type { AvailableAgent } from '@/types/agents'
 
 const api = useAutobotApi()
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-interface Agent {
-  id: string
-  name: string
-  type: string
-  status: 'active' | 'idle' | 'error' | 'stopped'
-  description: string
-  capabilities: string[]
-  last_activity: string
-  tasks_completed: number
-  success_rate: number
-}
+// #22141: the shape GET /agent/agents/available returns (autobot-backend AgentCapabilityInfo)
+type Agent = AvailableAgent
 
 interface AgentStats {
   total_agents: number
   active_agents: number
-  total_tasks: number
-  avg_success_rate: number
 }
 
+const ACTIVE_STATUSES = ['active', 'available', 'ready']
+
 const agents = ref<Agent[]>([])
-const stats = ref<AgentStats>({ total_agents: 0, active_agents: 0, total_tasks: 0, avg_success_rate: 0 })
+const stats = ref<AgentStats>({ total_agents: 0, active_agents: 0 })
 const selectedAgent = ref<Agent | null>(null)
 const filterStatus = ref<string>('all')
 const searchQuery = ref('')
@@ -56,14 +47,13 @@ const filteredAgents = computed(() => {
   let result = agents.value
 
   if (filterStatus.value !== 'all') {
-    result = result.filter(a => a.status === filterStatus.value)
+    result = result.filter(a => statusGroup(a.status) === filterStatus.value)
   }
 
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(a =>
       a.name.toLowerCase().includes(query) ||
-      a.type.toLowerCase().includes(query) ||
       a.description.toLowerCase().includes(query)
     )
   }
@@ -72,8 +62,12 @@ const filteredAgents = computed(() => {
 })
 
 // Methods
+function statusGroup(status: string): string {
+  return ACTIVE_STATUSES.includes(status) ? 'active' : status
+}
+
 function getStatusClass(status: string): string {
-  switch (status) {
+  switch (statusGroup(status)) {
     case 'active': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'idle': return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
     case 'error': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
@@ -83,7 +77,7 @@ function getStatusClass(status: string): string {
 }
 
 function getStatusDot(status: string): string {
-  switch (status) {
+  switch (statusGroup(status)) {
     case 'active': return 'bg-autobot-dot-ok'
     case 'idle': return 'bg-autobot-primary'
     case 'error': return 'bg-autobot-dot-bad'
@@ -98,27 +92,21 @@ async function loadAgents(): Promise<void> {
 
   try {
     // Issue #835 - use named function from useAutobotApi
-    const data = await api.getAvailableAgents() as Record<string, unknown>[]
-    agents.value = (Array.isArray(data) ? data : []) as unknown as Agent[]
+    const data = await api.getAvailableAgents()
+    agents.value = data.agents ?? []
+    stats.value = {
+      total_agents: data.total_agents ?? agents.value.length,
+      active_agents: agents.value.filter(a => statusGroup(a.status) === 'active').length,
+    }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load agents'
+    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.loadFailed')
   } finally {
     loading.value = false
   }
 }
 
-async function loadStats(): Promise<void> {
-  try {
-    // Issue #835 - use named function from useAutobotApi
-    const data = await api.getAgentsStatus()
-    stats.value = (data as unknown as AgentStats) || { total_agents: 0, active_agents: 0, total_tasks: 0, avg_success_rate: 0 }
-  } catch (e) {
-    logger.error('Failed to load stats:', e)
-  }
-}
-
 async function refreshData(): Promise<void> {
-  await Promise.all([loadAgents(), loadStats()])
+  await loadAgents()
 }
 
 async function startAgent(_agentId: string): Promise<void> {
@@ -127,7 +115,7 @@ async function startAgent(_agentId: string): Promise<void> {
     await api.resumeAgent()
     await loadAgents()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to start agent'
+    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.startFailed')
   }
 }
 
@@ -137,7 +125,7 @@ async function stopAgent(_agentId: string): Promise<void> {
     await api.pauseAgent()
     await loadAgents()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to stop agent'
+    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.stopFailed')
   }
 }
 
@@ -148,15 +136,13 @@ async function restartAgent(_agentId: string): Promise<void> {
     await api.resumeAgent()
     await loadAgents()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to restart agent'
+    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.restartFailed')
   }
 }
 
 function selectAgent(agent: Agent): void {
-  selectedAgent.value = selectedAgent.value?.id === agent.id ? null : agent
+  selectedAgent.value = selectedAgent.value?.name === agent.name ? null : agent
 }
-
-const { t } = useI18n()
 
 // #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
 const refreshPoller = useDashboardPoller(throwIfFailed(refreshData, error), REFRESH_INTERVAL_MS)
@@ -167,7 +153,7 @@ onMounted(() => refreshPoller.start(''))
 <template>
   <div class="p-6">
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
@@ -191,34 +177,6 @@ onMounted(() => refreshPoller.start(''))
           <div class="p-3 bg-autobot-pill-ok-bg rounded-lg">
             <svg class="w-6 h-6 text-autobot-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
-            <p class="text-2xl font-bold text-autobot-text-primary">{{ stats.total_tasks }}</p>
-          </div>
-          <div class="p-3 bg-autobot-illus-2-tint rounded-lg">
-            <svg class="w-6 h-6 text-autobot-text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.successRate') }}</p>
-            <p class="text-2xl font-bold text-autobot-text-primary">{{ (stats.avg_success_rate * 100).toFixed(1) }}%</p>
-          </div>
-          <div class="p-3 bg-autobot-pill-warn-bg rounded-lg">
-            <svg class="w-6 h-6 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
         </div>
@@ -283,11 +241,11 @@ onMounted(() => refreshPoller.start(''))
     <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div
         v-for="agent in filteredAgents"
-        :key="agent.id"
+        :key="agent.name"
         @click="selectAgent(agent)"
         :class="[
           'bg-white rounded-lg shadow-xs border border-autobot-border p-6 cursor-pointer transition-all',
-          selectedAgent?.id === agent.id ? 'ring-2 ring-primary-500' : 'hover:shadow-md'
+          selectedAgent?.name === agent.name ? 'ring-2 ring-primary-500' : 'hover:shadow-md'
         ]"
       >
         <!-- Agent Header -->
@@ -303,7 +261,6 @@ onMounted(() => refreshPoller.start(''))
             </div>
             <div>
               <h3 class="font-semibold text-autobot-text-primary">{{ agent.name }}</h3>
-              <p class="text-sm text-autobot-text-tertiary">{{ agent.type }}</p>
             </div>
           </div>
           <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(agent.status)]">
@@ -313,18 +270,6 @@ onMounted(() => refreshPoller.start(''))
 
         <!-- Description -->
         <p class="text-sm text-autobot-text-secondary mb-4">{{ agent.description }}</p>
-
-        <!-- Stats -->
-        <div class="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <p class="text-xs text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
-            <p class="text-lg font-bold text-autobot-text-primary">{{ agent.tasks_completed }}</p>
-          </div>
-          <div>
-            <p class="text-xs text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.successRate') }}</p>
-            <p class="text-lg font-bold text-autobot-text-primary">{{ (agent.success_rate * 100).toFixed(0) }}%</p>
-          </div>
-        </div>
 
         <!-- Capabilities -->
         <div class="mb-4">
@@ -340,29 +285,24 @@ onMounted(() => refreshPoller.start(''))
           </div>
         </div>
 
-        <!-- Last Activity -->
-        <div class="flex items-center justify-between text-xs text-autobot-text-tertiary pt-4 border-t border-autobot-border">
-          <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatFleetDateTime(agent.last_activity) }) }}</span>
-        </div>
-
         <!-- Actions -->
-        <div v-if="selectedAgent?.id === agent.id" class="flex gap-2 mt-4 pt-4 border-t border-autobot-border">
+        <div v-if="selectedAgent?.name === agent.name" class="flex gap-2 mt-4 pt-4 border-t border-autobot-border">
           <button
-            v-if="agent.status === 'stopped'"
-            @click.stop="startAgent(agent.id)"
+            v-if="statusGroup(agent.status) === 'stopped'"
+            @click.stop="startAgent(agent.name)"
             class="px-3 py-1.5 text-xs bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover"
           >
             {{ $t('tools.admin.agentsTool.start') }}
           </button>
           <button
-            v-if="agent.status === 'active' || agent.status === 'idle'"
-            @click.stop="stopAgent(agent.id)"
+            v-if="['active', 'idle'].includes(statusGroup(agent.status))"
+            @click.stop="stopAgent(agent.name)"
             class="px-3 py-1.5 text-xs bg-autobot-error-solid text-(--text-on-error) rounded-lg hover:bg-(--color-error-solid-hover)"
           >
             {{ $t('tools.admin.agentsTool.stop') }}
           </button>
           <button
-            @click.stop="restartAgent(agent.id)"
+            @click.stop="restartAgent(agent.name)"
             class="px-3 py-1.5 text-xs bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover rounded-lg"
           >
             {{ $t('tools.admin.agentsTool.restart') }}

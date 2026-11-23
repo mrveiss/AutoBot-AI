@@ -16,6 +16,7 @@ import { getBackendUrl } from '@/config/ssot-config'
 import { SlmApiClient } from '@/utils/ApiClient'
 import type { SlmUserResponse } from '@/composables/useSlmUserApi'
 import type { components } from '@/types/generated/api'
+import type { AgentsAvailableData, AgentsStatusData } from '@/types/agents'
 import {
   toNPUWorker,
   type NPUWorker,
@@ -925,14 +926,12 @@ export function useAutobotApi() {
     return response
   }
 
-  async function getAvailableAgents(): Promise<Record<string, unknown>[]> {
-    const response = await client.get<Record<string, unknown>[]>('/agent/agents/available')
-    return response
+  async function getAvailableAgents(): Promise<AgentsAvailableData> {
+    return (await client.get<{ data: AgentsAvailableData }>('/agent/agents/available')).data
   }
 
-  async function getAgentsStatus(): Promise<Record<string, unknown>> {
-    const response = await client.get<Record<string, unknown>>('/agent/agents/status')
-    return response
+  async function getAgentsStatus(): Promise<AgentsStatusData> {
+    return (await client.get<{ data: AgentsStatusData }>('/agent/agents/status')).data
   }
 
   async function pauseAgent(): Promise<Record<string, unknown>> {

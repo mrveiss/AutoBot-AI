@@ -18,6 +18,7 @@ from urllib.parse import urljoin
 
 import aiohttp
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY, EgressBlockedError
 from autobot_shared.logging_manager import get_logger
@@ -25,7 +26,7 @@ from autobot_shared.ollama_urls import ollama_tags_url
 from autobot_shared.ssot_config import config
 from autobot_shared.status_enums import ConnectionStatus
 from autobot_shared.time_utils import utc_timestamp
-from constants.network_constants import NetworkConstants
+from type_defs.ai_stack_agents import AIStackAgent, agent_dicts
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -134,6 +135,22 @@ async def _process_ai_stack_response(response, url: str, attempt: int, retry_att
         return {"content": response_text}, False, None
 
 
+# #22141: env-backed timeouts (were literals 60 / 60 / 10).
+AI_STACK_REQUEST_TIMEOUT_SECONDS = env_int("AUTOBOT_AI_STACK_REQUEST_TIMEOUT_SECONDS", 60)
+AI_STACK_RETRY_INTERVAL_SECONDS = env_int("AUTOBOT_AI_STACK_RETRY_INTERVAL_SECONDS", 60)
+AI_STACK_OLLAMA_TAGS_TIMEOUT_SECONDS = env_int("AUTOBOT_AI_STACK_OLLAMA_TAGS_TIMEOUT_SECONDS", 10)
+
+
+def _ollama_agent(model: Metadata) -> AIStackAgent:
+    """Typed agent for one Ollama model entry (#6228, #22141)."""
+    return AIStackAgent(
+        name=model["name"],
+        type=model["name"].replace(":", "_").replace(".", "_"),
+        provider="ollama",
+        parameters=model.get("details", {}).get("parameter_size", ""),
+    )
+
+
 class AIStackClient:
     """
     Client for communicating with AI Stack VM agents.
@@ -142,7 +159,7 @@ class AIStackClient:
     the AI Stack VM.
     """
 
-    RETRY_INTERVAL_SECONDS = 60
+    RETRY_INTERVAL_SECONDS = AI_STACK_RETRY_INTERVAL_SECONDS
 
     def __init__(self, base_url: str | None = None, enabled: bool | None = None) -> None:
         """Initialize AI Stack client with base URL and HTTP client configuration.
@@ -157,22 +174,9 @@ class AIStackClient:
         self._retry_task: asyncio.Task | None = None
         self.enabled: bool = config.ai_stack_enabled if enabled is None else enabled
 
-        # Use NetworkConstants for AI Stack configuration
-        ai_stack_config = {
-            "host": str(NetworkConstants.AI_STACK_HOST),
-            "port": NetworkConstants.AI_STACK_PORT,
-            "timeout": 60,
-            "retry_attempts": 3,
-            "retry_delay": 1.0,
-        }
-
-        # Get base_url from configuration if not provided
+        # Get base_url from the SSOT (scheme, host and port) if not provided
         if base_url is None:
-            host = ai_stack_config.get("host")
-            port = ai_stack_config.get("port")
-            if not host or not port:
-                raise ValueError("AI Stack configuration missing 'host' or 'port'")
-            base_url = f"http://{host}:{port}"
+            base_url = config.aistack_url
         self.base_url = base_url.rstrip("/")
         self.http_client = get_http_client()
 
@@ -183,10 +187,9 @@ class AIStackClient:
         self._ollama_url: str | None = config.ollama_url or None
 
         # Get timeout, retry, and connection configuration from config
-        timeout_seconds = ai_stack_config.get("timeout", 60)
-        self.timeout = aiohttp.ClientTimeout(total=timeout_seconds)
-        self.retry_attempts = ai_stack_config.get("retry_attempts", 3)
-        self.retry_delay = ai_stack_config.get("retry_delay", 1.0)
+        self.timeout = aiohttp.ClientTimeout(total=AI_STACK_REQUEST_TIMEOUT_SECONDS)
+        self.retry_attempts = 3
+        self.retry_delay = 1.0
 
         # Agent endpoint mappings — AI Stack API uses /agents/{type}/process
         self.agent_endpoints = {
@@ -332,7 +335,7 @@ class AIStackClient:
         return get_http_client().tracked_request(
             "GET",
             ollama_tags_url(self._ollama_url),
-            timeout=aiohttp.ClientTimeout(total=10),
+            timeout=aiohttp.ClientTimeout(total=AI_STACK_OLLAMA_TAGS_TIMEOUT_SECONDS),
             suppress_error_log=True,
             guard_egress=EGRESS_POLICY,
         )
@@ -402,27 +405,19 @@ class AIStackClient:
                 async with self._ollama_tags() as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        agents = [
-                            {
-                                "type": m["name"].replace(":", "_").replace(".", "_"),
-                                "name": m["name"],
-                                "status": "ready",
-                                "provider": "ollama",
-                                "parameters": m.get("details", {}).get("parameter_size", ""),
-                            }
-                            for m in data.get("models", [])
-                        ]
+                        agents = [_ollama_agent(m).model_dump() for m in data.get("models", [])]
                         return {"agents": agents, "total": len(agents), "source": "ollama"}
             except Exception as exc:
                 logger.debug("Ollama agent list failed: %s", exc)
 
         try:
             response = await self._make_request("GET", "/agents")
-            return response
+            agents = agent_dicts(response.get("agents", []), "ai_stack")
+            return {**response, "agents": agents, "total": response.get("total", len(agents))}
         except AIStackError as e:
             logger.warning("Cannot list AI Stack agents: %s", e.message)
             return {
-                "agents": list(self.agent_endpoints.keys()),
+                "agents": agent_dicts(list(self.agent_endpoints), "ai_stack"),
                 "total": len(self.agent_endpoints),
                 "source": "fallback_config",
             }

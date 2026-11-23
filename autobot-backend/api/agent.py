@@ -26,13 +26,12 @@ from fastapi.responses import JSONResponse
 
 from api.agent_events import BROADCAST_CHANNEL, owner_channel, publish_event_safe, publish_goal_events
 from api.agent_kb_context import _enhance_context_with_kb
+from api.agent_local_registry import local_registry_agents
 from api.schemas_agent import (
-    AgentAvailableData,
     AgentCommandApprovalResponse,
     AgentCommandExecuteResponse,
     AgentHealthResponse,
     AgentResearchData,
-    AgentStatusData,
     DevelopmentAnalysisData,
     GoalData,
     MultiAgentCoordinationData,
@@ -45,6 +44,7 @@ from api.schemas_agent_requests import (
     MultiAgentTaskPayload,
     ResearchTaskRequest,
 )
+from api.schemas_agent_roster import AgentAvailableData, AgentStatusData
 from api.schemas_common import AgentMessageResponse, DataResponse
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -57,6 +57,7 @@ from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_filters import filter_for_user_id, scoped_reader
 from monitoring.prometheus_metrics import get_metrics_manager
 from services.ai_stack_client import AIStackError, get_ai_stack_client
+from type_defs.ai_stack_agents import agent_names
 from utils.response_helpers import create_success_response, handle_ai_stack_error
 
 router = APIRouter()
@@ -992,7 +993,7 @@ async def execute_orchestrated_goal(
     # Get available agents
     try:
         agents_info = await ai_client.list_available_agents()
-        available_agents = agents_info.get("agents", [])
+        available_agents = agent_names(agents_info)
     except Exception as e:
         logger.warning("Could not get agent list: %s", e)
         available_agents = list(_FALLBACK_AGENTS)
@@ -1053,9 +1054,8 @@ async def coordinate_multi_agent_task(
     try:
         ai_client = await get_ai_stack_client()
 
-        # Validate agent availability
         agents_info = await ai_client.list_available_agents()
-        available_agents = agents_info.get("agents", [])
+        available_agents = agent_names(agents_info)
 
         unavailable_agents = [agent for agent in payload.agents if agent not in available_agents]
         if unavailable_agents:
@@ -1210,7 +1210,7 @@ async def _ai_stack_available_agents() -> List[dict]:
         return []
 
     agents_with_caps = []
-    for agent in agents_info.get("agents", []):
+    for agent in agent_names(agents_info):
         # Issue #281: capabilities from module constant, with fallback for unknown agents
         agent_info = AGENT_CAPABILITIES.get(
             agent,
@@ -1223,29 +1223,6 @@ async def _ai_stack_available_agents() -> List[dict]:
         agent_info["status"] = "available"
         agents_with_caps.append(agent_info)
     return agents_with_caps
-
-
-def _local_registry_agents() -> List[dict]:
-    """Agents from the canonical in-process AgentCapabilityRegistry (#6828).
-
-    Exposes the orchestration profiles (capabilities + specializations) through
-    the same response shape as AI Stack agents so /agents/available is the one
-    unified "find an agent that can do X" entry point.
-    """
-    from orchestration.agent_registry import get_default_capability_registry
-
-    agents = []
-    for profile in get_default_capability_registry().get_all().values():
-        capabilities = sorted({c.value for c in profile.capabilities} | set(profile.specializations))
-        agents.append(
-            {
-                "name": profile.agent_id,
-                "description": f"Local orchestration agent ({profile.agent_type})",
-                "capabilities": capabilities,
-                "status": profile.availability_status,
-            }
-        )
-    return agents
 
 
 @router.get("/agents/available", response_model=DataResponse[AgentAvailableData])
@@ -1266,7 +1243,7 @@ async def list_available_agents(capability: str | None = None):
     """
     agents_with_caps = await _ai_stack_available_agents()
     known = {a["name"] for a in agents_with_caps}
-    agents_with_caps.extend(a for a in _local_registry_agents() if a["name"] not in known)
+    agents_with_caps.extend(a for a in local_registry_agents() if a["name"] not in known)
 
     if capability:
         needle = capability.lower()
@@ -1302,15 +1279,16 @@ async def get_agents_status():
             ai_client.list_available_agents(),
         )
 
+        names = agent_names(agents_info)
         return create_success_response(
             {
                 "ai_stack_status": health_status["status"],
-                "total_agents": len(agents_info.get("agents", [])),
+                "total_agents": len(names),
                 "available_agents": agents_info.get("agents", []),
                 "multi_agent_coordination": True,
-                "npu_acceleration": "npu_code_search" in agents_info.get("agents", []),
-                "research_capabilities": any(agent in agents_info.get("agents", []) for agent in RESEARCH_AGENT_NAMES),
-                "development_tools": ("development_speedup" in agents_info.get("agents", [])),
+                "npu_acceleration": "npu_code_search" in names,
+                "research_capabilities": any(agent in names for agent in RESEARCH_AGENT_NAMES),
+                "development_tools": "development_speedup" in names,
             }
         )
 
