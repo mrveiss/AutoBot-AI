@@ -45,9 +45,9 @@ async def engine():  # noqa: ANN201
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    return async_sessionmaker(
+    return async_sessionmaker(  # canonical: ignore py-adhoc-db-engine
         engine, expire_on_commit=False, class_=AsyncSession
-    )  # canonical: ignore py-adhoc-db-engine
+    )
 
 
 def _make_app(
@@ -65,7 +65,6 @@ def _make_app(
     from llc.api import labels as labels_api
     from llc.api import templates as templates_api
     from llc.deps import get_session
-    from user_management.database import get_async_session
     from user_management.services import TenantContext
 
     app = FastAPI()
@@ -83,7 +82,6 @@ def _make_app(
                 await session.rollback()
                 raise
 
-    app.dependency_overrides[get_async_session] = _override_session
     app.dependency_overrides[get_session] = _override_session
 
     def _override_current_user() -> dict:

@@ -22,9 +22,9 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
+from llc.deps import SESSION_DEP
 from llc.models.api_key import LLCApiKey
 from llc.services.api_key import ApiKeyService
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 logger = get_logger(__name__)
@@ -60,7 +60,7 @@ class ApiKeyCreated(ApiKeyRead):
 async def create_api_key(
     agent_id: str,
     body: ApiKeyCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ApiKeyCreated:
@@ -87,7 +87,7 @@ async def create_api_key(
 async def revoke_api_key(
     agent_id: str,
     key_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -101,7 +101,7 @@ async def revoke_api_key(
 @router.get("/{agent_id}/api-keys", response_model=List[ApiKeyRead])
 async def list_api_keys(
     agent_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[ApiKeyRead]:

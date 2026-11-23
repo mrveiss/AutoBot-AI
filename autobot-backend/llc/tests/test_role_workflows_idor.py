@@ -28,7 +28,7 @@ _FIXED_USER_ID = uuid.UUID("77777777-7777-7777-7777-777777777777")
 def _make_client(caller_company_id: str) -> TestClient:
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
     from llc.api.roles import router as roles_router  # noqa: PLC0415
-    from user_management.database import get_async_session  # noqa: PLC0415
+    from llc.deps import get_session  # noqa: PLC0415
 
     app = FastAPI()
     app.include_router(roles_router, prefix="/api/llc")
@@ -36,7 +36,7 @@ def _make_client(caller_company_id: str) -> TestClient:
     async def _fake_session():
         yield AsyncMock()
 
-    app.dependency_overrides[get_async_session] = _fake_session
+    app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(_FIXED_USER_ID)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=uuid.UUID(caller_company_id), user_id=_FIXED_USER_ID, is_platform_admin=False
