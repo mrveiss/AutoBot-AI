@@ -79,19 +79,22 @@ async def _stale_reason(manager, session_id: str, company: str) -> str | None:
 async def execute_chat_company_assignment(approval: "Approval", session: "AsyncSession") -> None:
     """Assign the approved chat once, audited; a stale proposal is recorded, never forced."""
     from chat_history import ChatHistoryManager
-    from security.session_share_audit import assign_company_audited
+    from security.session_share_audit import assign_company_audited, record_assign_refused
 
     session_id, company = _target(approval)
     decider = verified_decider(approval)
     if decider is None:
         raise ValueError(f"approval {approval.id} has no verified decider; the assignment is refused")
     manager = ChatHistoryManager()
+    actor = _actor(approval, decider)
     stale = await _stale_reason(manager, session_id, company)
-    if stale is None:
+    if stale is not None:
+        await record_assign_refused(actor, session_id, company, stale)  # a refusal leaves its trail too
+    else:
         # A lost race is still refused by the compare-and-set, and its outcome row is ``failed``.
         stale = (
             None
-            if await assign_company_audited(manager, session_id, company, _actor(approval, decider))
+            if await assign_company_audited(manager, session_id, company, actor)
             else ("the chat was assigned while this was being applied")
         )
     if stale:

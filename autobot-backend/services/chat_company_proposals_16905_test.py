@@ -179,7 +179,11 @@ async def test_a_chat_tagged_in_the_meantime_is_stale_and_unchanged(db, audit, c
     target = next(str(r.id) for r in rows if r.context["session_id"] == "legacy-1")
     await _approve(db, target)
     assert chats.docs["legacy-1"]["companyId"] == CO_B and chats.writes == []
-    assert audit.await_count == 0
+    assert [c.args[1] for c in audit.await_args_list] == ["failed"]  # one durable failed row, no attempted row
+    failed = audit.await_args_list[0]
+    assert failed.args[0] == "session.company_assign" and failed.kwargs["durable"] is True
+    assert failed.kwargs["details"]["reason"] == "the chat already has a company"
+    assert failed.kwargs["user_id"] == str(DECIDER) and failed.kwargs["resource"] == "legacy-1"
     assert any("Stale" in body for body in await _comments(db, target))
     assert created  # the other proposal is untouched and still pending
 
