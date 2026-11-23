@@ -127,7 +127,7 @@ REACH = declare(
     discover=_backend_sources,
     what="non-test backend and shared modules",
     roots=_ROOTS,
-    floor=3153,
+    floor=3325,  # mid-window: population 3475, window (3175, 3475)
     growth=300,
 )
 
