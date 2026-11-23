@@ -166,12 +166,12 @@ async def update_workflow_secret(
 
     Issue #2153, #2303.
     """
+    owner_id = require_principal_id(current_user)  # 401 before any input check
     try:
         _validate_secret_name(name)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Request failed") from exc
 
-    owner_id = require_principal_id(current_user)
     try:
         updated = _svc().update_secret(
             name=name,
@@ -214,12 +214,12 @@ async def delete_workflow_secret(
 
     Issue #2153, #2303.
     """
+    owner_id = require_principal_id(current_user)  # 401 before any input check
     try:
         _validate_secret_name(name)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Request failed") from exc
 
-    owner_id = require_principal_id(current_user)
     try:
         deleted = _svc().delete_secret(name=name, owner_id=owner_id)
     except Exception as exc:
