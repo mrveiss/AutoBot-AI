@@ -17,6 +17,8 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 ROUTED_FILES = (
     "autobot-backend/api/monitoring.py",
     "autobot-backend/code_analysis/src/env_analyzer.py",
@@ -49,12 +51,12 @@ def test_every_ollama_host_port_url_goes_through_ollama_urls():
     root = repo_root()
     found = {}
     for rel in ROUTED_FILES:
-        tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         if lines := _unrouted(tree):
             found[rel] = lines
     assert not found, f"host+port Ollama URL not routed through autobot_shared.ollama_urls: {found}"
 
 
 def test_detector_flags_an_unrouted_builder():
-    assert _unrouted(ast.parse('u = f"http://{ollama_host}:{ollama_port}"'))
-    assert not _unrouted(ast.parse('u = ollama_base_url(f"http://{ollama_host}:{ollama_port}")'))
+    assert _unrouted(parse_cache.parse('u = f"http://{ollama_host}:{ollama_port}"'))
+    assert not _unrouted(parse_cache.parse('u = ollama_base_url(f"http://{ollama_host}:{ollama_port}")'))
