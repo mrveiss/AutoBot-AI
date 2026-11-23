@@ -5,7 +5,7 @@
 """A step the executor parks for approval is released by the control route (#17677).
 
 The approval card in the Workflow Builder answers through ``POST /control_workflow``;
-until now nothing ran that answer against the executor (``workflow_ownership_17014_test``
+until now nothing ran that answer against the executor (``workflow_ownership_test``
 stands the manager in). These tests use the real manager, controller and executor, and
 stub only the edges: the messenger (what would go to the browser) and the command runner
 (``_execute_command`` is a simulation today). A step waits until it is approved or
