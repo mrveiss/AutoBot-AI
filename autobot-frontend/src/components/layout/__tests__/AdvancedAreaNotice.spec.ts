@@ -10,6 +10,7 @@ import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import AdvancedAreaNotice from '../AdvancedAreaNotice.vue'
 import componentsCss from '@/assets/css/components.css?raw'
+import baseCardSource from '../../../../../libs/autobot-ui/src/components/BaseCard.vue?raw'
 import { useUiMode } from '@/composables/useUiMode'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
@@ -34,9 +35,13 @@ describe('AdvancedAreaNotice', () => {
   })
 
   it('is hidden in Full and shown in Minimal by the real `.only-min` rules of components.css', () => {
-    const rules = [/^\.only-min\s*\{[^}]*\}/m, /^html\[data-ui="minimal"\] \.only-min\s*\{[^}]*\}/m]
+    const rules = [/^html:not\(\[data-ui="minimal"\]\) \.only-min\s*\{[^}]*\}/m, /^html\[data-ui="minimal"\] \.only-min\s*\{[^}]*\}/m]
       .map((re) => componentsCss.match(re)?.[0])
     expect(rules.every(Boolean)).toBe(true)
+    // BaseCard's real scoped root rule (`.aui-card[data-v-x] { display: flex }`, 0,2,0) is what the
+    // hide rule must outrank; its scope id is read from the mounted element below.
+    const cardRule = baseCardSource.match(/^\.aui-card\s*\{[^}]*\}/m)?.[0]
+    expect(cardRule).toContain('display: flex')
     const style = document.createElement('style')
     style.textContent = rules.join('\n')
     document.head.appendChild(style)
@@ -45,6 +50,10 @@ describe('AdvancedAreaNotice', () => {
       global: { plugins: [i18n], stubs: { RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } } },
     })
     const el = w.get('[data-testid="advanced-area-notice"]').element
+    // The root carries its own scope id and the parent's; one rule per id, so BaseCard's is included.
+    const scopes = el.getAttributeNames().filter((n) => n.startsWith('data-v-'))
+    expect(scopes.length).toBeGreaterThan(0)
+    style.textContent += scopes.map((sc) => `\n${cardRule!.replace('.aui-card', `.aui-card[${sc}]`)}`).join('')
     document.documentElement.setAttribute('data-ui', 'full')
     expect(getComputedStyle(el).display).toBe('none')
     document.documentElement.setAttribute('data-ui', 'minimal')
