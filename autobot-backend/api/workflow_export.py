@@ -27,7 +27,7 @@ from api.schemas_workflows import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.principal import resolve_principal_id
+from autobot_shared.principal import require_principal_id, resolve_principal_id
 from services.workflow_automation.command_step import require_command_permission
 from services.workflow_automation.routes import get_workflow_manager
 from services.workflow_serializer import WorkflowSerializer
@@ -134,7 +134,7 @@ async def import_workflow(
     """
     require_command_permission(current_user)  # #19807: imported steps run shell commands
     try:
-        owner_id = resolve_principal_id(current_user)
+        owner_id = require_principal_id(current_user)
         new_id = await serializer.import_workflow(
             data=body.export_document,
             owner_id=owner_id,
@@ -173,7 +173,7 @@ async def share_workflow(
     Share a workflow.  Returns a share_id that others can use to clone it.
     """
     try:
-        owner_id = resolve_principal_id(current_user)
+        owner_id = require_principal_id(current_user)
         share_id = await sharing.share_workflow(
             workflow_id=body.workflow_id,
             owner_id=owner_id,
@@ -234,8 +234,8 @@ async def list_shared_workflows(
     Returns shares that are public, targeted at the user, or owned by the user.
     The embedded workflow payload is omitted to keep the response lightweight.
     """
+    user_id = require_principal_id(current_user)  # before the try: its 401 must not become a 500
     try:
-        user_id = resolve_principal_id(current_user)
         shares = await sharing.list_shared(user_id=user_id)
         return {"success": True, "shares": shares, "total_count": len(shares)}
 
@@ -259,7 +259,7 @@ async def clone_shared_workflow(
     """
     require_command_permission(current_user)  # #19807: cloned steps run shell commands
     try:
-        new_owner_id = resolve_principal_id(current_user)
+        new_owner_id = require_principal_id(current_user)
         new_id = await sharing.clone_workflow(
             share_id=share_id,
             new_owner_id=new_owner_id,
