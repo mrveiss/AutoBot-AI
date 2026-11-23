@@ -17,7 +17,7 @@ import asyncio
 import uuid
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import Response
 
 from api.desktop_control_lock import (
@@ -32,9 +32,11 @@ from api.schemas_system import (
     VncProxyStatusResponse,
 )
 from api.vnc_handshake_bridge import authenticate_both_legs, get_vnc_password
+from api.vnc_host_target import resolve_host_id
 from api.ws_security import enforce_ws_desktop_auth, enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
+from autobot_shared.env_utils import env_int, env_str
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY, assert_egress_policy
@@ -47,6 +49,18 @@ from type_defs.common import Metadata
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+# websockify runs --ssl-only (#22144): every probe of it is https, and its WebSocket is wss.
+VNC_UPSTREAM_SCHEME = env_str("AUTOBOT_VNC_UPSTREAM_SCHEME", "https")
+VNC_WS_SCHEMES = {"https": "wss", "http": "ws"}
+VNC_OBSERVATION_TIMEOUT_S = env_int("AUTOBOT_VNC_OBSERVATION_TIMEOUT_S", 1)
+VNC_STATUS_PROBE_TIMEOUT_S = env_int("AUTOBOT_VNC_STATUS_PROBE_TIMEOUT_S", 5)
+
+
+def _websockify_url(endpoint: str) -> str:
+    """The wss:// (or ws://) websockify URL for an http(s) noVNC endpoint."""
+    scheme, _, rest = endpoint.partition("://")
+    return f"{VNC_WS_SCHEMES[scheme]}://{rest}/websockify"
 
 
 async def _send_client_data_to_vnc(data: dict, vnc_ws, vnc_type: str) -> bool:
@@ -153,8 +167,8 @@ async def _forward_vnc_to_client(websocket: WebSocket, vnc_ws, vnc_type: str) ->
 
 # VNC endpoints
 VNC_ENDPOINTS = {
-    "desktop": f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}",
-    "browser": f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.VNC_PORT}",
+    "desktop": f"{VNC_UPSTREAM_SCHEME}://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}",
+    "browser": f"{VNC_UPSTREAM_SCHEME}://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.VNC_PORT}",
 }
 
 
@@ -176,7 +190,7 @@ async def record_observation(vnc_type: str, observation_type: str, data: Metadat
         async with await http_client.post(
             f"{backend_url}/api/vnc/observations/{vnc_type}",
             json=observation,
-            timeout=aiohttp.ClientTimeout(total=1),
+            timeout=aiohttp.ClientTimeout(total=VNC_OBSERVATION_TIMEOUT_S),
             guard_egress=EGRESS_POLICY,
         ):
             pass  # Just fire and forget, we don't need the response
@@ -241,8 +255,7 @@ async def acquire_desktop_control(
     Muting the agent's actuation calls (api.vnc_manager / api.vnc_mcp) until
     this is released or its idle-TTL expires.
     """
-    if vnc_type not in VNC_ENDPOINTS:
-        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+    resolve_host_id(request.session_id)  # the lock key is the selected /secrets host (#22145)
 
     owner = current_user.get("username") or "unknown"
     result = await acquire_human_control(request.session_id, owner)
@@ -273,8 +286,7 @@ async def release_desktop_control(
 
     The agent resumes actuation immediately once released.
     """
-    if vnc_type not in VNC_ENDPOINTS:
-        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+    resolve_host_id(request.session_id)  # the lock key is the selected /secrets host (#22145)
 
     owner = current_user.get("username") or "unknown"
     result = await release_human_control(request.session_id, owner)
@@ -297,12 +309,11 @@ async def release_desktop_control(
 )
 async def get_desktop_control_status(
     vnc_type: str,
-    session_id: str = "default",
+    session_id: str = Query(..., min_length=1, description="Selected /secrets infrastructure host id"),
     current_user: dict = Depends(get_current_user),
 ):
     """Get current desktop control-lock owner/state (#12002, #11506 T1)."""
-    if vnc_type not in VNC_ENDPOINTS:
-        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+    resolve_host_id(session_id)  # the lock key is the selected /secrets host (#22145)
 
     lock_state = await get_control_lock_state(session_id)
 
@@ -382,7 +393,9 @@ async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current
     try:
         http_client = get_http_client()
         async with await http_client.get(
-            f"{endpoint}/vnc.html", timeout=aiohttp.ClientTimeout(total=5), guard_egress=EGRESS_POLICY
+            f"{endpoint}/vnc.html",
+            timeout=aiohttp.ClientTimeout(total=VNC_STATUS_PROBE_TIMEOUT_S),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             accessible = response.status == 200
             return {
@@ -491,7 +504,7 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         return
 
     endpoint = VNC_ENDPOINTS[vnc_type]
-    ws_url = endpoint.replace("http://", "wss://") + "/websockify"
+    ws_url = _websockify_url(endpoint)
 
     await accept_websocket(websocket)
     logger.info(

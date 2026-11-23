@@ -1,0 +1,251 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""#22145: chat Desktop controls act on the selected /secrets host, never a fixed display.
+
+Covers: the host id resolves only from /secrets (fleet and unknown ids refused),
+the control reaches that host's own VNC address/port/password, the screenshot
+path returns a PNG from that host, and the E7 rule (no default user/capabilities).
+"""
+
+import base64
+import struct
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from fastapi import HTTPException
+
+from api import infrastructure as infra
+from api.infrastructure_host_rules import missing_host_fields, refuse_incomplete_host
+from api.schemas_system import MouseClickRequest
+from api.vnc_host_actions import keysym_for, run_on_host
+from api.vnc_host_target import VncTarget, resolve_host_id, resolve_vnc_target
+from api.vnc_manager import vnc_mouse_click, vnc_screenshot
+from api.vnc_rfb_client import VncFrame, VncRfbSession, frame_to_png
+
+SECRETS_HOST = {
+    "id": "h-secret",
+    "name": "box",
+    "host": "vnc.example.test",
+    "ssh_port": 22,
+    "vnc_port": 5905,
+    "username": "alice",
+    "capabilities": ["ssh", "vnc"],
+}
+FLEET_NODE_ID = "fleet-node-7"
+
+
+@pytest.fixture
+def secrets_hosts(monkeypatch):
+    """The one secrets loader terminal_ssh also uses; a fleet node is NOT in it."""
+    monkeypatch.setattr(infra, "_load_secrets_hosts", lambda: [dict(SECRETS_HOST)])
+
+
+@pytest.fixture
+def password(monkeypatch):
+    monkeypatch.setattr("api.vnc_host_target._vnc_password_for", lambda host_id: b"pw-" + host_id.encode())
+
+
+class TestResolveOnlyFromSecrets:
+    def test_secrets_host_resolves_to_its_own_endpoint_and_credentials(self, secrets_hosts, password):
+        target = resolve_vnc_target("h-secret")
+        assert target == VncTarget("h-secret", "vnc.example.test", 5905, b"pw-h-secret")
+
+    @pytest.mark.parametrize("bad_id", [FLEET_NODE_ID, "", "localhost", "default"])
+    def test_fleet_or_unknown_id_is_refused(self, secrets_hosts, password, bad_id):
+        with pytest.raises(HTTPException) as exc:
+            resolve_vnc_target(bad_id)
+        assert exc.value.status_code == 404
+
+    def test_host_without_vnc_capability_is_refused(self, monkeypatch, password):
+        host = {**SECRETS_HOST, "capabilities": ["ssh"]}
+        monkeypatch.setattr(infra, "_load_secrets_hosts", lambda: [host])
+        with pytest.raises(HTTPException) as exc:
+            resolve_host_id("h-secret")
+        assert exc.value.status_code == 422
+
+    def test_host_without_username_is_refused_with_a_clear_message(self, monkeypatch, password):
+        host = {**SECRETS_HOST, "username": ""}
+        monkeypatch.setattr(infra, "_load_secrets_hosts", lambda: [host])
+        with pytest.raises(HTTPException) as exc:
+            resolve_host_id("h-secret")
+        assert exc.value.status_code == 422
+        assert "username" in exc.value.detail
+
+
+class _FakeSession:
+    """Records what a control sends; stands in for the RFB connection."""
+
+    instances: list = []
+
+    def __init__(self, host, port, password):
+        self.args = (host, port, password)
+        self.width, self.height = 100, 80
+        self.events: list = []
+        _FakeSession.instances.append(self)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return None
+
+    async def pointer(self, x, y, buttons):
+        self.events.append(("pointer", x, y, buttons))
+
+    async def key(self, keysym, down):
+        self.events.append(("key", keysym, down))
+
+    async def cut_text(self, text):
+        self.events.append(("cut", text))
+
+    async def grab_frame(self):
+        return VncFrame(2, 1, bytes([255, 0, 0, 0, 255, 0]))
+
+
+@pytest.fixture
+def fake_session(secrets_hosts, password):
+    _FakeSession.instances = []
+    with patch("api.vnc_host_actions.VncRfbSession", _FakeSession):
+        yield _FakeSession
+
+
+class TestControlsActOnTheSelectedHost:
+    @pytest.mark.asyncio
+    async def test_click_connects_to_the_secrets_host_with_its_password(self, fake_session):
+        with patch("api.vnc_manager.is_actuation_muted", new=AsyncMock(return_value=False)):
+            result = await vnc_mouse_click(
+                MouseClickRequest(host_id="h-secret", x=3, y=4), admin_check=True, current_user={"username": "alice"}
+            )
+        assert result["status"] == "success"
+        (session,) = fake_session.instances
+        assert session.args == ("vnc.example.test", 5905, b"pw-h-secret")
+        assert ("pointer", 3, 4, 1) in session.events
+
+    @pytest.mark.asyncio
+    async def test_fleet_node_id_never_opens_a_connection(self, fake_session):
+        with patch("api.vnc_manager.is_actuation_muted", new=AsyncMock(return_value=False)):
+            with pytest.raises(HTTPException) as exc:
+                await vnc_mouse_click(
+                    MouseClickRequest(host_id=FLEET_NODE_ID, x=1, y=1),
+                    admin_check=True,
+                    current_user={"username": "alice"},
+                )
+        assert exc.value.status_code == 404
+        assert fake_session.instances == []
+
+    def test_host_id_is_required_on_the_request(self):
+        with pytest.raises(ValueError):
+            MouseClickRequest(x=1, y=1)
+
+    @pytest.mark.asyncio
+    async def test_key_chord_presses_then_releases_in_reverse(self, fake_session):
+        await run_on_host("h-secret", "key", key="ctrl+alt+Delete")
+        keys = [e for e in fake_session.instances[0].events if e[0] == "key"]
+        assert [k[2] for k in keys] == [True, True, True, False, False, False]
+        assert keys[0][1] == keysym_for("ctrl") and keys[2][1] == keysym_for("Delete")
+
+    @pytest.mark.asyncio
+    async def test_clipboard_text_goes_to_the_host(self, fake_session):
+        await run_on_host("h-secret", "clipboard", content="hello")
+        assert ("cut", "hello") in fake_session.instances[0].events
+
+    @pytest.mark.asyncio
+    async def test_unreachable_host_reports_an_error_result(self, secrets_hosts, password):
+        class Boom(_FakeSession):
+            async def __aenter__(self):
+                raise ConnectionRefusedError()
+
+        with patch("api.vnc_host_actions.VncRfbSession", Boom):
+            result = await run_on_host("h-secret", "click", x=1, y=1, button="left")
+        assert result["status"] == "error"
+
+
+class TestScreenshotPath:
+    @pytest.mark.asyncio
+    async def test_screenshot_returns_a_png_from_the_selected_host(self, fake_session):
+        result = await vnc_screenshot(host_id="h-secret", admin_check=True)
+        assert result["status"] == "success"
+        assert base64.b64decode(result["image_data"])[:8] == b"\x89PNG\r\n\x1a\n"
+        assert fake_session.instances[0].args[0] == "vnc.example.test"
+
+    @pytest.mark.asyncio
+    async def test_screenshot_of_a_fleet_node_is_refused(self, fake_session):
+        with pytest.raises(HTTPException) as exc:
+            await vnc_screenshot(host_id=FLEET_NODE_ID, admin_check=True)
+        assert exc.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_failure_is_an_error_result_not_operation_failed(self, secrets_hosts, password):
+        """Missing capture tools used to surface as the generic 'Operation failed' (#22145)."""
+
+        class Boom(_FakeSession):
+            async def grab_frame(self):
+                raise OSError("down")
+
+        with patch("api.vnc_host_actions.VncRfbSession", Boom):
+            result = await vnc_screenshot(host_id="h-secret", admin_check=True)
+        assert result["status"] == "error" and result["message"] != "Operation failed"
+        assert result["image_data"] == ""
+
+    def test_frame_to_png_round_trips_pixels(self):
+        from io import BytesIO
+
+        from PIL import Image
+
+        png = frame_to_png(VncFrame(2, 1, bytes([255, 0, 0, 0, 255, 0])))
+        assert list(Image.open(BytesIO(png)).getdata()) == [(255, 0, 0), (0, 255, 0)]
+
+
+class TestRfbRawRectDecoding:
+    @pytest.mark.asyncio
+    async def test_raw_bgrx_rect_becomes_rgb(self):
+        session = VncRfbSession("h", 1, b"pw")
+        session.width, session.height = 2, 1
+        payload = struct.pack("!HHHHi", 0, 0, 2, 1, 0) + bytes([0, 0, 255, 0, 0, 255, 0, 0])  # B,G,R,X per pixel
+        buf = bytearray(payload)
+
+        class Stream:
+            async def read_exactly(self, n):
+                chunk = bytes(buf[:n])
+                del buf[:n]
+                return chunk
+
+        session._stream = Stream()
+        canvas = bytearray(6)
+        await session._read_rect(canvas)
+        assert bytes(canvas) == bytes([255, 0, 0, 0, 255, 0])
+
+
+class TestE7NoDefaultUserOrCapabilities:
+    def test_loader_does_not_invent_root_or_ssh(self, monkeypatch):
+        import api.secrets as secrets_module
+
+        monkeypatch.setattr(
+            secrets_module.secrets_manager,
+            "list_secrets",
+            lambda *a, **k: [{"id": "s", "type": "infrastructure_host", "name": "n", "metadata": {"host": "h"}}],
+        )
+        (host,) = infra._load_secrets_hosts()
+        assert host["username"] == "" and host["capabilities"] == []
+
+    def test_incomplete_host_is_rejected_naming_the_fields(self):
+        with pytest.raises(HTTPException) as exc:
+            refuse_incomplete_host("infrastructure_host", {"host": "h"})
+        assert exc.value.status_code == 422
+        assert "username" in exc.value.detail and "capabilities" in exc.value.detail
+
+    def test_complete_host_and_other_secret_types_pass(self):
+        refuse_incomplete_host("infrastructure_host", {"username": "u", "capabilities": ["ssh"]})
+        refuse_incomplete_host("api_key", {})
+        assert missing_host_fields({"username": "u", "capabilities": ["vnc"]}) == []
+
+
+class TestTerminalSshSharesTheResolver:
+    @pytest.mark.asyncio
+    async def test_resolve_ssh_host_id_uses_the_same_lookup(self, secrets_hosts):
+        from api.terminal_ssh import resolve_ssh_host_id
+
+        assert await resolve_ssh_host_id("h-secret") is True
+        assert await resolve_ssh_host_id(FLEET_NODE_ID) is False
