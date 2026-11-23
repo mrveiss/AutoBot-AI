@@ -4,9 +4,10 @@
 # Author: mrveiss
 """A budget write is committed before its response is produced (#21332).
 
-`get_async_session` commits in its teardown, which FastAPI runs after the response is sent. The route
-handlers are called here directly (no teardown), and the spend is read from a SECOND connection to a
-file database: it only sees the charge if the handler itself committed. Before the fix the second
+A request-scoped session dependency commits in its teardown, which FastAPI runs after the response is sent;
+the budget routes now take ``SESSION_DEP`` (function scope), so the commit runs before the response. The route
+handlers are called here directly (no dependency teardown), and the spend is read from a SECOND connection to a
+file database: it only sees the charge once the handler's session committed. Before the fix the second
 session read the old remainder, which is how a caller that ingests, reads and ingests again charged twice.
 
 Claim (b), teardown after the response: the recorded version is the shared floor ``fastapi>=0.162.2``

@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""`POST /routines/{id}/trigger` answers 202 only after the schedule write succeeded (#22003)."""
+"""`POST /routines/{id}/trigger` answers 202 only after the schedule write succeeded (#22003).
+
+Create and update write the schedule after the routine is committed: a failure there is a WARNING and the
+route still succeeds, because the change is saved (owner decision 2026-11-22, #21332).
+"""
 
 from __future__ import annotations
 
@@ -41,6 +45,11 @@ class _Schedule:
             raise self._error
         self.zsets.setdefault(key, {}).update(mapping)
         return len(mapping)
+
+    async def zrem(self, key: str, member: str) -> int:
+        if self._error is not None:
+            raise self._error
+        return int(self.zsets.get(key, {}).pop(member, None) is not None)
 
 
 @pytest.fixture
@@ -92,9 +101,41 @@ def test_a_working_client_answers_202_and_the_routine_is_on_the_schedule(client:
     assert redis.zsets[_SCHEDULE_KEY][f"routine:{_ROUTINE}"] >= before
 
 
+async def _sync(redis: object, cron: str | None, log: MagicMock) -> None:
+    with patch.object(routines_api, "get_async_redis_client", AsyncMock(return_value=redis)):
+        with patch.object(routines_api, "logger", log):
+            await routines_api._sync_schedule(_ROUTINE, cron, nx=False)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cron", ["*/5 * * * *", None], ids=["put_on", "take_off"])
+async def test_a_failed_post_commit_schedule_write_is_a_warning_not_an_error(cron: str | None) -> None:
+    log = MagicMock()
+    await _sync(_Schedule(error=ConnectionError("redis down")), cron, log)  # does not raise: the routine is saved
+    log.warning.assert_called_once()
+    assert "ConnectionError" in log.warning.call_args.args[2]
+
+
+@pytest.mark.asyncio
+async def test_a_missing_client_after_commit_is_a_warning() -> None:
+    log = MagicMock()
+    await _sync(None, "*/5 * * * *", log)
+    log.warning.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_a_working_post_commit_schedule_write_puts_on_and_takes_off() -> None:
+    redis, log, before = _Schedule(), MagicMock(), time.time()
+    await _sync(redis, "*/5 * * * *", log)
+    assert redis.zsets[_SCHEDULE_KEY][f"routine:{_ROUTINE}"] > before
+    await _sync(redis, None, log)
+    assert f"routine:{_ROUTINE}" not in redis.zsets[_SCHEDULE_KEY]
+    log.warning.assert_not_called()
+
+
 def test_trigger_routine_has_no_swallowing_except() -> None:
     tree = ast.parse(Path(routines_api.__file__).read_text(encoding="utf-8"))
-    names = {"trigger_routine", "_schedule_now"}
+    names = {"trigger_routine", "_schedule_now", "_sync_schedule"}
     fns = [n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name in names]
     assert {f.name for f in fns} == names
     handlers = [h for f in fns for h in ast.walk(f) if isinstance(h, ast.ExceptHandler)]

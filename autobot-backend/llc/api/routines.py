@@ -24,7 +24,7 @@ routine by UUID.
 
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 try:
@@ -190,15 +190,7 @@ async def create_routine(
     )
     await session.commit()
     await session.refresh(routine)
-    try:
-        redis = await get_async_redis_client()
-        if redis is not None:
-            from datetime import timezone
-
-            next_ts: float = croniter(body.cron_schedule, datetime.now(tz=timezone.utc)).get_next(float)
-            await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine.id}": next_ts}, nx=True)
-    except Exception:
-        pass
+    await _sync_schedule(routine.id, body.cron_schedule, nx=True)
     return RoutineRead.model_validate(routine)
 
 
@@ -241,22 +233,32 @@ async def update_routine(
     await session.commit()
     await session.refresh(routine)
     new_status = updates.get("status")
+    if new_status is not None and new_status != RoutineStatus.ACTIVE:
+        await _sync_schedule(routine_id, None, nx=False)  # deactivated: off the schedule
+    elif new_status == RoutineStatus.ACTIVE or new_cron is not None:
+        await _sync_schedule(routine_id, new_cron or routine.cron_schedule, nx=False)  # re-activated or new cron
+    return RoutineRead.model_validate(routine)
+
+
+async def _sync_schedule(routine_id: uuid.UUID, cron_expr: Optional[str], *, nx: bool) -> None:
+    """Put the routine on the schedule at its next fire time, or take it off when *cron_expr* is None.
+
+    Runs after the routine is committed, so it is post-commit work: a failure is logged as a WARNING and the
+    route still answers success, because the change is saved (owner decision 2026-11-22, #21332).
+    """
+    member = f"routine:{routine_id}"
     try:
         redis = await get_async_redis_client()
-        if redis is not None:
-            if new_status is not None and new_status != RoutineStatus.ACTIVE:
-                # Deactivated — remove from schedule
-                await redis.zrem(_SCHEDULE_KEY, f"routine:{routine_id}")
-            elif new_status == RoutineStatus.ACTIVE or new_cron is not None:
-                # Re-activated or cron changed — re-insert with updated next fire time
-                cron_expr = new_cron or routine.cron_schedule
-                from datetime import timezone
-
-                next_ts: float = croniter(cron_expr, datetime.now(tz=timezone.utc)).get_next(float)
-                await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": next_ts}, nx=False)
-    except Exception:
-        pass
-    return RoutineRead.model_validate(routine)
+        if redis is None:
+            logger.warning("Routine %s saved but its schedule was not updated: no Redis client", routine_id)
+            return
+        if cron_expr is None:
+            await redis.zrem(_SCHEDULE_KEY, member)
+            return
+        next_ts: float = croniter(cron_expr, datetime.now(tz=timezone.utc)).get_next(float)
+        await redis.zadd(_SCHEDULE_KEY, {member: next_ts}, nx=nx)
+    except Exception as exc:  # noqa: BLE001 - the routine is committed; the schedule write is follow-up work
+        logger.warning("Routine %s saved but its schedule write failed: %s", routine_id, safe_log_text(repr(exc)))
 
 
 @router.delete("/routines/{routine_id}", status_code=status.HTTP_204_NO_CONTENT)

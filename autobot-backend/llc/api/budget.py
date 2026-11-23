@@ -212,7 +212,7 @@ async def provision_budget(
         response.status_code = status.HTTP_202_ACCEPTED
         return await _file_raise(session, row, {"budget_limit": body.budget_limit}, ctx)
 
-    # Every write route commits before it answers: the dependency's own commit runs after the response (#21332).
+    # Commit here so a direct call (no dependency) persists too; SESSION_DEP also commits before the response (#21332).
     await session.commit()
     remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
@@ -416,8 +416,8 @@ async def update_limit(
         )
         .values(**values)
     )
-    # Commit before the cache is dropped and before the response: the dependency's own commit runs after the
-    # response is sent, so a reader that re-populated the cache (or a caller reading back) saw the old limit (#21332).
+    # Commit before the cache is dropped: a reader that re-populated the cache between the drop and a later
+    # commit would see the old limit again (#21332).
     await session.commit()
     await session.refresh(row)
 
