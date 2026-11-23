@@ -20,15 +20,15 @@ workflow); locally run e.g.::
     export AUTOBOT_MIGRATION_TEST_ADMIN_URL=postgresql+asyncpg://migtest:migtest@127.0.0.1:5499/postgres
 """
 
-import base64
 import os
-import secrets
 import subprocess
 import sys
 import uuid
 from pathlib import Path
 
 import pytest
+
+from testkit.root_key import fresh_root_key
 
 ADMIN_URL_ENV = "AUTOBOT_MIGRATION_TEST_ADMIN_URL"
 # The Migration Gate sets this (#20080): a missing admin URL then FAILS the tests instead of
@@ -76,10 +76,13 @@ def _audit_chain_root_key(monkeypatch):
     test (never a literal); a key the environment already provides is left alone. Tests that
     exercise the missing-key path delete it themselves.
     """
+    from autobot_shared import audit_chain_writer
     from autobot_shared.secrets_envelope import ROOT_KEY_ENV
 
     if not os.environ.get(ROOT_KEY_ENV):
-        monkeypatch.setenv(ROOT_KEY_ENV, base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii"))
+        monkeypatch.setenv(ROOT_KEY_ENV, fresh_root_key())
+    # The writer memoises the derived key; without a reset only the first chaining test would use this one.
+    monkeypatch.setattr(audit_chain_writer, "_key_cache", {})
 
 
 @pytest.fixture

@@ -10,7 +10,6 @@ lock, and ``services.audit.integrity.verify_chain`` finds every kind of tamperin
 """
 
 import asyncio
-import base64
 import contextlib
 import uuid
 
@@ -18,12 +17,12 @@ import pytest
 from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from testkit.root_key import fresh_root_key
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
 
 _PRE = "20261122_121"
-_ROOT_KEY = base64.urlsafe_b64encode(b"r" * 32).decode("ascii")
 _SENTINEL = object()
 
 
@@ -33,7 +32,7 @@ def chain_env(monkeypatch):
     from autobot_shared import audit_chain_writer
     from autobot_shared.secrets_envelope import ROOT_KEY_ENV
 
-    monkeypatch.setenv(ROOT_KEY_ENV, _ROOT_KEY)
+    monkeypatch.setenv(ROOT_KEY_ENV, fresh_root_key())
     monkeypatch.setattr(audit_chain_writer, "_key_cache", {})
     return audit_chain_writer
 
