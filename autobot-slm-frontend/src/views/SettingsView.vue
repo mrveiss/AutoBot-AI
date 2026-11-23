@@ -91,13 +91,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col overflow-hidden bg-gray-50">
+  <div class="h-full flex flex-col overflow-hidden bg-autobot-bg-secondary">
     <!-- Header -->
-    <div class="bg-white border-b border-gray-200 px-6 py-4">
+    <div class="bg-white border-b border-autobot-border px-6 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
-          <h1 class="text-2xl font-bold text-gray-900">{{ $t('settingsView.settings') }}</h1>
-          <p class="text-sm text-gray-500">{{ $t('settingsView.configureSystemSettingsAnd') }}</p>
+          <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('settingsView.settings') }}</h1>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('settingsView.configureSystemSettingsAnd') }}</p>
         </div>
       </div>
 
@@ -117,8 +117,8 @@ onMounted(() => {
           :class="[
             'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap',
             activeTab === tab.id
-              ? 'bg-gray-50 text-primary-600 border-t border-x border-gray-200 -mb-px'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              ? 'bg-autobot-bg-secondary text-primary-600 border-t border-x border-autobot-border -mb-px'
+              : 'text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-hover'
           ]"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
