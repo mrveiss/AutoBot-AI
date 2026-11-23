@@ -35,7 +35,7 @@ from constants.threshold_constants import QueryDefaults
 CODE_TOOL_MAX_ITEMS = env_int_clamped("AUTOBOT_CODE_TOOL_MAX_ITEMS", 200, min_v=1, max_v=10_000)
 
 #: Source authorisation identity for MCP callers: truthy, no id, not the service principal, so
-#: ``_caller_owner_id`` fails closed and another owner's PRIVATE source stays invisible.
+#: ``caller_owner_id`` fails closed and another owner's PRIVATE source stays invisible.
 _MCP_SOURCE_PRINCIPAL = {"mcp_client": True}
 
 _LISTS = ("candidates", "reached", "edges", "skipped_edges", "results")
