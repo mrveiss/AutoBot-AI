@@ -429,15 +429,21 @@ class HeartbeatScheduler:
         return {}
 
 
+async def _find_state(session: AsyncSession, agent_id: str, *, for_update: bool = False) -> AgentRuntimeState | None:
+    """Return the agent's AgentRuntimeState, or None when it has none; never writes (#21992)."""
+    stmt = select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id)
+    result = await session.execute(stmt.with_for_update() if for_update else stmt)
+    return result.scalar_one_or_none()
+
+
 async def _get_or_create_state(session: AsyncSession, agent_id: str, *, for_update: bool = False) -> AgentRuntimeState:
     """Return existing AgentRuntimeState or create one for agent_id (#1407).
 
+    Write paths only: a read uses ``_find_state``. A created row starts with the heartbeat off (#21992).
     *for_update* takes the row lock, so a second control on the same agent waits for the first to commit
     and then reads the state it left (#21375).
     """
-    stmt = select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id)
-    result = await session.execute(stmt.with_for_update() if for_update else stmt)
-    state = result.scalar_one_or_none()
+    state = await _find_state(session, agent_id, for_update=for_update)
     if state is None:
         state = AgentRuntimeState(id=uuid.uuid4(), agent_id=agent_id)
         session.add(state)
