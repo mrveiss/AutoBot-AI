@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.http_refusal import fixed_refusal
 from models.schemas import TokenResponse
 from services.auth import auth_service, get_current_user
 from user_management.database import get_slm_db
@@ -60,7 +61,7 @@ async def setup_mfa(
         return MFASetupResponse(**result)
     except MFAServiceError as e:
         logger.warning("MFA setup error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
 
 @router.post("/verify-setup", response_model=MFAVerifySetupResponse)
@@ -83,10 +84,10 @@ async def verify_mfa_setup(
         logger.info("MFA enabled for user: %s", username)
         return MFAVerifySetupResponse(success=True, message="MFA enabled")
     except InvalidTOTPError:
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except MFAServiceError as e:
         logger.warning("MFA verification error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
 
 @router.post("/verify-login", response_model=TokenResponse)
@@ -128,7 +129,7 @@ async def verify_mfa_login(
         return await auth_service.create_token_response(user)
 
     except MFANotEnabledError:
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid user ID")
 
@@ -154,7 +155,7 @@ async def disable_mfa(
         return {"success": True, "message": "MFA disabled"}
     except MFAServiceError as e:
         logger.warning("MFA disable error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
 
 @router.get("/status", response_model=MFAStatusResponse)
@@ -196,7 +197,7 @@ async def regenerate_backup_codes(
         return BackupCodesResponse(backup_codes=codes)
     except MFAServiceError as e:
         logger.warning("Backup code regeneration error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
 
 async def _get_user_by_username(db: AsyncSession, username: str) -> User:

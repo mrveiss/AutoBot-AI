@@ -28,6 +28,7 @@ from api.user_management.dependencies import (
     require_platform_admin,
     user_management_route_marker,
 )
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.user_management.revocation_outcome import commit_or_503
@@ -111,10 +112,7 @@ async def create_organization(
         )
 
     except DuplicateOrganizationError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
 
 
 @router.get(
