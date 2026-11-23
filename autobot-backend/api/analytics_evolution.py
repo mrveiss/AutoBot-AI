@@ -22,8 +22,9 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from api.analytics_shared import NOT_A_GIT_REPOSITORY, resolve_source_git_root
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
-from api.codebase_analytics.endpoints.shared import require_source_access, resolve_scan_root
+from api.codebase_analytics.endpoints.shared import require_source_access
 from api.schemas_analytics import (
     AnalyticsEvolutionExportResponse,
     AnalyticsEvolutionPatternSnapshotResponse,
@@ -1119,11 +1120,9 @@ async def _evolution_repo_path(source_id: str):
 
     Returns (repo_path, error_response); error_response is None when the checkout is a git repository.
     """
-    repo_path = (await resolve_scan_root(source_id)).resolve()
-    git_dir = repo_path / ".git"
-    # The real path, and a repository of its own: a `.git` that is a link could point the miner at another tree.
-    if git_dir.is_symlink() or not git_dir.is_dir():
-        return None, EvolutionAnalysisResponse(status="error", message="The source checkout is not a git repository")
+    repo_path = await resolve_source_git_root(source_id)
+    if repo_path is None:
+        return None, EvolutionAnalysisResponse(status="error", message=NOT_A_GIT_REPOSITORY)
     return repo_path, None
 
 

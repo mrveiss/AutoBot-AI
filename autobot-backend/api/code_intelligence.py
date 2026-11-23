@@ -24,8 +24,9 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.analytics_shared import require_source_git_root
 from api.code_intelligence_paths import validate_path_exists, validate_path_is_directory
-from api.codebase_analytics.endpoints.shared import require_source_access, resolve_scan_root
+from api.codebase_analytics.endpoints.shared import require_source_access
 from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.schemas_code import (
     CachedSecurityScoreResponse,
@@ -1678,7 +1679,7 @@ async def analyze_code_evolution(
     Returns:
         Evolution report with emerging/declining patterns and refactorings
     """
-    path = str(await resolve_scan_root(source_id))  # the selected source's checkout (#20513)
+    path = str(await require_source_git_root(source_id))
 
     try:
         # Parse dates if provided
@@ -1732,7 +1733,7 @@ async def get_pattern_evolution(
     Returns:
         Pattern evolution metrics
     """
-    path = str(await resolve_scan_root(source_id))  # the selected source's checkout (#20513)
+    path = str(await require_source_git_root(source_id))
 
     try:
         miner = CodeEvolutionMiner(path)
@@ -1788,7 +1789,7 @@ async def detect_refactorings(
     Returns:
         List of detected refactoring commits
     """
-    path = str(await resolve_scan_root(source_id))  # the selected source's checkout (#20513)
+    path = str(await require_source_git_root(source_id))
 
     try:
         miner = CodeEvolutionMiner(path)
@@ -1838,7 +1839,7 @@ async def get_evolution_timeline(
     Returns:
         Timeline data with monthly pattern counts
     """
-    path = str(await resolve_scan_root(source_id))  # the selected source's checkout (#20513)
+    path = str(await require_source_git_root(source_id))
 
     try:
         miner = CodeEvolutionMiner(path)
@@ -1910,7 +1911,7 @@ async def get_full_evolution_report(
     Returns:
         Comprehensive evolution report
     """
-    path = str(await resolve_scan_root(source_id))  # the selected source's checkout (#20513)
+    path = str(await require_source_git_root(source_id))
 
     try:
         # Parse dates if provided

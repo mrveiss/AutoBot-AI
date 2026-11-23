@@ -75,6 +75,7 @@ def test_a_foreign_private_source_is_a_404_with_access_enforcement_left_real(rou
 
 
 def test_analyze_runs_the_miner_on_the_sources_checkout_only(tmp_path):
+    (tmp_path / ".git").mkdir()
     miner = MagicMock()
     miner.return_value.analyze_evolution.return_value = {}
     with (
@@ -83,4 +84,26 @@ def test_analyze_runs_the_miner_on_the_sources_checkout_only(tmp_path):
     ):
         response = _call(_client(), "analyze", source_id="src-1")
     assert response.status_code == 200
-    miner.assert_called_once_with(str(tmp_path))
+    miner.assert_called_once_with(str(tmp_path.resolve()))
+
+
+def _gitfile_checkout(tmp_path):
+    other = tmp_path / "other-source" / ".git"
+    other.mkdir(parents=True)
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    (checkout / ".git").write_text(f"gitdir: {other}\n", encoding="utf-8")
+    return checkout
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+def test_a_checkout_whose_git_is_a_gitfile_is_rejected_before_any_history_is_read(route, tmp_path):
+    miner = MagicMock()
+    with (
+        patch.object(shared, "resolve_source_root", AsyncMock(return_value=_gitfile_checkout(tmp_path))),
+        patch.object(mod, "CodeEvolutionMiner", miner),
+    ):
+        response = _call(_client(), route, source_id="src-1")
+    assert response.status_code == 400
+    assert "not a git repository" in response.text
+    miner.assert_not_called()

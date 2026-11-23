@@ -33,6 +33,34 @@ async def resolve_source_or_404(source_id: str | None) -> None:
         raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
 
 
+NOT_A_GIT_REPOSITORY = "The source checkout is not a git repository"
+
+
+async def resolve_source_git_root(source_id: str) -> Path | None:
+    """The selected source's checkout when it is a git repository of its own, else None (#20513).
+
+    A `.git` that is a symlink or a gitfile (a linked worktree/submodule) can point the miner at another
+    source's history, so only a real `.git` directory qualifies. Every git-history read of a source goes here.
+    """
+    from api.codebase_analytics.endpoints.shared import resolve_scan_root
+
+    repo_path = (await resolve_scan_root(source_id)).resolve()
+    git_dir = repo_path / ".git"
+    if git_dir.is_symlink() or not git_dir.is_dir():
+        return None
+    return repo_path
+
+
+async def require_source_git_root(source_id: str) -> Path:
+    """`resolve_source_git_root`, or a 400 when the checkout is not a repository of its own (#20513)."""
+    from utils.catalog_http_exceptions import raise_invalid_input
+
+    repo = await resolve_source_git_root(source_id)
+    if repo is None:
+        raise_invalid_input("source_id", NOT_A_GIT_REPOSITORY)
+    return repo
+
+
 def no_data_response(message: str, **extra_fields) -> dict:
     """Standardized no-data response envelope (Issue #543, extracted #12705).
 
