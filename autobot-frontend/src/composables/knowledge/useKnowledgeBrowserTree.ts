@@ -267,7 +267,8 @@ function useTreeContent(treeData: Ref<TreeNode[]>, nodeExpansion: ReturnType<typ
 /**
  * The cursor-paginated /entries tree. Not reachable from the template: since #12394 the
  * by_category tree above drives every mode. Kept wired to the composable, not deleted,
- * for the Manage listing work (#17530).
+ * for the Manage listing work (#17530), the pending step that will call loadUserKnowledge and
+ * loadMoreEntries; both rethrow a failed page so that screen can show it (no Manage screen exists yet).
  */
 function useEntriesPaging(treeData: Ref<TreeNode[]>, nodeExpansion: ReturnType<typeof useExpansion<string>>) {
   const entries = ref<Record<string, unknown>[]>([])

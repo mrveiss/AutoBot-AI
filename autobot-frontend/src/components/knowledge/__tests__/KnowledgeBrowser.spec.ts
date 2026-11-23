@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   fetchMainCategories: vi.fn(),
   fetchFactsByCategory: vi.fn(),
   handleSearch: vi.fn(),
+  clearResults: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -64,7 +65,7 @@ vi.mock('@/composables/knowledge/useKnowledgeSearch', async () => {
       ragError: r(null),
       toggleAccessLevel: vi.fn(),
       clearAccessLevelFilter: vi.fn(),
-      clearResults: vi.fn(),
+      clearResults: h.clearResults,
       handleSearch: h.handleSearch,
     }),
   }
@@ -137,5 +138,14 @@ describe('KnowledgeBrowser', () => {
   it('shows the placeholder reading pane until a file is picked', async () => {
     const w = await mountBrowser()
     expect(w.text()).toContain(en.knowledge.contentViewer.noFileSelected)
+  })
+
+  it('picking a file clears the search results so the reading pane shows it', async () => {
+    const w = await mountBrowser()
+    await w.findAll('.node-name-btn')[1].trigger('click') // cooking folder opens
+    h.clearResults.mockClear()
+    const file = w.findAll('.node-name-btn').find((b) => b.text() === 'pasta.md')!
+    await file.trigger('click')
+    expect(h.clearResults).toHaveBeenCalledTimes(1)
   })
 })

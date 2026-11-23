@@ -10,12 +10,12 @@
 import i18n from '@/i18n'
 import type { TreeNode } from '@/components/knowledge/TreeNodeComponent.vue'
 
-/** Loose shape of a knowledge fact as the KB endpoints return it (Record<string, unknown> on the wire). */
 const tr = (key: string, n?: number) => i18n.global.t(`knowledge.browser.${key}`, { n })
 
 /** Category identifier of an entry that names none; its display label is translated, the id is not. */
 const UNCATEGORIZED = 'Uncategorized'
 
+/** Loose shape of a knowledge fact as the KB endpoints return it (Record<string, unknown> on the wire). */
 export interface KnowledgeFactLike {
   key?: string
   title?: string

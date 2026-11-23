@@ -5,7 +5,7 @@
  * KnowledgeBrowser.vue had before it moved: paging (#12394), expansion kept across a
  * rebuild, the main-category filter, the debounced query, lazy content (#12370).
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 import { ref } from 'vue'
 
 const h = vi.hoisted(() => ({
@@ -16,7 +16,16 @@ const h = vi.hoisted(() => ({
 }))
 vi.mock('@/composables/knowledge/useKnowledgeBrowser', () => h)
 
+import i18n from '@/i18n'
+import en from '@/i18n/locales/en.json'
 import { useKnowledgeBrowserTree } from '../useKnowledgeBrowserTree'
+
+// The app's i18n starts with no messages (#12342) and initI18n() loads them before mount; a unit
+// test has no bootstrap, so load the real English bundle into the same global instance.
+beforeAll(() => {
+  i18n.global.setLocaleMessage('en', en as never)
+  i18n.global.locale.value = 'en'
+})
 
 const fact = (name: string, key: string, content = 'short') => ({ key, title: name, content, metadata: { filename: name } })
 const PAGE1 = { categories: { autobot_docs: [fact('docs/a.md', 'fact:a')], cooking: [fact('pasta.md', 'fact:p')] }, has_more: true }

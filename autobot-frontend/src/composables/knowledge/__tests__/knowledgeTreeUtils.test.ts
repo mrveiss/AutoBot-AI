@@ -4,7 +4,9 @@
  * The Knowledge Browser's pure tree helpers (#18244), pinned against the behaviour
  * KnowledgeBrowser.vue had before they moved out of it.
  */
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
+import i18n from '@/i18n'
+import en from '@/i18n/locales/en.json'
 import type { TreeNode } from '@/components/knowledge/TreeNodeComponent.vue'
 import {
   buildNestedTree,
@@ -18,6 +20,13 @@ import {
   getExpandedPaths,
   matchesMainCategory,
 } from '../knowledgeTreeUtils'
+
+// The app's i18n starts with no messages (#12342) and initI18n() loads them before mount; a unit
+// test has no bootstrap, so load the real English bundle into the same global instance.
+beforeAll(() => {
+  i18n.global.setLocaleMessage('en', en as never)
+  i18n.global.locale.value = 'en'
+})
 
 const fact = (filename: string, key?: string, content = 'snippet') => ({ key, title: filename, content, metadata: { filename } })
 
