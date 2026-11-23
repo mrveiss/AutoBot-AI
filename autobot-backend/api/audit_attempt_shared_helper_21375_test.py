@@ -10,7 +10,7 @@ an argument of ``audit_secret_op`` (the adapter onto that helper) or ``record_au
 carries it (``audit_log``, ``record``, ``AuditEvent``, ``replace(..., outcome="attempted")``, a private ``_audit``)
 is a second mechanism and fails here.
 
-Boundary: this reads ``api/*.py`` only, which is where the routes are. ``services/`` still holds approval actions with
+Boundary: this reads ``api/`` (subpackages included) only, which is where the routes are. ``services/`` still holds approval actions with
 their own ``_audit(..., "attempted")`` helpers; they are not routes and are tracked separately on the issue.
 """
 
@@ -44,7 +44,7 @@ def unshared_attempts(source: str) -> list[int]:
 
 
 def _route_modules() -> list[Path]:
-    return [p for p in sorted(API_DIR.glob("*.py")) if not p.name.endswith("_test.py")]
+    return [p for p in sorted(API_DIR.rglob("*.py")) if not p.name.endswith("_test.py") and "tests" not in p.parts]
 
 
 def test_every_attempted_row_of_a_route_goes_through_the_shared_helper() -> None:

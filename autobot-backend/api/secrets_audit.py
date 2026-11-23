@@ -20,7 +20,13 @@ from auth_middleware import get_auth_middleware
 from autobot_shared.logging_manager import get_logger
 from middleware.proxy_utils import get_client_ip
 from security.secrets_store_reader import secret_log_ref
-from services.audit.outcome import ATTEMPTED, audit_unavailable, record_audit_attempt, record_audit_outcome
+from services.audit.outcome import (
+    ATTEMPTED,
+    OUTCOME_MISSING_MARKER,
+    audit_unavailable,
+    record_audit_attempt,
+    record_audit_outcome,
+)
 from services.audit.taxonomy import AuditEvent
 from services.audit_logger import AuditResult, audit_log, get_audit_logger
 
@@ -111,7 +117,13 @@ async def _record_outcome(
     try:
         event = await _secret_event(operation, secret_id, request, result, actor, details)
     except Exception as exc:  # noqa: BLE001 -- the change has happened or failed already; the miss is logged
-        logger.error("[Secrets Audit] could not build the %s outcome: %s", operation, type(exc).__name__)
+        logger.error(
+            "%s attempt_id=%s [Secrets Audit] could not build the %s outcome: %s",
+            OUTCOME_MISSING_MARKER,
+            attempt.id,
+            operation,
+            type(exc).__name__,
+        )
         return
     await record_audit_outcome(event, result, attempt_id=attempt.id)
 

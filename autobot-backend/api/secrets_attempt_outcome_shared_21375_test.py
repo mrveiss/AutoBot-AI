@@ -9,6 +9,7 @@ written), then ONE outcome row -- ``success``, ``denied`` or ``failed`` -- linke
 Every assertion is on the audit store's events.
 """
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from api import secrets_audit_store_18648_test as base
@@ -54,15 +55,17 @@ def test_a_failed_delete_links_a_failed_row_carrying_the_class_name_only(client,
     assert "SECRET-VALUE" not in repr([e.__dict__ for e in store.events])
 
 
-def test_an_unwritable_attempt_is_a_503_and_the_delete_never_runs(client) -> None:
+def test_an_unwritable_attempt_is_a_503_and_the_delete_never_runs(client, caplog) -> None:
     client.manager.delete_secret = MagicMock(return_value=True)
 
-    with patch("services.audit.outcome.record_committed", AsyncMock(return_value=False)):
-        response = client.delete(f"/api/secrets/{SECRET_ID}")
+    with caplog.at_level(logging.ERROR, logger="services.audit.outcome"):
+        with patch("services.audit.outcome.record_committed", AsyncMock(return_value=False)):
+            response = client.delete(f"/api/secrets/{SECRET_ID}")
 
     assert response.status_code == 503
     assert response.json() == {"detail": AUDIT_UNAVAILABLE_DETAIL}
     client.manager.delete_secret.assert_not_called()
+    assert "was not written; refusing with 503" in caplog.text  # operators can find the refused attempt
 
 
 def test_a_write_that_raises_is_also_an_unwritable_attempt(client) -> None:

@@ -51,6 +51,7 @@ async def _written(event: AuditEvent) -> bool:
 async def record_audit_attempt(event: AuditEvent) -> None:
     """Durably record the intent; raise 503 when the write fails so nothing is changed."""
     if not await _written(replace(event, outcome=ATTEMPTED)):
+        logger.error("audit: attempt row for %s (%s) was not written; refusing with 503", event.action, event.id)
         raise audit_unavailable()
 
 
