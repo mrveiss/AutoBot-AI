@@ -96,9 +96,10 @@ def _client(monkeypatch, caller: dict, workflow=_DEFAULT) -> tuple[TestClient, _
 @pytest.mark.parametrize(
     ("user", "expected"),
     [
+        ({"id": "i-1", "user_id": "u-1", "sub": "s-1", "username": "n"}, "i-1"),
         ({"user_id": "u-1", "sub": "s-1", "username": "n"}, "u-1"),
         ({"sub": "s-1", "username": "n"}, "s-1"),
-        ({"username": "n"}, "n"),
+        ({"username": "n"}, None),
         ({}, None),
         (None, None),
     ],
@@ -130,9 +131,22 @@ def test_unowned_workflow_is_admin_only_not_open_to_everyone():
     assert is_owner_or_admin(unowned, ADMIN) is True
 
 
-def test_username_owner_matches_a_caller_identified_by_username():
-    """A workflow created before user_id claims existed records the username."""
-    assert is_owner_or_admin(_workflow("alice"), ALICE) is True
+def test_renamed_user_keeps_access():
+    """Same id, new username: ownership follows the id, not the mutable name (#21655)."""
+    renamed = {**ALICE, "username": "alice-renamed"}
+    assert is_owner_or_admin(_workflow("u-alice"), renamed) is True
+
+
+def test_username_equal_to_an_owner_id_gains_no_access():
+    """A user whose username is another owner's stored key, with a different id, is refused."""
+    impostor = {"username": "u-alice", "user_id": "u-mallory", "role": "user"}
+    assert is_owner_or_admin(_workflow("u-alice"), impostor) is False
+    assert may_control(_Manager(_workflow("u-alice")), "wf-1", impostor) is False
+
+
+def test_username_only_caller_owns_nothing():
+    """A legacy workflow keyed by username is no longer honoured: admin-only (fail closed)."""
+    assert is_owner_or_admin(_workflow("alice"), {"username": "alice", "role": "user"}) is False
 
 
 # --------------------------------------------------------------------------
