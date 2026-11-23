@@ -15,6 +15,11 @@
 # every `on.schedule` workflow, keeps ONE issue per failing one with the run link, and closes it
 # when the latest scheduled run passes. Nothing is posted on a pull request.
 #
+# ci.yml's ratchet-base step (AUTOBOT_RATCHET_BASE_SHA) is not mirrored on purpose: it reads the
+# base of a push, merge group or release promotion, and a scheduled run has none, so the
+# down-only ratchets compare against HEAD^1 (fetch-depth 2), as in coverage.yml's nightly.
+# The promtool provisioning IS mirrored, so the cold run collects the same rule tests.
+#
 # No pull-request CI slot: the trigger is `schedule`/`workflow_dispatch`, never `pull_request`,
 # and a scheduled run's ref is `main`, which pr-coordinator's PROTECTED set never touches.
 # 02:47 UTC sits between coverage (02:00) and the failure sweep (07:23).
@@ -78,7 +83,8 @@ jobs:
             if [ -s "$cached" ]; then
               echo "Packages that differ from the cached venv (\`-\` cached, \`+\` fresh):"
               echo '```diff'
-              diff "$cached" "$RUNNER_TEMP/freeze-cold.txt" | grep '^[<>]' | sed -e 's/^</-/' -e 's/^>/+/' || echo "(none)"
+              changes=$({ diff "$cached" "$RUNNER_TEMP/freeze-cold.txt" || true; } | grep '^[<>]' | sed -e 's/^</-/' -e 's/^>/+/' || true)
+              echo "${changes:-(none)}"
               echo '```'
             else
               echo "No cached venv exists for the current requirements; nothing to diff against."
@@ -93,6 +99,39 @@ jobs:
             ${{ runner.temp }}/freeze-cold.txt
             ${{ runner.temp }}/freeze-cached.txt
           if-no-files-found: ignore
+
+      # Same promtool provisioning as ci.yml's python-shard, so the cold run collects the same
+      # rule tests (the require step makes a missing binary an error, not a silent skip).
+      - name: Resolve the Prometheus version from the monitoring role (#18556)
+        id: promver
+        run: |
+          set -euo pipefail
+          V=$(sed -nE 's/^prometheus_version:[[:space:]]*"?([0-9][0-9.]*)"?.*/\1/p' autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml)
+          test -n "$V"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Cache promtool
+        id: promtool-cache
+        uses: actions/cache@v6
+        with:
+          path: /usr/local/bin/promtool
+          key: promtool-${{ runner.os }}-${{ steps.promver.outputs.version }}
+
+      - name: Install promtool (Prometheus rule validation, #13927)
+        if: steps.promtool-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          PROM_VERSION="${{ steps.promver.outputs.version }}"
+          TARBALL="prometheus-${PROM_VERSION}.linux-amd64"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 \
+            -o "/tmp/${TARBALL}.tar.gz" \
+            "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/${TARBALL}.tar.gz"  # noqa: pinned upstream release URL (#14053); the version is PROM_VERSION above
+          tar xzf "/tmp/${TARBALL}.tar.gz" -C /tmp
+          sudo install -m 0755 "/tmp/${TARBALL}/promtool" /usr/local/bin/promtool
+
+      - name: Require promtool in the rule tests (#13927)
+        run: |
+          echo "AUTOBOT_REQUIRE_PROMTOOL=1" >> "$GITHUB_ENV"
 
       - name: Run unit tests — backend, shared, tts-worker, repo_tests
         run: |
