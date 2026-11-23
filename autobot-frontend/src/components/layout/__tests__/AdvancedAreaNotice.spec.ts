@@ -9,6 +9,7 @@ import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import AdvancedAreaNotice from '../AdvancedAreaNotice.vue'
+import componentsCss from '@/assets/css/components.css?raw'
 import { useUiMode } from '@/composables/useUiMode'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
@@ -30,6 +31,26 @@ describe('AdvancedAreaNotice', () => {
     const heading = w.get('h2')
     expect(heading.text()).toBe(en.ui.advancedArea.title)
     expect(root.attributes('aria-labelledby')).toBe(heading.attributes('id'))
+  })
+
+  it('is hidden in Full and shown in Minimal by the real `.only-min` rules of components.css', () => {
+    const rules = [/^\.only-min\s*\{[^}]*\}/m, /^html\[data-ui="minimal"\] \.only-min\s*\{[^}]*\}/m]
+      .map((re) => componentsCss.match(re)?.[0])
+    expect(rules.every(Boolean)).toBe(true)
+    const style = document.createElement('style')
+    style.textContent = rules.join('\n')
+    document.head.appendChild(style)
+    const w = mount(AdvancedAreaNotice, {
+      attachTo: document.body,
+      global: { plugins: [i18n], stubs: { RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } } },
+    })
+    const el = w.get('[data-testid="advanced-area-notice"]').element
+    document.documentElement.setAttribute('data-ui', 'full')
+    expect(getComputedStyle(el).display).toBe('none')
+    document.documentElement.setAttribute('data-ui', 'minimal')
+    expect(getComputedStyle(el).display).not.toBe('none')
+    w.unmount()
+    style.remove()
   })
 
   it('"Show all features" switches the UI to Full mode', async () => {

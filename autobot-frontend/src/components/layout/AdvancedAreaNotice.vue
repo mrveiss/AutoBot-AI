@@ -10,7 +10,7 @@
   essentials" note (AppHeader) is not repeated here.
 -->
 <template>
-  <section class="only-min advanced-area" data-testid="advanced-area-notice" :aria-labelledby="titleId">
+  <BaseCard class="only-min advanced-area" data-testid="advanced-area-notice" :aria-labelledby="titleId" flush>
     <div class="advanced-area__body">
       <span class="advanced-area__tile" aria-hidden="true"><Icon name="layer-group" /></span>
       <div class="advanced-area__text">
@@ -26,13 +26,13 @@
         </BaseButton>
       </div>
     </div>
-  </section>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
 import { useId } from 'vue'
 import { RouterLink } from 'vue-router'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, BaseCard } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useUiMode, useUiModeAnnouncer } from '@/composables/useUiMode'
 
@@ -50,9 +50,6 @@ function showAll(): void {
 /* No `display` here: `.only-min` (components.css) owns show/hide by UI mode. */
 .advanced-area {
   margin: var(--spacing-4) var(--page-margin) 0;
-  background: var(--surface);
-  border: var(--bw) solid var(--border);
-  border-radius: var(--radius-lg);
 }
 
 .advanced-area__body {

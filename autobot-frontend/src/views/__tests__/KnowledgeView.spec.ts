@@ -5,7 +5,7 @@
  * advanced entries carry `adv`, Vector Store is admin-only, Transcriber and Health stay (D1),
  * and the advanced-area notice shows only on advanced pages.
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { createPinia, setActivePinia } from 'pinia'
@@ -114,6 +114,28 @@ describe('KnowledgeView advanced-area notice', () => {
   it('carries only-min, so the shared CSS shows it in Minimal mode only', async () => {
     const w = await mountAt('/knowledge/graph', true)
     expect(w.get('[data-testid="advanced-area-notice"]').classes()).toContain('only-min')
+  })
+})
+
+describe('KnowledgeView mobile sidebar', () => {
+  const STORAGE_KEY = 'knowledge-sidebar-mobile-open'
+  const MOBILE_WIDTH = 500
+  const originalWidth = window.innerWidth
+
+  beforeEach(() => {
+    window.innerWidth = MOBILE_WIDTH
+    localStorage.setItem(STORAGE_KEY, 'true')
+  })
+  afterEach(() => {
+    window.innerWidth = originalWidth
+  })
+
+  it('closes the open sidebar when a SectionNav link is clicked', async () => {
+    const w = await mountAt('/knowledge/browser', true)
+    expect(w.get('.knowledge-sidebar').classes()).toContain('mobile-open')
+    await w.get('.aui-section-nav__link').trigger('click')
+    expect(w.get('.knowledge-sidebar').classes()).not.toContain('mobile-open')
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('false')
   })
 })
 
