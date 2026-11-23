@@ -387,7 +387,7 @@ const formattedContent = computed(() => sanitizeChatHtml(formatChatMessageHtml(p
 /* User message code styling */
 .user-message .message-text :deep(code) {
   @apply px-1.5 py-0.5 rounded text-xs font-mono;
-  background: rgba(0, 0, 0, 0.2);
+  background: color-mix(in srgb, var(--text-on-primary) 20%, transparent);
   color: var(--text-inverse);
 }
 
@@ -408,7 +408,7 @@ const formattedContent = computed(() => sanitizeChatHtml(formatChatMessageHtml(p
 /* Metadata */
 .user-message .message-metadata {
   @apply mt-1.5 pt-1 border-t;
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: color-mix(in srgb, var(--text-on-primary) 30%, transparent);
 }
 
 .assistant-message .message-metadata {
@@ -520,7 +520,7 @@ const formattedContent = computed(() => sanitizeChatHtml(formatChatMessageHtml(p
   margin-top: var(--spacing-2);
   padding: 2px var(--spacing-2);
   border-radius: var(--radius-full);
-  background: rgba(251, 191, 36, 0.12);
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
   color: var(--color-warning);
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);

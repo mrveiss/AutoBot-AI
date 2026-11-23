@@ -56,3 +56,17 @@ export function getRiskSeverity(riskLevel: string | null | undefined): RiskSever
   if (!riskLevel) return null
   return RISK_SEVERITY_BY_LEVEL[riskLevel.toUpperCase()] ?? null
 }
+
+export type RiskBadgeVariant = 'success' | 'warning' | 'error' | 'neutral'
+
+/**
+ * Kit badge variant for a risk level (#18243). LOW is success, MEDIUM a warning, HIGH and
+ * CRITICAL an error. An unrecognised value is neutral, never the success tone: an
+ * unclassified command must not read as safe (#14955).
+ */
+export function riskBadgeVariant(riskLevel: string | null | undefined): RiskBadgeVariant {
+  const severity = getRiskSeverity(riskLevel)
+  if (severity === 'low') return 'success'
+  if (severity === 'medium') return 'warning'
+  return severity ? 'error' : 'neutral'
+}

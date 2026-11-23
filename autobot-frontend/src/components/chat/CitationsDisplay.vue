@@ -332,7 +332,7 @@ const citationTitle = (citation: Citation): string => {
 }
 
 .citation-item:hover {
-  background: rgba(99, 102, 241, 0.08);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
 .citation-rank {
@@ -426,17 +426,17 @@ const citationTitle = (citation: Citation): string => {
 }
 
 .reliability-high {
-  background: rgba(34, 197, 94, 0.15);
+  background: color-mix(in srgb, var(--color-success) 15%, transparent);
   color: var(--chart-green);
 }
 
 .reliability-medium {
-  background: rgba(251, 191, 36, 0.15);
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
   color: var(--color-warning);
 }
 
 .reliability-low {
-  background: rgba(239, 68, 68, 0.15);
+  background: color-mix(in srgb, var(--color-error) 15%, transparent);
   color: var(--color-error);
 }
 

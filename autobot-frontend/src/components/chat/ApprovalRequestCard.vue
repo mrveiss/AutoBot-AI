@@ -2,7 +2,7 @@
   <!-- PRE-APPROVED STATE - Show blue auto-approval -->
   <div v-if="status === 'pre_approved'" class="approval-confirmed approval-pre-approved">
     <div class="approval-header">
-      <Icon name="shield-check" class="text-blue-600" />
+      <Icon name="shield-check" class="approval-icon approval-icon--info" />
       <span class="font-semibold">{{ $t('chat.approval.autoApproved') }}</span>
     </div>
     <div class="approval-details">
@@ -20,7 +20,7 @@
   <!-- USER APPROVED STATE - Show green confirmation -->
   <div v-else-if="status === 'approved'" class="approval-confirmed approval-approved">
     <div class="approval-header">
-      <Icon name="check-circle" class="text-green-600" />
+      <Icon name="check-circle" class="approval-icon approval-icon--success" />
       <span class="font-semibold">{{ $t('chat.approval.commandApproved') }}</span>
     </div>
     <div class="approval-details">
@@ -38,7 +38,7 @@
   <!-- DENIED STATE - Show red rejection -->
   <div v-else-if="status === 'denied'" class="approval-confirmed approval-denied">
     <div class="approval-header">
-      <Icon name="times-circle" class="text-red-600" />
+      <Icon name="times-circle" class="approval-icon approval-icon--error" />
       <span class="font-semibold">{{ $t('chat.approval.commandDenied') }}</span>
     </div>
     <div class="approval-details">
@@ -56,7 +56,7 @@
   <!-- PENDING APPROVAL STATE - Show approval buttons -->
   <div v-else-if="requiresApproval && !status" class="approval-request">
     <div class="approval-header">
-      <Icon name="exclamation-triangle" class="text-yellow-600" />
+      <Icon name="exclamation-triangle" class="approval-icon approval-icon--warning" />
       <span class="font-semibold">{{ $t('chat.approval.approvalRequired') }}</span>
     </div>
     <div class="approval-details">
@@ -82,19 +82,19 @@
       <!-- Interactive Command Warning (Issue #33) -->
       <div v-if="isInteractive" class="approval-detail-item interactive-warning">
         <div class="interactive-header">
-          <Icon name="keyboard" class="text-blue-600" />
-          <span class="detail-label font-semibold text-blue-700">{{ $t('chat.approval.interactiveCommand') }}</span>
+          <Icon name="keyboard" class="approval-icon approval-icon--info" />
+          <span class="detail-label interactive-label">{{ $t('chat.approval.interactiveCommand') }}</span>
         </div>
         <div class="interactive-info">
-          <p class="text-sm text-autobot-text-secondary mb-2">
+          <p class="interactive-text">
             {{ $t('chat.approval.interactiveInfo') }}
           </p>
           <div
             v-if="interactiveReasons && interactiveReasons.length > 0"
             class="interactive-reasons"
           >
-            <span class="text-xs font-medium text-autobot-text-secondary">{{ $t('chat.approval.inputRequiredFor') }}</span>
-            <ul class="text-xs text-autobot-text-secondary mt-1 ml-4 list-disc">
+            <span class="interactive-note">{{ $t('chat.approval.inputRequiredFor') }}</span>
+            <ul class="interactive-list">
               <li v-for="(reason, idx) in interactiveReasons" :key="idx">{{ reason }}</li>
             </ul>
           </div>
@@ -548,4 +548,13 @@ const submitWithComment = () => {
     min-width: unset;
   }
 }
+
+.approval-icon--info { color: var(--color-info); }
+.approval-icon--success { color: var(--color-success); }
+.approval-icon--error { color: var(--color-error); }
+.approval-icon--warning { color: var(--color-warning); }
+.interactive-label { color: var(--color-info); font-weight: var(--font-semibold); }
+.interactive-text { margin-bottom: var(--spacing-2); color: var(--text-secondary); font-size: var(--text-sm); }
+.interactive-note { color: var(--text-secondary); font-size: var(--text-xs); font-weight: var(--font-medium); }
+.interactive-list { margin: var(--spacing-1) 0 0 var(--spacing-4); color: var(--text-secondary); font-size: var(--text-xs); list-style: disc; }
 </style>

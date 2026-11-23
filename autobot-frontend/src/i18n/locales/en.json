@@ -431,6 +431,7 @@
       "editMessage": "Edit Message",
       "enterMessage": "Enter your message...",
       "ctrlEnterToSave": "Press Ctrl+Enter (Cmd+Enter on Mac) to save",
+      "downloadAttachment": "Download {name}",
       "tokens": "{count} tokens",
       "attachments": "{count} attachment | {count} attachments",
       "thinking": "Thinking...",
@@ -637,6 +638,8 @@
     },
     "overseer": {
       "executionPlan": "Execution Plan",
+      "stepOf": "Step {current} of {total}",
+      "exitCode": "Exit: {code}",
       "stepsProgress": "{completed} of {total} steps",
       "copyCommand": "Copy command",
       "whatCommandDoes": "What this command does",
@@ -829,7 +832,7 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "lightweightModeTooltip": "About 90% cheaper than standard mode",
     "streamPreview": {
       "thought": "Thinking: {text}",
       "planning": "Planning: {text}"

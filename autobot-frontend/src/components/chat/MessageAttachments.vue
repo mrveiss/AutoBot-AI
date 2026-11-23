@@ -9,15 +9,19 @@
         v-for="attachment in attachments"
         :key="attachment.id"
         class="attachment-item"
+        role="button"
+        tabindex="0"
         @click="$emit('view', attachment)"
+        @keydown.enter.self="$emit('view', attachment)"
       >
         <Icon :name="getAttachmentIcon(attachment.type)" />
         <span class="attachment-name">{{ attachment.name }}</span>
         <span class="attachment-size">{{ formatFileSize(attachment.size || 0, SIZE_FORMAT) }}</span>
         <button
+          v-if="downloadable"
           class="attachment-download"
           @click.stop="$emit('download', attachment)"
-          :aria-label="`Download ${attachment.name}`"
+          :aria-label="$t('chat.messages.downloadAttachment', { name: attachment.name })"
         >
           <Icon name="download" />
         </button>
@@ -52,6 +56,8 @@ interface Attachment {
 
 interface Props {
   attachments: Attachment[]
+  /** Show the per-file download button. The stream passes false: it has no download handler. */
+  downloadable?: boolean
 }
 
 interface Emits {
@@ -59,7 +65,7 @@ interface Emits {
   (e: 'download', attachment: Attachment): void
 }
 
-defineProps<Props>()
+withDefaults(defineProps<Props>(), { downloadable: true })
 defineEmits<Emits>()
 
 const getAttachmentIcon = (type: string): IconName => {
