@@ -245,14 +245,17 @@ _SCRIPT_PATTERNS = (
 #: Known, recorded, and NOT silently excluded: the MCP tracker stores its own data in DB 10,
 #: which redis-databases.yaml assigns to the security audit log. Moving that data is a decision
 #: (no agent moves stored data on its own), so these stay listed until it is made.
+_TRACKER = "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/"
+#: Per-file count of known script literals. SHRINK-ONLY: a live count above its baseline is a new
+#: copy; a live count below it means the baseline must be lowered to match (a file at 0 is dropped).
 _SCRIPT_KNOWN = {
-    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts",
-    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/correlate-unfinished-tasks.cjs",
-    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/generate-insights.cjs",
-    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/ingest-conversation.cjs",
-    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/validate-fixes.cjs",
-    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/real-time-ingestion.ts",
-    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/knowledge-integration.ts",
+    _TRACKER + "src/index.ts": 1,
+    _TRACKER + "correlate-unfinished-tasks.cjs": 1,
+    _TRACKER + "generate-insights.cjs": 2,
+    _TRACKER + "ingest-conversation.cjs": 1,
+    _TRACKER + "validate-fixes.cjs": 2,
+    _TRACKER + "src/real-time-ingestion.ts": 1,
+    _TRACKER + "src/knowledge-integration.ts": 4,
 }
 
 
@@ -265,6 +268,27 @@ def find_script_literals(text: str, path: str) -> list[str]:
         if any(rx.search(line) for rx in _SCRIPT_PATTERNS):
             found.append(f"{path}:{lineno} script literal")
     return found
+
+
+def script_baseline_problems(hits: list[str], known: dict[str, int]) -> list[str]:
+    """What is wrong between the live script literals *hits* (``path:line ...``) and the *known* baseline.
+
+    Shrink-only per file: more literals than the baseline (or any in an unlisted file) is a new copy;
+    fewer means the baseline is stale and must be lowered.
+    """
+    live: dict[str, int] = {}
+    for hit in hits:
+        path = hit.split(":")[0]
+        live[path] = live.get(path, 0) + 1
+    problems = [
+        f"{p}: {n} literal(s), baseline {known.get(p, 0)}" for p, n in sorted(live.items()) if n > known.get(p, 0)
+    ]
+    problems += [
+        f"{p}: {live.get(p, 0)} literal(s), baseline {n} -- lower the baseline"
+        for p, n in sorted(known.items())
+        if live.get(p, 0) < n
+    ]
+    return problems
 
 
 def _script_sources() -> list[Path]:
@@ -443,10 +467,32 @@ def test_browser_and_node_sources_build_no_redis_url_and_pin_no_db_number():
         for p in sources
         for h in find_script_literals(p.read_text(encoding="utf-8", errors="replace"), p.relative_to(_REPO).as_posix())
     ]
-    unknown = [h for h in hits if h.split(":")[0] not in _SCRIPT_KNOWN]
-    assert unknown == [], "Redis URL or DB number in browser/Node code (#19232):\n" + "\n".join(unknown)
-    stale = _SCRIPT_KNOWN - {h.split(":")[0] for h in hits}
-    assert not stale, f"no longer a copy -- drop from _SCRIPT_KNOWN: {sorted(stale)}"
+    problems = script_baseline_problems(hits, _SCRIPT_KNOWN)
+    assert problems == [], "Redis URL or DB number in browser/Node code (#19232):\n" + "\n".join(problems)
+
+
+_TWO_PER_FILE = {"a.ts": 2}
+
+
+def test_script_baseline_passes_at_the_baseline_count():
+    assert script_baseline_problems(["a.ts:1 script literal", "a.ts:9 script literal"], _TWO_PER_FILE) == []
+
+
+def test_script_baseline_fails_on_a_second_finding_in_a_listed_file():
+    """The whole-file baseline let this through (#19750)."""
+    hits = ["a.ts:1 script literal", "a.ts:9 script literal", "a.ts:12 script literal"]
+    assert script_baseline_problems(hits, _TWO_PER_FILE) == ["a.ts: 3 literal(s), baseline 2"]
+
+
+def test_script_baseline_fails_on_a_finding_in_an_unlisted_file():
+    hits = ["a.ts:1 script literal", "a.ts:9 script literal", "b.ts:3 script literal"]
+    assert script_baseline_problems(hits, _TWO_PER_FILE) == ["b.ts: 1 literal(s), baseline 0"]
+
+
+def test_script_baseline_fails_until_it_is_lowered_when_a_count_drops():
+    assert script_baseline_problems(["a.ts:1 script literal"], _TWO_PER_FILE) == [
+        "a.ts: 1 literal(s), baseline 2 -- lower the baseline"
+    ]
 
 
 def test_detector_ignores_a_single_value():
