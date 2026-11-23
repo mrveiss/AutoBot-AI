@@ -32,7 +32,7 @@
         {{ $t('knowledge.searchPanel.loadingDocument') }}
       </div>
       <div v-else class="viewer-body min-h-0 flex-1 overflow-auto px-4 py-3">
-        <pre class="viewer-content m-0 font-sans text-sm leading-relaxed break-words whitespace-pre-wrap text-[var(--text)]" v-html="highlightText(content, query)"></pre>
+        <pre class="viewer-content m-0 font-sans text-sm leading-relaxed break-words whitespace-pre-wrap text-[var(--text)]" v-html="highlighted"></pre>
       </div>
 
       <footer class="viewer-footer flex items-center gap-3 border-t border-[var(--line)] px-4 py-3">
@@ -54,6 +54,7 @@ import type { SearchResult } from '@/stores/useKnowledgeStore'
 import { createLogger } from '@/utils/debugUtils'
 import { createDateFormatter, formatManPageTitle } from '@/utils/formatHelpers'
 import { highlightText, scoreVariant } from '@/composables/knowledge/searchHighlight'
+import { sanitizeKnowledgeHtml } from '@/utils/sanitize'
 
 const COPIED_MS = 2000
 
@@ -74,6 +75,9 @@ const title = computed(
     formatManPageTitle(props.result?.document?.title, props.result?.document?.metadata?.factType, t) ||
     t('knowledge.searchPanel.untitled'),
 )
+
+// highlightText escapes first; the kit sanitiser is the second line of defence and keeps the <mark> wrapper.
+const highlighted = computed(() => sanitizeKnowledgeHtml(highlightText(props.content, props.query)))
 
 async function copyContent(): Promise<void> {
   if (!props.content) return
