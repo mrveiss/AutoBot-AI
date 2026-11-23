@@ -19,7 +19,7 @@ _RE_FUNCTIONS = frozenset({"compile", "sub", "subn", "finditer", "findall", "mat
 #: pattern text (an escaped slash is normalised first). Each is anchored on what follows the marker,
 #: so a URL scheme (`://`), a division and a CSS id selector are not read as comments.
 _COMMENT_PATTERN_SHAPES = (
-    r"(?<![:\w/])//(?=\.|\[\^|\\N)",  # `//` line comment, then a run of anything
+    r"(?<!\w:)(?<![\w/])//(?=\.|\[\^|\\N)",  # `//` line comment (not a `scheme://`; `(?://` is one)
     r"/\\\*(?!\\\*\\Z)",  # `/\*` block comment opener
     r"<!--(?=\.|\[\^|\[\\s\\S)",  # HTML comment opener
     r"\^\\s\*\\?#",  # `^\s*#` line comment
@@ -39,13 +39,34 @@ def _is_re_call(node: ast.AST) -> bool:
     )
 
 
-def _constant_pattern(call: ast.Call, consts: dict[str, ast.expr]) -> str | None:
-    """The call's first argument when it is a string literal or a module string constant."""
+def _constant_pattern(call: ast.Call, consts: dict[str, ast.expr], local: frozenset[str]) -> str | None:
+    """The call's first argument when it is a string literal, or a module string constant no local binding shadows."""
     if not call.args:
         return None
     arg = call.args[0]
-    arg = consts.get(arg.id, arg) if isinstance(arg, ast.Name) else arg
+    if isinstance(arg, ast.Name) and arg.id not in local:
+        arg = consts.get(arg.id, arg)
     return arg.value if isinstance(arg, ast.Constant) and isinstance(arg.value, str) else None
+
+
+_FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+
+
+def _local_names(fn: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> frozenset[str]:
+    """Names a function binds locally: its parameters and every name it assigns."""
+    a = fn.args
+    params = {p.arg for p in (*a.posonlyargs, *a.args, *a.kwonlyargs, a.vararg, a.kwarg) if p is not None}
+    stored = {n.id for n in ast.walk(fn) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
+    return frozenset(params | stored)
+
+
+def _re_calls_in_scope(node: ast.AST, local: frozenset[str] = frozenset()):
+    """Every `re` call under *node*, with the names its enclosing functions bind locally."""
+    for child in ast.iter_child_nodes(node):
+        scope = local | _local_names(child) if isinstance(child, _FUNCTION_NODES) else local
+        if _is_re_call(child):
+            yield child, scope
+        yield from _re_calls_in_scope(child, scope)
 
 
 def strips_comments_by_regex(tree: ast.AST, asserted: set[int], consts: dict[str, ast.expr]) -> bool:
@@ -55,9 +76,9 @@ def strips_comments_by_regex(tree: ast.AST, asserted: set[int], consts: dict[str
     constants. Reads call nodes and their constant argument. A pattern built at run time (concatenated,
     formatted, passed in) is not followed, and neither is a `from re import sub` alias.
     """
-    for node in ast.walk(tree):
-        if _is_re_call(node) and id(node) not in asserted:
-            pattern = _constant_pattern(node, consts)
+    for node, local in _re_calls_in_scope(tree):
+        if id(node) not in asserted:
+            pattern = _constant_pattern(node, consts, local)
             if pattern is not None and _COMMENT_PATTERN.search(pattern.replace("\\/", "/")):
                 return True
     return False

@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Files whose regex strips or reads a comment construct, pending migration (#21569).
 
-Measured with the guard's own detector over the tree it sweeps: **39 files** (plus
+Measured with the guard's own detector over the tree it sweeps: **40 files** (plus
 `tools/lint/_comment_syntax.py`, the canonical exemption). **This list only ever shrinks.**
 
 Not every entry is a source scanner. Some are format parsers where a trailing `#` is part of the
@@ -21,6 +21,7 @@ PENDING_REGEX_STRIPPERS = frozenset(
         "pipeline-scripts/landing_notes.py",
         "repo_tests/_filter_entries.py",
         "repo_tests/_hardcoded_colour_detect.py",
+        "repo_tests/_unconnected_clients.py",
         "repo_tests/_unconnected_mounts.py",
         "repo_tests/ambient_git_vars_mirror_test.py",
         "repo_tests/analytics_page_open_reads_only_20491_test.py",

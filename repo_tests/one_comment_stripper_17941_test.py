@@ -111,7 +111,7 @@ _MARKERS = frozenset({"#", "//", "/*"})
 #: one, so "exempt" cannot quietly become a second place comment logic lives.
 _CANONICAL = frozenset({"tools/lint/_comment_syntax.py"})
 
-#: The regex-shaped strippers (#21569) are pending in `_comment_regex_pending`: 39 files measured when
+#: The regex-shaped strippers (#21569) are pending in `_comment_regex_pending`: 40 files measured when
 #: the regex shape was added, on top of the 9 below. Same rule: shrink only.
 _PENDING_PRIVATE_STRIPPERS = frozenset(
     {
@@ -532,6 +532,12 @@ def test_the_pending_list_only_shrinks() -> None:
         ("a regex skipping a hash line", 'import re\nx = re.compile(r"^\\s*#")\n', True),
         ("a regex stripping a trailing hash comment", 'import re\nx = re.sub(r"#.*", "", s)\n', True),
         ("an escaped-slash line comment", 'import re\nx = re.sub(r"\\/\\/.*", "", s)\n', True),
+        ("a line comment in a non-capturing group", 'import re\nx = re.sub(r"(?://[^\\n]*)", "", s)\n', True),
+        (
+            "a parameter shadowing a module constant",
+            'import re\nP = r"//.*"\ndef f(P):\n    return re.search(P, s)\n',
+            False,
+        ),
         ("a pattern held in a module constant", 'import re\nP = r"^\\s*#"\nx = re.search(P, s)\n', True),
         ("a URL scheme is not a comment", 'import re\nx = re.match(r"https://example", s)\n', False),
         ("a division is not a comment", 'import re\nx = re.findall(r"(\\d+)/(\\d+)", s)\n', False),
