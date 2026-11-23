@@ -64,6 +64,7 @@ class AuditAction(str, Enum):
     SESSION_SHARE = "session.share"  # #18890: an owner shared a chat with participants
     SESSION_UNSHARE = "session.unshare"  # #18890: an owner removed a participant
     SESSION_OWNER_ASSIGN = "session.owner_assign"
+    SESSION_COMPANY_ASSIGN = "session.company_assign"  # #21997: a person assigned an Unassigned chat to a company
     SESSION_REASSIGN = "session.reassign"  # #20029: a removed user's chat session handed to a successor
     KNOWLEDGE_ADD = "knowledge.add"
     KNOWLEDGE_REMOVE = "knowledge.remove"
