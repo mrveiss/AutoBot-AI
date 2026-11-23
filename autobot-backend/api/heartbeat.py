@@ -276,7 +276,9 @@ async def trigger_manual(
     scheduler: HeartbeatScheduler = Depends(_get_scheduler),
     _scope: AgentScope = Depends(manage_scope),
 ) -> Dict[str, str]:
-    """Immediately queue a manual heartbeat run for an agent (#1407)."""
+    """Immediately queue a manual heartbeat run for an agent; refused with 409 unless it is ACTIVE (#1407, #21992)."""
+    if await scheduler._should_skip_heartbeat(agent_id):
+        raise HTTPException(status_code=409, detail="Agent is not active; enable its heartbeat first")
     fire_and_forget(
         scheduler._run_once(agent_id, WakeupTrigger.MANUAL),
         name=f"hb-manual-{agent_id}",

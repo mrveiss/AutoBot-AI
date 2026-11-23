@@ -7,6 +7,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 
 from api import heartbeat
 from api.heartbeat_scope import AgentScope
@@ -65,3 +66,26 @@ async def test_event_wakeup_runs_nothing_for_a_disabled_agent():
     await scheduler._run_once("a1", WakeupTrigger.EVENT)
     scheduler._start_run.assert_not_awaited()
     scheduler._invoke_agent.assert_not_awaited()
+
+
+def _trigger_scheduler(skip):
+    return MagicMock(_should_skip_heartbeat=AsyncMock(return_value=skip), _run_once=MagicMock())
+
+
+@pytest.mark.asyncio
+async def test_run_now_for_an_agent_that_is_not_active_answers_409(monkeypatch):
+    fired = MagicMock()
+    monkeypatch.setattr(heartbeat, "fire_and_forget", fired)
+    with pytest.raises(HTTPException) as refused:
+        await heartbeat.trigger_manual("a1", _trigger_scheduler(True), SCOPE)
+    assert refused.value.status_code == 409
+    fired.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_now_for_an_active_agent_is_accepted(monkeypatch):
+    fired = MagicMock()
+    monkeypatch.setattr(heartbeat, "fire_and_forget", fired)
+    result = await heartbeat.trigger_manual("a1", _trigger_scheduler(False), SCOPE)
+    assert result == {"agent_id": "a1", "status": "triggered"}
+    fired.assert_called_once()
