@@ -133,6 +133,15 @@ async def test_a_working_post_commit_schedule_write_puts_on_and_takes_off() -> N
     log.warning.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_no_croniter_after_commit_is_a_warning() -> None:
+    """An update with no new cron reaches the schedule write without the route's croniter check."""
+    log = MagicMock()
+    with patch.object(routines_api, "croniter", None):
+        await _sync(_Schedule(), "*/5 * * * *", log)
+    log.warning.assert_called_once()
+
+
 def test_trigger_routine_has_no_swallowing_except() -> None:
     tree = ast.parse(Path(routines_api.__file__).read_text(encoding="utf-8"))
     names = {"trigger_routine", "_schedule_now", "_sync_schedule"}
