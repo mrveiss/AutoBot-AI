@@ -669,11 +669,14 @@ jobs:
         echo "AUTOBOT_REQUIRE_PROMTOOL=1" >> "$GITHUB_ENV"
         promtool --version
 
-    - name: Enforce reach-floor staleness on merge trains (#19282)
+    - name: Enforce reach-floor staleness on merge trains and on main (#19282, #22110)
       # A floor the tree outgrew is stale, not lost. It fails where it is fixed -- the merge train,
       # which re-pins with scripts/repin_reach_floors.py -- and only warns on other PRs, whose
       # authors did not grow the tree. A real reach loss fails everywhere (repo_tests/_reach.py).
-      if: startsWith(github.head_ref, 'train-')
+      # #22110: main's own run (a push to main, or a merge group) enforces it too, so the merge that
+      # drove a floor into its bottom band is the one that goes red, never an unrelated later PR;
+      # repin-reach-floors.yml then opens the one PR that re-pins it.
+      if: startsWith(github.head_ref, 'train-') || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
       run: echo "AUTOBOT_REACH_AUDIT=1" >> "$GITHUB_ENV"
 
     # Static checks (black / isort / flake8 / bandit) deliberately live in

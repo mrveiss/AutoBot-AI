@@ -89,9 +89,8 @@ The floor exists so a filter that has started eating the tree fails as a defect
 in this file instead of reporting a clean codebase. It was ``> 100`` against
 2,308 real files — 23x slack, which only catches total collapse, while #15121
 was a filter eating the tree and a *partial* version of it would have sailed
-through. ``_SOURCE_FLOOR`` now sits just under the measured population, and
-``test_the_floor_has_not_decayed_into_slack`` caps how far the population may
-outgrow it so the slack cannot silently return.
+through. ``REACH`` below now declares the floor mid-window of the measured population, and
+``scripts/repin_reach_floors.py`` re-pins it when the tree outgrows it (#22110).
 """
 
 from __future__ import annotations
@@ -104,6 +103,7 @@ from typing import Dict, FrozenSet, List, Set, Tuple
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 from autobot_shared.paths import scrubbed_git_env
 from tools.lint import _parse_cache as parse_cache
@@ -146,22 +146,13 @@ _CANONICAL_DEFINER = (_REPO / "autobot_shared" / "error_boundaries" / "decorator
 # moving the floor much, so the floor alone would not catch it.
 _TREES_THAT_MUST_BE_SCANNED = ("autobot_shared", "autobot-slm-backend", "scripts", "tools")
 
-#: Population floor for the tracked scan. Measured at 4,574 sources on
-#: 2026-11-22 (#22103); the floor sits 149 below that. The four trees above
-#: measured about 384, 344, 49 and 86 sources then. Losing `autobot_shared`
-#: or `autobot-slm-backend` falls through the floor; `scripts` and `tools`
-#: are smaller than the margin, so `test_the_scan_reaches_every_tree...` pins
-#: them per tree instead. Ordinary churn of a few files trips neither. The
-#: slack test below caps the population at `_MAX_FLOOR_SLACK` times this
-#: floor. RATCHET: raise it when the population genuinely grows; lower it
-#: only with a stated reason.
-_SOURCE_FLOOR = 4425
-
-#: How far the population may outgrow the floor before the floor is stale. The
-#: floor started at 100 against 2,308 files -- 23x slack -- which is how it
-#: stopped meaning anything. At 1.5x it can never decay that far again, while
-#: still allowing 43% growth before anyone has to touch it.
-_MAX_FLOOR_SLACK = 1.5
+#: Population floor for the tracked scan, declared so the reach registry measures it and
+#: ``scripts/repin_reach_floors.py`` re-pins it when the tree outgrows it (#22110). It was a bare
+#: bare ``_SOURCE_FLOOR`` that decayed into red on unrelated PRs twice in a day (#22103). Measured at
+#: 4,597 sources on 2026-11-23; growth 300 puts the pin mid-window (4597 - 150). The four trees
+#: above measured about 384, 344, 49 and 86 sources on 2026-11-22. Losing `autobot_shared` or
+#: `autobot-slm-backend` falls through the floor; `scripts` and `tools` are smaller than the
+#: margin, so `test_the_scan_reaches_every_tree...` pins them per tree instead.
 
 #: Tracked sources that do not parse, and are therefore inspected blind. Empty
 #: on purpose: measured at 0 of 3,099. Down-only -- an entry here is a statement
@@ -210,13 +201,26 @@ def _tracked_paths(root: Path = _REPO) -> Set[Path]:
     return {root / relative for relative in listing.split("\0") if relative}
 
 
-def _tracked_sources() -> List[Path]:
-    """Every tracked, non-test .py file in the repository -- the guard's real scan.
+def _tracked_sources(root: Path = _REPO) -> List[Path]:
+    """Every tracked, non-test .py file under `root` -- the guard's real scan.
 
-    See "WHAT THE TRACKED TREE MEANS HERE" above for why both halves are here.
+    See "WHAT THE TRACKED TREE MEANS HERE" above for why both halves are here. An untracked
+    `root` yields [] rather than raising, which `declare()` requires of a discovery (#16154).
     """
-    tracked = _tracked_paths()
-    return [path for path in _production_sources(_REPO) if path in tracked]
+    try:
+        tracked = _tracked_paths(root)
+    except (subprocess.CalledProcessError, OSError):
+        return []
+    return [path for path in _production_sources(root) if path in tracked]
+
+
+REACH = declare(
+    "with-error-handling-tracked-sources",
+    discover=_tracked_sources,
+    floor=4447,  # mid-window: population 4597, window (4297, 4597)
+    growth=300,
+    what="tracked non-test python sources",
+)
 
 
 def _defines_target(path: Path) -> List[int]:
@@ -268,26 +272,17 @@ def test_the_scan_sees_the_tree_it_is_pointed_at(tracked_sources):
     "with_error_handling vanished" is a defect in the code under guard. Before
     #15121 the first masqueraded as the second in every worktree checkout.
     """
-    assert len(tracked_sources) >= _SOURCE_FLOOR, (
-        f"only {len(tracked_sources)} tracked sources survived the exclusion filter, "
-        f"below the recorded floor of {_SOURCE_FLOOR} — the filter is eating the tree, "
-        "so every assertion below is vacuous"
-    )
+    REACH.completed(tracked_sources)
     assert _CANONICAL_DEFINER in {path.resolve() for path in tracked_sources}
 
 
 def test_the_floor_has_not_decayed_into_slack(tracked_sources):
     """#15202 item 4: a floor far below the population stops catching anything.
 
-    The floor is only proportional while someone raises it. This caps the drift
-    at `_MAX_FLOOR_SLACK` so it cannot quietly return to the 23x it had.
+    The 1.5x cap this held was a second, hand-kept copy of the rule `declare()` states with
+    `growth=` (#22110); `verify_floor` now answers it, and fails in the audit that re-pins it.
     """
-    ceiling = int(_SOURCE_FLOOR * _MAX_FLOOR_SLACK)
-    assert len(tracked_sources) <= ceiling, (
-        f"the tree has grown to {len(tracked_sources)} sources against a floor of "
-        f"{_SOURCE_FLOOR} — raise `_SOURCE_FLOOR` to just under the new population. "
-        "This is not a defect in the codebase; it is the floor going stale."
-    )
+    REACH.verify_floor(_REPO)
 
 
 @pytest.mark.parametrize("tree", _TREES_THAT_MUST_BE_SCANNED)
