@@ -248,8 +248,8 @@ class ServiceConfigMixin:
         ollama_host = self.get_host("ollama")
         ollama_port = self.get_port("ollama")
         if ollama_host and ollama_port:
-            return f"http://{ollama_host}:{ollama_port}"
-        return f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+            return ollama_base_url(f"http://{ollama_host}:{ollama_port}")
+        return ollama_base_url(f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}")
 
     def get_ollama_url_for_model(self, model_name: str) -> str:
         """Get Ollama URL routed by model name (#1070).

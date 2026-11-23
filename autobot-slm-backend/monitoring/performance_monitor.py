@@ -26,6 +26,7 @@ from metrics_types import DatabaseMetrics, HostPerformanceMetrics, InterVMMetric
 
 from autobot_shared.log_dir import FirstWriteFileHandler
 from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.ollama_urls import ollama_version_url
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import utc_timestamp
@@ -68,7 +69,7 @@ SERVICE_ENDPOINTS = {
     "npu-worker": f"http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}/health",
     "ai-stack": f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}/health",
     "browser": f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}/health",
-    "ollama": f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.OLLAMA_PORT}/api/version",
+    "ollama": ollama_version_url(f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.OLLAMA_PORT}"),
     "redis": f"{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}",
 }
 
@@ -100,9 +101,6 @@ class FleetPerformanceMonitor:
     async def initialize_redis_connection(self):
         """Initialize Redis connection for metrics storage using canonical utility."""
         try:
-            # Use canonical Redis utility following CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
-            from autobot_shared.redis_client import get_redis_client
-
             self.redis_client = get_redis_client(database="metrics")
             if self.redis_client is None:
                 raise Exception("Redis client initialization returned None")

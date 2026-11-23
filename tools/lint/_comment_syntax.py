@@ -511,6 +511,31 @@ def strip_html_comments(text: str) -> str:
     return _HTML_SCRIPT_OR_COMMENT.sub(lambda m: m.group(1) or "\n" * m.group().count("\n"), text)
 
 
+_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_HTML_OR_BLOCK_COMMENT = re.compile(rf"({SCRIPT_ELEMENT})|<!--.*?-->|/\*.*?\*/", SCRIPT_ELEMENT_FLAGS)
+
+
+def _blank(text: str) -> str:
+    """*text* with every character but its newlines turned into a space."""
+    return re.sub(r"[^\n]", " ", text)
+
+
+def _blank_comment(match: re.Match) -> str:
+    """One comment (or script element) match of ``_HTML_OR_BLOCK_COMMENT``, blanked."""
+    if match.group(1) is not None:
+        return _BLOCK_COMMENT.sub(lambda m: _blank(m.group()), match.group())
+    return _blank(match.group()) if match.group().startswith("/*") else "\n" * match.group().count("\n")
+
+
+def strip_html_and_block_comments(text: str) -> str:
+    """*text* with ``<!-- -->`` and ``/* */`` comments removed in ONE left-to-right pass, newlines kept.
+
+    Whichever opener comes first wins, so ``/* <!-- */ live /* --> */`` keeps ``live``: two sequential passes would
+    let the HTML pair swallow it. A ``<script>`` element keeps its ``<!--`` text (a string there is data) but its
+    ``/* */`` comments are blanked. An unclosed opener stays as text."""
+    return _HTML_OR_BLOCK_COMMENT.sub(_blank_comment, text)
+
+
 def code_text(source: str | Path, **kwargs) -> str:
     """`code_lines` rejoined, for callers that search the whole file at once."""
     return "\n".join(line.text for line in code_lines(source, **kwargs))
