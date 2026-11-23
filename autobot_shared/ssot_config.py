@@ -59,7 +59,9 @@ from autobot_shared.ssot_chat_graph_settings import ChatGraphSettings
 from autobot_shared.ssot_codebase_index import CodebaseIndexSettings
 from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
+from autobot_shared.ssot_reachable_host import reachable_host
 from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
+    NOVNC_PATH_DEFAULT,
     SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
     SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT,
     SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
@@ -170,7 +172,8 @@ class VMConfig(RedactedSettings):
 
     # Issue #2953: Defaults changed to 127.0.0.1 for single-host installs.
     # Distributed installs override these via AUTOBOT_*_HOST env vars in .env.
-    main: str = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_HOST")
+    main: Annotated[str, BeforeValidator(reachable_host)] = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_HOST")
+    main_bind: str = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_BIND_HOST")  # listen address (#18810)
     frontend: str = Field(default="127.0.0.1", alias="AUTOBOT_FRONTEND_HOST")
     npu: str = Field(default="127.0.0.1", alias="AUTOBOT_NPU_WORKER_HOST")
     redis: str = Field(default="127.0.0.1", alias="AUTOBOT_REDIS_HOST")
@@ -197,6 +200,7 @@ class PortConfig(RedactedSettings):
     # roles/vnc/defaults/main.yml computes 5900 + vnc_display (default 1 -> 5901),
     # as does status-all-vms.sh. network-config.sh's old 5902 was the outlier.
     vnc_server: int = Field(default=5901, alias="AUTOBOT_VNC_SERVER_PORT")
+    vnc_base: int = Field(default=5900, alias="AUTOBOT_VNC_BASE_PORT")  # RFB port 5900 + display (#22146)
     browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")  # Issue #4052: 9001; 3000 is Grafana
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
     chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
@@ -1271,16 +1275,9 @@ class PathConfig(RedactedSettings, SSHIdentitySettings):
     # operational identity — this default follows that account.
     vnc_passwd_file: str = Field(default="/home/autobot-vnc/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
 
-    # noVNC web root — absolute path, not relative to base_dir.
-    #
-    # #13069: pinned to /opt/novnc, NOT the distro /usr/share/novnc package.
-    # roles/vnc removes that package (state: absent) and installs a checksummed
-    # upstream release at this path instead, because the distro build
-    # (novnc 1:1.0.0-5 on Ubuntu 22.04) predates VeNCrypt support and was the
-    # cause of the handshake failure in #13060. Keep in sync with
-    # autobot-slm-backend/ansible/roles/vnc/defaults/main.yml novnc_path.
-    # Override via AUTOBOT_NOVNC_PATH env var.
-    novnc_path: str = Field(default="/opt/novnc", alias="AUTOBOT_NOVNC_PATH")
+    # noVNC web root (#13069, #22146): roles/vnc installs it and writes AUTOBOT_NOVNC_PATH.
+    novnc_path: str = Field(default=NOVNC_PATH_DEFAULT, alias="AUTOBOT_NOVNC_PATH")
+    websockify_search_path: str = Field(default="/usr/bin:/usr/local/bin", alias="AUTOBOT_WEBSOCKIFY_SEARCH_PATH")
 
     # Canonical inter-node SSH private key (#12429). SINGLE source of truth for
     # every consumer that SSHes to fleet nodes (SLM -> fleet, deploy, code-sync,
@@ -1879,6 +1876,7 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     mcp_isolation_mode: str = Field(default="inprocess", alias="MCP_ISOLATION_MODE")
     mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
     mcp_registry_cache_ttl: str = Field(default="60", alias="MCP_REGISTRY_CACHE_TTL")
+    mcp_bridge_probe_timeout_s: float = Field(default=3.0, alias="AUTOBOT_MCP_BRIDGE_PROBE_TIMEOUT_S")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
     # #13265: run-JWT signing secret as an SSOT field, read by
     # mcp_isolated_runtime._resolve_run_jwt_secret() when provisioning an

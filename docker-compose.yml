@@ -326,7 +326,9 @@ services:
       - AUTOBOT_OLLAMA_HOST=${AUTOBOT_OLLAMA_HOST:-autobot-ollama}
       - AUTOBOT_OLLAMA_PORT=11434
       - AUTOBOT_OLLAMA_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
-      - AUTOBOT_BACKEND_HOST=0.0.0.0
+      # #18810: the listen address is the uvicorn --host above; AUTOBOT_BACKEND_HOST (the dialed host)
+      # stays unset so it resolves to loopback inside the container, never 0.0.0.0.
+      - AUTOBOT_BACKEND_BIND_HOST=0.0.0.0
       - AUTOBOT_BACKEND_PORT=8001
       - AUTOBOT_LLM_PROVIDER=${AUTOBOT_LLM_PROVIDER:-ollama}
       - AUTOBOT_DEFAULT_LLM_MODEL=${AUTOBOT_DEFAULT_LLM_MODEL:-qwen3.5:9b}

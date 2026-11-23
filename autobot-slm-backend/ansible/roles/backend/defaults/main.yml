@@ -30,6 +30,11 @@ backend_deploy_from_git: true
 # Windows Defender Firewall rule is evaluated once for nginx, never for uvicorn restarts.
 backend_host: "127.0.0.1"   # uvicorn: localhost only (nginx proxies from LAN)
 backend_port: 8001           # uvicorn: plain HTTP port (internal)
+# #18810: the address clients dial, written as AUTOBOT_BACKEND_HOST. Never an unspecified
+# bind address: that case falls back to the inventory backend host, else loopback.
+backend_advertised_host: >-
+  {{ backend_host if backend_host not in ['0.0.0.0', '::', '']
+     else (infrastructure.hosts.backend if infrastructure is defined else '127.0.0.1') }}
 backend_nginx_port: 8443     # nginx: external TLS port (LAN-facing)
 # #11670: worker count is owned by the canonical unit (autobot-backend.service.j2),
 # not by hand-placed .service.d/ drop-ins. The co-located single-box lowers this

@@ -2297,6 +2297,18 @@
       when: "'browser' in group_names"
       tags: [browser, deploy]
 
+    # #22146: the fleet update never ran the vnc role, so a node installed before the
+    # #13069 pin kept the distro noVNC and its old websockify unit (--web=/usr/share/novnc)
+    # forever. Only the pin and the unit that serves it -- not the provisioning half.
+    - name: "[PLAY 2] VNC | Converge the pinned noVNC and its websockify unit (#22146)"
+      ansible.builtin.include_role:
+        name: vnc
+        tasks_from: novnc
+        apply:
+          become: true
+      when: "role_vnc_active | default(false) | bool"
+      tags: [vnc, deploy]
+
     - name: "[PLAY 2] Node Update Complete"
       debug:
         msg: "{{ inventory_hostname }} updated"
