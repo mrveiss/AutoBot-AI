@@ -48,7 +48,8 @@ _HARDCODED_SHAPES = (
 _MIGRATED_CALL_SITES = {
     "autobot-backend/llc/services/slm_policy.py": 'client._rest_url(f"/api/settings/',
     "autobot-backend/orchestration/dag_executor.py": 'rest_url(slm_url, f"/api/nodes/',
-    "autobot-backend/services/redis_service_manager.py": 'rest_url(self.slm_url, f"/api/nodes/',
+    # #16346: redis_service_manager reaches the SLM through SLMClient.node_service_action, whose URL is built here.
+    "autobot-backend/services/slm_node_services.py": "url = self._rest_url(path)",
     "autobot-backend/services/skill_management/skill_proposer.py": 'rest_url(config.slm_url, "/api/skills/propose")',
     "scripts/daily_health_check.py": 'rest_url(self.slm_url, "/api/health")',
 }
@@ -57,7 +58,7 @@ _MIGRATED_CALL_SITES = {
 _PER_FILE_PATHS = {
     "autobot-backend/llc/services/slm_policy.py": "/api/settings/disposal_policy",
     "autobot-backend/orchestration/dag_executor.py": "/api/nodes/node-1/execute",
-    "autobot-backend/services/redis_service_manager.py": "/api/nodes/node-1/services",
+    "autobot-backend/services/slm_node_services.py": "/api/nodes/node-1/services/redis-stack-server/restart",
     "autobot-backend/services/skill_management/skill_proposer.py": "/api/skills/propose",
     "scripts/daily_health_check.py": "/api/health",
 }
