@@ -113,8 +113,9 @@ describe('watchApprovedDelete (#21989)', () => {
   it('watching the same approval again replaces the earlier watch', () => {
     const first = vi.fn()
     const second = vi.fn()
-    watchApprovedDelete('a1', first, vi.fn())
-    watchApprovedDelete('a1', second, vi.fn())
+    // The approved watch re-reads on its schedule, so its resync must return a promise like the real one.
+    watchApprovedDelete('a1', first, vi.fn().mockResolvedValue(true))
+    watchApprovedDelete('a1', second, vi.fn().mockResolvedValue(true))
     emit('approval_approved', 'a1')
     expect(first).not.toHaveBeenCalled()
     expect(second).toHaveBeenCalledTimes(1)
