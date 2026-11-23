@@ -9,7 +9,7 @@ after the whole frontend suite. This file pins what that early signal depends on
 
 * the job runs only on a ready, un-held pull request, and starts after ``changes`` alone;
 * it sets up the toolchain through the one shared action, with the same package the suite installs;
-* it runs ``vitest related --run --passWithNoTests`` and passes no ``--`` before the files (Vitest 4's ``related`` command
+* it runs ``vitest related --run --passWithNoTests`` and passes no ``--`` before the files (Vitest 5's ``related`` command
   reads its files from the arguments before ``--``; the ones after it never reach it);
 * no ``run:`` block interpolates an expression, so a file name cannot become shell;
 * a shared-kit change selects consumer specs, which needs both apps to pin the kit by file path.
