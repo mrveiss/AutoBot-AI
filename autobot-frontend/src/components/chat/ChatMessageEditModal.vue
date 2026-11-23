@@ -9,13 +9,13 @@
     <textarea
       ref="textarea"
       v-model="content"
-      class="edit-textarea"
+      class="flex-1 w-full px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-electric-500 resize-none"
       :placeholder="$t('chat.messages.enterMessage')"
       rows="6"
       @keydown.ctrl.enter="emit('save')"
       @keydown.meta.enter="emit('save')"
     ></textarea>
-    <div class="edit-hint">{{ $t('chat.messages.ctrlEnterToSave') }}</div>
+    <div class="text-xs text-autobot-text-muted mt-2">{{ $t('chat.messages.ctrlEnterToSave') }}</div>
 
     <template #actions>
       <BaseButton variant="secondary" @click="emit('cancel')">{{ $t('common.cancel') }}</BaseButton>
@@ -42,22 +42,3 @@ watch(() => props.modelValue, async (open) => {
   textarea.value?.focus()
 })
 </script>
-
-<style scoped>
-.edit-textarea {
-  flex: 1;
-  inline-size: 100%;
-  padding: var(--aui-space-2) var(--aui-space-3);
-  resize: none;
-  border: 1px solid var(--aui-input-border);
-  border-radius: var(--aui-radius-md);
-  background: var(--aui-input-bg);
-  color: var(--aui-color-text);
-  font: inherit;
-}
-.edit-textarea:focus-visible {
-  outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
-  outline-offset: 1px;
-}
-.edit-hint { margin-block-start: var(--aui-space-2); color: var(--aui-color-text-muted); font-size: var(--aui-text-xs); }
-</style>

@@ -20,11 +20,11 @@
       :aria-label="$t('chat.messages.conversation')"
     >
       <!-- Issue #1314: virtual scroll spacer sets the total scrollable height -->
-      <div class="stream-spacer" :style="{ height: `${totalSize}px` }">
+      <div class="relative w-full" :style="{ height: `${totalSize}px` }">
         <div
           v-for="vItem in virtualItems"
           :key="String(vItem.key)"
-          class="stream-item"
+          class="absolute top-0 left-0 w-full pb-1"
           :data-index="vItem.index"
           :ref="(el: any) => el && measureElement(el as Element)"
           :style="{ transform: `translateY(${vItem.start}px)` }"
@@ -183,8 +183,3 @@ onUnmounted(() => {
   stopFallbackTracking = null
 })
 </script>
-
-<style scoped>
-.stream-spacer { position: relative; inline-size: 100%; }
-.stream-item { position: absolute; inset-block-start: 0; inset-inline-start: 0; inline-size: 100%; padding-block-end: var(--aui-space-1); }
-</style>
