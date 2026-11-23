@@ -141221,9 +141221,9 @@ export interface operations {
     };
     get_health_score_api_quality_health_score_get: {
         parameters: {
-            query?: {
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -141253,11 +141253,11 @@ export interface operations {
     };
     get_quality_metrics_api_quality_metrics_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Filter by category */
                 category?: components["schemas"]["MetricCategory"] | null;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -141287,12 +141287,12 @@ export interface operations {
     };
     get_pattern_distribution_api_quality_patterns_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Filter by severity */
                 severity?: string | null;
                 limit?: number;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -141322,11 +141322,11 @@ export interface operations {
     };
     get_complexity_metrics_api_quality_complexity_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Number of hotspots to return */
                 top_n?: number;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -141356,12 +141356,12 @@ export interface operations {
     };
     get_quality_trends_api_quality_trends_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 period?: string;
                 /** @description Specific metric to trend */
                 metric?: string | null;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -141391,9 +141391,9 @@ export interface operations {
     };
     get_quality_snapshot_api_quality_snapshot_get: {
         parameters: {
-            query?: {
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -141423,13 +141423,13 @@ export interface operations {
     };
     drill_down_category_api_quality_drill_down__category__get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Filter by file path */
                 file_filter?: string | null;
                 severity?: string | null;
                 limit?: number;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
             };
             header?: never;
             path: {
@@ -141461,7 +141461,9 @@ export interface operations {
     };
     export_quality_report_api_quality_export_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 format?: string;
             };
             header?: never;

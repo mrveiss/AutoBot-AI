@@ -138,6 +138,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
     {
       path: '/api/quality/health-score',
       scopeToSource: true,
+      requireSource: true,
       pickData: (raw) => {
         recordStatus('healthScore', raw)
         return {
@@ -178,6 +179,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
       // Issue #552 / #3436
       path: '/api/quality/metrics',
       scopeToSource: true,
+      requireSource: true,
       pickData: (raw) => {
         if (Array.isArray(raw)) {
           noDataFlags.value.metrics = false
@@ -215,6 +217,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
       // Issue #552 / #3436
       path: '/api/quality/patterns',
       scopeToSource: true,
+      requireSource: true,
       pickData: (raw) => {
         if (Array.isArray(raw)) {
           noDataFlags.value.patterns = false
@@ -252,6 +255,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
       // Issue #552 / #3436
       path: '/api/quality/complexity',
       scopeToSource: true,
+      requireSource: true,
       pickData: (raw) => {
         recordStatus('complexity', raw)
         return {
@@ -289,6 +293,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
       // Issue #552 / #3436
       path: '/api/quality/trends',
       scopeToSource: true,
+      requireSource: true,
       pickData: (raw) => {
         recordStatus('trends', raw)
         return (raw.data_points as Array<{ date: string; score: number }>) || []
@@ -321,6 +326,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
       // Issue #552 / #3436
       path: '/api/quality/snapshot',
       scopeToSource: true,
+      requireSource: true,
       pickData: (raw) => {
         recordStatus('snapshot', raw)
         const stats =
@@ -368,6 +374,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
         {
           path: `/api/quality/drill-down/${encodeURIComponent(category)}`,
           scopeToSource: true,
+          requireSource: true,
           pickData: (raw) => raw as unknown as QualityDrillDown,
           onError: (message, err) => {
             logger.warn('Failed to load drill-down data:', err)
@@ -390,11 +397,12 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
     error.value = null
     isLoading.value = true
     try {
-      // Issue #552: no source scoping for export
+      // #20513: the export is of one source
       const ep = useFetchEndpoint<Record<string, unknown>, QualityExportResult>(
         {
           path: '/api/quality/export',
-          scopeToSource: false,
+          scopeToSource: true,
+          requireSource: true,
           pickData: (raw) => raw as QualityExportResult,
           onError: (message, err) => {
             logger.warn('Failed to export report:', err)
@@ -402,6 +410,7 @@ export function useCodeQualityData(withSourceId: (url: string) => string) {
           },
           label: 'Export',
         },
+        { withSourceId },
       )
       await ep.load({ format })
       return ep.data.value
