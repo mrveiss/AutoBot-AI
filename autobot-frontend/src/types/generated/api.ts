@@ -49632,6 +49632,8 @@ export interface paths {
          * Export Conversation
          * @description Export a single conversation in JSON or Markdown format (#1808).
          *
+         *     Follows read access (#22002): the shared ownership dependency, which also refuses another company's chat (#21997).
+         *
          *     - **json**: Enriched AutoBot JSON envelope with metadata and messages.
          *     - **markdown**: Human-readable Markdown with message headers.
          */
@@ -99861,7 +99863,7 @@ export interface components {
         };
         /**
          * SessionCompanyAssign
-         * @description Body of the assign-company route.
+         * @description Body of ``POST /chat/sessions/{session_id}/company``.
          */
         SessionCompanyAssign: {
             /**
@@ -99874,7 +99876,7 @@ export interface components {
         };
         /**
          * SessionCompanyAssignData
-         * @description data payload of the assign-company route.
+         * @description data payload of ``POST /chat/sessions/{session_id}/company``.
          */
         SessionCompanyAssignData: {
             /** Session Id */
