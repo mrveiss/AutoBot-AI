@@ -44,8 +44,8 @@
 import { ref, computed, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, watch, type Ref, type ComputedRef } from 'vue'
 import { useChatStore, type UserContext, type SessionActivity } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import { buildAuthenticatedWsSubprotocols, withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
-import { getApiBase } from '@/config/ssot-config'
+import { buildAuthenticatedWsSubprotocols, onCompanySwitch } from '@/utils/buildAuthenticatedWsUrl'
+import { presenceWsUrl } from '@/composables/sessionPresenceUrl'
 import { syncOnlineUsers } from '@/composables/sessionPresenceSync'
 import { apiService, type PendingInvitationResponse } from '@/services/api'
 
@@ -160,13 +160,6 @@ let presenceSocket: WebSocket | null = null
 // under every other still-mounted consumer. Reference-counted: the socket
 // closes only when the last instance disposes.
 let activeInstanceCount = 0
-
-// #16457: the token travels via the Sec-WebSocket-Protocol subprotocol, not
-// the URL -- it no longer lands in server access logs or browser history.
-function _presenceWsUrl(sessionId: string): string {
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${wsProtocol}//${window.location.host}${getApiBase()}/ws/sessions/${sessionId}/presence`
-}
 
 /**
  * Session Collaboration composable
@@ -354,7 +347,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       leaveSession()
     }
 
-    const wsUrl = _presenceWsUrl(sessionId)
+    const wsUrl = presenceWsUrl(sessionId)
     const subprotocols = buildAuthenticatedWsSubprotocols()
     if (subprotocols === null) {
       logger.debug('No auth token available yet; deferring presence connect')
@@ -370,7 +363,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       currentTab: 'chat'
     }
 
-    presenceSocket = new WebSocket(withCompanyScope(wsUrl), subprotocols)
+    presenceSocket = new WebSocket(wsUrl, subprotocols)
     presenceSocket.onopen = () => {
       wsConnected.value = true
       void _syncPresence()
@@ -543,6 +536,12 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       }
     }
   )
+
+  // A company switch reopens the presence socket; one already on the new URL stays (many instances watch).
+  onCompanySwitch(() => {
+    const id = currentSessionId.value
+    if (id && presenceSocket?.url !== presenceWsUrl(id)) { leaveSession(); joinSession(id) }
+  })
 
   if (getCurrentInstance()) {
     onMounted(() => {

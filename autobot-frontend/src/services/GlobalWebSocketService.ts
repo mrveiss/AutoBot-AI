@@ -18,7 +18,7 @@ import { DEFAULT_CONFIG } from '@/config/defaults.js'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
-import { buildAuthenticatedWsSubprotocols, withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
+import { buildAuthenticatedWsSubprotocols, onCompanySwitch, withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
 
@@ -854,9 +854,9 @@ if (typeof window !== 'undefined') {
     whenPiniaReady(() => {
       const userStore = useUserStore()
       tryConnect()
-      // #6692: react to login (token appears) and logout (token cleared) so a
-      // user who lands on the app pre-auth gets a connection the moment they
-      // sign in, without waiting for reconnect-backoff to fire.
+      onCompanySwitch(() => globalWebSocketService.forceReconnect())
+      // #6692: react to login (token appears) and logout (token cleared), so a user who lands pre-auth
+      // gets a connection the moment they sign in.
       watch(
         () => userStore.authState.token,
         (token, previous) => {

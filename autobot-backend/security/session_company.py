@@ -6,7 +6,8 @@
 
 The active company is the one every Company OS route already uses (``docs/llc/tenant-context.md``): the
 ``X-Organization-Id`` header the top-bar switcher sends (``fetchWithAuth.ts``), else the ``company_id`` query
-parameter (a browser WebSocket cannot set a header, so it names its company there), else the JWT ``org_id`` claim. A
+parameter (a browser WebSocket cannot set a header, so it names its company there), else the JWT ``org_id`` claim.
+A malformed header is not a name: it falls through to the query (``security.named_company``, the one definition). A
 header naming a company the caller is not a member of is refused, exactly as ``get_tenant_context`` refuses it;
 a platform admin may name any. A service principal, or a caller with no identity, acts in no company. Companies
 are internal entities, not tenants: this scopes what a person sees and opens, it is not an isolation boundary.
@@ -27,25 +28,19 @@ from starlette.requests import HTTPConnection
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from chat_history.company_scope import ActiveCompany
+from security.named_company import COMPANY_QUERY_PARAM, ORGANIZATION_HEADER, named_company, parse_uuid
 from security.session_owner_errors import SessionOwnerUnreadable
 
 logger = get_logger(__name__)
 
 #: The header the company switcher sends on every request (the same one ``get_tenant_context`` reads).
-ACTIVE_COMPANY_HEADER = "X-Organization-Id"
+ACTIVE_COMPANY_HEADER = ORGANIZATION_HEADER
 #: The query parameter a browser WebSocket names its company in, since it cannot set the header (the same parameter
 #: ``get_tenant_context`` falls back to, after the header).
-ACTIVE_COMPANY_QUERY_PARAM = "company_id"
+ACTIVE_COMPANY_QUERY_PARAM = COMPANY_QUERY_PARAM
 _STATE_KEY = "active_company_scope"
 #: The key a live connection's user payload carries its active company under, resolved once at connect.
 ACTIVE_COMPANY_KEY = "active_company"
-
-
-def _parse(value) -> uuid.UUID | None:
-    try:
-        return uuid.UUID(str(value)) if value else None
-    except (ValueError, TypeError):
-        return None
 
 
 async def may_act_in_company(company_id: uuid.UUID, user: dict) -> bool:
@@ -95,11 +90,9 @@ async def _resolve_company_scope(request: Request, user: dict | None) -> ActiveC
     user = user if user is not None else _caller(request)
     if not user or user.get("service") or user.get("auth_disabled"):
         return ActiveCompany(None)
-    named = _parse(request.headers.get(ACTIVE_COMPANY_HEADER)) or _parse(
-        request.query_params.get(ACTIVE_COMPANY_QUERY_PARAM)
-    )
+    named = named_company(request)
     if named is None:
-        return ActiveCompany(_parse(user.get("org_id")))
+        return ActiveCompany(parse_uuid(user.get("org_id")))
     if not await may_act_in_company(named, user):
         logger.warning("Active company refused: caller is not a member of the company the header names")
         raise fixed_refusal(403)
@@ -193,7 +186,7 @@ async def creation_company_metadata(request: Request, client_metadata: dict | No
     to name, and the owner decision is that an untagged chat waits in Unassigned for a person to assign it.
     """
     scope = await resolve_company_scope(request, user)
-    named = _parse((client_metadata or {}).get("company_id"))
+    named = parse_uuid((client_metadata or {}).get("company_id"))
     if named is None:
         return {"company_id": scope.active} if scope.active else {}
     if scope.active is not None and str(named) != scope.active:

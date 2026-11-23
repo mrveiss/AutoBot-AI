@@ -14,7 +14,7 @@ import { backoffDelay } from '@autobot/ui'
 import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, toValue, toRaw, type Ref, type MaybeRefOrGetter } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
-import { withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
+import { onCompanySwitch, withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
 
 // Create scoped logger for useWebSocket
 const logger = createLogger('useWebSocket')
@@ -443,6 +443,9 @@ export function useWebSocket(
       }
     })
   }
+
+  // A company switch reopens a live socket so its URL carries the new company (#21997)
+  onCompanySwitch(() => (isConnected.value || isConnecting.value) && reconnect())
 
   // Auto-connect on mount
   if (opts.autoConnect) {

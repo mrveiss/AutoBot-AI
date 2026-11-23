@@ -15,7 +15,7 @@ import { ref, watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import config, { getApiBase } from '@/config/ssot-config'
-import { buildAuthenticatedWsSubprotocols, withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
+import { buildAuthenticatedWsSubprotocols, onCompanySwitch, withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
 import type { ConnectionState } from '@/services/GlobalWebSocketService'
@@ -522,6 +522,10 @@ if (typeof window !== 'undefined') {
     whenPiniaReady(() => {
       const userStore = useUserStore()
       tryConnect()
+      onCompanySwitch(() => {
+        liveEventService.disconnect()
+        tryConnect()
+      })
       // React to login (token appears) and logout (token cleared).
       watch(
         () => userStore.authState.token,
