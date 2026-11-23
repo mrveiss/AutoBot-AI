@@ -16,6 +16,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import config, { getApiBase } from '@/config/ssot-config'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
+import { onCompanySwitch, withCompanyScope } from '@/utils/companyScopedSocket'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
 import type { ConnectionState } from '@/services/GlobalWebSocketService'
@@ -131,7 +132,7 @@ class LiveEventService {
     logger.debug('Connecting LiveEventService', { attempt: this.reconnectAttempts + 1 })
     return new Promise<void>((resolve, reject) => {
       try {
-        this.ws = new WebSocket(url, subprotocols)
+        this.ws = new WebSocket(withCompanyScope(url), subprotocols)
       } catch (err: unknown) {
         this._handleError(err)
         reject(err)
@@ -522,6 +523,10 @@ if (typeof window !== 'undefined') {
     whenPiniaReady(() => {
       const userStore = useUserStore()
       tryConnect()
+      onCompanySwitch(() => {
+        liveEventService.disconnect()
+        tryConnect()
+      })
       // React to login (token appears) and logout (token cleared).
       watch(
         () => userStore.authState.token,

@@ -1305,6 +1305,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/sessions/{session_id}/company": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign Session Company
+         * @description The owner assigns an Unassigned chat to a company; audited, once, never moved (#21997).
+         */
+        post: operations["assign_session_company_api_chat_sessions__session_id__company_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat/chats": {
         parameters: {
             query?: never;
@@ -23232,7 +23252,7 @@ export interface paths {
          *     Issue #12377: captures owner_id from the caller so HTTP-created sources
          *     are privately scoped like the LLC-created ones (source_service's
          *     create_github_source(owner_id=...), api/llc/sprints.py::attach_project_repo).
-         *     Uses the same caller-identity derivation (_caller_owner_id) that #12375's
+         *     Uses the same caller-identity derivation (caller_owner_id) that #12375's
          *     require_source_access dependency authorizes reads against, so create and
          *     read agree on what "owned by the caller" means.
          */
@@ -49612,6 +49632,8 @@ export interface paths {
          * Export Conversation
          * @description Export a single conversation in JSON or Markdown format (#1808).
          *
+         *     Follows read access (#22002): the shared ownership dependency, which also refuses another company's chat (#21997).
+         *
          *     - **json**: Enriched AutoBot JSON envelope with metadata and messages.
          *     - **markdown**: Human-readable Markdown with message headers.
          */
@@ -73441,6 +73463,21 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["SessionCheckpointClearData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[SessionCompanyAssignData] */
+        DataResponse_SessionCompanyAssignData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["SessionCompanyAssignData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -99824,6 +99861,31 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * SessionCompanyAssign
+         * @description Body of ``POST /chat/sessions/{session_id}/company``.
+         */
+        SessionCompanyAssign: {
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SessionCompanyAssignData
+         * @description data payload of ``POST /chat/sessions/{session_id}/company``.
+         */
+        SessionCompanyAssignData: {
+            /** Session Id */
+            session_id: string;
+            /** Company Id */
+            company_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** SessionCostResponse */
         SessionCostResponse: {
             /** Session Id */
@@ -99998,6 +100060,15 @@ export interface components {
             sessions: components["schemas"]["ChatSessionSummary"][];
             /** Count */
             count: number;
+            /**
+             * Unassigned
+             * @default []
+             */
+            unassigned: components["schemas"]["ChatSessionSummary"][];
+            /** Unassigned Count */
+            unassigned_count?: number | null;
+            /** Company Id */
+            company_id?: string | null;
             /** Scope */
             scope?: string | null;
             /** Org Id */
@@ -111574,6 +111645,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_SessionUnshareData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_session_company_api_chat_sessions__session_id__company_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionCompanyAssign"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionCompanyAssignData_"];
                 };
             };
             /** @description Validation Error */

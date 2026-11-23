@@ -136,6 +136,12 @@
     app_log_dir_group: "{{ slm_group }}"
   tags: ['slm', 'backend', 'systemd']
 
+# #19832: resolve the frontend trusted-proxy entries to IPs BEFORE the unit renders them (every renderer
+# of the unit comes through this file, the self-update path included).
+- name: "SLM | #19832: resolve the trusted proxies the unit carries"
+  ansible.builtin.import_tasks: trusted_proxies.yml
+  tags: ['slm', 'backend', 'systemd', 'config']
+
 - name: "SLM | Deploy backend systemd service"
   ansible.builtin.template:
     src: autobot-slm-backend.service.j2

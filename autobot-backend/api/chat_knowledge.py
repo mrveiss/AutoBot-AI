@@ -76,6 +76,7 @@ from autobot_shared.logging_manager import get_logger
 from chat_history.summarization_prompt import SummarizationFailed
 from constants.threshold_constants import CategoryDefaults
 from knowledge.search_filters import scoped_reader
+from security.session_company import require_session_company
 from security.upload_filename_policy import require_safe_upload
 
 # Import existing components
@@ -87,13 +88,10 @@ logger = get_logger(__name__)
 # inherits it. `get_current_user` not `check_admin_permission` -- these are
 # users operating on their own conversations, and an admin gate would lock them
 # out. Authentication only; see the docstring and #17722.
-router = APIRouter(tags=["chat_knowledge"], dependencies=[Depends(get_current_user)])
+router = APIRouter(tags=["chat_knowledge"], dependencies=[Depends(get_current_user), Depends(require_session_company)])
 
-# #16490: DELETE /context/{chat_id} and the /context-orphans cleanup routes
-# live in a sibling module -- this file is a handful of lines from
-# scripts/check_python_file_size.py's MAX_LINES, the same reason
-# chat_knowledge_manager.py/chat_knowledge_prompt.py were split out of it
-# (#15160). Composed the same way api/chat.py composes api/chat_sessions.py.
+# #16490: DELETE /context/{chat_id} and the /context-orphans cleanup routes live in a sibling module (this file is
+# at scripts/check_python_file_size.py's MAX_LINES, like chat_knowledge_manager.py/chat_knowledge_prompt.py, #15160).
 from api.chat_knowledge_delete import router as _delete_router
 
 router.include_router(_delete_router)

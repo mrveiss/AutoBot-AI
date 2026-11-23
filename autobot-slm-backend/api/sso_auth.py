@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.security import create_audit_log
 from api.sso_deps import get_audit_db
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.proxy_utils import get_client_ip
 from autobot_shared.rate_limiter import RateLimiter
 from config import settings
@@ -264,16 +265,10 @@ async def initiate_sso_login(
             state=state,
         )
     except SSOProviderNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e
     except SSOServiceError as e:
         logger.error("Failed to initiate SSO login: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST) from e
 
 
 @router.get("/callback")
@@ -402,15 +397,9 @@ async def ldap_login(
             await audit_db.commit()
         except Exception as audit_err:
             logger.warning("SSO audit write failed: %s", audit_err)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_401_UNAUTHORIZED) from e
     except SSOProviderNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        ) from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e
 
 
 @router.get("/saml/slo")

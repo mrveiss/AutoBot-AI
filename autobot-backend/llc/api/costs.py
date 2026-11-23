@@ -43,13 +43,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llc.deps import assert_company_access
+from llc.deps import SESSION_DEP, assert_company_access
 from llc.models.budget import LLCAgentBudget
 from llc.services.model_tiers import get_model_tier_service
 from llc.services.step_rollup import StepRollupService
 from llm_shared.quota_headroom import QuotaHeadroomEntry, get_quota_headroom_store
 from models.agent_org import AgentOrgNode
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 logger = get_logger(__name__)
@@ -207,7 +206,7 @@ def _company_uuid(company_id: str):
 @router.get("/by-agent-model", response_model=List[AgentModelCost])
 async def costs_by_agent_model(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentModelCost]:
@@ -395,7 +394,7 @@ def _bucket_out(bucket) -> RollupBucketOut:  # noqa: ANN001
 @router.get("/step-rollup", response_model=StepRollupResponse)
 async def step_rollup(
     company_id: str = Query(..., description="Company UUID"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> StepRollupResponse:

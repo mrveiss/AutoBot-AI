@@ -46,6 +46,7 @@ from api.schemas_workflows import (
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from skills.manager import SkillManager, get_skill_manager
 from skills.registry import get_skill_registry
@@ -291,7 +292,7 @@ async def install_catalog_skill(
         pkg = await importer.install_from_catalog(name, entry, repo_id=body.repo_id)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=422, detail="Internal server error")
+        raise fixed_refusal(422)
 
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:

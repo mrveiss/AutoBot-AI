@@ -84,3 +84,15 @@ export function applyOrgHeader(headers: Headers): void {
 export function orgScope(companyId: string): { headers: { 'X-Organization-Id': string } } {
   return { headers: { 'X-Organization-Id': companyId } }
 }
+
+/**
+ * A WebSocket URL naming the selected company in the `company_id` query parameter. A browser WebSocket cannot
+ * set the `X-Organization-Id` header, so this is how a socket tells the backend its active company; the backend
+ * checks the caller's membership exactly as it does for the header. Unchanged when no company is selected or the
+ * URL already names one.
+ */
+export function withCompanyScope(url: string): string {
+  const companyId = getSelectedCompanyId()
+  if (!companyId || /[?&]company_id=/.test(url)) return url
+  return `${url}${url.includes('?') ? '&' : '?'}company_id=${encodeURIComponent(companyId)}`
+}

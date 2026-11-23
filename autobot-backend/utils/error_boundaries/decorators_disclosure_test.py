@@ -21,6 +21,7 @@ from fastapi import HTTPException
 
 from autobot_shared.error_boundaries.decorators import with_error_handling
 from autobot_shared.error_boundaries.types import APIErrorResponse, ErrorCategory
+from autobot_shared.http_refusal import REFUSAL_TEXT
 
 # A message shaped like the ones that actually leak here.
 _LEAKY = "could not connect to /opt/autobot/run/redis.sock db=4 user=autobot_admin"
@@ -149,3 +150,19 @@ def test_the_sync_wrapper_is_sanitised_too():
 
     assert _LEAKY not in str(caught.value.detail)
     assert "RuntimeError" not in str(caught.value.detail)
+
+
+def test_every_4xx_category_answers_with_the_one_refusal_wording():
+    """A 4xx reads the same from the boundary as from a route's ``fixed_refusal`` (#21943).
+
+    Fails if a category regains its own client wording, or if its status has no entry in
+    ``REFUSAL_TEXT`` and would fall back to the generic default.
+    """
+    client_errors = [c for c in ErrorCategory if APIErrorResponse.get_status_code_for_category(c) < 500]
+    assert client_errors, "the instrument found no 4xx category to check"
+    for category in client_errors:
+        status = APIErrorResponse.get_status_code_for_category(category)
+        assert status in REFUSAL_TEXT, f"{category} -> {status} has no fixed refusal wording"
+        assert APIErrorResponse.get_client_message_for_category(category) == REFUSAL_TEXT[status]
+    server = APIErrorResponse.get_client_message_for_category(ErrorCategory.SERVER_ERROR)
+    assert server not in REFUSAL_TEXT.values()  # 5xx keep the boundary's own wording
