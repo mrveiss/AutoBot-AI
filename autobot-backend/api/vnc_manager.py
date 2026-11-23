@@ -349,8 +349,8 @@ async def vnc_mouse_click(
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
-    Perform mouse click at specified coordinates with human-like behavior.
-    Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Click at the given coordinates on the selected /secrets host (#22145).
+    Issue #74: Desktop interaction controls.
     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
     control-lock -- the lock owner's own toolbar keeps working.
 
@@ -374,8 +374,8 @@ async def vnc_keyboard_type(
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
-    Type text via keyboard with human-like speed and pauses.
-    Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Type text on the selected /secrets host (#22145).
+    Issue #74: Desktop interaction controls.
     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
     control-lock -- the lock owner's own toolbar keeps working.
 
@@ -449,8 +449,8 @@ async def vnc_mouse_drag(
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
-    Perform mouse drag operation with curved, human-like movement.
-    Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Drag along a curved path on the selected /secrets host (#22145).
+    Issue #74: Desktop interaction controls.
     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
     control-lock -- the lock owner's own toolbar keeps working.
 
