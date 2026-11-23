@@ -41,6 +41,9 @@ export type { RiskTier } from './src/types/riskTier'
 export { default as BaseAlert } from './src/components/BaseAlert.vue'
 export type { AlertVariant, AlertSize, BaseAlertProps } from './src/components/BaseAlert.vue'
 
+export { default as BaseProgress } from './src/components/BaseProgress.vue'
+export type { ProgressVariant, ProgressSize } from './src/components/BaseProgress.vue'
+
 export { default as BaseCard } from './src/components/BaseCard.vue'
 
 // The one data table (#14778) -- retires the main app's BaseTable and DataTable forks.

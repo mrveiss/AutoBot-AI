@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.user_management import last_platform_admin
 from autobot_shared.user_management.revocation_outcome import RENAME_REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
 from autobot_shared.user_management.user_service_errors import UserNotFoundError
@@ -57,7 +58,7 @@ async def create_autobot_user(
         return UserResponse.model_validate(user)
     except Exception as e:
         logger.error("Failed to create AutoBot user: %s", e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error") from e
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST) from e
 
 
 @router.get("", response_model=UserListResponse)
@@ -123,7 +124,7 @@ async def update_autobot_user(
         response = UserResponse.model_validate(user)
     except Exception as e:
         logger.error("Failed to update AutoBot user: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e
     await commit_or_503(db, RENAME_REVOCATION_INCOMPLETE_MESSAGE)  # outside the try, whose except answers 404
     return response
 
@@ -169,6 +170,6 @@ async def delete_autobot_user(
         raise await last_platform_admin.refuse_last_platform_admin(db, exc) from exc
     except Exception as e:
         logger.error("Failed to delete AutoBot user: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e
 
     await commit_or_503(db)  # a failed revocation is answered, not only logged (#20443)
