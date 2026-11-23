@@ -32,7 +32,7 @@ from typing import Dict, List, Mapping, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from models.manifest import RoleManifest, ServiceType
-from services.role_manifest_errors import MANIFEST_ERRORS
+from services.role_manifest_errors import HEALTH_UNDECLARED, MANIFEST_ERRORS
 
 logger = get_logger(__name__)
 
@@ -182,6 +182,7 @@ def default_roles_for(
 
     manifests = get_manifest_loader().load_all()
     errors: Dict[str, str] = {}
+    HEALTH_UNDECLARED.clear()
     roles = []
     for role in static_roles:
         try:
@@ -202,15 +203,20 @@ def default_roles_for(
 def _apply_health(role_data: Dict, name: str, manifest: RoleManifest) -> None:
     """Set health_check_port/path from the manifest's explicit ``role_health`` entry for ``name`` (#22032).
 
-    An entry with ``checked: false`` sets neither. A manifest with no entry for the role raises: health is
-    declared per role, never inferred from the manifest's single ``health.endpoint``.
+    An entry with ``checked: false`` sets neither. A manifest with no entry for the role (an installed manifest older
+    than this code) leaves the role whole and only its health unset: logged once, recorded in ``HEALTH_UNDECLARED``.
+    Health is never inferred from the manifest's single ``health.endpoint``.
     """
-    entry = manifest.role_health.get(name)
+    entry = (manifest.role_health or {}).get(name)
     if entry is None:
-        raise RoleManifestMissingError(
-            f"role {name!r} resolves to manifest {manifest.role!r}, which declares no role_health for it "
-            f"(declared: {sorted(manifest.role_health)}); state its health or `checked: false`"
-        )
+        if name not in HEALTH_UNDECLARED:
+            logger.warning(
+                "Manifest %s declares no role_health for role %s: no health check (stale manifest?)",
+                manifest.role,
+                name,
+            )
+        HEALTH_UNDECLARED[name] = manifest.role
+        return
     if entry.checked:
         role_data["health_check_port"] = entry.port
         role_data["health_check_path"] = entry.path

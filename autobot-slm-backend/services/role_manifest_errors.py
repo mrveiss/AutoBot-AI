@@ -15,6 +15,10 @@ from typing import Dict
 #: role name -> why it was left out of ``role_registry.DEFAULT_ROLES``. Empty when every role resolved.
 MANIFEST_ERRORS: Dict[str, str] = {}
 
+#: role name -> the manifest that declares no ``role_health`` for it (#22032): an installed manifest older than the SLM
+#: code. The role stays fully available and simply has no health check; this is the report, not a refusal.
+HEALTH_UNDECLARED: Dict[str, str] = {}
+
 
 def manifest_errors() -> Dict[str, str]:
     """A copy of ``MANIFEST_ERRORS``: roles unavailable for want of a usable manifest; empty when healthy."""

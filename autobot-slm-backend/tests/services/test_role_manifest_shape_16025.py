@@ -188,10 +188,15 @@ def test_a_role_declared_unchecked_gains_no_health_from_a_shared_manifest():
     assert "health_check_port" not in result and "health_check_path" not in result
 
 
-def test_a_role_the_manifest_declares_no_health_for_is_refused_not_inferred():
-    manifest = _manifest("autobot-backend", health_endpoint="https://x:8443/x")
-    with pytest.raises(rms.RoleManifestMissingError, match="declares no role_health for it"):
-        rms.apply_manifest_shape({"name": "backend"}, {"autobot-backend": manifest})
+def test_a_stale_manifest_without_role_health_keeps_the_role_whole_and_omits_only_its_health():
+    rms.HEALTH_UNDECLARED.clear()
+    manifest = _manifest("autobot-backend", services=[_svc("autobot-backend")], health_endpoint="https://x:8443/x")
+    manifest = manifest.model_copy(update={"role_health": None})
+    result = rms.apply_manifest_shape({"name": "backend"}, {"autobot-backend": manifest}, {})
+    assert result["systemd_service"] == ["autobot-backend"] and result["canonical_name"] == "autobot-backend"
+    assert "health_check_port" not in result and "health_check_path" not in result
+    assert rms.HEALTH_UNDECLARED == {"backend": "autobot-backend"}
+    rms.HEALTH_UNDECLARED.clear()
 
 
 def test_registry_only_fields_are_never_touched():

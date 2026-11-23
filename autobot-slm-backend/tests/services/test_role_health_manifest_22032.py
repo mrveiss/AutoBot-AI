@@ -175,3 +175,49 @@ def test_a_tagged_role_without_a_health_entry_is_rejected():
 def test_every_tagged_role_with_an_entry_is_accepted():
     declared = {"a": RoleHealthCheck(checked=False), "b": RoleHealthCheck(checked=True, port=9, path="/h")}
     assert set(_manifest_tagging(["a", "b"], declared).role_health) == {"a", "b"}
+
+
+def _undeclared(manifests: dict, role_names: set[str]) -> list[str]:
+    """Registry roles that resolve to a manifest which declares no ``role_health`` entry for them."""
+    found = []
+    for name in sorted(role_names):
+        manifest, _owns = rms.find_role_manifest(name, manifests)
+        if manifest is not None and name not in (manifest.role_health or {}):
+            found.append(name)
+    return found
+
+
+def test_every_real_manifest_declares_health_for_every_role_it_serves():
+    assert _undeclared(_manifests(), _registry_role_names()) == []
+
+
+def test_a_synthetic_manifest_missing_an_entry_is_flagged_and_a_complete_one_passes():
+    def build(role_health):
+        svc = ManifestService(name="x", slm_roles=["a"])
+        return RoleManifest(
+            role="autobot-x",
+            description="fixture",
+            deploy={"source": "x/", "destination": "/opt/x/", "sync": False},
+            services=[svc],
+            role_health=role_health,
+        )
+
+    assert _undeclared({"autobot-x": build({})}, {"a"}) == ["a"]
+    assert _undeclared({"autobot-x": build(None)}, {"a"}) == ["a"]
+    assert _undeclared({"autobot-x": build({"a": RoleHealthCheck(checked=False)})}, {"a"}) == []
+
+
+def test_a_stale_manifest_without_role_health_parses_and_its_roles_keep_units_and_sync():
+    stale = RoleManifest(
+        role="autobot-backend",
+        description="stale",
+        deploy={"source": "autobot-backend/", "destination": "/opt/b/", "sync_target": "{base_dir}"},
+        services=[
+            ManifestService(name="autobot-backend"),
+            ManifestService(name="autobot-celery", slm_roles=["celery"]),
+        ],
+    )
+    assert stale.role_health is None
+    shaped = rms.apply_manifest_shape({"name": "celery"}, {"autobot-backend": stale}, {"base_dir": "/b"})
+    assert shaped["systemd_service"] == ["autobot-celery"] and shaped["target_path"] == "/b"
+    assert "health_check_port" not in shaped
