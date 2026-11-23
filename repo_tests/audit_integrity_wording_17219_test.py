@@ -54,7 +54,7 @@ REACH = declare(
     discover=_population,
     what="audit modules (path names audit)",
     roots=_ROOTS,
-    floor=45,  # #19676: pinned while the declaration is new; drops once it has a base to compare to
+    floor=46,  # #19676: pinned while the declaration is new; drops once it has a base to compare to
 )
 
 
