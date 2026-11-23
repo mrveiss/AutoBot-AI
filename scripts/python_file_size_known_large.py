@@ -460,7 +460,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 775,
     "autobot_shared/circuit_breaker.py": 689,
-    "autobot_shared/env_registry.py": 1049,  # #20910: transcriber block -> env_registry_transcriber (was 1061)
+    "autobot_shared/env_registry.py": 1045,  # #22030: backend header folded (was 1049; #20910: 1061)
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/npu/integration.py": 929,
     "autobot_shared/plugin_sdk/loader.py": 682,

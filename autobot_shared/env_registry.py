@@ -139,9 +139,7 @@ register_env_var(
     )
 )
 
-# --- backend ----------------------------------------------------------------
-
-# --- chat -------------------------------------------------------------------
+# --- backend: env_registry_backend.py (#22030: folded to make room for the slm_client import) --- chat ---
 
 register_env_var(
     EnvVarSpec(
