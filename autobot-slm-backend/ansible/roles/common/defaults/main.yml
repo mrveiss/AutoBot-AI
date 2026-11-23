@@ -61,7 +61,7 @@ firewall_service_ports:
 
   # SLM services
   slm_backend: "{{ slm_backend_port }}"
-  slm_frontend: 443
+  slm_frontend: "{{ slm_nginx_tls_port }}"
 
 # Default UFW logging level
 # Options: off, low, medium, high, full

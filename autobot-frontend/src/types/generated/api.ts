@@ -19271,7 +19271,7 @@ export interface paths {
         put?: never;
         /**
          * Enable Plugin
-         * @description Enable a plugin.
+         * @description Enable a plugin: audited, persisted across restarts, and applied to the loaded plugin (#17421).
          *
          *     Args:
          *         plugin_name: Plugin name
@@ -19297,7 +19297,7 @@ export interface paths {
         put?: never;
         /**
          * Disable Plugin
-         * @description Disable a plugin.
+         * @description Disable a plugin: audited, persisted across restarts, and applied to the loaded plugin (#17421).
          *
          *     Args:
          *         plugin_name: Plugin name
@@ -23252,7 +23252,7 @@ export interface paths {
          *     Issue #12377: captures owner_id from the caller so HTTP-created sources
          *     are privately scoped like the LLC-created ones (source_service's
          *     create_github_source(owner_id=...), api/llc/sprints.py::attach_project_repo).
-         *     Uses the same caller-identity derivation (_caller_owner_id) that #12375's
+         *     Uses the same caller-identity derivation (caller_owner_id) that #12375's
          *     require_source_access dependency authorizes reads against, so create and
          *     read agree on what "owned by the caller" means.
          */
@@ -43020,7 +43020,7 @@ export interface paths {
          *     "system:") go through the SkillApproval governance workflow (GH#8734 AC-6):
          *     admins resume immediately; non-admins receive HTTP 202 with an approval_id
          *     that an admin must approve via the SLM dashboard before the agent resumes.
-         *     User-paused agents can be resumed by any authenticated user.
+         *     User-paused agents can be resumed by an owner/admin of the agent's company (#21376).
          *     DISABLED and TERMINATED agents are not affected — use PUT /config instead.
          */
         post: operations["resume_agent_api_heartbeat__agent_id__resume_post"];
@@ -177883,7 +177883,9 @@ export interface operations {
     ingest_cost_api_llc_budget__agent_id__ingest_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 agent_id: string;
             };

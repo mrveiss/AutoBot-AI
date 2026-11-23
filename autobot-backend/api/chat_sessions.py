@@ -57,6 +57,7 @@ from chat_history.owner_keys import owner_from_metadata, strip_server_controlled
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from exceptions import AuthenticationError, AuthorizationError
 from exceptions import ValidationError as ScopeValidationError
 from exceptions import get_exceptions_lazy
 from security.session_company import creation_company_metadata, resolve_company_scope
@@ -196,31 +197,27 @@ def _validate_session_id_or_raise(session_id: str) -> None:
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+        raise ValidationError("Invalid session ID format", client_message="Invalid session ID format")
+
+
+CHAT_MESSAGES_MAX_PER_PAGE = 100  # largest page a client may request (#21998)
 
 
 def _validate_pagination_params(page: int, per_page: int) -> None:
     """
     Validate pagination parameters and raise ValidationError if invalid.
 
-    Issue #620.
-
-    Args:
-        page: Page number (must be >= 1)
-        per_page: Items per page (must be 1-100)
+    Issue #620. The boundary answers the error with a 4xx naming the range (#21998).
 
     Raises:
-        ValidationError: If parameters are invalid
+        ValidationError: page must be >= 1 and per_page within CHAT_MESSAGES_MAX_PER_PAGE
     """
-    if page < 1 or per_page < 1 or per_page > 100:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Invalid pagination parameters")
+    if page < 1 or not 1 <= per_page <= CHAT_MESSAGES_MAX_PER_PAGE:
+        _, _, _, ValidationError, _ = get_exceptions_lazy()
+        raise ValidationError(
+            "Invalid pagination parameters",
+            client_message=f"page must be >= 1 and per_page 1-{CHAT_MESSAGES_MAX_PER_PAGE}",
+        )
 
 
 def _validate_export_format_or_raise(export_format: str) -> None:
@@ -243,7 +240,10 @@ def _validate_export_format_or_raise(export_format: str) -> None:
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Invalid export format. Supported: json, txt, csv")
+        raise ValidationError(
+            "Invalid export format. Supported: json, txt, csv",
+            client_message="Invalid export format. Supported: json, txt, csv",
+        )
 
 
 async def _export_session_data_or_raise(chat_history_manager, session_id: str, export_format: str) -> str:
@@ -477,14 +477,7 @@ async def _list_scoped_sessions(
     """
     user_data = get_auth_middleware().get_user_from_request(request)
     if not user_data:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Authentication required for scoped listing")
+        raise AuthenticationError("Authentication required for scoped listing")
 
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
 
@@ -521,14 +514,7 @@ async def _list_org_sessions(
             data={"sessions": [], "count": 0, "scope": "org"}, message="User has no organization", request_id=request_id
         )
     if not (is_admin_role(user_role) or user_role == "org_admin"):
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Admin role required for org-scoped listing")
+        raise AuthorizationError("Admin role required for org-scoped listing")
 
     session_ids = set(await validator.get_org_sessions(org_id))
     all_sessions = await chat_history_manager.list_sessions_fast()
@@ -871,7 +857,7 @@ async def update_session(
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+        raise ValidationError("Invalid session ID format", client_message="Invalid session ID format")
 
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
@@ -924,7 +910,7 @@ def _validate_delete_session_params(session_id: str, file_action: str, file_opti
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+        raise ValidationError("Invalid session ID format", client_message="Invalid session ID format")
 
     # Validate file_action (Issue #380: use module-level constant)
     if file_action not in _VALID_FILE_ACTIONS:
@@ -935,7 +921,10 @@ def _validate_delete_session_params(session_id: str, file_action: str, file_opti
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError(f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}")
+        raise ValidationError(
+            f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}",
+            client_message=f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}",
+        )
 
     # Parse file_options if provided
     parsed_file_options = {}
@@ -1594,7 +1583,7 @@ async def get_session_activities(
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+        raise ValidationError("Invalid session ID format", client_message="Invalid session ID format")
 
     # Get memory graph from app state
     memory_graph: AutoBotMemoryGraph | None = getattr(request.app.state, "memory_graph", None)
@@ -1674,14 +1663,7 @@ async def clear_session_checkpoints(
     """
     user_role = current_user.get("role", "")
     if not (is_admin_role(user_role) or user_role == "org_admin"):
-        (
-            _AutoBotError,
-            _InternalError,
-            _ResourceNotFoundError,
-            ValidationError,
-            _get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Admin role required to clear session checkpoints")
+        raise AuthorizationError("Admin role required to clear session checkpoints")
     try:
         from chat_workflow.graph import delete_thread_checkpoints
 

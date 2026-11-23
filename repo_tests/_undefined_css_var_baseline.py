@@ -66,7 +66,6 @@ UNDEFINED_CSS_VAR_NAMES: dict[str, int] = {
     "--color-primary-bg-transparent": 1,
     "--color-primary-border": 1,
     "--color-primary-rgb": 1,
-    "--color-primary-transparent": 2,
     "--color-purple-bg-transparent": 1,
     "--color-success-bg-transparent": 3,
     "--color-success-rgb": 2,
@@ -108,4 +107,4 @@ UNDEFINED_CSS_VAR_NAMES: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately so a per-name edit cannot drift it unseen.
-TOTAL_SITES = 127  # #18819: -5, the deleted ErrorBanner and ui/BaseAlert were the only users of five undefined vars
+TOTAL_SITES = 125  # #18819: -5, the deleted ErrorBanner and ui/BaseAlert were the only users of five undefined vars
