@@ -21,7 +21,7 @@
 # The promtool provisioning IS mirrored, so the cold run collects the same rule tests.
 #
 # No pull-request CI slot: the trigger is `schedule`/`workflow_dispatch`, never `pull_request`,
-# and a scheduled run's ref is `main`, which pr-coordinator's PROTECTED set never touches.
+# and a scheduled run's ref is `main`, whose runs the PR slot coordinator leaves alone (it skips a fixed set of branch names).
 # 02:47 UTC sits between coverage (02:00) and the failure sweep (07:23).
 
 name: Scheduled Cold-Cache Canary
