@@ -1,5 +1,5 @@
 # Databases, caches, and ORMs
-redis>=8.1.0,<9.0
+redis>=8.1.0,<8.2  # <8.2: redis 8.2.0 breaks fakeredis 2.40.0 (#22120); was <9.0
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 chromadb  # version from constraints/shared.txt (#19478)
 sqlalchemy  # held below 2.1 by constraints/shared.txt, with the three service manifests: 2.1 breaks the SLM suite (InternalTraversal); raising it is #17445's work, not a bump's
