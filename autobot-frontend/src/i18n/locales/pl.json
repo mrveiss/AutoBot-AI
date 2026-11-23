@@ -10024,6 +10024,8 @@
     "pauseAll": "Wstrzymaj wszystkich agentów",
     "pauseFailed": "Nie udało się wstrzymać agentów",
     "resumeAll": "Wznów wszystkich agentów",
-    "resumeFailed": "Nie udało się wznowić agentów"
+    "resumeFailed": "Nie udało się wznowić agentów",
+    "successRate": "Wskaźnik powodzenia",
+    "tasksCompleted": "Ukończone zadania"
   }
 }

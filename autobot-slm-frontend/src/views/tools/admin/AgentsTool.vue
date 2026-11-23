@@ -19,7 +19,8 @@ import { useI18n } from 'vue-i18n'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import { useAgentsApi } from '@/composables/useAgentsApi'
-import type { AgentOrgStatusItem, AvailableAgent } from '@/types/agents'
+import type { AgentOrgStatusItem } from '@/types/agents'
+import { joinAgents, statusGroup, summarise, type Agent, type AgentStats } from '@/composables/agentsRoster'
 
 const api = useAutobotApi()
 const agentsApi = useAgentsApi()
@@ -29,22 +30,6 @@ const { t } = useI18n()
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-// #22141: GET /agent/agents/available rows, joined with the agent_org status items (stats) and the
-// AI-stack status items (type) by name or id. A null stat is unmeasured, never 0 (#17514).
-interface Agent extends AvailableAgent {
-  type: string | null
-  tasksCompleted: number | null
-  successRate: number | null
-}
-
-interface AgentStats {
-  total_agents: number
-  active_agents: number
-  total_tasks: number | null
-  avg_success_rate: number | null
-}
-
-const ACTIVE_STATUSES = ['active', 'available', 'ready']
 const EMPTY_STATS: AgentStats = { total_agents: 0, active_agents: 0, total_tasks: null, avg_success_rate: null }
 
 const agents = ref<Agent[]>([])
@@ -73,11 +58,6 @@ const filteredAgents = computed(() => {
 })
 
 // Methods
-function statusGroup(status: string | null): string {
-  if (status === null) return 'unknown'
-  return ACTIVE_STATUSES.includes(status) ? 'active' : status
-}
-
 function getStatusClass(status: string | null): string {
   switch (statusGroup(status)) {
     case 'active': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
@@ -96,39 +76,6 @@ function getStatusDot(status: string | null): string {
     case 'stopped': return 'bg-autobot-text-tertiary'
     default: return 'bg-autobot-text-tertiary'
   }
-}
-
-function average(values: number[]): number | null {
-  return values.length ? Math.round(values.reduce((sum, v) => sum + v, 0) / values.length) : null
-}
-
-function summarise(rows: Agent[], total: number): AgentStats {
-  const tasks = rows.map(a => a.tasksCompleted).filter((v): v is number => v !== null)
-  const rates = rows.map(a => a.successRate).filter((v): v is number => v !== null)
-  return {
-    total_agents: total,
-    active_agents: rows.filter(a => statusGroup(a.status) === 'active').length,
-    total_tasks: tasks.length ? tasks.reduce((sum, v) => sum + v, 0) : null,
-    avg_success_rate: average(rates),
-  }
-}
-
-function joinAgents(
-  available: AvailableAgent[],
-  org: AgentOrgStatusItem[],
-  types: Record<string, string>,
-): Agent[] {
-  const byKey = new Map<string, AgentOrgStatusItem>()
-  org.forEach(o => { byKey.set(o.id, o); byKey.set(o.name, o) })
-  return available.map(a => {
-    const o = byKey.get(a.name)
-    return {
-      ...a,
-      type: types[a.name] ?? o?.type ?? null,
-      tasksCompleted: o?.tasksCompleted ?? null,
-      successRate: o?.successRate ?? null,
-    }
-  })
 }
 
 // The stats are supplementary: a failure there leaves them "not reported" instead of blanking the tab.

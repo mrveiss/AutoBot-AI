@@ -11058,6 +11058,8 @@
     "pauseAll": "Pause all agents",
     "pauseFailed": "Failed to pause agents",
     "resumeAll": "Resume all agents",
-    "resumeFailed": "Failed to resume agents"
+    "resumeFailed": "Failed to resume agents",
+    "successRate": "Success Rate",
+    "tasksCompleted": "Tasks Completed"
   }
 }

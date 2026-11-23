@@ -146,7 +146,6 @@ def _ollama_agent(model: Metadata) -> AIStackAgent:
     return AIStackAgent(
         name=model["name"],
         type=model["name"].replace(":", "_").replace(".", "_"),
-        status="ready",
         provider="ollama",
         parameters=model.get("details", {}).get("parameter_size", ""),
     )

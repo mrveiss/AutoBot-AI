@@ -21,7 +21,7 @@ import time
 from typing import List
 
 import aiohttp
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from api.agent_events import BROADCAST_CHANNEL, owner_channel, publish_event_safe, publish_goal_events
@@ -47,6 +47,7 @@ from api.schemas_agent_requests import (
 from api.schemas_agent_roster import AgentAvailableData, AgentStatusData
 from api.schemas_common import AgentMessageResponse, DataResponse
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.auth.permissions import role_value
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
@@ -678,7 +679,7 @@ async def receive_goal(
 
     goal = payload.goal
     use_phi2 = payload.use_phi2
-    user_role = payload.user_role
+    user_role = role_value(current_user.get("role"))  # #22143: never the payload
 
     # Check permission (Issue #620: uses helper)
     permission_error = _check_goal_permission(security_layer, user_role, goal)
@@ -709,8 +710,8 @@ async def receive_goal(
 )
 async def pause_agent_api(
     request: Request,
-    user_role: str = Form("user"),
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Pauses the agent's current operation (Issue #744: requires admin authentication).
@@ -719,6 +720,7 @@ async def pause_agent_api(
     backend integration.
     """
     security_layer = request.app.state.security_layer
+    user_role = role_value(current_user.get("role"))  # #22143: never a Form field
     orchestrator = getattr(request.app.state, "orchestrator", None)
     if orchestrator is None:
         raise HTTPException(
@@ -752,8 +754,8 @@ async def pause_agent_api(
 )
 async def resume_agent_api(
     request: Request,
-    user_role: str = Form("user"),
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Resumes the agent's operation if paused (Issue #744: requires admin authentication).
@@ -762,6 +764,7 @@ async def resume_agent_api(
     Full implementation will be added with backend integration.
     """
     security_layer = request.app.state.security_layer
+    user_role = role_value(current_user.get("role"))  # #22143: never a Form field
     orchestrator = getattr(request.app.state, "orchestrator", None)
     if orchestrator is None:
         raise HTTPException(
@@ -797,6 +800,7 @@ async def command_approval(
     request: Request,
     payload: CommandApprovalPayload,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Receives user approval/denial for a command execution.
@@ -809,7 +813,7 @@ async def command_approval(
 
     task_id = payload.task_id
     approved = payload.approved
-    user_role = payload.user_role
+    user_role = role_value(current_user.get("role"))  # #22143: never the payload
 
     # Check permission (Issue #620: uses helper)
     permission_error = _check_approval_permission(security_layer, user_role, task_id, approved)
@@ -857,7 +861,7 @@ async def execute_command(
                       or a 500 error if an internal error occurs.
     """
     security_layer = request.app.state.security_layer
-    command, user_role = payload.command, payload.user_role
+    command, user_role = payload.command, role_value(current_user.get("role"))  # #22143
     channel = owner_channel(current_user)  # #17354: not every signed-in client
 
     # Validate command request (Issue #281: uses helper)

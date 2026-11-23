@@ -10024,6 +10024,8 @@
     "pauseAll": "Apturēt visus aģentus",
     "pauseFailed": "Neizdevās apturēt aģentus",
     "resumeAll": "Atsākt visus aģentus",
-    "resumeFailed": "Neizdevās atsākt aģentus"
+    "resumeFailed": "Neizdevās atsākt aģentus",
+    "successRate": "Veiksmes rādītājs",
+    "tasksCompleted": "Pabeigtie uzdevumi"
   }
 }

@@ -56326,6 +56326,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AIStackAgent
+         * @description One agent as listed by ``AIStackClient.list_available_agents``.
+         */
+        AIStackAgent: {
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Status */
+            status?: string | null;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
+             * Parameters
+             * @default
+             */
+            parameters: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AIStackAgentsData
          * @description Data payload for GET /ai-stack/agents.
          */
@@ -58535,7 +58559,7 @@ export interface components {
             /** Total Agents */
             total_agents: number;
             /** Available Agents */
-            available_agents: string[];
+            available_agents: components["schemas"]["AIStackAgent"][];
             /** Multi Agent Coordination */
             multi_agent_coordination: boolean;
             /** Npu Acceleration */
@@ -62441,16 +62465,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** Body_pause_agent_api_api_agent_pause_post */
-        Body_pause_agent_api_api_agent_pause_post: {
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** Body_process_audio_api_multimodal_process_audio_post */
         Body_process_audio_api_multimodal_process_audio_post: {
             /** File */
@@ -62492,16 +62506,6 @@ export interface components {
             path: string;
             /** New Name */
             new_name: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** Body_resume_agent_api_api_agent_resume_post */
-        Body_resume_agent_api_api_agent_resume_post: {
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -67129,11 +67133,6 @@ export interface components {
             task_id: string;
             /** Approved */
             approved: boolean;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -67175,16 +67174,11 @@ export interface components {
         };
         /**
          * CommandExecutePayload
-         * @description Body of POST /execute_command: the command to run and the caller's role.
+         * @description Body of POST /execute_command: the command to run.
          */
         CommandExecutePayload: {
             /** Command */
             command: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -79605,7 +79599,7 @@ export interface components {
          * GoalPayload
          * @description Goal payload — unified from bare and advanced variants (#10666 B1).
          *
-         *     The simple /goal endpoint reads only ``goal``/``use_phi2``/``user_role``.
+         *     The simple /goal endpoint reads only ``goal``/``use_phi2``; the caller's role comes from the authenticated identity (#22143).
          *     The /goal/orchestrated endpoint also reads the remaining optional fields.
          *     All added fields carry defaults, so existing callers that only send
          *     ``goal`` remain fully backward-compatible.
@@ -79621,11 +79615,6 @@ export interface components {
              * @default false
              */
             use_phi2: boolean;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Agents
              * @description Specific agents to use
@@ -131617,11 +131606,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_pause_agent_api_api_agent_pause_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -131630,15 +131615,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMessageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -131650,11 +131626,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_resume_agent_api_api_agent_resume_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -131663,15 +131635,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMessageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

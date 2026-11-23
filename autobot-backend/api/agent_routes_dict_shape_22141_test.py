@@ -63,3 +63,22 @@ async def test_client_fallback_returns_same_typed_shape() -> None:
     info = await client.list_available_agents()
     assert info["source"] == "fallback_config"
     assert all(isinstance(a, dict) and a["name"] == a["type"] for a in info["agents"])
+
+
+async def test_ollama_branch_reports_no_invented_status() -> None:
+    """Ollama reports no agent status, so the typed agent carries None (#22141)."""
+    from unittest.mock import MagicMock
+
+    tags = MagicMock()
+    tags.status = 200
+    tags.json = AsyncMock(return_value={"models": [{"name": "llama3.2:3b", "details": {"parameter_size": "3.2B"}}]})
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=tags)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    client = AIStackClient(base_url="http://ai-stack.invalid", enabled=False)
+    client._ollama_url = "http://ollama.invalid"
+    client._ollama_tags = lambda: cm
+    info = await client.list_available_agents()
+    assert info["source"] == "ollama"
+    assert info["agents"][0]["status"] is None
+    assert info["agents"][0]["provider"] == "ollama"

@@ -10024,6 +10024,8 @@
     "pauseAll": "השהיית כל הסוכנים",
     "pauseFailed": "השהיית הסוכנים נכשלה",
     "resumeAll": "חידוש כל הסוכנים",
-    "resumeFailed": "חידוש הסוכנים נכשל"
+    "resumeFailed": "חידוש הסוכנים נכשל",
+    "successRate": "שיעור הצלחה",
+    "tasksCompleted": "משימות שהושלמו"
   }
 }

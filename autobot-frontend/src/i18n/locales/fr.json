@@ -10024,6 +10024,8 @@
     "pauseAll": "Mettre tous les agents en pause",
     "pauseFailed": "Échec de la mise en pause des agents",
     "resumeAll": "Reprendre tous les agents",
-    "resumeFailed": "Échec de la reprise des agents"
+    "resumeFailed": "Échec de la reprise des agents",
+    "successRate": "Taux de réussite",
+    "tasksCompleted": "Tâches terminées"
   }
 }

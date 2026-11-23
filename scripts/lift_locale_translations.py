@@ -86,6 +86,7 @@ MIN_SOURCE_LENGTH = 4
 KEY_MAPPINGS: dict[str, str] = {
     "agents.processMonitorTab.durationSeconds": "workflow.history.durationSeconds",
     "agents.processMonitorTab.durationMinutes": "workflow.history.durationMinutes",
+    "tools.admin.agentsTool.successRate": "slmAgentsTool.successRate",  # #22141: "Success Rate" splits de/pl
 }
 
 #: How dominant one translation must be among disagreeing candidates.

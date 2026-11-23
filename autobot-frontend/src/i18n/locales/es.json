@@ -10024,6 +10024,8 @@
     "pauseAll": "Pausar todos los agentes",
     "pauseFailed": "No se pudieron pausar los agentes",
     "resumeAll": "Reanudar todos los agentes",
-    "resumeFailed": "No se pudieron reanudar los agentes"
+    "resumeFailed": "No se pudieron reanudar los agentes",
+    "successRate": "Tasa de éxito",
+    "tasksCompleted": "Tareas completadas"
   }
 }
