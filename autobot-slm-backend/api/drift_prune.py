@@ -29,7 +29,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.code_sync import router
-from api.security import create_audit_log
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.security.path_http import require_contained_relative_path
 from services.auth import require_permission
@@ -129,6 +128,10 @@ async def _refuse_unless_deploy_idle() -> None:
 
 async def _audit_pending(db: AsyncSession, user: dict, component: str, paths: list[str]):
     """Commit the intent BEFORE anything is removed: no deletion without a durable row."""
+    # Deferred: api.security is a router module; importing it here at load time would run it
+    # whenever api.code_sync is imported (this module is registered from full_tree_drift).
+    from api.security import create_audit_log
+
     actor = str(user.get("sub", ""))
     log = await create_audit_log(
         db,

@@ -101,6 +101,9 @@ def _setup(tmp_path, monkeypatch, component: str, source_rel: str | None = None)
     deployed = tmp_path / "deployed" / component
     for name in ("keep.py", "gone.py", "other_gone.py"):
         _write(deployed / name, "k = 1\n" if name == "keep.py" else "x")
+    # `import services.full_tree_drift as _ftd` inside drift_prune resolves through the `services`
+    # stub's attribute (a ModuleStub), not sys.modules; point it at the module loaded above.
+    monkeypatch.setattr(_dp, "_ftd", _ftd)
     monkeypatch.setattr(_ftd, "get_live_dir", lambda c: str(deployed))
     monkeypatch.setattr(_ftd, "get_default_source_dir", lambda c: str(src))
     return repo, deployed
