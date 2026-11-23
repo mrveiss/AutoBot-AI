@@ -42,22 +42,22 @@ withDefaults(
 </script>
 
 <template>
-  <section :class="['aui-card', `aui-card--${variant}`, `aui-card--${size}`]">
-    <header v-if="$slots.header || title || $slots.actions" class="aui-card__header">
-      <div class="aui-card__heading">
+  <section data-slot="card" :class="['aui-card', `aui-card--${variant}`, `aui-card--${size}`]">
+    <header v-if="$slots.header || title || $slots.actions" data-slot="card-header" class="aui-card__header">
+      <div data-slot="card-heading" class="aui-card__heading">
         <slot name="header">
           <h3 v-if="title" class="aui-card__title">{{ title }}</h3>
           <p v-if="subtitle" class="aui-card__subtitle">{{ subtitle }}</p>
         </slot>
       </div>
-      <div v-if="$slots.actions" class="aui-card__actions">
+      <div v-if="$slots.actions" data-slot="card-actions" class="aui-card__actions">
         <slot name="actions" />
       </div>
     </header>
-    <div :class="['aui-card__body', { 'aui-card__body--flush': flush, 'aui-card__body--scroll': scrollable }]">
+    <div data-slot="card-body" :class="['aui-card__body', { 'aui-card__body--flush': flush, 'aui-card__body--scroll': scrollable }]">
       <slot />
     </div>
-    <footer v-if="$slots.footer" class="aui-card__footer">
+    <footer v-if="$slots.footer" data-slot="card-footer" class="aui-card__footer">
       <slot name="footer" />
     </footer>
   </section>
@@ -107,7 +107,7 @@ withDefaults(
   font-size: var(--aui-text-lg);
 }
 
-.aui-card__header {
+[data-slot="card-header"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -137,7 +137,7 @@ withDefaults(
   flex-shrink: 0;
 }
 
-.aui-card__body {
+[data-slot="card-body"] {
   padding: var(--aui-card-padding);
 }
 .aui-card__body--flush {
@@ -147,7 +147,7 @@ withDefaults(
   overflow-y: auto;
 }
 
-.aui-card__footer {
+[data-slot="card-footer"] {
   padding: calc(var(--aui-card-padding) * 0.8) var(--aui-card-padding);
   border-top: 1px solid var(--aui-color-border);
 }

@@ -114,6 +114,33 @@ const { announce } = useAnnounce()
   (adapter: `--tooltip-*`, `--z-tooltip`). The kit holds no strings; pass `text` or the `content` slot.
 - `useAnnounce()` is the single screen-reader announcer (body-level `aria-live` region).
 
+## Density
+
+Density is a token scope, never a prop. Comfortable is the `:root` default; the app's
+`[data-layout-density="compact"|"spacious"]` attribute scopes
+(`autobot-frontend/src/assets/css/themes/preferences.css`) redefine only spacing and density
+tokens. Primitives consume them (`--aui-card-padding`, `--aui-table-row-h`,
+`--aui-table-cell-py`, mapped in `src/tokens/adapter.css`) and never learn density exists.
+Do not add `.density-*` classes: that would define density twice.
+
+## Part names
+
+Every internal region of a composite primitive carries a stable `data-slot="<part>"`
+attribute, and the primitive's stylesheet targets it (`[data-slot="card-body"] { ... }`).
+
+- Format: lowercase kebab-case, prefixed by the primitive (`card-header`, `table-cell`).
+- **A part name is public API.** Renaming or removing one is a breaking change; the names are
+  pinned by `src/components/__tests__/Parts.test.ts`.
+- A view that must restyle a region targets its `data-slot`, never a class of its own reached
+  into the DOM shape.
+- Add part names only to primitives merged into the kit. Do not retrofit them onto unmerged forks.
+
+| Primitive | Parts |
+|---|---|
+| `BaseCard` | `card`, `card-header`, `card-heading`, `card-actions`, `card-body`, `card-footer` |
+| `BaseTable` | `table`, `table-controls`, `table-tools`, `table-scroll`, `table-caption`, `table-head-cell`, `table-row`, `table-cell`, `table-state`, `table-footer` |
+| `PageHeader` | `page-header`, `page-header-breadcrumb`, `page-header-row`, `page-header-actions`, `page-header-toolbar` |
+
 ## Token contract
 
 See [`src/tokens/contract.css`](./src/tokens/contract.css) for the authoritative list.

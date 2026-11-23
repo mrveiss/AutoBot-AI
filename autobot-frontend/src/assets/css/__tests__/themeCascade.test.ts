@@ -57,6 +57,13 @@ describe('density scope (#18161, #17564)', () => {
     for (const { names } of scopes) for (const name of required) expect(names).toContain(name)
   })
 
+  it('every scope redefines only spacing and density tokens (#17564 AC2)', () => {
+    const density = /^--(spacing-(unit|xs|sm|md|lg|xl|2xl)|content-padding-[xy]|card-padding|tbl-(row-h|cell-px|cell-py|head-h)|table-(row-height|cell-py))$/
+    for (const { key, names } of scopes) {
+      expect([...(names ?? [])].filter((n) => !density.test(n)), key).toEqual([])
+    }
+  })
+
   it('design-tokens.css declares the four tokens once, as the comfortable base', () => {
     const base = read('assets/css/design-tokens.css')
     for (const name of ['--table-row-height', '--table-cell-py', '--card-padding', '--spacing-unit']) {

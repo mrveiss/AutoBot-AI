@@ -36,11 +36,11 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
 </script>
 
 <template>
-  <header class="aui-page-header">
-    <div v-if="$slots.breadcrumb" class="aui-page-header__breadcrumb">
+  <header data-slot="page-header" class="aui-page-header">
+    <div v-if="$slots.breadcrumb" data-slot="page-header-breadcrumb" class="aui-page-header__breadcrumb">
       <slot name="breadcrumb" />
     </div>
-    <div v-if="hasTitle() || $slots.leading || $slots.actions" class="aui-page-header__row">
+    <div v-if="hasTitle() || $slots.leading || $slots.actions" data-slot="page-header-row" class="aui-page-header__row">
       <div class="aui-page-header__start">
         <slot name="leading" />
         <div v-if="hasTitle()" class="aui-page-header__text">
@@ -53,11 +53,11 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
           </p>
         </div>
       </div>
-      <div v-if="$slots.actions" class="aui-page-header__actions">
+      <div v-if="$slots.actions" data-slot="page-header-actions" class="aui-page-header__actions">
         <slot name="actions" />
       </div>
     </div>
-    <div v-if="$slots.default" class="aui-page-header__toolbar">
+    <div v-if="$slots.default" data-slot="page-header-toolbar" class="aui-page-header__toolbar">
       <slot />
     </div>
   </header>

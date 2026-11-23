@@ -272,15 +272,15 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div class="aui-table" :class="`aui-table--${size}`">
-    <div v-if="$slots.controls" class="aui-table__controls"><slot name="controls" /></div>
-    <div v-if="columnsMenuLabel && menuItems.length" class="aui-table__tools">
+  <div data-slot="table" class="aui-table" :class="`aui-table--${size}`">
+    <div v-if="$slots.controls" data-slot="table-controls" class="aui-table__controls"><slot name="controls" /></div>
+    <div v-if="columnsMenuLabel && menuItems.length" data-slot="table-tools" class="aui-table__tools">
       <BaseTableColumnsMenu :label="columnsMenuLabel" :items="menuItems" @toggle="toggleColumn" />
     </div>
     <div v-if="loading && loadingLabel" class="aui-table__sr" role="status">{{ loadingLabel }}</div>
-    <div class="aui-table__scroll">
+    <div data-slot="table-scroll" class="aui-table__scroll">
       <table class="aui-table__table" :aria-label="caption ? undefined : ariaLabel" :aria-busy="loading">
-        <caption v-if="$slots.caption || caption" class="aui-table__caption">
+        <caption v-if="$slots.caption || caption" data-slot="table-caption" class="aui-table__caption">
           <slot name="caption">{{ caption }}</slot>
         </caption>
         <thead>
@@ -298,6 +298,7 @@ watchEffect(() => {
               v-for="col in shownColumns"
               :key="col.key"
               scope="col"
+              data-slot="table-head-cell"
               class="aui-table__th"
               :class="cellClasses(col)"
               :style="{ width: col.width }"
@@ -324,17 +325,17 @@ watchEffect(() => {
               </button>
               <template v-else>{{ col.label }}</template>
             </th>
-            <th v-if="$slots.actions" scope="col" class="aui-table__th aui-table__cell--right">{{ actionsLabel }}</th>
+            <th v-if="$slots.actions" scope="col" data-slot="table-head-cell" class="aui-table__th aui-table__cell--right">{{ actionsLabel }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td :colspan="colspan" class="aui-table__state">
+            <td :colspan="colspan" data-slot="table-state" class="aui-table__state">
               <slot name="loading">{{ loadingLabel }}</slot>
             </td>
           </tr>
           <tr v-else-if="shownRows.length === 0">
-            <td :colspan="colspan" class="aui-table__state">
+            <td :colspan="colspan" data-slot="table-state" class="aui-table__state">
               <slot v-if="noMatches" name="no-matches">
                 <EmptyState :title="noMatchesTitle ?? emptyTitle" :description="noMatchesDescription ?? emptyDescription" />
               </slot>
@@ -347,6 +348,7 @@ watchEffect(() => {
             <tr
               v-for="(row, index) in shownRows"
               :key="rowKeyOf(row)"
+              data-slot="table-row"
               class="aui-table__row"
               :class="rowClasses(row, index)"
             >
@@ -359,10 +361,10 @@ watchEffect(() => {
                   @change="toggleRow(rowKeyOf(row))"
                 />
               </td>
-              <td v-for="col in shownColumns" :key="col.key" class="aui-table__cell" :class="cellClasses(col)">
+              <td v-for="col in shownColumns" :key="col.key" data-slot="table-cell" class="aui-table__cell" :class="cellClasses(col)">
                 <slot :name="`cell-${col.key}`" :row="row" :value="row[col.key]">{{ formatCell(row, col) }}</slot>
               </td>
-              <td v-if="$slots.actions" class="aui-table__cell aui-table__cell--right">
+              <td v-if="$slots.actions" data-slot="table-cell" class="aui-table__cell aui-table__cell--right">
                 <slot name="actions" :row="row" />
               </td>
             </tr>
@@ -370,7 +372,7 @@ watchEffect(() => {
         </tbody>
       </table>
     </div>
-    <div v-if="paged || $slots.footer" class="aui-table__footer">
+    <div v-if="paged || $slots.footer" data-slot="table-footer" class="aui-table__footer">
       <BasePagination
         v-if="paged"
         :page="activePage"
@@ -443,7 +445,7 @@ watchEffect(() => {
   color: var(--aui-color-text);
 }
 
-.aui-table__th {
+[data-slot="table-head-cell"] {
   height: var(--aui-table-head-h);
   padding: 0 var(--aui-table-cell-px);
   background: var(--aui-table-head-bg);
@@ -463,7 +465,7 @@ watchEffect(() => {
 
 tbody .aui-table__check { background: transparent; }
 
-.aui-table__cell {
+[data-slot="table-cell"] {
   height: var(--aui-table-row-h);
   padding: var(--aui-table-cell-py) var(--aui-table-cell-px);
   min-width: var(--aui-table-min-col);
