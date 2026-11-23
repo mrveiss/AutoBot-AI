@@ -73,14 +73,18 @@ describe('part names (#17564)', () => {
   })
 })
 
-const PARTS: Record<string, { source: string; parts: string[] }> = {
-  BaseCard: { source: cardSrc, parts: ["card", "card-header", "card-heading", "card-title", "card-subtitle", "card-actions", "card-body", "card-footer"] },
-  BaseTable: { source: tableSrc, parts: ["table", "table-controls", "table-tools", "table-sr", "table-scroll", "table-grid", "table-caption", "table-head-cell", "table-check", "table-checkbox", "table-sort", "table-arrow", "table-row", "table-cell", "table-state", "table-footer"] },
-  PageHeader: { source: headerSrc, parts: ["page-header", "page-header-breadcrumb", "page-header-row", "page-header-start", "page-header-text", "page-header-eyebrow", "page-header-title", "page-header-title-text", "page-header-subtitle", "page-header-actions", "page-header-toolbar"] },
-  BaseInput: { source: inputSrc, parts: ["input", "input-label", "input-asterisk", "input-control", "input-affix", "input-field", "input-clear", "input-error", "input-helper"] },
-  EmptyState: { source: emptySrc, parts: ["empty", "empty-icon", "empty-title", "empty-description", "empty-actions"] },
-  BaseButton: { source: buttonSrc, parts: ["button", "button-label", "button-spinner"] },
-  BaseBadge: { source: badgeSrc, parts: ["badge", "badge-remove"] },
+/** A selector that styles an element part (or the root) by class: modifiers (`--x`) are not matched. */
+const partClassSelector = (prefix: string): RegExp =>
+  new RegExp(`\\.${prefix}(?:__[a-z]+(?:-[a-z]+)*)?(?![\\w-])\\s*[{,:\\[>+~]|\\.${prefix}(?:__[a-z]+(?:-[a-z]+)*)?(?![\\w-])\\s+[.\\[a-z]`)
+
+const PARTS: Record<string, { prefix: string; source: string; parts: string[] }> = {
+  BaseCard: { prefix: "aui-card", source: cardSrc, parts: ["card", "card-header", "card-heading", "card-title", "card-subtitle", "card-actions", "card-body", "card-footer"] },
+  BaseTable: { prefix: "aui-table", source: tableSrc, parts: ["table", "table-controls", "table-tools", "table-sr", "table-scroll", "table-grid", "table-caption", "table-head-cell", "table-check", "table-checkbox", "table-sort", "table-arrow", "table-row", "table-cell", "table-state", "table-footer"] },
+  PageHeader: { prefix: "aui-page-header", source: headerSrc, parts: ["page-header", "page-header-breadcrumb", "page-header-row", "page-header-start", "page-header-text", "page-header-eyebrow", "page-header-title", "page-header-title-text", "page-header-subtitle", "page-header-actions", "page-header-toolbar"] },
+  BaseInput: { prefix: "aui-input", source: inputSrc, parts: ["input", "input-label", "input-asterisk", "input-control", "input-affix", "input-field", "input-clear", "input-error", "input-helper"] },
+  EmptyState: { prefix: "aui-empty", source: emptySrc, parts: ["empty", "empty-icon", "empty-title", "empty-description", "empty-actions"] },
+  BaseButton: { prefix: "aui-btn", source: buttonSrc, parts: ["button", "button-label", "button-spinner"] },
+  BaseBadge: { prefix: "aui-badge", source: badgeSrc, parts: ["badge", "badge-remove"] },
 }
 
 const mountAll = () => ({
@@ -97,10 +101,19 @@ describe('part names, every kit primitive (#17564, #14776, #14778)', () => {
     expect(found).toEqual([...parts].sort())
   })
 
-  it.each(Object.entries(PARTS))('%s stylesheet targets its parts by data-slot, not by class', (_name, { source, parts }) => {
+  it.each(Object.entries(PARTS))('%s stylesheet targets its parts by data-slot, not by class', (_name, { prefix, source, parts }) => {
     const css = source.split('<style scoped>')[1]
     expect(css).toContain(`[data-slot="${parts[0]}"]`)
-    expect(css).not.toMatch(new RegExp(`\\.aui-${parts[0].split('-')[0]}(__[a-z-]+)?\\s*[{,:]`))
+    expect(css.match(partClassSelector(prefix))).toBeNull()
+  })
+
+  it('the part-class pattern ignores modifier classes and catches a part class', () => {
+    const re = partClassSelector('aui-card')
+    expect('.aui-card__body--flush { padding: 0; }').not.toMatch(re)
+    expect('.aui-card--sm [data-slot="card-body"] { x: y; }').not.toMatch(re)
+    expect('.aui-card__body { padding: 0; }').toMatch(re)
+    expect('.aui-card { display: flex; }').toMatch(re)
+    expect('.aui-card--sm .aui-card__body {').toMatch(re)
   })
 
   it('BaseInput, EmptyState, BaseButton and BaseBadge render their parts', () => {

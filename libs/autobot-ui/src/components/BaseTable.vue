@@ -517,7 +517,7 @@ tbody [data-slot="table-check"] { background: transparent; }
 }
 
 [data-slot="table-sort"]:focus-visible,
-.aui-table__th span[tabindex]:focus-visible,
+[data-slot="table-head-cell"] span[tabindex]:focus-visible,
 [data-slot="table-checkbox"]:focus-visible {
   outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
   outline-offset: 2px;
