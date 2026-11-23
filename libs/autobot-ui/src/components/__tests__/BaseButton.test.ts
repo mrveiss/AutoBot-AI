@@ -221,7 +221,7 @@ describe('BaseButton', () => {
     // fails if aria-pressed is swallowed or the pressed rule leaves the kit
     const wrapper = mount(BaseButton, { attrs: { 'aria-pressed': 'true' }, slots: { default: 'Voice' } })
     expect(wrapper.attributes('aria-pressed')).toBe('true')
-    expect(buttonSource).toMatch(/\.aui-btn\[aria-pressed='true'\]/)
+    expect(buttonSource).toMatch(/\[data-slot="button"\]\[aria-pressed='true'\]/)
   })
 
   it('keeps the contrast text on a pressed primary button while hovered or active', () => {
