@@ -94,7 +94,7 @@ onMounted(async () => {
 
   <!-- Authenticated pages - with sidebar -->
   <template v-else>
-    <div class="flex min-h-screen bg-gray-100">
+    <div class="flex min-h-screen bg-autobot-bg-tertiary">
       <Sidebar />
       <div class="flex-1 flex flex-col overflow-hidden">
         <!-- Issue #741: Top-bar notification for code updates -->

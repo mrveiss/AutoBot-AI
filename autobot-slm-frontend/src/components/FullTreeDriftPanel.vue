@@ -95,11 +95,11 @@ function formatChecked(value: string | undefined): string {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-xs border border-gray-200">
-    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+  <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-autobot-border">
       <div>
-        <h3 class="text-base font-semibold text-gray-900">{{ $t('fullTreeDriftPanel.title') }}</h3>
-        <p class="text-xs text-gray-500">{{ $t('fullTreeDriftPanel.description') }}</p>
+        <h3 class="text-base font-semibold text-autobot-text-primary">{{ $t('fullTreeDriftPanel.title') }}</h3>
+        <p class="text-xs text-autobot-text-tertiary">{{ $t('fullTreeDriftPanel.description') }}</p>
       </div>
       <button
         @click="handleCheck"
@@ -117,15 +117,15 @@ function formatChecked(value: string | undefined): string {
     <BaseAlert v-if="codeSync.fullTreeDriftError.value" variant="error" size="compact" :message="codeSync.fullTreeDriftError.value" />
 
     <div v-if="report" class="px-4 py-3" data-testid="full-tree-drift-report">
-      <div class="flex items-center gap-3 mb-3 text-sm text-gray-500">
+      <div class="flex items-center gap-3 mb-3 text-sm text-autobot-text-tertiary">
         <span>{{ $t('fullTreeDriftPanel.checkedAt', { value: formatChecked(report.checked_at) }) }}</span>
         <span>{{ $t('fullTreeDriftPanel.totalCompared', { count: report.total_compared }) }}</span>
-        <span :class="report.total_drift > 0 ? 'text-red-700 font-medium' : 'text-green-700 font-medium'">
+        <span :class="report.total_drift > 0 ? 'text-autobot-pill-bad-fg font-medium' : 'text-autobot-pill-ok-fg font-medium'">
           {{ $t('fullTreeDriftPanel.totalDrift', { count: report.total_drift }) }}
         </span>
       </div>
 
-      <div v-if="report.errors.length" class="mb-3 text-sm text-red-700">
+      <div v-if="report.errors.length" class="mb-3 text-sm text-autobot-pill-bad-fg">
         <div v-for="msg in report.errors" :key="msg">{{ msg }}</div>
       </div>
 
@@ -138,7 +138,7 @@ function formatChecked(value: string | undefined): string {
             'px-3 py-1 rounded-full text-xs font-medium border',
             verdictFilter === option
               ? 'bg-primary-600 text-white border-primary-600'
-              : 'bg-white text-gray-600 border-gray-300',
+              : 'bg-white text-autobot-text-secondary border-autobot-border-strong',
           ]"
         >
           {{ $t(`fullTreeDriftPanel.filter.${option}`) }}
@@ -147,48 +147,48 @@ function formatChecked(value: string | undefined): string {
 
       <div v-for="component in components" :key="component.component" class="mb-5 last:mb-0" data-testid="full-tree-drift-component">
         <div class="flex items-center gap-2 mb-2">
-          <h4 class="text-sm font-semibold text-gray-800">{{ component.component }}</h4>
-          <span v-if="component.skipped" class="text-xs text-gray-400">{{ $t('fullTreeDriftPanel.skipped') }}</span>
-          <span v-else-if="component.error" class="text-xs text-red-600">{{ component.error }}</span>
-          <span v-else class="text-xs text-gray-400">{{ $t('fullTreeDriftPanel.filesCompared', { count: component.compared }) }}</span>
+          <h4 class="text-sm font-semibold text-autobot-text-primary">{{ component.component }}</h4>
+          <span v-if="component.skipped" class="text-xs text-autobot-text-tertiary">{{ $t('fullTreeDriftPanel.skipped') }}</span>
+          <span v-else-if="component.error" class="text-xs text-autobot-error">{{ component.error }}</span>
+          <span v-else class="text-xs text-autobot-text-tertiary">{{ $t('fullTreeDriftPanel.filesCompared', { count: component.compared }) }}</span>
         </div>
 
         <template v-if="!component.skipped && !component.error">
           <div v-if="showsGroup('modified') && filesByVerdict(component, 'modified').length" class="mb-2">
-            <div class="text-xs font-medium text-yellow-700 mb-1">{{ $t('fullTreeDriftPanel.filter.modified') }}</div>
-            <ul class="text-xs font-mono text-gray-700 space-y-0.5">
+            <div class="text-xs font-medium text-autobot-pill-warn-fg mb-1">{{ $t('fullTreeDriftPanel.filter.modified') }}</div>
+            <ul class="text-xs font-mono text-autobot-text-secondary space-y-0.5">
               <li v-for="file in filesByVerdict(component, 'modified')" :key="file.path">{{ file.path }}</li>
             </ul>
           </div>
 
           <div v-if="showsGroup('removed_from_source') && filesByVerdict(component, 'removed_from_source').length" class="mb-2">
-            <div class="text-xs font-medium text-red-700 mb-1">{{ $t('fullTreeDriftPanel.filter.removed_from_source') }}</div>
-            <ul class="text-xs font-mono text-gray-700 space-y-0.5">
+            <div class="text-xs font-medium text-autobot-pill-bad-fg mb-1">{{ $t('fullTreeDriftPanel.filter.removed_from_source') }}</div>
+            <ul class="text-xs font-mono text-autobot-text-secondary space-y-0.5">
               <li v-for="file in filesByVerdict(component, 'removed_from_source')" :key="file.path">
                 {{ file.path }}
-                <span class="text-gray-400">{{ $t('fullTreeDriftPanel.removedAtCommit', { commit: file.detail ?? '' }) }}</span>
+                <span class="text-autobot-text-tertiary">{{ $t('fullTreeDriftPanel.removedAtCommit', { commit: file.detail ?? '' }) }}</span>
               </li>
             </ul>
           </div>
 
-          <div v-if="showsGroup('build_bundle') && buildBundleCount(component) > 0" class="text-xs text-gray-500 mb-2">
+          <div v-if="showsGroup('build_bundle') && buildBundleCount(component) > 0" class="text-xs text-autobot-text-tertiary mb-2">
             {{ $t('fullTreeDriftPanel.buildBundleCount', { count: buildBundleCount(component) }) }}
           </div>
 
-          <div v-if="showsGroup('host_state') && hostStateEntries(component).length" class="text-xs text-gray-500">
+          <div v-if="showsGroup('host_state') && hostStateEntries(component).length" class="text-xs text-autobot-text-tertiary">
             <div v-for="[name, count] in hostStateEntries(component)" :key="name">
               {{ $t('fullTreeDriftPanel.hostStateCategory', { category: name, count }) }}
             </div>
           </div>
 
-          <div v-if="isComponentClean(component)" class="text-xs text-green-700">
+          <div v-if="isComponentClean(component)" class="text-xs text-autobot-pill-ok-fg">
             {{ $t('fullTreeDriftPanel.noDrift') }}
           </div>
         </template>
       </div>
     </div>
 
-    <div v-else class="px-4 py-6 text-center text-sm text-gray-400">
+    <div v-else class="px-4 py-6 text-center text-sm text-autobot-text-tertiary">
       {{ $t('fullTreeDriftPanel.noReportYet') }}
     </div>
   </div>

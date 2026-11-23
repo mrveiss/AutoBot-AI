@@ -85,8 +85,42 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
             (d / "A.vue").write_text('<template><p class="bg-red-500"/></template>', encoding="utf-8")
         assert scan(tmp_path) == {"bg-red-500": 1, f"{SLM_KEY_PREFIX}bg-red-500": 1}
 
+    @pytest.mark.parametrize(
+        "name,body",
+        [
+            ("A.vue", "<style>.x { @apply bg-red-500; }</style>"),
+            ("node-status.ts", "export const c = 'text-green-600'"),
+            ("main.css", ".btn { @apply bg-gray-200; }"),
+        ],
+    )
+    def test_the_slm_reads_style_ts_and_css_too(self, tmp_path, name, body):
+        d = tmp_path / "autobot-slm-frontend" / "src"
+        d.mkdir(parents=True)
+        (d / name).write_text(body, encoding="utf-8")
+        assert sum(n for k, n in scan(tmp_path).items() if k.startswith(SLM_KEY_PREFIX)) == 1
+
+    def test_the_user_frontend_still_reads_markup_only(self, tmp_path):
+        d = tmp_path / "autobot-frontend" / "src"
+        d.mkdir(parents=True)
+        (d / "a.ts").write_text("export const c = 'text-green-600'", encoding="utf-8")
+        (d / "A.vue").write_text("<style>.x { @apply bg-red-500; }</style>", encoding="utf-8")
+        assert scan(tmp_path) == {}
+
     def test_the_pattern_is_compiled(self):
         assert RAW_PALETTE_CLASS.search("bg-red-500")
+
+
+class TestTheControlPlaneIsAtZero:
+    """#17566 / #17567: the SLM sweep exited at zero, with no allowlist; this keeps it there."""
+
+    def test_no_slm_source_carries_a_palette_class(self, measured):
+        found = {k: n for k, n in measured.items() if k.startswith(SLM_KEY_PREFIX)}
+        assert not found, f"the SLM control plane is held at zero palette classes: {found}. {_FIX}"
+
+    def test_the_baseline_holds_no_slm_entry(self):
+        assert not [
+            k for k in RAW_PALETTE_CLASSES if k.startswith(SLM_KEY_PREFIX)
+        ], "the control plane is at zero: an slm: entry here is an allowlist, which #17566 forbids"
 
 
 class TestThePopulationOnlyShrinks:

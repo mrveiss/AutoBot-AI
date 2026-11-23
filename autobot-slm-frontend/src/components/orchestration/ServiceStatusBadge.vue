@@ -36,25 +36,25 @@ const statusClasses = computed(() => {
   }
 
   const colorClasses: Record<string, { dot: string; text: string }> = {
-    running: { dot: 'bg-green-500', text: 'text-green-600' },
-    active: { dot: 'bg-green-500', text: 'text-green-600' },
-    activating: { dot: 'bg-blue-500', text: 'text-blue-600' },
-    online: { dot: 'bg-green-500', text: 'text-green-600' },
-    stopped: { dot: 'bg-gray-400', text: 'text-gray-500' },
-    inactive: { dot: 'bg-gray-400', text: 'text-gray-500' },
-    deactivating: { dot: 'bg-orange-500', text: 'text-orange-600' },
-    offline: { dot: 'bg-gray-500', text: 'text-gray-600' },
-    failed: { dot: 'bg-red-500', text: 'text-red-600' },
-    error: { dot: 'bg-red-500', text: 'text-red-600' },
-    unknown: { dot: 'bg-yellow-500', text: 'text-yellow-600' },
-    healthy: { dot: 'bg-green-500', text: 'text-green-600' },
-    unhealthy: { dot: 'bg-red-500', text: 'text-red-600' },
-    degraded: { dot: 'bg-yellow-500', text: 'text-yellow-600' },
-    maintenance: { dot: 'bg-purple-500', text: 'text-purple-600' },
+    running: { dot: 'bg-autobot-dot-ok', text: 'text-autobot-success' },
+    active: { dot: 'bg-autobot-dot-ok', text: 'text-autobot-success' },
+    activating: { dot: 'bg-autobot-primary', text: 'text-autobot-text-link' },
+    online: { dot: 'bg-autobot-dot-ok', text: 'text-autobot-success' },
+    stopped: { dot: 'bg-autobot-dot-idle', text: 'text-autobot-text-tertiary' },
+    inactive: { dot: 'bg-autobot-dot-idle', text: 'text-autobot-text-tertiary' },
+    deactivating: { dot: 'bg-autobot-primary', text: 'text-autobot-warning' },
+    offline: { dot: 'bg-autobot-text-tertiary', text: 'text-autobot-text-secondary' },
+    failed: { dot: 'bg-autobot-dot-bad', text: 'text-autobot-error' },
+    error: { dot: 'bg-autobot-dot-bad', text: 'text-autobot-error' },
+    unknown: { dot: 'bg-autobot-dot-warn', text: 'text-autobot-warning' },
+    healthy: { dot: 'bg-autobot-dot-ok', text: 'text-autobot-success' },
+    unhealthy: { dot: 'bg-autobot-dot-bad', text: 'text-autobot-error' },
+    degraded: { dot: 'bg-autobot-dot-warn', text: 'text-autobot-warning' },
+    maintenance: { dot: 'bg-autobot-primary', text: 'text-autobot-text-primary' },
   }
 
   // Fallback for unknown status values
-  const defaultColors = { dot: 'bg-gray-400', text: 'text-gray-500' }
+  const defaultColors = { dot: 'bg-autobot-dot-idle', text: 'text-autobot-text-tertiary' }
   const colors = colorClasses[props.status.toLowerCase()] || defaultColors
 
   return {

@@ -57,36 +57,36 @@ let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
 function getLogClass(logType: string): string {
   switch (logType) {
     case 'success':
-      return 'text-green-400'
+      return 'text-autobot-success'
     case 'error':
-      return 'text-red-400'
+      return 'text-autobot-error'
     case 'warning':
-      return 'text-yellow-400'
+      return 'text-autobot-warning'
     case 'task':
-      return 'text-blue-400 font-semibold'
+      return 'text-autobot-info font-semibold'
     case 'info':
-      return 'text-cyan-400'
+      return 'text-autobot-info'
     default:
-      return 'text-gray-300'
+      return 'text-autobot-text-tertiary'
   }
 }
 
 function getStatusBadgeClass(s: string): string {
   switch (s) {
     case 'completed':
-      return 'bg-green-100 text-green-800'
+      return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'in_progress':
-      return 'bg-blue-100 text-blue-800'
+      return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
     case 'pending':
-      return 'bg-yellow-100 text-yellow-800'
+      return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
     case 'failed':
-      return 'bg-red-100 text-red-800'
+      return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
     case 'cancelled':
-      return 'bg-orange-100 text-orange-800'
+      return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
     case 'connecting':
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-autobot-bg-tertiary text-autobot-text-primary'
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 }
 
@@ -271,7 +271,7 @@ onUnmounted(() => {
     <!-- Log Container -->
     <div
       ref="logContainer"
-      class="max-h-[60vh] overflow-y-auto p-4 font-mono text-sm bg-gray-950 rounded"
+      class="max-h-[60vh] overflow-y-auto p-4 font-mono text-sm bg-autobot-bg-tertiary rounded"
       role="log"
       :aria-label="$t('deploymentLogViewer.deploymentLogOutput')"
       aria-live="polite"
@@ -281,10 +281,10 @@ onUnmounted(() => {
         :key="index"
         class="flex gap-2 py-0.5"
       >
-        <span class="text-gray-500 shrink-0">{{ formatTime(log.timestamp) }}</span>
+        <span class="text-autobot-text-tertiary shrink-0">{{ formatTime(log.timestamp) }}</span>
         <span :class="getLogClass(log.log_type)">{{ log.message }}</span>
       </div>
-      <div v-if="logs.length === 0" class="text-gray-500 italic">
+      <div v-if="logs.length === 0" class="text-autobot-text-tertiary italic">
         {{ $t('deploymentLogViewer.waitingForDeploymentLogs') }}
       </div>
     </div>
@@ -298,7 +298,7 @@ onUnmounted(() => {
           <span
             :class="[
               'w-2 h-2 rounded-full',
-              isConnected ? 'bg-green-500' : 'bg-red-500',
+              isConnected ? 'bg-autobot-dot-ok' : 'bg-autobot-dot-bad',
             ]"
             aria-hidden="true"
           />

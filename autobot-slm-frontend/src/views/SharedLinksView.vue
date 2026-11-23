@@ -15,16 +15,16 @@
     <!-- Page header -->
     <div class="flex items-start justify-between mb-6">
       <div>
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+        <h2 class="text-2xl font-bold text-autobot-text-primary">
           {{ $t('sharedLinksView.title') }}
         </h2>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('sharedLinksView.subtitle') }}
         </p>
       </div>
       <button
         type="button"
-        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-autobot-border-strong text-autobot-text-secondary hover:bg-autobot-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         :disabled="loading"
         @click="fetchLinks()"
       >
@@ -67,7 +67,7 @@
     <!-- Loading state -->
     <div
       v-if="loading && links.length === 0"
-      class="flex flex-col items-center gap-3 py-12 text-gray-500 dark:text-gray-400"
+      class="flex flex-col items-center gap-3 py-12 text-autobot-text-tertiary"
     >
       <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -78,7 +78,7 @@
     <!-- Empty state -->
     <div
       v-else-if="!loading && links.length === 0"
-      class="flex flex-col items-center gap-3 py-12 text-gray-500 dark:text-gray-400"
+      class="flex flex-col items-center gap-3 py-12 text-autobot-text-tertiary"
     >
       <svg class="w-8 h-8 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.328-1.328a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" />

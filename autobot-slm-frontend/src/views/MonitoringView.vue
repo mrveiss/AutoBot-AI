@@ -68,7 +68,7 @@ function getStatusColor(status: string): string {
     case 'degraded': return 'bg-warning-500'
     case 'unhealthy':
     case 'critical': return 'bg-error-500'
-    default: return 'bg-gray-400'
+    default: return 'bg-autobot-dot-idle'
   }
 }
 </script>
@@ -87,14 +87,14 @@ function getStatusColor(status: string): string {
           :class="['w-2.5 h-2.5 rounded-full', getStatusColor(systemHealth)]"
           aria-hidden="true"
         ></span>
-        <span class="text-sm text-gray-600 capitalize">{{ systemHealth }}</span>
+        <span class="text-sm text-autobot-text-secondary capitalize">{{ systemHealth }}</span>
       </div>
     </template>
 
     <template #header-end>
       <!-- Quick Stats -->
       <div class="flex items-center gap-4 text-sm">
-        <div class="flex items-center gap-2 text-gray-600">
+        <div class="flex items-center gap-2 text-autobot-text-secondary">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
           </svg>

@@ -106,7 +106,7 @@ const healthClass = computed(() => {
     case 'healthy': return 'bg-success-500'
     case 'degraded': return 'bg-warning-500'
     case 'unhealthy': return 'bg-error-500'
-    default: return 'bg-gray-400'
+    default: return 'bg-autobot-dot-idle'
   }
 })
 
@@ -169,22 +169,22 @@ onMounted(() => {
 
 <template>
   <aside
-    class="w-64 bg-gray-900 text-white min-h-screen flex flex-col"
+    class="w-64 bg-(--slm-bar) text-(--slm-bar-fg) min-h-screen flex flex-col"
     :aria-label="$t('common.sidebar.sidebarNavigationAria')"
   >
     <!-- Logo & Title -->
-    <div class="p-4 border-b border-gray-800">
+    <div class="p-4 border-b border-(--slm-bar-line)">
       <div class="flex items-center gap-3">
         <BrandMark :size="40" />
         <div>
           <h1 class="font-bold text-lg">{{ $t('common.sidebar.sLMAdmin') }}</h1>
-          <p class="text-xs text-gray-400">{{ $t('common.sidebar.serviceLifecycleManager') }}</p>
+          <p class="text-xs text-(--slm-bar-muted)">{{ $t('common.sidebar.serviceLifecycleManager') }}</p>
         </div>
       </div>
     </div>
 
     <!-- Fleet Health Summary -->
-    <div class="p-4 border-b border-gray-800" role="status" :aria-label="healthLabel">
+    <div class="p-4 border-b border-(--slm-bar-line)" role="status" :aria-label="healthLabel">
       <div class="flex items-center gap-2 mb-2">
         <div
           :class="['w-3 h-3 rounded-full', healthClass]"
@@ -195,7 +195,7 @@ onMounted(() => {
       </div>
       <div class="grid grid-cols-2 gap-2 text-xs">
         <div class="flex justify-between">
-          <span class="text-gray-400">{{ $t('common.sidebar.total') }}</span>
+          <span class="text-(--slm-bar-muted)">{{ $t('common.sidebar.total') }}</span>
           <span>{{ fleetStore.fleetSummary.total_nodes }}</span>
         </div>
         <div class="flex justify-between">
@@ -226,10 +226,10 @@ onMounted(() => {
             role="menuitem"
             :tabindex="isItemActive(item.path) ? 0 : -1"
             :class="[
-              'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
+              'w-full flex items-center gap-3 px-3 py-2 rounded-lg border-l-(length:--nav-on-bw) transition-colors',
               isItemActive(item.path)
-                ? 'bg-primary-600 text-white'
-                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                ? 'bg-primary-600 text-white border-(--slm-bar-on)'
+                : 'text-(--slm-bar-fg) border-transparent hover:bg-(--slm-bar-hover)'
             ]"
           >
             <span class="w-5 h-5 flex items-center justify-center" aria-hidden="true">
@@ -326,14 +326,14 @@ onMounted(() => {
     </nav>
 
     <!-- User & Logout -->
-    <div class="p-4 border-t border-gray-800">
+    <div class="p-4 border-t border-(--slm-bar-line)">
       <!-- #14781: the console carries 11 locales; this is how a user reaches them -->
       <LanguageSwitcher />
 
       <!-- Issue #754: High contrast toggle -->
       <button
         @click="theme.toggleContrast()"
-        class="w-full flex items-center gap-2 px-3 py-2 mb-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
+        class="w-full flex items-center gap-2 px-3 py-2 mb-2 text-sm text-(--slm-bar-fg) hover:bg-(--slm-bar-hover) rounded-lg transition-colors"
         :aria-pressed="theme.isContrast.value"
         :aria-label="$t('common.sidebar.toggleHighContrastAria')"
       >
@@ -353,12 +353,12 @@ onMounted(() => {
           </div>
           <div>
             <p class="text-sm font-medium">{{ authStore.user?.username || $t('common.sidebar.user') }}</p>
-            <p class="text-xs text-gray-400">{{ authStore.isAdmin ? $t('common.sidebar.admin') : $t('common.sidebar.user') }}</p>
+            <p class="text-xs text-(--slm-bar-muted)">{{ authStore.isAdmin ? $t('common.sidebar.admin') : $t('common.sidebar.user') }}</p>
           </div>
         </div>
         <button
           @click="handleLogout"
-          class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+          class="p-2 text-(--slm-bar-muted) hover:text-(--slm-bar-fg) hover:bg-(--slm-bar-hover) rounded-lg transition-colors"
           :aria-label="$t('common.sidebar.logOutAria')"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -366,7 +366,7 @@ onMounted(() => {
           </svg>
         </button>
       </div>
-      <p class="text-xs text-gray-500">{{ $t('common.sidebar.sLMAdminV10') }}</p>
+      <p class="text-xs text-(--slm-bar-muted)">{{ $t('common.sidebar.sLMAdminV10') }}</p>
     </div>
   </aside>
 </template>

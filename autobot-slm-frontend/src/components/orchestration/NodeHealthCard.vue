@@ -47,7 +47,7 @@ const emit = defineEmits<{
 <template>
   <button
     @click="emit('toggle', nodeId)"
-    class="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+    class="w-full flex items-center justify-between p-4 hover:bg-autobot-bg-hover transition-colors"
     :class="{ 'cursor-default': !showExpandIcon }"
   >
     <div class="flex items-center gap-4">
@@ -55,7 +55,7 @@ const emit = defineEmits<{
       <svg
         v-if="showExpandIcon"
         :class="[
-          'w-5 h-5 text-gray-400 transition-transform',
+          'w-5 h-5 text-autobot-text-tertiary transition-transform',
           isExpanded ? 'rotate-90' : ''
         ]"
         fill="none"
@@ -68,10 +68,10 @@ const emit = defineEmits<{
       <!-- Node Info -->
       <div class="text-left">
         <div class="flex items-center gap-2">
-          <span class="font-semibold text-gray-900">{{ hostname }}</span>
-          <span v-if="ipAddress" class="text-sm text-gray-500">({{ ipAddress }})</span>
+          <span class="font-semibold text-autobot-text-primary">{{ hostname }}</span>
+          <span v-if="ipAddress" class="text-sm text-autobot-text-tertiary">({{ ipAddress }})</span>
         </div>
-        <div class="text-sm text-gray-500">{{ $t('orchestration.nodeHealthCard.value0ServicePlural', { value0: totalServices, plural: totalServices !== 1 ? 's' : '' }) }}</div>
+        <div class="text-sm text-autobot-text-tertiary">{{ $t('orchestration.nodeHealthCard.value0ServicePlural', { value0: totalServices, plural: totalServices !== 1 ? 's' : '' }) }}</div>
       </div>
     </div>
 
@@ -79,20 +79,20 @@ const emit = defineEmits<{
     <div class="flex items-center gap-4">
       <!-- Running Count -->
       <div v-if="runningCount > 0" class="flex items-center gap-1.5 text-sm">
-        <span class="w-2 h-2 rounded-full bg-green-500"></span>
-        <span class="text-green-600">{{ runningCount }}</span>
+        <span class="w-2 h-2 rounded-full bg-autobot-dot-ok"></span>
+        <span class="text-autobot-success">{{ runningCount }}</span>
       </div>
 
       <!-- Stopped Count -->
       <div v-if="stoppedCount > 0" class="flex items-center gap-1.5 text-sm">
-        <span class="w-2 h-2 rounded-full bg-gray-400"></span>
-        <span class="text-gray-500">{{ stoppedCount }}</span>
+        <span class="w-2 h-2 rounded-full bg-autobot-dot-idle"></span>
+        <span class="text-autobot-text-tertiary">{{ stoppedCount }}</span>
       </div>
 
       <!-- Failed Count -->
       <div v-if="failedCount > 0" class="flex items-center gap-1.5 text-sm">
-        <span class="w-2 h-2 rounded-full bg-red-500"></span>
-        <span class="text-red-600">{{ failedCount }}</span>
+        <span class="w-2 h-2 rounded-full bg-autobot-dot-bad"></span>
+        <span class="text-autobot-error">{{ failedCount }}</span>
       </div>
 
       <!-- Restart All Button -->
@@ -100,7 +100,7 @@ const emit = defineEmits<{
         v-if="showRestartButton"
         @click.stop="emit('restartAll', nodeId, hostname)"
         :disabled="isRestartingAll"
-        class="px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded-sm hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+        class="px-2.5 py-1 text-xs font-medium text-autobot-warning bg-autobot-warning-bg border border-autobot-warning-light rounded-sm hover:bg-autobot-pill-warn-bg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
         :title="$t('orchestration.nodeHealthCard.restartAllServicesOnThisNode')"
       >
         <svg

@@ -3,36 +3,36 @@
 <!-- Author: mrveiss -->
 <template>
   <div class="drafts-tab space-y-3">
-    <div v-if="!Array.isArray(drafts) || drafts.length === 0" class="text-center py-12 text-gray-400">
+    <div v-if="!Array.isArray(drafts) || drafts.length === 0" class="text-center py-12 text-autobot-text-tertiary">
       {{ $t('skills.draftsTab.noDraftSkillsAutoBot') }}
     </div>
     <div
       v-for="draft in typedDrafts"
       :key="draft.id"
-      class="bg-gray-800 rounded-lg border border-gray-700 p-4"
+      class="bg-autobot-bg-card rounded-lg border border-autobot-border p-4"
     >
       <div class="flex items-start justify-between mb-2">
-        <span class="font-semibold text-white">{{ draft.name }}</span>
-        <span class="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30
+        <span class="font-semibold text-autobot-text-primary">{{ draft.name }}</span>
+        <span class="text-xs text-autobot-warning bg-autobot-warning/10 border border-autobot-warning/30
                      px-2 py-0.5 rounded">{{ $t('skills.draftsTab.draft') }}</span>
       </div>
-      <p v-if="draft.gap_reason" class="text-sm text-gray-400 mb-3">{{ draft.gap_reason }}</p>
+      <p v-if="draft.gap_reason" class="text-sm text-autobot-text-tertiary mb-3">{{ draft.gap_reason }}</p>
       <pre
         v-if="draft.skill_md"
-        class="text-xs text-gray-500 bg-gray-900 rounded p-3 mb-3
+        class="text-xs text-autobot-text-tertiary bg-autobot-bg-primary rounded p-3 mb-3
                overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto"
       >{{ String(draft.skill_md).slice(0, 300) }}{{ String(draft.skill_md).length > 300 ? '...' : '' }}</pre>
       <div class="flex gap-3">
         <button
-          class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm
-                 text-gray-300 transition-colors"
+          class="px-3 py-1.5 bg-autobot-bg-tertiary hover:bg-autobot-bg-active rounded text-sm
+                 text-autobot-text-secondary transition-colors"
           @click="$emit('test', draft.id)"
         >
           {{ $t('skills.draftsTab.testRun') }}
         </button>
         <button
-          class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm
-                 text-white transition-colors"
+          class="px-3 py-1.5 bg-autobot-primary hover:bg-autobot-primary-hover rounded text-sm
+                 text-autobot-text-primary transition-colors"
           @click="$emit('promote', draft.id)"
         >
           {{ $t('skills.draftsTab.promoteToBuiltin') }}

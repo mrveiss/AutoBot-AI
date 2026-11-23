@@ -64,14 +64,14 @@ function navigateTo(path: string): void {
 </script>
 
 <template>
-  <div :class="nested ? undefined : 'h-full flex flex-col overflow-hidden bg-gray-50'">
+  <div :class="nested ? undefined : 'h-full flex flex-col overflow-hidden bg-autobot-bg-secondary'">
     <PollingPausedAlert v-if="notice" :poller="notice.alertSource" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mx-6 mt-4" @retry="notice.retry" />
     <PollingPausedAlert v-else-if="!hasOuterNotice" :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mx-6 mt-4" @retry="poller.start('')" />
     <!-- Header -->
-    <div :class="['bg-white border-b border-gray-200 px-6', nested ? 'py-2' : 'py-4']">
+    <div :class="['bg-white border-b border-autobot-border px-6', nested ? 'py-2' : 'py-4']">
       <div :class="['flex items-center', nested ? 'justify-end' : 'justify-between']">
         <div v-if="!nested" class="flex items-center gap-4">
-          <h1 class="text-2xl font-bold text-gray-900">{{ title }}</h1>
+          <h1 class="text-2xl font-bold text-autobot-text-primary">{{ title }}</h1>
           <slot name="title-extra" />
         </div>
         <slot name="header-end" />
@@ -93,8 +93,8 @@ function navigateTo(path: string): void {
           :class="[
             'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap',
             activeTab === tab.id
-              ? 'bg-gray-50 text-primary-600 border-t border-x border-gray-200 -mb-px'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              ? 'bg-autobot-bg-secondary text-primary-600 border-t border-x border-autobot-border -mb-px'
+              : 'text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-hover'
           ]"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

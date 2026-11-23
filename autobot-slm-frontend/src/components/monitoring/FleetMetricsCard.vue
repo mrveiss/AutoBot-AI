@@ -41,56 +41,56 @@ const formatTimestamp = createDateFormatter({ kind: 'time' })
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+  <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <h3 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.fleetMetricsCard.fleetMetricsSummary') }}</h3>
-      <div v-if="metrics" class="text-sm text-gray-500">{{ $t('monitoring.fleetMetricsCard.updatedValue0', { value0: formatTimestamp(metrics.timestamp) }) }}</div>
+      <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('monitoring.fleetMetricsCard.fleetMetricsSummary') }}</h3>
+      <div v-if="metrics" class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.updatedValue0', { value0: formatTimestamp(metrics.timestamp) }) }}</div>
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-8">
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
     </div>
 
-    <div v-else-if="!metrics" class="text-center py-8 text-gray-500">
+    <div v-else-if="!metrics" class="text-center py-8 text-autobot-text-tertiary">
       {{ $t('monitoring.fleetMetricsCard.noFleetMetricsAvailable') }}
     </div>
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <!-- Fleet Health -->
       <div class="space-y-2">
-        <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.fleetMetricsCard.fleetHealth') }}</div>
+        <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.fleetHealth') }}</div>
         <div :class="['text-3xl font-bold', healthColor]">
           {{ healthPercentage }}%
         </div>
-        <div class="text-xs text-gray-600">{{ $t('monitoring.fleetMetricsCard.value0Value1NodesOnline', { value0: metrics.online_nodes, value1: metrics.total_nodes }) }}</div>
+        <div class="text-xs text-autobot-text-secondary">{{ $t('monitoring.fleetMetricsCard.value0Value1NodesOnline', { value0: metrics.online_nodes, value1: metrics.total_nodes }) }}</div>
       </div>
 
       <!-- CPU Usage -->
       <div class="space-y-2">
-        <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.fleetMetricsCard.avgCPUUsage') }}</div>
+        <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.avgCPUUsage') }}</div>
         <div :class="['text-3xl font-bold', getMetricColor(metrics.avg_cpu_percent)]">
           {{ metrics.avg_cpu_percent.toFixed(1) }}%
         </div>
-        <div class="text-xs text-gray-600">{{ $t('monitoring.fleetMetricsCard.acrossValue0Nodes', { value0: metrics.total_nodes }) }}</div>
+        <div class="text-xs text-autobot-text-secondary">{{ $t('monitoring.fleetMetricsCard.acrossValue0Nodes', { value0: metrics.total_nodes }) }}</div>
       </div>
 
       <!-- Memory Usage -->
       <div class="space-y-2">
-        <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.fleetMetricsCard.avgMemoryUsage') }}</div>
+        <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.avgMemoryUsage') }}</div>
         <div :class="['text-3xl font-bold', getMetricColor(metrics.avg_memory_percent)]">
           {{ metrics.avg_memory_percent.toFixed(1) }}%
         </div>
-        <div class="text-xs text-gray-600">{{ $t('monitoring.fleetMetricsCard.acrossValue0Nodes', { value0: metrics.total_nodes }) }}</div>
+        <div class="text-xs text-autobot-text-secondary">{{ $t('monitoring.fleetMetricsCard.acrossValue0Nodes', { value0: metrics.total_nodes }) }}</div>
       </div>
 
       <!-- Services -->
       <div class="space-y-2">
-        <div class="text-sm font-medium text-gray-500">{{ $t('monitoring.fleetMetricsCard.services') }}</div>
-        <div class="text-3xl font-bold text-gray-900">
+        <div class="text-sm font-medium text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.services') }}</div>
+        <div class="text-3xl font-bold text-autobot-text-primary">
           {{ metrics.running_services }}/{{ metrics.total_services }}
         </div>
-        <div class="text-xs text-gray-600">
+        <div class="text-xs text-autobot-text-secondary">
           <span v-if="metrics.failed_services > 0" class="text-error-600">{{ $t('monitoring.fleetMetricsCard.value0Failed', { value0: metrics.failed_services }) }}</span>
           <span v-else class="text-success-600">{{ $t('monitoring.fleetMetricsCard.allHealthy') }}</span>
         </div>
@@ -98,19 +98,19 @@ const formatTimestamp = createDateFormatter({ kind: 'time' })
     </div>
 
     <!-- Status Breakdown -->
-    <div v-if="metrics" class="mt-6 pt-6 border-t border-gray-200">
+    <div v-if="metrics" class="mt-6 pt-6 border-t border-autobot-border">
       <div class="grid grid-cols-3 gap-4 text-center">
         <div>
           <div class="text-2xl font-bold text-success-600">{{ metrics.online_nodes }}</div>
-          <div class="text-xs text-gray-500">{{ $t('monitoring.fleetMetricsCard.online') }}</div>
+          <div class="text-xs text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.online') }}</div>
         </div>
         <div>
           <div class="text-2xl font-bold text-warning-600">{{ metrics.degraded_nodes }}</div>
-          <div class="text-xs text-gray-500">{{ $t('monitoring.fleetMetricsCard.degraded') }}</div>
+          <div class="text-xs text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.degraded') }}</div>
         </div>
         <div>
-          <div class="text-2xl font-bold text-gray-400">{{ metrics.offline_nodes }}</div>
-          <div class="text-xs text-gray-500">{{ $t('monitoring.fleetMetricsCard.offline') }}</div>
+          <div class="text-2xl font-bold text-autobot-text-tertiary">{{ metrics.offline_nodes }}</div>
+          <div class="text-xs text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.offline') }}</div>
         </div>
       </div>
     </div>

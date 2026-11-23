@@ -164,7 +164,7 @@ function skillCountLabel(agent: ExternalAgent): string {
 }
 
 function statusClass(agent: ExternalAgent): string {
-  if (!agent.enabled) return 'text-gray-400'
+  if (!agent.enabled) return 'text-autobot-text-tertiary'
   if (agent.verified) return 'text-success-500'
   if (agent.card_error) return 'text-error-500'
   return 'text-warning-500'
@@ -194,13 +194,13 @@ onMounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">{{ $t('externalAgentsView.externalAgents') }}</h1>
-        <p class="text-sm text-gray-600 mt-1">
+        <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('externalAgentsView.externalAgents') }}</h1>
+        <p class="text-sm text-autobot-text-secondary mt-1">
           {{ $t('externalAgentsView.manageExternalA2ACompliant') }}
         </p>
       </div>
       <button
-        class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
+        class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-autobot-text-primary rounded-lg text-sm font-medium transition-colors"
         @click="openCreate"
       >
         {{ $t('externalAgentsView.registerAgent') }}
@@ -216,23 +216,23 @@ onMounted(() => {
     </div>
 
     <!-- Loading -->
-    <div v-if="registry.isLoading" class="flex justify-center py-12 text-gray-400 text-sm">
+    <div v-if="registry.isLoading" class="flex justify-center py-12 text-autobot-text-tertiary text-sm">
       {{ $t('externalAgentsView.loadingAgents') }}
     </div>
 
     <!-- Empty state -->
     <div
       v-else-if="!registry.isLoading && registry.agents.length === 0"
-      class="text-center py-12 text-gray-500 text-sm"
+      class="text-center py-12 text-autobot-text-tertiary text-sm"
     >
       {{ $t('externalAgentsView.noExternalAgentsRegistered') }}
     </div>
 
     <!-- Agent table -->
-    <div v-else class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700">
+    <div v-else class="bg-autobot-bg-card rounded-xl overflow-hidden border border-autobot-border">
       <table class="w-full text-sm">
         <thead>
-          <tr class="border-b border-gray-700 text-gray-400 text-left">
+          <tr class="border-b border-autobot-border text-autobot-text-tertiary text-left">
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.name') }}</th>
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.uRL') }}</th>
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.status') }}</th>
@@ -245,20 +245,20 @@ onMounted(() => {
           <tr
             v-for="agent in registry.agents"
             :key="agent.id"
-            class="border-b border-gray-700/50 hover:bg-gray-750 transition-colors"
+            class="border-b border-autobot-border/50 hover:bg-gray-750 transition-colors"
           >
             <td class="px-4 py-3">
               <button
-                class="font-medium text-gray-100 hover:text-primary-400 transition-colors text-left"
+                class="font-medium text-autobot-text-primary hover:text-primary-400 transition-colors text-left"
                 @click="openDetail(agent)"
               >
                 {{ agent.name }}
               </button>
-              <div v-if="agent.description" class="text-xs text-gray-500 mt-0.5 line-clamp-1">
+              <div v-if="agent.description" class="text-xs text-autobot-text-tertiary mt-0.5 line-clamp-1">
                 {{ agent.description }}
               </div>
             </td>
-            <td class="px-4 py-3 text-gray-400 font-mono text-xs truncate max-w-xs">
+            <td class="px-4 py-3 text-autobot-text-tertiary font-mono text-xs truncate max-w-xs">
               {{ agent.base_url }}
             </td>
             <td class="px-4 py-3">
@@ -269,13 +269,13 @@ onMounted(() => {
                 {{ agent.card_error }}
               </div>
             </td>
-            <td class="px-4 py-3 text-gray-300">{{ skillCountLabel(agent) }}</td>
+            <td class="px-4 py-3 text-autobot-text-secondary">{{ skillCountLabel(agent) }}</td>
             <td class="px-4 py-3">
               <div class="flex flex-wrap gap-1">
                 <span
                   v-for="tag in agent.tags"
                   :key="tag"
-                  class="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded-sm text-xs"
+                  class="px-1.5 py-0.5 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm text-xs"
                 >
                   {{ tag }}
                 </span>
@@ -291,14 +291,14 @@ onMounted(() => {
                   {{ verifyingId === agent.id ? $t('externalAgentsView.verifying') : $t('externalAgentsView.verify') }}
                 </button>
                 <button
-                  class="text-xs text-gray-400 hover:text-gray-300 disabled:opacity-50"
+                  class="text-xs text-autobot-text-tertiary hover:text-autobot-text-primary disabled:opacity-50"
                   :disabled="refreshingId === agent.id"
                   @click="refreshCard(agent)"
                 >
                   {{ refreshingId === agent.id ? $t('externalAgentsView.queued') : $t('externalAgentsView.refresh') }}
                 </button>
                 <button
-                  class="text-xs text-gray-400 hover:text-gray-200"
+                  class="text-xs text-autobot-text-tertiary hover:text-autobot-text-primary"
                   @click="openEdit(agent)"
                 >
                   {{ $t('externalAgentsView.edit') }}
@@ -327,56 +327,56 @@ onMounted(() => {
       <div class="space-y-4">
         <div class="space-y-3">
           <div>
-            <label class="block text-xs text-gray-400 mb-1">{{ $t('externalAgentsView.name1') }}</label>
+            <label class="block text-xs text-autobot-text-tertiary mb-1">{{ $t('externalAgentsView.name1') }}</label>
             <input
               v-model="form.name"
-              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
+              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-primary-500"
               :placeholder="$t('externalAgentsView.myExternalAgent')"
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">{{ $t('externalAgentsView.baseURL') }}</label>
+            <label class="block text-xs text-autobot-text-tertiary mb-1">{{ $t('externalAgentsView.baseURL') }}</label>
             <input
               v-model="form.base_url"
-              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500 font-mono"
+              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-primary-500 font-mono"
               :placeholder="$t('externalAgentsView.httpsAgentExampleCom')"
               :disabled="modalMode === 'edit'"
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">{{ $t('externalAgentsView.description') }}</label>
+            <label class="block text-xs text-autobot-text-tertiary mb-1">{{ $t('externalAgentsView.description') }}</label>
             <input
               v-model="form.description"
-              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
+              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-primary-500"
               :placeholder="$t('externalAgentsView.optionalDescription')"
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">{{ $t('externalAgentsView.tagsCommaSeparated') }}</label>
+            <label class="block text-xs text-autobot-text-tertiary mb-1">{{ $t('externalAgentsView.tagsCommaSeparated') }}</label>
             <input
               v-model="form.tags"
-              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
+              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-primary-500"
               :placeholder="$t('externalAgentsView.financeAnalysis')"
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1">
+            <label class="block text-xs text-autobot-text-tertiary mb-1">
               {{ $t('externalAgentsView.bearerTokenAPIKey') }}
-              <span v-if="modalMode === 'edit'" class="text-gray-500">{{ $t('externalAgentsView.leaveBlankToKeep') }}</span>
+              <span v-if="modalMode === 'edit'" class="text-autobot-text-tertiary">{{ $t('externalAgentsView.leaveBlankToKeep') }}</span>
             </label>
             <input
               v-model="form.api_key"
               type="password"
-              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500 font-mono"
+              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-primary-500 font-mono"
               :placeholder="$t('externalAgentsView.sk')"
             />
           </div>
           <div class="flex items-center gap-6">
-            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label class="flex items-center gap-2 text-sm text-autobot-text-secondary cursor-pointer">
               <input v-model="form.enabled" type="checkbox" class="accent-primary-500" />
               {{ $t('externalAgentsView.enabled') }}
             </label>
-            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label class="flex items-center gap-2 text-sm text-autobot-text-secondary cursor-pointer">
               <input v-model="form.ssl_verify" type="checkbox" class="accent-primary-500" />
               {{ $t('externalAgentsView.verifySSL') }}
             </label>
@@ -392,13 +392,13 @@ onMounted(() => {
       </div>
       <template #actions>
         <button
-          class="px-4 py-2 text-sm text-gray-300 hover:text-gray-100 transition-colors"
+          class="px-4 py-2 text-sm text-autobot-text-secondary hover:text-autobot-text-primary transition-colors"
           @click="closeModal"
         >
           {{ $t('externalAgentsView.cancel') }}
         </button>
         <button
-          class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-autobot-text-primary rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           :disabled="isSaving || !form.name || !form.base_url"
           @click="saveAgent"
         >
@@ -416,49 +416,49 @@ onMounted(() => {
       @close="closeDetail"
     >
       <div class="space-y-4">
-        <div v-if="isLoadingDetail" class="text-gray-400 text-sm text-center py-8">
+        <div v-if="isLoadingDetail" class="text-autobot-text-tertiary text-sm text-center py-8">
           {{ $t('externalAgentsView.loading') }}
         </div>
         <template v-else-if="detailAgent">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-xs text-gray-400 font-mono mt-0.5">{{ detailAgent.base_url }}</p>
+              <p class="text-xs text-autobot-text-tertiary font-mono mt-0.5">{{ detailAgent.base_url }}</p>
             </div>
             <span :class="['text-sm font-medium', statusClass(detailAgent)]">
               {{ statusLabel(detailAgent) }}
             </span>
           </div>
 
-          <div v-if="detailAgent.description" class="text-sm text-gray-300">
+          <div v-if="detailAgent.description" class="text-sm text-autobot-text-secondary">
             {{ detailAgent.description }}
           </div>
 
           <div class="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <div class="text-xs text-gray-500 mb-0.5">{{ $t('externalAgentsView.skills') }}</div>
-              <div class="text-gray-200">{{ skillCountLabel(detailAgent) }}</div>
+              <div class="text-xs text-autobot-text-tertiary mb-0.5">{{ $t('externalAgentsView.skills') }}</div>
+              <div class="text-autobot-text-primary">{{ skillCountLabel(detailAgent) }}</div>
             </div>
             <div>
-              <div class="text-xs text-gray-500 mb-0.5">{{ $t('externalAgentsView.cardFetched') }}</div>
-              <div class="text-gray-200">
+              <div class="text-xs text-autobot-text-tertiary mb-0.5">{{ $t('externalAgentsView.cardFetched') }}</div>
+              <div class="text-autobot-text-primary">
                 {{ formatFleetDateTime(detailAgent.card_fetched_at ?? null) }}
               </div>
             </div>
             <div>
-              <div class="text-xs text-gray-500 mb-0.5">{{ $t('externalAgentsView.createdBy') }}</div>
-              <div class="text-gray-200">{{ detailAgent.created_by || '—' }}</div>
+              <div class="text-xs text-autobot-text-tertiary mb-0.5">{{ $t('externalAgentsView.createdBy') }}</div>
+              <div class="text-autobot-text-primary">{{ detailAgent.created_by || '—' }}</div>
             </div>
             <div>
-              <div class="text-xs text-gray-500 mb-0.5">{{ $t('externalAgentsView.tags') }}</div>
+              <div class="text-xs text-autobot-text-tertiary mb-0.5">{{ $t('externalAgentsView.tags') }}</div>
               <div class="flex flex-wrap gap-1">
                 <span
                   v-for="tag in detailAgent.tags"
                   :key="tag"
-                  class="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded-sm text-xs"
+                  class="px-1.5 py-0.5 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm text-xs"
                 >
                   {{ tag }}
                 </span>
-                <span v-if="!detailAgent.tags.length" class="text-gray-500">{{ $t('externalAgentsView.none') }}</span>
+                <span v-if="!detailAgent.tags.length" class="text-autobot-text-tertiary">{{ $t('externalAgentsView.none') }}</span>
               </div>
             </div>
           </div>
@@ -466,14 +466,14 @@ onMounted(() => {
           <div v-if="detailAgent.card_error" class="p-2 bg-error-900/30 border border-error-700 rounded-sm text-error-300 text-xs">{{ $t('externalAgentsView.cardErrorValue0', { value0: detailAgent.card_error }) }}</div>
 
           <div v-if="detailCardJson">
-            <div class="text-xs text-gray-500 mb-1">{{ $t('externalAgentsView.agentCardJSON') }}</div>
-            <pre class="bg-gray-900 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto max-h-64">{{ detailCardJson }}</pre>
+            <div class="text-xs text-autobot-text-tertiary mb-1">{{ $t('externalAgentsView.agentCardJSON') }}</div>
+            <pre class="bg-autobot-bg-primary rounded-lg p-3 text-xs text-autobot-text-secondary overflow-x-auto max-h-64">{{ detailCardJson }}</pre>
           </div>
         </template>
       </div>
       <template #actions>
         <button
-          class="px-4 py-2 text-sm text-gray-300 hover:text-gray-100 transition-colors"
+          class="px-4 py-2 text-sm text-autobot-text-secondary hover:text-autobot-text-primary transition-colors"
           @click="closeDetail"
         >{{ $t('externalAgentsView.close') }}</button>
       </template>

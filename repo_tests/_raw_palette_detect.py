@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Detector for raw Tailwind palette classes in `.vue` markup (#14580).
+"""Detector for raw Tailwind palette classes in `.vue` markup (#14580), and in every SLM source (#17566).
 
 `stylelint`'s `color-no-hex` reads `<style>` blocks only. A class written
 straight into a template -- `bg-red-50`, `text-gray-700`, `dark:border-blue-500/30`
@@ -36,6 +36,8 @@ from repo_tests._hardcoded_colour_detect import REACH_IMPORTANT_FILES, _importan
 _FRONTEND = Path("autobot-frontend/src")
 _SLM_FRONTEND = Path("autobot-slm-frontend/src")
 SLM_KEY_PREFIX = "slm:"
+#: The control plane is held to zero in every source kind that can carry a utility class.
+SLM_SUFFIXES = (".vue", ".ts", ".css")
 
 _PALETTES = (
     "slate|gray|grey|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|"
@@ -56,17 +58,30 @@ REACH_PALETTE_FILES = REACH_IMPORTANT_FILES
 scanned_files = _important_scanned_files
 
 
-def scan_tree(base: Path, prefix: str = "") -> dict[str, int]:
-    """``class literal -> count`` over one app's `.vue` files, `<style>` excluded."""
+def scan_tree(
+    base: Path,
+    prefix: str = "",
+    suffixes: tuple[str, ...] = (".vue",),
+    read_style: bool = False,
+) -> dict[str, int]:
+    """``class literal -> count`` over one app's sources.
+
+    ``read_style`` keeps `<style>` blocks (and `@apply` lines) in view; the control plane
+    reads them, plus its `.ts` and `.css` sources, because its exit is zero everywhere
+    (#17566, #17567) -- a palette class in `utils/node-status.ts` or an `@apply` in
+    `main.css` is the same defect as one in a template.
+    """
     counts: dict[str, int] = {}
-    for path in sorted(base.rglob("*.vue")):
-        if "node_modules" in path.parts:
+    for path in sorted(base.rglob("*.vue") if suffixes == (".vue",) else base.rglob("*")):
+        if "node_modules" in path.parts or path.suffix not in suffixes or not path.is_file():
             continue
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        for hit in RAW_PALETTE_CLASS.findall(_STYLE_BLOCK.sub("", text)):
+        if not read_style:
+            text = _STYLE_BLOCK.sub("", text)
+        for hit in RAW_PALETTE_CLASS.findall(text):
             key = prefix + hit
             counts[key] = counts.get(key, 0) + 1
     return counts
@@ -77,5 +92,5 @@ def scan(repo: Path) -> dict[str, int]:
     counts = scan_tree(repo / _FRONTEND)
     slm = repo / _SLM_FRONTEND
     if slm.is_dir():
-        counts.update(scan_tree(slm, SLM_KEY_PREFIX))
+        counts.update(scan_tree(slm, SLM_KEY_PREFIX, SLM_SUFFIXES, read_style=True))
     return counts

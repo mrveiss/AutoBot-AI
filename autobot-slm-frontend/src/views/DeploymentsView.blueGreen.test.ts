@@ -109,12 +109,12 @@ import DeploymentsView from './DeploymentsView.vue'
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
 /**
- * The blue-green "Active" tile. Two `text-blue-600` stat numbers exist —
+ * The blue-green "Active" tile. Two `text-autobot-text-link` stat numbers exist —
  * standard `inProgress` first, then blue-green `active` — and `v-show` keeps
  * both in the DOM, so take the last.
  */
 function activeTileCount(wrapper: VueWrapper): string {
-  const tiles = wrapper.findAll('p.text-2xl.font-bold.text-blue-600')
+  const tiles = wrapper.findAll('p.text-2xl.font-bold.text-autobot-text-link')
   return tiles.length > 0 ? tiles[tiles.length - 1].text() : ''
 }
 
@@ -138,7 +138,7 @@ describe('DeploymentsView blue-green stats (#13138)', () => {
 
   it('gives the monitoring status the in-flight badge, not the neutral default', async () => {
     const wrapper = await mountWith('monitoring')
-    expect(wrapper.html()).toContain('bg-blue-100 text-blue-800')
+    expect(wrapper.html()).toContain('bg-autobot-pill-info-bg text-autobot-pill-info-fg')
   })
 
   it('still counts the pre-existing in-flight statuses', async () => {

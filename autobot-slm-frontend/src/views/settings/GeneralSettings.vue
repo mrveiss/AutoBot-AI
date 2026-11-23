@@ -298,42 +298,42 @@ onMounted(() => {
       <BaseAlert v-if="success" variant="success" :message="success" />
 
       <!-- General Settings Card -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <h2 class="text-lg font-semibold mb-6">{{ $t('settings.generalSettings.generalSettings') }}</h2>
 
         <div class="space-y-6">
           <!-- System Name -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.systemName') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.displayNameForThis') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.generalSettings.systemName') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.generalSettings.displayNameForThis') }}</p>
             </div>
             <input
               type="text"
               v-model="settings.system_name"
-              class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
 
           <!-- Default Timezone — full IANA list -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.defaultTimezone') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.timezoneForDisplayingDatesAndTimes', { count: allTimezones.length }) }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.generalSettings.defaultTimezone') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.generalSettings.timezoneForDisplayingDatesAndTimes', { count: allTimezones.length }) }}</p>
             </div>
             <select
               v-model="settings.default_timezone"
-              class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             >
               <option v-for="tz in allTimezones" :key="tz" :value="tz">{{ tz }}</option>
             </select>
           </div>
 
           <!-- Theme (#18239) -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label for="slm-theme" class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.theme') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.themeHint') }}</p>
+              <label for="slm-theme" class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.generalSettings.theme') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.generalSettings.themeHint') }}</p>
             </div>
             <select
               id="slm-theme"
@@ -346,10 +346,10 @@ onMounted(() => {
           </div>
 
           <!-- Auto Refresh -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.autoRefresh') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.automaticallyRefreshDataOn') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.generalSettings.autoRefresh') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.generalSettings.automaticallyRefreshDataOn') }}</p>
             </div>
             <BaseSwitch v-model="settings.auto_refresh" :label="$t('settings.generalSettings.autoRefresh')" />
           </div>
@@ -357,13 +357,13 @@ onMounted(() => {
           <!-- Refresh Interval -->
           <div class="flex items-center justify-between">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.refreshInterval') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.howOftenToRefresh') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.generalSettings.refreshInterval') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.generalSettings.howOftenToRefresh') }}</p>
             </div>
             <select
               v-model="settings.refresh_interval"
               :disabled="!settings.auto_refresh"
-              class="w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-autobot-bg-tertiary disabled:text-autobot-text-tertiary"
             >
               <option value="10">{{ $t('settings.generalSettings.10Seconds') }}</option>
               <option value="30">{{ $t('settings.generalSettings.30Seconds') }}</option>
@@ -375,7 +375,7 @@ onMounted(() => {
         </div>
 
         <!-- Save Button -->
-        <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end">
+        <div class="mt-8 pt-6 border-t border-autobot-border flex justify-end">
           <button
             @click="saveAllSettings"
             class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 disabled:opacity-50"
@@ -391,18 +391,18 @@ onMounted(() => {
       </div>
 
       <!-- NTP / Time Sync Card -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between mb-6">
           <div>
             <h2 class="text-lg font-semibold">{{ $t('settings.generalSettings.fleetTimeSynchronization') }}</h2>
-            <p class="text-sm text-gray-500 mt-1">
+            <p class="text-sm text-autobot-text-tertiary mt-1">
               {{ $t('settings.generalSettings.configureNTPServersAnd') }}
             </p>
           </div>
           <button
             @click="syncTimeToNodes"
             :disabled="syncing"
-            class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+            class="px-5 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             <svg v-if="syncing" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -418,17 +418,17 @@ onMounted(() => {
 
         <!-- NTP Servers textarea -->
         <div class="mb-6">
-          <label class="block text-sm font-medium text-gray-900 mb-1">
+          <label class="block text-sm font-medium text-autobot-text-primary mb-1">
             {{ $t('settings.generalSettings.nTPServers') }}
-            <span class="text-gray-400 font-normal">{{ $t('settings.generalSettings.onePerLine') }}</span>
+            <span class="text-autobot-text-tertiary font-normal">{{ $t('settings.generalSettings.onePerLine') }}</span>
           </label>
           <textarea
             v-model="ntpServersText"
             rows="4"
             :placeholder="$t('settings.generalSettings.n0PoolNtpOrg1Pool')"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
           />
-          <p class="text-xs text-gray-500 mt-1">
+          <p class="text-xs text-autobot-text-tertiary mt-1">
             {{ $t('settings.generalSettings.serversAreTriedIn') }}
           </p>
         </div>
@@ -447,19 +447,19 @@ onMounted(() => {
         </BaseAlert>
       </div>
       <!-- Setup Wizard Card -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between mb-4">
           <div>
             <h2 class="text-lg font-semibold">{{ $t('settings.generalSettings.setupWizard') }}</h2>
-            <p class="text-sm text-gray-500 mt-1">
+            <p class="text-sm text-autobot-text-tertiary mt-1">
               {{ $t('settings.generalSettings.runTheGuidedFleet') }}
             </p>
           </div>
           <span
             v-if="wizardStatus"
             :class="wizardStatus.completed
-              ? 'bg-green-100 text-green-800'
-              : 'bg-yellow-100 text-yellow-800'"
+              ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
+              : 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'"
             class="px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap"
           >
             {{ wizardStatus.completed ? $t('settings.generalSettings.completed') : `In Progress: ${wizardStatus.current_step}` }}
@@ -480,7 +480,7 @@ onMounted(() => {
           <button
             @click="resetWizard"
             :disabled="wizardResetting"
-            class="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50"
+            class="px-5 py-2 border border-autobot-border-strong text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             <svg v-if="wizardResetting" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />

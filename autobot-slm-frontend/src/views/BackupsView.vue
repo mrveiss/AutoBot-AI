@@ -120,15 +120,15 @@ async function handleDeleteBackup(backupId: string): Promise<void> {
 function getBackupStatusClass(state: string): string {
   switch (state) {
     case 'completed':
-      return 'bg-green-100 text-green-800'
+      return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'in_progress':
-      return 'bg-blue-100 text-blue-800'
+      return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
     case 'pending':
-      return 'bg-yellow-100 text-yellow-800'
+      return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
     case 'failed':
-      return 'bg-red-100 text-red-800'
+      return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 }
 
@@ -143,8 +143,8 @@ function getNodeHostname(nodeId: string): string {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">{{ $t('backupsView.statefulServices') }}</h1>
-        <p class="text-sm text-gray-500 mt-1">
+        <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('backupsView.statefulServices') }}</h1>
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('backupsView.manageBackups') }}
         </p>
       </div>
@@ -152,7 +152,7 @@ function getNodeHostname(nodeId: string): string {
 
     <!-- Backups Header -->
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-semibold text-gray-800">{{ $t('backupsView.backupHistory') }}</h2>
+      <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('backupsView.backupHistory') }}</h2>
       <button
         @click="showCreateBackupDialog = true"
         class="btn btn-primary flex items-center gap-2"
@@ -166,70 +166,70 @@ function getNodeHostname(nodeId: string): string {
 
     <!-- Backups Table -->
     <div class="card overflow-hidden">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+      <table class="min-w-full divide-y divide-autobot-border">
+        <thead class="bg-autobot-bg-secondary">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.backupID') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.node') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.service') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.size') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.location') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.status') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.created') }}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.actions') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('backupsView.backupID') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('backupsView.node') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('backupsView.service') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('backupsView.size') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('backupsView.location') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('backupsView.status') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('backupsView.created') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('backupsView.actions') }}</th>
           </tr>
         </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
+        <tbody class="bg-white divide-y divide-autobot-border">
           <tr v-for="backup in backups" :key="backup.backup_id">
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-autobot-text-primary">
               {{ backup.backup_id.slice(0, 8) }}...
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-primary">
               {{ getNodeHostname(backup.node_id) }}
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
               {{ backup.service_type }}
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
               {{ formatBytes(backup.size_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: t('common.zeroSize') }) }}
             </td>
             <!-- #13307: backup_path was already in the API response and the
                  page never rendered it, which is the whole of "no idea where
                  they are created". title= carries the full path for a copy. -->
-            <td class="px-6 py-4 text-sm text-gray-500 max-w-xs">
+            <td class="px-6 py-4 text-sm text-autobot-text-tertiary max-w-xs">
               <span v-if="backup.backup_path" class="font-mono text-xs break-all" :title="backup.backup_path">
                 {{ backup.backup_path }}
               </span>
-              <span v-else class="text-gray-400">{{ $t('backupsView.locationPending') }}</span>
+              <span v-else class="text-autobot-text-tertiary">{{ $t('backupsView.locationPending') }}</span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <span :class="['px-2 py-1 text-xs font-medium rounded-full', getBackupStatusClass(backup.status)]">
                 {{ backup.status }}
               </span>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
               {{ formatFleetDateTime(backup.started_at, '-') }}
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm space-x-3">
               <button
                 v-if="backup.status === 'completed' && backup.restorable"
                 @click="handleRestore(backup.backup_id)"
-                class="text-blue-600 hover:text-blue-800 font-medium"
+                class="text-autobot-text-link hover:text-autobot-text-link font-medium"
               >
                 {{ $t('backupsView.restore') }}
               </button>
               <button
                 v-if="backup.status !== 'in_progress'"
                 @click="handleDeleteBackup(backup.backup_id)"
-                class="text-red-600 hover:text-red-800 font-medium"
+                class="text-autobot-error hover:text-autobot-pill-bad-fg font-medium"
               >
                 {{ $t('backupsView.delete') }}
               </button>
-              <span v-if="backup.status === 'in_progress'" class="text-gray-400">-</span>
+              <span v-if="backup.status === 'in_progress'" class="text-autobot-text-tertiary">-</span>
             </td>
           </tr>
           <tr v-if="backups.length === 0 && !isLoadingBackups">
-            <td colspan="8" class="px-6 py-12 text-center text-gray-500">
+            <td colspan="8" class="px-6 py-12 text-center text-autobot-text-tertiary">
               {{ $t('backupsView.noBackupsYetClick') }}
             </td>
           </tr>
@@ -253,10 +253,10 @@ function getNodeHostname(nodeId: string): string {
       <div class="space-y-4">
         <!-- Node Selection -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.node') }}</label>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('backupsView.node') }}</label>
           <select
             v-model="newBackup.node_id"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
           >
             <option value="">{{ $t('backupsView.selectANode') }}</option>
             <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
@@ -267,10 +267,10 @@ function getNodeHostname(nodeId: string): string {
 
         <!-- Service Type Selection -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.serviceType') }}</label>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('backupsView.serviceType') }}</label>
           <select
             v-model="newBackup.service_type"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
           >
             <option v-for="svc in serviceTypes" :key="svc" :value="svc">
               {{ svc }}
@@ -281,7 +281,7 @@ function getNodeHostname(nodeId: string): string {
       <template #actions>
         <button
           @click="showCreateBackupDialog = false"
-          class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-tertiary rounded-md hover:bg-autobot-bg-active"
         >
           {{ $t('backupsView.cancel') }}
         </button>

@@ -52,20 +52,20 @@ const emit = defineEmits<{
       </svg>
       {{ title }}
     </template>
-    <div class="text-sm text-gray-600" v-html="safeMessage"></div>
+    <div class="text-sm text-autobot-text-secondary" v-html="safeMessage"></div>
 
     <template #actions>
       <button
         @click="emit('cancel')"
         :disabled="isProcessing"
-        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50"
       >
         {{ $t('orchestration.restartConfirmDialog.cancel') }}
       </button>
       <button
         @click="emit('confirm')"
         :disabled="isProcessing"
-        class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center gap-2"
+        class="px-4 py-2 text-sm font-medium text-(--text-on-warning) bg-autobot-warning-hover rounded-lg hover:bg-autobot-warning-hover disabled:opacity-50 flex items-center gap-2"
       >
         <svg
           v-if="isProcessing"

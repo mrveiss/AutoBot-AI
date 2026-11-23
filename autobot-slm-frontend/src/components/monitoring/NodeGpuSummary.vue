@@ -33,19 +33,19 @@ function percent(value: number | null | undefined): string {
 }
 
 function tone(value: number | null | undefined): string {
-  if (value == null) return 'text-gray-500'
+  if (value == null) return 'text-autobot-text-tertiary'
   if (value >= 90) return 'text-error-600'
   if (value >= 70) return 'text-warning-600'
   return 'text-success-600'
 }
 
 const summary = computed(() => {
-  if (props.unavailable) return { text: t('monitoring.systemMonitor.gpuUnavailable'), tone: 'text-gray-400' }
+  if (props.unavailable) return { text: t('monitoring.systemMonitor.gpuUnavailable'), tone: 'text-autobot-text-tertiary' }
   const status = props.status
   if (!status || status.state === 'not_reported') {
-    return { text: t('monitoring.systemMonitor.gpuNotReported'), tone: 'text-gray-400' }
+    return { text: t('monitoring.systemMonitor.gpuNotReported'), tone: 'text-autobot-text-tertiary' }
   }
-  if (status.state === 'none') return { text: t('monitoring.systemMonitor.gpuNone'), tone: 'text-gray-500' }
+  if (status.state === 'none') return { text: t('monitoring.systemMonitor.gpuNone'), tone: 'text-autobot-text-tertiary' }
 
   // The generated type marks devices optional (the schema gives it a default).
   const devices = status.devices ?? []
@@ -79,7 +79,7 @@ const summary = computed(() => {
 
 <template>
   <div class="flex justify-between text-sm">
-    <span class="text-gray-600">{{ t('monitoring.systemMonitor.gpu') }}</span>
+    <span class="text-autobot-text-secondary">{{ t('monitoring.systemMonitor.gpu') }}</span>
     <span :class="summary.tone" data-testid="node-gpu-summary">{{ summary.text }}</span>
   </div>
 </template>

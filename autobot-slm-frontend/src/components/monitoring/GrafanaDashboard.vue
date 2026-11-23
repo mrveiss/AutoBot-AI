@@ -170,13 +170,13 @@ onUnmounted(() => {
     <!-- Loading State -->
     <div v-if="loading" class="loading-overlay">
       <BaseSpinner size="md" />
-      <p class="text-sm text-gray-600 mt-2">{{ $t('monitoring.grafanaDashboard.loadingValue0', { value0: dashboardTitle }) }}</p>
+      <p class="text-sm text-autobot-text-secondary mt-2">{{ $t('monitoring.grafanaDashboard.loadingValue0', { value0: dashboardTitle }) }}</p>
     </div>
 
     <!-- Error State -->
     <div v-if="error" class="error-overlay">
       <div class="text-4xl mb-4">⚠️</div>
-      <p class="text-gray-700 mb-4">{{ error }}</p>
+      <p class="text-autobot-text-secondary mb-4">{{ error }}</p>
       <button @click="retry" class="btn btn-primary">
         {{ $t('monitoring.grafanaDashboard.retry') }}
       </button>
@@ -309,7 +309,7 @@ onUnmounted(() => {
 }
 
 .btn-primary {
-  @apply bg-blue-600 text-white hover:bg-blue-700;
+  @apply bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover;
 }
 
 iframe {

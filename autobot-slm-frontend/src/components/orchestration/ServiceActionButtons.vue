@@ -50,7 +50,7 @@ const iconSize = props.size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4'
       v-if="status !== 'running'"
       @click.stop="emit('start', nodeId, serviceName)"
       :disabled="isActionInProgress"
-      :class="`${buttonSize} text-green-600 hover:bg-green-50 rounded-sm disabled:opacity-50`"
+      :class="`${buttonSize} text-autobot-success hover:bg-autobot-success-bg rounded-sm disabled:opacity-50`"
       :title="$t('orchestration.serviceActionButtons.startService')"
     >
       <svg
@@ -72,7 +72,7 @@ const iconSize = props.size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4'
       v-if="status === 'running'"
       @click.stop="emit('stop', nodeId, serviceName)"
       :disabled="isActionInProgress"
-      :class="`${buttonSize} text-red-600 hover:bg-red-50 rounded-sm disabled:opacity-50`"
+      :class="`${buttonSize} text-autobot-error hover:bg-autobot-error-bg rounded-sm disabled:opacity-50`"
       :title="$t('orchestration.serviceActionButtons.stopService')"
     >
       <svg
@@ -93,7 +93,7 @@ const iconSize = props.size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4'
     <button
       @click.stop="emit('restart', nodeId, serviceName)"
       :disabled="isActionInProgress"
-      :class="`${buttonSize} text-blue-600 hover:bg-blue-50 rounded-sm disabled:opacity-50`"
+      :class="`${buttonSize} text-autobot-text-link hover:bg-autobot-info-bg rounded-sm disabled:opacity-50`"
       :title="$t('orchestration.serviceActionButtons.restartService')"
     >
       <svg
