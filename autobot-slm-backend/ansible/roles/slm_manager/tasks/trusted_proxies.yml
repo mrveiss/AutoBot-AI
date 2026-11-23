@@ -30,6 +30,7 @@
   register: _slm_frontend_lookup
   check_mode: false  # read-only
   when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
+  become: true  # #14693: update-all-nodes includes this file without a play-level become
   tags: ['slm', 'backend', 'systemd', 'config']
 
 - name: "SLM | #19832: assert every frontend entry resolved"
@@ -45,6 +46,7 @@
       address or a resolvable DNS name); otherwise the SLM sees all clients as one address.
     quiet: true
   when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
+  become: true  # #14693: update-all-nodes includes this file without a play-level become
   tags: ['slm', 'backend', 'systemd', 'config']
 
 - name: "SLM | #19832: trust the resolved frontend addresses"
@@ -53,4 +55,5 @@
       {{ _slm_frontend_lookup.results | map(attribute='ansible_facts.getent_ahosts') | map('dict2items') | flatten
          | rejectattr('value', 'none') | map(attribute='key') | unique | join(',') }}
   when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
+  become: true  # #14693: update-all-nodes includes this file without a play-level become
   tags: ['slm', 'backend', 'systemd', 'config']
