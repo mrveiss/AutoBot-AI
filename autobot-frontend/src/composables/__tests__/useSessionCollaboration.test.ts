@@ -30,12 +30,15 @@ vi.mock('@/stores/useChatStore', () => ({
 }))
 
 vi.mock('@/config/ssot-config', () => ({
-  getApiBase: () => '/api'
+  getApiBase: () => '/api',
+  getBackendWsUrl: () => 'ws://localhost'
 }))
 
 // #16457: the token travels as a subprotocol, not embedded in the URL.
 vi.mock('@/utils/buildAuthenticatedWsUrl', () => ({
-  buildAuthenticatedWsSubprotocols: () => ['bearer', 'fake-test-token']
+  buildAuthenticatedWsSubprotocols: () => ['bearer', 'fake-test-token'],
+  withCompanyScope: (url: string) => url,
+  onCompanySwitch: () => () => {},
 }))
 
 const inviteToSession = vi.fn()

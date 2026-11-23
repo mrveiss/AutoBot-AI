@@ -30,7 +30,7 @@ describe('useWebSocket company switch (#21997)', () => {
 
   it('reconnects under the newly selected company', async () => {
     scope = effectScope()
-    const socket = scope.run(() => useWebSocket('wss://backend.example/api/ws/chat-1'))!
+    const socket = scope.run(() => useWebSocket('wss://backend.example/api/ws/chat-1', { companyScoped: true }))!
     await vi.advanceTimersByTimeAsync(20)
     expect(socket.isConnected.value).toBe(true)
     expect(MockWebSocket.getLatestInstance()!.url).not.toContain('company_id')
@@ -41,5 +41,18 @@ describe('useWebSocket company switch (#21997)', () => {
 
     expect(MockWebSocket.getAllInstances()).toHaveLength(2)
     expect(MockWebSocket.getLatestInstance()!.url).toContain(`company_id=${COMPANY}`)
+  })
+
+  it('leaves a socket that is not company-scoped alone (a terminal never gets company_id)', async () => {
+    useLlcCompanyStore().selectedCompanyId = COMPANY
+    scope = effectScope()
+    scope.run(() => useWebSocket('wss://backend.example/api/terminal/ws/ssh/h1'))
+    await vi.advanceTimersByTimeAsync(20)
+    expect(MockWebSocket.getLatestInstance()!.url).not.toContain('company_id')
+
+    useLlcCompanyStore().selectedCompanyId = ''
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(500)
+    expect(MockWebSocket.getAllInstances()).toHaveLength(1)
   })
 })
