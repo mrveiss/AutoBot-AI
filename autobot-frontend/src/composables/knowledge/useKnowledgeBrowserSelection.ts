@@ -36,8 +36,10 @@ export function useKnowledgeBrowserSelection(vec: Vectorization, onError?: (mess
   const endRun = (runId: number) => {
     if (runId === activeRun) isVectorizing.value = false
   }
-  const reportFailure = (label: string, err: unknown) => {
+  // A superseded or cancelled run is abandoned work: log its failure, but do not show a banner for it.
+  const reportFailure = (runId: number, label: string, err: unknown) => {
     logger.error(`${label} failed:`, err)
+    if (runId !== activeRun) return
     onError?.(i18n.global.t('knowledge.browser.vectorizeFailed'))
   }
 
@@ -49,7 +51,7 @@ export function useKnowledgeBrowserSelection(vec: Vectorization, onError?: (mess
       logger.info(`${label} complete:`, await run())
       return true
     } catch (err) {
-      reportFailure(label, err)
+      reportFailure(runId, label, err)
       return false
     } finally {
       endRun(runId)
@@ -94,13 +96,14 @@ export function useKnowledgeBrowserSelection(vec: Vectorization, onError?: (mess
     const results = await Promise.allSettled(failed.map((id) => vec.vectorizeDocument(id)))
     const rejected = results.flatMap((result, i) => (result.status === 'rejected' ? [[failed[i], result.reason] as const] : []))
     rejected.forEach(([id, reason]) => logger.error(`Failed to retry vectorization for ${id}:`, reason))
-    if (rejected.length) onError?.(i18n.global.t('knowledge.browser.vectorizeFailed'))
+    if (rejected.length && runId === activeRun) onError?.(i18n.global.t('knowledge.browser.vectorizeFailed'))
     endRun(runId)
     return rejected.length === 0
   }
 
   const handleCancelVectorization = () => {
     // Backend jobs cannot be cancelled yet; this only stops waiting for them.
+    activeRun++
     isVectorizing.value = false
     showProgressModal.value = false
     logger.info('Vectorization cancelled by user')

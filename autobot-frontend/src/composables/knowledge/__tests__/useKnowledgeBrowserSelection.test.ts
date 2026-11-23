@@ -96,6 +96,20 @@ describe('useKnowledgeBrowserSelection', () => {
     expect(sel.isVectorizing.value).toBe(true)
   })
 
+  it('a cancelled run that later fails does not call onError', async () => {
+    const vec = fakeVec()
+    let failFirst!: (e: Error) => void
+    vec.vectorizeDocument.mockImplementationOnce(() => new Promise((_, reject) => { failFirst = reject }))
+    const onError = vi.fn()
+    const sel = useKnowledgeBrowserSelection(vec as never, onError)
+    const run = sel.handleVectorizeDocument('a')
+    sel.handleCancelVectorization()
+    failFirst(new Error('late'))
+    await expect(run).resolves.toBe(false)
+    expect(onError).not.toHaveBeenCalled()
+    expect(sel.isVectorizing.value).toBe(false)
+  })
+
   it('reports a rejected retry through onError', async () => {
     const vec = fakeVec({ a: 'failed' })
     vec.vectorizeDocument.mockRejectedValueOnce(new Error('boom'))
