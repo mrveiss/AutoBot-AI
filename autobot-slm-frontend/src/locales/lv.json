@@ -2232,7 +2232,7 @@
     "noDrift": "No drift — nothing to remove or report",
     "noReportYet": "No report yet — click \"Check All Files\" to run a full-tree drift check",
     "prune": {
-      "cancel": "Cancel",
+      "cancel": "Atcelt",
       "confirm": "Confirm removal of {count} file(s)",
       "intro": "Git proves these files were deleted from source and they are still deployed. Only these files are removed. Host state, build bundles and modified files are never touched.",
       "previewAction": "Preview removal",
