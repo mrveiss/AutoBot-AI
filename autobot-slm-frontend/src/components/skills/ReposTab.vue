@@ -5,8 +5,8 @@
   <div class="repos-tab">
     <div class="flex justify-end mb-4">
       <button
-        class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm
-               text-white transition-colors"
+        class="px-3 py-1.5 bg-autobot-primary hover:bg-autobot-primary-hover rounded text-sm
+               text-autobot-text-primary transition-colors"
         @click="showAddModal = true"
       >
         {{ $t('skills.reposTab.addRepo') }}
@@ -28,8 +28,8 @@
       </template>
       <template #actions="{ row }">
         <button
-          class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs
-                 text-gray-300 transition-colors"
+          class="px-2 py-1 bg-autobot-bg-tertiary hover:bg-autobot-bg-active rounded text-xs
+                 text-autobot-text-secondary transition-colors"
           @click="$emit('sync', String(row.id))"
         >
           {{ $t('skills.reposTab.sync') }}
@@ -46,31 +46,31 @@
     >
       <div class="space-y-3">
         <label class="block">
-          <span class="text-sm text-gray-400">{{ $t('skills.reposTab.name') }}</span>
+          <span class="text-sm text-autobot-text-tertiary">{{ $t('skills.reposTab.name') }}</span>
           <input
             v-model="newRepo.name"
             type="text"
             :placeholder="$t('skills.reposTab.mySkills')"
-            class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
-                   text-white text-sm focus:outline-hidden focus:border-blue-500"
+            class="mt-1 w-full bg-autobot-bg-primary border border-autobot-border rounded px-3 py-2
+                   text-autobot-text-primary text-sm focus:outline-hidden focus:border-autobot-primary"
           />
         </label>
         <label class="block">
-          <span class="text-sm text-gray-400">{{ $t('skills.reposTab.uRL') }}</span>
+          <span class="text-sm text-autobot-text-tertiary">{{ $t('skills.reposTab.uRL') }}</span>
           <input
             v-model="newRepo.url"
             type="text"
             :placeholder="$t('skills.reposTab.httpsOrPathToDir')"
-            class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
-                   text-white text-sm focus:outline-hidden focus:border-blue-500"
+            class="mt-1 w-full bg-autobot-bg-primary border border-autobot-border rounded px-3 py-2
+                   text-autobot-text-primary text-sm focus:outline-hidden focus:border-autobot-primary"
           />
         </label>
         <label class="block">
-          <span class="text-sm text-gray-400">{{ $t('skills.reposTab.type') }}</span>
+          <span class="text-sm text-autobot-text-tertiary">{{ $t('skills.reposTab.type') }}</span>
           <select
             v-model="newRepo.repo_type"
-            class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
-                   text-white text-sm focus:outline-hidden focus:border-blue-500"
+            class="mt-1 w-full bg-autobot-bg-primary border border-autobot-border rounded px-3 py-2
+                   text-autobot-text-primary text-sm focus:outline-hidden focus:border-autobot-primary"
           >
             <option value="git">{{ $t('skills.reposTab.git') }}</option>
             <option value="local">{{ $t('skills.reposTab.local') }}</option>
@@ -81,15 +81,15 @@
       </div>
       <template #actions>
         <button
-          class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm
-                 text-white transition-colors"
+          class="flex-1 px-4 py-2 bg-autobot-primary hover:bg-autobot-primary-hover rounded text-sm
+                 text-autobot-text-primary transition-colors"
           @click="submitAdd"
         >
           {{ $t('skills.reposTab.add') }}
         </button>
         <button
-          class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm
-                 text-gray-300 transition-colors"
+          class="flex-1 px-4 py-2 bg-autobot-bg-tertiary hover:bg-autobot-bg-active rounded text-sm
+                 text-autobot-text-secondary transition-colors"
           @click="showAddModal = false"
         >
           {{ $t('skills.reposTab.cancel') }}

@@ -89,14 +89,14 @@ async function handleAssign(): Promise<void> {
     :close-label="$t('ui.modal.closeDialog')"
     @close="emit('close')"
   >
-    <div v-if="isLoading" class="text-gray-500">{{ $t('codeSourceModal.loadingNodes') }}</div>
+    <div v-if="isLoading" class="text-autobot-text-tertiary">{{ $t('codeSourceModal.loadingNodes') }}</div>
 
     <div v-else class="space-y-4">
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.node') }}</label>
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('codeSourceModal.node') }}</label>
         <select
           v-model="selectedNodeId"
-          class="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
+          class="w-full border border-autobot-border-strong rounded-md p-2 bg-white text-autobot-text-primary"
         >
           <option value="">{{ $t('codeSourceModal.selectANode') }}</option>
           <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
@@ -106,24 +106,24 @@ async function handleAssign(): Promise<void> {
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.repositoryPath') }}</label>
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('codeSourceModal.repositoryPath') }}</label>
         <input
           v-model="repoPath"
           type="text"
-          class="w-full border border-gray-300 rounded-md p-2 text-gray-900"
+          class="w-full border border-autobot-border-strong rounded-md p-2 text-autobot-text-primary"
         />
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.branch') }}</label>
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('codeSourceModal.branch') }}</label>
         <input
           v-model="branch"
           type="text"
-          class="w-full border border-gray-300 rounded-md p-2 text-gray-900"
+          class="w-full border border-autobot-border-strong rounded-md p-2 text-autobot-text-primary"
         />
       </div>
 
-      <div v-if="error" class="text-red-600 text-sm">{{ error }}</div>
+      <div v-if="error" class="text-autobot-error text-sm">{{ error }}</div>
     </div>
 
     <template #actions>

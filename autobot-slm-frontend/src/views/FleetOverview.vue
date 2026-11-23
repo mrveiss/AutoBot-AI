@@ -377,14 +377,14 @@ function nodeStatusBadgeClass(status: string): string {
   switch (status) {
     case 'online':
     case 'healthy':
-      return 'bg-green-100 text-green-800'
+      return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'degraded':
-      return 'bg-yellow-100 text-yellow-800'
+      return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
     case 'error':
     case 'unhealthy':
-      return 'bg-red-100 text-red-800'
+      return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
     default:
-      return 'bg-gray-100 text-gray-600'
+      return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
   }
 }
 
@@ -396,8 +396,8 @@ const formatLastSeen = formatCompactRelativeTime
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">{{ $t('fleetOverview.fleetOverview') }}</h1>
-        <p class="text-sm text-gray-500 mt-1 flex items-center gap-2">
+        <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('fleetOverview.fleetOverview') }}</h1>
+        <p class="text-sm text-autobot-text-tertiary mt-1 flex items-center gap-2">
           {{ $t('fleetOverview.realTimeHealthStatus') }}
           <!-- WebSocket Connection Indicator (Issue #754: aria) -->
           <span
@@ -405,19 +405,19 @@ const formatLastSeen = formatCompactRelativeTime
             :aria-label="$t('fleetOverview.webSocketStatusAria', { status: ws.connected.value ? $t('fleetOverview.webSocketConnected') : ws.reconnecting.value ? $t('fleetOverview.webSocketReconnecting') : $t('fleetOverview.webSocketDisconnected') })"
             class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
             :class="ws.connected.value
-              ? 'bg-green-100 text-green-800'
+              ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
               : ws.reconnecting.value
-                ? 'bg-yellow-100 text-yellow-800'
-                : 'bg-red-100 text-red-800'"
+                ? 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
+                : 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'"
           >
             <span
               class="w-1.5 h-1.5 rounded-full"
               aria-hidden="true"
               :class="ws.connected.value
-                ? 'bg-green-500'
+                ? 'bg-autobot-dot-ok'
                 : ws.reconnecting.value
-                  ? 'bg-yellow-500 animate-pulse'
-                  : 'bg-red-500'"
+                  ? 'bg-autobot-dot-warn animate-pulse'
+                  : 'bg-autobot-dot-bad'"
             ></span>
             {{ ws.connected.value ? $t('fleetOverview.live') : ws.reconnecting.value ? $t('fleetOverview.webSocketReconnecting') : $t('fleetOverview.webSocketDisconnected') }}
           </span>
@@ -450,7 +450,7 @@ const formatLastSeen = formatCompactRelativeTime
     </div>
 
     <!-- Tabs (Issue #754: ARIA tablist) -->
-    <div class="border-b border-gray-200 mb-6">
+    <div class="border-b border-autobot-border mb-6">
       <nav class="-mb-px flex space-x-8" role="tablist" :aria-label="$t('fleetOverview.fleetViewTabsAria')">
         <button
           @click="navigateToTab('nodes')"
@@ -461,7 +461,7 @@ const formatLastSeen = formatCompactRelativeTime
             'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
             activeTab === 'nodes'
               ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
           <div class="flex items-center gap-2">
@@ -480,7 +480,7 @@ const formatLastSeen = formatCompactRelativeTime
             'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
             activeTab === 'npu'
               ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
           <div class="flex items-center gap-2">
@@ -499,7 +499,7 @@ const formatLastSeen = formatCompactRelativeTime
             'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
             activeTab === 'infrastructure'
               ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
           <div class="flex items-center gap-2">
@@ -571,13 +571,13 @@ const formatLastSeen = formatCompactRelativeTime
       <template #subtitle>
         {{ $t('fleetOverview.thisActionCannotBe') }}
       </template>
-      <p class="text-gray-700 mb-6">
+      <p class="text-autobot-text-secondary mb-6">
         {{ $t('fleetOverview.areYouSureYou') }}
         <span class="font-medium">{{ selectedNode?.hostname }}</span>{{ $t('fleetOverview.allAssociatedDataWill') }}
       </p>
       <template #actions>
         <button @click="closeDeleteConfirm" :disabled="isDeleting" class="btn btn-secondary">{{ $t('fleetOverview.cancel') }}</button>
-        <button @click="confirmDelete" :disabled="isDeleting" class="btn bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
+        <button @click="confirmDelete" :disabled="isDeleting" class="btn bg-autobot-error-solid text-(--text-on-error) hover:bg-(--color-error-solid-hover) disabled:opacity-50">
           {{ isDeleting ? $t('fleetOverview.deleting') : $t('fleetOverview.deleteNode') }}
         </button>
       </template>
@@ -613,15 +613,15 @@ const formatLastSeen = formatCompactRelativeTime
       </template>
       <div v-if="connectionTestResult?.success" class="space-y-2 mb-6">
         <div v-if="connectionTestResult.latency_ms" class="flex justify-between text-sm">
-          <span class="text-gray-500">{{ $t('fleetOverview.latency') }}</span>
+          <span class="text-autobot-text-tertiary">{{ $t('fleetOverview.latency') }}</span>
           <span class="font-medium">{{ connectionTestResult.latency_ms }}ms</span>
         </div>
-        <div v-if="connectionTestResult.message" class="text-sm text-gray-700">
+        <div v-if="connectionTestResult.message" class="text-sm text-autobot-text-secondary">
           {{ connectionTestResult.message }}
         </div>
       </div>
       <div v-else class="mb-6">
-        <p class="text-sm text-red-600" role="alert">
+        <p class="text-sm text-autobot-error" role="alert">
           {{ connectionTestResult?.error || $t('fleetOverview.failedToConnectToNode') }}
         </p>
       </div>
@@ -641,11 +641,11 @@ const formatLastSeen = formatCompactRelativeTime
     >
       <template #subtitle>{{ selectedNode?.hostname }}</template>
       <!-- Issue #3306: Node summary section above event log -->
-      <div v-if="selectedNode" class="border-b border-gray-200 px-6 py-4 bg-white">
+      <div v-if="selectedNode" class="border-b border-autobot-border px-6 py-4 bg-white">
         <div class="flex items-center justify-between mb-3">
           <div>
-            <p class="text-sm font-medium text-gray-900">{{ selectedNode.hostname }}</p>
-            <p class="text-xs text-gray-500 mt-0.5">{{ selectedNode.ip_address }}</p>
+            <p class="text-sm font-medium text-autobot-text-primary">{{ selectedNode.hostname }}</p>
+            <p class="text-xs text-autobot-text-tertiary mt-0.5">{{ selectedNode.ip_address }}</p>
           </div>
           <span
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize"
@@ -654,31 +654,31 @@ const formatLastSeen = formatCompactRelativeTime
             {{ selectedNode.status }}
           </span>
         </div>
-        <div class="text-xs text-gray-500 mb-3">
+        <div class="text-xs text-autobot-text-tertiary mb-3">
           {{ $t('fleetOverview.lastSeen') }}
-          <span class="text-gray-700 font-medium">
+          <span class="text-autobot-text-secondary font-medium">
             {{ formatLastSeen(selectedNode.health?.last_heartbeat ?? selectedNode.updated_at) }}
           </span>
         </div>
         <div v-if="selectedNode.health" class="grid grid-cols-3 gap-3 mb-3">
-          <div class="rounded-md border border-gray-200 px-3 py-2 text-center">
-            <p class="text-xs text-gray-500">{{ $t('fleetOverview.cpu') }}</p>
-            <p class="text-sm font-semibold text-gray-900">{{ selectedNode.health.cpu_percent.toFixed(1) }}%</p>
+          <div class="rounded-md border border-autobot-border px-3 py-2 text-center">
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('fleetOverview.cpu') }}</p>
+            <p class="text-sm font-semibold text-autobot-text-primary">{{ selectedNode.health.cpu_percent.toFixed(1) }}%</p>
           </div>
-          <div class="rounded-md border border-gray-200 px-3 py-2 text-center">
-            <p class="text-xs text-gray-500">{{ $t('fleetOverview.memory') }}</p>
-            <p class="text-sm font-semibold text-gray-900">{{ selectedNode.health.memory_percent.toFixed(1) }}%</p>
+          <div class="rounded-md border border-autobot-border px-3 py-2 text-center">
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('fleetOverview.memory') }}</p>
+            <p class="text-sm font-semibold text-autobot-text-primary">{{ selectedNode.health.memory_percent.toFixed(1) }}%</p>
           </div>
-          <div class="rounded-md border border-gray-200 px-3 py-2 text-center">
-            <p class="text-xs text-gray-500">{{ $t('fleetOverview.disk') }}</p>
-            <p class="text-sm font-semibold text-gray-900">{{ selectedNode.health.disk_percent.toFixed(1) }}%</p>
+          <div class="rounded-md border border-autobot-border px-3 py-2 text-center">
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('fleetOverview.disk') }}</p>
+            <p class="text-sm font-semibold text-autobot-text-primary">{{ selectedNode.health.disk_percent.toFixed(1) }}%</p>
           </div>
         </div>
         <div v-if="selectedNode.roles && selectedNode.roles.length > 0" class="flex flex-wrap gap-1.5">
           <span
             v-for="role in selectedNode.roles"
             :key="role"
-            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200"
+            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-autobot-info-bg text-autobot-text-primary border border-autobot-primary-light"
           >
             {{ role }}
           </span>
