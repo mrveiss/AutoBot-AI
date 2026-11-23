@@ -86,6 +86,10 @@ MIN_SOURCE_LENGTH = 4
 KEY_MAPPINGS: dict[str, str] = {
     "agents.processMonitorTab.durationSeconds": "workflow.history.durationSeconds",
     "agents.processMonitorTab.durationMinutes": "workflow.history.durationMinutes",
+    # #22084: "Cancel" matches too many unrelated keys whose he/ur translations are
+    # still English; this names the one dedicated source key for the prune dialog.
+    # The main-app `driftPrune` block exists only as a lift source for the SLM locales.
+    "fullTreeDriftPanel.prune.cancel": "driftPrune.cancel",
 }
 
 #: How dominant one translation must be among disagreeing candidates.

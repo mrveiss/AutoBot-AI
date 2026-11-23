@@ -161,6 +161,7 @@ class AuditAction(str, Enum):
     API_KEY_USE = "api_key.use"  # pragma: allowlist secret -- an action name, not a key
     SECURITY_SUSPICIOUS_ACTIVITY = "security.suspicious_activity"
     CODE_ROLLBACK = "code.rollback"  # #20214: the SLM updater deploys an earlier commit the operator chose
+    CODE_DRIFT_PRUNE = "code.drift_prune"  # #22082: an admin removed git-proven removed_from_source files
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
     CODE_SOURCE_RUN_RECORD_CLEANUP = "code_source.run_record_cleanup"  # #21417: approved run-record removal
