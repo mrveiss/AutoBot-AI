@@ -17,16 +17,16 @@ import { effectScope } from 'vue'
 const mockGet = vi.fn(async (..._args: unknown[]) => ({}))
 const mockPost = vi.fn(async (..._args: unknown[]) => ({}))
 
+// The composable uses the typed `call`; route each (method, contract path, options) to the two mocks.
 vi.mock('@/utils/ApiClient', () => ({
   default: {
-    get: (...args: unknown[]) => mockGet(...args),
-    post: (...args: unknown[]) => mockPost(...args)
+    call: (method: string, path: string, opts: unknown) =>
+      method === 'get' ? mockGet(path, opts) : mockPost(path, opts)
   }
 }))
 
 import { useDesktopControlLock } from '../useDesktopControlLock'
 import { useUserStore } from '@/stores/useUserStore'
-import { getApiBase } from '@/config/ssot-config'
 
 function fakeState(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -48,17 +48,6 @@ describe('useDesktopControlLock', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('builds every lock URL from the canonical API base (#22144)', async () => {
-    mockGet.mockResolvedValueOnce(fakeState())
-    mockPost.mockResolvedValue(fakeState({ owner: 'alice', human_active: true }))
-    const { refreshStatus, takeControl, releaseControl } = useDesktopControlLock('host-1')
-    await refreshStatus()
-    await takeControl()
-    await releaseControl()
-    const urls = [mockGet.mock.calls[0][0], mockPost.mock.calls[0][0], mockPost.mock.calls[1][0]] as string[]
-    expect(urls.every((u) => u.startsWith(`${getApiBase()}/vnc-proxy/desktop/control/`))).toBe(true)
   })
 
   it('makes no request without a selected host id (#22145)', async () => {
@@ -88,7 +77,10 @@ describe('useDesktopControlLock', () => {
     })
     scope.stop()
 
-    expect(mockGet).toHaveBeenCalledWith('/api/vnc-proxy/desktop/control/status?session_id=host-1')
+    expect(mockGet).toHaveBeenCalledWith('/api/vnc-proxy/{vnc_type}/control/status', {
+      path: { vnc_type: 'desktop' },
+      query: { session_id: 'host-1' }
+    })
   })
 
   it('takeControl calls POST /control/acquire and sets isMine when owner matches current user', async () => {
@@ -115,7 +107,10 @@ describe('useDesktopControlLock', () => {
     })
     scope.stop()
 
-    expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/desktop/control/acquire', { session_id: 'host-1' })
+    expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/{vnc_type}/control/acquire', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-1' }
+    })
   })
 
   it('isMine is false when a different user holds the lock', async () => {
@@ -147,7 +142,10 @@ describe('useDesktopControlLock', () => {
     })
     scope.stop()
 
-    expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/desktop/control/release', { session_id: 'host-1' })
+    expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/{vnc_type}/control/release', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-1' }
+    })
   })
 
   it('surfaces a denied release without throwing', async () => {
@@ -208,7 +206,10 @@ describe('useDesktopControlLock', () => {
 
         await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS)
 
-        expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/desktop/control/acquire', { session_id: 'host-1' })
+        expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/{vnc_type}/control/acquire', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-1' }
+    })
       })
       scope.stop()
     })

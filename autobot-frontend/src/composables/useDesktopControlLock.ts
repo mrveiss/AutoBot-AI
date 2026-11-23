@@ -18,7 +18,6 @@
  */
 
 import { computed, getCurrentScope, onScopeDispose, ref } from 'vue'
-import { getApiBase } from '@/config/ssot-config'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
@@ -57,7 +56,8 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
     return humanActive.value && !!username && owner.value === username
   })
 
-  const basePath = `${getApiBase()}/vnc-proxy/${vncType}/control`
+  // Typed contract keys: ApiClient.call applies the configured API base (getApiBase) itself.
+  const path = { vnc_type: vncType }
 
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
@@ -89,8 +89,10 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
   async function refreshStatus(): Promise<DesktopControlLockState | null> {
     if (!sessionId) return null
     try {
-      const result = await ApiClient.get<DesktopControlLockState>(
-        `${basePath}/status?session_id=${encodeURIComponent(sessionId)}`
+      const result: DesktopControlLockState = await ApiClient.call(
+        'get',
+        '/api/vnc-proxy/{vnc_type}/control/status',
+        { path, query: { session_id: sessionId } }
       )
       owner.value = result.owner
       humanActive.value = result.human_active
@@ -118,9 +120,11 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
       loading.value = true
     }
     try {
-      const result = await ApiClient.post<DesktopControlLockState>(`${basePath}/acquire`, {
-        session_id: sessionId
-      })
+      const result: DesktopControlLockState = await ApiClient.call(
+        'post',
+        '/api/vnc-proxy/{vnc_type}/control/acquire',
+        { path, body: { session_id: sessionId } }
+      )
       owner.value = result.owner
       humanActive.value = result.human_active
       if (!result.success) {
@@ -156,9 +160,11 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
     loading.value = true
     stopHeartbeat()
     try {
-      const result = await ApiClient.post<DesktopControlLockState>(`${basePath}/release`, {
-        session_id: sessionId
-      })
+      const result: DesktopControlLockState = await ApiClient.call(
+        'post',
+        '/api/vnc-proxy/{vnc_type}/control/release',
+        { path, body: { session_id: sessionId } }
+      )
       owner.value = result.owner
       humanActive.value = result.human_active
       if (!result.success) {
