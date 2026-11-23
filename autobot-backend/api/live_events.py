@@ -44,9 +44,11 @@ from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, is_client_disconnect, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from chat_history.company_scope import ActiveCompany
 from events.bus import get_event_bus
 from events.channel_commands import CommandRefused, dispatch_command
 from events.channel_stream import get_channel_event_stream
+from security.session_company import ACTIVE_COMPANY_KEY, connection_company, session_in_company
 from services.workflow_permission_service import WorkflowPermissionService
 
 logger = get_logger(__name__)
@@ -106,21 +108,16 @@ def _coerce_last_event_id(raw: object) -> int:
 
 
 async def _authorize_conversation_channel(channel: str, user_payload: dict) -> bool:
-    """Authorize ``session:``/``chat:`` subscriptions (#14819).
+    """Authorize ``session:``/``chat:`` subscriptions (#14819, #21997).
 
-    Conversation channels carry a user's own messages, so this fails closed:
-    admins bypass, the owner is allowed, everyone else is denied.  Ownership is
-    resolved through the chat history manager, which is the store that knows
-    which user a session belongs to.
+    Conversation channels carry a user's own messages, so this fails closed. The connection's active company comes
+    first, for an administrator too, as on HTTP: another company's chat is refused (``refuse_other_company``). Then
+    admins bypass, the owner is allowed, everyone else is denied. The store that knows a session's company and
+    owner is the chat history manager.
     """
-    if _is_admin(user_payload):
+    active = ActiveCompany(user_payload.get(ACTIVE_COMPANY_KEY))
+    if _is_admin(user_payload) and active.active is None:
         return True
-    # ``get_session_owner`` returns the *username* it stored in session
-    # metadata, but a JWT may identify the caller by either field — compare
-    # against both rather than guessing which one this deployment uses.
-    identities = {str(value) for value in (user_payload.get("user_id"), user_payload.get("username")) if value}
-    if not identities:
-        return False
     _prefix, _, ident = channel.partition(":")
     if not ident:
         return False
@@ -132,15 +129,23 @@ async def _authorize_conversation_channel(channel: str, user_payload: dict) -> b
             # No store to check against — deny rather than assume ownership.
             logger.warning("Conversation channel authz denied: chat history manager unavailable")
             return False
-        owner = await manager.get_session_owner(ident)
-        if owner is None:
-            # Unknown or unowned conversation: deny non-admins rather than
-            # treating "no record" as "no restriction" (#14819 fails closed).
+        if not await session_in_company(manager, ident, active):
             return False
-        return str(owner) in identities
+        return _is_admin(user_payload) or await _owned_by(manager, ident, user_payload)
     except Exception:
         logger.exception("Conversation channel authorization failed for %s", channel)
         return False
+
+
+async def _owned_by(manager, session_id: str, user_payload: dict) -> bool:
+    """Whether the session's recorded owner is the caller; no record denies (#14819 fails closed).
+
+    ``get_session_owner`` returns the *username* stored in session metadata, but a JWT may identify the caller by
+    either field, so both are compared.
+    """
+    identities = {str(value) for value in (user_payload.get("user_id"), user_payload.get("username")) if value}
+    owner = await manager.get_session_owner(session_id) if identities else None
+    return owner is not None and str(owner) in identities
 
 
 async def _send_error(ws: WebSocket, message: str) -> None:
@@ -471,6 +476,11 @@ async def live_events_endpoint(websocket: WebSocket):
         await websocket.close(code=4001, reason="Unauthorized")
         logger.info("Live events WebSocket rejected: invalid token")
         return
+    if user_payload is not None:  # #21997: the connection's active company, resolved once, as on HTTP
+        company = await connection_company(websocket, user_payload)
+        if company is None:
+            return
+        user_payload = {**user_payload, ACTIVE_COMPANY_KEY: company.active}
     await accept_websocket(websocket)
     logger.info(
         "Live events WebSocket connected: %s (user=%s)",

@@ -14,6 +14,8 @@ import os
 import time
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Literal, Optional, Tuple, overload
 
+import aiofiles
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.file_io import remove_session_lock, run_in_chat_io_executor, session_file_lock
@@ -28,6 +30,7 @@ from chat_history.session_lease import (
     file_generation,
     session_lease,
 )
+from security.session_owner_errors import SessionOwnerUnreadable
 
 logger = get_logger(__name__)
 
@@ -81,6 +84,10 @@ class SessionLockMixin:
         async def _clear_session_redis_cache(self, session_id: str) -> None: ...
 
         async def _load_session_from_file(self, session_id: str) -> Dict[str, Any] | None: ...
+
+        async def _existing_chat_file(self, session_id: str) -> str | None: ...
+
+        def _decrypt_data(self, data: str) -> Dict[str, Any]: ...
 
         async def _async_cache_session(self, cache_key: str, chat_data: Dict[str, Any]) -> Any: ...
 
@@ -277,6 +284,54 @@ class SessionLockMixin:
         except Exception as e:
             logger.error("Error updating session metadata %s: %s", session_id, e)
             return False
+
+    async def _stored_metadata(self, session_id: str) -> Dict[str, Any] | None:
+        """The session file's decrypted ``metadata``; None when it has no file. A file it cannot read raises."""
+        chat_file = await self._existing_chat_file(session_id)
+        if chat_file is None:  # Inline below, so CodeQL sees the containment at the read (code_sync_paths.py)
+            return None
+        chat_file, root = os.path.realpath(chat_file), os.path.realpath(self._get_chats_directory())
+        if not chat_file.startswith(root + os.sep):
+            raise ValueError("the chat file resolved outside the chats directory")
+        async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+            file_content = await f.read()
+        decrypted = await run_in_chat_io_executor(self._decrypt_data, file_content)  # #21664: off the loop
+        return decrypted.get("metadata", {})
+
+    async def get_session_company(self, session_id: str) -> str | None:
+        """The company stored on the session; None when it is Unassigned or has no file (#21997).
+
+        A metadata read, as ``get_session_owner`` is: no message handling. A file it cannot read raises
+        ``SessionOwnerUnreadable``, which a caller must not read as "Unassigned".
+        """
+        try:
+            return ((await self._stored_metadata(session_id)) or {}).get("company_id") or None
+        except Exception as e:
+            logger.warning("Failed to get session company for %s: %s", session_id, e)
+            raise SessionOwnerUnreadable(session_id) from e
+
+    async def set_metadata_if_unset(self, session_id: str, key: str, value: Any) -> bool:
+        """Compare-and-set one metadata key under the session lease; True when it was written (#21997).
+
+        The key is re-read on the file as it is once the lease is held, and written only if it is still empty,
+        so of two concurrent writers exactly one wins and the other gets False without touching the file. False
+        also when the session is absent. A lease timeout and any other failure raise.
+        """
+        won = {"written": False}
+
+        def apply(chat_data: Dict[str, Any]) -> Optional[bool]:
+            metadata = chat_data.get("metadata") or {}
+            if metadata.get(key):
+                return False  # lost the race: nothing to change, no new generation
+            chat_data["metadata"] = {**metadata, key: value}
+            chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            won["written"] = True
+            return None
+
+        await self._locked_update(
+            session_id, "set_metadata_if_unset", apply, must_exist=True, after=self._update_redis_session_cache
+        )
+        return won["written"]
 
     async def _peek_generation(self, session_id: str, chats_directory: str) -> int:
         """The file's fencing generation, 0 when it is absent or unreadable (a delete may remove either)."""

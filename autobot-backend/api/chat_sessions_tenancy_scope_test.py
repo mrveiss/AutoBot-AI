@@ -122,8 +122,9 @@ class TestLegacyUntaggedSessionsAreNotLost:
 class TestIsAgentScopedSessionHelper:
     """Cheap structural pins on the discriminator itself."""
 
-    def test_company_id_alone_is_sufficient(self):
-        assert chat_sessions._is_agent_scoped_session({"companyId": "co-1"}) is True
+    def test_company_id_alone_is_an_ordinary_company_chat(self):
+        """#21997: a ``companyId`` alone no longer hides a chat; the company filter decides who sees it."""
+        assert chat_sessions._is_agent_scoped_session({"companyId": "co-1"}) is False
 
     def test_session_kind_alone_is_sufficient(self):
         assert chat_sessions._is_agent_scoped_session({"sessionKind": "agent"}) is True

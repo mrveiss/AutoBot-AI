@@ -19,6 +19,8 @@ const h = vi.hoisted(() => ({
     getSessionFacts: vi.fn().mockResolvedValue({ facts: [] }), preserveSessionFacts: vi.fn(),
   },
   call: vi.fn(),
+  company: { selectedCompanyId: '', companies: [] as { id: string; name: string }[], hasCompanies: false, fetchCompanies: vi.fn() },
+  assign: vi.fn(),
   confirm: vi.fn().mockResolvedValue(true),
 }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => h.rs }))
@@ -26,7 +28,8 @@ vi.mock('@/stores/useFolderStore', () => ({ useFolderStore: () => h.folders }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => h.controller }))
 vi.mock('@/composables/useConfirmDialog', () => ({ useConfirmDialog: () => ({ confirm: h.confirm }) }))
 vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast: vi.fn() }) }))
-vi.mock('@/utils/ApiClient', () => ({ default: { call: h.call } }))
+vi.mock('@/utils/ApiClient', () => ({ default: { call: h.call, assignChatCompany: h.assign } }))
+vi.mock('@/stores/useLlcCompanyStore', () => ({ useLlcCompanyStore: () => h.company }))
 vi.mock('../ChatFolderTree.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('../ChatFolderNode.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('../DeleteConversationDialog.vue', () => ({ default: { props: ['visible', 'sessionId'], template: '<div v-if="visible" data-testid="delete-dialog" :data-session="sessionId" />' } }))
@@ -55,6 +58,8 @@ beforeEach(() => {
   h.rs.sessions = reactive([session('a', 'Fleet check'), session('b', 'NPU plan')])
   h.rs.sidebarCollapsed = false
   h.call.mockResolvedValue(null)
+  h.assign.mockResolvedValue({})
+  h.company.companies = []
   // vitest.config mockReset wipes the defaults set in vi.hoisted, so every test re-applies them (#3070).
   h.confirm.mockResolvedValue(true)
   h.controller.deleteChatSession.mockResolvedValue(undefined)
@@ -165,5 +170,33 @@ describe('ChatSidebar', () => {
   it('fetches the folders on mount', () => {
     render().unmount()
     expect(h.folders.fetchFolders).toHaveBeenCalled()
+  })
+})
+
+describe('ChatSidebar Unassigned group (#21997)', () => {
+  it('lists chats that carry no company apart from the history, once', async () => {
+    h.rs.sessions = reactive([session('a', 'Fleet check'), { ...session('u1', 'Old CEO chat'), unassigned: true }])
+    const w = render()
+    expect(rowTitles(w)).toEqual(['Fleet check'])
+    const rows = w.findAll('[data-testid="unassigned-row"]')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].text()).toContain('Old CEO chat')
+    w.unmount()
+  })
+
+  it('shows no Unassigned group when every chat has a company', () => {
+    const w = render()
+    expect(w.find('[data-testid="unassigned-group"]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('assigns nothing until the person picks a company and presses Assign', async () => {
+    h.company.companies = [{ id: 'co-1', name: 'Acme' }]
+    h.rs.sessions = reactive([{ ...session('u1', 'Old CEO chat'), unassigned: true }])
+    const w = render()
+    const assign = w.get('[data-testid="unassigned-assign"]')
+    expect(assign.attributes('disabled')).toBeDefined()
+    expect(h.assign).not.toHaveBeenCalled()
+    w.unmount()
   })
 })

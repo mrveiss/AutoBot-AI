@@ -83,13 +83,21 @@
           </div>
         </section>
 
+        <ChatUnassignedGroup
+          :sessions="unassignedSessions"
+          :companies="companies"
+          :title-of="(s) => s.title || getSessionPreview(s)"
+          @open="openSession"
+          @assign="assignToCompany"
+        />
+
         <section>
           <h3 class="mx-2.5 mb-1.5 mt-4 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-[var(--aui-color-text-muted)]">
             {{ $t('chat.sidebar.chatHistory') }}
           </h3>
           <ChatSessionList
             :sessions="filteredSessions"
-            :total-count="store.sessions.length"
+            :total-count="store.sessions.filter((s) => !s.unassigned).length"
             :current-session-id="store.currentSessionId"
             :selection-mode="selectionMode"
             :is-selected="sessionSelection.isSelected"
@@ -175,9 +183,11 @@ import type { ChatSession } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useFolderStore } from '@/stores/useFolderStore'
 import { useChatSidebarSessions } from '@/composables/chat/useChatSidebarSessions'
+import { useChatCompanyScope } from '@/composables/chat/useChatCompanyScope'
 import ChatFolderTree from './ChatFolderTree.vue'
 import FolderNode from './ChatFolderNode.vue'
 import ChatSidebarToolbar from './ChatSidebarToolbar.vue'
+import ChatUnassignedGroup from './ChatUnassignedGroup.vue'
 import ChatSessionList from './ChatSessionList.vue'
 import ChatSidebarSystemControl from './ChatSidebarSystemControl.vue'
 import DeleteConversationDialog from './DeleteConversationDialog.vue'
@@ -193,13 +203,16 @@ const folderStore = useFolderStore()
 
 // The session list state and actions (search, selection, rename, share, delete) live in one composable.
 const {
-  getSessionPreview, searchQuery, filteredSessions,
+  getSessionPreview, searchQuery, filteredSessions, unassignedSessions,
   selectionMode, sessionSelection, enableSelectionMode, cancelSelection, deleteSelectedSessions,
   showEditModal, editingName, editSessionName, saveSessionName, cancelEdit,
   showShareDialog, shareTargetSessionId, openShareDialog, handleShareComplete,
   showDeleteDialog, deleteTargetSessionId, deleteFileStats, deleteKBFacts, kbFactsLoading, deletePreviewFailed,
   deleteSession, deleteCurrentSession, handleDeleteConfirm, handleDeleteCancel,
 } = useChatSidebarSessions()
+
+// #21997: the list follows the active company; a person assigns each Unassigned chat.
+const { companies, assignToCompany } = useChatCompanyScope()
 
 // GH#8987: folder section state
 const showFolders = ref(true)
