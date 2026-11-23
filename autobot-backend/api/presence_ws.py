@@ -14,7 +14,7 @@ import uuid
 from fastapi import APIRouter, WebSocket
 from sqlalchemy import select
 
-from api.ws_security import enforce_ws_origin
+from api.ws_security import enforce_ws_origin, in_active_company
 from auth_middleware import authenticate_websocket
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -103,6 +103,11 @@ async def session_presence(
         await accept_websocket(websocket)
         await websocket.close(code=_WS_CLOSE_POLICY_VIOLATION, reason="Not a session participant")
         logger.info("Presence WS refused: user=%s not a participant of session=%s", user_id, session_id)
+        return
+
+    if not await in_active_company(websocket, session_id, user_payload):  # #21997: another company's chat
+        await accept_websocket(websocket)
+        await websocket.close(code=_WS_CLOSE_POLICY_VIOLATION, reason="Forbidden")
         return
 
     logger.info("Presence WS connect: user=%s session=%s", user_id, session_id)

@@ -412,6 +412,8 @@ async def owns_chat_session(websocket: WebSocket, session_id: str, user: dict) -
     does one whose file exists but cannot be read (``SessionOwnerUnreadable``): the
     owner is unknown, so it is not the caller.
     """
+    if not await in_active_company(websocket, session_id, user):
+        return False  # before the admin pass, as on HTTP: an administrator is bound by the active company too
     if is_admin_role(user.get("role")):
         return True
     from autobot_shared.redis_client import get_redis_client  # noqa: PLC0415
@@ -423,6 +425,17 @@ async def owns_chat_session(websocket: WebSocket, session_id: str, user: dict) -
     if owner is None:
         owner = await _durable_session_owner(websocket, session_id)
     return bool(owner) and owner == user.get("username")
+
+
+async def in_active_company(websocket: WebSocket, session_id: str, user: dict) -> bool:
+    """False for a chat of a company other than the socket's active one: the HTTP rule, one core (#21997)."""
+    from security.session_company import enforce_session_company  # noqa: PLC0415
+
+    try:
+        await enforce_session_company(session_id, websocket, user)
+    except HTTPException:
+        return False
+    return True
 
 
 async def _durable_session_owner(websocket: WebSocket, session_id: str) -> "str | None":

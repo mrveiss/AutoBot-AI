@@ -30,7 +30,8 @@ vi.mock('@/stores/useChatStore', () => ({
 }))
 
 vi.mock('@/config/ssot-config', () => ({
-  getApiBase: () => '/api'
+  getApiBase: () => '/api',
+  getBackendWsUrl: () => 'ws://localhost'
 }))
 
 // #16457: the token travels as a subprotocol, not embedded in the URL.

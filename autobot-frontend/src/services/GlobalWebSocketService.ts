@@ -19,6 +19,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
+import { onCompanySwitch, withCompanyScope } from '@/utils/companyScopedSocket'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
 
@@ -250,7 +251,7 @@ class GlobalWebSocketService {
 
     return new Promise<void>((resolve, reject) => {
       try {
-        this.ws = new WebSocket(this.state.url, subprotocols)
+        this.ws = new WebSocket(withCompanyScope(this.state.url), subprotocols)
         this._setupEventHandlers(resolve, reject)
         this._setupConnectionTimeout(reject)
       } catch (error: unknown) {
@@ -854,9 +855,8 @@ if (typeof window !== 'undefined') {
     whenPiniaReady(() => {
       const userStore = useUserStore()
       tryConnect()
-      // #6692: react to login (token appears) and logout (token cleared) so a
-      // user who lands on the app pre-auth gets a connection the moment they
-      // sign in, without waiting for reconnect-backoff to fire.
+      onCompanySwitch(() => globalWebSocketService.forceReconnect())
+      // #6692: react to login (token appears) and logout (token cleared) so a pre-auth user connects at sign-in.
       watch(
         () => userStore.authState.token,
         (token, previous) => {
