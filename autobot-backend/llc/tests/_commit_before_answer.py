@@ -156,7 +156,7 @@ def _no_return_names(tree: ast.AST) -> dict[str, bool]:
     }
 
 
-def _returns_inside(nodes: list[ast.stmt]) -> bool:
+def _returns_inside(nodes: list[ast.AST]) -> bool:
     """A `return` reachable in *nodes*: one in a nested function or class is not the handler's own."""
     for node in nodes:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
