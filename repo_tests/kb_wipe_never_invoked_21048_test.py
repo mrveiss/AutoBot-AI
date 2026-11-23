@@ -35,7 +35,7 @@ def _tracked_files() -> list[str]:
 REACH = declare(
     "kb-wipe-never-invoked",
     discover=_discover,
-    floor=14453,  # measured on this tree; a new guard pins until it lands on the base (#19676)
+    floor=14453,  # mid-window: population 14653 (2026-11-23); a new guard pins until it lands on the base (#19676)
     growth=400,
     what="tracked files",
 )

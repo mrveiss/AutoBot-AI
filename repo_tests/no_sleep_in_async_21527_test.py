@@ -46,7 +46,7 @@ def _discover(root: Path) -> list[str]:
 REACH = declare(
     "no-sleep-in-async-21527",
     discover=_discover,
-    floor=8720,  # measured on this tree; a new guard pins until it lands on the base (#19676)
+    floor=8720,  # mid-window: population 8920 (2026-11-23); a new guard pins until it lands on the base (#19676)
     growth=400,
     what="tracked Python files swept for time.sleep inside async def",
 )

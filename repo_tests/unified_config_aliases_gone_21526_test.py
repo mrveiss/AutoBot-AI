@@ -146,7 +146,7 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "unified-config-aliases-gone",
     discover=_population,
-    floor=9798,  # measured on this tree (9683, growth 400, mid-window); a new guard pins until it lands on the base (#19676)
+    floor=9798,  # mid-window: population 9998, growth 400 (2026-11-23); a new guard pins until it lands on the base (#19676)
     what="tracked python and markdown files outside changelogs and archives",
     growth=400,
 )
