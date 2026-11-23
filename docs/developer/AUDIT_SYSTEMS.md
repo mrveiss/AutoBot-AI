@@ -192,6 +192,16 @@ to `ACTION_ALIASES` with the canonical target. Do not add a baseline entry for a
 The identity services still insert `audit_row` rows in the caller's transaction, bypassing the Redis
 projection and threat analysis; routing them through the bus needs a post-commit sink (#19014).
 
+**Audit-first controls: one attempt/outcome helper (#21375).** A route that must be on the trail before it acts
+writes an `attempted` row, acts, then writes an outcome row (`success`, `failed` or `denied`) linked to the
+attempt by `metadata.attempt_id`. The one implementation is `services/audit/outcome.py`
+(`record_audit_attempt`, `record_audit_outcome`): an unwritable attempt answers 503 and nothing is changed; an
+unwritable outcome is logged with the `AUDIT_OUTCOME_MISSING` marker. Heartbeat controls call it directly; the
+secret routes reach it through `api/secrets_audit.audit_secret_op`, whose other, attempt-less records stay
+best-effort through `audit_log`. Outcome reasons are fixed strings or exception class names, never messages
+(secret rows keep theirs in `details.reason`, heartbeat rows in `failure`).
+`api/audit_attempt_shared_helper_21375_test.py` fails when a route module writes an `attempted` row any other way.
+
 ## Data-move proposal (for the #17038 approval queue; not implemented)
 
 1. Optional backfill for visibility: copy db-10 `audit:log:<date>` entries, `audit_log:global`,
