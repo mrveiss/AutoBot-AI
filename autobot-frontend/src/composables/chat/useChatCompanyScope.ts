@@ -38,6 +38,9 @@ export function useChatCompanyScope() {
     await controller.loadChatSessions(true)
   }
 
+  // The assignment picker needs the companies even when the chat is opened before any Company OS page.
+  if (!companyStore.hasCompanies) void companyStore.fetchCompanies()
+
   watch(() => companyStore.selectedCompanyId, (next, prev) => {
     if (next !== prev) void reloadForCompany()
   })

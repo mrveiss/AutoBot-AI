@@ -78,6 +78,19 @@ describe('company switch', () => {
   })
 })
 
+describe('company list for the Assign picker', () => {
+  it('fetches the companies on mount when none are loaded', () => {
+    h.company.hasCompanies = false
+    setup()
+    expect(h.company.fetchCompanies).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fetch when the companies are already loaded', () => {
+    setup()
+    expect(h.company.fetchCompanies).not.toHaveBeenCalled()
+  })
+})
+
 describe('assignment', () => {
   it('assigns through ApiClient.assignChatCompany only when called, then reloads keeping the open chat', async () => {
     const store = open('y', chat('y'), chat('u1', true))
