@@ -186,14 +186,18 @@ def test_local_admin_app_never_exposes_authenticated_code_sync_paths():
     this unauthenticated, socket-only app."""
     # effective_routes() follows nested include_router() wrappers (the drift prune router, #22082), so
     # routes nested into the code-sync router are part of what must stay off the unauthenticated app.
-    other_paths = {m.path for m in effective_routes(code_sync.router) if m.path != "/code-sync/self-update"}
+    code_sync_routes = effective_routes(code_sync.router)
+    assert all(m.prefix_complete for m in code_sync_routes), "a nested prefix is unreadable: paths would be short"
+    other_paths = {m.path for m in code_sync_routes if m.path != "/code-sync/self-update"}
     assert len(other_paths) > 10, "sanity: code_sync_router must have plenty of other routes to contrast against"
     assert {
         "/code-sync/drift/prune",
         "/code-sync/drift/prune/preview",
     } <= other_paths, "the nested prune routes are walked"
 
-    admin_paths = {m.path for m in effective_routes(local_admin_socket.create_local_admin_app().router)}
+    admin_routes = effective_routes(local_admin_socket.create_local_admin_app().router)
+    assert all(m.prefix_complete for m in admin_routes), "a nested prefix is unreadable: paths would be short"
+    admin_paths = {m.path for m in admin_routes}
     assert admin_paths.isdisjoint(other_paths)
 
 
