@@ -173,9 +173,9 @@ function formatChecked(value: string | undefined): string {
         </div>
 
         <template v-if="!component.skipped && !component.error">
-          <div v-if="prune.results.value[component.component]" class="mt-2 text-xs text-gray-700" data-testid="drift-prune-result">
+          <div v-if="prune.results.value[component.component]" class="mt-2 text-xs text-autobot-text-primary" data-testid="drift-prune-result">
             {{ $t('fullTreeDriftPanel.prune.result', { removed: prune.results.value[component.component].removed.length, left: pruneOutcomeDetails(component.component).length }) }}
-            <div v-for="[path, reason] in pruneOutcomeDetails(component.component)" :key="path" class="font-mono text-gray-500">
+            <div v-for="[path, reason] in pruneOutcomeDetails(component.component)" :key="path" class="font-mono text-autobot-text-tertiary">
               {{ $t('fullTreeDriftPanel.prune.resultDetail', { path, reason }) }}
             </div>
           </div>
@@ -205,15 +205,15 @@ function formatChecked(value: string | undefined): string {
               >
                 {{ prune.busyComponent.value === component.component ? $t('fullTreeDriftPanel.prune.previewing') : $t('fullTreeDriftPanel.prune.previewAction') }}
               </button>
-              <div v-else class="rounded-md border border-red-200 bg-red-50 p-3" data-testid="drift-prune-confirm">
-                <div class="text-xs font-medium text-red-800 mb-1">
+              <div v-else class="rounded-md border border-autobot-error bg-autobot-error-bg p-3" data-testid="drift-prune-confirm">
+                <div class="text-xs font-medium text-autobot-error mb-1">
                   {{ $t('fullTreeDriftPanel.prune.title', { count: prune.batch(component.component).files.length, component: component.component }) }}
                 </div>
-                <p v-if="prune.batchNote(component.component)" class="text-xs font-medium text-red-800 mb-1" data-testid="drift-prune-batch">
+                <p v-if="prune.batchNote(component.component)" class="text-xs font-medium text-autobot-error mb-1" data-testid="drift-prune-batch">
                   {{ prune.batchNote(component.component) }}
                 </p>
-                <p class="text-xs text-gray-600 mb-2">{{ $t('fullTreeDriftPanel.prune.intro') }}</p>
-                <ul class="text-xs font-mono text-gray-700 space-y-0.5 mb-2" data-testid="drift-prune-files">
+                <p class="text-xs text-autobot-text-secondary mb-2">{{ $t('fullTreeDriftPanel.prune.intro') }}</p>
+                <ul class="text-xs font-mono text-autobot-text-primary space-y-0.5 mb-2" data-testid="drift-prune-files">
                   <li v-for="file in prune.batch(component.component).files" :key="file.path">{{ file.path }}</li>
                 </ul>
                 <div class="flex items-center gap-2">
