@@ -15,7 +15,7 @@ field here described a process. It will grow again; it now has room to.
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HealthResponse(BaseModel):
@@ -28,6 +28,9 @@ class HealthResponse(BaseModel):
     # #15462: `/slm/` answered 403 for hours while this said "healthy" — every
     # field described a process, none the artifact a user loads.
     frontend: str = "unknown"
+    # #22067: roles left out of the registry for want of a manifest: "unhealthy" plus the map below, never a crash.
+    manifests: str = "healthy"
+    manifest_errors: dict[str, str] = Field(default_factory=dict)
     # #14299: Redis was never part of this response — a backend with an open
     # circuit breaker on its main database still reported itself healthy, as
     # long as Postgres answered. Required (not Optional): the single caller

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
-from autobot_shared.http_refusal import http_refusal
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from llc.deps import assert_company_access, load_authorized, service_dep, session_dep
@@ -222,10 +222,10 @@ async def decide_approval(
     except ApprovalNotFoundError as exc:
         await session.rollback()
         logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise fixed_refusal(404)
     except (ApprovalStateError, ApprovalRequiredError):
         await session.rollback()
-        raise HTTPException(status_code=409, detail="Internal server error")
+        raise fixed_refusal(409)
     except Exception:
         await session.rollback()
         raise

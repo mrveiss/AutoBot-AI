@@ -33,6 +33,7 @@ from ..models.goal import GoalLevel, GoalStatus, LLCGoal
 from ..models.work_item import LLCWorkItem
 from ..services.goal import GoalService
 from ._common import acting_user_id
+from ._named_agent import require_member_targets
 
 router = APIRouter(prefix="/goals", tags=["llc-goals"])
 
@@ -166,6 +167,7 @@ async def create_goal(
     ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
     assert_company_access(ctx, body.company_id)
+    await require_member_targets(session, body.company_id, None, body.owner_agent_id, slug_ok=True)
     goal = await _svc().create(
         session,
         company_id=body.company_id,
@@ -222,8 +224,9 @@ async def update_goal(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
-    await _get_authorized_goal(session, goal_id, ctx)
+    owned = await _get_authorized_goal(session, goal_id, ctx)
     updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
+    await require_member_targets(session, owned.company_id, None, updates.get("owner_agent_id"), slug_ok=True)
     goal = await _svc().update(session, goal_id, **updates)
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")

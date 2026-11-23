@@ -40,7 +40,7 @@ from api.user_management.dependencies import (
     get_current_user,
     require_org_context,
 )
-from autobot_shared.http_refusal import http_refusal
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
@@ -214,13 +214,13 @@ async def create_company(
         return await _create_and_commit(svc, membership_svc, body, user_id)
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
     except (CompanyBudgetError, CompanyCycleError):
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY)
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except Exception:
         await svc.session.rollback()
         raise
@@ -240,7 +240,7 @@ async def get_company(
         org = await svc.get(company_id)
         return _to_read(org)
     except CompanyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
 
 
 @router.patch("/{company_id}", response_model=CompanyRead)
@@ -262,16 +262,16 @@ async def update_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
     except CompanyMoveContendedError:  # lost a lock race, nothing changed (#19593)
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Concurrent move in progress; try again")
     except (CompanyBudgetError, CompanyCycleError):
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY)
     except NotAuthorisedError as exc:  # fixed public text only; the ids/roles are logged by the service (#19634)
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.public_detail)
@@ -300,10 +300,10 @@ async def delete_company(
             await _kb_manager.drop_collection(KbCollectionManager.COMPANY_PREFIX, company_id, suffix)
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except CompanyHasChildrenError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
     except Exception:
         await svc.session.rollback()
         raise
@@ -339,7 +339,7 @@ async def activate_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except ValueError as exc:
         await svc.session.rollback()
         raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.activate_company") from None
@@ -369,7 +369,7 @@ async def suspend_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except ValueError as exc:
         await svc.session.rollback()
         raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.suspend_company") from None
@@ -400,7 +400,7 @@ async def offboard_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except ValueError as exc:
         await svc.session.rollback()
         raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.offboard_company") from None
@@ -429,7 +429,7 @@ async def archive_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except ValueError as exc:
         await svc.session.rollback()
         raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.archive_company") from None
@@ -450,7 +450,7 @@ async def get_company_tree(
     try:
         return await svc.get_sub_company_tree(company_id)
     except CompanyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
 
 
 @router.get("/{company_id}/ancestry", response_model=List[CompanyAncestor])
@@ -474,7 +474,7 @@ async def get_company_ancestry(
             for a in ancestors
         ]
     except CompanyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
 
 
 # ------------------------------------------------------------------
@@ -512,7 +512,7 @@ async def get_kb_ancestry_collections(
     try:
         chain = await resolver.get_query_collections(session, str(company_id))
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
 
     return [
         KbAncestryCollection(

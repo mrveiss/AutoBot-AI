@@ -39,7 +39,8 @@ _INCLUDE_ACTIONS = (
 _MIN_ENTRIES = 9
 
 #: Names no entry defines because the controller supplies them: inventory structure and gathered facts.
-#: `slm_backend_port` is declared once, in inventory/group_vars/all.yml (#20600), which every play sees.
+#: `slm_backend_port` is declared once, in inventory/group_vars/all.yml (#20600), which every play sees; so is
+#: `slm_trusted_proxies` (#19832), derived from the inventory's `frontend` group.
 _SUPPLIED = frozenset(
     {
         "autobot",
@@ -49,6 +50,7 @@ _SUPPLIED = frozenset(
         "ansible_host",
         "ansible_facts",
         "slm_backend_port",
+        "slm_trusted_proxies",
     }
 )
 

@@ -21,9 +21,13 @@ export function factByKeyUrl(documentId: string): string {
   return `${getApiBase()}/knowledge_base/fact/${encodeURIComponent(factKey)}`
 }
 
-/** The category a list row shows when the backend sent none (`toSearchResult` in KnowledgeRepository, #21796). */
+/**
+ * The ONE default fact category the knowledge UI shows and submits when none is set (#21921).
+ * The display form of the backend's `CategoryDefaults.GENERAL` (`autobot_shared/category_defaults.py`,
+ * `'general'`); `repo_tests/knowledge_default_category_mirror_21921_test.py` fails if the two drift apart.
+ */
 export const DEFAULT_FACT_CATEGORY = 'General'
-/** The UI document class a list row shows when the backend sent no `type`. */
+/** The UI document class a fact shows as when the backend sent no `type`. */
 export const DEFAULT_FACT_TYPE = 'document'
 const DOCUMENT_TYPES: readonly KnowledgeDocument['type'][] = ['document', 'webpage', 'api', 'upload']
 

@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from llc.deps import service_dep, session_dep
@@ -167,7 +168,7 @@ async def create_kanban_board(
         await session.commit()
     except ValueError as exc:
         logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     return _board_response(board)
 
 
@@ -188,7 +189,7 @@ async def create_sprint_board(
         await session.commit()
     except ValueError as exc:
         logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     return _board_response(board)
 
 
@@ -233,7 +234,7 @@ async def get_board_items(
         result = await svc.get_board_items(session, board_id)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise fixed_refusal(404)
 
     board = result["board"]
     columns_with_items: List[Dict[str, Any]] = []
@@ -353,6 +354,6 @@ async def move_item(
         raise refused_transition(exc)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise fixed_refusal(404)
 
     return _work_item_summary(updated_item, body.column_id)

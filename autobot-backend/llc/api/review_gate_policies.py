@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import fixed_refusal
 from llc.deps import assert_company_access, service_dep, session_dep
 from user_management.services import TenantContext
 
@@ -145,7 +146,7 @@ async def create_review_gate_policy(
         )
         await session.commit()
     except ReviewGatePolicyConflictError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
     return ReviewGatePolicyRead.model_validate(policy)
 
 
@@ -173,7 +174,7 @@ async def update_review_gate_policy(
         )
         await session.commit()
     except ReviewGatePolicyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     return ReviewGatePolicyRead.model_validate(policy)
 
 

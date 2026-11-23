@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from autobot_shared.http_refusal import http_refusal
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from llc.deps import session_dep
@@ -132,7 +132,7 @@ async def trigger_heartbeat(
         raise http_refusal(409, exc, scope="agents.trigger_heartbeat") from None
     except ValueError as exc:
         logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise fixed_refusal(404)
 
     agent_company = agent_cfg.get("company_id")
     if ctx.org_id is None or (agent_company is not None and agent_company != ctx.org_id):

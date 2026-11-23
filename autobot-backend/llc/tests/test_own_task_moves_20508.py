@@ -64,14 +64,14 @@ async def test_a_person_moves_their_own_done_task_back_to_ready(field: str) -> N
 async def test_anyone_else_keeps_the_transition_rules(acting_user) -> None:
     done = _item(WorkItemStatus.DONE, created_by=_ME, assignee=_ME)
     with pytest.raises(InvalidTransition):
-        await _move(done, WorkItemStatus.READY, acting_user)
+        await _move(done, WorkItemStatus.BLOCKED, acting_user)  # done only reopens to ready or in_progress (#20508)
     assert done.status == WorkItemStatus.DONE
 
 
 @pytest.mark.asyncio
 async def test_a_task_with_no_owner_is_nobodys_own() -> None:
     with pytest.raises(InvalidTransition):
-        await _move(_item(WorkItemStatus.DONE), WorkItemStatus.READY, _ME)
+        await _move(_item(WorkItemStatus.DONE), WorkItemStatus.BLOCKED, _ME)
 
 
 def test_past_its_reviewer_is_not_an_own_task_move() -> None:

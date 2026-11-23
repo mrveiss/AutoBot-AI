@@ -29,6 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import fixed_refusal
 from llc.deps import session_dep
 from llc.models.secret import LLCSecret
 from llc.services.authz import NotAuthorisedError, require_company_admin
@@ -177,7 +178,7 @@ async def get_secret(
     try:
         plaintext = await svc.get(session=session, company_id=company_id, name=name)
     except SecretNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from exc
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from exc
 
     result = await session.execute(
         select(LLCSecret).where(
@@ -201,5 +202,5 @@ async def revoke_secret(
     try:
         await svc.revoke(session=session, company_id=company_id, name=name, actor=str(actor_id(current_user)))
     except SecretNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from exc
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from exc
     await session.commit()

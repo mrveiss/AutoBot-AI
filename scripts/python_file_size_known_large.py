@@ -80,7 +80,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1389,  # #18055: split to problem_storage.py
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1119,
-    "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 744,
+    "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 742,  # #20945: 744 -> 742
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 695,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 794,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
@@ -285,7 +285,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/prompt_manager.py": 1462,
     "autobot-backend/protocols/agent_communication.py": 654,
     "autobot-backend/research_browser_manager.py": 704,
-    "autobot-backend/secure_command_executor.py": 1087,
+    "autobot-backend/secure_command_executor.py": 1083,
     "autobot-backend/secure_sandbox_executor.py": 1017,
     "autobot-backend/security/command_patterns.py": 609,
     "autobot-backend/security/domain_security.py": 715,
@@ -446,7 +446,7 @@ KNOWN_LARGE: dict[str, int] = {
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,
     "autobot-slm-backend/services/replication.py": 785,
-    "autobot-slm-backend/services/role_registry.py": 690,
+    "autobot-slm-backend/services/role_registry.py": 654,
     "autobot-slm-backend/services/service_orchestrator.py": 913,
     "autobot-slm-backend/slm/agent/agent.py": 630,
     "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 1990,  # #18052: resolver test moved out
@@ -463,7 +463,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/env_registry.py": 1049,  # #20910: transcriber block -> env_registry_transcriber (was 1061)
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/npu/integration.py": 929,
-    "autobot_shared/plugin_sdk/loader.py": 690,
+    "autobot_shared/plugin_sdk/loader.py": 682,
     "autobot_shared/plugin_sdk/plugin_load_visibility_test.py": 750,
     "autobot_shared/plugin_sdk/plugin_sdk_test.py": 941,
     "autobot_shared/rate_limiter_test.py": 618,

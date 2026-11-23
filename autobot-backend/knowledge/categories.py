@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
+from knowledge.category_keys import FACTS_KEY, QUARANTINED_KEY
+from knowledge.category_quarantine import add_to_category, remove_from_category, servable_fact_ids
 from knowledge.quarantine import drop_quarantined_hashes
 
 logger = get_logger(__name__)
@@ -309,7 +311,7 @@ class CategoriesMixin:
         """Reassign facts from categories being deleted (Issue #398: extracted)."""
         count = 0
         for cat_id in categories:
-            cat_facts = await self.redis().smembers(f"category:facts:{cat_id}")
+            cat_facts = await self.redis().smembers(FACTS_KEY.format(cat_id))
             for fact_id in cat_facts:
                 if isinstance(fact_id, bytes):
                     fact_id = fact_id.decode("utf-8")
@@ -336,7 +338,7 @@ class CategoriesMixin:
             await self.redis().srem("category:root", cat_id)
 
         await self.redis().delete(f"category:children:{cat_id}")
-        await self.redis().delete(f"category:facts:{cat_id}")
+        await self.redis().delete(FACTS_KEY.format(cat_id), QUARANTINED_KEY.format(cat_id))
         await self.redis().delete(f"category:{cat_id}")
 
     async def _build_deletion_list(self, category_id: str, recursive: bool) -> tuple[List[str], Dict[str, Any] | None]:
@@ -568,7 +570,7 @@ class CategoriesMixin:
         """Remove fact from old category if reassigning (Issue #398: extracted)."""
         old_category = await self._get_fact_category_id(fact_id)
         if old_category and old_category != new_category_id:
-            await self.redis().srem(f"category:facts:{old_category}", fact_id)
+            await remove_from_category(self.redis(), fact_id, old_category)
             await self._decrement_category_count(old_category)
 
     async def assign_fact_to_category(self, fact_id: str, category_id: str) -> Dict[str, Any]:
@@ -601,15 +603,6 @@ class CategoriesMixin:
                 e,
             )
             return {"success": False, "message": "Category operation failed"}
-
-    async def _gather_category_fact_ids(self, category_ids: List[str]) -> set:
-        """Gather all fact IDs from multiple categories (Issue #398: extracted)."""
-        all_ids: set = set()
-        for cat_id in category_ids:
-            fact_ids = await self.redis().smembers(f"category:facts:{cat_id}")
-            for fid in fact_ids:
-                all_ids.add(fid.decode("utf-8") if isinstance(fid, bytes) else fid)
-        return all_ids
 
     async def _load_fact_data(self, fact_ids: List[str]) -> List[Dict[str, Any]]:
         """Load fact data for multiple fact IDs (Issue #398: extracted)."""
@@ -647,7 +640,7 @@ class CategoriesMixin:
             if include_descendants:
                 category_ids.extend(await self._get_all_descendants(category_id))
 
-            all_fact_ids = await self._gather_category_fact_ids(category_ids)
+            all_fact_ids = await servable_fact_ids(self.redis(), category_ids)  # #21957: no quarantined ids
             total_count = len(all_fact_ids)
 
             paginated_ids = sorted(list(all_fact_ids))[offset : offset + limit]
@@ -934,11 +927,11 @@ class CategoriesMixin:
 
     async def _assign_fact_to_category(self, fact_id: str, category_id: str) -> None:
         """Internal method to assign a fact to a category."""
-        # Add to category's fact set
-        await self.redis().sadd(f"category:facts:{category_id}", fact_id)
-
-        # Update fact metadata
+        # category_id first: add_to_category's race handling relies on this order (#21957)
         await self.redis().hset(f"fact:{fact_id}", "category_id", category_id)
+
+        # Add to category's fact set, with its quarantine index entry (one MULTI)
+        await add_to_category(self.redis(), fact_id, category_id)
 
         # Increment category count
         await self.redis().hincrby(f"category:{category_id}", "fact_count", 1)

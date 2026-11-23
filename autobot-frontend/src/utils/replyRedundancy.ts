@@ -12,13 +12,14 @@
  * more than the answer is kept.
  */
 
+import { stripProtocolTagsForDisplay } from './llmProtocolTags'
 import { RESPOND_TOOL_TYPE } from './replyRedundancyConstants'
 
 type Entry = { sender?: string; text?: string; content?: string; metadata?: Record<string, unknown> | null }
 
-/** The text folded for comparison. */
+/** The text folded for comparison. A tool call is a step, not words: whole calls and markers go first (#21880). */
 export function normalizeReply(text: string | null | undefined): string {
-  return (text ?? '')
+  return stripProtocolTagsForDisplay(text ?? '')
     .normalize('NFKC')
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)

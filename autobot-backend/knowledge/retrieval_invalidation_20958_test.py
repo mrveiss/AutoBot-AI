@@ -385,7 +385,7 @@ _VECTOR_WRITES: dict[tuple[str, str], str] = {
     (
         "services/knowledge/doc_indexer.py",
         "_handle_dim_mismatch",
-    ): "sync init path; doc_index_orphans.resolve_collection awaits the registered _bump_after_recreate (#20992)",
+    ): "sync init path; every route to it runs through resolve_collection, which reaches the registered _bump_after_recreate (pinned by the call-graph tests below, #20992)",
     ("services/knowledge/kb_synthesizer.py", "_index_documents"): _ENTRY,
     ("services/knowledge/lineage_service.py", "rollback_entity"): _NOT_RAG,
     ("services/knowledge/lineage_service.py", "stamp_entity_version"): _NOT_RAG,
@@ -428,3 +428,51 @@ def test_every_raw_vector_write_is_an_entry_point_or_explained():
 def test_every_site_marked_entry_is_a_registered_entry_point():
     registered = {(e.path, e.qualname.rsplit(".", 1)[-1]) for e in WRITE_ENTRY_POINTS}
     assert {k for k, v in _VECTOR_WRITES.items() if v == _ENTRY} <= registered
+
+
+_ORPHANS = "services/knowledge/doc_index_orphans.py"
+_DOC_INDEXER = "services/knowledge/doc_indexer.py"
+
+
+def _called_names(fn: ast.AST) -> set[str]:
+    """Bare and attribute names of everything *fn* calls (``f(...)``, ``x.f(...)``)."""
+    names: set[str] = set()
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Call):
+            target = node.func
+            names.add(target.id if isinstance(target, ast.Name) else getattr(target, "attr", ""))
+    return names
+
+
+def _functions(rel: str) -> dict[str, ast.AST]:
+    tree = ast.parse((BACKEND / rel).read_text(encoding="utf-8"))
+    return {n.name: n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+
+def _reachable(rel: str, start: str) -> set[str]:
+    """Functions of module *rel* reachable from *start* through calls to its own functions."""
+    funcs, seen, todo = _functions(rel), set(), [start]
+    while todo:
+        name = todo.pop()
+        if name in seen or name not in funcs:
+            continue
+        seen.add(name)
+        todo.extend(_called_names(funcs[name]))
+    return seen
+
+
+def test_resolve_collection_reaches_the_registered_recreate_bump():
+    registered = {(e.path, e.qualname.rsplit(".", 1)[-1]) for e in WRITE_ENTRY_POINTS}
+    assert (_ORPHANS, "_bump_after_recreate") in registered
+    assert "_bump_after_recreate" in _reachable(_ORPHANS, "resolve_collection"), (
+        "resolve_collection no longer reaches _bump_after_recreate: a dimension-mismatch recreate "
+        "would leave cached retrievals stale (#20992)"
+    )
+
+
+def test_the_docs_indexer_resolves_its_collection_only_through_resolve_collection():
+    funcs = _functions(_DOC_INDEXER)
+    callers = {name: _called_names(fn) for name, fn in funcs.items()}
+    assert "resolve_collection" in callers["initialize"]
+    assert not {n for n, c in callers.items() if "_resolve_collection" in c}, "a direct resolve bypasses the bump"
+    assert {n for n, c in callers.items() if "_handle_dim_mismatch" in c} == {"_resolve_collection"}
