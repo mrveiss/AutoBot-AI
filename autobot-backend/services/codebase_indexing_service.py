@@ -28,7 +28,7 @@ from typing import Any, Dict, List
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.vue_sfc import VUE_SCRIPT_RE
+from autobot_shared.vue_sfc import vue_script_body
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from knowledge_base_factory import get_knowledge_base_or_none
@@ -50,7 +50,7 @@ _VUE_TEMPLATE_RE = re.compile(
     re.IGNORECASE,
 )
 # #1733: ReDoS fix - replaced nested quantifier with [\s\S]*?
-# #21641: the <script> extractor lives in autobot_shared.vue_sfc (VUE_SCRIPT_RE)
+# #21641: the <script> extractor lives in autobot_shared.vue_sfc (vue_script_body)
 # #1733: ReDoS fix - replaced nested quantifier with [\s\S]*?
 _VUE_STYLE_RE = re.compile(
     r"<style[^>]*>([\s\S]*?)</style>",
@@ -318,7 +318,7 @@ class CodeChunker:
         """Chunk Vue files by template, script, and style sections."""
         chunks = []
         template_match = _VUE_TEMPLATE_RE.search(content)
-        script_match = VUE_SCRIPT_RE.search(content)
+        script_body = vue_script_body(content)
         style_match = _VUE_STYLE_RE.search(content)
 
         if template_match:
@@ -332,8 +332,8 @@ class CodeChunker:
                     }
                 )
 
-        if script_match:
-            script_content = script_match.group(1).strip()
+        if script_body is not None:
+            script_content = script_body.strip()
             if script_content:
                 self._add_vue_script_chunks(chunks, script_content)
 

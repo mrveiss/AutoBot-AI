@@ -51,7 +51,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_constants import TTL_30_DAYS
-from autobot_shared.vue_sfc import VUE_SCRIPT_RE
+from autobot_shared.vue_sfc import vue_script_body
 
 # #18070: one ValidationResult -- this module used to declare a second one.
 from code_intelligence.code_generation.types import ValidationResult, ValidationStatus
@@ -389,9 +389,9 @@ class MultiLanguageCodeValidator:
         elif language == CodeLanguage.VUE:
             # Extract script section and validate (#1721, #21641: the one shared
             # linear-time, closing-tag-tolerant extractor, autobot_shared.vue_sfc)
-            script_match = VUE_SCRIPT_RE.search(code)
-            if script_match:
-                return cls.validate_typescript(script_match.group(1))
+            script_body = vue_script_body(code)
+            if script_body is not None:
+                return cls.validate_typescript(script_body)
             return ValidationResult(status=ValidationStatus.VALID, is_valid=True)
         else:
             return ValidationResult(status=ValidationStatus.VALID, is_valid=True)
