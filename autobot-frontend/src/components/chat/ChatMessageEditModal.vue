@@ -9,13 +9,13 @@
     <textarea
       ref="textarea"
       v-model="content"
-      class="flex-1 w-full px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-electric-500 resize-none"
+      :style="TEXTAREA_STYLE"
       :placeholder="$t('chat.messages.enterMessage')"
       rows="6"
       @keydown.ctrl.enter="emit('save')"
       @keydown.meta.enter="emit('save')"
     ></textarea>
-    <div class="text-xs text-autobot-text-muted mt-2">{{ $t('chat.messages.ctrlEnterToSave') }}</div>
+    <div :style="HINT_STYLE">{{ $t('chat.messages.ctrlEnterToSave') }}</div>
 
     <template #actions>
       <BaseButton variant="secondary" @click="emit('cancel')">{{ $t('common.cancel') }}</BaseButton>
@@ -34,6 +34,24 @@ const content = defineModel<string>('content', { required: true })
 const emit = defineEmits<{ 'update:modelValue': [open: boolean]; save: []; cancel: [] }>()
 
 const textarea = ref<HTMLTextAreaElement>()
+
+/** Kit tokens only. The field keeps the browser focus outline (no custom ring to restyle). */
+const TEXTAREA_STYLE = {
+  flex: 1,
+  inlineSize: '100%',
+  padding: 'var(--aui-space-2) var(--aui-space-3)',
+  resize: 'none',
+  border: '1px solid var(--aui-input-border)',
+  borderRadius: 'var(--aui-radius-md)',
+  background: 'var(--aui-input-bg)',
+  color: 'var(--aui-color-text)',
+  font: 'inherit',
+} as const
+const HINT_STYLE = {
+  marginBlockStart: 'var(--aui-space-2)',
+  color: 'var(--aui-color-text-muted)',
+  fontSize: 'var(--aui-text-xs)',
+} as const
 
 /** Focus the field once the dialog is open (as the stream did after opening it). */
 watch(() => props.modelValue, async (open) => {

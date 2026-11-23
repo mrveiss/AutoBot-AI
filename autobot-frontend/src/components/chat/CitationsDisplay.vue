@@ -10,7 +10,7 @@
       @keydown.space.prevent="toggleExpanded"
     >
       <div class="citations-header-left">
-        <Icon name="layer-group" class="text-autobot-primary" />
+        <Icon name="layer-group" class="citations-icon" />
         <span class="citations-label">{{ $t('chat.citations.sources') }}</span>
         <span class="citations-count">{{ citations.length }}</span>
       </div>
@@ -461,4 +461,6 @@ const citationTitle = (citation: Citation): string => {
     gap: var(--spacing-1);
   }
 }
+
+.citations-icon { color: var(--color-primary); }
 </style>
