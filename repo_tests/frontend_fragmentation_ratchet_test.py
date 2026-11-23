@@ -102,7 +102,7 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5318,  # #20670: -1, the admin-status control styles became utility classes (5319 -> 5318); #20513: -2 on main's 5321 (KnowledgeBaseOptIn onto BaseButton; 5321 - 2 = 5319); #21032: -1 more, merged tree measures 5321 (main 5322); #20682: -2, the detach button rules left WorkflowCanvas for utility classes (5324 -> 5322); #17677: -1, WorkflowRunner's own .step-actions left for the shared approval card (5325 -> 5324); #18978: BacklogCreateModal onto the kit (-5) on main's 5330; T77 merge with main: 5330 measured on the merged tree; T78 merge of #20579 + #20479: 5334 measured on the merged tree; #14776: the main-app EmptyState fork retired into the kit adapter (5360 -> 5359); #19904 batch 2: 5381 -> 5360, 29 more views onto BaseButton; #19904 batch 1: 5391 -> 5388, per-view .btn* rules retired into BaseButton; #19903 AC2: both app ToastContainers retired into the kit (-14) on 5405; #19903: the retired NotificationConfigModal and the toast/result reuse (-16) on main's 5421; #17562 batch 2: five tables onto BaseTable (-4) on 5425; #19532: the retired main-GUI SettingsPanel (-6); #19217: the retired main-app web research editors (-23) on main's 5454; #17562: six hand-rolled tables onto the kit BaseTable (-12) on main's 5466; #13422: risk-badge, risk-pill, cost-pill and the level-* risk classes left for the kit RiskBadge (-3) on main's 5476; train-85b: #12741 show-more rules moved to TruncationNotice (-3) on main's 5479; train-84: #14780 BaseAvatar (-2) on main's 5481; #17829: the chat input status bar classes became utilities (-3); #14780 drawer adoption: 5492 -> 5484 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link; train-85h merge: main's 5469 + this train's -3
+    "distinct_class_names": 5270,  # #18244: Knowledge Browser port, 5318 -> 5270  # #20670: -1, the admin-status control styles became utility classes (5319 -> 5318); #20513: -2 on main's 5321 (KnowledgeBaseOptIn onto BaseButton; 5321 - 2 = 5319); #21032: -1 more, merged tree measures 5321 (main 5322); #20682: -2, the detach button rules left WorkflowCanvas for utility classes (5324 -> 5322); #17677: -1, WorkflowRunner's own .step-actions left for the shared approval card (5325 -> 5324); #18978: BacklogCreateModal onto the kit (-5) on main's 5330; T77 merge with main: 5330 measured on the merged tree; T78 merge of #20579 + #20479: 5334 measured on the merged tree; #14776: the main-app EmptyState fork retired into the kit adapter (5360 -> 5359); #19904 batch 2: 5381 -> 5360, 29 more views onto BaseButton; #19904 batch 1: 5391 -> 5388, per-view .btn* rules retired into BaseButton; #19903 AC2: both app ToastContainers retired into the kit (-14) on 5405; #19903: the retired NotificationConfigModal and the toast/result reuse (-16) on main's 5421; #17562 batch 2: five tables onto BaseTable (-4) on 5425; #19532: the retired main-GUI SettingsPanel (-6); #19217: the retired main-app web research editors (-23) on main's 5454; #17562: six hand-rolled tables onto the kit BaseTable (-12) on main's 5466; #13422: risk-badge, risk-pill, cost-pill and the level-* risk classes left for the kit RiskBadge (-3) on main's 5476; train-85b: #12741 show-more rules moved to TruncationNotice (-3) on main's 5479; train-84: #14780 BaseAvatar (-2) on main's 5481; #17829: the chat input status bar classes became utilities (-3); #14780 drawer adoption: 5492 -> 5484 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link; train-85h merge: main's 5469 + this train's -3
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (5611 -> 5594).
@@ -130,11 +130,11 @@ BASELINE = {
 # up as one number falling to zero rather than as noise in the total.
 FAMILY_BASELINE = {
     "btn": 79,  # #18978: 80 -> 79; #19904 batch 2: 101 -> 80; #19904 batch 1: 104 -> 101; #18849: 116 -> 104, the local BaseButton fork retired into the kit
-    "status": 113,  # #17829: .status-left/.status-right became utilities in ChatInputStatusBar.vue
+    "status": 112,  # #18244: Knowledge Browser port, 113 -> 112  # #17829: .status-left/.status-right became utilities in ChatInputStatusBar.vue
     "header": 23,  # #14776: local BaseCard + BasePanel merged into the kit card (24 -> 23)
     "card": 57,  # #14776: local BaseCard + BasePanel merged into the kit card (67 -> 57)
-    "badge": 47,  # #14776: the local BaseBadge fork left for the kit (58 -> 50)
-    "result": 52,
+    "badge": 46,  # #18244: Knowledge Browser port, 47 -> 46  # #14776: the local BaseBadge fork left for the kit (58 -> 50)
+    "result": 50,  # #18244: Knowledge Browser port, 52 -> 50
     "progress": 47,
     "stat": 38,
     "panel": 19,  # #14780 drawer adoption: 23 -> 19 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14776: local BaseCard + BasePanel merged into the kit card (34 -> 23)
@@ -146,10 +146,10 @@ FAMILY_BASELINE = {
     "section": 23,
     "summary": 27,
     "text": 28,
-    "toggle": 22,  # #19217: the retired main-app web research editors (24 -> 22)
+    "toggle": 21,  # #18244: Knowledge Browser port, 22 -> 21  # #19217: the retired main-app web research editors (24 -> 22)
     "field": 17,  # #19217: the retired main-app web research editors (20 -> 17)
     "icon": 12,  # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (16 -> 12)
-    "checkbox": 9,
+    "checkbox": 8,  # #18244: Knowledge Browser port, 9 -> 8
     "sidebar": 9,
     "dropdown": 9,
     "nav": 7,
@@ -159,8 +159,8 @@ FAMILY_BASELINE = {
     # Three vocabularies for "the user is waiting": 60 distinct names across
     # 105 files. #12731 records this as "inconsistent loading"; this is the
     # measurement of it. They should collapse to one.
-    "loading": 28,  # #19906: 29 -> 28; #14778: DataTable loading-cell left (30 -> 29)
-    "skeleton": 26,
+    "loading": 27,  # #18244: Knowledge Browser port, 28 -> 27  # #19906: 29 -> 28; #14778: DataTable loading-cell left (30 -> 29)
+    "skeleton": 23,  # #18244: Knowledge Browser port, 26 -> 23
     "spinner": 2,  # #19906: 4 -> 2
     "table": 12,  # #14778: BaseTable and DataTable table-* left (18 -> 12)
     "input": 15,  # #14778: 18 -> 15, the local BaseInput fork retired into the kit;

@@ -394,19 +394,6 @@
   "90188fc5",
   "bcaba128"
  ],
- "autobot-frontend/src/components/documents/AIDocumentEditor.vue": [
-  "09291a7d",
-  "2d06b3b5",
-  "44cd160c",
-  "45eb596d",
-  "4e201f34",
-  "6e926fec",
-  "8d61de85",
-  "91464cc8",
-  "a184b6d6",
-  "abcb4551",
-  "f9078a90"
- ],
  "autobot-frontend/src/components/examples/ThemingPatternExample.vue": [
   "0151c1ce",
   "0e46f202",
@@ -504,23 +491,6 @@
  ],
  "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": [
   "ca160449"
- ],
- "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": [
-  "0910e9cc",
-  "1a8ff6a9",
-  "2ed6872a",
-  "4f07d0fd",
-  "5033f5a4",
-  "56289275",
-  "69e83d1f",
-  "6d1525cf",
-  "84a613fc",
-  "89ac0de4",
-  "d88b3004",
-  "dba59897",
-  "dc5579ed",
-  "e8180e46",
-  "fbd91534"
  ],
  "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": [
   "3495e788"

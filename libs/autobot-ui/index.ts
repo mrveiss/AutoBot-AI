@@ -83,6 +83,10 @@ export { default as PageHeader } from './src/components/PageHeader.vue'
 export { default as Breadcrumb } from './src/components/Breadcrumb.vue'
 export type { BreadcrumbItem } from './src/components/Breadcrumb.vue'
 
+// The section sub-navigation (the Refined UI `.sub` sidebar, #18241); Knowledge is its first consumer.
+export { default as SectionNav } from './src/components/SectionNav.vue'
+export type { SectionNavItem, SectionNavSection } from './src/components/SectionNav.vue'
+
 export { default as BrandMark } from './src/components/BrandMark.vue'
 
 export { default as BaseTooltip } from './src/components/BaseTooltip.vue'

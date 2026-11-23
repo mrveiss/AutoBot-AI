@@ -4117,7 +4117,9 @@
       "tooltipFailed": "Vectorization failed for this document",
       "tooltipPending": "Document is pending vectorization",
       "tooltipUnknown": "Vectorization status unknown",
-      "tooltipVectorized": "Document has been vectorized and is searchable via RAG"
+      "tooltipVectorized": "Document has been vectorized and is searchable via RAG",
+      "overallProgress": "Overall vectorization progress",
+      "documentProgress": "Vectorization progress for {name}"
     },
     "batchSelection": {
       "selected": "{count} selected",
