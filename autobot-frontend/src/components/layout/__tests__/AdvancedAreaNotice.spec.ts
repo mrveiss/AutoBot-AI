@@ -11,10 +11,11 @@ import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import AdvancedAreaNotice from '../AdvancedAreaNotice.vue'
-import componentsCss from '@/assets/css/components.css?raw'
 import { useUiMode } from '@/composables/useUiMode'
 
-// Real kit source read via node:fs (Vite's `?raw` fs allow-list denies files outside the app root).
+// Vitest's CSS handling returns '' for a `?raw` .css import (see safeAreaInsets.test.ts), so the
+// shared stylesheet is read from disk too, as is the real kit source via node:fs (Vite's `?raw` fs allow-list denies files outside the app root).
+const componentsCss = readFileSync(resolve(__dirname, '../../../assets/css/components.css'), 'utf-8')
 const baseCardSource = readFileSync(
   resolve(__dirname, '../../../../../libs/autobot-ui/src/components/BaseCard.vue'),
   'utf-8',

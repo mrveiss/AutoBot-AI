@@ -1,7 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 /** Main-category state of the Knowledge Browser (#18244): load, fallback, edit modal, Populate. */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 
 const h = vi.hoisted(() => ({
   fetchMainCategories: vi.fn(),
@@ -15,7 +15,16 @@ vi.mock('@/composables/knowledge/useMachineKnowledge', () => ({
   useMachineKnowledge: () => ({ refreshSystemKnowledge: h.refreshSystemKnowledge }),
 }))
 
+import i18n from '@/i18n'
+import en from '@/i18n/locales/en.json'
 import { useKnowledgeBrowserCategories } from '../useKnowledgeBrowserCategories'
+
+// The app's i18n starts with no messages (#12342) and initI18n() loads them before mount; a unit
+// test has no bootstrap, so load the real English bundle into the same global instance.
+beforeAll(() => {
+  i18n.global.setLocaleMessage('en', en as never)
+  i18n.global.locale.value = 'en'
+})
 
 const CAT = (id: string, count = 1) => ({ id, name: id, description: '', icon: 'book', color: '', count })
 
