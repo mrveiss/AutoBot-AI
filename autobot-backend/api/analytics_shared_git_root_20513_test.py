@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,11 +15,12 @@ import pytest
 from api import analytics_shared as mod
 from api.codebase_analytics import source_paths
 from api.codebase_analytics.endpoints import report
+from autobot_shared.paths import scrubbed_git_env
 
 
 def _real(tmp_path):
     root = tmp_path / "real"
-    (root / ".git").mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", str(root)], check=True, env=scrubbed_git_env())
     return root
 
 
@@ -76,6 +78,20 @@ def test_a_clone_reaching_outside_the_base_through_a_symlinked_parent_is_rejecte
     checkout = base / "link" / "child"
     assert not checkout.is_symlink()
     assert mod.git_root_of(checkout) is None
+
+
+def test_an_empty_git_directory_inside_a_parent_repository_is_rejected(tmp_path):
+    """Git discovery skips an empty `.git` and would read the parent's history under this source's keys."""
+    parent = _real(tmp_path)
+    checkout = parent / "sub"
+    (checkout / ".git").mkdir(parents=True)
+    assert mod.git_root_of(checkout) is None
+
+
+def test_a_nested_real_repository_inside_a_parent_repository_is_accepted(tmp_path):
+    subprocess.run(["git", "init", "-q", str(_real(tmp_path) / "nested")], check=True, env=scrubbed_git_env())
+    nested = _real(tmp_path) / "nested"
+    assert mod.git_root_of(nested) == nested.resolve()
 
 
 def test_a_real_repository_is_accepted(tmp_path):

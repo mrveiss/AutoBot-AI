@@ -1765,7 +1765,9 @@ async def _get_bug_prediction(
     Returns:
         PredictionResult or None if analysis fails or times out
     """
-    root = git_root_of(Path(project_root))  # the source's own repository, never a redirected one (#20513)
+    root = await asyncio.to_thread(
+        git_root_of, Path(project_root)
+    )  # the source's own repository, never a redirected one (#20513)
     if root is None:  # `git log` would read another repository's history: this section fails closed
         logger.warning("Bug prediction skipped: the source checkout is not a git repository of its own")
         return None

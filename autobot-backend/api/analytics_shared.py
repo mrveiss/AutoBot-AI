@@ -9,6 +9,8 @@ Contains utilities reused across analytics_quality, analytics_evolution,
 analytics_code_review, and analytics_code_generation.
 """
 
+import asyncio
+import subprocess  # nosec B404  # only the exception types; the call goes through run_git
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
@@ -39,10 +41,13 @@ NOT_A_GIT_REPOSITORY = "The source checkout is not a git repository"
 def git_root_of(checkout: Path) -> Path | None:
     """`checkout` resolved, when it is a git repository of its own and nothing redirects it; else None (#20513).
 
+    Blocking: async callers use `asyncio.to_thread`.
+
     Rejected: a checkout root that is itself a symlink; a clone under the registered clone base
     (`CODE_SOURCES_BASE`, the rule `orphan_clone_detector` and source deletion apply) that resolves outside
     it; a `.git` that is a symlink or a gitfile (linked worktree or submodule) and so can point at another
-    source's history; a missing `.git` (git would walk up into a parent repository). Callers fail closed on
+    source's history; a missing `.git` (git would walk up into a parent repository); a `.git` that git's own
+    discovery skips (empty or broken), checked by `_git_resolves_to`. Callers fail closed on
     None. The check precedes the read, so a swap between the two is not excluded; the clone directory is
     written only by the sync path, never by a request.
     """
@@ -56,14 +61,30 @@ def git_root_of(checkout: Path) -> Path | None:
     git_dir = resolved / ".git"
     if git_dir.is_symlink() or not git_dir.is_dir():
         return None
-    return resolved
+    return resolved if _git_resolves_to(resolved, git_dir) else None
+
+
+def _git_resolves_to(checkout: Path, git_dir: Path) -> bool:
+    """True when git's own discovery from `checkout` lands on `git_dir`, not on a parent repository's.
+
+    An empty or broken `.git` directory is skipped by discovery, which then reads an ancestor's history.
+    Blocking (a subprocess): async callers run it through `asyncio.to_thread`. A timeout, a missing git or
+    a refusal (for example another owner's directory) counts as "no", so callers fail closed.
+    """
+    from autobot_shared.git_probe import run_git
+
+    try:
+        probe = run_git(["rev-parse", "--absolute-git-dir"], cwd=checkout)
+    except (subprocess.SubprocessError, OSError):
+        return False
+    return probe.returncode == 0 and Path(probe.stdout.strip()).resolve() == git_dir.resolve()
 
 
 async def resolve_source_git_root(source_id: str) -> Path | None:
     """The selected source's checkout when `git_root_of` accepts it, else None (#20513)."""
     from api.codebase_analytics.endpoints.shared import resolve_scan_root
 
-    return git_root_of(await resolve_scan_root(source_id))
+    return await asyncio.to_thread(git_root_of, await resolve_scan_root(source_id))
 
 
 async def require_source_git_root(source_id: str) -> Path:

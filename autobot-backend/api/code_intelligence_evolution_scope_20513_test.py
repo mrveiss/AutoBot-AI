@@ -6,12 +6,14 @@
 
 from __future__ import annotations
 
+import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from api import code_intelligence as mod
 from api.codebase_analytics.endpoints import shared
+from autobot_shared.paths import scrubbed_git_env
 
 _ROUTES = ("analyze", "patterns", "refactorings", "timeline", "report")
 
@@ -75,7 +77,7 @@ def test_a_foreign_private_source_is_a_404_with_access_enforcement_left_real(rou
 
 
 def test_analyze_runs_the_miner_on_the_sources_checkout_only(tmp_path):
-    (tmp_path / ".git").mkdir()
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=scrubbed_git_env())
     miner = MagicMock()
     miner.return_value.analyze_evolution.return_value = {}
     with (

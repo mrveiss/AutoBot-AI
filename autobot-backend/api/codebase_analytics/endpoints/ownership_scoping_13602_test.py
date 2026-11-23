@@ -29,11 +29,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import subprocess
 
 import pytest
 
 import api.codebase_analytics.endpoints.ownership as own_mod
 from api.codebase_analytics.endpoints import shared
+from autobot_shared.paths import scrubbed_git_env
 
 
 @pytest.fixture
@@ -43,7 +45,9 @@ def two_roots(tmp_path):
     project_root = tmp_path / "code_source"
     clone = tmp_path / "data" / "code-sources" / "abc123"
     project_root.mkdir(parents=True)
-    (clone / ".git").mkdir(parents=True)  # blame reads this checkout's own history (#20513)
+    subprocess.run(
+        ["git", "init", "-q", str(clone)], check=True, env=scrubbed_git_env()
+    )  # blame reads this checkout's own history (#20513)
     return project_root, clone
 
 
