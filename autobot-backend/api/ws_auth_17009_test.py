@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
+from starlette.datastructures import State
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
@@ -161,6 +162,11 @@ class TestTheOverseerSocket:
             assert _connect(module, "/ws/s-1", USER) == "accepted"
 
 
+def _socket():
+    """A socket as a browser opens it: headers and query parameters present, no company named."""
+    return SimpleNamespace(app=None, headers={}, query_params={}, state=State())
+
+
 class TestOwnsChatSession:
     """The ownership check itself: strict, never degraded to log-only."""
 
@@ -194,7 +200,7 @@ class TestOwnsChatSession:
     async def test_ownership(self, owners, redis_value, durable_value, caller, expected):
         owns, redis_owner, durable_owner = owners
         redis_owner.value, durable_owner.value = redis_value, durable_value
-        assert await owns(SimpleNamespace(app=None), "s-1", caller) is expected
+        assert await owns(_socket(), "s-1", caller) is expected
 
     @pytest.mark.asyncio
     async def test_an_unreadable_session_file_is_unowned_not_an_unhandled_error(self, owners):
@@ -205,7 +211,7 @@ class TestOwnsChatSession:
         redis_owner.value = None
         with patch("utils.chat_utils.get_chat_history_manager") as manager:
             manager.return_value.get_session_owner = AsyncMock(side_effect=SessionOwnerUnreadable("s-1"))
-            assert await owns(SimpleNamespace(app=None), "s-1", USER) is False
+            assert await owns(_socket(), "s-1", USER) is False
 
 
 @pytest.mark.asyncio

@@ -25,6 +25,8 @@ from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from exceptions import get_exceptions_lazy
+from security.session_company import creation_company_metadata, resolve_company_scope
+from security.session_ownership import validate_session_ownership
 from services.audit.audit import AuditAction, audit_record
 from services.conversation_export import (
     export_all_conversations_json,
@@ -66,14 +68,19 @@ def _validate_format_or_raise(export_format: str) -> None:
     """Raise ValidationError when the requested format is not supported."""
     if export_format not in _VALID_EXPORT_FORMATS:
         _, _, _, ValidationError, _ = get_exceptions_lazy()
-        raise ValidationError(f"Invalid format {export_format!r}. Supported: json, markdown")
+        raise ValidationError(
+            f"Invalid format {export_format!r}. Supported: json, markdown",
+            client_message=f"Invalid format {export_format!r}. Supported: json, markdown",
+        )
 
 
 def _validate_session_id_or_raise(session_id: str) -> None:
     """Raise ValidationError when session_id is not well-formed."""
     if not validate_chat_session_id(session_id):
         _, _, _, ValidationError, _ = get_exceptions_lazy()
-        raise ValidationError(f"Invalid session_id: {session_id!r}")
+        raise ValidationError(
+            f"Invalid session_id: {session_id!r}", client_message=f"Invalid session_id: {session_id!r}"
+        )
 
 
 def _validate_on_conflict_or_raise(on_conflict: str) -> None:
@@ -132,9 +139,12 @@ async def export_conversation(
     request: Request,
     format: str = Query(default="json", description="Export format: json or markdown"),
     current_user: dict = Depends(get_current_user),
+    ownership: dict = Depends(validate_session_ownership),  # SECURITY: read access, owner or participant (#22002)
 ):
     """
     Export a single conversation in JSON or Markdown format (#1808).
+
+    Follows read access (#22002): the shared ownership dependency, which also refuses another company's chat (#21997).
 
     - **json**: Enriched AutoBot JSON envelope with metadata and messages.
     - **markdown**: Human-readable Markdown with message headers.
@@ -192,7 +202,10 @@ async def export_all_conversations(
         raise HTTPException(status_code=403, detail="Administrator role required for an instance-wide export")
     chat_history_manager = get_chat_history_manager(request)
     archive = await export_all_conversations_json(
-        chat_history_manager, current_user.get("username"), all_users=all_users
+        chat_history_manager,
+        current_user.get("username"),
+        all_users=all_users,
+        company=await resolve_company_scope(request, current_user),  # #21997: the active company's chats + Unassigned
     )
 
     if archive is None:
@@ -243,6 +256,7 @@ async def import_conversation_endpoint(
         # callers that read "no owner" as "legacy, allow" make it readable by
         # anyone. It also gates `replace` against overwriting another user.
         user_data=current_user,
+        company_metadata=await creation_company_metadata(request, None, current_user),  # #21997: a new chat is stamped
     )
 
     logger.info(

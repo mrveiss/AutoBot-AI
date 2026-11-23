@@ -225,6 +225,19 @@ function blockInertClick(event: MouseEvent): void {
   text-decoration: underline;
 }
 
+/* ---- pressed (toggle) state: a surface fill and an accent border ---- */
+.aui-btn[aria-pressed='true'] {
+  background-color: var(--aui-color-surface-raised);
+  border-color: var(--aui-color-primary);
+  color: var(--aui-color-text);
+}
+
+/* A pressed primary keeps its contrast text on the primary hover and active fills. */
+.aui-btn--primary[aria-pressed='true']:hover:not(:disabled):not([aria-disabled='true']),
+.aui-btn--primary[aria-pressed='true']:active:not(:disabled):not([aria-disabled='true']) {
+  color: var(--aui-color-primary-contrast);
+}
+
 /* ---- loading spinner ---- */
 .aui-btn__spinner {
   width: 1em;

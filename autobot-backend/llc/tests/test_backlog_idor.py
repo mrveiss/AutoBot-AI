@@ -24,7 +24,8 @@ _OTHER_ORG = "99999999-9999-9999-9999-999999999999"
 
 def _make_client(caller_org_id: str, is_platform_admin: bool = False) -> TestClient:
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
-    from llc.api.backlog import get_session, router  # noqa: PLC0415
+    from llc.api.backlog import router  # noqa: PLC0415
+    from llc.deps import get_session
 
     app = FastAPI()
     app.include_router(router, prefix="/api/llc")
@@ -53,7 +54,8 @@ def _stop_patches():
 
 class TestBacklogNoAuth:
     def test_get_backlog_no_token_returns_401(self):
-        from llc.api.backlog import get_session, router
+        from llc.api.backlog import router
+        from llc.deps import get_session
 
         app = FastAPI()
         app.include_router(router, prefix="/api/llc")

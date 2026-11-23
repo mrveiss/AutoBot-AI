@@ -14,6 +14,7 @@ import { backoffDelay } from '@autobot/ui'
 import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, toValue, toRaw, type Ref, type MaybeRefOrGetter } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
+import { onCompanySwitch, withCompanyScope } from '@/utils/companyScopedSocket'
 
 // Create scoped logger for useWebSocket
 const logger = createLogger('useWebSocket')
@@ -94,6 +95,13 @@ export interface UseWebSocketOptions {
   protocols?: MaybeRefOrGetter<string[] | undefined>
 
   /**
+   * Name the selected company in the URL (`company_id`) and reopen on a company switch (#21997), for a socket
+   * that reaches a chat session. Off by default: a terminal or dashboard socket is not company-scoped.
+   * @default false
+   */
+  companyScoped?: boolean
+
+  /**
    * Callback when connection opens
    */
   onOpen?: (event: Event) => void
@@ -123,6 +131,7 @@ export const URL_RESTART_DELAY_MS = 100
 // deliberately allows (#17009), and an absent value means "offer none".
 const DEFAULT_OPTIONS: Required<Omit<UseWebSocketOptions, 'protocols'>> = {
   autoConnect: true,
+  companyScoped: false,
   autoReconnect: true,
   maxReconnectAttempts: 5,
   reconnectDelay: 1000,
@@ -290,7 +299,8 @@ export function useWebSocket(
     try {
       // #16457: an auth token travels as a subprotocol, never in the URL.
       const subprotocols = toValue(opts.protocols)
-      const socket = subprotocols ? new WebSocket(wsUrl, subprotocols) : new WebSocket(wsUrl)
+      const openUrl = opts.companyScoped ? withCompanyScope(wsUrl) : wsUrl
+      const socket = subprotocols ? new WebSocket(openUrl, subprotocols) : new WebSocket(openUrl)
       ws.value = socket
 
       // Connection timeout
@@ -441,6 +451,9 @@ export function useWebSocket(
       }
     })
   }
+
+  // A company switch reopens a live socket so its URL carries the new company (#21997)
+  if (opts.companyScoped) onCompanySwitch(() => (isConnected.value || isConnecting.value) && reconnect())
 
   // Auto-connect on mount
   if (opts.autoConnect) {

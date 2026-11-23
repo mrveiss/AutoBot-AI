@@ -44,6 +44,7 @@ from api.user_management.dependencies import get_db_session, get_tenant_context
 from auth_middleware import get_current_user
 from autobot_memory_graph.owner_scope import OwnerScope, OwnerScopeRequired
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.user_management.base_service import TenantContext
@@ -227,7 +228,7 @@ async def graph_rag_search(
 
     except ValueError as e:
         logger.warning("[%s] Validation error: %s", request_id, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
     except Exception as e:
         logger.error("[%s] Graph-RAG search failed: %s", request_id, e, exc_info=True)
