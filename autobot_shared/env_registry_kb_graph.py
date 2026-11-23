@@ -1,7 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """Knowledge-graph bucket-section AUTOBOT_* environment variable registrations (#20945), plus the Chroma
-write-lease ones (#20992).
+write-lease ones (#20992) and the category quarantine index rebuild one (#21957).
 
 Sibling of ``env_registry_knowledge`` (which sits at the 600-line ceiling), imported by
 ``env_registry`` itself like every split module, so registration happens whenever it loads.
@@ -140,5 +140,19 @@ register_env_var(
         ),
         component="knowledge",
         range=(1, 60),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_CATEGORY_INDEX_REBUILD_BATCH",
+        type=int,
+        default=500,
+        description=(
+            "Categorised facts whose metadata is read per pipeline round trip while the category "
+            "quarantine index is rebuilt (knowledge/category_quarantine.py, #21957)."
+        ),
+        component="knowledge",
+        range=(1, 5000),
     )
 )
