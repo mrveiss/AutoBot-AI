@@ -13,23 +13,24 @@ import { BaseAlert, createLogger } from '@autobot/ui'
 import { ref, computed, onMounted } from 'vue'
 import { VncViewer, VncToolbar } from '@autobot/vnc'
 import type { VncHost } from '@autobot/vnc'
-import { getVNCHosts, getSlmApiBase } from '@/config/ssot-config'
+import { useI18n } from 'vue-i18n'
+import { getSlmApiBase } from '@/config/ssot-config'
+import { probeVncWebsocket, vncClientUrlFromWebsocket } from '@/config/vnc-client'
 import { useSlmApi } from '@/composables/useSlmApi'
 
 const logger = createLogger('NoVNCTool')
 const api = useSlmApi()
+const { t } = useI18n()
 
 const loading = ref(false)
 const loadingEndpoints = ref(false)
 const error = ref<string | null>(null)
 const isConnected = ref(false)
 
-const staticHosts = getVNCHosts().map(h => ({ ...h, proxied: h.id === 'main', source: 'static' as const }))
+// Fleet hosts only (owner ruling 2026-11-23): the SLM tool reaches AutoBot's own infrastructure.
 const dynamicHosts = ref<VncHost[]>([])
-
-const hosts = computed<VncHost[]>(() => [...staticHosts, ...dynamicHosts.value])
-const selectedHostId = ref(staticHosts[0]?.id || '')
-const currentHost = computed(() => hosts.value.find(h => h.id === selectedHostId.value))
+const selectedHostId = ref('')
+const currentHost = computed(() => dynamicHosts.value.find(h => h.id === selectedHostId.value))
 
 async function fetchDynamicEndpoints(): Promise<void> {
   loadingEndpoints.value = true
@@ -40,9 +41,12 @@ async function fetchDynamicEndpoints(): Promise<void> {
       name: ep.name || `${ep.hostname} (${ep.vnc_type})`,
       host: ep.ip_address,
       port: ep.port,
-      description: `SLM-managed VNC on ${ep.hostname}`,
-      proxied: false,
+      description: t('tools.admin.noVNCTool.fleetEndpointDescription', { hostname: ep.hostname }),
+      url: vncClientUrlFromWebsocket(ep.websocket_url),
+      websocketUrl: ep.websocket_url,
+      embeddable: true,
     }))
+    if (!currentHost.value) selectedHostId.value = dynamicHosts.value[0]?.id ?? ''
   } catch (e) {
     logger.warn('VNC endpoints API not available:', e)
   } finally {
@@ -50,11 +54,20 @@ async function fetchDynamicEndpoints(): Promise<void> {
   }
 }
 
-function connect(): void {
-  if (!currentHost.value) { error.value = 'Please select a host'; return }
+async function connect(): Promise<void> {
+  const host = currentHost.value
+  if (!host?.websocketUrl) { error.value = t('tools.admin.noVNCTool.selectHostError'); return }
   loading.value = true
   error.value = null
-  setTimeout(() => { isConnected.value = true; loading.value = false }, 1000)
+  try {
+    await probeVncWebsocket(host.websocketUrl)
+    isConnected.value = true
+  } catch (e) {
+    logger.warn('VNC endpoint connect failed:', e)
+    error.value = t('tools.admin.noVNCTool.connectFailed', { name: host.name })
+  } finally {
+    loading.value = false
+  }
 }
 
 function disconnect(): void { isConnected.value = false }
@@ -82,11 +95,6 @@ onMounted(() => fetchDynamicEndpoints())
             :disabled="isConnected || loadingEndpoints"
             class="text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
           >
-            <optgroup v-if="staticHosts.length > 0" :label="$t('tools.admin.noVNCTool.staticHosts')">
-              <option v-for="host in staticHosts" :key="host.id" :value="host.id">
-                {{ host.name }} ({{ host.host }}:{{ host.port }})
-              </option>
-            </optgroup>
             <optgroup v-if="dynamicHosts.length > 0" :label="$t('tools.admin.noVNCTool.sLMManaged')">
               <option v-for="host in dynamicHosts" :key="host.id" :value="host.id">
                 {{ host.name }} ({{ host.host }}:{{ host.port }})

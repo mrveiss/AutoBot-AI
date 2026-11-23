@@ -11,6 +11,7 @@
  */
 
 import apiClient from '@/utils/ApiClient';
+import { secretsApiClient } from '@/utils/SecretsApiClient';
 
 export interface InfraHost {
   id: string;
@@ -60,6 +61,33 @@ export function infraHostToSecret(host: InfraHost) {
     },
     _isLegacyHost: true // Flag for legacy hosts that need different delete API
   };
+}
+
+/** The metadata key linking a host's VNC password secret to the host (read by api/vnc_host_target.py). */
+const VNC_COMPANION_HOST_KEY = 'vnc_host_id';
+
+/**
+ * #22145: a host's VNC password is its own secret, linked by host id, so the chat
+ * Desktop can authenticate to that host's VNC endpoint with it.
+ */
+export async function createVncCompanion(
+  created: unknown,
+  form: { type: string; name: string; host: string; capabilities: string[]; vnc_password: string },
+  hostData: Record<string, unknown>,
+  t: (key: string, params?: Record<string, unknown>) => string
+): Promise<void> {
+  if (form.type !== 'infrastructure_host' || !form.capabilities.includes('vnc') || !form.vnc_password) return;
+  const hostId = (created as { data?: { id?: string } } | null)?.data?.id;
+  if (!hostId) throw new Error(t('security.secretsManager.vncCompanionNoHostId'));
+  await secretsApiClient.createSecret({
+    name: t('security.secretsManager.vncCompanionName', { name: form.name }),
+    type: 'password',
+    scope: hostData.scope,
+    chat_id: hostData.chat_id,
+    value: form.vnc_password,
+    description: t('security.secretsManager.vncCompanionDescription', { host: form.host }),
+    metadata: { [VNC_COMPANION_HOST_KEY]: hostId }
+  } as unknown as Parameters<typeof secretsApiClient.createSecret>[0]);
 }
 
 export function useSecretsInfraApi() {

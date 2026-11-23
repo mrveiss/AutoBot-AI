@@ -78,8 +78,8 @@ const logger = createLogger('VncToolbar')
 const props = defineProps<{
   /** Whether VNC is currently connected */
   connected: boolean
-  /** Base URL for VNC API calls — defaults to /api */
-  apiBaseUrl?: string
+  /** Base URL for VNC API calls; the host app supplies its own (#22144) */
+  apiBaseUrl: string
   /** iframe element id to fullscreen */
   frameId?: string
 }>()
@@ -88,7 +88,7 @@ const emit = defineEmits<{
   error: [message: string]
 }>()
 
-const controls = useVncControls({ baseUrl: props.apiBaseUrl ?? '/api' })
+const controls = useVncControls({ baseUrl: props.apiBaseUrl })
 const lastError = ref<string | null>(null)
 const isFullscreen = ref(false)
 const showTypeDialog = ref(false)

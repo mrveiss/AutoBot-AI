@@ -1,0 +1,35 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+// AutoBot - AI-Powered Automation Platform
+// Author: mrveiss
+/**
+ * #22144: the noVNC client URL is derived (https scheme, SSOT port, configured path),
+ * never assembled from http:// / :6080 / /vnc.html literals at the call site.
+ */
+
+import { describe, it, expect } from 'vitest'
+import { getConfig } from '@/config/ssot-config'
+import {
+  buildVncBaseUrl,
+  buildVncClientUrl,
+  getVncClientPort,
+  VNC_CLIENT_PATH,
+  VNC_CLIENT_SCHEME,
+} from '../vnc-client'
+
+describe('vnc-client URL derivation', () => {
+  it('serves noVNC over https because websockify is --ssl-only', () => {
+    expect(VNC_CLIENT_SCHEME).toBe('https')
+    expect(buildVncBaseUrl({ host: 'box.example.test', vnc_port: 6081 })).toBe('https://box.example.test:6081')
+  })
+
+  it('falls back to the SSOT desktop port, not a literal', () => {
+    expect(getVncClientPort({ host: 'box.example.test' })).toBe(getConfig().vnc.desktop.port)
+    expect(getVncClientPort({ host: 'box.example.test', vnc_port: null })).toBe(getConfig().vnc.desktop.port)
+  })
+
+  it('builds the full client URL from base, configured path and query', () => {
+    const url = buildVncClientUrl({ host: 'box.example.test', vnc_port: 6081 })
+    expect(url).toBe(`https://box.example.test:6081${VNC_CLIENT_PATH}?autoconnect=true`)
+  })
+})

@@ -451,7 +451,7 @@
             <!-- Capabilities -->
             <div class="form-row">
               <div class="form-group">
-                <label>{{ $t('security.secretsManager.capabilities') }}</label>
+                <label>{{ $t('security.secretsManager.capabilities') }} <span class="required">*</span></label>
                 <div class="capability-checkboxes">
                   <label class="checkbox-option">
                     <input type="checkbox" value="ssh" v-model="secretForm.capabilities" disabled checked />
@@ -766,7 +766,7 @@ import { useDebounce } from '@/composables/useDebounce';
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger';
 import { useVirtualList } from '@/composables/useVirtualList';
 import { useSecretsInfraApi } from '@/composables/security/useSecretsInfraApi';
-import { infraHostToSecret, type InfraHostsResponse } from '@/composables/security/useSecretsInfraApi';
+import { createVncCompanion, infraHostToSecret, type InfraHostsResponse } from '@/composables/security/useSecretsInfraApi';
 import { useSecretWrites } from '@/composables/security/useSecretWrites';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
@@ -1442,11 +1442,11 @@ const saveSecret = async () => {
     if (showEditModal.value) {
       await secretsApiClient.updateSecret(secretForm.id, secretData, { chatId: secretData.chat_id as string | null | undefined });
     } else {
-      // For non-infrastructure_host types, use the standard value field
       if (secretForm.type !== 'infrastructure_host') {
         secretData.value = secretForm.value;
       }
-      await secretsApiClient.createSecret(secretData as unknown as Parameters<typeof secretsApiClient.createSecret>[0]);
+      const created = await secretsApiClient.createSecret(secretData as unknown as Parameters<typeof secretsApiClient.createSecret>[0]);
+      await createVncCompanion(created, secretForm, secretData, t);
     }
   });
   saving.value = false;

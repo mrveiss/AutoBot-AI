@@ -8,7 +8,7 @@
     />
     <VncToolbar
       :connected="modelValue"
-      :api-base-url="apiBaseUrl"
+      :api-base-url="apiBaseUrl ?? getApiBase()"
     />
   </div>
 </template>
@@ -19,12 +19,13 @@
 // Wire-in for @autobot/vnc — satisfies GH#6836 wiring gate for autobot-frontend
 import { VncViewer, VncToolbar } from '@autobot/vnc'
 import type { VncHost } from '@autobot/vnc'
+import { getApiBase } from '@/config/ssot-config'
 
 defineProps<{
   modelValue: boolean
   host?: VncHost
   loading?: boolean
-  /** Base URL for VNC API calls propagated to VncToolbar. Defaults to /api in plugin. */
+  /** Base URL for VNC API calls propagated to VncToolbar. Defaults to the canonical API base. */
   apiBaseUrl?: string
 }>()
 

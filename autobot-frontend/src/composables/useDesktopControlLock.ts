@@ -18,6 +18,7 @@
  */
 
 import { computed, getCurrentScope, onScopeDispose, ref } from 'vue'
+import { getApiBase } from '@/config/ssot-config'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
@@ -39,7 +40,11 @@ export interface DesktopControlLockState {
   message: string
 }
 
-export function useDesktopControlLock(vncType: string = 'desktop', sessionId: string = 'default') {
+/**
+ * @param hostId the selected /secrets host id; it is the lock key (#22145).
+ */
+export function useDesktopControlLock(hostId: string, vncType: string = 'desktop') {
+  const sessionId = hostId
   const userStore = useUserStore()
 
   const owner = ref<string | null>(null)
@@ -52,7 +57,7 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
     return humanActive.value && !!username && owner.value === username
   })
 
-  const basePath = `/vnc-proxy/${vncType}/control`
+  const basePath = `${getApiBase()}/vnc-proxy/${vncType}/control`
 
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
@@ -82,6 +87,7 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
   }
 
   async function refreshStatus(): Promise<DesktopControlLockState | null> {
+    if (!sessionId) return null
     try {
       const result = await ApiClient.get<DesktopControlLockState>(
         `${basePath}/status?session_id=${encodeURIComponent(sessionId)}`
@@ -107,6 +113,7 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
   async function acquire(options: { silent?: boolean } = {}): Promise<DesktopControlLockState | null> {
     const { silent = false } = options
     error.value = null
+    if (!sessionId) return null
     if (!silent) {
       loading.value = true
     }
@@ -145,6 +152,7 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
 
   async function releaseControl(): Promise<DesktopControlLockState | null> {
     error.value = null
+    if (!sessionId) return null
     loading.value = true
     stopHeartbeat()
     try {

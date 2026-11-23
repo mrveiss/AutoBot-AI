@@ -41,23 +41,24 @@ async function vncFetch<T>(method: 'GET' | 'POST', path: string, body?: unknown)
 export type VncRequest = <T>(method: 'GET' | 'POST', path: string, body?: unknown) => Promise<T>
 
 export interface UseVncControlsOptions {
-  /** Path prefix for the `/vnc/*` endpoints. */
-  baseUrl?: string
+  /** API base for the `/vnc/*` endpoints; each app supplies its own (no default, #22144). */
+  baseUrl: string
   /**
-   * Threaded into every request body as `session_id` (#12002), so a lock
-   * owner's toolbar drives their own session rather than whichever is default.
+   * The selected /secrets host id (#22145). Threaded into every request as
+   * `host_id`; the backend resolves it only from /secrets and refuses any other id.
+   * Omitted by the SLM toolbar, whose target scope is the fleet.
    */
-  sessionId?: string
+  hostId?: string
   /** Defaults to plain `fetch` — see {@link VncRequest}. */
   request?: VncRequest
 }
 
-export function useVncControls(options: UseVncControlsOptions = {}) {
-  const { baseUrl = '/api', sessionId, request = vncFetch } = options
+export function useVncControls(options: UseVncControlsOptions) {
+  const { baseUrl, hostId, request = vncFetch } = options
 
-  // #12002: every POST body carries the session id when one was supplied.
+  // #22145: every POST body names the host the control acts on.
   const withSession = (body?: Record<string, unknown>) =>
-    sessionId === undefined ? body : { ...(body ?? {}), session_id: sessionId }
+    hostId === undefined ? body : { ...(body ?? {}), host_id: hostId }
 
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -95,7 +96,7 @@ export function useVncControls(options: UseVncControlsOptions = {}) {
   }
 
   async function captureScreenshot(): Promise<VncActionResponse> {
-    try { return await call(() => request<VncActionResponse>('GET', `${baseUrl}/vnc/screenshot`)) }
+    try { return await call(() => request<VncActionResponse>('GET', `${baseUrl}/vnc/screenshot${hostId === undefined ? '' : `?host_id=${encodeURIComponent(hostId)}`}`)) }
     catch (err) { logger.error('Screenshot capture failed:', err); const m = extractErrorMessage(err, 'Screenshot capture failed'); error.value = m; return { status: 'error', message: m, image_data: '' } }
   }
 
