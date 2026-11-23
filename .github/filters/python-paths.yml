@@ -425,8 +425,9 @@ python:
   - '.github/workflows/dispatch-generated-types.yml'
   # #21359: `preboard_guard_lane_21359_test.py` reads the pre-board guard lane workflow by concrete literal.
   - '.github/workflows/dispatch-preboard-guards.yml'
-  # #22114: `preboard_own_specs_21509_test.py` reads the shared frontend setup action by concrete literal.
-  - '.github/actions/setup-frontend/action.yml'
+  # #22114: the setup action is read by concrete literal (`setup_frontend_action_22114_test.py`) and declared as a glob
+  # (`frontend_related_specs_22114_test.py`); one glob covers both.
+  - '.github/actions/setup-frontend/**'
   # #21359: the lane's guard reads `pytest.ini` (testpaths must equal the lane's roots plus the roots it
   # leaves to the suite) and `.test_durations` (covered below); a change confined to either must run it.
   - 'pytest.ini'

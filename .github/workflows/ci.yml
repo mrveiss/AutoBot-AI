@@ -922,11 +922,11 @@ jobs:
   # #22114: the specs that import what a pull request changed, run first. The full frontend suites type-check, lint and run
   # the integration suite before their unit tests, so a spec that cannot load (a `vi.mock` factory missing an export the changed
   # code now imports) used to turn the pull request red only at the end of that job. This job starts as soon as `changes`
-  # is done (no `short-check` wait), installs only the app a changed file belongs to (both for a shared-kit change), and runs `vitest related` on the files
+  # and `short-check` (#20552: a job that starts from detection waits for it) are done, installs only the app a changed file belongs to (both for a shared-kit change), and runs `vitest related` on the files
   # the pull request changed. It is an early signal, not a gate: no required context depends on it, and the full suites are unchanged.
   frontend-related-specs:
     name: frontend-related-specs
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.ready == 'true' && needs.changes.outputs.held != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15

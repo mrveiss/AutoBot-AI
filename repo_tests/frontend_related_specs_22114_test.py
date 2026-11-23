@@ -7,7 +7,7 @@
 It runs ``vitest related`` on the files a pull request changes, so a spec that cannot load goes red in minutes and not
 after the whole frontend suite. This file pins what that early signal depends on:
 
-* the job runs only on a ready, un-held pull request, and starts after ``changes`` alone;
+* the job runs only on a ready, un-held pull request, and starts after ``changes`` and ``short-check`` (#20552);
 * it sets up the toolchain through the one shared action, with the same package the suite installs;
 * it runs ``vitest related --run --passWithNoTests`` and passes no ``--`` before the files (Vitest 5's ``related`` command
   reads its files from the arguments before ``--``; the ones after it never reach it);
@@ -47,7 +47,7 @@ def test_the_job_runs_on_a_ready_unheld_pull_request_after_changes_only(jobs) ->
     job = jobs["frontend-related-specs"]
     assert job["name"] == "frontend-related-specs"
     assert job["if"] == _IF
-    assert job["needs"] == "changes", "no short-check wait: the point is an early signal"
+    assert job["needs"] == ["changes", "short-check"], "#20552: a job that starts from detection waits for short-check"
 
 
 def test_the_job_uses_the_shared_setup_action_with_the_suites_package(jobs) -> None:
