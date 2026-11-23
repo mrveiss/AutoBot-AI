@@ -65,6 +65,19 @@ def test_a_clone_resolving_outside_the_clone_base_is_rejected(tmp_path, monkeypa
     assert mod.git_root_of(_escapes_the_clone_base(tmp_path, monkeypatch)) is None
 
 
+def test_a_clone_reaching_outside_the_base_through_a_symlinked_parent_is_rejected(tmp_path, monkeypatch):
+    """Not a symlink itself, so only the clone-base containment rule can refuse it (#20513)."""
+    base = tmp_path / "code-sources"
+    base.mkdir()
+    monkeypatch.setattr(source_paths, "CODE_SOURCES_BASE", base)
+    outside = tmp_path / "outside"
+    (outside / "child" / ".git").mkdir(parents=True)
+    (base / "link").symlink_to(outside, target_is_directory=True)
+    checkout = base / "link" / "child"
+    assert not checkout.is_symlink()
+    assert mod.git_root_of(checkout) is None
+
+
 def test_a_real_repository_is_accepted(tmp_path):
     root = _real(tmp_path)
     assert mod.git_root_of(root) == root.resolve()
