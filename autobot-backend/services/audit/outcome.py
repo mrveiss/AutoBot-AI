@@ -34,7 +34,7 @@ OUTCOME_MISSING_MARKER = "AUDIT_OUTCOME_MISSING"
 AUDIT_UNAVAILABLE_DETAIL = "Audit trail unavailable; nothing was changed"
 
 
-def audit_unavailable() -> HTTPException:
+def attempt_unrecorded() -> HTTPException:
     """The 503 for an attempt row that could not be written: nothing has been changed."""
     return HTTPException(status_code=503, detail=AUDIT_UNAVAILABLE_DETAIL)
 
@@ -52,7 +52,7 @@ async def record_audit_attempt(event: AuditEvent) -> None:
     """Durably record the intent; raise 503 when the write fails so nothing is changed."""
     if not await _written(replace(event, outcome=ATTEMPTED)):
         logger.error("audit: attempt row for %s (%s) was not written; refusing with 503", event.action, event.id)
-        raise audit_unavailable()
+        raise attempt_unrecorded()
 
 
 async def record_audit_outcome(

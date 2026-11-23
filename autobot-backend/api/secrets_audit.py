@@ -23,7 +23,7 @@ from security.secrets_store_reader import secret_log_ref
 from services.audit.outcome import (
     ATTEMPTED,
     OUTCOME_MISSING_MARKER,
-    audit_unavailable,
+    attempt_unrecorded,
     record_audit_attempt,
     record_audit_outcome,
 )
@@ -104,7 +104,7 @@ async def _record_attempt(operation: str, secret_id: str | None, request: Reques
         event = await _secret_event(operation, secret_id, request, ATTEMPTED, actor, details)
     except Exception as exc:  # noqa: BLE001 -- an unbuildable record is an unwritten one
         logger.error("[Secrets Audit] could not build the %s attempt: %s", operation, type(exc).__name__)
-        raise audit_unavailable() from None
+        raise attempt_unrecorded() from None
     await record_audit_attempt(event)
     _pending(request)[operation] = event
 
