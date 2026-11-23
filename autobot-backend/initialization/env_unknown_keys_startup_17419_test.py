@@ -37,6 +37,7 @@ async def test_before_the_deadline_an_unknown_key_warns_and_startup_continues(mo
         await lifespan._check_env_drift()  # must not raise
 
     assert report.unknown_key_policy == unknown.POLICY_WARN
+    assert "env drift detected" in caplog.text, "an unknown key before the deadline must still be reported"
 
 
 @pytest.mark.parametrize("offset_days", [0, 30])
