@@ -13,10 +13,9 @@ imports, which this module does not have).
 """
 
 import ast
-import sys
-from pathlib import Path
 
 import pytest
+from _slm_role_manifest_fixtures import REGISTRY_SOURCE, REPO_ROOT, real_manifests, registry_role_fields
 
 from models.manifest import (
     ManifestDeploy,
@@ -29,9 +28,6 @@ from models.manifest import (
 )
 from services import role_manifest_shape as rms
 from services.manifest_loader import ManifestLoader
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _role_manifest_fixtures import REGISTRY_SOURCE, REPO_ROOT, real_manifests, registry_role_fields  # noqa: E402
 
 _UNCHECKED = RoleHealthCheck(checked=False)
 

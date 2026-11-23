@@ -17,14 +17,12 @@ import types
 from pathlib import Path
 
 import pytest
+from _slm_role_manifest_fixtures import PLACEHOLDERS
 
 from services import manifest_loader as ml
 from services import role_manifest_shape as rms
 from services.manifest_loader import ManifestLoader
 from services.role_manifest_errors import MANIFEST_ERRORS, manifest_errors, no_manifest_preflight
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _role_manifest_fixtures import PLACEHOLDERS  # noqa: E402
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _STALE = "role: autobot-backend\ndescription: x\ndeploy:\n  source: autobot-backend/\n  destination: /x/\n"

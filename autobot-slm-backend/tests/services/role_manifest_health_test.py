@@ -10,17 +10,12 @@ of roles (``HEALTH_DERIVED_ROLES``) plus one own-bind exception (``HEALTH_OWN_BI
 manifest's ``role_health`` entry for the role is the only declaration, validated by ``RoleHealthCheck``.
 """
 
-import sys
-from pathlib import Path
-
 import pytest
+from _slm_role_manifest_fixtures import PLACEHOLDERS, real_manifests, registry_role_fields
 from pydantic import ValidationError
 
 from models.manifest import ManifestService, RoleHealthCheck, RoleManifest
 from services import role_manifest_shape as rms
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _role_manifest_fixtures import PLACEHOLDERS, real_manifests, registry_role_fields  # noqa: E402
 
 #: Each manifest-backed role's resolved (health port, health path) BEFORE #22032, derived from the opt-in list, the
 #: own-bind table and the manifests' ``health.endpoint`` of that commit; None is "no health check". The change is
