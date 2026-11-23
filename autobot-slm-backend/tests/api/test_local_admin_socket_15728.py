@@ -40,6 +40,7 @@ from _code_sync_import import import_code_sync  # noqa: E402
 import_code_sync()
 
 import api.code_sync as code_sync  # noqa: E402
+from autobot_shared.api_routing.router_routes import effective_routes  # noqa: E402
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _MODULE_PATH = _BACKEND_ROOT / "services" / "local_admin_socket.py"
@@ -175,7 +176,7 @@ def test_stop_sets_should_exit_and_awaits_the_task():
 
 def test_local_admin_app_exposes_only_self_update():
     app = local_admin_socket.create_local_admin_app()
-    paths = {route.path for route in app.router.routes}
+    paths = {mounted.path for mounted in effective_routes(app.router)}
     assert paths == {"/self-update"}
 
 
@@ -183,10 +184,20 @@ def test_local_admin_app_never_exposes_authenticated_code_sync_paths():
     """#15728 AC4 contrast: none of the OTHER code-sync endpoints -- still
     gated behind get_current_user on the real HTTP router -- may leak onto
     this unauthenticated, socket-only app."""
-    other_paths = {r.path for r in code_sync.router.routes if r.path != "/code-sync/self-update"}
+    # effective_routes() follows nested include_router() wrappers (the drift prune router, #22082), so
+    # routes nested into the code-sync router are part of what must stay off the unauthenticated app.
+    code_sync_routes = effective_routes(code_sync.router)
+    assert all(m.prefix_complete for m in code_sync_routes), "a nested prefix is unreadable: paths would be short"
+    other_paths = {m.path for m in code_sync_routes if m.path != "/code-sync/self-update"}
     assert len(other_paths) > 10, "sanity: code_sync_router must have plenty of other routes to contrast against"
+    assert {
+        "/code-sync/drift/prune",
+        "/code-sync/drift/prune/preview",
+    } <= other_paths, "the nested prune routes are walked"
 
-    admin_paths = {route.path for route in local_admin_socket.create_local_admin_app().router.routes}
+    admin_routes = effective_routes(local_admin_socket.create_local_admin_app().router)
+    assert all(m.prefix_complete for m in admin_routes), "a nested prefix is unreadable: paths would be short"
+    admin_paths = {m.path for m in admin_routes}
     assert admin_paths.isdisjoint(other_paths)
 
 
@@ -208,7 +219,7 @@ def test_http_route_and_local_socket_share_the_same_trigger_function():
 
 def test_local_self_update_route_delegates_to_the_shared_trigger():
     app = local_admin_socket.create_local_admin_app()
-    route = next(r for r in app.router.routes if r.path == "/self-update")
+    route = next(m.route for m in effective_routes(app.router) if m.path == "/self-update")
     fake_db = object()
 
     with patch(
@@ -234,6 +245,6 @@ def test_http_self_update_route_still_requires_get_current_user():
     thing: whatever that symbol resolves to, this route depends on it, and
     removing the dependency fails here.
     """
-    route = next(r for r in code_sync.router.routes if r.path == "/code-sync/self-update")
+    route = next(m.route for m in effective_routes(code_sync.router) if m.path == "/code-sync/self-update")
     deps = [d.call for d in route.dependant.dependencies if d.call is not None]
     assert code_sync.get_current_user in deps, f"observed {len(deps)} dependencies, none of them the auth symbol"

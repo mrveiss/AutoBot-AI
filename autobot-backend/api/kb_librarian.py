@@ -43,6 +43,7 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from knowledge.search_filters import caller_reader
 from knowledge_factory import peek_knowledge_base
@@ -194,7 +195,7 @@ async def configure_kb_librarian(
         }
 
     except ValueError:
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except Exception as e:
         logger.error("Error configuring KB Librarian: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

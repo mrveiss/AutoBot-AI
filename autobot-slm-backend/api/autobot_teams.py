@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.http_refusal import fixed_refusal
 from services.auth import require_permission
 from user_management.database import get_autobot_db
 from user_management.services import TeamService, TenantContext
@@ -91,7 +92,7 @@ async def create_team(
         return AutobotTeamResponse.model_validate(team)
     except Exception as e:
         logger.error("Failed to create AutoBot team: %s", e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error") from e
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST) from e
 
 
 @router.get("", response_model=AutobotTeamListResponse)
@@ -153,7 +154,7 @@ async def update_team(
         return AutobotTeamResponse.model_validate(team)
     except Exception as e:
         logger.error("Failed to update AutoBot team: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e
 
 
 @router.delete("/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -171,7 +172,7 @@ async def delete_team(
         await team_service.delete_team(team_id)
     except Exception as e:
         logger.error("Failed to delete AutoBot team: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e
 
 
 @router.post("/{team_id}/members", status_code=status.HTTP_201_CREATED)
@@ -195,7 +196,7 @@ async def add_team_member(
         return {"message": "Member added successfully"}
     except Exception as e:
         logger.error("Failed to add team member: %s", e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error") from e
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST) from e
 
 
 @router.delete("/{team_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -214,4 +215,4 @@ async def remove_team_member(
         await team_service.remove_member(team_id=team_id, user_id=user_id)
     except Exception as e:
         logger.error("Failed to remove team member: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from e

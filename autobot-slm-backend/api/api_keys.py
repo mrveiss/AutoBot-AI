@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.http_refusal import fixed_refusal
 from services.auth import get_current_user
 from user_management.database import get_slm_db
 from user_management.models.api_key import API_KEY_SCOPES
@@ -91,7 +92,7 @@ async def create_api_key(
         )
     except APIKeyServiceError as e:
         logger.warning("API key creation error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
 
 @router.get("", response_model=APIKeyListResponse)
@@ -182,7 +183,7 @@ async def update_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
     except APIKeyServiceError as e:
         logger.warning("API key update error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
 
 @router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -207,7 +208,7 @@ async def revoke_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
     except APIKeyServiceError as e:
         logger.warning("API key revoke error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
 
 
 async def _get_user_by_username(db: AsyncSession, username: str) -> User:

@@ -29,10 +29,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import fixed_refusal
+from llc.deps import SESSION_DEP
 from llc.models.secret import LLCSecret
 from llc.services.authz import NotAuthorisedError, require_company_admin
 from llc.services.secret import SecretNotFound, SecretService
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ._common import actor_id
@@ -105,7 +106,7 @@ async def _require_secret_admin(
     company_id: str = Depends(_check_company_access),
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
 ) -> str:
     """Owner or admin of this company, or a platform admin; else 403.
 
@@ -130,7 +131,7 @@ async def _require_secret_admin(
 @router.get("/{company_id}", response_model=List[SecretSummary])
 async def list_secrets(
     company_id: str = Depends(_check_company_access),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
 ) -> List[SecretSummary]:
     """List secret names and versions.  Values are never included."""
@@ -146,7 +147,7 @@ async def list_secrets(
 async def set_secret(
     body: SecretSetRequest,
     company_id: str = Depends(_require_secret_admin),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
     current_user: dict = Depends(get_current_user),
 ) -> SecretSetResponse:
@@ -170,14 +171,14 @@ async def set_secret(
 async def get_secret(
     name: str,
     company_id: str = Depends(_require_secret_admin),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
 ) -> SecretValueResponse:
     """Return the decrypted plaintext value for a named secret."""
     try:
         plaintext = await svc.get(session=session, company_id=company_id, name=name)
     except SecretNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from exc
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from exc
 
     result = await session.execute(
         select(LLCSecret).where(
@@ -193,7 +194,7 @@ async def get_secret(
 async def revoke_secret(
     name: str,
     company_id: str = Depends(_require_secret_admin),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
     current_user: dict = Depends(get_current_user),
 ) -> None:
@@ -201,5 +202,5 @@ async def revoke_secret(
     try:
         await svc.revoke(session=session, company_id=company_id, name=name, actor=str(actor_id(current_user)))
     except SecretNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from exc
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND) from exc
     await session.commit()

@@ -53,12 +53,12 @@ import html
 import re
 from pathlib import Path
 
+from tools.lint._comment_syntax import strip_html_comments
 from tools.lint._scan_helpers import tracked_paths
 
 _TREES = ("autobot-frontend/src", "autobot-slm-frontend/src")
 # The closing tag tolerates whitespace and attributes (`</script >`), as browsers do (CodeQL py/bad-tag-filter).
 _SCRIPT = re.compile(r"<(script|style)(?=[\s>/])[^>]*>.*?</\1(?=[\s>/])[^>]*>", re.DOTALL | re.IGNORECASE)
-_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _TEMPLATE = re.compile(r"<template\b.*</template>", re.DOTALL)
 _TEXT = re.compile(r"""> *\s*([A-Za-z][A-Za-z ,.!?'’()-]{2,}?)\s*<""")
 _TWO_LOWER = re.compile(r"[a-z]{2}")
@@ -84,7 +84,7 @@ def in_boundary(rel: str) -> bool:
 
 
 def _region(source: str) -> str:
-    match = _TEMPLATE.search(_COMMENT.sub("", _SCRIPT.sub("", source)))
+    match = _TEMPLATE.search(strip_html_comments(_SCRIPT.sub("", source)))
     return match.group(0) if match else ""
 
 

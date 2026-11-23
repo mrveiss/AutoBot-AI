@@ -18,12 +18,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import assert_company_access
+from llc.deps import SESSION_DEP, assert_company_access
 from llc.models.enums import MembershipRole
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.membership_policy import LastOwnerError, authorize_member_change, lock_company_members
 from llc.services.membership_service import MemberAlreadyExistsError, MemberNotFoundError, MembershipService
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from .companies import _to_member_read
@@ -68,7 +67,7 @@ async def _current_role(session: AsyncSession, svc: MembershipService, company_i
 async def add_member(
     company_id: uuid.UUID,
     body: MemberAddRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -101,7 +100,7 @@ async def change_member_role(
     company_id: uuid.UUID,
     user_id: uuid.UUID,
     body: MemberRoleRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -132,7 +131,7 @@ async def change_member_role(
 async def remove_member(
     company_id: uuid.UUID,
     user_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
