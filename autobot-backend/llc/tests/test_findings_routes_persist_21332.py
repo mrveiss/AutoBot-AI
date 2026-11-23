@@ -31,6 +31,7 @@ from llc.models.enums import FindingProposalStatus
 from llc.models.finding_proposal import LLCFindingProposal
 from llc.models.sprint import LLCProject
 from llc.tests import _e2e_harness as harness
+from testkit.fake_async_session import FakeAsyncSession
 from user_management.services import TenantContext
 
 _USER = uuid.uuid4()
@@ -162,14 +163,7 @@ async def test_a_refused_dismissal_leaves_the_proposal_untouched(client, factory
 @pytest.mark.asyncio
 async def test_the_proposal_is_row_locked_when_loaded() -> None:
     """Promote and dismiss load the proposal FOR UPDATE, so a concurrent second request waits and then sees 409."""
-    statements: list = []
-
-    class _Session:
-        async def execute(self, stmt):  # noqa: ANN001, ANN202
-            statements.append(stmt)
-            return SimpleNamespace(scalar_one_or_none=lambda: None)
-
-    ctx = SimpleNamespace(org_id=uuid.uuid4())
+    session = FakeAsyncSession()  # no queued result: the proposal is missing, so the load answers 404
     with pytest.raises(HTTPException):
-        await findings_api._load_owned_proposal(uuid.uuid4(), _Session(), ctx)
-    assert statements[0]._for_update_arg is not None
+        await findings_api._load_owned_proposal(uuid.uuid4(), session, SimpleNamespace(org_id=uuid.uuid4()))
+    assert session.statements[0]._for_update_arg is not None
