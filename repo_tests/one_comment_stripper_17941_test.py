@@ -45,7 +45,9 @@ argument is a string literal or a module string constant, and flags one that nam
 `/\\*` block, a `<!--` HTML or a `^\\s*#` / `#.*` line comment. A URL scheme (`https://`), a
 division and a CSS id selector (`#id`) are not comments and do not trip it. What it still cannot
 see: a pattern built at run time (joined, formatted, passed in), a `from re import sub` alias, a
-compiled pattern held on another object, and a non-`re` engine (`regex`). `<!--`:
+compiled pattern held on another object, a non-`re` engine (`regex`), a `//` with nothing
+after it that consumes the comment (`(?m)^\\s*//`), and a marker inside a character class
+(`[#;].*`). It does flag a `/\\*\\*` glob that is not anchored with `\\Z`. `<!--`:
 `tools/lint/_comment_syntax.py` already has `strip_html_comments` and `strip_html_and_block_comments`,
 so an HTML hit migrates to those rather than keeping its own pattern.
 """
@@ -405,7 +407,8 @@ def test_the_pending_list_only_shrinks() -> None:
     stale = sorted(_PENDING - found)
 
     assert not stale, (
-        f"{len(stale)} entr(y/ies) in `_PENDING_PRIVATE_STRIPPERS` no longer carry a private "
+        f"{len(stale)} entr(y/ies) in `_PENDING_PRIVATE_STRIPPERS` or `_comment_regex_pending.py` no longer "
+        "carry a private "
         f"stripper:\n  " + "\n  ".join(stale) + "\n\nDelete them. The list is a ratchet; leaving a "
         "migrated file listed lets a future one be re-added under cover of an entry that is "
         "already spent."
@@ -527,6 +530,8 @@ def test_the_pending_list_only_shrinks() -> None:
         ("a regex stripping a block comment", 'import re\nx = re.sub(r"/\\*.*?\\*/", "", s)\n', True),
         ("a regex stripping an HTML comment", 'import re\nx = re.sub(r"<!--.*?-->", "", s)\n', True),
         ("a regex skipping a hash line", 'import re\nx = re.compile(r"^\\s*#")\n', True),
+        ("a regex stripping a trailing hash comment", 'import re\nx = re.sub(r"#.*", "", s)\n', True),
+        ("an escaped-slash line comment", 'import re\nx = re.sub(r"\\/\\/.*", "", s)\n', True),
         ("a pattern held in a module constant", 'import re\nP = r"^\\s*#"\nx = re.search(P, s)\n', True),
         ("a URL scheme is not a comment", 'import re\nx = re.match(r"https://example", s)\n', False),
         ("a division is not a comment", 'import re\nx = re.findall(r"(\\d+)/(\\d+)", s)\n', False),

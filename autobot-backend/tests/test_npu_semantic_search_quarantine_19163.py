@@ -129,5 +129,6 @@ def test_npu_module_calls_kb_search_only_on_the_cpu_leg():
     import npu_semantic_search as mod
 
     calls, unpinned = _unpinned_kb_search_calls(inspect.getsource(mod))
-    assert calls, "no knowledge_base.search call found: the detector would be blind"
+    # The module has two KB legs (primary and fallback); ">=" so a new pinned call does not break the floor.
+    assert len(calls) >= 2, f"{len(calls)} knowledge_base.search call(s) found: a leg vanished or the detector is blind"
     assert unpinned == []
