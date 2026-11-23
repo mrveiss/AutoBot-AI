@@ -58,13 +58,17 @@ async def _assign_audited(request: Request, session_id: str, company: str, user:
     means no change (503).
     """
     manager = get_chat_history_manager(request)
+
+    async def write() -> bool:
+        return await manager.set_metadata_if_unset(session_id, "company_id", company)
+
     try:
         changed = await audited_change(
             "assign_company",
             session_shares.audit_actor(request, user),
             session_id,
             [],
-            lambda: manager.set_metadata_if_unset(session_id, "company_id", company),
+            write,
             details={"company_id": company},
         )
     except ShareAuditError:
