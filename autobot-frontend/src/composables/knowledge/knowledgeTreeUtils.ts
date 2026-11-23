@@ -164,7 +164,7 @@ export function filterTreeByQuery(nodes: TreeNode[], query: string, onFolderMatc
     const matches = node.name.toLowerCase().includes(q)
     const children = node.children ? filterTreeByQuery(node.children, q, onFolderMatch) : []
     if (!matches && children.length === 0) return acc
-    acc.push({ ...node, children: children.length > 0 ? children : node.children })
+    acc.push({ ...node, children: matches ? node.children : children })
     if (node.type === 'folder') onFolderMatch(node.id)
     return acc
   }, [])

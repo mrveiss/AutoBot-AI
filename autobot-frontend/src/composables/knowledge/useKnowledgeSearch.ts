@@ -39,9 +39,13 @@ export function useKnowledgeSearch(selectedCategory: Ref<string | null>) {
       doc?.metadata?.access_level === selectedAccessLevel.value
   }
 
+  // Bumped per search and by clearResults, so only the latest uncleared search may write the flags.
+  let searchSeq = 0
+
   const handleSearch = async () => {
     if (!searchQuery.value.trim()) return
 
+    const seq = ++searchSeq
     isSearching.value = true
     ragError.value = null
     ragResponse.value = null
@@ -117,9 +121,11 @@ export function useKnowledgeSearch(selectedCategory: Ref<string | null>) {
         ragError.value = 'Search failed - backend may be unavailable'
       }
     } finally {
-      isSearching.value = false
-      searchPerformed.value = true
-      lastSearchQuery.value = searchQuery.value
+      if (seq === searchSeq) {
+        isSearching.value = false
+        searchPerformed.value = true
+        lastSearchQuery.value = searchQuery.value
+      }
     }
   }
 
@@ -134,6 +140,8 @@ export function useKnowledgeSearch(selectedCategory: Ref<string | null>) {
   }
 
   const clearResults = () => {
+    searchSeq++
+    isSearching.value = false
     searchResults.value = []
     searchPerformed.value = false
     ragResponse.value = null

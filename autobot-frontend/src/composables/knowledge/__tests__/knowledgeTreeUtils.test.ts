@@ -128,6 +128,12 @@ describe('filterTreeByQuery', () => {
     expect(out[0].children).toHaveLength(2)
   })
 
+  it('keeps every child of a matching folder even when one child also matches', () => {
+    const tree = buildTreeFromCategoryFacts({ cat: [fact('docs/Alpha.md', 'fact:a'), fact('docs/docs.md', 'fact:d')] }, (c) => c)
+    const out = filterTreeByQuery(tree, 'docs', () => {})
+    expect(out[0].children?.[0].children?.map((n) => n.name)).toEqual(['Alpha.md', 'docs.md'])
+  })
+
   it('returns nothing for a query that matches nothing', () => {
     expect(filterTreeByQuery(nodes, 'zzz', () => {})).toEqual([])
   })

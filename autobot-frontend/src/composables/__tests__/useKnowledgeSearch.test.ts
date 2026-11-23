@@ -52,6 +52,19 @@ describe('useKnowledgeSearch', () => {
     expect(s.searchResults.value.map(r => r.document?.id)).toEqual(['1'])
   })
 
+  it('a search that completes after clearResults does not bring the results pane back', async () => {
+    let release!: (r: unknown) => void
+    searchKnowledge.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+    const s = useKnowledgeSearch(ref(null))
+    s.searchQuery.value = 'x'
+    const pending = s.handleSearch()
+    s.clearResults()
+    release([{ document: { id: '1' } }])
+    await pending
+    expect(s.searchPerformed.value).toBe(false)
+    expect(s.isSearching.value).toBe(false)
+  })
+
   it('clearResults resets search state', async () => {
     searchKnowledge.mockResolvedValue([{ document: { id: '1' } }])
     const s = useKnowledgeSearch(ref(null))

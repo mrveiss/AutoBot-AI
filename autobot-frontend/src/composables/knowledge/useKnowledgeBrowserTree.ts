@@ -82,11 +82,10 @@ function useTreeLoader(opts: BrowserTreeOptions) {
     return (await opts.fetchBatchStatus(ids, names)) !== false
   }
 
-  const loadFirstPage = async () => {
-    generation++
+  const loadFirstPage = async (requestedGeneration: number) => {
     offset.value = 0
     const data = await fetchFactsByCategory({ limit: CATEGORY_FACTS_PAGE_SIZE, offset: 0 })
-    if (!data || !data.categories) return
+    if (requestedGeneration !== generation || !data || !data.categories) return
     facts.value = data.categories as FactsByCategory
     hasMoreCategoryFacts.value = Boolean(data.has_more)
     offset.value = CATEGORY_FACTS_PAGE_SIZE
@@ -105,13 +104,14 @@ function useTreeLoader(opts: BrowserTreeOptions) {
 
   const loadMoreCategoryFacts = async () => {
     if (isLoadingMoreCategoryFacts.value || !hasMoreCategoryFacts.value) return
-    const expandedPaths = getExpandedPaths(treeData.value, nodeExpansion.expanded.value)
     const requestedGeneration = generation
     isLoadingMoreCategoryFacts.value = true
     try {
       const data = await fetchFactsByCategory({ limit: CATEGORY_FACTS_PAGE_SIZE, offset: offset.value })
       if (requestedGeneration !== generation) return
       if (data && data.categories) {
+        // Read at rebuild time, so a folder the user collapsed during the request stays collapsed.
+        const expandedPaths = getExpandedPaths(treeData.value, nodeExpansion.expanded.value)
         mergePage(data.categories as FactsByCategory)
         hasMoreCategoryFacts.value = Boolean(data.has_more)
         offset.value += CATEGORY_FACTS_PAGE_SIZE
@@ -130,8 +130,9 @@ function useTreeLoader(opts: BrowserTreeOptions) {
   /** (Re)load the tree from the first page; a failure lands in `error`. */
   const loadTree = () => {
     error.value = null
-    return loadKnowledgeTree(loadFirstPage).catch((err) => {
-      error.value = asError(err)
+    const requestedGeneration = ++generation
+    return loadKnowledgeTree(() => loadFirstPage(requestedGeneration)).catch((err) => {
+      if (requestedGeneration === generation) error.value = asError(err)
     })
   }
 

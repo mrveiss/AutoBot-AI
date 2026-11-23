@@ -58,6 +58,8 @@ describe('KBSearchResultPanel', () => {
 
   it('Enter on the focused Close button is left to the button, not turned into an open-result', async () => {
     const { w } = mountPanel()
+    await w.get('[role="region"]').trigger('keydown', { key: 'ArrowDown' })
+    await flushPromises()
     const close = w.get('.panel-header button')
     const before = w.emitted('select')?.length ?? 0
     await close.trigger('keydown', { key: 'Enter' })

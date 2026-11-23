@@ -80,6 +80,37 @@ describe('loading', () => {
     expect(h.fetchFactsByCategory).toHaveBeenCalledTimes(2)
   })
 
+  it('an older first page settling after a newer load neither replaces the tree nor sets error', async () => {
+    let release!: (page: unknown) => void
+    let fail!: (e: Error) => void
+    h.fetchFactsByCategory.mockReset()
+      .mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+      .mockReturnValueOnce(new Promise((_, reject) => { fail = reject }))
+      .mockResolvedValueOnce(PAGE1)
+    const { tree } = make()
+    const older = tree.loadTree()
+    const middle = tree.loadTree()
+    await tree.loadTree()
+    release({ categories: { stale: [fact('s.md', 'fact:s')] }, has_more: false })
+    fail(new Error('late'))
+    await Promise.all([older, middle])
+    expect(tree.treeData.value.map((n) => n.category)).toEqual(['autobot_docs', 'cooking'])
+    expect(tree.error.value).toBeNull()
+  })
+
+  it('a folder collapsed while a page is loading stays collapsed after the merge', async () => {
+    let release!: (page: unknown) => void
+    h.fetchFactsByCategory.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+    const { tree } = make()
+    await tree.loadTree()
+    tree.nodeExpansion.expand('folder-1')
+    const pending = tree.loadMoreCategoryFacts()
+    tree.nodeExpansion.collapse('folder-1')
+    release(PAGE2)
+    await pending
+    expect(tree.expandedNodes.value.has('folder-1')).toBe(false)
+  })
+
   it('merges a category named like an Object.prototype member as data', async () => {
     h.fetchFactsByCategory.mockResolvedValueOnce({ categories: { constructor: [fact('c.md', 'fact:c')] }, has_more: false })
     const { tree } = make()
