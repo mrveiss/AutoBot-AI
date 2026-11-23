@@ -25,7 +25,7 @@ from services.role_manifest_errors import MANIFEST_ERRORS, manifest_errors, no_m
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _STALE = "role: autobot-backend\ndescription: x\ndeploy:\n  source: autobot-backend/\n  destination: /x/\n"
-_FRESH = _STALE + '  sync_target: "{base_dir}"\n'
+_FRESH = _STALE + '  sync_target: "{base_dir}"\nrole_health:\n  backend:\n    checked: false\n'
 _STATIC = [{"name": "backend", "systemd_service": "autobot-backend"}]
 _PLACEHOLDERS = {"base_dir": "/b", "agent_dir": "/a"}
 

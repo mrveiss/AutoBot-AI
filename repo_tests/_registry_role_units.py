@@ -91,3 +91,17 @@ def registry_role_units(root: Path) -> dict[str, list[str]]:
         if resolved:
             units[name.value] = resolved
     return units
+
+
+def manifest_role_health(root: Path) -> dict[str, tuple[int, str] | None]:
+    """``registry role name -> (port, path)`` its manifest's ``role_health`` declares; None for ``checked: false``.
+
+    The only reader of a role's health outside the SLM (#22032): ``role_registry`` restates none of it, so a guard
+    that wants a role's health port reads the manifest field, never the registry source.
+    """
+    found: dict[str, tuple[int, str] | None] = {}
+    for path in sorted((root / _INFRA).glob("*/manifest.yml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        for role, entry in (data.get("role_health") or {}).items():
+            found[role] = (entry["port"], entry["path"]) if entry.get("checked") else None
+    return found

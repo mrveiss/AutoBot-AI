@@ -13,7 +13,8 @@ claimed this); this module reads the loaded manifests and augments
 ``role_registry``'s static catalog with the manifest's values, so a future
 edit to one ``manifest.yml`` is the only place those facts have to change.
 
-Phase 1 (#16025) derived the identifier, units, health and ports. Phase 2 derives ``source_paths`` and
+Phase 1 (#16025) derived the identifier, units, health and ports; since #22032 a role's health is the
+manifest's explicit ``role_health`` entry, never inferred from ``health.endpoint``. Phase 2 derives ``source_paths`` and
 ``target_path`` from ``deploy.source`` / ``deploy.sync`` / ``deploy.sync_target`` (and a service's own
 ``sync_target``), for every role a manifest resolves to. ``sync_target`` is what the code-sync rsyncs INTO, which
 equals the manifest's ``destination`` (the install directory the unit runs from, #21974), except the service-level
@@ -28,16 +29,12 @@ fallback, keeps a literal unit). NOT derived, and still declared only in ``role_
 from __future__ import annotations
 
 from typing import Dict, List, Mapping, Tuple
-from urllib.parse import urlparse
 
 from autobot_shared.logging_manager import get_logger
 from models.manifest import RoleManifest, ServiceType
 from services.role_manifest_errors import MANIFEST_ERRORS
 
 logger = get_logger(__name__)
-
-_DEFAULT_HTTPS_PORT = 443
-_DEFAULT_HTTP_PORT = 80
 
 # #16025: fields apply_manifest_shape never sets -- role_registry.py's static
 # dicts remain their sole declaration until each gets a manifest field.
@@ -51,37 +48,6 @@ REGISTRY_ONLY_FIELDS: frozenset = frozenset(
         "required",
         "degraded_without",
         "ansible_playbook",
-    }
-)
-
-# #16025: slm-backend sits behind nginx on the SLM manager, so its manifest
-# health.endpoint (no explicit port in the URL -- an implicit 443) describes the
-# EXTERNAL, proxied check. The port below is the backend process's OWN bind
-# port, used to verify the process directly during a deploy -- a different
-# check, not a stale duplicate of the same one (verified: autobot-slm-backend's
-# own manifest declares its systemd unit with no `system_service`, i.e. the unit
-# IS the process on 8000; slm-frontend has no such distinct internal port --
-# nginx IS its primary service -- so it is not listed). This is the one health
-# fact the manifests cannot express, so it is declared here, once, explicitly.
-HEALTH_OWN_BIND: Mapping[str, Tuple[int, str]] = {"slm-backend": (8000, "/api/health")}
-HEALTH_DERIVATION_EXCLUDED = frozenset(HEALTH_OWN_BIND)
-
-# #16025: roles whose health check IS their manifest's ``health.endpoint`` (the port and path come only from the
-# manifest -- the registry declares neither). A role absent from here and from HEALTH_OWN_BIND has no health check:
-# a manifest shared by several roles (autobot-database, the celery roles of autobot-backend) describes ONE endpoint
-# that is not each role's own, so deriving it for every role would give celery the backend's port.
-HEALTH_DERIVED_ROLES = frozenset(
-    {
-        "slm-frontend",
-        "slm-monitoring",
-        "backend",
-        "frontend",
-        "ai-stack",
-        "chromadb",
-        "npu-worker",
-        "browser-service",
-        "autobot-llm-cpu",
-        "autobot-llm-gpu",
     }
 )
 
@@ -165,22 +131,6 @@ def sync_from_manifest(
     return ([deploy.source] if deploy.sync else []), resolved
 
 
-def health_from_manifest(manifest: RoleManifest) -> Tuple[int | None, str | None]:
-    """(port, path) implied by the manifest's ``health.endpoint``, or (None, None)."""
-    if manifest.health is None:
-        return None, None
-    parsed = urlparse(manifest.health.endpoint)
-    if parsed.port is not None:
-        port = parsed.port
-    elif parsed.scheme == "https":
-        port = _DEFAULT_HTTPS_PORT
-    elif parsed.scheme == "http":
-        port = _DEFAULT_HTTP_PORT
-    else:
-        return None, None
-    return port, (parsed.path or None)
-
-
 def manifest_ports(manifest: RoleManifest) -> List[Dict]:
     """The manifest's declared ports, as plain dicts (role_registry has no schema for these yet)."""
     return [
@@ -250,14 +200,20 @@ def default_roles_for(
 
 
 def _apply_health(role_data: Dict, name: str, manifest: RoleManifest) -> None:
-    """Set health_check_port/path: the explicit own-bind port, else the manifest's endpoint for a derived role."""
-    if name in HEALTH_OWN_BIND:
-        role_data["health_check_port"], role_data["health_check_path"] = HEALTH_OWN_BIND[name]
-    elif name in HEALTH_DERIVED_ROLES:
-        port, path = health_from_manifest(manifest)
-        if port is not None:
-            role_data["health_check_port"] = port
-            role_data["health_check_path"] = path
+    """Set health_check_port/path from the manifest's explicit ``role_health`` entry for ``name`` (#22032).
+
+    An entry with ``checked: false`` sets neither. A manifest with no entry for the role raises: health is
+    declared per role, never inferred from the manifest's single ``health.endpoint``.
+    """
+    entry = manifest.role_health.get(name)
+    if entry is None:
+        raise RoleManifestMissingError(
+            f"role {name!r} resolves to manifest {manifest.role!r}, which declares no role_health for it "
+            f"(declared: {sorted(manifest.role_health)}); state its health or `checked: false`"
+        )
+    if entry.checked:
+        role_data["health_check_port"] = entry.port
+        role_data["health_check_path"] = entry.path
 
 
 def apply_manifest_shape(

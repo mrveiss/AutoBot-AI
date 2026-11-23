@@ -40,6 +40,13 @@ health:
   retries: 3
   expected_status: 200
 
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  slm-backend:   # the process's own bind port, not the proxied health.endpoint above (nginx fronts it)
+    checked: true
+    port: 8000
+    path: /api/health
+
 secrets:
   own:
     - tls_cert
