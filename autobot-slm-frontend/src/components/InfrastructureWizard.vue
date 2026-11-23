@@ -238,15 +238,15 @@ function getCategoryIcon(category: string): string {
 function getStatusColor(status: string): string {
   switch (status) {
     case 'completed':
-      return 'text-green-600 bg-green-100'
+      return 'text-autobot-success bg-autobot-pill-ok-bg'
     case 'failed':
-      return 'text-red-600 bg-red-100'
+      return 'text-autobot-error bg-autobot-pill-bad-bg'
     case 'running':
-      return 'text-blue-600 bg-blue-100'
+      return 'text-autobot-text-link bg-autobot-pill-info-bg'
     case 'cancelled':
-      return 'text-gray-600 bg-gray-100'
+      return 'text-autobot-text-secondary bg-autobot-bg-tertiary'
     default:
-      return 'text-yellow-600 bg-yellow-100'
+      return 'text-autobot-warning bg-autobot-pill-warn-bg'
   }
 }
 </script>
@@ -272,11 +272,11 @@ function getStatusColor(status: string): string {
           :key="s"
           :class="[
             'flex-1 h-2 rounded-full transition-colors',
-            s <= step ? 'bg-primary-600' : 'bg-gray-200',
+            s <= step ? 'bg-primary-600' : 'bg-autobot-bg-active',
           ]"
         />
       </div>
-      <div class="flex justify-between mt-2 text-xs text-gray-500">
+      <div class="flex justify-between mt-2 text-xs text-autobot-text-tertiary">
         <span>{{ $t('infrastructureWizard.selectPlaybook') }}</span>
         <span>{{ $t('infrastructureWizard.reviewConfigure') }}</span>
         <span>{{ $t('infrastructureWizard.execute') }}</span>
@@ -287,7 +287,7 @@ function getStatusColor(status: string): string {
     <div class="pt-4">
       <!-- Step 1: Select Playbook -->
       <div v-if="step === 1">
-        <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('infrastructureWizard.selectInfrastructurePlaybook') }}</h4>
+        <h4 class="text-base font-medium text-autobot-text-primary mb-4">{{ $t('infrastructureWizard.selectInfrastructurePlaybook') }}</h4>
 
         <div v-if="isLoadingPlaybooks" class="flex items-center justify-center py-8">
           <div class="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full" />
@@ -296,10 +296,10 @@ function getStatusColor(status: string): string {
         <div v-else class="space-y-6">
           <div v-for="(categoryPlaybooks, category) in playbooksByCategory" :key="category">
             <div class="flex items-center gap-2 mb-3">
-              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getCategoryIcon(category)" />
               </svg>
-              <h5 class="text-sm font-medium text-gray-700 uppercase tracking-wide">{{ category }}</h5>
+              <h5 class="text-sm font-medium text-autobot-text-secondary uppercase tracking-wide">{{ category }}</h5>
             </div>
             <div class="space-y-2">
               <div
@@ -310,7 +310,7 @@ function getStatusColor(status: string): string {
                   'p-4 border rounded-lg cursor-pointer transition-all',
                   selectedPlaybookId === playbook.id
                     ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
-                    : 'border-gray-200 hover:border-gray-300',
+                    : 'border-autobot-border hover:border-autobot-border-strong',
                 ]"
               >
                 <div class="flex items-start gap-3">
@@ -319,7 +319,7 @@ function getStatusColor(status: string): string {
                       'w-5 h-5 mt-0.5 rounded-full border-2 flex items-center justify-center transition-colors',
                       selectedPlaybookId === playbook.id
                         ? 'border-primary-500 bg-primary-500'
-                        : 'border-gray-300',
+                        : 'border-autobot-border-strong',
                     ]"
                   >
                     <div
@@ -328,17 +328,17 @@ function getStatusColor(status: string): string {
                     />
                   </div>
                   <div class="flex-1">
-                    <div class="font-medium text-gray-900">{{ playbook.name }}</div>
-                    <div class="text-sm text-gray-500 mt-1">{{ playbook.description }}</div>
+                    <div class="font-medium text-autobot-text-primary">{{ playbook.name }}</div>
+                    <div class="text-sm text-autobot-text-tertiary mt-1">{{ playbook.description }}</div>
                     <div class="flex flex-wrap gap-2 mt-2">
                       <span
                         v-for="host in playbook.target_hosts"
                         :key="host"
-                        class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
+                        class="px-2 py-0.5 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm"
                       >
                         {{ host }}
                       </span>
-                      <span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-sm">
+                      <span class="px-2 py-0.5 text-xs bg-autobot-pill-info-bg text-autobot-text-link rounded-sm">
                         ~{{ playbook.estimated_duration }}
                       </span>
                     </div>
@@ -352,22 +352,22 @@ function getStatusColor(status: string): string {
 
       <!-- Step 2: Review & Configure -->
       <div v-else-if="step === 2 && selectedPlaybook">
-        <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('infrastructureWizard.reviewConfiguration') }}</h4>
+        <h4 class="text-base font-medium text-autobot-text-primary mb-4">{{ $t('infrastructureWizard.reviewConfiguration') }}</h4>
 
         <!-- Error Message -->
         <BaseAlert v-if="executeError" variant="error" class="mb-4" :message="executeError" />
 
         <div class="space-y-4">
           <!-- Playbook Summary -->
-          <div class="p-4 bg-gray-50 rounded-lg">
-            <div class="text-sm text-gray-500 mb-1">{{ $t('infrastructureWizard.selectedPlaybook') }}</div>
-            <div class="font-medium text-gray-900">{{ selectedPlaybook.name }}</div>
-            <div class="text-sm text-gray-600 mt-1">{{ selectedPlaybook.description }}</div>
+          <div class="p-4 bg-autobot-bg-secondary rounded-lg">
+            <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('infrastructureWizard.selectedPlaybook') }}</div>
+            <div class="font-medium text-autobot-text-primary">{{ selectedPlaybook.name }}</div>
+            <div class="text-sm text-autobot-text-secondary mt-1">{{ selectedPlaybook.description }}</div>
           </div>
 
           <!-- Target Hosts -->
-          <div class="p-4 bg-gray-50 rounded-lg">
-            <div class="text-sm text-gray-500 mb-2">{{ $t('infrastructureWizard.targetHosts') }}</div>
+          <div class="p-4 bg-autobot-bg-secondary rounded-lg">
+            <div class="text-sm text-autobot-text-tertiary mb-2">{{ $t('infrastructureWizard.targetHosts') }}</div>
             <div class="flex flex-wrap gap-2">
               <span
                 v-for="host in selectedPlaybook.target_hosts"
@@ -380,16 +380,16 @@ function getStatusColor(status: string): string {
           </div>
 
           <!-- Default Variables -->
-          <div class="p-4 bg-gray-50 rounded-lg">
-            <div class="text-sm text-gray-500 mb-2">{{ $t('infrastructureWizard.defaultVariables') }}</div>
+          <div class="p-4 bg-autobot-bg-secondary rounded-lg">
+            <div class="text-sm text-autobot-text-tertiary mb-2">{{ $t('infrastructureWizard.defaultVariables') }}</div>
             <div class="font-mono text-sm">
               <div
                 v-for="(value, key) in selectedPlaybook.variables"
                 :key="key"
-                class="flex justify-between py-1 border-b border-gray-200 last:border-0"
+                class="flex justify-between py-1 border-b border-autobot-border last:border-0"
               >
-                <span class="text-gray-600">{{ key }}:</span>
-                <span class="text-gray-900">{{ value }}</span>
+                <span class="text-autobot-text-secondary">{{ key }}:</span>
+                <span class="text-autobot-text-primary">{{ value }}</span>
               </div>
             </div>
           </div>
@@ -431,7 +431,7 @@ function getStatusColor(status: string): string {
       <!-- Step 3: Execution -->
       <div v-else-if="step === 3 && currentExecution">
         <div class="flex items-center justify-between mb-4">
-          <h4 class="text-base font-medium text-gray-900">{{ $t('infrastructureWizard.executionProgress') }}</h4>
+          <h4 class="text-base font-medium text-autobot-text-primary">{{ $t('infrastructureWizard.executionProgress') }}</h4>
           <span
             :class="[
               'px-3 py-1 rounded-full text-sm font-medium',
@@ -443,28 +443,28 @@ function getStatusColor(status: string): string {
         </div>
 
         <!-- Output Console -->
-        <div class="bg-gray-900 rounded-lg p-4 font-mono text-sm h-96 overflow-y-auto">
+        <div class="bg-autobot-bg-tertiary rounded-lg p-4 font-mono text-sm h-96 overflow-y-auto">
           <div
             v-for="(line, index) in currentExecution.output"
             :key="index"
             :class="[
               'whitespace-pre-wrap',
-              line.startsWith('[SUCCESS]') ? 'text-green-400' :
-              line.startsWith('[FAILED]') || line.startsWith('[ERROR]') ? 'text-red-400' :
-              line.startsWith('[WARNING]') ? 'text-yellow-400' :
-              line.startsWith('[INFO]') ? 'text-blue-400' :
-              line.startsWith('TASK') ? 'text-cyan-400' :
-              line.startsWith('PLAY') ? 'text-purple-400 font-bold' :
-              line.includes('changed:') ? 'text-yellow-300' :
-              line.includes('ok:') ? 'text-green-300' :
-              'text-gray-300'
+              line.startsWith('[SUCCESS]') ? 'text-autobot-success' :
+              line.startsWith('[FAILED]') || line.startsWith('[ERROR]') ? 'text-autobot-error' :
+              line.startsWith('[WARNING]') ? 'text-autobot-warning' :
+              line.startsWith('[INFO]') ? 'text-autobot-info' :
+              line.startsWith('TASK') ? 'text-autobot-info' :
+              line.startsWith('PLAY') ? 'text-autobot-illus-2 font-bold' :
+              line.includes('changed:') ? 'text-autobot-warning' :
+              line.includes('ok:') ? 'text-autobot-success' :
+              'text-autobot-text-tertiary'
             ]"
           >
             {{ line }}
           </div>
           <div
             v-if="currentExecution.status === 'running'"
-            class="inline-block w-2 h-4 bg-gray-300 animate-pulse ml-1"
+            class="inline-block w-2 h-4 bg-autobot-border-strong animate-pulse ml-1"
           />
         </div>
 
@@ -500,7 +500,7 @@ function getStatusColor(status: string): string {
           <button
             v-if="currentExecution?.status === 'running'"
             @click="cancelExecution"
-            class="btn btn-secondary text-red-600 hover:bg-red-50"
+            class="btn btn-secondary text-autobot-error hover:bg-autobot-error-bg"
           >
             {{ $t('infrastructureWizard.cancelExecution') }}
           </button>

@@ -114,6 +114,39 @@ const { announce } = useAnnounce()
   (adapter: `--tooltip-*`, `--z-tooltip`). The kit holds no strings; pass `text` or the `content` slot.
 - `useAnnounce()` is the single screen-reader announcer (body-level `aria-live` region).
 
+## Density
+
+Density is a token scope, never a prop. Comfortable is the `:root` default; the app's
+`[data-layout-density="compact"|"spacious"]` attribute scopes
+(`autobot-frontend/src/assets/css/themes/preferences.css`) redefine only spacing and density
+tokens. Primitives consume them (`--aui-card-padding`, `--aui-table-row-h`,
+`--aui-table-cell-py`, mapped in `src/tokens/adapter.css`) and never learn density exists.
+Do not add `.density-*` classes: that would define density twice.
+
+## Part names
+
+Every internal region of a composite primitive carries a stable `data-slot="<part>"`
+attribute, and the primitive's stylesheet targets it (`[data-slot="card-body"] { ... }`).
+
+- Format: lowercase kebab-case, prefixed by the primitive (`card-header`, `table-cell`).
+- **A part name is public API.** Renaming or removing one is a breaking change; the names are
+  pinned by `src/components/__tests__/Parts.test.ts`.
+- A view that must restyle a region targets its `data-slot`, never a class of its own reached
+  into the DOM shape.
+- Add part names only to primitives merged into the kit. Do not retrofit them onto unmerged forks.
+
+| Primitive | Parts |
+|---|---|
+| `BaseCard` | `card`, `card-header`, `card-heading`, `card-title`, `card-subtitle`, `card-actions`, `card-body`, `card-footer` |
+| `BaseTable` | `table`, `table-controls`, `table-tools`, `table-sr`, `table-scroll`, `table-grid`, `table-caption`, `table-head-cell`, `table-check`, `table-checkbox`, `table-sort`, `table-arrow`, `table-row`, `table-cell`, `table-state`, `table-footer` |
+| `PageHeader` | `page-header`, `page-header-breadcrumb`, `page-header-row`, `page-header-start`, `page-header-text`, `page-header-eyebrow`, `page-header-title`, `page-header-title-text`, `page-header-subtitle`, `page-header-actions`, `page-header-toolbar` |
+| `BaseInput` | `input`, `input-label`, `input-asterisk`, `input-control`, `input-affix`, `input-field`, `input-clear`, `input-error`, `input-helper` |
+| `EmptyState` | `empty`, `empty-icon`, `empty-title`, `empty-description`, `empty-actions` |
+| `BaseButton` | `button`, `button-label`, `button-spinner` |
+| `BaseBadge` | `badge`, `badge-remove` |
+
+Class names (`aui-*`) stay on the elements as a compatibility alias and for state modifiers (`aui-table__row--selected`, `aui-btn--primary`, ...). The kit stylesheet targets `data-slot`; modifiers remain classes because they are state, not parts.
+
 ## Token contract
 
 See [`src/tokens/contract.css`](./src/tokens/contract.css) for the authoritative list.

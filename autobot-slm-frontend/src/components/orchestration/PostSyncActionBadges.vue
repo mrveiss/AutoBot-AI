@@ -44,38 +44,38 @@ const CATEGORY_STYLES: Record<
   { bg: string; text: string; icon: string; hoverBg: string }
 > = {
   schema: {
-    bg: 'bg-purple-100',
-    text: 'text-purple-700',
+    bg: 'bg-autobot-illus-2-tint',
+    text: 'text-autobot-text-primary',
     icon: 'M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M9 11h6M9 15h4',
-    hoverBg: 'hover:bg-purple-200',
+    hoverBg: 'hover:bg-autobot-illus-2-tint',
   },
   build: {
-    bg: 'bg-amber-100',
-    text: 'text-amber-700',
+    bg: 'bg-autobot-pill-warn-bg',
+    text: 'text-autobot-pill-warn-fg',
     icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z',
-    hoverBg: 'hover:bg-amber-200',
+    hoverBg: 'hover:bg-autobot-pill-warn-bg',
   },
   install: {
-    bg: 'bg-blue-100',
-    text: 'text-blue-700',
+    bg: 'bg-autobot-pill-info-bg',
+    text: 'text-autobot-text-primary',
     icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
-    hoverBg: 'hover:bg-blue-200',
+    hoverBg: 'hover:bg-autobot-info-bg',
   },
   restart: {
-    bg: 'bg-orange-100',
-    text: 'text-orange-700',
+    bg: 'bg-autobot-pill-warn-bg',
+    text: 'text-autobot-pill-warn-fg',
     icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
-    hoverBg: 'hover:bg-orange-200',
+    hoverBg: 'hover:bg-autobot-pill-warn-bg',
   },
 }
 
 function getStyle(category: string) {
   return (
     CATEGORY_STYLES[category] ?? {
-      bg: 'bg-gray-100',
-      text: 'text-gray-600',
+      bg: 'bg-autobot-bg-tertiary',
+      text: 'text-autobot-text-secondary',
       icon: '',
-      hoverBg: 'hover:bg-gray-200',
+      hoverBg: 'hover:bg-autobot-bg-active',
     }
   )
 }
@@ -95,9 +95,9 @@ function isExecuting(
 <template>
   <div
     v-if="actions.length > 0"
-    class="px-4 py-2 bg-gray-50 border-b border-gray-100 flex flex-wrap items-center gap-1.5"
+    class="px-4 py-2 bg-autobot-bg-secondary border-b border-autobot-border-subtle flex flex-wrap items-center gap-1.5"
   >
-    <span class="text-xs font-medium text-gray-500 mr-1">
+    <span class="text-xs font-medium text-autobot-text-tertiary mr-1">
       {{ $t('orchestration.postSyncActionBadges.postSync') }}
     </span>
     <button
