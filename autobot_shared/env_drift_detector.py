@@ -42,6 +42,7 @@ from autobot_shared.env_file import parse_env_file
 from autobot_shared.env_unknown_keys import (
     POLICY_REFUSE,
     POLICY_WARN,
+    UnknownEnvKeysRefused,
     declared_env_names,
     describe_unknown_key,
     is_agent_provider_override,
@@ -367,6 +368,15 @@ def _emit_drift_warnings(report: DriftReport) -> None:
 
 #: Exit code for unknown ``AUTOBOT_`` keys once the policy has resolved to refuse (#17419).
 EXIT_UNKNOWN_KEYS_REFUSED = 3
+
+
+def raise_if_refused(report: DriftReport) -> None:
+    """Log each unknown key, then abort startup when the policy is ``refuse`` (#17419); a no-op otherwise."""
+    if not report.refused:
+        return
+    for key in report.unknown_keys:
+        logger.error("%s", describe_unknown_key(key, report.unknown_suggestions.get(key), report.unknown_key_policy))
+    raise UnknownEnvKeysRefused(f"{len(report.unknown_keys)} unknown AUTOBOT_* key(s) in .env; see the log above")
 
 
 def _cli_main(args: List[str]) -> int:

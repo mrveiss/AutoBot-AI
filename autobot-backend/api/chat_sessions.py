@@ -16,6 +16,7 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
+from api import chat_session_company as _company
 from api import chat_session_sharing as _sharing  # #18890, #21898: share routes + the owner-only gate
 from api.chat_activity_store import _process_activity_batch, _store_single_activity, activity_principal
 from api.chat_session_messages import fetch_session_messages
@@ -49,6 +50,7 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from chat_history.company_scope import ActiveCompany, is_agent_kind
 from chat_history.owner_keys import owner_from_metadata, strip_server_controlled
 
 # Import session lifecycle hooks (Issue #4260)
@@ -58,6 +60,7 @@ from chat_workflow.session_handler import _emit_session_create, _emit_session_de
 from exceptions import AuthenticationError, AuthorizationError
 from exceptions import ValidationError as ScopeValidationError
 from exceptions import get_exceptions_lazy
+from security.session_company import creation_company_metadata, resolve_company_scope
 from security.session_ownership import build_owner_metadata, validate_session_ownership
 
 # Issue #6559: Wire audit_record into session create/delete/export endpoints
@@ -367,21 +370,22 @@ async def list_sessions(
             details={"component": "chat_history_manager"},
         )
 
+    company = await resolve_company_scope(request, current_user)  # #21997: the active company, server side
     # Issue #689: Shared session listing
     if scope == "shared":
-        return await _list_shared_sessions(request, request_id, chat_history_manager)
+        return await _list_shared_sessions(request, request_id, chat_history_manager, company)
 
     # Issue #684: Scoped session listing
     if scope in ("org", "team"):
-        return await _list_scoped_sessions(request, request_id, chat_history_manager, scope, team_id)
+        return await _list_scoped_sessions(request, request_id, chat_history_manager, scope, team_id, company)
 
     # Default: the caller's own ordinary sessions (fast mode)
-    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"))
+    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"), company)
 
     # Issue #4352: Signal intentional empty to distinguish from API failure.
     # When an authenticated request returns 0 sessions, mark it explicitly so
     # the frontend can clear local sessions instead of preserving them.
-    response_data: dict = {"sessions": sessions, "count": len(sessions)}
+    response_data: dict = company.listing(sessions)
     if len(sessions) == 0:
         response_data["intentional_empty"] = True
 
@@ -393,48 +397,29 @@ async def list_sessions(
 
 
 def _is_agent_scoped_session(session: dict) -> bool:
-    """A company/agent conversation (e.g. LLC CEO chat), not an ordinary user chat.
+    """A Company OS agent conversation (e.g. the CEO chat), not an ordinary user chat (#12685).
 
-    #12685: the leak this closes — LLC agent heartbeat/CEO-chat conversations
-    were registered in the same session store as ordinary chats and returned by
-    the default ``GET /api/chat/sessions`` list with no company scoping. The
-    only thing distinguishing them was a display title ("CEO · <company_id>"),
-    which is exactly the fragility that let two companies' agent chats pile
-    into one flat list.
-
-    ``companyId`` / ``sessionKind`` are first-class metadata fields written at
-    session creation (``CeoChatView.vue`` -> ``POST /chat/sessions`` ->
-    ``create_session`` here) and surfaced by ``list_sessions_fast`` /
-    ``list_sessions`` (``chat_history/session_listing.py``). Either field being
-    set is sufficient — a session can carry a ``company_id`` without an
-    explicit ``session_kind`` (or vice versa for a future non-company agent).
-
-    Migration: sessions created before this fix have neither field. They are
-    NOT retroactively reclassified — there is no reliable non-title signal to
-    do that with, and title-matching is the bug this closes, not the fix for
-    it. Such legacy sessions keep showing in the general list exactly as they
-    did before (no data loss, no silent re-scoping). A backfill/admin cleanup
-    for pre-existing "CEO · <company_id>" sessions is a separate, explicit,
-    one-time operation — #14756, not folded into this filter.
+    Only ``sessionKind == "agent"`` makes it one. A ``companyId`` alone is an ordinary chat that belongs to that
+    company (#21997); the company filter (``chat_history.company_scope``) decides who sees it. Sessions that
+    predate the metadata carry neither field and are Unassigned until a person assigns them; nothing re-tags them.
     """
-    return bool(session.get("companyId")) or session.get("sessionKind") == "agent"
+    return is_agent_kind(session)
 
 
-async def list_user_sessions(chat_history_manager, username: str | None) -> list:
+async def list_user_sessions(chat_history_manager, username: str | None, company: ActiveCompany | None = None) -> list:
     """The caller's own ordinary chat sessions — the one listing every route uses (#21653).
 
-    Shared by ``GET /chat/sessions`` (default scope) and ``/api/batch-jobs/chat-init``
-    so both apply the same ownership filter (``_filter_user_sessions``) and the same
-    agent-scoped exclusion. No role bypass: an administrator lists only their own.
-    Fails closed (#21664): a principal with no username owns nothing, so it gets ``[]``.
+    Shared by ``GET /chat/sessions`` (default scope), ``/api/batch-jobs/chat-init``, ``GET /chats`` and the bulk
+    export, so all apply the same ownership filter (``_filter_user_sessions``), the same agent-scoped exclusion
+    and, when *company* is given, the same company filter: its company's chats plus the Unassigned ones (#21997).
+    No role bypass: an administrator lists only their own. Fails closed (#21664): no username, ``[]``.
     """
     if not username:
         return []
     sessions = await chat_history_manager.list_sessions_fast()
-    # #12685: company/agent-scoped conversations (e.g. LLC CEO chat) are not ordinary
-    # user chats — first-class scoping fields, not a title parse.
-    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
-    return await _filter_user_sessions(sessions, username, chat_history_manager.get_session_owner)
+    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]  # #12685: not ordinary user chats
+    owned = await _filter_user_sessions(sessions, username, chat_history_manager.get_session_owner)
+    return company.visible(owned) if company is not None else owned
 
 
 async def _filter_user_sessions(sessions: list, username: str, read_owner) -> list:
@@ -471,12 +456,18 @@ def _build_ownership_validator(redis):
     return SessionOwnershipValidator(redis)
 
 
+def _company_listing(sessions: list, company: ActiveCompany | None) -> dict:
+    """The ``sessions``/``count`` fields narrowed to the active company, the Unassigned set beside them (#21997)."""
+    return company.listing(sessions) if company is not None else {"sessions": sessions, "count": len(sessions)}
+
+
 async def _list_scoped_sessions(
     request: Request,
     request_id: str,
     chat_history_manager,
     scope: str,
     team_id: str | None,
+    company: ActiveCompany | None = None,
 ):
     """List sessions scoped to org or team.
 
@@ -494,13 +485,13 @@ async def _list_scoped_sessions(
     validator = _build_ownership_validator(redis)
 
     if scope == "org":
-        return await _list_org_sessions(user_data, validator, chat_history_manager, request_id)
+        return await _list_org_sessions(user_data, validator, chat_history_manager, request_id, company)
 
     # scope == "team"
     if not team_id:
         raise ScopeValidationError("team_id required for team scope")
     await require_team_member(user_data, team_id)  # #21667
-    return await _list_team_sessions(team_id, validator, chat_history_manager, request_id)
+    return await _list_team_sessions(team_id, validator, chat_history_manager, request_id, company)
 
 
 async def _list_org_sessions(
@@ -508,6 +499,7 @@ async def _list_org_sessions(
     validator,
     chat_history_manager,
     request_id: str,
+    company: ActiveCompany | None = None,
 ):
     """List all sessions in the user's organization.
 
@@ -531,8 +523,7 @@ async def _list_org_sessions(
 
     return create_chat_response(
         data={
-            "sessions": filtered,
-            "count": len(filtered),
+            **_company_listing(filtered, company),
             "scope": "org",
             "org_id": org_id,
         },
@@ -546,6 +537,7 @@ async def _list_team_sessions(
     validator,
     chat_history_manager,
     request_id: str,
+    company: ActiveCompany | None = None,
 ):
     """List all sessions for a specific team.
 
@@ -558,8 +550,7 @@ async def _list_team_sessions(
 
     return create_chat_response(
         data={
-            "sessions": filtered,
-            "count": len(filtered),
+            **_company_listing(filtered, company),
             "scope": "team",
             "team_id": team_id,
         },
@@ -572,6 +563,7 @@ async def _list_shared_sessions(
     request: Request,
     request_id: str,
     chat_history_manager,
+    company: ActiveCompany | None = None,
 ):
     """List sessions shared with the authenticated user (#689).
 
@@ -606,11 +598,7 @@ async def _list_shared_sessions(
     filtered.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
 
     return create_chat_response(
-        data={
-            "sessions": filtered,
-            "count": len(filtered),
-            "scope": "shared",
-        },
+        data={**_company_listing(filtered, company), "scope": "shared"},
         message="Shared sessions retrieved",
         request_id=request_id,
     )
@@ -697,8 +685,8 @@ async def _track_session_in_memory_graph(
         )
 
 
-async def _reject_session_id_collision(chat_history_manager, session_id: str, user_data: dict | None) -> None:
-    """Refuse to create over an existing session the caller does not own (#14012).
+async def _reject_session_id_collision(chat_history_manager, session_id: str, user_data: dict | None) -> bool:
+    """Refuse to create over an existing session the caller does not own (#14012); True for the caller's own retry.
 
     The caller-supplied id (#6746) is validated for shape only, so without this a
     request naming someone else's session id would overwrite their messages and
@@ -717,12 +705,12 @@ async def _reject_session_id_collision(chat_history_manager, session_id: str, us
         if legacy_transcript_file(session_id) is not None:  # #18293: a legacy-only id is never taken over
             logger.warning("Refusing create over legacy transcript id %s", session_id)
             raise _session_id_taken_error()
-        return
+        return False
 
     owner = owner_from_metadata((existing.get("metadata") or {}) if isinstance(existing, dict) else {})
     caller = (user_data or {}).get("username")
     if owner and caller and owner == caller:
-        return  # the caller's own session — a retry, not a takeover
+        return True  # the caller's own session — a retry, not a takeover
 
     logger.warning("Refusing create over existing session %s (owner=%s, caller=%s)", session_id, owner, caller)
     raise _session_id_taken_error()
@@ -766,13 +754,14 @@ async def create_session(session_data: SessionCreate, request: Request):
     # SECURITY: Extract authenticated user and add to metadata as owner; a revoked JWT is 401 (#18688)
     user_data = await resolve_human_user(request)
 
+    is_retry = False
     if session_data.id and validate_chat_session_id(session_data.id):
         session_id = session_data.id
         # #14012: the id above is caller-supplied and only its FORMAT was
         # checked. Without this, creating over an existing id replaced the
         # stored messages with [] and reassigned ownership — one request that
         # destroyed a conversation and took the session over.
-        await _reject_session_id_collision(chat_history_manager, session_id, user_data)
+        is_retry = await _reject_session_id_collision(chat_history_manager, session_id, user_data)
     else:
         session_id = generate_chat_session_id()
     session_title = session_data.title or DEFAULT_SESSION_TITLE
@@ -783,6 +772,8 @@ async def create_session(session_data: SessionCreate, request: Request):
     # #14020: one builder for every path that stamps ownership (#684 org/team
     # hierarchy included), so create and backfill cannot drift apart.
     metadata.update(build_owner_metadata(user_data, session_data.team_id))
+    if not is_retry:  # #21997: only the assign route changes an existing chat's company; a retry keeps its own
+        metadata.update(await creation_company_metadata(request, session_data.metadata, user_data))
     if user_data and user_data.get("username"):
         logger.info(
             "Session %s created with owner: %s (org: %s)",
@@ -1692,3 +1683,4 @@ async def clear_session_checkpoints(
 
 
 router.include_router(_sharing.router)
+router.include_router(_company.router)  # #21997: assign an Unassigned chat to a company

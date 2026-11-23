@@ -104,6 +104,10 @@ class SessionListData(BaseModel):
 
     sessions: List[ChatSessionSummary]
     count: int
+    # #21997: ``sessions`` are the active company's chats; the untagged ones are listed apart.
+    unassigned: List[ChatSessionSummary] = []
+    unassigned_count: int | None = None
+    company_id: str | None = None
     scope: str | None = None
     org_id: str | None = None
     team_id: str | None = None

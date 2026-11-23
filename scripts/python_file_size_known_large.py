@@ -197,7 +197,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/events/stream_manager.py": 654,
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
-    "autobot-backend/initialization/lifespan.py": 2311,
+    "autobot-backend/initialization/lifespan.py": 2305,
     "autobot-backend/initialization/router_registry/feature_routers.py": 758,
     "autobot-backend/integrations/cloud_integration.py": 616,
     "autobot-backend/integrations/communication_integration.py": 605,
@@ -345,7 +345,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/skill_management/skill_distillation_scheduler.py": 717,
     # 1090 -> 1043 (#14039): the direct-uvicorn-vs-nginx predicate moved to
     # autobot_shared/slm_rest_url.py so the standalone REST callers could import it.
-    "autobot-backend/services/slm_client.py": 979,
+    "autobot-backend/services/slm_client.py": 975,
     "autobot-backend/services/slm_client_test.py": 659,
     "autobot-backend/services/temporal_invalidation_service.py": 997,
     "autobot-backend/services/tool_output_filter.py": 639,
@@ -415,7 +415,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 722,
     "autobot-slm-backend/api/monitoring.py": 1087,
-    "autobot-slm-backend/api/nodes.py": 2877,
+    "autobot-slm-backend/api/nodes.py": 2876,
     "autobot-slm-backend/api/nodes_execution.py": 699,
     "autobot-slm-backend/api/nodes_execution_test.py": 756,
     "autobot-slm-backend/api/orchestration.py": 769,
@@ -446,7 +446,7 @@ KNOWN_LARGE: dict[str, int] = {
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,
     "autobot-slm-backend/services/replication.py": 785,
-    "autobot-slm-backend/services/role_registry.py": 654,
+    "autobot-slm-backend/services/role_registry.py": 617,
     "autobot-slm-backend/services/service_orchestrator.py": 913,
     "autobot-slm-backend/slm/agent/agent.py": 630,
     "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 1990,  # #18052: resolver test moved out
@@ -460,7 +460,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 775,
     "autobot_shared/circuit_breaker.py": 689,
-    "autobot_shared/env_registry.py": 1049,  # #20910: transcriber block -> env_registry_transcriber (was 1061)
+    "autobot_shared/env_registry.py": 1045,  # #22030: backend header folded (was 1049; #20910: 1061)
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/npu/integration.py": 929,
     "autobot_shared/plugin_sdk/loader.py": 682,

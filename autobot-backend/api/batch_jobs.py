@@ -46,6 +46,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.redis_utils import decode_redis_value
+from security.session_company import resolve_company_scope
 from services import batch_job_ownership as ownership
 from services.batch_job_store import deserialize_job as _deserialize_job
 from services.batch_job_store import get_job_key as _get_job_key
@@ -248,9 +249,10 @@ async def batch_chat_initialization(request: Request, current_user: dict = Depen
     start_time = time.time()
     logger.info("Starting batch chat initialization...")
 
+    company = await resolve_company_scope(request, current_user)  # a refusal (403) is the caller's answer, not a 500
     try:
         results = await asyncio.gather(
-            get_chat_sessions(request.app, current_user.get("username")),
+            get_chat_sessions(request.app, current_user.get("username"), company),
             get_system_health(),
             get_service_health_legacy(),
             get_settings(request.app),
@@ -811,19 +813,15 @@ async def batch_load(batch_request: APIBatchRequest, request: Request, current_u
     return BatchLoadResponse(results=await dispatch_batch(request, batch_request.requests))
 
 
-async def get_chat_sessions(app, username: str | None):
-    """The caller's own chat sessions; `app` is passed in, not imported (#13558).
-
-    #21653: this used to list every ``chat_*.json`` on the instance. It now uses the
-    canonical listing behind ``GET /chat/sessions``, so the same ownership filter applies.
-    """
+async def get_chat_sessions(app, username: str | None, company):
+    """The caller's own chat sessions (the ``GET /chat/sessions`` listing, #21653), narrowed to *company* (#21997)."""
     manager = getattr(app.state, "chat_history_manager", None)
     if not manager:
         return {"sessions": []}
     from api.chat_sessions import list_user_sessions
 
     try:
-        return {"sessions": await list_user_sessions(manager, username)}
+        return company.listing(await list_user_sessions(manager, username, company))
     except Exception as e:
         logger.warning("Failed to get chat sessions: %s", e)
         return {"sessions": []}
