@@ -315,7 +315,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
     from fastapi import FastAPI
 
     from llc.api import budget as budget_api
-    from user_management.database import get_async_session
+    from llc.deps import get_session
 
     application = FastAPI()
     application.include_router(budget_api.router, prefix="/api/llc")
@@ -329,7 +329,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
                 await s.rollback()
                 raise
 
-    application.dependency_overrides[get_async_session] = _override_session
+    application.dependency_overrides[get_session] = _override_session
     return application
 
 
