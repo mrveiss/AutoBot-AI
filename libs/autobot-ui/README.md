@@ -137,9 +137,15 @@ attribute, and the primitive's stylesheet targets it (`[data-slot="card-body"] {
 
 | Primitive | Parts |
 |---|---|
-| `BaseCard` | `card`, `card-header`, `card-heading`, `card-actions`, `card-body`, `card-footer` |
-| `BaseTable` | `table`, `table-controls`, `table-tools`, `table-scroll`, `table-caption`, `table-head-cell`, `table-row`, `table-cell`, `table-state`, `table-footer` |
-| `PageHeader` | `page-header`, `page-header-breadcrumb`, `page-header-row`, `page-header-actions`, `page-header-toolbar` |
+| `BaseCard` | `card`, `card-header`, `card-heading`, `card-title`, `card-subtitle`, `card-actions`, `card-body`, `card-footer` |
+| `BaseTable` | `table`, `table-controls`, `table-tools`, `table-sr`, `table-scroll`, `table-grid`, `table-caption`, `table-head-cell`, `table-check`, `table-checkbox`, `table-sort`, `table-arrow`, `table-row`, `table-cell`, `table-state`, `table-footer` |
+| `PageHeader` | `page-header`, `page-header-breadcrumb`, `page-header-row`, `page-header-start`, `page-header-text`, `page-header-eyebrow`, `page-header-title`, `page-header-title-text`, `page-header-subtitle`, `page-header-actions`, `page-header-toolbar` |
+| `BaseInput` | `input`, `input-label`, `input-asterisk`, `input-control`, `input-affix`, `input-field`, `input-clear`, `input-error`, `input-helper` |
+| `EmptyState` | `empty`, `empty-icon`, `empty-title`, `empty-description`, `empty-actions` |
+| `BaseButton` | `button`, `button-label`, `button-spinner` |
+| `BaseBadge` | `badge`, `badge-remove` |
+
+Class names (`aui-*`) stay on the elements as a compatibility alias and for state modifiers (`aui-table__row--selected`, `aui-btn--primary`, ...). The kit stylesheet targets `data-slot`; modifiers remain classes because they are state, not parts.
 
 ## Token contract
 

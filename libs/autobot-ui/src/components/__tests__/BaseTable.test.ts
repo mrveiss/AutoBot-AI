@@ -197,7 +197,7 @@ describe('BaseTable', () => {
   it('declares zebra before hover and selected, so both still win on a zebra row', () => {
     // fails if the zebra rule follows a same-specificity hover or selected rule
     const at = (sel: string) => tableSource.indexOf(sel)
-    expect(at('.aui-table__row--zebra {')).toBeLessThan(at('.aui-table__row:hover {'))
+    expect(at('.aui-table__row--zebra {')).toBeLessThan(at('[data-slot="table-row"]:hover {'))
     expect(at('.aui-table__row--zebra {')).toBeLessThan(at('.aui-table__row--selected {'))
   })
 
@@ -223,7 +223,7 @@ describe('BaseTable', () => {
     const at = (sel: string) => tableSource.indexOf(sel)
     for (const v of ['success', 'warning', 'error', 'info']) {
       expect(at(`.aui-table__row--${v} {`)).toBeGreaterThan(at('.aui-table__row--zebra {'))
-      expect(at(`.aui-table__row--${v} {`)).toBeLessThan(at('.aui-table__row:hover {'))
+      expect(at(`.aui-table__row--${v} {`)).toBeLessThan(at('[data-slot="table-row"]:hover {'))
       expect(at(`.aui-table__row--${v} {`)).toBeLessThan(at('.aui-table__row--selected {'))
     }
   })
@@ -235,7 +235,7 @@ describe('BaseTable', () => {
   })
 
   it('scrolls horizontally in its own container', () => {
-    expect(tableSource).toMatch(/\.aui-table__scroll\s*\{[^}]*overflow-x:\s*auto/)
+    expect(tableSource).toMatch(/\[data-slot="table-scroll"\]\s*\{[^}]*overflow-x:\s*auto/)
   })
 
   it('uses no box-shadow and no raw colour in its source', () => {

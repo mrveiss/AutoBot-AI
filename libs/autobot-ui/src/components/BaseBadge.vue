@@ -56,6 +56,7 @@ function onRemove(event: MouseEvent): void {
 
 <template>
   <span
+    data-slot="badge"
     :class="[
       'aui-badge',
       `aui-badge--${variant}`,
@@ -69,6 +70,7 @@ function onRemove(event: MouseEvent): void {
     <button
       v-if="removable"
       type="button"
+      data-slot="badge-remove"
       class="aui-badge__remove"
       :aria-label="removeLabel"
       @click="onRemove"
@@ -81,7 +83,7 @@ function onRemove(event: MouseEvent): void {
 </template>
 
 <style scoped>
-.aui-badge {
+[data-slot="badge"] {
   --aui-badge-color: var(--aui-color-text-muted);
   --aui-badge-contrast: var(--aui-color-text);
   display: inline-flex;
@@ -176,7 +178,7 @@ function onRemove(event: MouseEvent): void {
   border-color: var(--aui-color-border);
 }
 
-.aui-badge__remove {
+[data-slot="badge-remove"] {
   display: inline-flex;
   margin-inline-start: var(--aui-space-1);
   padding: 0;
@@ -186,11 +188,11 @@ function onRemove(event: MouseEvent): void {
   cursor: pointer;
   opacity: 0.7;
 }
-.aui-badge__remove:hover,
-.aui-badge__remove:focus-visible {
+[data-slot="badge-remove"]:hover,
+[data-slot="badge-remove"]:focus-visible {
   opacity: 1;
 }
-.aui-badge__remove svg {
+[data-slot="badge-remove"] svg {
   width: 0.75em;
   height: 0.75em;
 }

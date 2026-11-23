@@ -46,8 +46,8 @@ withDefaults(
     <header v-if="$slots.header || title || $slots.actions" data-slot="card-header" class="aui-card__header">
       <div data-slot="card-heading" class="aui-card__heading">
         <slot name="header">
-          <h3 v-if="title" class="aui-card__title">{{ title }}</h3>
-          <p v-if="subtitle" class="aui-card__subtitle">{{ subtitle }}</p>
+          <h3 v-if="title" data-slot="card-title" class="aui-card__title">{{ title }}</h3>
+          <p v-if="subtitle" data-slot="card-subtitle" class="aui-card__subtitle">{{ subtitle }}</p>
         </slot>
       </div>
       <div v-if="$slots.actions" data-slot="card-actions" class="aui-card__actions">
@@ -64,7 +64,7 @@ withDefaults(
 </template>
 
 <style scoped>
-.aui-card {
+[data-slot="card"] {
   display: flex;
   flex-direction: column;
   background-color: var(--aui-color-surface);
@@ -95,7 +95,7 @@ withDefaults(
   background-color: var(--aui-color-surface-sunken);
   box-shadow: none;
 }
-.aui-card--dark .aui-card__footer {
+.aui-card--dark [data-slot="card-footer"] {
   background-color: var(--aui-color-surface-raised);
 }
 
@@ -116,21 +116,21 @@ withDefaults(
   border-bottom: 1px solid var(--aui-color-border);
   font-weight: var(--aui-font-weight-semibold);
 }
-.aui-card__heading {
+[data-slot="card-heading"] {
   min-width: 0;
 }
-.aui-card__title {
+[data-slot="card-title"] {
   margin: 0;
   font-size: var(--aui-text-lg);
   font-weight: var(--aui-font-weight-semibold);
 }
-.aui-card__subtitle {
+[data-slot="card-subtitle"] {
   margin: var(--aui-space-1) 0 0;
   color: var(--aui-color-text-muted);
   font-size: var(--aui-text-sm);
   font-weight: normal;
 }
-.aui-card__actions {
+[data-slot="card-actions"] {
   display: flex;
   align-items: center;
   gap: var(--aui-space-2);

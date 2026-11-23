@@ -41,14 +41,14 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
       <slot name="breadcrumb" />
     </div>
     <div v-if="hasTitle() || $slots.leading || $slots.actions" data-slot="page-header-row" class="aui-page-header__row">
-      <div class="aui-page-header__start">
+      <div data-slot="page-header-start" class="aui-page-header__start">
         <slot name="leading" />
-        <div v-if="hasTitle()" class="aui-page-header__text">
-          <p v-if="$slots.eyebrow" class="aui-page-header__eyebrow"><slot name="eyebrow" /></p>
-          <component :is="heading" class="aui-page-header__title" :class="`aui-page-header__title--${size}`">
-            <span class="aui-page-header__title-text"><slot name="title">{{ title }}</slot></span>
+        <div v-if="hasTitle()" data-slot="page-header-text" class="aui-page-header__text">
+          <p v-if="$slots.eyebrow" data-slot="page-header-eyebrow" class="aui-page-header__eyebrow"><slot name="eyebrow" /></p>
+          <component :is="heading" data-slot="page-header-title" class="aui-page-header__title" :class="`aui-page-header__title--${size}`">
+            <span data-slot="page-header-title-text" class="aui-page-header__title-text"><slot name="title">{{ title }}</slot></span>
           </component>
-          <p v-if="hasSubtitle()" class="aui-page-header__subtitle">
+          <p v-if="hasSubtitle()" data-slot="page-header-subtitle" class="aui-page-header__subtitle">
             <slot name="subtitle">{{ subtitle }}</slot>
           </p>
         </div>
@@ -64,7 +64,7 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
 </template>
 
 <style scoped>
-.aui-page-header {
+[data-slot="page-header"] {
   display: flex;
   flex-direction: column;
   gap: var(--aui-space-3);
@@ -73,7 +73,7 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
   background: var(--aui-page-header-bg, var(--aui-color-surface));
 }
 
-.aui-page-header__row {
+[data-slot="page-header-row"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -81,18 +81,18 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
   flex-wrap: wrap;
 }
 
-.aui-page-header__start {
+[data-slot="page-header-start"] {
   display: flex;
   align-items: center;
   gap: var(--aui-space-3);
   min-width: 0;
 }
 
-.aui-page-header__text {
+[data-slot="page-header-text"] {
   min-width: 0;
 }
 
-.aui-page-header__title {
+[data-slot="page-header-title"] {
   display: flex;
   align-items: center;
   gap: var(--aui-space-2);
@@ -102,7 +102,7 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
 }
 
 /* text-overflow applies to this flex item (blockified), not to the flex row around it */
-.aui-page-header__title-text {
+[data-slot="page-header-title-text"] {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -125,12 +125,12 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
   font-size: var(--aui-text-xl);
 }
 
-.aui-page-header__eyebrow {
+[data-slot="page-header-eyebrow"] {
   margin: 0 0 var(--aui-space-1);
   color: var(--aui-color-text-muted);
   font-size: var(--aui-text-sm);
 }
-.aui-page-header__subtitle {
+[data-slot="page-header-subtitle"] {
   margin: 0;
   color: var(--aui-color-text-muted);
   font-size: var(--aui-text-sm);
@@ -139,7 +139,7 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
   white-space: nowrap;
 }
 
-.aui-page-header__actions {
+[data-slot="page-header-actions"] {
   display: flex;
   align-items: center;
   gap: var(--aui-space-2);
@@ -147,7 +147,7 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
   flex-wrap: wrap;
 }
 
-.aui-page-header__toolbar {
+[data-slot="page-header-toolbar"] {
   display: flex;
   align-items: center;
   gap: var(--aui-space-3);
