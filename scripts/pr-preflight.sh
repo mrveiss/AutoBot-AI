@@ -146,17 +146,14 @@ if [ "$PY_SOURCE" = "CI-parity venv" ]; then
   # script -- in --check mode, so preflight never installs anything -- and let
   # the answer decide which of the two lines this is.
   #
-  # Reported, not gated -- the same call #15091 made. A stale venv is still a
-  # far better interpreter than the system one, and failing preflight for a
-  # condition unrelated to the diff teaches people to ignore preflight. The
-  # detail is left to the floor report immediately below; this line only has
-  # to stop claiming parity it does not have.
-  if scripts/setup-ci-parity-env.sh --check >/dev/null 2>&1; then
+  # GATED (#22135). This was "reported, not gated" (#15091), and the venv sat at
+  # fastapi 0.141.1 against a >=0.162.2 floor for months while every local gate
+  # passed. A failing check beats a note nobody acts on: the cost is one rebuild.
+  if STALE_REPORT=$(scripts/setup-ci-parity-env.sh --check 2>&1); then
     pass "python $PY_VERSION from the CI-parity venv"
   else
-    note "python $PY_VERSION from the CI-parity venv -- but the venv is STALE (#15130)"
-    note "it no longer matches requirements-ci.txt / requirements-ci-test.txt"
-    note "reconcile it: scripts/setup-ci-parity-env.sh"
+    fail "the CI-parity venv is STALE -- local runs are not CI runs (#15130, #22135): scripts/setup-ci-parity-env.sh"
+    printf '%s\n' "$STALE_REPORT" | head -12 | sed 's/^/        /'
   fi
 else
   note "python $PY_VERSION from the system python3 -- CI runs 3.14 (#13573)"
@@ -712,12 +709,7 @@ CQEOF
   #
   # A stale tree is a `skip_check`, not a `note`: the gate COULD NOT RUN, and
   # the distinction those two draw is the whole reason SKIPPED is counted.
-  frontend_deps_current() {
-    local ws="$REPO_ROOT/autobot-frontend"
-    [ -d "$ws/node_modules" ] || return 1
-    [ -f "$ws/node_modules/.package-lock.json" ] || return 1
-    [ ! "$ws/package-lock.json" -nt "$ws/node_modules/.package-lock.json" ]
-  }
+  frontend_deps_current() { FRONTEND_STALE=$(scripts/check-frontend-deps-current.sh autobot-frontend 2>&1); }
 
   # verify-generated-types needs NO node_modules, which is worth stating because
   # the issue and this script both assumed it did. `npm run verify:types` is
@@ -741,8 +733,8 @@ CQEOF
       '^autobot-frontend/' \
       bash -c 'cd "$0/autobot-frontend" && npm run test:integration && npm run test:coverage' "$REPO_ROOT"
   else
-    skip_check "Unit & Integration Tests" \
-      "autobot-frontend/node_modules is absent or older than package-lock.json -- npm --prefix autobot-frontend ci"
+    # #22135: a stale install is a FAIL, not a skip -- a green local run on missing packages (reka-ui) said nothing.
+    selected "Unit & Integration Tests" && { fail "Unit & Integration Tests -- node_modules is stale"; printf '%s\n' "$FRONTEND_STALE" | head -12 | sed 's/^/        /'; }
   fi
 
   # ---- gates this box cannot reproduce -----------------------------------
