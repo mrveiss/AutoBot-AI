@@ -54,14 +54,14 @@ export function getStatusBgColor(status: string): string {
   const category = getStatusCategory(status)
   switch (category) {
     case 'healthy':
-      return 'bg-green-500'
+      return 'bg-autobot-dot-ok'
     case 'warning':
-      return 'bg-yellow-500'
+      return 'bg-autobot-dot-warn'
     case 'error':
-      return 'bg-red-500'
+      return 'bg-autobot-dot-bad'
     case 'neutral':
     default:
-      return 'bg-gray-400'
+      return 'bg-autobot-dot-idle'
   }
 }
 
@@ -72,14 +72,14 @@ export function getStatusTextColor(status: string): string {
   const category = getStatusCategory(status)
   switch (category) {
     case 'healthy':
-      return 'text-green-600'
+      return 'text-autobot-success'
     case 'warning':
-      return 'text-yellow-600'
+      return 'text-autobot-warning'
     case 'error':
-      return 'text-red-600'
+      return 'text-autobot-error'
     case 'neutral':
     default:
-      return 'text-gray-500'
+      return 'text-autobot-text-tertiary'
   }
 }
 
@@ -90,14 +90,14 @@ export function getStatusBadgeClass(status: string): string {
   const category = getStatusCategory(status)
   switch (category) {
     case 'healthy':
-      return 'bg-green-100 text-green-800'
+      return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'warning':
-      return 'bg-yellow-100 text-yellow-800'
+      return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
     case 'error':
-      return 'bg-red-100 text-red-800'
+      return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
     case 'neutral':
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 }
 
@@ -108,14 +108,14 @@ export function getStatusDotClass(status: string): string {
   const category = getStatusCategory(status)
   switch (category) {
     case 'healthy':
-      return 'bg-green-500'
+      return 'bg-autobot-dot-ok'
     case 'warning':
-      return 'bg-yellow-500 animate-pulse'
+      return 'bg-autobot-dot-warn animate-pulse'
     case 'error':
-      return 'bg-red-500'
+      return 'bg-autobot-dot-bad'
     case 'neutral':
     default:
-      return 'bg-gray-400'
+      return 'bg-autobot-dot-idle'
   }
 }
 
@@ -144,18 +144,18 @@ export function needsAttention(status: NodeStatus | NodeHealthStatus | string): 
  * Get color for metric value (CPU, memory, disk).
  */
 export function getMetricColor(value: number): string {
-  if (value >= 90) return 'text-red-500'
-  if (value >= 70) return 'text-yellow-500'
-  return 'text-green-500'
+  if (value >= 90) return 'text-autobot-error'
+  if (value >= 70) return 'text-autobot-warning'
+  return 'text-autobot-success'
 }
 
 /**
  * Get progress bar color class for metric.
  */
 export function getMetricBarColor(value: number): string {
-  if (value >= 90) return 'bg-red-500'
-  if (value >= 70) return 'bg-yellow-500'
-  return 'bg-green-500'
+  if (value >= 90) return 'bg-autobot-dot-bad'
+  if (value >= 70) return 'bg-autobot-dot-warn'
+  return 'bg-autobot-dot-ok'
 }
 
 /**
