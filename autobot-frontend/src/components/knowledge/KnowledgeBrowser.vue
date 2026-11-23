@@ -178,6 +178,7 @@ const tree = useKnowledgeBrowserTree({
   onError: (message) => showDocBranchError(message),
   onFilePicked: () => {
     selectedDocId.value = null // picking a fact leaves the AI document editor
+    search.clearResults() // and the results pane, which outranks the reading pane
   },
 })
 const {

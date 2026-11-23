@@ -46,7 +46,7 @@ export interface BrowserTreeOptions {
   selectedMainCategory: Ref<string | null>
   selectedCategory: Ref<string | null>
   /** Fetch vectorization status for the given files (useKnowledgeVectorization.fetchBatchStatus). */
-  fetchBatchStatus: (ids: string[], names: Map<string, string>) => Promise<unknown>
+  fetchBatchStatus: (ids: string[], names: Map<string, string>) => Promise<boolean | void>
   /** Called when a file (not a folder) is picked, so the caller can leave the AI document editor. */
   onFilePicked?: () => void
   /** Called with a translated message when a background load fails, so the caller can show it. */
@@ -55,7 +55,7 @@ export interface BrowserTreeOptions {
 
 const asError = (err: unknown) => (err instanceof Error ? err : new Error(String(err)))
 
-const tr = (key: string) => i18n.global.t(`knowledge.browser.${key}`)
+const tr = (key: string, n?: number) => i18n.global.t(`knowledge.browser.${key}`, { n })
 
 function useTreeLoader(opts: BrowserTreeOptions) {
   const treeData = ref<TreeNode[]>([])
@@ -67,20 +67,23 @@ function useTreeLoader(opts: BrowserTreeOptions) {
   const isRefreshingStatus = ref(false)
   const facts = ref<FactsByCategory>({})
   const offset = ref(0)
+  // Bumped when a reload starts, so a page requested before it cannot merge into the new tree.
+  let generation = 0
 
   const rebuild = () => {
     treeData.value = buildTreeFromCategoryFacts(facts.value, formatCategoryName)
   }
 
-  const fetchStatuses = async (tree: TreeNode[]) => {
+  /** Resolves false when the status request failed (the documents are then marked unknown). */
+  const fetchStatuses = async (tree: TreeNode[]): Promise<boolean> => {
     const { ids, names } = extractFileIdsAndNames(tree)
-    if (ids.length > 0) {
-      logger.info(`Fetching vectorization status for ${ids.length} documents`)
-      await opts.fetchBatchStatus(ids, names)
-    }
+    if (ids.length === 0) return true
+    logger.info(`Fetching vectorization status for ${ids.length} documents`)
+    return (await opts.fetchBatchStatus(ids, names)) !== false
   }
 
   const loadFirstPage = async () => {
+    generation++
     offset.value = 0
     const data = await fetchFactsByCategory({ limit: CATEGORY_FACTS_PAGE_SIZE, offset: 0 })
     if (!data || !data.categories) return
@@ -92,7 +95,8 @@ function useTreeLoader(opts: BrowserTreeOptions) {
   }
 
   const mergePage = (incoming: FactsByCategory) => {
-    const merged = { ...facts.value }
+    // Null prototype: a category named `constructor` or `__proto__` is data, not an inherited member.
+    const merged: FactsByCategory = Object.assign(Object.create(null), facts.value)
     Object.keys(incoming).forEach((cat) => {
       merged[cat] = [...(merged[cat] || []), ...incoming[cat]]
     })
@@ -102,9 +106,11 @@ function useTreeLoader(opts: BrowserTreeOptions) {
   const loadMoreCategoryFacts = async () => {
     if (isLoadingMoreCategoryFacts.value || !hasMoreCategoryFacts.value) return
     const expandedPaths = getExpandedPaths(treeData.value, nodeExpansion.expanded.value)
+    const requestedGeneration = generation
     isLoadingMoreCategoryFacts.value = true
     try {
       const data = await fetchFactsByCategory({ limit: CATEGORY_FACTS_PAGE_SIZE, offset: offset.value })
+      if (requestedGeneration !== generation) return
       if (data && data.categories) {
         mergePage(data.categories as FactsByCategory)
         hasMoreCategoryFacts.value = Boolean(data.has_more)
@@ -133,8 +139,8 @@ function useTreeLoader(opts: BrowserTreeOptions) {
     if (isRefreshingStatus.value) return
     isRefreshingStatus.value = true
     try {
-      await fetchStatuses(treeData.value)
-      logger.info('Vectorization status refreshed')
+      if (await fetchStatuses(treeData.value)) logger.info('Vectorization status refreshed')
+      else opts.onError?.(tr('statusRefreshFailed'))
     } catch (err) {
       logger.error('Failed to refresh vectorization status:', err)
       opts.onError?.(tr('statusRefreshFailed'))
@@ -191,7 +197,7 @@ function useTreeContent(treeData: Ref<TreeNode[]>, nodeExpansion: ReturnType<typ
       if (!Array.isArray(data.results)) return
       folder.children = (data.results as KnowledgeFactLike[]).map((item, idx) => ({
         id: `file-${folder.id}-${idx}`,
-        name: (item.metadata?.title || item.metadata?.source || `Document ${idx + 1}`) as string,
+        name: (item.metadata?.title || item.metadata?.source || tr('documentFallback', idx + 1)) as string,
         type: 'file' as const,
         path: `${folder.path}/${item.metadata?.title || item.metadata?.source}`,
         size: (item.content?.length as number | undefined) || 0,
@@ -286,6 +292,7 @@ function useEntriesPaging(treeData: Ref<TreeNode[]>, nodeExpansion: ReturnType<t
       hasMore.value = result.hasMore
     } catch (err) {
       logger.error('Failed to load more entries:', err)
+      throw err // a failed page is not an empty one: callers must not rebuild the tree from it
     } finally {
       isLoadingMore.value = false
     }

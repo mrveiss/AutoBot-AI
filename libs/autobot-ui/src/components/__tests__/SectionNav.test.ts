@@ -47,6 +47,14 @@ describe('SectionNav', () => {
     expect(w.findAll('a')[0].classes()).not.toContain('adv')
   })
 
+  it('hides the whole list of an advanced section whose items do not set adv', () => {
+    const w = render({
+      sections: [{ id: 'a', label: 'Research', adv: true, items: [{ id: 'web', label: 'Web', to: '/web' }] }],
+    })
+    expect(w.get('.aui-section-nav__list').classes()).toContain('adv')
+    expect(w.get('a').classes()).not.toContain('adv')
+  })
+
   it('binds the target as href for a plain anchor and as `to` for a link component', () => {
     expect(render().find('a').attributes('href')).toBe('/browser')
     const Link = defineComponent({

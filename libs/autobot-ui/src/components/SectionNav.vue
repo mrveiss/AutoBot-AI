@@ -76,7 +76,7 @@ const itemClass = (item: SectionNavItem) => [
     <h2 v-if="title" class="aui-section-nav__title">{{ title }}</h2>
     <template v-for="section in sections" :key="section.id">
       <p v-if="section.label" :class="['aui-section-nav__sect', { adv: section.adv }]">{{ section.label }}</p>
-      <ul class="aui-section-nav__list" :class="{ adv: section.adv && !section.label }">
+      <ul class="aui-section-nav__list" :class="{ adv: section.adv }">
         <li v-for="item in section.items" :key="item.id" class="aui-section-nav__li" :class="{ adv: item.adv }">
           <component :is="item.disabled ? 'span' : linkAs" v-bind="linkProps(item)" :class="itemClass(item)">
             <span v-if="$slots.icon" class="aui-section-nav__icon"><slot name="icon" :item="item" /></span>

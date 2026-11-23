@@ -18,6 +18,13 @@ const logger = createLogger('KnowledgeBrowserSelection')
 
 type Vectorization = ReturnType<typeof useKnowledgeVectorization>
 
+/** A resolved result that still reports failure: `false`, or a batch result with a non-empty `failed` list. */
+const isFailedResult = (result: unknown): boolean => {
+  if (result === false) return true
+  const failed = (result as { failed?: unknown } | null | undefined)?.failed
+  return Array.isArray(failed) && failed.length > 0
+}
+
 export function useKnowledgeBrowserSelection(vec: Vectorization, onError?: (message: string) => void) {
   const isVectorizing = ref(false)
   const showProgressModal = ref(false)
@@ -44,11 +51,16 @@ export function useKnowledgeBrowserSelection(vec: Vectorization, onError?: (mess
   }
 
   /** Run a vectorize action with the busy flag held; resolves true on success, false on a reported failure. */
-  const guarded = async (label: string, run: () => Promise<unknown>, openModal = false): Promise<boolean> => {
+  const guarded = async (label: string, run: (runId: number) => Promise<unknown>, openModal = false): Promise<boolean> => {
     const runId = startRun()
     if (openModal) showProgressModal.value = true
     try {
-      logger.info(`${label} complete:`, await run())
+      const result = await run(runId)
+      if (isFailedResult(result)) {
+        reportFailure(runId, label, result)
+        return false
+      }
+      logger.info(`${label} complete:`, result)
       return true
     } catch (err) {
       reportFailure(runId, label, err)
@@ -77,9 +89,10 @@ export function useKnowledgeBrowserSelection(vec: Vectorization, onError?: (mess
     const ids = vec.selectedDocumentsList.value.filter((id) => vec.documentStates.value.get(id)?.status !== 'vectorized')
     return guarded(
       'Batch vectorization',
-      async () => {
+      async (runId) => {
         const result = ids.length ? await vec.vectorizeBatch(ids) : undefined
-        vec.deselectAll()
+        // A cancelled or superseded run must not clear what the user selected since.
+        if (runId === activeRun) vec.deselectAll()
         return result
       },
       ids.length > 0,
@@ -94,11 +107,16 @@ export function useKnowledgeBrowserSelection(vec: Vectorization, onError?: (mess
     const runId = startRun()
     // In parallel: no N+1 sequential calls.
     const results = await Promise.allSettled(failed.map((id) => vec.vectorizeDocument(id)))
-    const rejected = results.flatMap((result, i) => (result.status === 'rejected' ? [[failed[i], result.reason] as const] : []))
-    rejected.forEach(([id, reason]) => logger.error(`Failed to retry vectorization for ${id}:`, reason))
-    if (rejected.length && runId === activeRun) onError?.(i18n.global.t('knowledge.browser.vectorizeFailed'))
+    // vectorizeDocument resolves false rather than rejecting, so both count as a failed retry.
+    const failures = results.flatMap((result, i) =>
+      result.status === 'rejected' || result.value === false
+        ? [[failed[i], result.status === 'rejected' ? result.reason : 'resolved false'] as const]
+        : [],
+    )
+    failures.forEach(([id, reason]) => logger.error(`Failed to retry vectorization for ${id}:`, reason))
+    if (failures.length && runId === activeRun) onError?.(i18n.global.t('knowledge.browser.vectorizeFailed'))
     endRun(runId)
-    return rejected.length === 0
+    return failures.length === 0
   }
 
   const handleCancelVectorization = () => {

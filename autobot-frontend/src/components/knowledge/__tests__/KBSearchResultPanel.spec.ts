@@ -47,8 +47,11 @@ describe('KBSearchResultPanel', () => {
     await root.trigger('keydown', { key: 'ArrowDown' })
     await flushPromises()
     expect(w.findAll('[role="option"]')[1].attributes('aria-selected')).toBe('true')
+    const before = w.emitted('select')!.length
     await root.trigger('keydown', { key: 'Enter' })
-    expect(w.emitted('select')!.length).toBeGreaterThanOrEqual(1)
+    const selects = w.emitted('select')!
+    expect(selects).toHaveLength(before + 1)
+    expect(selects[before]).toEqual(selects[before - 1])
     await root.trigger('keydown', { key: 'Escape' })
     expect(w.emitted('close')).toHaveLength(1)
   })

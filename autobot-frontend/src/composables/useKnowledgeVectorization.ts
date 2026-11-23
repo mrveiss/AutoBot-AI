@@ -52,7 +52,7 @@ const logger = createLogger('useKnowledgeVectorization')
 
 // Request cache for batch status API calls (Issue #4006)
 interface CachedRequest {
-  data: Promise<void>
+  data: Promise<boolean>
   time: number
 }
 
@@ -205,8 +205,8 @@ export function useKnowledgeVectorization() {
   const fetchBatchStatus = async (
     documentIds: string[],
     documentNames?: Map<string, string>
-  ): Promise<void> => {
-    if (documentIds.length === 0) return
+  ): Promise<boolean> => {
+    if (documentIds.length === 0) return true
 
     // Issue #4006: Check request cache for deduplication
     clearExpiredCache()
@@ -240,13 +240,12 @@ export function useKnowledgeVectorization() {
             })
           }
         }
+        return true
       } catch (error) {
         logger.error('Failed to fetch batch vectorization status:', error)
         // Mark all as unknown on error, preserving names if provided (Issue #165)
-        documentIds.forEach(id => {
-          const name = documentNames?.get(id)
-          setDocumentStatus(id, 'unknown', undefined, undefined, name)
-        })
+        documentIds.forEach(id => setDocumentStatus(id, 'unknown', undefined, undefined, documentNames?.get(id)))
+        return false
       }
     })()
 

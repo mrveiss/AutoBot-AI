@@ -70,6 +70,48 @@ describe('loading', () => {
     await tree.loadMoreCategoryFacts() // nothing more: no third fetch
     expect(h.fetchFactsByCategory).toHaveBeenCalledTimes(2)
   })
+
+  it('merges a category named like an Object.prototype member as data', async () => {
+    h.fetchFactsByCategory.mockResolvedValueOnce({ categories: { constructor: [fact('c.md', 'fact:c')] }, has_more: false })
+    const { tree } = make()
+    await tree.loadTree()
+    await tree.loadMoreCategoryFacts()
+    expect(tree.treeData.value.map((n) => n.category)).toEqual(['autobot_docs', 'cooking', 'constructor'])
+  })
+
+  it('drops a page requested before a reload instead of merging it into the new tree', async () => {
+    let release!: (page: unknown) => void
+    h.fetchFactsByCategory.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+    const { tree } = make()
+    await tree.loadTree()
+    const stale = tree.loadMoreCategoryFacts()
+    h.fetchFactsByCategory.mockResolvedValueOnce(PAGE1)
+    await tree.loadTree()
+    release(PAGE2)
+    await stale
+    expect(tree.treeData.value[1].children?.map((n) => n.name)).toEqual(['pasta.md'])
+    expect(tree.hasMoreCategoryFacts.value).toBe(true)
+    expect(tree.isLoadingMoreCategoryFacts.value).toBe(false)
+  })
+})
+
+describe('entries paging', () => {
+  it('keeps the tree and rethrows when an entries page request fails', async () => {
+    h.fetchEntriesPage.mockRejectedValueOnce(new Error('down'))
+    const { tree } = make()
+    await tree.loadTree()
+    const before = tree.treeData.value
+    await expect(tree.loadUserKnowledge()).rejects.toThrow('down')
+    expect(tree.treeData.value).toBe(before)
+  })
+
+  it('names fallbacks through i18n: an entry without a title and a category', async () => {
+    h.fetchEntriesPage.mockResolvedValueOnce({ items: [{ content: 'x' }], nextCursor: '0', hasMore: false })
+    const { tree } = make()
+    await tree.loadUserKnowledge()
+    expect(tree.treeData.value[0].name).toBe('Uncategorized')
+    expect(tree.treeData.value[0].children?.[0].name).toBe('Entry 1')
+  })
 })
 
 describe('filtering', () => {
@@ -228,6 +270,15 @@ describe('refreshing statuses', () => {
     await Promise.all([tree.refreshVectorizationStatus(), tree.refreshVectorizationStatus()])
     expect(fetchBatchStatus).toHaveBeenCalledTimes(1)
     expect(tree.isRefreshingStatus.value).toBe(false)
+  })
+
+  it('reports a status refresh that resolves false (the production binding never rejects)', async () => {
+    const onError = vi.fn()
+    const { tree, fetchBatchStatus } = make({ onError })
+    await tree.loadTree()
+    fetchBatchStatus.mockResolvedValueOnce(false)
+    await tree.refreshVectorizationStatus()
+    expect(onError).toHaveBeenCalledTimes(1)
   })
 
   it('reports a failed status refresh through onError', async () => {

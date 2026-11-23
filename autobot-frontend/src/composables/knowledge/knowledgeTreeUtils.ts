@@ -7,9 +7,15 @@
  * path segments of their filename, filtering by main category and by a search
  * query, and saving / restoring which folders are expanded across a rebuild.
  */
+import i18n from '@/i18n'
 import type { TreeNode } from '@/components/knowledge/TreeNodeComponent.vue'
 
 /** Loose shape of a knowledge fact as the KB endpoints return it (Record<string, unknown> on the wire). */
+const tr = (key: string, n?: number) => i18n.global.t(`knowledge.browser.${key}`, { n })
+
+/** Category identifier of an entry that names none; its display label is translated, the id is not. */
+const UNCATEGORIZED = 'Uncategorized'
+
 export interface KnowledgeFactLike {
   key?: string
   title?: string
@@ -67,7 +73,7 @@ function toFileNode(fact: KnowledgeFactLike, part: string, category: string, fil
 }
 
 function insertFact(root: NestedDir, fact: KnowledgeFactLike, category: string, idx: number): void {
-  const filename = (fact.metadata?.filename || fact.title || `Fact ${idx + 1}`) as string
+  const filename = (fact.metadata?.filename || fact.title || tr('factFallback', idx + 1)) as string
   const parts = filename.split('/').filter((p: string) => p)
   let current = root
   parts.forEach((part, i) => {
@@ -125,10 +131,10 @@ export function buildTreeFromCategoryFacts(
 export function buildTreeFromEntries(entries: Record<string, unknown>[], folderName: (c: string) => string): TreeNode[] {
   const byCategory = new Map<string, TreeNode[]>()
   ;(Array.isArray(entries) ? (entries as KnowledgeFactLike[]) : []).forEach((entry, idx) => {
-    const category = entry.category || 'Uncategorized'
+    const category = entry.category || UNCATEGORIZED
     const file: TreeNode = {
       id: `file-${idx}`,
-      name: entry.title || entry.source || `Entry ${idx + 1}`,
+      name: entry.title || entry.source || tr('entryFallback', idx + 1),
       type: 'file',
       path: `/${category}/${entry.title || entry.source}`,
       size: entry.content?.length || 0,
@@ -140,7 +146,7 @@ export function buildTreeFromEntries(entries: Record<string, unknown>[], folderN
   })
   return Array.from(byCategory.entries()).map(([category, files], idx) => ({
     id: `folder-${idx}`,
-    name: folderName(category),
+    name: category === UNCATEGORIZED ? tr('uncategorized') : folderName(category),
     type: 'folder' as const,
     path: `/${category}`,
     category,

@@ -110,6 +110,38 @@ describe('useKnowledgeBrowserSelection', () => {
     expect(sel.isVectorizing.value).toBe(false)
   })
 
+  it('reports a batch that resolves with failed documents, and a document that resolves false', async () => {
+    const vec = fakeVec({}, ['a'])
+    vec.vectorizeBatch.mockResolvedValueOnce({ succeeded: [], failed: ['a'] })
+    vec.vectorizeDocument.mockResolvedValueOnce(false)
+    const onError = vi.fn()
+    const sel = useKnowledgeBrowserSelection(vec as never, onError)
+    await expect(sel.vectorizeSelected()).resolves.toBe(false)
+    await expect(sel.handleVectorizeDocument('a')).resolves.toBe(false)
+    expect(onError).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports a retry that resolves false', async () => {
+    const vec = fakeVec({ a: 'failed' })
+    vec.vectorizeDocument.mockResolvedValueOnce(false)
+    const onError = vi.fn()
+    const sel = useKnowledgeBrowserSelection(vec as never, onError)
+    await expect(sel.handleRetryFailed()).resolves.toBe(false)
+    expect(onError).toHaveBeenCalledTimes(1)
+  })
+
+  it('a cancelled batch settling late does not clear a newer selection', async () => {
+    const vec = fakeVec({}, ['a'])
+    let release!: (r: unknown) => void
+    vec.vectorizeBatch.mockImplementationOnce(() => new Promise((resolve) => { release = resolve }))
+    const sel = useKnowledgeBrowserSelection(vec as never)
+    const run = sel.vectorizeSelected()
+    sel.handleCancelVectorization()
+    release({ succeeded: ['a'], failed: [] })
+    await run
+    expect(vec.deselectAll).not.toHaveBeenCalled()
+  })
+
   it('reports a rejected retry through onError', async () => {
     const vec = fakeVec({ a: 'failed' })
     vec.vectorizeDocument.mockRejectedValueOnce(new Error('boom'))
