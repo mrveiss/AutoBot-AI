@@ -10,7 +10,7 @@ import pytest
 
 from api import heartbeat
 from api.heartbeat_scope import AgentScope
-from models.heartbeat import AgentRuntimeState, HeartbeatStatus
+from models.heartbeat import AgentRuntimeState, HeartbeatStatus, WakeupTrigger
 from services.heartbeat_scheduler import HeartbeatScheduler
 from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
@@ -54,3 +54,14 @@ async def test_start_spawns_no_task_for_a_never_enabled_agent():
 async def test_start_spawns_a_task_for_an_active_agent():
     _, scheduler = await _started([_row(HeartbeatStatus.ACTIVE)])
     scheduler._spawn_task.assert_called_once_with("a1", 60)
+
+
+@pytest.mark.asyncio
+async def test_event_wakeup_runs_nothing_for_a_disabled_agent():
+    session = FakeAsyncSession(results=[FakeResult([HeartbeatStatus.DISABLED.value])])
+    scheduler = HeartbeatScheduler(lambda: session)
+    scheduler._start_run = AsyncMock()
+    scheduler._invoke_agent = AsyncMock()
+    await scheduler._run_once("a1", WakeupTrigger.EVENT)
+    scheduler._start_run.assert_not_awaited()
+    scheduler._invoke_agent.assert_not_awaited()

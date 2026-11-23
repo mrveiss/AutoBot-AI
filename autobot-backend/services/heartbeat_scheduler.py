@@ -194,9 +194,9 @@ class HeartbeatScheduler:
 
     async def _run_once(self, agent_id: str, trigger: WakeupTrigger) -> None:
         """Execute one heartbeat run for agent_id (#1407)."""
-        # Skip paused or error agents (GH#6470, MVA-1411)
+        # Only an ACTIVE agent runs, on interval or on an event (GH#6470, MVA-1411, #21992)
         if await self._should_skip_heartbeat(agent_id):
-            logger.info("Skipping heartbeat for paused/error agent %s", agent_id)
+            logger.info("Skipping heartbeat for agent %s: not active", agent_id)
             return
         run_id, state_id, timeout, run_jwt, workspace_dir = await self._start_run(agent_id, trigger)
         final_status, error_msg, usage = await self._invoke_agent(
@@ -217,17 +217,17 @@ class HeartbeatScheduler:
             return status == HeartbeatStatus.PAUSED.value
 
     async def _should_skip_heartbeat(self, agent_id: str) -> bool:
-        """Return True if the agent's heartbeat should be suppressed (MVA-1411).
+        """Return True unless the agent is ACTIVE (MVA-1411, #21992).
 
-        Suppressed when status is PAUSED (budget/admin hold) or ERROR (needs
-        operator recovery before resuming).
+        Suppressed for no row, DISABLED (the heartbeat is off, so events do not wake it either), PAUSED
+        (budget/admin hold), ERROR (needs operator recovery) and TERMINATED.
         """
         async with self._session_factory() as session:
             result = await session.execute(
                 select(AgentRuntimeState.status).where(AgentRuntimeState.agent_id == agent_id)
             )
             status = result.scalar_one_or_none()
-            return status in (HeartbeatStatus.PAUSED.value, HeartbeatStatus.ERROR.value)
+            return status != HeartbeatStatus.ACTIVE.value
 
     async def _start_run(
         self, agent_id: str, trigger: WakeupTrigger
