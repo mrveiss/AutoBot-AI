@@ -5,24 +5,33 @@
 // of another company; assignment is an explicit call through ApiClient.assignChatCompany, never automatic.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick, reactive } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { useChatStore } from '@/stores/useChatStore'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 
 const h = vi.hoisted(() => ({
-  store: { sessions: [] as { id: string; unassigned?: boolean }[], currentSessionId: 'a' as string | null },
   controller: { loadChatSessions: vi.fn(), switchToSession: vi.fn() },
   company: { selectedCompanyId: 'co-1', companies: [{ id: 'co-2', name: 'Beta' }], hasCompanies: true, fetchCompanies: vi.fn() },
   assign: vi.fn(),
   showToast: vi.fn(),
 }))
-vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => h.store }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => h.controller }))
 vi.mock('@/stores/useLlcCompanyStore', () => ({ useLlcCompanyStore: () => h.company }))
 vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast: h.showToast }) }))
 vi.mock('@/utils/ApiClient', () => ({ default: { assignChatCompany: h.assign } }))
 
 import { useChatCompanyScope } from '../useChatCompanyScope'
+
+// The REAL chat store: the close on a company switch is asserted on its currentSessionId.
+const chat = (id: string, unassigned = false) => ({ id, title: id, messages: [], isActive: false, unassigned })
+function open(id: string, ...listed: ReturnType<typeof chat>[]) {
+  const store = useChatStore()
+  listed.forEach((c) => store.importSession(c))
+  store.currentSessionId = id
+  return store
+}
 
 function setup() {
   let api!: ReturnType<typeof useChatCompanyScope>
@@ -33,46 +42,51 @@ function setup() {
 }
 
 beforeEach(() => {
+  setActivePinia(createPinia())
   // vitest.config mockReset wipes the defaults, so each test re-applies them (#3070).
   h.company = reactive({ selectedCompanyId: 'co-1', companies: [{ id: 'co-2', name: 'Beta' }], hasCompanies: true, fetchCompanies: vi.fn() })
-  h.store.sessions = [{ id: 'a' }]
-  h.store.currentSessionId = 'a'
   h.controller.loadChatSessions.mockResolvedValue(undefined)
   h.controller.switchToSession.mockResolvedValue(undefined)
   h.assign.mockResolvedValue({})
 })
 
 describe('company switch', () => {
-  it('reloads the list in place and leaves an open chat of the other company closed', async () => {
+  it('closes an open chat of the other company and reloads the list in place', async () => {
+    const store = open('a', chat('a'))
     setup()
     h.company.selectedCompanyId = 'co-2'
     await nextTick(); await flushPromises()
-    expect(h.controller.loadChatSessions).toHaveBeenCalledTimes(1)
-    expect(h.controller.switchToSession).not.toHaveBeenCalled()
+    expect(store.currentSessionId).toBeNull()
+    expect(h.controller.loadChatSessions).toHaveBeenCalledWith(true)
   })
 
   it('keeps the open chat when it is Unassigned, which every company lists', async () => {
-    h.controller.loadChatSessions.mockImplementation(async () => { h.store.sessions = [{ id: 'a', unassigned: true }] })
+    const store = open('a', chat('a', true))
     setup()
     h.company.selectedCompanyId = 'co-2'
     await nextTick(); await flushPromises()
-    expect(h.controller.switchToSession).toHaveBeenCalledWith('a')
+    expect(store.currentSessionId).toBe('a')
+    expect(h.controller.loadChatSessions).toHaveBeenCalledWith(true)
   })
 
   it('does nothing when the company did not change', async () => {
+    const store = open('a', chat('a'))
     setup()
     await nextTick(); await flushPromises()
     expect(h.controller.loadChatSessions).not.toHaveBeenCalled()
+    expect(store.currentSessionId).toBe('a')
   })
 })
 
 describe('assignment', () => {
-  it('assigns through ApiClient.assignChatCompany only when called, then reloads the list', async () => {
+  it('assigns through ApiClient.assignChatCompany only when called, then reloads keeping the open chat', async () => {
+    const store = open('y', chat('y'), chat('u1', true))
     const api = setup()
     expect(h.assign).not.toHaveBeenCalled()
     expect(await api.assignToCompany('u1', 'co-2')).toBe(true)
     expect(h.assign).toHaveBeenCalledWith('u1', 'co-2')
-    expect(h.controller.loadChatSessions).toHaveBeenCalled()
+    expect(h.controller.loadChatSessions).toHaveBeenCalledWith(true)
+    expect(store.currentSessionId).toBe('y')
   })
 
   it('reports a refused assignment and does not reload', async () => {

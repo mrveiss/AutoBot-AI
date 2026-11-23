@@ -62,6 +62,7 @@ export class ChatController {
   private _chatStore?: ReturnType<typeof useChatStore>
   private _appStore?: ReturnType<typeof useAppStore>
   private retryAttempts = 3
+  private _listSeq = 0 // #21997: the newest loadChatSessions owns the list
   private retryDelay = 1000
 
   private _activeStreams = new ActiveStreams() // #21357
@@ -611,10 +612,13 @@ export class ChatController {
     return sessionId
   }
 
-  async loadChatSessions(): Promise<void> {
+  /** Reload the list; `keepOpen` reopens the open chat when the new list still has it (#21997). */
+  async loadChatSessions(keepOpen = false): Promise<void> {
+    const seq = ++this._listSeq
     try {
-
       const sessions = await chatRepository.getChatList()
+      if (seq !== this._listSeq) return // a newer load started: this response is stale, never clear for it
+      const open = keepOpen ? this.chatStore.currentSessionId : null
 
       // FIXED: Clear existing sessions before loading to prevent duplicates
       this.chatStore.clearAllSessions()
@@ -628,6 +632,7 @@ export class ChatController {
           this.chatStore.importSession({ ...session, title: session.title ?? '', isActive: false })
         })
         logger.debug(`Loaded ${sessions.length} chat sessions`)
+        if (open && sessions.some(x => x.id === open)) await this.switchToSession(open)
       } else {
         logger.warn('getChatList() returned non-array value:', sessions)
       }

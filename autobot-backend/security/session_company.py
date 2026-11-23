@@ -45,11 +45,18 @@ def _parse(value) -> uuid.UUID | None:
 
 
 async def may_act_in_company(company_id: uuid.UUID, user: dict) -> bool:
-    """Whether *user* may act in *company_id*: a platform admin, or a member of it (``llc.services.authz``)."""
+    """Whether *user* may act in *company_id*: a platform admin, or a member of it (``llc.services.authz``).
+
+    With authentication off there is no caller to hold a membership, so the answer is yes, the same as
+    ``_resolve_company_scope`` (no scope, no refusal) gives every other chat route (#21997).
+    """
     from api.user_management.dependencies import _is_platform_admin_claim
+    from auth_middleware import get_auth_middleware
     from llc.services.authz import is_company_member
     from user_management.database import get_async_session_factory
 
+    if user.get("auth_disabled") or not get_auth_middleware().enable_auth:
+        return True
     if _is_platform_admin_claim(user):
         return True
     user_id = user.get("user_id") or user.get("id") or user.get("sub")

@@ -32,15 +32,11 @@ export function useChatCompanyScope() {
     return !!id && store.sessions.some((s) => s.id === id && s.unassigned)
   }
 
+  /** Close the open chat unless it is Unassigned, then reload; the reload reopens only a chat the new list still has. */
   async function reloadForCompany(): Promise<void> {
-    const open = store.currentSessionId
-    // The reload drops the open chat; it comes back only when it is still listed as Unassigned.
-    await controller.loadChatSessions()
-    if (open && isOpenUnassigned(open)) await controller.switchToSession(open)
+    if (!isOpenUnassigned(store.currentSessionId)) store.currentSessionId = null
+    await controller.loadChatSessions(true)
   }
-
-  // The assignment picker needs the companies even when the chat is opened before any Company OS page.
-  if (!companyStore.hasCompanies) void companyStore.fetchCompanies()
 
   watch(() => companyStore.selectedCompanyId, (next, prev) => {
     if (next !== prev) void reloadForCompany()
@@ -56,7 +52,7 @@ export function useChatCompanyScope() {
     }
     const name = companyStore.companies.find((c) => c.id === companyId)?.name ?? ''
     showToast(t('chat.sidebar.assignedSuccess', { company: name }), 'success')
-    await controller.loadChatSessions()
+    await controller.loadChatSessions(true) // assigning X while viewing Y keeps Y open
     return true
   }
 
