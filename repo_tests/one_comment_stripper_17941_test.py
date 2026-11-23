@@ -36,6 +36,18 @@ module-level `NAME = ...` or annotated `NAME: T = ...` constant (string or
 tuple/list/set), optionally starred or wrapped in `tuple(...)`; one built in a
 function, imported or concatenated is not followed (an AST rule cannot
 evaluate it), and is a second recorded limit.
+
+## The regex shape (#21569)
+
+A comment can also be stripped by a pattern. `_comment_regex_detect` reads `re.compile`, `re.sub`,
+`re.subn`, `re.finditer`, `re.findall`, `re.match`, `re.search` and `re.split` calls whose first
+argument is a string literal or a module string constant, and flags one that names a `//` line, a
+`/\\*` block, a `<!--` HTML or a `^\\s*#` / `#.*` line comment. A URL scheme (`https://`), a
+division and a CSS id selector (`#id`) are not comments and do not trip it. What it still cannot
+see: a pattern built at run time (joined, formatted, passed in), a `from re import sub` alias, a
+compiled pattern held on another object, and a non-`re` engine (`regex`). `<!--`:
+`tools/lint/_comment_syntax.py` already has `strip_html_comments` and `strip_html_and_block_comments`,
+so an HTML hit migrates to those rather than keeping its own pattern.
 """
 
 from __future__ import annotations
@@ -44,6 +56,8 @@ import ast
 import re
 
 import pytest
+from repo_tests._comment_regex_detect import strips_comments_by_regex
+from repo_tests._comment_regex_pending import PENDING_REGEX_STRIPPERS
 from repo_tests._paths import repo_root
 
 from tools.lint import _parse_cache as parse_cache
@@ -95,6 +109,8 @@ _MARKERS = frozenset({"#", "//", "/*"})
 #: one, so "exempt" cannot quietly become a second place comment logic lives.
 _CANONICAL = frozenset({"tools/lint/_comment_syntax.py"})
 
+#: The regex-shaped strippers (#21569) are pending in `_comment_regex_pending`: 39 files measured when
+#: the regex shape was added, on top of the 9 below. Same rule: shrink only.
 _PENDING_PRIVATE_STRIPPERS = frozenset(
     {
         # BLOCKED BY THE SIZE RATCHET, not by the concept (#17941). The file
@@ -115,6 +131,9 @@ _PENDING_PRIVATE_STRIPPERS = frozenset(
         "tools/lint/check_git_write_env_scrubbed_test.py",
     }
 )
+
+
+_PENDING = _PENDING_PRIVATE_STRIPPERS | PENDING_REGEX_STRIPPERS
 
 
 def _asserted_ids(tree: ast.AST) -> set[int]:
@@ -197,6 +216,8 @@ def _strips_comments_by_hand(tree: ast.AST) -> bool:
     """
     asserted = _asserted_ids(tree)
     consts = _module_constants(tree)
+    if strips_comments_by_regex(tree, asserted, consts):
+        return True
     for scope in _scopes(tree):
         good, bad, content_vars = _bindings(scope)
         path_vars = good - bad
@@ -361,7 +382,7 @@ def _files_with_private_strippers() -> set[str]:
 def test_no_new_file_strips_comments_by_hand() -> None:
     """The ratchet. A new private copy fails here; a migrated one must be delisted."""
     found = _files_with_private_strippers()
-    added = sorted(found - _PENDING_PRIVATE_STRIPPERS - _CANONICAL)
+    added = sorted(found - _PENDING - _CANONICAL)
 
     assert not added, (
         f"{len(added)} file(s) test a string against a comment marker directly instead of using "
@@ -381,7 +402,7 @@ def test_the_pending_list_only_shrinks() -> None:
     makes the list a ratchet rather than a note.
     """
     found = _files_with_private_strippers()
-    stale = sorted(_PENDING_PRIVATE_STRIPPERS - found)
+    stale = sorted(_PENDING - found)
 
     assert not stale, (
         f"{len(stale)} entr(y/ies) in `_PENDING_PRIVATE_STRIPPERS` no longer carry a private "
@@ -502,6 +523,15 @@ def test_the_pending_list_only_shrinks() -> None:
         ("a comment naming the idiom", '# we used to call line.startswith("#") here\nx = 1\n', False),
         ("a docstring naming the idiom", '"""Avoid line.startswith(\\"#\\") -- use the helper."""\nx = 1\n', False),
         ("the marker as a plain string", 'MARKER = "#"\nx = 1\n', False),
+        ("a regex stripping a line comment", 'import re\nx = re.sub(r"//[^\\n]*", "", s)\n', True),
+        ("a regex stripping a block comment", 'import re\nx = re.sub(r"/\\*.*?\\*/", "", s)\n', True),
+        ("a regex stripping an HTML comment", 'import re\nx = re.sub(r"<!--.*?-->", "", s)\n', True),
+        ("a regex skipping a hash line", 'import re\nx = re.compile(r"^\\s*#")\n', True),
+        ("a pattern held in a module constant", 'import re\nP = r"^\\s*#"\nx = re.search(P, s)\n', True),
+        ("a URL scheme is not a comment", 'import re\nx = re.match(r"https://example", s)\n', False),
+        ("a division is not a comment", 'import re\nx = re.findall(r"(\\d+)/(\\d+)", s)\n', False),
+        ("a CSS id selector is not a comment", 'import re\nx = re.split(r"#id", s)\n', False),
+        ("a regex comment control under an assert", 'import re\nassert re.sub(r"//.*", "", s)\n', False),
     ],
 )
 def test_the_detector_reads_code_and_not_prose(label: str, source: str, expected: bool) -> None:
