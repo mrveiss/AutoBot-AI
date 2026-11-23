@@ -199,7 +199,7 @@ def test_the_pending_row_is_committed_before_apply_then_updated_with_the_outcome
     row = env.rows[0]
     assert (row.category, row.action, row.resource_type, row.resource_id) == (
         "deploy",
-        "drift_prune",
+        "code.drift_prune",
         "component",
         "plugins",
     )

@@ -45,6 +45,10 @@ from services.drift_prune import (
 
 _MAX_PATHS = 5000
 
+#: ``AuditAction.CODE_DRIFT_PRUNE`` in autobot-backend/services/audit/taxonomy.py (the SLM
+#: backend cannot import that package; ``rollback_audit.ACTION`` does the same).
+_AUDIT_ACTION = "code.drift_prune"
+
 
 class DriftPrunePreviewRequest(BaseModel):
     """Which component to preview."""
@@ -136,7 +140,7 @@ async def _audit_pending(db: AsyncSession, user: dict, component: str, paths: li
     log = await create_audit_log(
         db,
         category="deploy",
-        action="drift_prune",
+        action=_AUDIT_ACTION,
         user_id=actor,
         username=actor,
         resource_type="component",
