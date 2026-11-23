@@ -1,0 +1,48 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# ONE home for the frontend toolchain setup (#22114): the Node major from the repo-root .nvmrc (#19328), the npm cache,
+# and the dependency install of each named package. Used by ci.yml (frontend-tests, frontend-related-specs) and
+# dispatch-preboard-guards.yml (own-specs); it used to be written inline in each. The caller checks the repository out first.
+name: Set up the frontend toolchain
+description: setup-node on .nvmrc with the npm cache, then install each package's dependencies
+
+inputs:
+  cache-dependency-path:
+    description: Lockfile path(s), one per line, that key the npm cache
+    required: true
+  package-dirs:
+    description: Whitespace-separated package directories to install in; empty installs nothing
+    default: ''
+  allow-install-fallback:
+    description: "'true' runs `npm install` in a package that commits no package-lock.json; otherwise every install is `npm ci`"
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version-file: .nvmrc
+        cache: 'npm'
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    - name: Install frontend dependencies
+      if: inputs.package-dirs != ''
+      shell: bash
+      env:
+        # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so skip the ~100MB CDN download -- a Cypress
+        # CDN 504 must never red out a required check. Local dev `npm ci` is unaffected and still gets it.
+        CYPRESS_INSTALL_BINARY: '0'
+        PACKAGE_DIRS: ${{ inputs.package-dirs }}
+        ALLOW_FALLBACK: ${{ inputs.allow-install-fallback }}
+      run: |
+        for dir in $PACKAGE_DIRS; do
+          echo "::group::install $dir"
+          (
+            cd "$dir" || exit 1
+            if [ "$ALLOW_FALLBACK" = "true" ] && [ ! -f package-lock.json ]; then npm install || exit 1; else npm ci || exit 1; fi
+          ) < /dev/null || { echo "::error::installing the dependencies of $dir failed"; exit 1; }
+          echo "::endgroup::"
+        done

@@ -961,24 +961,22 @@ jobs:
           fi
           echo "apps=${apps# }" >> "$GITHUB_OUTPUT"
 
-      # The frontend test job's setup (frontend-tests above): the Node major from .nvmrc and the npm cache.
-      - name: Setup Node.js
+      # The one frontend setup (.github/actions/setup-frontend, #22114): Node from .nvmrc, the npm cache, `npm ci` per app.
+      - name: Set up the frontend toolchain
         if: steps.files.outputs.apps != ''
-        uses: actions/setup-node@v7
+        uses: ./.github/actions/setup-frontend
         with:
-          node-version-file: .nvmrc
-          cache: 'npm'
+          package-dirs: ${{ steps.files.outputs.apps }}
           cache-dependency-path: |
             autobot-frontend/package-lock.json
             autobot-slm-frontend/package-lock.json
 
-      # Per app: `npm ci` as its own CI job does, then `vitest related --run` on just the changed files. A file no spec
+      # Per app: `vitest related --run` on just the changed files. A file no spec
       # imports selects no spec (`--passWithNoTests`). Every app runs even after one fails, so the run lists every red spec.
       - name: Run the related specs
         if: steps.files.outputs.apps != ''
         env:
           APPS: ${{ steps.files.outputs.apps }}
-          CYPRESS_INSTALL_BINARY: '0'  # #13410: no job runs Cypress
         run: |
           rc=0
           for app in $APPS; do
@@ -986,7 +984,6 @@ jobs:
             echo "::group::${app}: vitest related on ${#FILES[@]} changed file(s)"
             (
               cd "$app" || exit 1
-              npm ci || exit 1
               npx --no-install vitest related --run --passWithNoTests "${FILES[@]}"
             ) < /dev/null || { echo "::error::the specs related to the changed files of ${app} failed"; rc=1; }
             echo "::endgroup::"
@@ -1000,22 +997,11 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v7
+    - name: Set up the frontend toolchain
+      uses: ./.github/actions/setup-frontend
       with:
-        node-version-file: .nvmrc
-        cache: 'npm'
+        package-dirs: autobot-frontend
         cache-dependency-path: autobot-frontend/package-lock.json
-
-    - name: Install frontend dependencies
-      # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so
-      # skip the ~100MB CDN download — a Cypress CDN 504 must never red out a
-      # required check. Local dev `npm ci` is unaffected and still gets it.
-      env:
-        CYPRESS_INSTALL_BINARY: '0'
-      run: |
-        cd autobot-frontend
-        npm ci
 
     - name: Run frontend linting
       run: |

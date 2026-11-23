@@ -47,7 +47,7 @@
 #           package being the directory that holds the config. A spec-looking file inside a package that the package's
 #           own `exclude` skips, or outside every package, is a notice; one inside a package that its `include` does not
 #           match (nothing runs it) is an `::error::` and red. An empty selection is green and installs nothing ("no changed frontend specs"). Otherwise Node is set up and
-#           each package installed as the frontend test job does (setup-node on .nvmrc, `npm ci`, or `npm install` where no lock is
+#           each package installed by the shared setup action (.github/actions/setup-frontend: setup-node on .nvmrc, `npm ci`, or `npm install` where no lock is
 #           committed), and `vitest run` is given just the selected files, with no coverage gate. A failing spec, or a selected
 #           file Vitest collects nothing from, is red. Not covered: the rest of the frontend suite, lint, type-check, build.
 #   added-headers  Every file the head ADDS (or renames or copies into place) in the license-header check's scope must carry the
@@ -361,8 +361,7 @@ jobs:
     timeout-minutes: 30
     env:
       PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
-      # The frontend test job's own settings: no Cypress download (no CI job runs Cypress), room for the compiler.
-      CYPRESS_INSTALL_BINARY: '0'
+      # The frontend test job's own setting: room for the compiler. (No Cypress download: the setup action sets that.)
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - name: Checkout the dispatched branch
@@ -394,20 +393,28 @@ jobs:
           python3 pipeline-scripts/preboard_guard_lane.py changed-specs \
             --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" --out-dir "$RUNNER_TEMP/own-specs" >> "$GITHUB_OUTPUT"
 
-      # The frontend test job's setup (ci.yml frontend-tests): the Node major from .nvmrc and the npm cache. Skipped for an empty selection.
-      - name: Setup Node.js
+      # The packages that hold a selected spec, as one whitespace-separated list for the setup action.
+      - name: List the packages to install
+        id: packages
         if: steps.select.outputs.total != '0'
-        uses: actions/setup-node@v7
+        env:
+          SPECS_DIR: ${{ runner.temp }}/own-specs
+        run: echo "dirs=$(tr '\n' ' ' < "$SPECS_DIR/packages.txt")" >> "$GITHUB_OUTPUT"
+
+      # The one frontend setup (.github/actions/setup-frontend, #22114), as ci.yml frontend-tests uses it: the Node major from
+      # .nvmrc, the npm cache, `npm ci` per package, or `npm install` where no lock is committed. Skipped for an empty selection.
+      - name: Set up the frontend toolchain
+        if: steps.select.outputs.total != '0'
+        uses: ./.github/actions/setup-frontend
         with:
-          node-version-file: .nvmrc
-          cache: 'npm'
+          package-dirs: ${{ steps.packages.outputs.dirs }}
+          allow-install-fallback: 'true'
           cache-dependency-path: |
             autobot-frontend/package-lock.json
             autobot-slm-frontend/package-lock.json
 
-      # Per package: install as its own CI job does (`npm ci` with a committed lock, `npm install` for the kit that has none),
-      # then `vitest run` on just the selected files (relative to the package) from the array: no word-splitting. Every package
-      # runs even after one fails, so the run lists every failing spec; the package list is not left on the installer's stdin.
+      # Per package: `vitest run` on just the selected files (relative to the package) from the array: no word-splitting. Every
+      # package runs even after one fails, so the run lists every failing spec; the package list is not left on the runner's stdin.
       - name: Run the changed specs
         if: steps.select.outputs.total != '0'
         env:
@@ -419,7 +426,6 @@ jobs:
             echo "::group::$pkg: ${#FILES[@]} spec file(s)"
             (
               cd "$pkg" || exit 1
-              if [ -f package-lock.json ]; then npm ci || exit 1; else npm install || exit 1; fi
               npx --no-install vitest run "${FILES[@]}"
             ) < /dev/null || { echo "::error::the changed specs of $pkg failed"; rc=1; }
             echo "::endgroup::"
