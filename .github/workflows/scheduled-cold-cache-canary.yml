@@ -42,6 +42,8 @@ concurrency:
 jobs:
   cold-suite:
     name: python-suite (cold cache)
+    # main only: a manual dispatch may pick another branch, and this canary is about main.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -84,10 +86,10 @@ jobs:
               echo "Packages that differ from the cached venv (\`-\` cached, \`+\` fresh):"
               echo '```diff'
               changes=$({ diff "$cached" "$RUNNER_TEMP/freeze-cold.txt" || true; } | grep '^[<>]' | sed -e 's/^</-/' -e 's/^>/+/' || true)
-              echo "${changes:-(none)}"
+              echo "${changes:-(none)}" | tee "$RUNNER_TEMP/freeze-diff.txt"
               echo '```'
             else
-              echo "No cached venv exists for the current requirements; nothing to diff against."
+              echo "No cached venv exists for the current requirements; nothing to diff against." | tee "$RUNNER_TEMP/freeze-diff.txt"
             fi
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
@@ -98,6 +100,7 @@ jobs:
           path: |
             ${{ runner.temp }}/freeze-cold.txt
             ${{ runner.temp }}/freeze-cached.txt
+            ${{ runner.temp }}/freeze-diff.txt
           if-no-files-found: ignore
 
       # Same promtool provisioning as ci.yml's python-shard, so the cold run collects the same
