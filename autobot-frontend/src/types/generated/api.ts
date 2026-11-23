@@ -62605,11 +62605,6 @@ export interface components {
             text: string;
             /** Reference Audio */
             reference_audio: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -62619,16 +62614,6 @@ export interface components {
             name: string;
             /** Audio */
             audio: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** Body_voice_listen_api_api_voice_listen_post */
-        Body_voice_listen_api_api_voice_listen_post: {
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -62646,11 +62631,6 @@ export interface components {
              * @default
              */
             language: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Stream
              * @default false
@@ -62678,11 +62658,6 @@ export interface components {
              * @default
              */
             language: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Stream
              * @default false
@@ -124844,11 +124819,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_voice_listen_api_api_voice_listen_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -124857,15 +124828,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VoiceListenResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

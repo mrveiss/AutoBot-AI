@@ -4091,7 +4091,8 @@
         "navigateFailed": "Navigation failed",
         "backFailed": "Failed to go back",
         "forwardFailed": "Failed to go forward",
-        "refreshFailed": "Failed to refresh"
+        "refreshFailed": "Failed to refresh",
+        "invalidUrl": "أدخل عنوان ويب كاملاً يبدأ بـ http:// أو https://"
       },
       "fileBrowserTool": {
         "actions": "Actions",
@@ -4202,7 +4203,6 @@
       },
       "voiceTool": {
         "aI": "AI",
-        "aIResponse": "AI Response:",
         "autoListenAfterResponse": "Auto-listen after response",
         "chineseSimplified": "Chinese (Simplified)",
         "clear": "مسح",
@@ -4219,14 +4219,18 @@
         "listening": "جارٍ الاستماع...",
         "listeningClickToStop": "Listening... Click to stop",
         "notListening": "Not listening",
-        "pitchValue0": "Pitch: {value0}",
+        "playbackFailed": "فشل تشغيل الصوت",
         "processing": "جارٍ المعالجة...",
+        "recognitionError": "خطأ في التعرف على الكلام: {error}",
+        "recognitionUnsupported": "التعرف على الكلام غير مدعوم في هذا المتصفح",
         "silent": "Silent",
         "spanish": "Spanish",
         "speakClearlyAndAt": "Speak clearly and at a normal pace",
-        "speakToInteractWith": "Speak to interact with the AI assistant",
+        "speakFailed": "تعذّر نطق النص",
+        "speakToInteractWith": "تحدّث واستمع إلى القراءة بصوت عالٍ",
         "speaking": "جارٍ الكلام...",
         "speechSpeedValue0X": "Speech Speed: {value0}x",
+        "spoken": "تم نطقه:",
         "stopSpeaking": "Stop Speaking",
         "tips": "Tips",
         "tryDifferentLanguagesFor": "Try different languages for multilingual support",

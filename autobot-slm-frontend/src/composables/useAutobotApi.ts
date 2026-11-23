@@ -26,7 +26,7 @@ import {
 
 export { toNPUWorker }
 export type { NPUWorker, NPUWorkerDefinition, NPUWorkerTestResult }
-import type { AuditQueryResponse } from '@autobot/ui'
+import { httpErrorFrom, type AuditQueryResponse } from '@autobot/ui'
 import type * as LF from '@/composables/autobotAdminModels'
 import type { AgentConfigSummary, MCPServer, PermissionRule } from '@/composables/autobotAdminModels'
 export type { AgentConfigSummary, MCPServer, PermissionRule }
@@ -100,13 +100,6 @@ export interface SharedLinksAdminResponse {
   success: boolean
   data: { links: SharedLinkAdminItem[]; count: number }
   message: string
-}
-
-export interface VoiceSpeakResponse {
-  response?: string
-  text?: string
-  status?: string
-  error?: string
 }
 
 // =============================================================================
@@ -968,19 +961,19 @@ export function useAutobotApi() {
     await client.put('/voice/config', config)
   }
 
-  async function voiceListen(userRole: string = 'admin'): Promise<Record<string, unknown>> {
-    const formData = new FormData()
-    formData.append('user_role', userRole)
-    const response = await client.post<Record<string, unknown>>('/voice/listen', formData)
+  // The caller's role comes from the authenticated session; the form carries no role (#22143).
+  async function voiceListen(): Promise<Record<string, unknown>> {
+    const response = await client.post<Record<string, unknown>>('/voice/listen')
     return response
   }
 
-  async function voiceSpeak(text: string, userRole: string = 'admin'): Promise<VoiceSpeakResponse> {
+  /** `POST /voice/speak` answers `audio/wav` (#17779), never JSON, so this returns the audio itself (#17784). */
+  async function voiceSpeak(text: string): Promise<Blob> {
     const formData = new FormData()
     formData.append('text', text)
-    formData.append('user_role', userRole)
-    const response = await client.post<VoiceSpeakResponse>('/voice/speak', formData)
-    return response
+    const response = await client.rawRequest('/voice/speak', { method: 'POST', body: formData })
+    if (!response.ok) throw await httpErrorFrom(response)
+    return response.blob()
   }
 
   // =============================================================================
@@ -1220,22 +1213,16 @@ export function useAutobotApi() {
     return response
   }
 
-  async function browserGoBack(sessionId: string): Promise<Record<string, unknown>> {
-    const response = await client.post<Record<string, unknown>>(`/browser/mcp/navigate`, { url: 'javascript:history.back()' })
-    void sessionId
-    return response
+  async function browserGoBack(): Promise<Record<string, unknown>> {
+    return client.post<Record<string, unknown>>('/playwright/back', {})
   }
 
-  async function browserGoForward(sessionId: string): Promise<Record<string, unknown>> {
-    const response = await client.post<Record<string, unknown>>(`/browser/mcp/navigate`, { url: 'javascript:history.forward()' })
-    void sessionId
-    return response
+  async function browserGoForward(): Promise<Record<string, unknown>> {
+    return client.post<Record<string, unknown>>('/playwright/forward', {})
   }
 
-  async function browserRefresh(sessionId: string): Promise<Record<string, unknown>> {
-    const response = await client.post<Record<string, unknown>>(`/browser/mcp/navigate`, { url: 'javascript:location.reload()' })
-    void sessionId
-    return response
+  async function browserRefresh(): Promise<Record<string, unknown>> {
+    return client.post<Record<string, unknown>>('/playwright/reload', {})
   }
 
   // =============================================================================

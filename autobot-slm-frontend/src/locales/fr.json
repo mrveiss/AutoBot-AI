@@ -4091,7 +4091,8 @@
         "navigateFailed": "Échec de la navigation",
         "backFailed": "Failed to go back",
         "forwardFailed": "Failed to go forward",
-        "refreshFailed": "Failed to refresh"
+        "refreshFailed": "Failed to refresh",
+        "invalidUrl": "Saisissez une adresse web complète commençant par http:// ou https://"
       },
       "fileBrowserTool": {
         "actions": "Actes",
@@ -4202,7 +4203,6 @@
       },
       "voiceTool": {
         "aI": "AI",
-        "aIResponse": "AI Response:",
         "autoListenAfterResponse": "Auto-listen after response",
         "chineseSimplified": "Chinese (Simplified)",
         "clear": "Effacer",
@@ -4219,14 +4219,18 @@
         "listening": "Écoute...",
         "listeningClickToStop": "Listening... Click to stop",
         "notListening": "Not listening",
-        "pitchValue0": "Pitch: {value0}",
+        "playbackFailed": "Échec de la lecture audio",
         "processing": "Processing...",
+        "recognitionError": "Erreur de reconnaissance vocale : {error}",
+        "recognitionUnsupported": "La reconnaissance vocale n'est pas prise en charge par ce navigateur",
         "silent": "Silent",
         "spanish": "Spanish",
         "speakClearlyAndAt": "Speak clearly and at a normal pace",
-        "speakToInteractWith": "Speak to interact with the AI assistant",
+        "speakFailed": "Impossible de prononcer le texte",
+        "speakToInteractWith": "Parlez et écoutez la lecture à voix haute",
         "speaking": "Parlant...",
         "speechSpeedValue0X": "Speech Speed: {value0}x",
+        "spoken": "Prononcé :",
         "stopSpeaking": "Stop Speaking",
         "tips": "Tips",
         "tryDifferentLanguagesFor": "Try different languages for multilingual support",

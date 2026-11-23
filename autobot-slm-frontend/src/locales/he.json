@@ -4091,7 +4091,8 @@
         "navigateFailed": "Navigation failed",
         "backFailed": "Failed to go back",
         "forwardFailed": "Failed to go forward",
-        "refreshFailed": "Failed to refresh"
+        "refreshFailed": "Failed to refresh",
+        "invalidUrl": "הזן כתובת אינטרנט מלאה המתחילה ב-http:// או https://"
       },
       "fileBrowserTool": {
         "actions": "פעולות",
@@ -4202,7 +4203,6 @@
       },
       "voiceTool": {
         "aI": "AI",
-        "aIResponse": "AI Response:",
         "autoListenAfterResponse": "Auto-listen after response",
         "chineseSimplified": "Chinese (Simplified)",
         "clear": "Clear",
@@ -4219,14 +4219,18 @@
         "listening": "Listening...",
         "listeningClickToStop": "Listening... Click to stop",
         "notListening": "Not listening",
-        "pitchValue0": "Pitch: {value0}",
+        "playbackFailed": "ניגון השמע נכשל",
         "processing": "Processing...",
+        "recognitionError": "שגיאת זיהוי דיבור: {error}",
+        "recognitionUnsupported": "זיהוי דיבור אינו נתמך בדפדפן זה",
         "silent": "Silent",
         "spanish": "Spanish",
         "speakClearlyAndAt": "Speak clearly and at a normal pace",
-        "speakToInteractWith": "Speak to interact with the AI assistant",
+        "speakFailed": "לא ניתן היה להקריא את הטקסט",
+        "speakToInteractWith": "דברו ושמעו את ההקראה",
         "speaking": "Speaking...",
         "speechSpeedValue0X": "Speech Speed: {value0}x",
+        "spoken": "הוקרא:",
         "stopSpeaking": "Stop Speaking",
         "tips": "Tips",
         "tryDifferentLanguagesFor": "Try different languages for multilingual support",

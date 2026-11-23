@@ -8,14 +8,18 @@ import { BaseAlert } from '@autobot/ui'
 /**
  * VoiceTool - Voice Interface
  *
- * Voice input/output interface for AI interactions.
+ * Dictation with spoken read-back. What you say is recognised by the browser, then spoken by the
+ * canonical text-to-speech route (`POST /voice/speak`), which answers `audio/wav`; the tool plays
+ * that audio. It does not produce an AI reply, and never read one from that route (#17784).
  * Migrated from main AutoBot frontend - Issue #729.
  */
 
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useAutobotApi } from '@/composables/useAutobotApi'
+import { useI18n } from 'vue-i18n'
+import { autobotApiErrorMessage, useAutobotApi } from '@/composables/useAutobotApi'
 
 const api = useAutobotApi()
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -23,13 +27,12 @@ const error = ref<string | null>(null)
 const isListening = ref(false)
 const isSpeaking = ref(false)
 const transcript = ref('')
-const aiResponse = ref('')
+const spokenText = ref('')
 
 interface VoiceSettings {
   language: string
   voice: string
   speed: number
-  pitch: number
   autoListen: boolean
 }
 
@@ -37,11 +40,9 @@ const settings = ref<VoiceSettings>({
   language: 'en-US',
   voice: 'default',
   speed: 1.0,
-  pitch: 1.0,
   autoListen: false
 })
 
-const availableVoices = ref<string[]>(['default'])
 const conversationHistory = ref<{ role: 'user' | 'assistant'; text: string; timestamp: Date }[]>([])
 
 // Speech Recognition browser API types
@@ -81,7 +82,7 @@ let recognition: SpeechRecognitionInstance | null = null
 
 function initSpeechRecognition(): void {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    error.value = 'Speech recognition is not supported in this browser'
+    error.value = t('tools.admin.voiceTool.recognitionUnsupported')
     return
   }
 
@@ -124,7 +125,7 @@ function initSpeechRecognition(): void {
 
   recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
     isListening.value = false
-    error.value = `Speech recognition error: ${event.error}`
+    error.value = t('tools.admin.voiceTool.recognitionError', { error: event.error })
   }
 }
 
@@ -152,99 +153,79 @@ function toggleListening(): void {
 }
 
 async function processVoiceInput(): Promise<void> {
-  if (!transcript.value.trim()) return
+  const text = transcript.value.trim()
+  if (!text) return
 
-  // Add to history
-  conversationHistory.value.push({
-    role: 'user',
-    text: transcript.value,
-    timestamp: new Date()
-  })
-
+  conversationHistory.value.push({ role: 'user', text, timestamp: new Date() })
   loading.value = true
-
   try {
-    // Send to AI backend - Issue #835
-    const response = await api.voiceSpeak(transcript.value)
-
-    const responseText = typeof response.response === 'string' ? response.response
-      : typeof response.text === 'string' ? response.text
-      : 'No response received'
-    aiResponse.value = responseText
-
-    // Add AI response to history
-    conversationHistory.value.push({
-      role: 'assistant',
-      text: aiResponse.value,
-      timestamp: new Date()
-    })
-
-    // Speak response
-    speakText(aiResponse.value)
+    spokenText.value = text
+    await speakText(text)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to process voice input'
+    error.value = autobotApiErrorMessage(e, t('tools.admin.voiceTool.speakFailed'))
   } finally {
     loading.value = false
   }
 }
 
-function speakText(text: string): void {
-  if (!('speechSynthesis' in window)) {
-    error.value = 'Speech synthesis is not supported in this browser'
-    return
+let player: HTMLAudioElement | null = null
+let playerUrl: string | null = null
+
+function releasePlayer(): void {
+  player?.pause()
+  player = null
+  if (playerUrl) {
+    URL.revokeObjectURL(playerUrl)
+    playerUrl = null
   }
+}
 
-  const utterance = new SpeechSynthesisUtterance(text)
-  utterance.lang = settings.value.language
-  utterance.rate = settings.value.speed
-  utterance.pitch = settings.value.pitch
+function finishPlayback(): void {
+  isSpeaking.value = false
+  releasePlayer()
+  if (settings.value.autoListen) {
+    startListening()
+  }
+}
 
-  utterance.onstart = () => {
+/** Fetch the synthesized `audio/wav` for *text* and play it; resolves once playback has started. */
+async function speakText(text: string): Promise<void> {
+  const audio = await api.voiceSpeak(text)
+  releasePlayer()
+  playerUrl = URL.createObjectURL(audio)
+  player = new Audio(playerUrl)
+  player.playbackRate = settings.value.speed
+  player.onplay = () => {
     isSpeaking.value = true
   }
-
-  utterance.onend = () => {
+  player.onended = finishPlayback
+  player.onerror = () => {
     isSpeaking.value = false
-    if (settings.value.autoListen) {
-      startListening()
-    }
+    error.value = t('tools.admin.voiceTool.playbackFailed')
   }
-
-  utterance.onerror = () => {
-    isSpeaking.value = false
-    error.value = 'Speech synthesis failed'
-  }
-
-  speechSynthesis.speak(utterance)
+  await player.play()
 }
 
 function stopSpeaking(): void {
-  speechSynthesis.cancel()
+  releasePlayer()
   isSpeaking.value = false
 }
 
 function clearHistory(): void {
   conversationHistory.value = []
   transcript.value = ''
-  aiResponse.value = ''
-}
-
-function loadVoices(): void {
-  const voices = speechSynthesis.getVoices()
-  availableVoices.value = voices.map(v => v.name)
+  spokenText.value = ''
 }
 
 onMounted(() => {
   initSpeechRecognition()
-  loadVoices()
-  speechSynthesis.onvoiceschanged = loadVoices
 })
 
 onUnmounted(() => {
   if (recognition) {
     recognition.abort()
   }
-  speechSynthesis.cancel()
+  releasePlayer()
 })
 </script>
 
@@ -325,9 +306,9 @@ onUnmounted(() => {
           </div>
 
           <!-- AI Response -->
-          <div v-if="aiResponse" class="mt-4 p-4 bg-autobot-bg-secondary rounded-lg max-w-lg w-full">
+          <div v-if="spokenText" class="mt-4 p-4 bg-autobot-bg-secondary rounded-lg max-w-lg w-full">
             <div class="flex items-center justify-between mb-1">
-              <p class="text-sm text-primary-600">{{ $t('tools.admin.voiceTool.aIResponse') }}</p>
+              <p class="text-sm text-primary-600">{{ $t('tools.admin.voiceTool.spoken') }}</p>
               <button
                 v-if="isSpeaking"
                 @click="stopSpeaking"
@@ -336,7 +317,7 @@ onUnmounted(() => {
                 {{ $t('tools.admin.voiceTool.stopSpeaking') }}
               </button>
             </div>
-            <p class="text-autobot-text-primary">{{ aiResponse }}</p>
+            <p class="text-autobot-text-primary">{{ spokenText }}</p>
           </div>
 
           <!-- Loading -->
@@ -407,19 +388,6 @@ onUnmounted(() => {
             <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.voiceTool.speechSpeedValue0X', { value0: settings.speed.toFixed(1) }) }}</label>
             <input
               v-model.number="settings.speed"
-              type="range"
-              min="0.5"
-              max="2"
-              step="0.1"
-              class="w-full"
-            />
-          </div>
-
-          <!-- Pitch -->
-          <div>
-            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.voiceTool.pitchValue0', { value0: settings.pitch.toFixed(1) }) }}</label>
-            <input
-              v-model.number="settings.pitch"
               type="range"
               min="0.5"
               max="2"

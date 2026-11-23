@@ -4091,7 +4091,8 @@
         "navigateFailed": "Die Navigation ist fehlgeschlagen",
         "backFailed": "Failed to go back",
         "forwardFailed": "Failed to go forward",
-        "refreshFailed": "Failed to refresh"
+        "refreshFailed": "Failed to refresh",
+        "invalidUrl": "Geben Sie eine vollständige Webadresse ein, die mit http:// oder https:// beginnt"
       },
       "fileBrowserTool": {
         "actions": "Aktionen",
@@ -4202,7 +4203,6 @@
       },
       "voiceTool": {
         "aI": "AI",
-        "aIResponse": "AI Response:",
         "autoListenAfterResponse": "Auto-listen after response",
         "chineseSimplified": "Chinese (Simplified)",
         "clear": "Clear",
@@ -4219,14 +4219,18 @@
         "listening": "Hören...",
         "listeningClickToStop": "Listening... Click to stop",
         "notListening": "Not listening",
-        "pitchValue0": "Pitch: {value0}",
+        "playbackFailed": "Audiowiedergabe fehlgeschlagen",
         "processing": "Processing...",
+        "recognitionError": "Spracherkennungsfehler: {error}",
+        "recognitionUnsupported": "Spracherkennung wird in diesem Browser nicht unterstützt",
         "silent": "Silent",
         "spanish": "Spanish",
         "speakClearlyAndAt": "Speak clearly and at a normal pace",
-        "speakToInteractWith": "Speak to interact with the AI assistant",
+        "speakFailed": "Der Text konnte nicht gesprochen werden",
+        "speakToInteractWith": "Sprechen Sie und hören Sie es vorgelesen",
         "speaking": "Apropos...",
         "speechSpeedValue0X": "Speech Speed: {value0}x",
+        "spoken": "Gesprochen:",
         "stopSpeaking": "Stop Speaking",
         "tips": "Tips",
         "tryDifferentLanguagesFor": "Try different languages for multilingual support",

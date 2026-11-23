@@ -41,7 +41,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
-from constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants, ServiceURLs
 from research_browser_manager import get_research_browser_manager
 from services.playwright_service import (
     get_playwright_service,
@@ -57,7 +57,7 @@ logger = get_logger(__name__)
 
 
 # Browser VM connection
-BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+BROWSER_VM_URL = ServiceURLs.BROWSER_SERVICE
 
 
 @router.get("/status", response_model=PlaywrightStatusResponse)

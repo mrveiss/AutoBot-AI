@@ -4091,7 +4091,8 @@
         "navigateFailed": "Navigācija neizdevās",
         "backFailed": "Failed to go back",
         "forwardFailed": "Failed to go forward",
-        "refreshFailed": "Failed to refresh"
+        "refreshFailed": "Failed to refresh",
+        "invalidUrl": "Ievadiet pilnu tīmekļa adresi, kas sākas ar http:// vai https://"
       },
       "fileBrowserTool": {
         "actions": "Darbības",
@@ -4202,7 +4203,6 @@
       },
       "voiceTool": {
         "aI": "AI",
-        "aIResponse": "AI Response:",
         "autoListenAfterResponse": "Auto-listen after response",
         "chineseSimplified": "Chinese (Simplified)",
         "clear": "Clear",
@@ -4219,14 +4219,18 @@
         "listening": "Klausos...",
         "listeningClickToStop": "Listening... Click to stop",
         "notListening": "Not listening",
-        "pitchValue0": "Pitch: {value0}",
+        "playbackFailed": "Audio atskaņošana neizdevās",
         "processing": "Processing...",
+        "recognitionError": "Runas atpazīšanas kļūda: {error}",
+        "recognitionUnsupported": "Šī pārlūkprogramma neatbalsta runas atpazīšanu",
         "silent": "Silent",
         "spanish": "Spanish",
         "speakClearlyAndAt": "Speak clearly and at a normal pace",
-        "speakToInteractWith": "Speak to interact with the AI assistant",
+        "speakFailed": "Neizdevās izrunāt tekstu",
+        "speakToInteractWith": "Runājiet un klausieties priekšlasījumu",
         "speaking": "Runā...",
         "speechSpeedValue0X": "Speech Speed: {value0}x",
+        "spoken": "Izrunāts:",
         "stopSpeaking": "Stop Speaking",
         "tips": "Tips",
         "tryDifferentLanguagesFor": "Try different languages for multilingual support",
