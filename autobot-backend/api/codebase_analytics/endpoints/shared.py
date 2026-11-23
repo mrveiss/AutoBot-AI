@@ -217,7 +217,7 @@ async def trigger_auto_index_if_unindexed(source_id: "str | None") -> None:
 _NO_OWNER_ID = "\x00::codebase-analytics::no-owner::"
 
 
-def _caller_owner_id(user: "dict | None") -> "str | None":
+def caller_owner_id(user: "dict | None") -> "str | None":
     """Derive the caller's ownership identity from an auth user dict (#12358).
 
     Mirrors how ``owner_id`` is written when a source is created (see
@@ -270,7 +270,7 @@ async def authorize_source_access(source_id: "str | None", user: "dict | None") 
         # A fault is not "no such source": answering 404 here told the caller the
         # id was unknown when the registry could not be read (#17982).
         raise _registry_unavailable_503() from None
-    if source is None or not _is_visible(source, _caller_owner_id(user)):
+    if source is None or not _is_visible(source, caller_owner_id(user)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Code source not found",

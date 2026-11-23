@@ -65,6 +65,8 @@ DECLARED_SCOPES = {
     ),
     "llc-exception-text-sweep-files-21579": ("autobot-backend/llc",),
     "slm-users-db-scan": ("autobot-slm-backend",),
+    "slm-manager-no-literal-tls-port-19832": ("autobot-slm-backend/ansible/roles/slm_manager",),
+    "slm-backend-unit-renderers-19832": ("autobot-slm-backend/ansible",),
     "test-name-predicate-single-home-21078": (
         "autobot-backend",
         "autobot-infrastructure",

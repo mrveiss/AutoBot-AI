@@ -23232,7 +23232,7 @@ export interface paths {
          *     Issue #12377: captures owner_id from the caller so HTTP-created sources
          *     are privately scoped like the LLC-created ones (source_service's
          *     create_github_source(owner_id=...), api/llc/sprints.py::attach_project_repo).
-         *     Uses the same caller-identity derivation (_caller_owner_id) that #12375's
+         *     Uses the same caller-identity derivation (caller_owner_id) that #12375's
          *     require_source_access dependency authorizes reads against, so create and
          *     read agree on what "owned by the caller" means.
          */

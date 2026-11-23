@@ -526,7 +526,15 @@
       "webSource": "Web Source",
       "knowledgeBase": "Knowledge Base",
       "modelOnly": "Model only",
-      "modelOnlyTooltip": "This claim is based on model training data only — no sources were retrieved"
+      "modelOnlyTooltip": "This claim is based on model training data only — no sources were retrieved",
+      "tool": "Tool:",
+      "arguments": "Arguments:",
+      "host": "Host:",
+      "exitCode": "Exit code:",
+      "resultLinks": "Result links:",
+      "checkPartial": "The check of quoted values was partial: some tool output was too long to read in full or is no longer available.",
+      "unprovenTitle": "Not found in this turn's tool results:",
+      "unprovenHint": "These exact values appear in no tool result of this turn. They may be reformatted or computed, so this is not a verdict that they are wrong."
     },
     "tabContent": {
       "openInNewWindow": "Open in new window",
