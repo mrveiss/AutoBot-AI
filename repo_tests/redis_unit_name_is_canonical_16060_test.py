@@ -31,8 +31,8 @@ from __future__ import annotations
 import re
 
 from repo_tests._paths import repo_root
+from repo_tests._registry_role_units import registry_role_units
 
-from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 
 _SLM = repo_root() / "autobot-slm-backend"
@@ -47,26 +47,15 @@ _ABSENT = ("redis-server", "redis")
 
 
 def _registry_unit() -> str | None:
-    """The redis role's `systemd_service`, parsed from the registry source.
+    """The redis role's unit, as DEFAULT_ROLES holds it: from the manifest that tags the role (#16025).
 
     Parsed rather than imported: `role_registry.py` imports `models.database`,
-    which needs the package and its dependencies. What is being pinned is the
-    declaration, and the declaration is what every caller resolves against.
+    which needs the package and its dependencies. The registry no longer
+    restates the unit; the declaration every caller resolves against is the
+    manifest service whose `slm_roles` names `redis`.
     """
-    import ast
-
-    tree = parse_cache.parse((_SLM / "services" / "role_registry.py").read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Dict):
-            continue
-        entry = {
-            k.value: v.value
-            for k, v in zip(node.keys, node.values)
-            if isinstance(k, ast.Constant) and isinstance(v, ast.Constant)
-        }
-        if entry.get("name") == "redis" and "systemd_service" in entry:
-            return entry["systemd_service"]
-    return None
+    units = registry_role_units(repo_root()).get("redis")
+    return units[0] if units else None
 
 
 def test_the_registry_names_the_stack_unit():
