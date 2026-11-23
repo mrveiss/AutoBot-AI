@@ -27,8 +27,8 @@ _OTHER_ORG = "99999999-9999-9999-9999-999999999999"
 def _make_client(caller_org_id: str) -> TestClient:
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
     from llc.api.activity import router as activity_router  # noqa: PLC0415
+    from llc.deps import get_session  # noqa: PLC0415
     from llc.services.activity_log import ActivityLogPage  # noqa: PLC0415
-    from user_management.database import get_async_session  # noqa: PLC0415
 
     app = FastAPI()
     app.include_router(activity_router, prefix="/api/llc")
@@ -36,7 +36,7 @@ def _make_client(caller_org_id: str) -> TestClient:
     async def _fake_session():
         yield AsyncMock()
 
-    app.dependency_overrides[get_async_session] = _fake_session
+    app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(_FIXED_USER_ID)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=uuid.UUID(caller_org_id), user_id=_FIXED_USER_ID, is_platform_admin=False

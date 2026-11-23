@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict
 
+from autobot_shared.http_refusal import refusal_text
 from autobot_shared.status_enums import Severity
 
 
@@ -223,15 +224,14 @@ class APIErrorResponse:
         table and column names. The diagnostic detail is logged server-side
         against the response's ``trace_id`` instead, so nothing is lost to
         whoever is allowed to see it.
+
+        A 4xx category answers with the one refusal wording for its status (``http_refusal.REFUSAL_TEXT``,
+        #21943), so a refusal reads the same whether a route raised it or the boundary built it.
         """
+        status_code = APIErrorResponse.get_status_code_for_category(category)
+        if status_code < 500:
+            return refusal_text(status_code)
         message_map = {
-            ErrorCategory.VALIDATION: "The request was not valid.",
-            ErrorCategory.USER_INPUT: "The request was not valid.",
-            ErrorCategory.AUTHENTICATION: "Authentication is required.",
-            ErrorCategory.AUTHORIZATION: "You do not have access to this resource.",
-            ErrorCategory.NOT_FOUND: "The requested resource was not found.",
-            ErrorCategory.CONFLICT: "The request conflicts with the current state.",
-            ErrorCategory.RATE_LIMIT: "Too many requests — try again later.",
             ErrorCategory.EXTERNAL_SERVICE: "An upstream service failed.",
             ErrorCategory.SERVICE_UNAVAILABLE: "The service is temporarily unavailable.",
             ErrorCategory.NETWORK: "The service is temporarily unavailable.",

@@ -407,7 +407,6 @@ LEGACY = "/api/llc/workflows"
 def _legacy_client(maker, company, user) -> httpx.AsyncClient:
     from api.user_management.dependencies import get_current_user as gcu
     from llc.api.workflows import router as legacy_router
-    from user_management.database import get_async_session
 
     app = FastAPI()
     app.include_router(legacy_router, prefix="/api/llc")
@@ -416,7 +415,7 @@ def _legacy_client(maker, company, user) -> httpx.AsyncClient:
         async with maker() as s:
             yield s
 
-    app.dependency_overrides[get_async_session] = _session
+    app.dependency_overrides[get_session] = _session
     app.dependency_overrides[gcu] = lambda: {"id": str(user)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=company, user_id=user, is_platform_admin=False

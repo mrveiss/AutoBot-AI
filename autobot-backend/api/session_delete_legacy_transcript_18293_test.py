@@ -135,6 +135,7 @@ class _World:
             method="POST",
             client=None,
             headers={},
+            query_params={},
             url=SimpleNamespace(path="/api/chat/sessions/x"),
             scope={"route": SimpleNamespace(path="/api/chat/sessions/{session_id}")},
         )

@@ -8,8 +8,8 @@
   filters, search). The kit ships no text: the title and subtitle come in translated.
     props : title, subtitle, level (heading level, 1-6; default 1),
             size (title size: sm | md | lg | xl; default lg; the level stays semantic)
-    slots : breadcrumb, leading, title (rich title content), subtitle, actions,
-            default (the toolbar row under the title)
+    slots : breadcrumb, leading, eyebrow (a short line ABOVE the title), title (rich title content),
+            subtitle, actions, default (the toolbar row under the title)
   A surface that needs its own chrome (the terminal window) sets these on the root rather than
   overriding the rules: --aui-page-header-bg, --aui-page-header-border, --aui-page-header-py,
   --aui-page-header-px, --aui-page-header-title-color.
@@ -44,6 +44,7 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
       <div class="aui-page-header__start">
         <slot name="leading" />
         <div v-if="hasTitle()" class="aui-page-header__text">
+          <p v-if="$slots.eyebrow" class="aui-page-header__eyebrow"><slot name="eyebrow" /></p>
           <component :is="heading" class="aui-page-header__title" :class="`aui-page-header__title--${size}`">
             <span class="aui-page-header__title-text"><slot name="title">{{ title }}</slot></span>
           </component>
@@ -124,6 +125,11 @@ const hasSubtitle = () => !!(props.subtitle || slots.subtitle)
   font-size: var(--aui-text-xl);
 }
 
+.aui-page-header__eyebrow {
+  margin: 0 0 var(--aui-space-1);
+  color: var(--aui-color-text-muted);
+  font-size: var(--aui-text-sm);
+}
 .aui-page-header__subtitle {
   margin: 0;
   color: var(--aui-color-text-muted);

@@ -33,9 +33,11 @@ async def attachments_allowed(chat_id: str, current_user: dict | None, request) 
     admin, no ``log_only`` pass. Any refusal or failure to learn the owner is False; a session the posture would
     merely claim (``legacy_unowned``) has no files of the caller's to attach.
     """
+    from security.session_company import enforce_session_company
     from security.session_posture import validate_strict
 
     try:
+        await enforce_session_company(chat_id, request, current_user)  # #21997: another company's chat reads nothing
         decision = await validate_strict(chat_id, current_user or {}, request)
     except HTTPException as exc:
         logger.info("Attachments not read for chat %s...: strict posture refused (%s)", chat_id[:8], exc.status_code)

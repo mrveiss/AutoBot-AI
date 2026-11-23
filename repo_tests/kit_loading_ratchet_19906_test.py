@@ -31,18 +31,18 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_file_present, base_table, raised_known_entries
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import strip_html_and_block_comments
+
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins")
 _SKIPPED = re.compile(r"(/node_modules/|/dist/|\.test\.|\.spec\.|\.stories\.|/__tests__/)")
 _KEYFRAMES = re.compile(r"@keyframes\s+spin(?![\w-])")
 _UTILITY = re.compile(r"\b(?:animate-spin|fa-spin)(?![\w-])")
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
-_BLOCK_COMMENT = re.compile(r"/\*.*?\*/|<!--.*?-->", re.S)
 
 
 def _code_only(text: str) -> str:
     """*text* with block comments blanked (newlines kept) and comment lines dropped."""
-    blanked = _BLOCK_COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
-    return _COMMENT_LINE.sub("", blanked)
+    return _COMMENT_LINE.sub("", strip_html_and_block_comments(text))
 
 
 # 30 and 321 measured on bb5f0299e0; 15 and 317 after the first batch.
@@ -107,6 +107,12 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         self._w(tmp_path, "A.vue", '/*\n@keyframes spin {\n}\n  animate-spin\n*/\n<!--\n<i class="fa-spin"></i>\n-->\n')
         self._w(tmp_path, "b.css", "/* @keyframes spin */\n")
         assert counts(tmp_path) == (0, 0)
+
+    def test_a_live_declaration_between_two_css_comments_that_hold_html_delimiters_is_counted(
+        self, tmp_path: Path
+    ) -> None:
+        self._w(tmp_path, "b.css", "/* <!-- */\n@keyframes spin {}\n/* --> */\n")
+        assert counts(tmp_path) == (1, 0)
 
     def test_the_pin_check_fails_on_a_planted_copy(self, tmp_path: Path) -> None:
         self._w(tmp_path, "A.vue", '<style>@keyframes spin { }</style>\n<i class="fa-spin"></i>\n')

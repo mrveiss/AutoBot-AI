@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { HttpError } from '@autobot/ui'
-import { toSessionDate, type ChatListEntry } from './sessionDates'
+import { toSessionDate, withUnassigned, type BackendSessionList, type ChatListEntry } from './sessionDates'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'
 import { storedMessageText } from '@/utils/attachmentNotice'
+import { toSource, type StoredSource } from '@/utils/messageCitations'
 import type { ApiResponse } from '@/types/models'
 import type { ChatMessage } from '@/types/api'
 
@@ -122,13 +123,8 @@ interface BackendSessionEntry {
   lastModified?: string
 }
 
-/** RAG source entry persisted at the top level of a backend message (Issue #4448). */
-interface BackendRagSource {
-  title?: string
-  path?: string
-  score?: number
-  chunk_id?: string
-}
+/** RAG or tool-step source persisted at the top level of a backend message (#4448, #21976). */
+type BackendRagSource = StoredSource
 
 /** Minimal message shape returned by the backend get-session endpoint */
 interface BackendMessageEntry {
@@ -328,24 +324,24 @@ export class ChatRepository {
   // Get list of all chat sessions (for compatibility with controller)
   async getChatList(): Promise<ChatListEntry[]> {
     try {
-      const response = await this.get<{
-        sessions?: BackendSessionEntry[]
-        data?: { sessions?: BackendSessionEntry[] }
+      const response = await this.get<BackendSessionList<BackendSessionEntry> & {
+        data?: BackendSessionList<BackendSessionEntry>
       }>(`${getApiBase()}/chat/sessions`)
-      // API response may be { sessions: [...] } or { data: { sessions: [...] } }
-      const sessions = response.data?.data?.sessions || response.data?.sessions || []
+      const body = response.data?.data ?? response.data // the list is { sessions } or { data: { sessions } }
+      const sessions = withUnassigned(body?.sessions || [], body?.unassigned || [])
 
       // Transform backend session format to frontend store format.
       // NOTE: the mapped objects use the store's camelCase/Date shape
       // (createdAt/updatedAt/isActive) rather than the declared `ChatSession`
       // wire type — masked while axios typed `.data` as `any` (#12363 Phase 2).
-      return sessions.map((session: BackendSessionEntry) => ({
+      return sessions.map((session) => ({
         id: session.id || session.chatId,
         title: session.title || session.name || `Chat ${session.id?.slice(0, 8)}`,
         messages: [], // Sessions list doesn't include messages - loaded separately
         createdAt: toSessionDate(session.createdAt, session.createdTime),
         updatedAt: toSessionDate(session.updatedAt, session.lastModified),
-        isActive: false // Will be set by store when session is selected
+        isActive: false, // Will be set by store when session is selected
+        unassigned: session.unassigned
       })) as unknown as ChatListEntry[]
     } catch (error: unknown) {
       logger.error('Failed to get chat list:', error)
@@ -394,16 +390,8 @@ export class ChatRepository {
           // CRITICAL FIX: Backend saves approval metadata in rawData, not metadata
           // Check both rawData (old format) and metadata (new format) for backward compatibility
           metadata: msg.metadata || msg.rawData || {},
-          // Issue #4448: Map top-level sources for RAG citation display.
-          // Normalise to RagSource shape; treat missing array as empty.
-          sources: Array.isArray(msg.sources)
-            ? msg.sources.map((s) => ({
-                title: s.title ?? s.path ?? '',
-                path: s.path ?? '',
-                score: typeof s.score === 'number' ? s.score : 0,
-                chunk_id: s.chunk_id ?? '',
-              }))
-            : []
+          // #4448, #21976: one reading of stored sources (unified entries and legacy knowledge-base ones)
+          sources: Array.isArray(msg.sources) ? msg.sources.map((s) => toSource(s)) : []
         }
         logger.debug(`Message ${index + 1}: sender=${msg.sender} -> ${transformed.sender}, type=${rawType} -> ${normalizedType}, content length=${transformed.content.length}`)
         return transformed

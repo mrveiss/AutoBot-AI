@@ -383,3 +383,74 @@ async def test_an_owned_session_with_no_messages_still_exists_and_is_not_taken_o
 
     _assert_saved_under_a_fresh_id(manager, result)
     manager.set_session_owner.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_new_import_carries_the_active_company(monkeypatch) -> None:
+    """#21997: an imported chat is a new chat, so it is stamped with the active company like any other."""
+    manager = _manager()
+
+    result = await import_conversation(
+        manager, dict(_DOCUMENT), user_data=_ALICE, company_metadata={"company_id": "co-1"}
+    )
+
+    assert result["success"] is True
+    metadata = manager.save_session.call_args.kwargs["metadata"]
+    assert metadata["company_id"] == "co-1" and metadata["owner"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_an_import_with_no_active_company_stays_unassigned() -> None:
+    manager = _manager()
+
+    await import_conversation(manager, dict(_DOCUMENT), user_data=_ALICE)
+
+    assert "company_id" not in manager.save_session.call_args.kwargs["metadata"]
+
+
+@pytest.mark.asyncio
+async def test_replacing_ones_own_chat_does_not_re_tag_it() -> None:
+    manager = _manager(exists=True, owner="alice")
+    manager.get_session_company = AsyncMock(return_value="co-1")
+
+    await import_conversation(
+        manager,
+        dict(_DOCUMENT),
+        on_conflict="replace",
+        user_data=_ALICE,
+        company_metadata={"company_id": "co-1"},
+    )
+
+    assert "company_id" not in manager.save_session.call_args.kwargs["metadata"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("on_conflict", ["replace", "rename", "skip"])
+async def test_an_import_onto_ones_own_chat_of_another_company_is_refused(on_conflict) -> None:
+    """#21997: the owned existing id resolves, and the company check refuses before anything is written."""
+    manager = _manager(exists=True, owner="alice")
+    manager.get_session_company = AsyncMock(return_value="co-b")
+
+    with pytest.raises(HTTPException) as refused:
+        await import_conversation(
+            manager,
+            dict(_DOCUMENT),
+            on_conflict=on_conflict,
+            user_data=_ALICE,
+            company_metadata={"company_id": "co-a"},
+        )
+
+    assert (refused.value.status_code, refused.value.detail) == (403, "Forbidden")
+    manager.save_session.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_import_onto_ones_own_chat_of_the_active_company_replaces_it() -> None:
+    manager = _manager(exists=True, owner="alice")
+    manager.get_session_company = AsyncMock(return_value="co-a")
+
+    result = await import_conversation(
+        manager, dict(_DOCUMENT), on_conflict="replace", user_data=_ALICE, company_metadata={"company_id": "co-a"}
+    )
+
+    assert result["success"] is True

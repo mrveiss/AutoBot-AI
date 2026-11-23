@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.http_refusal import http_refusal
-from user_management.database import get_async_session
+from llc.deps import SESSION_DEP
 from user_management.services import TenantContext
 
 from ..kb.context_builder import HeartbeatContextBuilder
@@ -26,7 +26,7 @@ from ..kb.rag_assembler import LLCRAGAssembler
 from ..services.accessors import get_work_item_service
 from ..services.company_os.errors import CompanyOsError, CompanyOsNotFound
 from ..services.goal import GoalService
-from ._common import parse_work_item_id
+from ._common import parse_work_item_id, require_context_item_id
 
 router = APIRouter(tags=["llc-context"])
 
@@ -40,11 +40,11 @@ def _get_context_services() -> Dict[str, Any]:
     }
 
 
-@router.get("/context/{item_id}")
+@router.get("/context/{item_id}", dependencies=[Depends(require_context_item_id)])
 async def get_context(
     item_id: str,
     mode: str = "fat",
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:

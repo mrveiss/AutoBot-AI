@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Which assistant entries a turn persists, and which model each carries (#21880, #21881).
 
-The rule for "the same answer" (#21880). Both texts are normalised first: Unicode-folded
+The rule for "the same answer" (#21880). Both texts are normalised first: tool calls removed, Unicode-folded
 to lower case, markdown and punctuation reduced to word separators, whitespace collapsed.
 Then a model's narration is redundant when, after normalisation, it
 
@@ -15,6 +15,12 @@ Then a model's narration is redundant when, after normalisation, it
 Narration that says something the ``respond`` text does not is kept. Narration that
 CONTAINS the ``respond`` text plus more (a lead-in, a trailing line) is kept too: it is
 the superset, and dropping it would lose words. That case is an owner ruling (#21880).
+
+The structural rule (#21880): stored prose never contains a tool call. A parsed ``respond`` call is the answer's
+own bubble (the ``respond_tool`` entry); left in the narration it made the narration look different from the answer
+and both were stored. So every complete call is removed from an iteration's prose before it is split or judged
+(``clean_reply_text`` keeps parsed calls on purpose; other callers rely on that, so this is a sibling used here
+only), a thought left unclosed before its call ends at the call, and a call-only iteration stores no prose entry.
 
 Every assistant entry carries the model that produced it (#21881): the model of the
 streamed chunk of its own iteration, else the turn's selected model, else ``unknown``.
@@ -27,8 +33,8 @@ import uuid
 from typing import Any, Callable, Dict, Iterable, List
 
 from autobot_shared.text_tokens import word_token_list
-from chat_workflow.thought_markers import split_reasoning_blocks
-from chat_workflow.tool_call_args import clean_reply_text
+from chat_workflow.thought_markers import TOOL_CALL_MARK, split_reasoning_blocks
+from chat_workflow.tool_call_args import clean_reply_text, mark_tool_calls
 
 UNKNOWN_MODEL = "unknown"
 RESPOND_TOOL_TYPE = "respond_tool"
@@ -36,9 +42,18 @@ RESPOND_TOOL_TYPE = "respond_tool"
 COMPLETED_KEY = "completed"
 
 
+def _unmarked(text: str) -> str:
+    return text.replace(TOOL_CALL_MARK, "").strip()
+
+
+def reply_prose_text(text: str | None) -> str:
+    """*text* as stored prose: cleaned, and with no tool call in it (#21880)."""
+    return _unmarked(mark_tool_calls(clean_reply_text(text or ""), TOOL_CALL_MARK))
+
+
 def normalize_reply(text: str | None) -> str:
     """*text* folded for comparison: no markdown, no punctuation, no case, single spaces."""
-    return " ".join(word_token_list(unicodedata.normalize("NFKC", text or "")))
+    return " ".join(word_token_list(unicodedata.normalize("NFKC", reply_prose_text(text))))
 
 
 def contains_token_run(needle: str, haystack: str) -> bool:
@@ -132,10 +147,14 @@ def iteration_reply_entries(
     Each thought/planning block is stored typed as it is live; the answer is *text* without them, built by
     *build_final* and judged for redundancy against *judged_against*.
     """
-    blocks, answer = split_reasoning_blocks(clean_reply_text(text or ""))
+    blocks, answer = split_reasoning_blocks(mark_tool_calls(clean_reply_text(text or ""), TOOL_CALL_MARK))
+    answer = _unmarked(answer)
     seen: Dict[tuple, int] = {}
     entries = []
     for kind, body in blocks:
+        body = _unmarked(body)
+        if not body:
+            continue
         occurrence = seen[(kind, body)] = seen.get((kind, body), -1) + 1
         meta = {"message_type": kind, "iteration": iteration, "model": model_or_unknown(model), COMPLETED_KEY: True}
         entries.append(
@@ -169,7 +188,7 @@ def build_final_response_entry(
     None for an empty reply, or prose that repeats an assistant entry already in *batch* (#21880). The entry keeps
     the streamed id and time (#21846), carries *model* (#21881) and ``completed`` (#21904).
     """
-    content = clean_reply_text(llm_response or "")
+    content = reply_prose_text(llm_response)
     if not content or is_redundant_prose(content, batch):
         return None
     return chat_mgr._build_message_dict(

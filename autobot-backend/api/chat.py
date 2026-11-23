@@ -325,7 +325,7 @@ logger.info(
 
 # Include session management router
 from api.chat_sessions import delete_session as _canonical_delete_session
-from api.chat_sessions import list_user_sessions, log_request_context
+from api.chat_sessions import list_user_sessions, log_request_context, resolve_company_scope
 from api.chat_sessions import router as sessions_router
 
 router.include_router(sessions_router)
@@ -370,7 +370,7 @@ def _validate_session_id(session_id: str | None) -> None:
         raise ValidationError("session_id is required (AUTOBOT_CHAT_SSOT_STRICT)")
 
     if session_id and not validate_chat_session_id(session_id):
-        raise ValidationError("Invalid session ID format")
+        raise ValidationError("Invalid session ID format", client_message="Invalid session ID format")
 
 
 def _to_persisted_message(api_data: Dict[str, Any], default_type: str) -> Dict[str, Any]:
@@ -974,8 +974,8 @@ async def list_chats(
             details={"component": "chat_history_manager"},
         )
 
-    # #21664: the caller's own sessions through the one shared listing, never the instance-wide list
-    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"))
+    company = await resolve_company_scope(request, current_user)  # #21664 own sessions only; #21997 active company
+    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"), company)
     return create_chat_response(
         data=sessions,
         message="Chat sessions retrieved successfully",
@@ -1014,7 +1014,7 @@ async def send_message(
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Message content cannot be empty")
+        raise ValidationError("Message content cannot be empty", client_message="Message content cannot be empty")
 
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
@@ -1427,7 +1427,7 @@ def _validate_chat_message(request_data: dict) -> str:
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Message content is required")
+        raise ValidationError("Message content is required", client_message="Message content is required")
     return message
 
 

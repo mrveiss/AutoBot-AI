@@ -29,7 +29,6 @@ from llc.models.membership import LLCCompanyMembership
 # Registers the SQLite compile shims for postgresql.JSONB / postgresql.UUID.
 from llc.tests import _e2e_harness as harness
 from models.workflow import Workflow
-from user_management.database import get_async_session
 from user_management.models.base import Base
 from user_management.models.role import Role
 from user_management.services import TenantContext
@@ -82,7 +81,6 @@ def _client(maker, org: uuid.UUID, user: uuid.UUID, platform: bool = False) -> h
             yield s
 
     app.dependency_overrides[get_session] = _session
-    app.dependency_overrides[get_async_session] = _session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(user)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=org, user_id=user, is_platform_admin=platform
