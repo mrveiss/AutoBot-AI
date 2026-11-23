@@ -57,3 +57,14 @@ def test_unset_keeps_default(tmp_path):
     got = _load_settings(tmp_path, {})
     assert "127.0.0.1" in got["trusted_proxies"] and "::1" in got["trusted_proxies"]
     assert isinstance(got["cors_origins"], list) and got["cors_origins"]
+
+
+@pytest.mark.parametrize("env,field", FIELDS)
+def test_blank_env_keeps_the_default_not_an_empty_list(tmp_path, env, field):
+    default = _load_settings(tmp_path, {})[field]
+    assert _load_settings(tmp_path, {env: "  "})[field] == default != []
+
+
+def test_bracketed_ipv6_is_split_as_csv_not_refused(tmp_path):
+    got = _load_settings(tmp_path, {"SLM_TRUSTED_PROXIES": "[::1],198.51.100.5"})
+    assert got["trusted_proxies"] == ["[::1]", "198.51.100.5"]

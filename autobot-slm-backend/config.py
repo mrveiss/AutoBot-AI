@@ -19,7 +19,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Optional
 
-from pydantic import ConfigDict, field_validator
+from pydantic import ConfigDict, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, NoDecode
 
 from autobot_shared import postgres_identity as pg
@@ -110,7 +110,7 @@ def _get_cors_origins() -> list:
     Issue #2862 — removed hardcoded fallback IPs; all values now flow through
     NetworkConstants so ConfigRegistry overrides are respected.
     """
-    env_origins = os.getenv("SLM_CORS_ORIGINS", "")
+    env_origins = os.getenv("SLM_CORS_ORIGINS", "").strip()
     if env_origins:
         return _split_csv(env_origins)
 
@@ -142,7 +142,7 @@ def _get_trusted_proxies() -> list:
 
     Issue #2862 — replaced hardcoded IP fallback with SSOT-derived values.
     """
-    env_proxies = os.getenv("SLM_TRUSTED_PROXIES", "")
+    env_proxies = os.getenv("SLM_TRUSTED_PROXIES", "").strip()
     if env_proxies:
         return _split_csv(env_proxies)
 
@@ -507,20 +507,28 @@ class Settings(RedactedReprMixin, BaseSettings):
 
     @field_validator("cors_origins", "trusted_proxies", mode="before")
     @classmethod
-    def _parse_csv_list(cls, value):
+    def _parse_csv_list(cls, value, info: ValidationInfo):
         """Comma-separated is the one env format for these list fields (#22116).
 
         ``NoDecode`` stops pydantic-settings JSON-decoding the env value, so a
         string reaches here and is split by ``_split_csv`` (same helper the
-        default factories use). A JSON array string (leading ``[``) is also
-        accepted for backward compatibility; lists pass through unchanged.
+        default factories use). A blank value means unset and keeps the
+        default, as the default factories treat it. A JSON array string is
+        also accepted for backward compatibility; text that only looks like
+        one (a bracketed IPv6 such as ``[::1]``) is split as CSV. Lists pass
+        through unchanged.
         """
-        if isinstance(value, str):
-            text = value.strip()
-            if text.startswith("["):
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if not text:
+            return cls.model_fields[info.field_name].default
+        if text.startswith("["):
+            try:
                 return json.loads(text)
-            return _split_csv(text)
-        return value
+            except json.JSONDecodeError:
+                pass
+        return _split_csv(text)
 
     # External URL - remote nodes use nginx reverse proxy.
     # Issue #2758: derive dynamically from local IP when SLM_EXTERNAL_URL is
