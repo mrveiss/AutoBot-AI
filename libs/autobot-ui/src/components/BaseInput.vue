@@ -105,21 +105,21 @@ defineExpose({ focus: () => inputRef.value?.focus(), blur: () => inputRef.value?
 </script>
 
 <template>
-  <div class="aui-input" :class="`aui-input--${size}`" v-bind="pickAttrs(true)">
-    <label v-if="label" :for="inputId" class="aui-input__label">
-      {{ label }}<span v-if="required" class="aui-input__asterisk" aria-hidden="true">*</span>
+  <div data-slot="input" class="aui-input" :class="`aui-input--${size}`" v-bind="pickAttrs(true)">
+    <label v-if="label" :for="inputId" data-slot="input-label" class="aui-input__label">
+      {{ label }}<span v-if="required" data-slot="input-asterisk" class="aui-input__asterisk" aria-hidden="true">*</span>
     </label>
 
     <div
-      class="aui-input__control"
+      data-slot="input-control" class="aui-input__control"
       :class="{ 'aui-input__control--error': !!error, 'aui-input__control--disabled': disabled }"
     >
-      <span v-if="$slots.prefix" class="aui-input__affix"><slot name="prefix" /></span>
+      <span v-if="$slots.prefix" data-slot="input-affix" class="aui-input__affix"><slot name="prefix" /></span>
       <input
         v-bind="pickAttrs(false)"
         :id="inputId"
         ref="inputRef"
-        class="aui-input__field"
+        data-slot="input-field" class="aui-input__field"
         :type="type"
         :value="modelValue"
         :placeholder="placeholder"
@@ -131,11 +131,11 @@ defineExpose({ focus: () => inputRef.value?.focus(), blur: () => inputRef.value?
         :aria-describedby="describedBy()"
         @input="onInput"
       />
-      <span v-if="$slots.suffix || showClear" class="aui-input__affix">
+      <span v-if="$slots.suffix || showClear" data-slot="input-affix" class="aui-input__affix">
         <button
           v-if="showClear"
           type="button"
-          class="aui-input__clear"
+          data-slot="input-clear" class="aui-input__clear"
           :aria-label="clearName"
           @click="onClear"
         >
@@ -145,31 +145,31 @@ defineExpose({ focus: () => inputRef.value?.focus(), blur: () => inputRef.value?
       </span>
     </div>
 
-    <p v-if="error" :id="errorId" class="aui-input__error" role="alert">{{ error }}</p>
-    <p v-else-if="helperText" :id="helperId" class="aui-input__helper">{{ helperText }}</p>
+    <p v-if="error" :id="errorId" data-slot="input-error" class="aui-input__error" role="alert">{{ error }}</p>
+    <p v-else-if="helperText" :id="helperId" data-slot="input-helper" class="aui-input__helper">{{ helperText }}</p>
   </div>
 </template>
 
 <style scoped>
-.aui-input {
+[data-slot="input"] {
   display: flex;
   flex-direction: column;
   gap: var(--aui-space-1);
   font-family: var(--aui-font-sans);
 }
 
-.aui-input__label {
+[data-slot="input-label"] {
   font-size: var(--aui-text-sm);
   font-weight: var(--aui-font-weight-medium);
   color: var(--aui-color-text);
 }
 
-.aui-input__asterisk {
+[data-slot="input-asterisk"] {
   margin-left: var(--aui-space-1);
   color: var(--aui-color-error);
 }
 
-.aui-input__control {
+[data-slot="input-control"] {
   display: flex;
   align-items: center;
   gap: var(--aui-space-2);
@@ -181,14 +181,14 @@ defineExpose({ focus: () => inputRef.value?.focus(), blur: () => inputRef.value?
   transition: border-color var(--aui-transition);
 }
 
-.aui-input--sm .aui-input__control {
+.aui-input--sm [data-slot="input-control"] {
   height: var(--aui-input-height-sm);
 }
-.aui-input--lg .aui-input__control {
+.aui-input--lg [data-slot="input-control"] {
   height: var(--aui-input-height-lg);
 }
 
-.aui-input__control:focus-within {
+[data-slot="input-control"]:focus-within {
   border-color: var(--aui-color-primary);
   outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
   outline-offset: 1px;
@@ -205,7 +205,7 @@ defineExpose({ focus: () => inputRef.value?.focus(), blur: () => inputRef.value?
   cursor: not-allowed;
 }
 
-.aui-input__field {
+[data-slot="input-field"] {
   flex: 1;
   min-width: 0;
   width: 100%;
@@ -216,24 +216,24 @@ defineExpose({ focus: () => inputRef.value?.focus(), blur: () => inputRef.value?
   font-family: inherit;
   font-size: var(--aui-text-sm);
 }
-.aui-input--lg .aui-input__field {
+.aui-input--lg [data-slot="input-field"] {
   font-size: var(--aui-text-base);
 }
-.aui-input__field::placeholder {
+[data-slot="input-field"]::placeholder {
   color: var(--aui-color-text-muted);
 }
-.aui-input__field:disabled {
+[data-slot="input-field"]:disabled {
   cursor: not-allowed;
 }
 
-.aui-input__affix {
+[data-slot="input-affix"] {
   display: flex;
   align-items: center;
   gap: var(--aui-space-1);
   color: var(--aui-color-text-muted);
 }
 
-.aui-input__clear {
+[data-slot="input-clear"] {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -246,22 +246,22 @@ defineExpose({ focus: () => inputRef.value?.focus(), blur: () => inputRef.value?
   line-height: 1;
   cursor: pointer;
 }
-.aui-input__clear:hover {
+[data-slot="input-clear"]:hover {
   color: var(--aui-color-text);
 }
-.aui-input__clear:focus-visible {
+[data-slot="input-clear"]:focus-visible {
   outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
 }
 
-.aui-input__helper,
-.aui-input__error {
+[data-slot="input-helper"],
+[data-slot="input-error"] {
   margin: 0;
   font-size: var(--aui-text-xs);
 }
-.aui-input__helper {
+[data-slot="input-helper"] {
   color: var(--aui-color-text-muted);
 }
-.aui-input__error {
+[data-slot="input-error"] {
   color: var(--aui-color-error);
   font-weight: var(--aui-font-weight-medium);
 }
