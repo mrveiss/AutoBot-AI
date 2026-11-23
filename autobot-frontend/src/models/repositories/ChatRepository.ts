@@ -121,6 +121,7 @@ interface BackendSessionEntry {
   createdTime?: string
   updatedAt?: string
   lastModified?: string
+  companyId?: string
 }
 
 /** RAG or tool-step source persisted at the top level of a backend message (#4448, #21976). */
@@ -341,7 +342,8 @@ export class ChatRepository {
         createdAt: toSessionDate(session.createdAt, session.createdTime),
         updatedAt: toSessionDate(session.updatedAt, session.lastModified),
         isActive: false, // Will be set by store when session is selected
-        unassigned: session.unassigned
+        unassigned: session.unassigned,
+        companyId: session.companyId
       })) as unknown as ChatListEntry[]
     } catch (error: unknown) {
       logger.error('Failed to get chat list:', error)

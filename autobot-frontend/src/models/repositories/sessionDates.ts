@@ -13,6 +13,8 @@ export interface ChatListEntry {
   isActive: boolean
   /** The chat carries no company yet (#21997). */
   unassigned?: boolean
+  /** The company the chat is tagged with; empty when it is Unassigned (#16905). */
+  companyId?: string
 }
 
 /**

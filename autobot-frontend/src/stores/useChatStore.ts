@@ -65,7 +65,7 @@ export interface ChatSession {
   sessionSecrets?: SessionSecret[]
   // GH#8987: folder assignment (folder_id from useFolderStore)
   folderId?: string | null
-  unassigned?: boolean // #21997: no company yet; listed in the Unassigned group until a person assigns one
+  companyId?: string; unassigned?: boolean // #16905 its company (Company OS lists only its own); #21997 no company yet
   // Desktop automation context. DORMANT: vncUrl preserved for future VNC re-integration (#1130 → #5136)
   desktopSession?: {
     id?: string

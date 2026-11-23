@@ -40,13 +40,19 @@ export function useChatSidebarSessions() {
 
   // GH#8987: client-side filter by title over the loaded sessions; archived folders' chats stay searchable.
   const searchQuery = ref('')
+  // #16905: inside Company OS (CeoChatView sets activeChatContext.company_id) the list is a positive filter on
+  // that company's chats and there is no Unassigned group; the general chat sidebar sets no context and is unchanged.
+  const companyOsId = computed(() => String(store.activeChatContext?.company_id ?? '').toLowerCase())
+  const inSurface = (s: ChatSession): boolean =>
+    !companyOsId.value || (!s.unassigned && String(s.companyId ?? '').toLowerCase() === companyOsId.value)
   const filteredSessions = computed(() => {
     const q = searchQuery.value.trim().toLowerCase()
     const matches = (s: ChatSession) => !q || (s.title || getSessionPreview(s)).toLowerCase().includes(q)
-    return store.sessions.filter((s) => !s.unassigned && matches(s))
+    return store.sessions.filter((s) => !s.unassigned && inSurface(s) && matches(s))
   })
   // #21997: chats that carry no company stay apart, in the Unassigned group, until a person assigns one.
   const unassignedSessions = computed(() => {
+    if (companyOsId.value) return []
     const q = searchQuery.value.trim().toLowerCase()
     return store.sessions.filter((s) => s.unassigned && (!q || (s.title || getSessionPreview(s)).toLowerCase().includes(q)))
   })

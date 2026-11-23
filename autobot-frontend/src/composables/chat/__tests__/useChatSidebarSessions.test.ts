@@ -10,7 +10,11 @@ import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 
 const h = vi.hoisted(() => ({
-  store: { sessions: [] as unknown[], currentSessionId: 'a' as string | null },
+  store: {
+    sessions: [] as unknown[],
+    currentSessionId: 'a' as string | null,
+    activeChatContext: {} as Record<string, unknown>,
+  },
   controller: {
     deleteChatSession: vi.fn().mockResolvedValue(undefined),
     updateSessionTitle: vi.fn(),
@@ -51,6 +55,7 @@ beforeEach(() => {
   h.controller.deleteChatSession.mockResolvedValue(undefined)
   h.controller.getSessionFacts.mockResolvedValue({ facts: [{ id: 'f1' }, { id: 'f2' }] })
   h.controller.preserveSessionFacts.mockResolvedValue({ updated_count: 1 })
+  h.store.activeChatContext = {}
   h.store.sessions = reactive([session('abcdefgh12345678', 'Alpha'), session('b', '', 'Hello there, this is a long first message'), session('c', '')])
 })
 
@@ -210,5 +215,27 @@ describe('delete with the knowledge-fact preview', () => {
     const api = setup()
     api.deleteCurrentSession()
     await vi.waitFor(() => expect(api.deleteTargetSessionId.value).toBe('a'))
+  })
+})
+
+// #16905: the Company OS surface lists only its company's chats and has no Unassigned group; /chat is unchanged.
+describe('company scope of the list', () => {
+  const tagged = (id: string, companyId: string) => ({ ...session(id, id), companyId })
+  const loose = (id: string) => ({ ...session(id, id), unassigned: true })
+  const mixed = () => reactive([tagged('mine', 'CO-A'), tagged('theirs', 'co-b'), loose('stray')])
+
+  it('Company OS shows only the active company chats and no Unassigned group', () => {
+    h.store.sessions = mixed()
+    h.store.activeChatContext = { company_id: 'co-a' }
+    const api = setup()
+    expect(api.filteredSessions.value.map((s) => s.id)).toEqual(['mine'])
+    expect(api.unassignedSessions.value).toEqual([])
+  })
+
+  it('the general sidebar keeps every company chat and its Unassigned group', () => {
+    h.store.sessions = mixed()
+    const api = setup()
+    expect(api.filteredSessions.value.map((s) => s.id)).toEqual(['mine', 'theirs'])
+    expect(api.unassignedSessions.value.map((s) => s.id)).toEqual(['stray'])
   })
 })
