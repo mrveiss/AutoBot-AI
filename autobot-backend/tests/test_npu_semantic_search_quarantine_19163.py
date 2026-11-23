@@ -98,8 +98,7 @@ def _unpinned_kb_search_calls(src: str) -> tuple:
         if isinstance(n, ast.Call)
         and isinstance(n.func, ast.Attribute)
         and n.func.attr == "search"
-        and isinstance(n.func.value, ast.Attribute)
-        and n.func.value.attr == "knowledge_base"
+        and "knowledge_base" in (getattr(n.func.value, "attr", None), getattr(n.func.value, "id", None))
     ]
     pinned = [
         c
@@ -119,6 +118,7 @@ def test_the_detector_sees_wrapped_calls_and_flags_unpinned_ones():
     assert [len(x) for x in _unpinned_kb_search_calls(wrapped_pinned)] == [1, 0]
     assert [len(x) for x in _unpinned_kb_search_calls(wrapped_unpinned)] == [1, 1]
     assert [len(x) for x in _unpinned_kb_search_calls("self.knowledge_base.search(q, top_k=5)")] == [1, 1]
+    assert [len(x) for x in _unpinned_kb_search_calls("knowledge_base.search(q, top_k=5)")] == [1, 1]
 
 
 def test_npu_module_calls_kb_search_only_on_the_cpu_leg():
