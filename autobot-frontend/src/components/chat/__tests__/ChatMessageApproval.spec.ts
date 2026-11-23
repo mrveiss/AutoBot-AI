@@ -87,9 +87,11 @@ describe('ChatMessageApproval', () => {
     expect(render(pending, context({ permissionStore: { isEnabled: true } })).findAll('input[type="checkbox"]')).toHaveLength(2)
   })
 
-  it('risk badge: an unknown level is not the success tone', () => {
+  it('risk badge follows the severity and never reads an unrecognised level as success (#14955)', () => {
     const badge = (level: string) => render({ ...pending, risk_level: level }).get('.detail-value[data-slot="badge"]').classes().join(' ')
     expect(badge('LOW')).toContain('success')
-    expect(badge('WHATEVER')).not.toContain('success')
+    expect(badge('MEDIUM')).toContain('warning')
+    expect(badge('CRITICAL')).toContain('error')
+    for (const raw of ['dangerous', 'forbidden', 'WHATEVER', '']) expect(badge(raw)).not.toContain('success')
   })
 })

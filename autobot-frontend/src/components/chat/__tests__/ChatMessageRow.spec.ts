@@ -4,10 +4,12 @@
 // Author: mrveiss
 //
 // ChatMessageRow (#18243, step 5a batch 2): the bubble frame, header actions and send-status the stream had inline.
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
+const save = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/useAIDocument', () => ({ useAIDocument: () => ({ saveMessageAsDocument: save }) }))
 import ChatMessageRow from '../ChatMessageRow.vue'
 import type { ChatMessage } from '@/stores/useChatStore'
 
@@ -57,5 +59,23 @@ describe('ChatMessageRow', () => {
   it('shows the type badge for a typed message and none for a plain one', () => {
     expect(render(msg({ type: 'debug' })).text()).toContain('Debug')
     expect(render(msg()).find('[data-slot="badge"]').exists()).toBe(false)
+  })
+
+  it('saves an assistant message as a document and reports the id (#3245)', async () => {
+    save.mockResolvedValueOnce({ id: 'doc-1' })
+    const w = render(msg())
+    await w.get('button[aria-label="Save as document"]').trigger('click')
+    await Promise.resolve()
+    expect(save).toHaveBeenCalledWith({ content: 'hi', messageId: 'm1' })
+    await vi.waitFor(() => expect(w.emitted('save-as-document')?.[0]).toEqual(['doc-1']))
+    expect(render(msg({ sender: 'user' })).find('button[aria-label="Save as document"]').exists()).toBe(false)
+  })
+
+  it('keeps the actions reachable by keyboard and touch (focus-within and hover:none rules)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const src = readFileSync(resolve(__dirname, '../ChatMessageRow.vue'), 'utf-8')
+    expect(src).toMatch(/\.message-wrapper:focus-within \.message-actions\s*\{ opacity: 1/)
+    expect(src).toMatch(/@media \(hover: none\)\s*\{ \.message-actions\s*\{ opacity: 1/)
   })
 })

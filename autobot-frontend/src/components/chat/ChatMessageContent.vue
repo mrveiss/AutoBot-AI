@@ -58,6 +58,15 @@
           <Icon name="brain" />
           {{ $t('chat.messages.thinkingUsed') }}
         </BaseBadge>
+        <BaseBadge
+          v-if="thinkingMetadata?.used"
+          variant="info"
+          size="xs"
+          :rounded="false"
+          :title="$t('chat.message.thinking.tooltip')"
+        >
+          {{ $t('chat.message.thinking.badge', { count: thinkingMetadata.tokens_used || 0 }) }}
+        </BaseBadge>
         <span v-if="model" class="metadata-item">
           <Icon name="robot" />
           {{ model }}
@@ -73,6 +82,12 @@
       </div>
     </div>
 
+    <!-- Issue #10548: model-only claim badge (no KB/graph evidence found) -->
+    <BaseBadge v-if="isModelOnlyClaim" variant="warning" size="xs" :title="$t('chat.citations.modelOnlyTooltip')">
+      <Icon name="robot" />
+      {{ $t('chat.citations.modelOnly') }}
+    </BaseBadge>
+
     <!-- #249, #1186, #4448, #21976: the answer's sources, stored and streamed alike -->
     <CitationsDisplay
       v-if="message.sender === 'assistant' && citations.length > 0"
@@ -85,8 +100,8 @@
     <MessageAttachments
       v-if="message.attachments && message.attachments.length > 0"
       :attachments="message.attachments"
-      :downloadable="false"
       @view="viewAttachment"
+      @download="downloadAttachment"
     />
 
     <ChatMessageApproval :message="message" />
@@ -152,6 +167,23 @@ function isRich(kind: 'image' | 'video'): boolean {
 /** #21976: a citation that is a tool step scrolls to that step's messages. */
 function openCitationStep(citation: { step_id?: string }) {
   if (citation.step_id) emit('citation-step', citation.step_id)
+}
+
+/** Fields the older message view read; absent on most messages, so each is optional. */
+const thinkingMetadata = computed(() => (props.message as { thinking_metadata?: { used?: boolean; tokens_used?: number } }).thinking_metadata)
+const isModelOnlyClaim = computed(() => {
+  const grounding = (props.message as { grounding?: { grounded?: boolean } }).grounding
+  return props.message.sender === 'assistant' && grounding != null && grounding.grounded === false
+})
+
+/** Download through the browser from the attachment's own URL (no extra request from this code). */
+function downloadAttachment(attachment: { url?: string; name?: string }) {
+  if (!attachment.url) return
+  const link = document.createElement('a')
+  link.href = attachment.url
+  link.download = attachment.name ?? ''
+  link.rel = 'noopener'
+  link.click()
 }
 
 function viewAttachment(attachment: { url?: string }) {

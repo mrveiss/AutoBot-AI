@@ -173,6 +173,7 @@
       "edit": "Edit message",
       "copy": "Copy message",
       "delete": "Delete message",
+      "saveAsDocument": "Save as document",
       "tokens": "{count} tokens",
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",

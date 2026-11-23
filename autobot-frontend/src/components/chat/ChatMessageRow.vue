@@ -52,6 +52,18 @@
         >
           <Icon name="copy" />
         </BaseButton>
+        <!-- Issue #3245: save an assistant response as a persistent AI document -->
+        <BaseButton
+          v-if="message.sender === 'assistant'"
+          variant="ghost"
+          size="xs"
+          :disabled="isSavingDocument"
+          :aria-label="$t('chat.message.saveAsDocument')"
+          :title="$t('chat.message.saveAsDocument')"
+          @click="saveAsDocument"
+        >
+          <Icon name="file-alt" />
+        </BaseButton>
         <BaseButton
           variant="ghost"
           size="xs"
@@ -84,7 +96,7 @@
  * (avatar, sender, badges, edit/copy/delete) and the user send-status. The body is the slot.
  * Split out of ChatMessages.vue; behaviour is unchanged.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseBadge, BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
@@ -98,6 +110,7 @@ import {
   getSenderName,
   messageTypeOf,
 } from '@/composables/chat/useChatMessageView'
+import { useAIDocument } from '@/composables/useAIDocument'
 import { formatTime } from '@/utils/formatHelpers'
 import { shownModel } from '@/utils/internalMessage'
 import type { ChatMessage } from '@/stores/useChatStore'
@@ -112,9 +125,25 @@ const emit = defineEmits<{
   copy: [message: ChatMessage]
   delete: [message: ChatMessage]
   retry: [messageId: string]
+  /** Issue #3245: emitted with the new document id after an assistant message is saved. */
+  'save-as-document': [docId: string]
 }>()
 
 const { t } = useI18n()
+
+const { saveMessageAsDocument } = useAIDocument()
+const isSavingDocument = ref(false)
+
+async function saveAsDocument() {
+  if (isSavingDocument.value) return
+  isSavingDocument.value = true
+  try {
+    const doc = await saveMessageAsDocument({ content: props.message.content, messageId: props.message.id })
+    emit('save-as-document', doc.id)
+  } finally {
+    isSavingDocument.value = false
+  }
+}
 
 const wrapperClass = computed(() => getMessageWrapperClass(props.message))
 const senderIcon = computed(() => getSenderIcon(props.message.sender, messageTypeOf(props.message)))
@@ -211,10 +240,12 @@ const badgeVariant = computed(() => {
 }
 .message-avatar.user { background: var(--aui-color-primary); color: var(--aui-color-primary-contrast); }
 
-/* Actions appear on hover and on keyboard focus (the old `group-hover` had no `group`). */
+/* Actions appear on hover and on keyboard focus (the old `group-hover` had no `group`), and are
+   always visible where there is no hover (touch). */
 .message-actions { display: flex; gap: var(--aui-space-1); opacity: 0; transition: opacity var(--aui-transition-fast); }
 .message-wrapper:hover .message-actions,
 .message-wrapper:focus-within .message-actions { opacity: 1; }
+@media (hover: none) { .message-actions { opacity: 1; } }
 .message-status-container { display: flex; justify-content: flex-end; margin-block: var(--aui-space-1); }
 
 @keyframes message-in {

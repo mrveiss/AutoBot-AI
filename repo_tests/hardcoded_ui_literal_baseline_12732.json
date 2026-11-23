@@ -355,10 +355,6 @@
   "b4218162",
   "bf0d6d8c"
  ],
- "autobot-frontend/src/components/chat/MessageItem.vue": [
-  "3c9d733f",
-  "3c9d733f"
- ],
  "autobot-frontend/src/components/chat/SlashCommandDropdown.vue": [
   "508a851f"
  ],

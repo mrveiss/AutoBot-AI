@@ -5,8 +5,7 @@
 /**
  * Canonical command-approval risk-level vocabulary (#14955).
  *
- * The `risk_level` field rendered by `useCommandApproval`/`ChatMessages.vue`
- * and `ApprovalRequestCard.vue` is contracted to
+ * The `risk_level` field rendered by `useCommandApproval`/`ChatMessageApproval.vue` is contracted to
  * `autobot-backend/models/command_execution.py::RiskLevel` (#7258's
  * deliberate uppercase fork, kept for legacy Redis/SQLite wire
  * compatibility): exactly four uppercase values —
