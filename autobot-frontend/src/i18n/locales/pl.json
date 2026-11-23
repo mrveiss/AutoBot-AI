@@ -10015,5 +10015,15 @@
     "invalid_generic": "Ten harmonogram jest nieprawidłowy.",
     "conflicting_fields": "Harmonogram zapisuje się albo jako cron, albo jako reguła kalendarzowa lub uruchomienie jednorazowe, nigdy jako oba.",
     "gatedNote": "Ostatni dzień, dzień tygodnia w miesiącu, dni 29–31 i uruchomienia jednorazowe będą dostępne po aktualizacji harmonogramatora."
+  },
+  "slmAgentsTool": {
+    "globalControls": "Te kontrolki wstrzymują lub wznawiają wszystkich agentów, a nie pojedynczego",
+    "loadFailed": "Nie udało się załadować agentów",
+    "noLastActivity": "Brak zgłoszonej aktywności",
+    "notReported": "Brak danych",
+    "pauseAll": "Wstrzymaj wszystkich agentów",
+    "pauseFailed": "Nie udało się wstrzymać agentów",
+    "resumeAll": "Wznów wszystkich agentów",
+    "resumeFailed": "Nie udało się wznowić agentów"
   }
 }

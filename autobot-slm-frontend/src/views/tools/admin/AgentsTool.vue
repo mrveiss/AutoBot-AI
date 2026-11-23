@@ -3,8 +3,9 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, PollingPausedAlert, getEnvPositiveInt } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, createLogger, getEnvPositiveInt } from '@autobot/ui'
 
+const logger = createLogger('AgentsTool')
 const REFRESH_INTERVAL_MS = getEnvPositiveInt(import.meta.env, 'VITE_AGENTS_REFRESH_INTERVAL_MS', 30_000)
 /**
  * AgentsTool - Agent Registry Manager
@@ -17,7 +18,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import type { AvailableAgent } from '@/types/agents'
+import type { AgentOrgStatusItem, AvailableAgent } from '@/types/agents'
 
 const api = useAutobotApi()
 const { t } = useI18n()
@@ -26,18 +27,26 @@ const { t } = useI18n()
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-// #22141: the shape GET /agent/agents/available returns (autobot-backend AgentCapabilityInfo)
-type Agent = AvailableAgent
+// #22141: GET /agent/agents/available rows, joined with the agent_org status items (stats) and the
+// AI-stack status items (type) by name or id. A null stat is unmeasured, never 0 (#17514).
+interface Agent extends AvailableAgent {
+  type: string | null
+  tasksCompleted: number | null
+  successRate: number | null
+}
 
 interface AgentStats {
   total_agents: number
   active_agents: number
+  total_tasks: number | null
+  avg_success_rate: number | null
 }
 
 const ACTIVE_STATUSES = ['active', 'available', 'ready']
+const EMPTY_STATS: AgentStats = { total_agents: 0, active_agents: 0, total_tasks: null, avg_success_rate: null }
 
 const agents = ref<Agent[]>([])
-const stats = ref<AgentStats>({ total_agents: 0, active_agents: 0 })
+const stats = ref<AgentStats>({ ...EMPTY_STATS })
 const selectedAgent = ref<Agent | null>(null)
 const filterStatus = ref<string>('all')
 const searchQuery = ref('')
@@ -62,11 +71,12 @@ const filteredAgents = computed(() => {
 })
 
 // Methods
-function statusGroup(status: string): string {
+function statusGroup(status: string | null): string {
+  if (status === null) return 'unknown'
   return ACTIVE_STATUSES.includes(status) ? 'active' : status
 }
 
-function getStatusClass(status: string): string {
+function getStatusClass(status: string | null): string {
   switch (statusGroup(status)) {
     case 'active': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'idle': return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
@@ -76,7 +86,7 @@ function getStatusClass(status: string): string {
   }
 }
 
-function getStatusDot(status: string): string {
+function getStatusDot(status: string | null): string {
   switch (statusGroup(status)) {
     case 'active': return 'bg-autobot-dot-ok'
     case 'idle': return 'bg-autobot-primary'
@@ -86,18 +96,59 @@ function getStatusDot(status: string): string {
   }
 }
 
+function average(values: number[]): number | null {
+  return values.length ? Math.round(values.reduce((sum, v) => sum + v, 0) / values.length) : null
+}
+
+function summarise(rows: Agent[], total: number): AgentStats {
+  const tasks = rows.map(a => a.tasksCompleted).filter((v): v is number => v !== null)
+  const rates = rows.map(a => a.successRate).filter((v): v is number => v !== null)
+  return {
+    total_agents: total,
+    active_agents: rows.filter(a => statusGroup(a.status) === 'active').length,
+    total_tasks: tasks.length ? tasks.reduce((sum, v) => sum + v, 0) : null,
+    avg_success_rate: average(rates),
+  }
+}
+
+function joinAgents(
+  available: AvailableAgent[],
+  org: AgentOrgStatusItem[],
+  types: Record<string, string>,
+): Agent[] {
+  const byKey = new Map<string, AgentOrgStatusItem>()
+  org.forEach(o => { byKey.set(o.id, o); byKey.set(o.name, o) })
+  return available.map(a => {
+    const o = byKey.get(a.name)
+    return {
+      ...a,
+      type: types[a.name] ?? o?.type ?? null,
+      tasksCompleted: o?.tasksCompleted ?? null,
+      successRate: o?.successRate ?? null,
+    }
+  })
+}
+
+// The stats are supplementary: a failure there leaves them "not reported" instead of blanking the tab.
+async function loadSupplement(): Promise<{ org: AgentOrgStatusItem[]; types: Record<string, string> }> {
+  const [org, status] = await Promise.allSettled([api.getAgentOrgStatus(), api.getAgentsStatus()])
+  if (org.status === 'rejected') logger.error('Failed to load agent stats:', org.reason)
+  if (status.status === 'rejected') logger.error('Failed to load agent status:', status.reason)
+  const types = Object.fromEntries(
+    (status.status === 'fulfilled' ? status.value.available_agents : []).map(a => [a.name, a.type]),
+  )
+  return { org: org.status === 'fulfilled' ? org.value.agents : [], types }
+}
+
 async function loadAgents(): Promise<void> {
   loading.value = true
   error.value = null
 
   try {
     // Issue #835 - use named function from useAutobotApi
-    const data = await api.getAvailableAgents()
-    agents.value = data.agents ?? []
-    stats.value = {
-      total_agents: data.total_agents ?? agents.value.length,
-      active_agents: agents.value.filter(a => statusGroup(a.status) === 'active').length,
-    }
+    const [data, supplement] = await Promise.all([api.getAvailableAgents(), loadSupplement()])
+    agents.value = joinAgents(data.agents ?? [], supplement.org, supplement.types)
+    stats.value = summarise(agents.value, data.total_agents ?? agents.value.length)
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.loadFailed')
   } finally {
@@ -109,35 +160,27 @@ async function refreshData(): Promise<void> {
   await loadAgents()
 }
 
-async function startAgent(_agentId: string): Promise<void> {
+// The backend has global pause/resume only (#22175 tracks per-agent control), so these act on every agent.
+async function pauseAll(): Promise<void> {
   try {
-    // Issue #835 - backend has global pause/resume, not per-agent
-    await api.resumeAgent()
-    await loadAgents()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.startFailed')
-  }
-}
-
-async function stopAgent(_agentId: string): Promise<void> {
-  try {
-    // Issue #835 - backend has global pause/resume, not per-agent
     await api.pauseAgent()
     await loadAgents()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.stopFailed')
+    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.pauseFailed')
   }
 }
 
-async function restartAgent(_agentId: string): Promise<void> {
+async function resumeAll(): Promise<void> {
   try {
-    // Issue #835 - pause then resume as restart
-    await api.pauseAgent()
     await api.resumeAgent()
     await loadAgents()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.restartFailed')
+    error.value = e instanceof Error ? e.message : t('tools.admin.agentsTool.resumeFailed')
   }
+}
+
+function formatStat(value: number | null, suffix = ''): string {
+  return value === null ? t('tools.admin.agentsTool.notReported') : `${value}${suffix}`
 }
 
 function selectAgent(agent: Agent): void {
@@ -153,7 +196,7 @@ onMounted(() => refreshPoller.start(''))
 <template>
   <div class="p-6">
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
       <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
@@ -181,6 +224,34 @@ onMounted(() => refreshPoller.start(''))
           </div>
         </div>
       </div>
+
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
+            <p class="text-2xl font-bold text-autobot-text-primary">{{ formatStat(stats.total_tasks) }}</p>
+          </div>
+          <div class="p-3 bg-autobot-illus-2-tint rounded-lg">
+            <svg class="w-6 h-6 text-autobot-text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.successRate') }}</p>
+            <p class="text-2xl font-bold text-autobot-text-primary">{{ formatStat(stats.avg_success_rate, '%') }}</p>
+          </div>
+          <div class="p-3 bg-autobot-pill-warn-bg rounded-lg">
+            <svg class="w-6 h-6 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Filters -->
@@ -204,6 +275,20 @@ onMounted(() => refreshPoller.start(''))
           <option value="error">{{ $t('tools.admin.agentsTool.error') }}</option>
           <option value="stopped">{{ $t('tools.admin.agentsTool.stopped') }}</option>
         </select>
+        <button
+          @click="pauseAll"
+          :title="$t('tools.admin.agentsTool.globalControls')"
+          class="px-3 py-2 text-sm bg-autobot-bg-tertiary text-autobot-text-primary rounded-lg hover:shadow-md"
+        >
+          {{ $t('tools.admin.agentsTool.pauseAll') }}
+        </button>
+        <button
+          @click="resumeAll"
+          :title="$t('tools.admin.agentsTool.globalControls')"
+          class="px-3 py-2 text-sm bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover rounded-lg"
+        >
+          {{ $t('tools.admin.agentsTool.resumeAll') }}
+        </button>
         <button
           @click="refreshPoller.start('')"
           :disabled="loading"
@@ -261,15 +346,28 @@ onMounted(() => refreshPoller.start(''))
             </div>
             <div>
               <h3 class="font-semibold text-autobot-text-primary">{{ agent.name }}</h3>
+              <p v-if="agent.type" class="text-sm text-autobot-text-tertiary">{{ agent.type }}</p>
             </div>
           </div>
           <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(agent.status)]">
-            {{ agent.status }}
+            {{ agent.status ?? $t('tools.admin.agentsTool.notReported') }}
           </span>
         </div>
 
         <!-- Description -->
         <p class="text-sm text-autobot-text-secondary mb-4">{{ agent.description }}</p>
+
+        <!-- Stats -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
+            <p class="text-lg font-bold text-autobot-text-primary">{{ formatStat(agent.tasksCompleted) }}</p>
+          </div>
+          <div>
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.successRate') }}</p>
+            <p class="text-lg font-bold text-autobot-text-primary">{{ formatStat(agent.successRate, '%') }}</p>
+          </div>
+        </div>
 
         <!-- Capabilities -->
         <div class="mb-4">
@@ -285,28 +383,9 @@ onMounted(() => refreshPoller.start(''))
           </div>
         </div>
 
-        <!-- Actions -->
-        <div v-if="selectedAgent?.name === agent.name" class="flex gap-2 mt-4 pt-4 border-t border-autobot-border">
-          <button
-            v-if="statusGroup(agent.status) === 'stopped'"
-            @click.stop="startAgent(agent.name)"
-            class="px-3 py-1.5 text-xs bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover"
-          >
-            {{ $t('tools.admin.agentsTool.start') }}
-          </button>
-          <button
-            v-if="['active', 'idle'].includes(statusGroup(agent.status))"
-            @click.stop="stopAgent(agent.name)"
-            class="px-3 py-1.5 text-xs bg-autobot-error-solid text-(--text-on-error) rounded-lg hover:bg-(--color-error-solid-hover)"
-          >
-            {{ $t('tools.admin.agentsTool.stop') }}
-          </button>
-          <button
-            @click.stop="restartAgent(agent.name)"
-            class="px-3 py-1.5 text-xs bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover rounded-lg"
-          >
-            {{ $t('tools.admin.agentsTool.restart') }}
-          </button>
+        <!-- Last Activity: no backend field yet (#22175) -->
+        <div class="flex items-center justify-between text-xs text-autobot-text-tertiary pt-4 border-t border-autobot-border">
+          <span>{{ $t('tools.admin.agentsTool.noLastActivity') }}</span>
         </div>
       </div>
     </div>

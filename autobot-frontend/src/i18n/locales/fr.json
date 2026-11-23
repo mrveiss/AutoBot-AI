@@ -10015,5 +10015,15 @@
     "invalid_generic": "Cette planification n'est pas valide.",
     "conflicting_fields": "Une planification est enregistrée soit en cron, soit en règle de calendrier ou exécution unique, jamais les deux.",
     "gatedNote": "Le dernier jour, le jour de la semaine du mois, les jours 29 à 31 et les exécutions uniques seront disponibles une fois le planificateur mis à jour."
+  },
+  "slmAgentsTool": {
+    "globalControls": "Ces commandes mettent en pause ou reprennent tous les agents, pas un seul",
+    "loadFailed": "Échec du chargement des agents",
+    "noLastActivity": "Aucune activité communiquée",
+    "notReported": "Non communiqué",
+    "pauseAll": "Mettre tous les agents en pause",
+    "pauseFailed": "Échec de la mise en pause des agents",
+    "resumeAll": "Reprendre tous les agents",
+    "resumeFailed": "Échec de la reprise des agents"
   }
 }

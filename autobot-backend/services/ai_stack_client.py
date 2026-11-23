@@ -18,7 +18,7 @@ from urllib.parse import urljoin
 
 import aiohttp
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY, EgressBlockedError
 from autobot_shared.logging_manager import get_logger
@@ -136,9 +136,9 @@ async def _process_ai_stack_response(response, url: str, attempt: int, retry_att
 
 
 # #22141: env-backed timeouts (were literals 60 / 60 / 10).
-AI_STACK_REQUEST_TIMEOUT_SECONDS = env_int("AUTOBOT_AI_STACK_REQUEST_TIMEOUT_SECONDS", 60)
-AI_STACK_RETRY_INTERVAL_SECONDS = env_int("AUTOBOT_AI_STACK_RETRY_INTERVAL_SECONDS", 60)
-AI_STACK_OLLAMA_TAGS_TIMEOUT_SECONDS = env_int("AUTOBOT_AI_STACK_OLLAMA_TAGS_TIMEOUT_SECONDS", 10)
+AI_STACK_REQUEST_TIMEOUT_SECONDS = env_int_clamped("AUTOBOT_AI_STACK_REQUEST_TIMEOUT_SECONDS", 60, 1, 3600)
+AI_STACK_RETRY_INTERVAL_SECONDS = env_int_clamped("AUTOBOT_AI_STACK_RETRY_INTERVAL_SECONDS", 60, 1, 3600)
+AI_STACK_OLLAMA_TAGS_TIMEOUT_SECONDS = env_int_clamped("AUTOBOT_AI_STACK_OLLAMA_TAGS_TIMEOUT_SECONDS", 10, 1, 3600)
 
 
 def _ollama_agent(model: Metadata) -> AIStackAgent:
@@ -146,6 +146,7 @@ def _ollama_agent(model: Metadata) -> AIStackAgent:
     return AIStackAgent(
         name=model["name"],
         type=model["name"].replace(":", "_").replace(".", "_"),
+        status="ready",
         provider="ollama",
         parameters=model.get("details", {}).get("parameter_size", ""),
     )

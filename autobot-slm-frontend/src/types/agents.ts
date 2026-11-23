@@ -19,5 +19,20 @@ export interface AgentsAvailableData {
 export interface AgentsStatusData {
   ai_stack_status: string
   total_agents: number
-  available_agents: Array<{ name: string; type: string; status: string; provider: string; parameters: string }>
+  available_agents: Array<{ name: string; type: string; status: string | null; provider: string; parameters: string }>
+}
+
+// GET /agents/status (agent_org): per-agent runtime stats; null = unmeasured (#17514), never 0
+export interface AgentOrgStatusItem {
+  id: string
+  name: string
+  type: string
+  status: string | null
+  tasksCompleted: number | null
+  successRate: number | null
+}
+
+export interface AgentOrgStatusList {
+  agents: AgentOrgStatusItem[]
+  total: number
 }
