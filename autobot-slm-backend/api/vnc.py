@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.http_refusal import fixed_refusal
 from models.database import Node
 from models.schemas import (
     VNCConnectionInfo,
@@ -65,10 +66,7 @@ async def create_vnc_credential(
         return vnc_credential_service.to_response(credential, node)
 
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error("Failed to create VNC credential: %s", e)
         raise HTTPException(

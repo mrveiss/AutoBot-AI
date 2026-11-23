@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from autobot_shared.http_refusal import http_refusal
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
 from llc.deps import assert_company_access
 from llc.models.template import (
     LLCTemplateSearchResponse,
@@ -84,7 +84,7 @@ async def publish_template(
         await svc.session.commit()
         return result
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
 @router.get("/search", response_model=LLCTemplateSearchResponse)
