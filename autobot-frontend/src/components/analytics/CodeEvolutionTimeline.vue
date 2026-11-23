@@ -222,7 +222,7 @@ import { createDateFormatter, isoDateStamp } from '@/utils/formatHelpers'
 const { t, locale } = useI18n()
 
 const { showToast } = useNotificationBus()
-const { fetchTimeline: apiFetchTimeline, fetchTrends: apiFetchTrends, fetchPatterns: apiFetchPatterns, fetchExport: apiFetchExport } = useCodeEvolutionData()
+const { sourceId, fetchTimeline: apiFetchTimeline, fetchTrends: apiFetchTrends, fetchPatterns: apiFetchPatterns, fetchExport: apiFetchExport } = useCodeEvolutionData()
 
 // State
 const timelineRequest = useLatestRequest() // only the newest fetchTimeline may write state or clear `loading`
@@ -458,8 +458,8 @@ onMounted(() => {
   fetchTimeline()
 })
 
-// Watch for control changes
-watch([selectedGranularity, selectedDays], () => {
+// Watch for control changes; the route is not keyed by source, so a source switch refetches (and supersedes the old call)
+watch([selectedGranularity, selectedDays, sourceId], () => {
   fetchTimeline()
 })
 </script>
