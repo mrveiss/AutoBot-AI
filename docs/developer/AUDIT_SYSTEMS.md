@@ -200,7 +200,7 @@ unwritable outcome is logged with the `AUDIT_OUTCOME_MISSING` marker. Heartbeat 
 secret routes reach it through `api/secrets_audit.audit_secret_op`, whose other, attempt-less records stay
 best-effort through `audit_log`. Outcome reasons are fixed strings or exception class names, never messages
 (secret rows keep theirs in `details.reason`, heartbeat rows in `failure`).
-`api/audit_attempt_shared_helper_21375_test.py` fails when a route module writes an `attempted` row any other way.
+`services/audit/outcome_test.py` fails when a route module writes an `attempted` row any other way.
 
 ## Data-move proposal (for the #17038 approval queue; not implemented)
 

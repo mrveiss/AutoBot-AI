@@ -59,7 +59,7 @@ def test_an_unwritable_attempt_is_a_503_and_the_delete_never_runs(client, caplog
     client.manager.delete_secret = MagicMock(return_value=True)
 
     with caplog.at_level(logging.ERROR, logger="services.audit.outcome"):
-        with patch("services.audit.outcome.record_committed", AsyncMock(return_value=False)):
+        with patch("services.audit.audit.record_committed", AsyncMock(return_value=False)):
             response = client.delete(f"/api/secrets/{SECRET_ID}")
 
     assert response.status_code == 503
@@ -71,7 +71,7 @@ def test_an_unwritable_attempt_is_a_503_and_the_delete_never_runs(client, caplog
 def test_a_write_that_raises_is_also_an_unwritable_attempt(client) -> None:
     client.manager.delete_secret = MagicMock(return_value=True)
 
-    with patch("services.audit.outcome.record_committed", AsyncMock(side_effect=RuntimeError("down"))):
+    with patch("services.audit.audit.record_committed", AsyncMock(side_effect=RuntimeError("down"))):
         response = client.delete(f"/api/secrets/{SECRET_ID}")
 
     assert response.status_code == 503
@@ -85,7 +85,7 @@ def test_an_unwritable_outcome_is_logged_and_does_not_change_the_answer(client, 
         rows.append(event)
         return len(rows) == 1
 
-    with patch("services.audit.outcome.record_committed", only_the_attempt):
+    with patch("services.audit.audit.record_committed", only_the_attempt):
         assert _delete(client).status_code == 200
 
     assert [e.outcome for e in rows] == ["attempted", "success"]

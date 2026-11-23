@@ -51,7 +51,7 @@ def store():
     with (
         patch("services.audit_logger.canonical.emit", fake.emit),
         patch("services.audit_logger.canonical.record_committed", record_committed),
-        patch("services.audit.outcome.record_committed", record_committed),  # attempt and outcome rows (#21375)
+        patch("services.audit.audit.record_committed", record_committed),  # attempt and outcome rows (#21375)
     ):
         yield fake
 
@@ -301,7 +301,7 @@ class TestAnUnrecordedWriteIsReported:
 
     def test_a_false_return_stops_a_credential_delete(self, client):
         """#20557: a delete is irreversible, so its record is written first and is not best-effort."""
-        with patch("services.audit.outcome.record_committed", AsyncMock(return_value=False)):
+        with patch("services.audit.audit.record_committed", AsyncMock(return_value=False)):
             response = _delete(client)
         assert response.status_code == 503
         client.manager.delete_secret.assert_not_called()

@@ -26,7 +26,7 @@ from llc.models.membership import LLCCompanyMembership
 from llc.tests import test_llc_org_chart as _org_chart
 from models.agent_org import AgentOrgNode
 from models.heartbeat import HeartbeatStatus
-from services.audit import outcome
+from services.audit import audit as audit_store
 from user_management.models.organization import Organization
 
 # The org-chart suite's in-memory schema fixtures, registered here by name.
@@ -111,7 +111,7 @@ def harness(session_factory, monkeypatch):  # noqa: ANN001
     get_state = AsyncMock(side_effect=_state_for)
     monkeypatch.setattr(heartbeat_controls, "_commit_changes", _write)
     names = AsyncMock(return_value="Alice A")
-    monkeypatch.setattr(outcome, "record_committed", _record)
+    monkeypatch.setattr(audit_store, "record_committed", _record)
     monkeypatch.setattr(heartbeat, "_get_or_create_state", get_state)
     monkeypatch.setattr(heartbeat, "_paused_by_name", names)
     scheduler = MagicMock(disable_agent=AsyncMock(), enable_agent=AsyncMock())

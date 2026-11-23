@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""#21375 AC3 guard: no route module writes an ``attempted`` audit row except through the shared helper.
+"""#21375 guard: no route module writes an ``attempted`` audit row except through the shared helper.
 
 An audit-first route records ``attempted``, changes state, then records the outcome linked to it. That pair has ONE
 implementation, ``services/audit/outcome.py``. A route module under ``api/`` may name the ``attempted`` result only as
@@ -17,7 +17,7 @@ their own ``_audit(..., "attempted")`` helpers; they are not routes and are trac
 import ast
 from pathlib import Path
 
-API_DIR = Path(__file__).resolve().parent
+API_DIR = Path(__file__).resolve().parents[2] / "api"
 _SHARED = frozenset({"audit_secret_op", "record_audit_attempt"})
 
 
@@ -72,3 +72,24 @@ def test_planted_second_mechanisms_are_caught() -> None:
         assert unshared_attempts(source) == [1], source
     assert unshared_attempts('await audit_secret_op("DELETE", ref, request, "attempted", required=True)') == []
     assert unshared_attempts("await record_audit_attempt(event)") == []
+
+
+def binds_record_committed(source: str) -> bool:
+    """Whether the module binds ``record_committed`` by name (a second patch seam for the one store function)."""
+    return any(
+        isinstance(n, ast.ImportFrom) and any(a.name == "record_committed" for a in n.names)
+        for n in ast.walk(ast.parse(source))
+    )
+
+
+def test_outcome_reaches_the_store_through_its_module_not_a_bound_name() -> None:
+    """One seam: a patch on ``services.audit.audit.record_committed`` must reach every attempt route (#21375)."""
+    source = (Path(__file__).resolve().parent / "outcome.py").read_text(encoding="utf-8")
+    assert not binds_record_committed(source), "outcome.py must call audit.record_committed, not bind the name"
+
+
+def test_a_bound_name_is_flagged() -> None:
+    """Positive control."""
+    assert binds_record_committed("from services.audit.audit import record_committed")
+    assert binds_record_committed("from services.audit.audit import record_committed as rc")
+    assert not binds_record_committed("from services.audit import audit as audit_store")

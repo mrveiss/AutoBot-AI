@@ -182,7 +182,7 @@ def test_an_unrecorded_delete_deletes_nothing(route, store) -> None:
     _, url = route
     coordinator = _Coordinator()
 
-    with patch("services.audit.outcome.record_committed", AsyncMock(return_value=False)):
+    with patch("services.audit.audit.record_committed", AsyncMock(return_value=False)):
         response, _ = _run(coordinator, url, store)
 
     assert response.status_code == 503

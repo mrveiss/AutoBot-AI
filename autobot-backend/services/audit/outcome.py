@@ -17,7 +17,7 @@ from dataclasses import replace
 from fastapi import HTTPException
 
 from autobot_shared.logging_manager import get_logger
-from services.audit.audit import record_committed
+from services.audit import audit as audit_store
 from services.audit.taxonomy import AuditEvent
 
 logger = get_logger(__name__)
@@ -42,7 +42,7 @@ def attempt_unrecorded() -> HTTPException:
 async def _written(event: AuditEvent) -> bool:
     """Whether the durable row was committed; a write that raises is a failed write, logged by class name only."""
     try:
-        return await record_committed(event)
+        return await audit_store.record_committed(event)
     except Exception as exc:  # noqa: BLE001 -- an audit write is reported by its caller, never allowed to escape
         logger.error("audit: write of %s raised %s", event.action, type(exc).__name__)
         return False

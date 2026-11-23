@@ -20,7 +20,7 @@ from api import secrets as secrets_module
 from api import secrets_audit, secrets_system_vault
 from api.schemas_system import ChatSecretScope, SecretCreateRequest, SecretUpdateRequest
 from api.secrets_system_vault_17731_test import _SECRET_ID, _FakeVault, client_and_vault  # noqa: F401 -- fixture
-from services.audit import outcome
+from services.audit import audit as audit_store
 
 _OLD = "old-value-20557"  # pragma: allowlist secret
 _NEW = "new-value-20557"  # pragma: allowlist secret
@@ -140,7 +140,7 @@ def real_audit(client_and_vault, monkeypatch):  # noqa: F811
 @pytest.mark.parametrize("failure", [AsyncMock(return_value=False), AsyncMock(side_effect=RuntimeError("down"))])
 def test_a_failed_audit_write_stops_a_credential_delete(real_audit, monkeypatch, failure) -> None:
     client, vault = real_audit
-    monkeypatch.setattr(outcome, "record_committed", failure)
+    monkeypatch.setattr(audit_store, "record_committed", failure)
 
     response = client.delete(f"/api/secrets/{_SECRET_ID}")
 
@@ -152,7 +152,7 @@ def test_a_failed_audit_write_stops_a_credential_delete(real_audit, monkeypatch,
 @pytest.mark.parametrize("failure", [AsyncMock(return_value=False), AsyncMock(side_effect=RuntimeError("down"))])
 def test_a_failed_audit_write_stops_a_credential_rotate(real_audit, monkeypatch, failure) -> None:
     client, vault = real_audit
-    monkeypatch.setattr(outcome, "record_committed", failure)
+    monkeypatch.setattr(audit_store, "record_committed", failure)
 
     response = client.put(f"/api/secrets/{_SECRET_ID}", json={"value": _NEW})
 
@@ -168,7 +168,7 @@ def test_the_record_is_written_before_the_delete(real_audit, monkeypatch) -> Non
         order.append(f"audit:{'present' if _VAULT_KEY in vault.store else 'gone'}")
         return True
 
-    monkeypatch.setattr(outcome, "record_committed", record)
+    monkeypatch.setattr(audit_store, "record_committed", record)
 
     assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 200
     assert order[0] == "audit:present"
@@ -235,7 +235,7 @@ def test_the_attempt_and_its_outcome_are_awaited_durably_and_linked(real_audit, 
     """`attempted` waits for the committed row, and the outcome row is the shared helper's, linked to it (#21375)."""
     client, _ = real_audit
     record = AsyncMock(return_value=True)
-    monkeypatch.setattr(outcome, "record_committed", record)
+    monkeypatch.setattr(audit_store, "record_committed", record)
 
     assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 200
 
@@ -249,7 +249,7 @@ def test_every_record_of_a_delete_names_the_resolved_actor(real_audit, monkeypat
     """The actor is looked up once; a second lookup that fails must not file the delete as `system`."""
     client, _ = real_audit
     record = AsyncMock(return_value=True)
-    monkeypatch.setattr(outcome, "record_committed", record)
+    monkeypatch.setattr(audit_store, "record_committed", record)
     monkeypatch.setattr(secrets_audit, "_actor", lambda _r: None)  # the second lookup comes back empty
 
     assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 200
