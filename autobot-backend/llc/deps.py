@@ -5,7 +5,7 @@
 """Shared FastAPI dependency helpers for LLC API routers (GH#9843).
 
 Eliminates per-router copy-paste of:
-  - ``get_session`` / ``session_dep`` — the request session, committed before the response is
+  - ``get_session`` / ``SESSION_DEP`` — the request session, committed before the response is
     sent (#21332)
   - ``_service()`` / ``lazy_singleton`` boilerplate — replaced by
     ``service_dep(SvcClass)`` which returns a cacheable Depends-compatible
@@ -17,7 +17,7 @@ circular import when a router is loaded in isolation via importlib (e.g. tests).
 
 Usage::
 
-    from llc.deps import service_dep, session_dep
+    from llc.deps import service_dep, SESSION_DEP
     from llc.services.my_service import MyService
 
     router = APIRouter(...)
@@ -25,7 +25,7 @@ Usage::
 
     @router.get("/")
     async def handler(
-        session: AsyncSession = session_dep,
+        session: AsyncSession = SESSION_DEP,
         svc: MyService = Depends(_my_svc_dep),
     ) -> ...:
         ...
@@ -62,7 +62,7 @@ MEMBERSHIP_LOOKUP_FAILED_DETAIL = "Membership lookup failed"
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """Company OS request session: commits on success, rolls back on error (#21332).
 
-    Built on the canonical ``async_session_scope``. Resolved through ``session_dep`` (function scope) it
+    Built on the canonical ``async_session_scope``. Resolved through ``SESSION_DEP`` (function scope) it
     exits after the route body and BEFORE the response is sent, so a 2xx means the write is committed,
     a failing commit never reaches the client as a 2xx, and a raising route rolls back.
 
@@ -78,7 +78,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 #: ``scope="function"`` ends the yield dependency after the path operation function and before the response is
 #: sent. A plain ``Depends(get_session)`` is request-scoped and would commit after the response: the llc guard
 #: (``llc/tests/test_commit_before_answer_guard_21332.py``) fails on it.
-session_dep = Depends(get_session, scope="function")
+SESSION_DEP = Depends(get_session, scope="function")
 
 
 # ``functools.lru_cache`` does not lock a miss: two threads can both build the
@@ -275,5 +275,5 @@ __all__ = [
     "load_owned_project",
     "require_board_role",
     "service_dep",
-    "session_dep",
+    "SESSION_DEP",
 ]

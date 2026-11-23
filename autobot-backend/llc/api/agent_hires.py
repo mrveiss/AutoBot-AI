@@ -28,7 +28,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text, sanitize_log_value
 from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET, current_claude_model
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
-from llc.deps import assert_company_access, log_unexpected, logged_server_error, service_dep, session_dep
+from llc.deps import SESSION_DEP, assert_company_access, log_unexpected, logged_server_error, service_dep
 from llc.services.agent_hire_service import (
     AgentHirePending,
     HirePayload,
@@ -315,7 +315,7 @@ async def _fetch_company_model_overrides(
 @router.post("/agent-hires", response_model=AgentHireRead, status_code=201)
 async def create_agent_hire(
     body: AgentHireCreate,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> AgentHireRead:
@@ -393,7 +393,7 @@ async def create_agent_hire(
 
 @router.get("/agent-hires", response_model=List[AgentHireRead])
 async def list_agent_hires(
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentHireRead]:
@@ -559,7 +559,7 @@ async def hire_agent(
     company_id: uuid.UUID,
     body: AgentHireRequest,
     response: Response,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: ApprovalService = Depends(_approval_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),

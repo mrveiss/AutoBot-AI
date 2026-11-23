@@ -60,7 +60,7 @@ from api.user_management.dependencies import (
     require_reporting_line_write,
 )
 from autobot_shared.singleton_factory import lazy_singleton
-from llc.deps import assert_company_access, session_dep
+from llc.deps import SESSION_DEP, assert_company_access
 from user_management.services import TenantContext
 
 from ..models.enums import RoleHolderType
@@ -114,7 +114,7 @@ async def get_chain(
     company_id: uuid.UUID,
     subject_type: str,
     subject_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ChainResponse:
@@ -130,7 +130,7 @@ async def get_direct_reports(
     company_id: uuid.UUID,
     subject_type: str,
     subject_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[HolderRef]:
@@ -150,7 +150,7 @@ async def set_reporting_line(
     subject_type: str,
     subject_id: uuid.UUID,
     payload: ReportingLineWrite,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -179,7 +179,7 @@ async def clear_reporting_line(
     company_id: uuid.UUID,
     subject_type: str,
     subject_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

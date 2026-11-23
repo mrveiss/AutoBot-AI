@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.singleton_factory import lazy_singleton
-from llc.deps import assert_company_access, session_dep
+from llc.deps import SESSION_DEP, assert_company_access
 from user_management.services import TenantContext
 
 from ..models.company_tool import URL_LENGTH
@@ -76,7 +76,7 @@ class ToolOverlayUpdate(BaseModel):
 @router.get("/{company_id}", response_model=List[ToolCatalogueEntry])
 async def list_tools(
     company_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[ToolCatalogueEntry]:
@@ -102,7 +102,7 @@ async def list_tools(
 async def tool_usage(
     company_id: uuid.UUID,
     tool_name: str,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ToolUsage:
@@ -116,7 +116,7 @@ async def upsert_tool_overlay(
     company_id: uuid.UUID,
     tool_name: str,
     payload: ToolOverlayUpdate,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ToolCatalogueEntry:

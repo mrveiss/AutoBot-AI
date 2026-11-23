@@ -25,7 +25,7 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
-from llc.deps import service_dep, session_dep
+from llc.deps import SESSION_DEP, service_dep
 from user_management.services import TenantContext
 
 from ..exceptions import WipLimitExceeded
@@ -136,7 +136,7 @@ def _board_summary(board: Any) -> Dict[str, Any]:
 
 @router.get("")
 async def list_company_boards(
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -154,7 +154,7 @@ async def list_company_boards(
 @router.post("/kanban", status_code=201)
 async def create_kanban_board(
     body: KanbanBoardRequest,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -175,7 +175,7 @@ async def create_kanban_board(
 @router.post("/sprint", status_code=201)
 async def create_sprint_board(
     body: SprintBoardRequest,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -196,7 +196,7 @@ async def create_sprint_board(
 @router.get("/{board_id}")
 async def get_board(
     board_id: str,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -216,7 +216,7 @@ async def get_board(
 @router.get("/{board_id}/items")
 async def get_board_items(
     board_id: str,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -261,7 +261,7 @@ async def get_board_items(
 async def update_board(
     board_id: str,
     body: BoardUpdateRequest,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -287,7 +287,7 @@ async def update_board(
 @router.delete("/{board_id}", status_code=204)
 async def delete_board(
     board_id: str,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -314,7 +314,7 @@ async def delete_board(
 async def move_item(
     board_id: str,
     body: MoveItemRequest,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: BoardService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),

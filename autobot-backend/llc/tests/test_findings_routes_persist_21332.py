@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.status_enums import Severity
 from llc.api import findings as findings_api
 from llc.models.enums import FindingProposalStatus
 from llc.models.finding_proposal import LLCFindingProposal
@@ -71,7 +72,7 @@ def _proposal(pid: uuid.UUID, company: uuid.UUID, project: uuid.UUID, key: str) 
         source_id="src",
         finding_key=key,
         finding_type="bug",
-        severity="high",
+        severity=Severity.HIGH.value,
         file_path="a.py",
         description="d",
         status=FindingProposalStatus.PENDING,

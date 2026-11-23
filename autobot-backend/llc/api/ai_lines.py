@@ -29,7 +29,7 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from api.user_management.human_decider import require_interactive_human
 from autobot_shared.ai_lines import DEFAULT_LINE, SCOPE_COMPANY, SCOPE_USER, AiLine, LineScope
 from autobot_shared.http_refusal import http_refusal
-from llc.deps import assert_company_access, session_dep
+from llc.deps import SESSION_DEP, assert_company_access
 from llc.services.ai_lines import normalise_key
 from services.ai_line_change_action import register_ai_line_change_action
 from services.ai_line_change_proposal import propose_line_change
@@ -101,7 +101,7 @@ def _personal_scope(current_user: dict) -> uuid.UUID:
 # Personal routes are declared BEFORE the company routes so that "/me" is never parsed as a company id.
 @router.get("/me", response_model=AiLinesResponse)
 async def read_my_lines(
-    session: AsyncSession = session_dep, current_user: dict = Depends(get_current_user)
+    session: AsyncSession = SESSION_DEP, current_user: dict = Depends(get_current_user)
 ) -> AiLinesResponse:
     """The signed-in user's own lines: the scope of a user with no company (#18430)."""
     user = _personal_scope(current_user)
@@ -129,7 +129,7 @@ async def propose_my_change(
 @router.get("/{company_id}", response_model=AiLinesResponse)
 async def read_lines(
     company_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> AiLinesResponse:

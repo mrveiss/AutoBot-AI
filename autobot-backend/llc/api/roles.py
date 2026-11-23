@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.singleton_factory import lazy_singleton
-from llc.deps import assert_company_access, session_dep
+from llc.deps import SESSION_DEP, assert_company_access
 from user_management.services import TenantContext
 
 from ..models.enums import RoleHolderType
@@ -176,7 +176,7 @@ def _as_holder(assignment) -> HolderResponse:  # noqa: ANN001
 @router.get("/{company_id}", response_model=List[CompanyRoleResponse])
 async def list_roles(
     company_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[CompanyRoleResponse]:
@@ -188,7 +188,7 @@ async def list_roles(
 async def create_role(
     company_id: uuid.UUID,
     payload: RoleCreate,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRoleResponse:
@@ -214,7 +214,7 @@ async def update_role(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     payload: RoleUpdate,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRoleResponse:
@@ -236,7 +236,7 @@ async def update_role(
 async def delete_role(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -257,7 +257,7 @@ async def list_holders(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     include_past: bool = False,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[HolderResponse]:
@@ -281,7 +281,7 @@ async def assign_holder(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     payload: HolderCreate,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> HolderResponse:
@@ -308,7 +308,7 @@ async def end_tenure(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     assignment_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -324,7 +324,7 @@ async def end_tenure(
 async def list_permissions(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[str]:
@@ -337,7 +337,7 @@ async def grant_permission(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     payload: PermissionCreate,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -363,7 +363,7 @@ async def revoke_permission(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     permission: str,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -389,7 +389,7 @@ async def revoke_permission(
 async def list_role_workflows(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[str]:
@@ -403,7 +403,7 @@ async def attach_workflow(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     payload: WorkflowAttach,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -428,7 +428,7 @@ async def detach_workflow(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     workflow_id: str,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -456,7 +456,7 @@ class CredentialAttach(BaseModel):
 async def list_role_tools(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[str]:
@@ -469,7 +469,7 @@ async def attach_tool(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     payload: ToolAttach,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -496,7 +496,7 @@ async def detach_tool(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     tool_name: str,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -517,7 +517,7 @@ async def list_role_credentials(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     include_revoked: bool = False,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[uuid.UUID]:
@@ -534,7 +534,7 @@ async def attach_credential(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     payload: CredentialAttach,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -559,7 +559,7 @@ async def detach_credential(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     secret_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -585,7 +585,7 @@ async def get_step_cost(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     workflow_id: str,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> StepCostResponse:
@@ -620,7 +620,7 @@ async def set_step_cost_inputs(
     role_id: uuid.UUID,
     workflow_id: str,
     payload: StepCostInputs,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> StepCostResponse:
@@ -648,7 +648,7 @@ async def set_step_cost_inputs(
 async def get_role_rate(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Optional[RoleRateResponse]:
@@ -669,7 +669,7 @@ async def set_role_rate(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
     payload: RoleRateSet,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> RoleRateResponse:
@@ -695,7 +695,7 @@ async def set_role_rate(
 async def clear_role_rate(
     company_id: uuid.UUID,
     role_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

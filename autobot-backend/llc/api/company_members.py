@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import assert_company_access, session_dep
+from llc.deps import SESSION_DEP, assert_company_access
 from llc.models.enums import MembershipRole
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.membership_policy import LastOwnerError, authorize_member_change, lock_company_members
@@ -67,7 +67,7 @@ async def _current_role(session: AsyncSession, svc: MembershipService, company_i
 async def add_member(
     company_id: uuid.UUID,
     body: MemberAddRequest,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -100,7 +100,7 @@ async def change_member_role(
     company_id: uuid.UUID,
     user_id: uuid.UUID,
     body: MemberRoleRequest,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -131,7 +131,7 @@ async def change_member_role(
 async def remove_member(
     company_id: uuid.UUID,
     user_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),

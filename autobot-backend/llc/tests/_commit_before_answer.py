@@ -5,7 +5,7 @@
 """Measuring instruments for the commit-before-answer guard (#21332).
 
 Owner ruling (2026-11-21): every Company OS write route commits before it answers, so a 2xx always means
-committed. The mechanism is ONE dependency (`llc.deps.session_dep`: `get_session` resolved with FastAPI's
+committed. The mechanism is ONE dependency (`llc.deps.SESSION_DEP`: `get_session` resolved with FastAPI's
 `scope="function"`), and this module reads the real route graph to prove every route uses it:
 
 * `llc_write_routes`        the write `APIRoute`s of the real, aggregated `llc.api.router` (population G2 walks)

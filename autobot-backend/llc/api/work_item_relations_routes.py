@@ -25,7 +25,7 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.singleton_factory import lazy_singleton
-from llc.deps import service_dep, session_dep
+from llc.deps import SESSION_DEP, service_dep
 from user_management.services import TenantContext
 
 from ..models.enums import WorkItemRelationType
@@ -92,7 +92,7 @@ async def _require_relation_of(session: AsyncSession, relation_id: str, item_id:
 async def add_relation(
     work_item_id: str,
     body: RelationCreate,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -127,7 +127,7 @@ async def remove_relation(
     work_item_id: str,
     relation_id: str,
     company_id: Optional[str] = Query(None, description="Accepted for compatibility; ignored."),
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

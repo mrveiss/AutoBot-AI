@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.webhook_signature import verify_webhook_signature
-from llc.deps import session_dep
+from llc.deps import SESSION_DEP
 
 from ..models.enums import WorkItemStatus
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
@@ -199,7 +199,7 @@ def _require_valid_signature(body: bytes, signature: Optional[str]) -> None:
 @router.post("/github")
 async def handle_github_webhook(
     request: Request,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     x_github_event: Optional[str] = Header(None),
     x_hub_signature_256: Optional[str] = Header(None),
 ) -> Dict[str, Any]:

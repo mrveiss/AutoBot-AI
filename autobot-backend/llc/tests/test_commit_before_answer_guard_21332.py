@@ -4,7 +4,7 @@
 # Author: mrveiss
 """A Company OS write route commits before it answers (#21332, owner ruling 2026-11-21).
 
-A 2xx from an llc write route means the write is committed. One dependency carries that: `llc.deps.session_dep`
+A 2xx from an llc write route means the write is committed. One dependency carries that: `llc.deps.SESSION_DEP`
 (`get_session` resolved with FastAPI's `scope="function"`, which exits after the route body and before the response
 is sent). Four parts pin it, each next to the control that proves its instrument can fail:
 
@@ -33,7 +33,7 @@ from repo_tests._ratchet_base import base_file_present, base_table
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from llc.api import router as llc_router
-from llc.deps import get_session, session_dep
+from llc.deps import SESSION_DEP, get_session
 from llc.tests._commit_before_answer import (
     LLC_ROOT,
     OWN_SESSION_HANDLERS,
@@ -100,7 +100,7 @@ def _app(events: list) -> FastAPI:
     app = FastAPI()
 
     @app.post("/scoped")
-    async def scoped(session: AsyncSession = session_dep) -> dict:
+    async def scoped(session: AsyncSession = SESSION_DEP) -> dict:
         events.append("handler")
         return {"ok": True}
 
@@ -110,7 +110,7 @@ def _app(events: list) -> FastAPI:
         return {"ok": True}
 
     @app.post("/refused")
-    async def refused(session: AsyncSession = session_dep) -> dict:
+    async def refused(session: AsyncSession = SESSION_DEP) -> dict:
         events.append("handler")
         raise HTTPException(status_code=409, detail="refused")
 
@@ -198,7 +198,7 @@ async def _legacy_provider(session: AsyncSession = Depends(get_async_session)) -
     return {}
 
 
-def _service_with_scoped_session(session: AsyncSession = session_dep) -> object:
+def _service_with_scoped_session(session: AsyncSession = SESSION_DEP) -> object:
     return object()
 
 
@@ -206,7 +206,7 @@ async def _through_scoped_sub_dependency(service: object = Depends(_service_with
     return {}
 
 
-async def _scoped(session: AsyncSession = session_dep) -> dict:
+async def _scoped(session: AsyncSession = SESSION_DEP) -> dict:
     return {}
 
 
@@ -281,7 +281,7 @@ def test_every_write_route_commits_before_it_answers_except_the_baselined_files(
     offenders = {
         route_key(r): session_violations(r) for r in routes if session_violations(r) and route_key(r)[0] not in held
     }
-    assert not offenders, f"use `session_dep` from llc.deps (function scope): {sorted(offenders)}"
+    assert not offenders, f"use `SESSION_DEP` from llc.deps (function scope): {sorted(offenders)}"
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +300,7 @@ def test_no_file_was_added_to_the_baseline_against_the_base() -> None:
     if base_file_present(root, (_BASELINE_REL,)):
         base = set(base_table(root, (_BASELINE_REL,), "COMMIT_BEFORE_ANSWER_BASELINE", absent_as_empty=True))
     added = baseline_additions(set(COMMIT_BEFORE_ANSWER_BASELINE), base)
-    assert not added, f"files added to a shrink-only baseline: {sorted(added)}; move them to session_dep instead"
+    assert not added, f"files added to a shrink-only baseline: {sorted(added)}; move them to SESSION_DEP instead"
 
 
 def test_a_baseline_addition_is_reported_and_a_removal_is_not() -> None:

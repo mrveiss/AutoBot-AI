@@ -231,7 +231,21 @@ def require_work_item_id(request: Request) -> None:
     handler's own logic is not caught. This runs before each handler's auth, so an
     unauthenticated caller with a malformed id gets 404 too; it says nothing about any row.
     """
-    raw = request.path_params.get("work_item_id")
+    _parse_path_work_item_id(request, "work_item_id")
+
+
+def require_context_item_id(request: Request) -> None:
+    """Route dependency for ``/context/{item_id}``: the same 404 as ``require_work_item_id`` (#20120).
+
+    A route-level dependency resolves before the route's own parameters, so a malformed id is
+    refused before the request session (``SESSION_DEP``) is opened (#21332).
+    """
+    _parse_path_work_item_id(request, "item_id")
+
+
+def _parse_path_work_item_id(request: Request, param: str) -> None:
+    """404 when the *param* path segment is present and not a UUID."""
+    raw = request.path_params.get(param)
     if raw is not None:
         parse_work_item_id(raw)
 

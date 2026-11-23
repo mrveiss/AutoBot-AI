@@ -23,7 +23,7 @@ from api.user_management.human_decider import require_interactive_human
 from autobot_shared.http_refusal import fixed_refusal, http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
-from llc.deps import assert_company_access, load_authorized, service_dep, session_dep
+from llc.deps import SESSION_DEP, assert_company_access, load_authorized, service_dep
 from models.approval import Approval
 from services.ai_line_change_action import ACTION as LINE_CHANGE_ACTION
 from services.approval_execution import is_server_only_action, run_post_approval_actions, set_verified_decider
@@ -94,7 +94,7 @@ class ApprovalResponse(BaseModel):
 @router.post("/approvals", response_model=ApprovalResponse, status_code=201)
 async def request_approval(
     body: ApprovalRequest,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: ApprovalService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -125,7 +125,7 @@ async def request_approval(
 async def list_pending(
     company_id: str = Query(..., description="Filter by company"),
     type: Optional[ApprovalType] = Query(None, description="Filter by gate type"),
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: ApprovalService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -149,7 +149,7 @@ class PendingCountResponse(BaseModel):
 @router.get("/companies/{company_id}/approvals/pending-count", response_model=PendingCountResponse)
 async def pending_count(
     company_id: uuid.UUID,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: ApprovalService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -163,7 +163,7 @@ async def pending_count(
 async def decide_approval(
     approval_id: str,
     body: ApprovalDecision,
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: ApprovalService = Depends(_service),
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),

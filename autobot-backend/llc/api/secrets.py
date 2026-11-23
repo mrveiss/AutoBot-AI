@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.http_refusal import fixed_refusal
-from llc.deps import session_dep
+from llc.deps import SESSION_DEP
 from llc.models.secret import LLCSecret
 from llc.services.authz import NotAuthorisedError, require_company_admin
 from llc.services.secret import SecretNotFound, SecretService
@@ -106,7 +106,7 @@ async def _require_secret_admin(
     company_id: str = Depends(_check_company_access),
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
 ) -> str:
     """Owner or admin of this company, or a platform admin; else 403.
 
@@ -131,7 +131,7 @@ async def _require_secret_admin(
 @router.get("/{company_id}", response_model=List[SecretSummary])
 async def list_secrets(
     company_id: str = Depends(_check_company_access),
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
 ) -> List[SecretSummary]:
     """List secret names and versions.  Values are never included."""
@@ -147,7 +147,7 @@ async def list_secrets(
 async def set_secret(
     body: SecretSetRequest,
     company_id: str = Depends(_require_secret_admin),
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
     current_user: dict = Depends(get_current_user),
 ) -> SecretSetResponse:
@@ -171,7 +171,7 @@ async def set_secret(
 async def get_secret(
     name: str,
     company_id: str = Depends(_require_secret_admin),
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
 ) -> SecretValueResponse:
     """Return the decrypted plaintext value for a named secret."""
@@ -194,7 +194,7 @@ async def get_secret(
 async def revoke_secret(
     name: str,
     company_id: str = Depends(_require_secret_admin),
-    session: AsyncSession = session_dep,
+    session: AsyncSession = SESSION_DEP,
     svc: SecretService = Depends(_get_service),
     current_user: dict = Depends(get_current_user),
 ) -> None:
