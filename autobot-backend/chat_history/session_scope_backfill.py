@@ -33,9 +33,13 @@ hook, and the CLI defaults to a dry run. Writing requires ``--apply``.
 
 #21997 (owner decision): no chat is re-tagged automatically. Untagged chats, these legacy CEO chats included, are
 listed as Unassigned and a person assigns each to a company through ``POST /chat/sessions/{id}/company``, which
-leaves an audit record. This module must therefore keep no caller (no startup, migration, task or agent invokes
-it); ``api/chat_company_scope_21997_test.py`` pins that. Its ``--apply`` is a manual operator tool that writes no
-audit record, so a person assigning through the route is the supported path.
+leaves an audit record.
+
+#16905 (owner decision 2026-11-23): this module is the PROPOSER. :func:`plan_dry_run` is called only by
+``services/chat_company_proposals.py``, which files each ``taggable`` entry in the approval queue (#17038); a person
+approves it and ``services/chat_company_assignment_action.py`` writes it through the same audited assign path as
+the route. Nothing here writes on that path. The CLI's ``--apply`` is a manual operator tool that writes no audit
+record, so approving a proposal is the supported path.
 
 Usage::
 
@@ -230,10 +234,12 @@ def _sessions_on_disk(chat_mgr) -> int:
     return len(list(directory.glob("*_chat.json")))
 
 
-async def _main(apply_changes: bool) -> None:
-    from chat_history import ChatHistoryManager
+async def plan_dry_run(chat_mgr) -> BackfillPlan:
+    """Scan every session and classify it. Writes nothing; the one read both the CLI and the proposer use (#16905).
 
-    chat_mgr = ChatHistoryManager()
+    Raises rather than report a clean scan of nothing: a listing that failed silently, or a company list that
+    could not be read, would otherwise look like "no legacy chats".
+    """
     sessions = await chat_mgr.list_sessions()
 
     on_disk = _sessions_on_disk(chat_mgr)
@@ -251,7 +257,14 @@ async def _main(apply_changes: bool) -> None:
             f"company: {exc}. Nothing was written."
         ) from exc
 
-    plan = build_plan(sessions, known)
+    return build_plan(sessions, known)
+
+
+async def _main(apply_changes: bool) -> None:
+    from chat_history import ChatHistoryManager
+
+    chat_mgr = ChatHistoryManager()
+    plan = await plan_dry_run(chat_mgr)
 
     # Reported through the logger, not print(), matching
     # `session_reply_backfill` and `workflow_redis_backfill` — the two existing

@@ -41,6 +41,7 @@ from api.benchmarks import router as benchmarks_router  # Issue #9024
 from api.browser_mcp import router as browser_mcp_router
 from api.canvas import router as canvas_router  # MVA-359
 from api.chat import router as chat_router
+from api.chat_company_proposals import router as chat_company_proposals_router  # #16905
 from api.chat_compare import router as chat_compare_router  # Issue #4414
 from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
@@ -180,6 +181,7 @@ def _get_system_routers() -> list:
         (mobile_devices_router, "/devices", ["devices", "integrations"], "mobile_devices"),  # GH#4463
         (data_storage_router, "", ["data-storage"], "data_storage"),
         (conversation_file_cleanup_router, "/conversation-files", ["conversation-files"], "conversation_file_cleanup"),
+        (chat_company_proposals_router, "", ["chat-company-proposals"], "chat_company_proposals"),  # #16905
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
     ]

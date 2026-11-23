@@ -399,15 +399,27 @@ class TestAssignCompany:
 class TestNothingRetagsAChatOnItsOwn:
     """The owner decision: no migration, no agent and no startup hook assigns a company."""
 
-    def test_the_backfill_has_no_caller(self):
+    # #16905 (owner decision 2026-11-23): the backfill is the PROPOSER whose caller is the approval queue. The one
+    # production importer is the module that files its findings as proposals; nothing else may reach it, so no
+    # startup hook, migration, task or agent can drive it, and it still retags nothing on its own.
+    _ONLY_CALLER = "services/chat_company_proposals.py"
+
+    def test_the_backfill_is_called_only_by_the_proposer_that_files_approval_requests(self):
         root = pathlib.Path(__file__).resolve().parents[1]
         importers = []
         for path in root.rglob("*.py"):
             if path.name.startswith("session_scope_backfill") or path == pathlib.Path(__file__).resolve():
                 continue
+            if path.name.endswith("_test.py"):
+                continue
             if "session_scope_backfill" in path.read_text(encoding="utf-8", errors="ignore"):
-                importers.append(str(path.relative_to(root)))
-        assert importers == [], f"the backfill is wired into: {importers}"
+                importers.append(path.relative_to(root).as_posix())
+        assert importers == [self._ONLY_CALLER], f"the backfill is wired into: {importers}"
+
+    def test_the_proposer_never_writes_a_chat_itself(self):
+        source = (pathlib.Path(__file__).resolve().parents[1] / self._ONLY_CALLER).read_text(encoding="utf-8")
+        for writer in ("apply_plan", "update_session_metadata", "set_metadata_if_unset"):
+            assert writer not in source
 
 
 class TestConcurrentAssignIsACompareAndSet:
