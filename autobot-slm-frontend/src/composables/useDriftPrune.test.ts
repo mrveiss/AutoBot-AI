@@ -29,7 +29,7 @@ describe('useDriftPrune batching (#22082)', () => {
     const rest = filesOf(DRIFT_PRUNE_MAX_PATHS, 7)
     call
       .mockResolvedValueOnce({ component: 'plugins', files: filesOf(0, total) })
-      .mockResolvedValueOnce({ component: 'plugins', removed: [], refused: {}, failed: {} })
+      .mockResolvedValueOnce({ component: 'plugins', removed: ['f0.py'], refused: {}, failed: {} })
       .mockResolvedValueOnce({ component: 'plugins', files: rest })
     const prune = useDriftPrune()
 
@@ -57,6 +57,30 @@ describe('useDriftPrune batching (#22082)', () => {
     await prune.preview('plugins')
     await prune.confirm('plugins')
     expect(prune.previews.value.plugins).toBeUndefined()
+  })
+
+  it('does not re-preview when the whole batch was refused, and keeps the outcome', async () => {
+    call
+      .mockResolvedValueOnce({ component: 'plugins', files: filesOf(0, 2) })
+      .mockResolvedValueOnce({ component: 'plugins', removed: [], refused: { 'f0.py': 'left untouched' }, failed: {} })
+    const prune = useDriftPrune()
+    await prune.preview('plugins')
+    await prune.confirm('plugins')
+    expect(call).toHaveBeenCalledTimes(2)
+    expect(prune.previews.value.plugins).toBeUndefined()
+    expect(prune.results.value.plugins.refused).toEqual({ 'f0.py': 'left untouched' })
+  })
+
+  it('re-previews after a partial failure, so the leftovers are shown again', async () => {
+    call
+      .mockResolvedValueOnce({ component: 'plugins', files: filesOf(0, 2) })
+      .mockResolvedValueOnce({ component: 'plugins', removed: ['f0.py'], refused: { 'f1.py': 'left untouched' }, failed: {} })
+      .mockResolvedValueOnce({ component: 'plugins', files: filesOf(1, 1) })
+    const prune = useDriftPrune()
+    await prune.preview('plugins')
+    await prune.confirm('plugins')
+    expect(call).toHaveBeenCalledTimes(3)
+    expect(prune.batch('plugins').files.map((f) => f.path)).toEqual(['f1.py'])
   })
 
   it('reports a failed request through the i18n key', async () => {

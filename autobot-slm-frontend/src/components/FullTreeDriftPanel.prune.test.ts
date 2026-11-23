@@ -80,6 +80,7 @@ describe('FullTreeDriftPanel prune (#22082)', () => {
     post
       .mockResolvedValueOnce({ component: 'plugins', files: [{ path: 'core-plugins/x/plugin.py', detail: 'abc' }] })
       .mockResolvedValueOnce({ component: 'plugins', removed: ['core-plugins/x/plugin.py'], refused: {}, failed: {} })
+      .mockResolvedValueOnce({ component: 'plugins', files: [{ path: 'core-plugins/y/plugin.py', detail: 'def' }] })
     const wrapper = mountPanel()
 
     await wrapper.find('[data-testid="drift-prune-preview"]').trigger('click')
@@ -91,6 +92,8 @@ describe('FullTreeDriftPanel prune (#22082)', () => {
       body: { component: 'plugins', paths: ['core-plugins/x/plugin.py'] },
     })
     expect(fetchFullTreeDrift).toHaveBeenCalledTimes(1)
+    expect(post).toHaveBeenNthCalledWith(3, 'post', '/api/code-sync/drift/prune/preview', { body: { component: 'plugins' } })
+    expect(wrapper.find('[data-testid="drift-prune-files"]').text()).toContain('core-plugins/y/plugin.py')
     expect(wrapper.find('[data-testid="drift-prune-result"]').text()).toContain('Removed 1 file(s); 0 left in place')
   })
 
@@ -110,6 +113,8 @@ describe('FullTreeDriftPanel prune (#22082)', () => {
     await wrapper.find('[data-testid="drift-prune-confirm-button"]').trigger('click')
     await flushPromises()
 
+    expect(post).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="drift-prune-confirm"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="drift-prune-result"]').text()).toContain('left untouched')
   })
 

@@ -88,6 +88,7 @@ KEY_MAPPINGS: dict[str, str] = {
     "agents.processMonitorTab.durationMinutes": "workflow.history.durationMinutes",
     # #22084: "Cancel" matches too many unrelated keys whose he/ur translations are
     # still English; this names the one dedicated source key for the prune dialog.
+    # The main-app `driftPrune` block exists only as a lift source for the SLM locales.
     "fullTreeDriftPanel.prune.cancel": "driftPrune.cancel",
 }
 

@@ -87,7 +87,9 @@ export function useDriftPrune() {
     if (!data) return null
     results.value = { ...results.value, [component]: data }
     delete previews.value[component]
-    // Re-preview so the next batch (or anything left in place) is shown for its own confirm.
+    // Re-preview only when something was removed: the next batch (or what was left in place)
+    // is then shown for its own confirm. A fully refused batch would just repeat the same list.
+    if (data.removed.length === 0) return data
     const next = await fetchPreview(component)
     if (next && next.files.length === 0) delete previews.value[component]
     return data
