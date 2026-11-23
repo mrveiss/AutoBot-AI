@@ -51,6 +51,8 @@ def _load_sso_module():
         "sqlalchemy.select": MagicMock(),
         "autobot_shared": MagicMock(),
         "autobot_shared.audit_actions": load_real_audit_actions(),  # #18716: real, stdlib-only
+        # api/sso.py raises fixed 4xx refusals (#21943); "autobot_shared" is a MagicMock, not a package
+        "autobot_shared.http_refusal": MagicMock(fixed_refusal=lambda status_code: Exception(status_code)),
         "autobot_shared.auth": MagicMock(),
         "autobot_shared.auth.permissions": MagicMock(),
         "models": MagicMock(),
