@@ -79599,7 +79599,7 @@ export interface components {
          * GoalPayload
          * @description Goal payload — unified from bare and advanced variants (#10666 B1).
          *
-         *     The simple /goal endpoint reads only ``goal``/``use_phi2``; the caller's role comes from the authenticated identity (#22143).
+         *     The simple /goal endpoint reads only ``goal``/``use_phi2``; the role is the session's (#22143).
          *     The /goal/orchestrated endpoint also reads the remaining optional fields.
          *     All added fields carry defaults, so existing callers that only send
          *     ``goal`` remain fully backward-compatible.

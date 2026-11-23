@@ -20,7 +20,7 @@
 
       <!-- Connection Information Section -->
       <fieldset class="space-y-4">
-        <legend class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
+        <legend class="flex items-center gap-2 text-sm font-semibold text-autobot-text-secondary border-b border-autobot-border-subtle pb-2">
           <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
           </svg>
@@ -30,7 +30,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <!-- Hostname -->
           <div class="sm:col-span-1">
-            <label for="hostname" class="block text-sm font-medium text-gray-700 mb-1">
+            <label for="hostname" class="block text-sm font-medium text-autobot-text-secondary mb-1">
               {{ $t('addNodeModal.hostname') }} <span class="text-error-500" aria-hidden="true">*</span>
               <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
             </label>
@@ -50,7 +50,7 @@
 
           <!-- IP Address -->
           <div class="sm:col-span-1">
-            <label for="ip_address" class="block text-sm font-medium text-gray-700 mb-1">
+            <label for="ip_address" class="block text-sm font-medium text-autobot-text-secondary mb-1">
               {{ $t('addNodeModal.iPAddress') }} <span class="text-error-500" aria-hidden="true">*</span>
               <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
             </label>
@@ -70,7 +70,7 @@
 
           <!-- SSH Port -->
           <div class="sm:col-span-1">
-            <label for="ssh_port" class="block text-sm font-medium text-gray-700 mb-1">
+            <label for="ssh_port" class="block text-sm font-medium text-autobot-text-secondary mb-1">
               {{ $t('addNodeModal.sSHPort') }}
             </label>
             <input
@@ -88,7 +88,7 @@
 
       <!-- Authentication Method Section -->
       <fieldset class="space-y-4">
-        <legend class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
+        <legend class="flex items-center gap-2 text-sm font-semibold text-autobot-text-secondary border-b border-autobot-border-subtle pb-2">
           <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
           </svg>
@@ -102,7 +102,7 @@
               'flex-1 flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all',
               formData.auth_method === 'password'
                 ? 'border-primary-500 bg-primary-50'
-                : 'border-gray-200 hover:border-gray-300 bg-white'
+                : 'border-autobot-border hover:border-autobot-border-strong bg-white'
             ]"
           >
             <input
@@ -117,8 +117,8 @@
               </svg>
             </div>
             <div>
-              <p class="font-medium text-gray-900">{{ $t('addNodeModal.password') }}</p>
-              <p class="text-xs text-gray-500">{{ $t('addNodeModal.sudoUserWithPassword') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('addNodeModal.password') }}</p>
+              <p class="text-xs text-autobot-text-tertiary">{{ $t('addNodeModal.sudoUserWithPassword') }}</p>
             </div>
           </label>
 
@@ -127,7 +127,7 @@
               'flex-1 flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all',
               formData.auth_method === 'pki'
                 ? 'border-primary-500 bg-primary-50'
-                : 'border-gray-200 hover:border-gray-300 bg-white'
+                : 'border-autobot-border hover:border-autobot-border-strong bg-white'
             ]"
           >
             <input
@@ -142,18 +142,18 @@
               </svg>
             </div>
             <div>
-              <p class="font-medium text-gray-900">{{ $t('addNodeModal.pKISSHKey') }}</p>
-              <p class="text-xs text-gray-500">{{ $t('addNodeModal.recommendedForProduction') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('addNodeModal.pKISSHKey') }}</p>
+              <p class="text-xs text-autobot-text-tertiary">{{ $t('addNodeModal.recommendedForProduction') }}</p>
             </div>
           </label>
         </div>
 
         <!-- Password Auth Fields -->
-        <div v-if="formData.auth_method === 'password'" class="p-4 bg-gray-50 rounded-lg space-y-4">
+        <div v-if="formData.auth_method === 'password'" class="p-4 bg-autobot-bg-secondary rounded-lg space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <!-- SSH User -->
             <div>
-              <label for="ssh_user" class="block text-sm font-medium text-gray-700 mb-1">
+              <label for="ssh_user" class="block text-sm font-medium text-autobot-text-secondary mb-1">
                 {{ $t('addNodeModal.username') }} <span class="text-error-500" aria-hidden="true">*</span>
                 <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
               </label>
@@ -169,11 +169,11 @@
 
             <!-- Password -->
             <div>
-              <label for="ssh_password" class="block text-sm font-medium text-gray-700 mb-1">
+              <label for="ssh_password" class="block text-sm font-medium text-autobot-text-secondary mb-1">
                 {{ $t('addNodeModal.password') }}
                 <span v-if="!isEditMode || needsCredentialsForEdit" class="text-error-500" aria-hidden="true">*</span>
                 <span v-if="!isEditMode || needsCredentialsForEdit" class="sr-only">{{ $t('addNodeModal.required') }}</span>
-                <span v-else class="text-gray-400 text-xs ml-1">{{ $t('addNodeModal.optional') }}</span>
+                <span v-else class="text-autobot-text-tertiary text-xs ml-1">{{ $t('addNodeModal.optional') }}</span>
               </label>
               <div class="relative">
                 <input
@@ -190,7 +190,7 @@
                 <button
                   type="button"
                   @click="showPassword = !showPassword"
-                  class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                  class="absolute inset-y-0 right-0 flex items-center pr-3 text-autobot-text-tertiary hover:text-autobot-text-secondary"
                   :aria-label="showPassword ? $t('addNodeModal.hidePasswordAria') : $t('addNodeModal.showPasswordAria')"
                   :aria-pressed="showPassword"
                 >
@@ -212,17 +212,17 @@
             <input
               type="checkbox"
               v-model="formData.has_sudo"
-              class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
+              class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
             />
-            <span class="text-sm text-gray-700">{{ $t('addNodeModal.userHasSudoPrivileges') }}</span>
+            <span class="text-sm text-autobot-text-secondary">{{ $t('addNodeModal.userHasSudoPrivileges') }}</span>
           </label>
         </div>
 
         <!-- PKI Auth Fields -->
-        <div v-if="formData.auth_method === 'pki'" class="p-4 bg-gray-50 rounded-lg space-y-4">
+        <div v-if="formData.auth_method === 'pki'" class="p-4 bg-autobot-bg-secondary rounded-lg space-y-4">
           <!-- SSH User -->
           <div>
-            <label for="ssh_user_pki" class="block text-sm font-medium text-gray-700 mb-1">
+            <label for="ssh_user_pki" class="block text-sm font-medium text-autobot-text-secondary mb-1">
               {{ $t('addNodeModal.username') }} <span class="text-error-500" aria-hidden="true">*</span>
               <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
             </label>
@@ -238,7 +238,7 @@
 
           <!-- Key Source Selection -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('addNodeModal.sSHKeySource') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('addNodeModal.sSHKeySource') }}</label>
             <div class="space-y-2" role="radiogroup" :aria-label="$t('addNodeModal.sSHKeySourceAria')">
               <label
                 v-for="option in keySourceOptions"
@@ -247,23 +247,23 @@
                   'flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all',
                   keySource === option.value
                     ? 'border-primary-500 bg-primary-50'
-                    : 'border-gray-200 hover:border-gray-300'
+                    : 'border-autobot-border hover:border-autobot-border-strong'
                 ]"
               >
                 <input
                   type="radio"
                   v-model="keySource"
                   :value="option.value"
-                  class="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                  class="w-4 h-4 text-primary-600 border-autobot-border-strong focus:ring-primary-500"
                 />
-                <span class="text-sm text-gray-700">{{ option.label }}</span>
+                <span class="text-sm text-autobot-text-secondary">{{ option.label }}</span>
               </label>
             </div>
           </div>
 
           <!-- Key Path (for browse) -->
           <div v-if="keySource === 'browse'">
-            <label for="ssh_key_path" class="block text-sm font-medium text-gray-700 mb-1">
+            <label for="ssh_key_path" class="block text-sm font-medium text-autobot-text-secondary mb-1">
               {{ $t('addNodeModal.keyPath') }}
             </label>
             <input
@@ -277,7 +277,7 @@
 
           <!-- Key Content (for paste) -->
           <div v-if="keySource === 'paste'">
-            <label for="ssh_key" class="block text-sm font-medium text-gray-700 mb-1">
+            <label for="ssh_key" class="block text-sm font-medium text-autobot-text-secondary mb-1">
               {{ $t('addNodeModal.sSHPrivateKey') }}
             </label>
             <textarea
@@ -297,7 +297,7 @@
 
       <!-- Role Assignment Section -->
       <fieldset class="space-y-4">
-        <legend class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
+        <legend class="flex items-center gap-2 text-sm font-semibold text-autobot-text-secondary border-b border-autobot-border-subtle pb-2">
           <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
           </svg>
@@ -312,32 +312,32 @@
               'flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-all',
               formData.roles.includes(role.id)
                 ? 'border-primary-500 bg-primary-50'
-                : 'border-gray-200 hover:border-gray-300'
+                : 'border-autobot-border hover:border-autobot-border-strong'
             ]"
           >
             <input
               type="checkbox"
               :value="role.id"
               v-model="formData.roles"
-              class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
+              class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
               :aria-label="`${role.name}: ${role.description}`"
             />
             <div>
-              <p class="font-medium text-gray-900 text-sm">{{ role.name }}</p>
-              <p class="text-xs text-gray-500">{{ role.description }}</p>
+              <p class="font-medium text-autobot-text-primary text-sm">{{ role.name }}</p>
+              <p class="text-xs text-autobot-text-tertiary">{{ role.description }}</p>
             </div>
           </label>
         </div>
         <p v-if="errors.roles" class="text-xs text-error-500" role="alert">{{ errors.roles }}</p>
 
         <!-- Selected Roles Details -->
-        <div v-if="selectedRolesDetails.length > 0" class="p-3 bg-gray-50 rounded-lg" role="status">
-          <p class="text-xs font-medium text-gray-600 mb-2">{{ $t('addNodeModal.selectedRolesWillConfigure') }}</p>
+        <div v-if="selectedRolesDetails.length > 0" class="p-3 bg-autobot-bg-secondary rounded-lg" role="status">
+          <p class="text-xs font-medium text-autobot-text-secondary mb-2">{{ $t('addNodeModal.selectedRolesWillConfigure') }}</p>
           <div class="space-y-1">
             <div v-for="role in selectedRolesDetails" :key="role.id" class="flex items-center gap-2 text-xs">
               <span class="w-2 h-2 bg-primary-500 rounded-full" aria-hidden="true"></span>
-              <span class="text-gray-700">{{ role.name }}: {{ role.services?.join(', ') || $t('addNodeModal.noServices') }}</span>
-              <span v-if="role.default_port" class="text-gray-500">{{ $t('addNodeModal.portValue0', { value0: role.default_port }) }}</span>
+              <span class="text-autobot-text-secondary">{{ role.name }}: {{ role.services?.join(', ') || $t('addNodeModal.noServices') }}</span>
+              <span v-if="role.default_port" class="text-autobot-text-tertiary">{{ $t('addNodeModal.portValue0', { value0: role.default_port }) }}</span>
             </div>
           </div>
         </div>
@@ -345,7 +345,7 @@
 
       <!-- Enrollment Options Section -->
       <fieldset class="space-y-4">
-        <legend class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
+        <legend class="flex items-center gap-2 text-sm font-semibold text-autobot-text-secondary border-b border-autobot-border-subtle pb-2">
           <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -360,26 +360,26 @@
             <input
               type="checkbox"
               v-model="formData.import_existing"
-              class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
+              class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
             />
             <div>
-              <span class="text-sm text-gray-700 font-medium">{{ $t('addNodeModal.importExistingNodeNo') }}</span>
-              <p class="text-xs text-gray-500 mt-0.5">
+              <span class="text-sm text-autobot-text-secondary font-medium">{{ $t('addNodeModal.importExistingNodeNo') }}</span>
+              <p class="text-xs text-autobot-text-tertiary mt-0.5">
                 {{ $t('addNodeModal.registerAnAlreadyConfigured') }}
               </p>
             </div>
           </label>
 
-          <div v-if="!formData.import_existing" class="pl-4 border-l-2 border-gray-200 space-y-3">
+          <div v-if="!formData.import_existing" class="pl-4 border-l-2 border-autobot-border space-y-3">
             <label class="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 v-model="formData.auto_enroll"
-                class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
+                class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
               />
               <div>
-                <span class="text-sm text-gray-700">{{ $t('addNodeModal.startEnrollmentImmediatelyAfter') }}</span>
-                <p class="text-xs text-gray-500 mt-0.5">
+                <span class="text-sm text-autobot-text-secondary">{{ $t('addNodeModal.startEnrollmentImmediatelyAfter') }}</span>
+                <p class="text-xs text-autobot-text-tertiary mt-0.5">
                   {{ $t('addNodeModal.theNodeWillBe') }}
                 </p>
               </div>
@@ -389,11 +389,11 @@
               <input
                 type="checkbox"
                 v-model="formData.deploy_pki"
-                class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
+                class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
               />
               <div>
-                <span class="text-sm text-gray-700">{{ $t('addNodeModal.deployPKICertificatesDuring') }}</span>
-                <p class="text-xs text-gray-500 mt-0.5">
+                <span class="text-sm text-autobot-text-secondary">{{ $t('addNodeModal.deployPKICertificatesDuring') }}</span>
+                <p class="text-xs text-autobot-text-tertiary mt-0.5">
                   {{ $t('addNodeModal.sSHKeysWillBe') }}
                 </p>
               </div>
@@ -414,11 +414,11 @@
             <input
               type="checkbox"
               v-model="formData.deploy_pki"
-              class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
+              class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
             />
             <div>
-              <span class="text-sm text-gray-700">{{ $t('addNodeModal.deployPKICertificatesAfter') }}</span>
-              <p class="text-xs text-gray-500 mt-0.5">
+              <span class="text-sm text-autobot-text-secondary">{{ $t('addNodeModal.deployPKICertificatesAfter') }}</span>
+              <p class="text-xs text-autobot-text-tertiary mt-0.5">
                 {{ $t('addNodeModal.ifAPasswordIs') }}
               </p>
             </div>
@@ -428,11 +428,11 @@
             <input
               type="checkbox"
               v-model="formData.run_enrollment"
-              class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
+              class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
             />
             <div>
-              <span class="text-sm text-gray-700">{{ $t('addNodeModal.reRunEnrollmentTasks') }}</span>
-              <p class="text-xs text-gray-500 mt-0.5">
+              <span class="text-sm text-autobot-text-secondary">{{ $t('addNodeModal.reRunEnrollmentTasks') }}</span>
+              <p class="text-xs text-autobot-text-tertiary mt-0.5">
                 {{ $t('addNodeModal.runAnsibleEnrollmentTo') }}
               </p>
             </div>
@@ -449,13 +449,13 @@
           <input
             type="checkbox"
             v-model="replaceConfirmed"
-            class="mt-0.5 w-4 h-4 text-error-500 border-gray-300 rounded-sm focus:ring-error-500"
+            class="mt-0.5 w-4 h-4 text-error-500 border-autobot-border-strong rounded-sm focus:ring-error-500"
           />
           <div>
-            <span class="text-sm text-gray-700 font-medium">
+            <span class="text-sm text-autobot-text-secondary font-medium">
               {{ $t('addNodeModal.iUnderstandThatThis') }}
             </span>
-            <p class="text-xs text-gray-500 mt-0.5">
+            <p class="text-xs text-autobot-text-tertiary mt-0.5">
               {{ $t('addNodeModal.allConfigurationAndHistory') }} <span class="font-medium">{{ existingNode?.hostname }}</span> {{ $t('addNodeModal.willBeDeleted') }}
             </p>
           </div>

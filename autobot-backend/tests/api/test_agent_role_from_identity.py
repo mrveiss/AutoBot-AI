@@ -72,3 +72,23 @@ def test_admin_session_is_allowed(path):
     with patch("api.agent.publish_event_safe", new=AsyncMock()):
         assert client.post(path).status_code == 200
     assert layer.asked == ["admin"]
+
+
+@pytest.mark.parametrize(("path", "body"), _JSON_ROUTES)
+def test_admin_session_is_allowed_on_the_json_routes(path, body):
+    client, layer = _client("admin")
+    with (
+        patch("api.agent.publish_event_safe", new=AsyncMock()),
+        patch("api.agent.publish_goal_events", new=AsyncMock()),
+        patch("api.agent._execute_goal_with_error_handling", new=AsyncMock(return_value={})),
+        patch("api.agent._handle_goal_result", new=AsyncMock(return_value={"message": "ok"})),
+        patch("api.agent._run_subprocess", new=AsyncMock(return_value=("", "", 0))),
+        patch("api.agent._handle_command_result", new=AsyncMock(return_value={"message": "ok"})),
+        patch(
+            "api.agent._publish_approval_to_redis",
+            new=AsyncMock(return_value={"message": "ok", "task_id": "t1", "approved": True}),
+        ),
+    ):
+        response = client.post(path, json=body)
+    assert response.status_code == 200, response.text
+    assert layer.asked[0] == "admin"
