@@ -191,7 +191,7 @@ const isFormValid = computed(() => {
   >
     <!-- Schedule Name -->
     <div class="mb-4">
-      <label for="schedule-name" class="block text-sm font-medium text-gray-700 mb-1">
+      <label for="schedule-name" class="block text-sm font-medium text-autobot-text-secondary mb-1">
         {{ $t('scheduleModal.scheduleName') }}
       </label>
       <input
@@ -199,13 +199,13 @@ const isFormValid = computed(() => {
         v-model="name"
         type="text"
         :placeholder="$t('scheduleModal.eGNightlyUpdates')"
-        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
       />
     </div>
 
     <!-- Cron Expression -->
     <div class="mb-4">
-      <label for="cron-expression" class="block text-sm font-medium text-gray-700 mb-1">
+      <label for="cron-expression" class="block text-sm font-medium text-autobot-text-secondary mb-1">
         {{ $t('scheduleModal.scheduleCronExpression') }}
       </label>
       <input
@@ -213,9 +213,9 @@ const isFormValid = computed(() => {
         v-model="cronExpression"
         type="text"
         placeholder="0 2 * * *"
-        class="w-full px-3 py-2 border border-gray-300 rounded-md font-mono focus:ring-primary-500 focus:border-primary-500"
+        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md font-mono focus:ring-primary-500 focus:border-primary-500"
       />
-      <p class="mt-1 text-sm text-gray-500" aria-live="polite">{{ cronDescription }}</p>
+      <p class="mt-1 text-sm text-autobot-text-tertiary" aria-live="polite">{{ cronDescription }}</p>
 
       <!-- Presets -->
       <div class="mt-2 flex flex-wrap gap-2" role="group" :aria-label="$t('scheduleModal.cronSchedulePresets')">
@@ -227,7 +227,7 @@ const isFormValid = computed(() => {
             'px-2 py-1 text-xs rounded-full transition-colors',
             cronExpression === preset.value
               ? 'bg-primary-100 text-primary-700 border border-primary-300'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+              : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active',
           ]"
           :aria-pressed="cronExpression === preset.value"
         >
@@ -238,13 +238,13 @@ const isFormValid = computed(() => {
 
     <!-- Target Type -->
     <div class="mb-4">
-      <label for="target-type" class="block text-sm font-medium text-gray-700 mb-1">
+      <label for="target-type" class="block text-sm font-medium text-autobot-text-secondary mb-1">
         {{ $t('scheduleModal.targetNodes') }}
       </label>
       <select
         id="target-type"
         v-model="targetType"
-        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
       >
         <option value="all">{{ $t('scheduleModal.allOutdatedNodes') }}</option>
         <option value="specific">{{ $t('scheduleModal.specificNodes') }}</option>
@@ -254,16 +254,16 @@ const isFormValid = computed(() => {
 
     <!-- Node Selection (when specific) -->
     <div v-if="targetType === 'specific' && nodes.length > 0" class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-1">
+      <label class="block text-sm font-medium text-autobot-text-secondary mb-1">
         {{ $t('scheduleModal.selectNodes') }}
       </label>
-      <div class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" :aria-label="$t('scheduleModal.nodeSelection')">
+      <div class="border border-autobot-border rounded-md max-h-40 overflow-y-auto" role="group" :aria-label="$t('scheduleModal.nodeSelection')">
         <div
           v-for="node in nodes"
           :key="node.node_id"
           @click="toggleNodeSelection(node.node_id)"
           :class="[
-            'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-gray-50',
+            'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-autobot-bg-hover',
             targetNodes.includes(node.node_id) ? 'bg-primary-50' : '',
           ]"
         >
@@ -275,24 +275,24 @@ const isFormValid = computed(() => {
             @click.stop
             @change="toggleNodeSelection(node.node_id)"
           />
-          <span class="text-sm text-gray-900">{{ node.hostname }}</span>
+          <span class="text-sm text-autobot-text-primary">{{ node.hostname }}</span>
         </div>
       </div>
-      <p v-if="targetNodes.length > 0" class="mt-1 text-sm text-gray-500" role="status">{{ $t('scheduleModal.countNodeSSelected', { count: targetNodes.length }) }}</p>
+      <p v-if="targetNodes.length > 0" class="mt-1 text-sm text-autobot-text-tertiary" role="status">{{ $t('scheduleModal.countNodeSSelected', { count: targetNodes.length }) }}</p>
     </div>
 
     <!-- Role Selection (when roles) - Issue #779 -->
     <div v-if="targetType === 'roles'" class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-2">
+      <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
         {{ $t('scheduleModal.targetRoles') }}
       </label>
-      <div v-if="availableRoles.length > 0" class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" :aria-label="$t('scheduleModal.roleSelection')">
+      <div v-if="availableRoles.length > 0" class="border border-autobot-border rounded-md max-h-40 overflow-y-auto" role="group" :aria-label="$t('scheduleModal.roleSelection')">
         <div
           v-for="role in availableRoles"
           :key="role.name"
           @click="toggleRoleSelection(role.name)"
           :class="[
-            'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-gray-50',
+            'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-autobot-bg-hover',
             targetRoles.includes(role.name) ? 'bg-primary-50' : '',
           ]"
         >
@@ -300,29 +300,29 @@ const isFormValid = computed(() => {
             type="checkbox"
             :checked="targetRoles.includes(role.name)"
             :value="role.name"
-            class="w-4 h-4 text-primary-600 rounded-sm border-gray-300"
+            class="w-4 h-4 text-primary-600 rounded-sm border-autobot-border-strong"
             :aria-label="$t('scheduleModal.selectRoleAria', { name: role.display_name || role.name })"
             @click.stop
             @change="toggleRoleSelection(role.name)"
           />
-          <span class="text-sm text-gray-900">{{ role.display_name || role.name }}</span>
+          <span class="text-sm text-autobot-text-primary">{{ role.display_name || role.name }}</span>
         </div>
       </div>
-      <div v-else class="text-sm text-gray-500 italic">
+      <div v-else class="text-sm text-autobot-text-tertiary italic">
         {{ $t('scheduleModal.noRolesAvailablePlease') }}
       </div>
-      <p v-if="targetRoles.length > 0" class="mt-1 text-sm text-gray-500" role="status">{{ $t('scheduleModal.countRoleSSelected', { count: targetRoles.length }) }}</p>
+      <p v-if="targetRoles.length > 0" class="mt-1 text-sm text-autobot-text-tertiary" role="status">{{ $t('scheduleModal.countRoleSSelected', { count: targetRoles.length }) }}</p>
     </div>
 
     <!-- Restart Strategy -->
     <div class="mb-4">
-      <label for="restart-strategy" class="block text-sm font-medium text-gray-700 mb-1">
+      <label for="restart-strategy" class="block text-sm font-medium text-autobot-text-secondary mb-1">
         {{ $t('scheduleModal.restartStrategy') }}
       </label>
       <select
         id="restart-strategy"
         v-model="restartStrategy"
-        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+        class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
       >
         <option value="graceful">{{ $t('scheduleModal.gracefulWaitForTasks') }}</option>
         <option value="immediate">{{ $t('scheduleModal.immediate') }}</option>
@@ -338,7 +338,7 @@ const isFormValid = computed(() => {
           v-model="restartAfterSync"
           class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
         />
-        <span class="text-sm text-gray-700">{{ $t('scheduleModal.restartServiceAfterSync') }}</span>
+        <span class="text-sm text-autobot-text-secondary">{{ $t('scheduleModal.restartServiceAfterSync') }}</span>
       </label>
 
       <label class="flex items-center gap-2 cursor-pointer">
@@ -347,13 +347,13 @@ const isFormValid = computed(() => {
           v-model="enabled"
           class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
         />
-        <span class="text-sm text-gray-700">{{ $t('scheduleModal.scheduleEnabled') }}</span>
+        <span class="text-sm text-autobot-text-secondary">{{ $t('scheduleModal.scheduleEnabled') }}</span>
       </label>
     </div>
     <template #actions>
       <button
         @click="handleClose"
-        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover"
       >
         {{ $t('scheduleModal.cancel') }}
       </button>
