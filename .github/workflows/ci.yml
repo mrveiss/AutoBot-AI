@@ -919,6 +919,80 @@ jobs:
           draft: ${{ github.event.pull_request.draft == true }}
           held: ${{ needs.changes.outputs.held }}
 
+  # #22114: the specs that import what a pull request changed, run first. The full frontend suites type-check, lint and run
+  # the integration suite before their unit tests, so a spec that cannot load (a `vi.mock` factory missing an export the changed
+  # code now imports) used to turn the pull request red only at the end of that job. This job starts as soon as `changes`
+  # is done (no `short-check` wait), installs only the app a changed file belongs to, and runs `vitest related` on the files
+  # the pull request changed. It is an early signal, not a gate: no required context depends on it, and the full suites are unchanged.
+  frontend-related-specs:
+    name: frontend-related-specs
+    needs: changes
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.ready == 'true' && needs.changes.outputs.held != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read  # list the pull request's files
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v7
+
+      # The pull request's own file list (what the pull request changes, not a two-dot diff of two tips); removed files are dropped.
+      # Each app's files go to `$RUNNER_TEMP/related/<app>.txt`, relative to the app, one per line.
+      - name: Changed frontend files
+        id: files
+        run: |
+          mkdir -p "$RUNNER_TEMP/related"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[] | select(.status != "removed") | .filename' > "$RUNNER_TEMP/related/all.txt"
+          apps=""
+          for app in autobot-frontend autobot-slm-frontend; do
+            sed -n "s|^${app}/||p" "$RUNNER_TEMP/related/all.txt" > "$RUNNER_TEMP/related/${app}.txt"
+            if [ -s "$RUNNER_TEMP/related/${app}.txt" ]; then
+              apps="${apps} ${app}"
+              echo "${app}: $(wc -l < "$RUNNER_TEMP/related/${app}.txt") changed file(s)"
+            fi
+          done
+          if [ -z "$apps" ]; then
+            echo "No frontend changes in this pull request: nothing to run (reporting success)."
+          fi
+          echo "apps=${apps# }" >> "$GITHUB_OUTPUT"
+
+      # The frontend test job's setup (frontend-tests above): the Node major from .nvmrc and the npm cache.
+      - name: Setup Node.js
+        if: steps.files.outputs.apps != ''
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: |
+            autobot-frontend/package-lock.json
+            autobot-slm-frontend/package-lock.json
+
+      # Per app: `npm ci` as its own CI job does, then `vitest related --run` on just the changed files. A file no spec
+      # imports selects no spec (`--passWithNoTests`). Every app runs even after one fails, so the run lists every red spec.
+      - name: Run the related specs
+        if: steps.files.outputs.apps != ''
+        env:
+          APPS: ${{ steps.files.outputs.apps }}
+          CYPRESS_INSTALL_BINARY: '0'  # #13410: no job runs Cypress
+        run: |
+          rc=0
+          for app in $APPS; do
+            mapfile -t FILES < "$RUNNER_TEMP/related/${app}.txt"
+            echo "::group::${app}: vitest related on ${#FILES[@]} changed file(s)"
+            (
+              cd "$app" || exit 1
+              npm ci || exit 1
+              npx --no-install vitest related --run --passWithNoTests "${FILES[@]}"
+            ) < /dev/null || { echo "::error::the specs related to the changed files of ${app} failed"; rc=1; }
+            echo "::endgroup::"
+          done
+          exit "$rc"
+
   frontend-tests:
     needs: [changes, short-check]
     if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_frontend_tests == 'true' }}
