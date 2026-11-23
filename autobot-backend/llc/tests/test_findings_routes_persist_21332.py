@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -157,3 +157,19 @@ async def test_a_refused_dismissal_leaves_the_proposal_untouched(client, factory
     second = await client.post(f"/findings/proposals/{seeded.proposal}/dismiss", json={"reason": "second"})
     assert (first.status_code, second.status_code) == (200, 409)
     assert (await _stored(factory, seeded.proposal)).dismiss_reason == "first"
+
+
+@pytest.mark.asyncio
+async def test_the_proposal_is_row_locked_when_loaded() -> None:
+    """Promote and dismiss load the proposal FOR UPDATE, so a concurrent second request waits and then sees 409."""
+    statements: list = []
+
+    class _Session:
+        async def execute(self, stmt):  # noqa: ANN001, ANN202
+            statements.append(stmt)
+            return SimpleNamespace(scalar_one_or_none=lambda: None)
+
+    ctx = SimpleNamespace(org_id=uuid.uuid4())
+    with pytest.raises(HTTPException):
+        await findings_api._load_owned_proposal(uuid.uuid4(), _Session(), ctx)
+    assert statements[0]._for_update_arg is not None

@@ -76,8 +76,13 @@ class DismissRequest(BaseModel):
 
 
 async def _load_owned_proposal(proposal_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCFindingProposal:
-    """Load proposal by id; 404 when missing or owned by a different org."""
-    result = await session.execute(select(LLCFindingProposal).where(LLCFindingProposal.id == proposal_id))
+    """Load proposal by id, row-locked; 404 when missing or owned by a different org.
+
+    Both callers (promote, dismiss) change the proposal: the lock makes a concurrent second request wait for the
+    first commit and read its status, so it gets the ``ProposalStateError`` 409 instead of a second work item.
+    """
+    stmt = select(LLCFindingProposal).where(LLCFindingProposal.id == proposal_id).with_for_update()
+    result = await session.execute(stmt)
     proposal = result.scalar_one_or_none()
     if proposal is None or str(proposal.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Proposal not found")

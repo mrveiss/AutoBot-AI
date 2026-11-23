@@ -145,9 +145,10 @@ def _has_call(nodes: list[ast.stmt], attr: str) -> bool:
     )
 
 
-def _no_return_names(tree: ast.AST) -> set[str]:
+def _no_return_names(tree: ast.AST) -> dict[str, bool]:
+    """`-> NoReturn` helpers of the module, mapped to whether each is `async` (and so only raises when awaited)."""
     return {
-        n.name
+        n.name: isinstance(n, ast.AsyncFunctionDef)
         for n in ast.walk(tree)
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
         and n.returns is not None
@@ -155,13 +156,31 @@ def _no_return_names(tree: ast.AST) -> set[str]:
     }
 
 
-def _ends_by_raising(handler: ast.ExceptHandler, no_return: set[str]) -> bool:
+def _returns_inside(nodes: list[ast.stmt]) -> bool:
+    """A `return` reachable in *nodes*: one in a nested function or class is not the handler's own."""
+    for node in nodes:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        if isinstance(node, ast.Return):
+            return True
+        if _returns_inside(list(ast.iter_child_nodes(node))):
+            return True
+    return False
+
+
+def _ends_by_raising(handler: ast.ExceptHandler, no_return: dict[str, bool]) -> bool:
+    """The handler raises on every path: it ends with a raise and has no `return` that leaves before it."""
+    if _returns_inside(handler.body):
+        return False
     last = handler.body[-1]
     if isinstance(last, ast.Raise):
         return True
-    call = last.value if isinstance(last, ast.Expr) else None
-    call = call.value if isinstance(call, ast.Await) else call
-    return isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id in no_return
+    expr = last.value if isinstance(last, ast.Expr) else None
+    awaited = isinstance(expr, ast.Await)
+    call = expr.value if awaited else expr
+    if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id in no_return):
+        return False
+    return awaited or not no_return[call.func.id]  # an un-awaited async helper only builds a coroutine
 
 
 def swallowed_failures(source: str, rel: str) -> list[str]:

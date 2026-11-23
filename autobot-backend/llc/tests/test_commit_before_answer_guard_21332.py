@@ -366,6 +366,16 @@ _FIRES = [
         "async def f(s):\n    try:\n        await s.flush()\n    except OSError:\n"
         "        await s.rollback()\n        return 1\n",
     ),
+    (
+        "conditional_return_before_the_final_raise",
+        "async def f(s, suppress):\n    try:\n        await s.commit()\n    except OSError:\n"
+        "        await s.rollback()\n        if suppress:\n            return {'ok': True}\n        raise\n",
+    ),
+    (
+        "async_no_return_helper_not_awaited",
+        "async def refuse(s) -> NoReturn:\n    raise E()\n\n"
+        "async def f(s):\n    try:\n        await s.commit()\n    except OSError:\n        refuse(s)\n    return 1\n",
+    ),
 ]
 _QUIET = [
     (
@@ -377,6 +387,16 @@ _QUIET = [
         "rollback_then_no_return_helper",
         "async def refuse(s) -> NoReturn:\n    raise E()\n\n"
         "async def f(s):\n    try:\n        await s.commit()\n    except OSError:\n        await refuse(s)\n",
+    ),
+    (
+        "sync_no_return_helper_called",
+        "def refuse(s) -> NoReturn:\n    raise E()\n\n"
+        "async def f(s):\n    try:\n        await s.commit()\n    except OSError:\n        refuse(s)\n",
+    ),
+    (
+        "return_only_inside_a_nested_function",
+        "async def f(s):\n    try:\n        await s.commit()\n    except OSError:\n"
+        "        def why():\n            return 'x'\n        log(why())\n        raise\n",
     ),
     ("no_commit_no_rollback", "async def f():\n    try:\n        run()\n    except OSError:\n        return None\n"),
 ]
