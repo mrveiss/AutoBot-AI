@@ -46,7 +46,7 @@ def _make_workflow_dict(company_id: str, workflow_id: str) -> dict:
 def _make_client(caller_company_id: str, is_platform_admin: bool = False) -> TestClient:
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
     from llc.api.workflows import router as workflows_router  # noqa: PLC0415
-    from user_management.database import get_async_session  # noqa: PLC0415
+    from llc.deps import get_session  # noqa: PLC0415
 
     app = FastAPI()
     app.include_router(workflows_router, prefix="/api/llc")
@@ -57,7 +57,7 @@ def _make_client(caller_company_id: str, is_platform_admin: bool = False) -> Tes
     async def _fake_session():
         yield mock_session
 
-    app.dependency_overrides[get_async_session] = _fake_session
+    app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(_FIXED_USER_ID)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=uuid.UUID(caller_company_id), user_id=_FIXED_USER_ID, is_platform_admin=is_platform_admin
@@ -86,7 +86,7 @@ def _stop_patches():
 class TestWorkflowsNoAuth:
     def _make_unauthenticated_client(self) -> TestClient:
         from llc.api.workflows import router as workflows_router
-        from user_management.database import get_async_session
+        from llc.deps import get_session
 
         app = FastAPI()
         app.include_router(workflows_router, prefix="/api/llc")
@@ -94,7 +94,7 @@ class TestWorkflowsNoAuth:
         async def _fake_session():
             yield AsyncMock()
 
-        app.dependency_overrides[get_async_session] = _fake_session
+        app.dependency_overrides[get_session] = _fake_session
         return TestClient(app)
 
     def test_list_workflows_no_token_returns_401(self):
