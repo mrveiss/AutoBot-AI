@@ -111,6 +111,25 @@ class TestAGitfileCheckoutIsRejected:
         assert exc.value.status_code == 400
 
 
+class TestAWarmCacheDoesNotBypassTheRejection:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ["get_expertise_scores", "get_knowledge_gaps"])
+    async def test_a_cached_result_is_not_served_for_a_gitfile_checkout(self, monkeypatch, gitfile_checkout, endpoint):
+        from fastapi import HTTPException
+
+        async def _resolve(source_id):
+            return gitfile_checkout
+
+        monkeypatch.setattr(shared, "resolve_scan_root", _resolve)
+        warm = {"abc123": {"expertise_scores": [{"x": 1}], "knowledge_gaps": [{"y": 1}]}}
+        monkeypatch.setattr(own_mod, "_ownership_analysis_cache", warm)
+        with pytest.raises(HTTPException) as exc:
+            await getattr(own_mod, endpoint)(
+                path=None, source_id="abc123", **({"risk_level": None} if endpoint == "get_knowledge_gaps" else {})
+            )
+        assert exc.value.status_code == 400
+
+
 class TestSiblingEndpointsAreScopedToo:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("endpoint", ["get_expertise_scores", "get_knowledge_gaps"])

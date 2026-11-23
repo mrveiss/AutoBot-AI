@@ -16,6 +16,7 @@ from typing import Dict, List, Set, Tuple
 
 import aiofiles
 
+from api.analytics_shared import git_root_of
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import optional_import
 from autobot_shared.status_enums import Severity
@@ -1003,7 +1004,6 @@ def _run_bug_prediction(file_path: str) -> List[Dict]:
     if not _analyzers_available:
         return []
     global _bug_predictor
-
     problems = []
     try:
         if _bug_predictor is None:
@@ -1011,10 +1011,10 @@ def _run_bug_prediction(file_path: str) -> List[Dict]:
                 # Double-check after acquiring lock
                 if _bug_predictor is None:
                     project_root = Path(file_path).parent
-                    while project_root.parent != project_root:
-                        if (project_root / ".git").exists():
-                            break
+                    while project_root.parent != project_root and git_root_of(project_root) is None:
                         project_root = project_root.parent
+                    if git_root_of(project_root) is None:  # no repository of its own: fail closed (#20513)
+                        return problems
                     _bug_predictor = BugPredictor(str(project_root))
 
         risk_assessment = _bug_predictor.analyze_file(file_path)

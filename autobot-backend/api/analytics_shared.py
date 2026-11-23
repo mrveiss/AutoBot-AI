@@ -36,19 +36,34 @@ async def resolve_source_or_404(source_id: str | None) -> None:
 NOT_A_GIT_REPOSITORY = "The source checkout is not a git repository"
 
 
-async def resolve_source_git_root(source_id: str) -> Path | None:
-    """The selected source's checkout when it is a git repository of its own, else None (#20513).
+def git_root_of(checkout: Path) -> Path | None:
+    """`checkout` resolved, when it is a git repository of its own and nothing redirects it; else None (#20513).
 
-    A `.git` that is a symlink or a gitfile (a linked worktree/submodule) can point the miner at another
-    source's history, so only a real `.git` directory qualifies. Every git-history read of a source goes here.
+    Rejected: a checkout root that is itself a symlink; a clone under the registered clone base
+    (`CODE_SOURCES_BASE`, the rule `orphan_clone_detector` and source deletion apply) that resolves outside
+    it; a `.git` that is a symlink or a gitfile (linked worktree or submodule) and so can point at another
+    source's history; a missing `.git` (git would walk up into a parent repository). Callers fail closed on
+    None. The check precedes the read, so a swap between the two is not excluded; the clone directory is
+    written only by the sync path, never by a request.
     """
-    from api.codebase_analytics.endpoints.shared import resolve_scan_root
+    from api.codebase_analytics.source_paths import CODE_SOURCES_BASE
 
-    repo_path = (await resolve_scan_root(source_id)).resolve()
-    git_dir = repo_path / ".git"
+    if checkout.is_symlink():
+        return None
+    resolved = checkout.resolve()
+    if checkout.is_relative_to(CODE_SOURCES_BASE) and not resolved.is_relative_to(CODE_SOURCES_BASE.resolve()):
+        return None
+    git_dir = resolved / ".git"
     if git_dir.is_symlink() or not git_dir.is_dir():
         return None
-    return repo_path
+    return resolved
+
+
+async def resolve_source_git_root(source_id: str) -> Path | None:
+    """The selected source's checkout when `git_root_of` accepts it, else None (#20513)."""
+    from api.codebase_analytics.endpoints.shared import resolve_scan_root
+
+    return git_root_of(await resolve_scan_root(source_id))
 
 
 async def require_source_git_root(source_id: str) -> Path:

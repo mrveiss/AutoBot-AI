@@ -246,7 +246,8 @@ class TestPatternAnalysisNoGlobalWrite:
 class TestGetBugPredictionUsesAsyncPath:
     """Issue #12406: wire _get_bug_prediction to BugPredictor.analyze_directory_async."""
 
-    async def test_calls_analyze_directory_async_not_sync(self):
+    async def test_calls_analyze_directory_async_not_sync(self, tmp_path):
+        (tmp_path / ".git").mkdir()
         from api.codebase_analytics.endpoints import report as report_mod
 
         fake_result = MagicMock(analyzed_files=3, high_risk_count=0)
@@ -256,7 +257,7 @@ class TestGetBugPredictionUsesAsyncPath:
 
         with patch.object(report_mod, "BugPredictor", return_value=fake_predictor):
             result = await report_mod._get_bug_prediction(
-                project_root="/srv/sources/b",
+                project_root=str(tmp_path),
                 use_semantic=False,
                 source_id="B",
             )
@@ -267,7 +268,8 @@ class TestGetBugPredictionUsesAsyncPath:
         fake_predictor.analyze_directory.assert_not_called()
         assert result is fake_result
 
-    async def test_constructs_predictor_with_semantic_flag_and_source_id(self):
+    async def test_constructs_predictor_with_semantic_flag_and_source_id(self, tmp_path):
+        (tmp_path / ".git").mkdir()
         from api.codebase_analytics.endpoints import report as report_mod
 
         with patch.object(report_mod, "BugPredictor") as fake_cls:
@@ -275,12 +277,12 @@ class TestGetBugPredictionUsesAsyncPath:
             fake_predictor.analyze_directory_async = AsyncMock(return_value=None)
 
             await report_mod._get_bug_prediction(
-                project_root="/srv/sources/b",
+                project_root=str(tmp_path),
                 use_semantic=True,
                 source_id="B",
             )
 
-        fake_cls.assert_called_once_with(project_root="/srv/sources/b", use_semantic_analysis=True, source_id="B")
+        fake_cls.assert_called_once_with(project_root=str(tmp_path), use_semantic_analysis=True, source_id="B")
 
 
 class TestEveryAnalysisIsBounded:

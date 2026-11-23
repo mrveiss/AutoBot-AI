@@ -107,3 +107,20 @@ def test_a_checkout_whose_git_is_a_gitfile_is_rejected_before_any_history_is_rea
     assert response.status_code == 400
     assert "not a git repository" in response.text
     miner.assert_not_called()
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+def test_a_symlinked_checkout_root_is_rejected_before_any_history_is_read(route, tmp_path):
+    other = tmp_path / "other-source"
+    (other / ".git").mkdir(parents=True)
+    root = tmp_path / "linked-root"
+    root.symlink_to(other, target_is_directory=True)
+    miner = MagicMock()
+    with (
+        patch.object(shared, "resolve_source_root", AsyncMock(return_value=root)),
+        patch.object(mod, "CodeEvolutionMiner", miner),
+    ):
+        response = _call(_client(), route, source_id="src-1")
+    assert response.status_code == 400
+    assert "not a git repository" in response.text
+    miner.assert_not_called()

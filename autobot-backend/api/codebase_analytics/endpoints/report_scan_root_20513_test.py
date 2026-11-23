@@ -85,9 +85,10 @@ async def test_pattern_analysis_scans_the_source_root_not_the_backend_dir(instal
 async def test_bug_prediction_reads_the_source_root_not_the_project_root(install_tree_sentinels):
     predictor = MagicMock()
     predictor.analyze_directory_async = AsyncMock(side_effect=RuntimeError("stop"))
+    (install_tree_sentinels / ".git").mkdir()  # the source's own repository (#20513)
     with patch.object(report_mod, "BugPredictor", return_value=predictor) as predictor_class:
         await report_mod._get_bug_prediction(str(install_tree_sentinels), "src-1")
-    assert predictor_class.call_args.kwargs["project_root"] == str(install_tree_sentinels)
+    assert predictor_class.call_args.kwargs["project_root"] == str(install_tree_sentinels.resolve())
 
 
 @pytest.mark.asyncio
