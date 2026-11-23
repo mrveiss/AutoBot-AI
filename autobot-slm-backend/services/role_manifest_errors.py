@@ -16,7 +16,8 @@ from typing import Dict
 MANIFEST_ERRORS: Dict[str, str] = {}
 
 #: role name -> the manifest that declares no ``role_health`` for it (#22032): an installed manifest older than the SLM
-#: code. The role stays fully available and simply has no health check; this is the report, not a refusal.
+#: code. The role stays fully available and simply has no health check. Diagnostic only: the user-visible signal is the
+#: one warning per role in the SLM log; nothing refuses on it, and ``/api/health`` does not report it (unlike above).
 HEALTH_UNDECLARED: Dict[str, str] = {}
 
 

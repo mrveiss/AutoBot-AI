@@ -52,8 +52,12 @@ def _manifests():
     return ManifestLoader(infra_base=repo_root() / "autobot-infrastructure").load_all()
 
 
+#: The real manifests' sync targets carry these tokens; ``sync_from_manifest`` refuses an unknown one.
+_PLACEHOLDERS = {"base_dir": "/b", "agent_dir": "/a"}
+
+
 def _resolved(name: str, manifests) -> tuple[int, str] | None:
-    shaped = rms.apply_manifest_shape({"name": name, "source_paths": [], "target_path": "/x"}, manifests, {})
+    shaped = rms.apply_manifest_shape({"name": name, "source_paths": [], "target_path": "/x"}, manifests, _PLACEHOLDERS)
     port, path = shaped.get("health_check_port"), shaped.get("health_check_path")
     return None if port is None and path is None else (port, path)
 
@@ -207,7 +211,8 @@ def test_a_synthetic_manifest_missing_an_entry_is_flagged_and_a_complete_one_pas
     assert _undeclared({"autobot-x": build({"a": RoleHealthCheck(checked=False)})}, {"a"}) == []
 
 
-def test_a_stale_manifest_without_role_health_parses_and_its_roles_keep_units_and_sync():
+def test_a_stale_manifest_without_role_health_parses_and_its_roles_keep_units_and_sync(monkeypatch):
+    monkeypatch.setattr(rms, "HEALTH_UNDECLARED", {})  # module state: this test's record must not leak
     stale = RoleManifest(
         role="autobot-backend",
         description="stale",
