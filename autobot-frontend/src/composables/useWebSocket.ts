@@ -14,6 +14,7 @@ import { backoffDelay } from '@autobot/ui'
 import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, toValue, toRaw, type Ref, type MaybeRefOrGetter } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
+import { withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
 
 // Create scoped logger for useWebSocket
 const logger = createLogger('useWebSocket')
@@ -289,7 +290,9 @@ export function useWebSocket(
     try {
       // #16457: an auth token travels as a subprotocol, never in the URL.
       const subprotocols = toValue(opts.protocols)
-      const socket = subprotocols ? new WebSocket(wsUrl, subprotocols) : new WebSocket(wsUrl)
+      const socket = subprotocols
+        ? new WebSocket(withCompanyScope(wsUrl), subprotocols)
+        : new WebSocket(withCompanyScope(wsUrl))
       ws.value = socket
 
       // Connection timeout

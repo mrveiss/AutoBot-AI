@@ -15,7 +15,7 @@ import { ref, watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import config, { getApiBase } from '@/config/ssot-config'
-import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
+import { buildAuthenticatedWsSubprotocols, withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
 import type { ConnectionState } from '@/services/GlobalWebSocketService'
@@ -131,7 +131,7 @@ class LiveEventService {
     logger.debug('Connecting LiveEventService', { attempt: this.reconnectAttempts + 1 })
     return new Promise<void>((resolve, reject) => {
       try {
-        this.ws = new WebSocket(url, subprotocols)
+        this.ws = new WebSocket(withCompanyScope(url), subprotocols)
       } catch (err: unknown) {
         this._handleError(err)
         reject(err)

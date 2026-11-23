@@ -41,6 +41,7 @@ _ALL = [
 def _request(company: str | None = None):
     request = MagicMock()
     request.headers = {session_company.ACTIVE_COMPANY_HEADER: company} if company else {}
+    request.query_params = {}
     return request
 
 
@@ -430,9 +431,12 @@ class TestConcurrentAssignIsACompareAndSet:
         assert results == ["attempted", "attempted", "failed", "success"]
 
 
-def _socket(company: str | None = None):
+def _socket(company: str | None = None, via_query: bool = False):
+    """A socket naming *company* by header, or by the ``company_id`` query parameter a browser WebSocket must use."""
     socket = MagicMock()
-    socket.headers = {session_company.ACTIVE_COMPANY_HEADER: company} if company else {}
+    named = {session_company.ACTIVE_COMPANY_HEADER: company} if company else {}
+    socket.headers = {} if via_query else named
+    socket.query_params = {session_company.ACTIVE_COMPANY_QUERY_PARAM: company} if company and via_query else {}
     socket.state = State()
     return socket
 
@@ -440,7 +444,7 @@ def _socket(company: str | None = None):
 class TestWebSocketAppliesTheSameCompanyRule:
     """``owns_chat_session`` (the Overseer socket) refuses another company's chat exactly as HTTP does."""
 
-    async def _owns(self, user, stored, company, durable_owner="alice"):
+    async def _owns(self, user, stored, company, durable_owner="alice", via_query=False):
         from api import ws_security
 
         manager = MagicMock(get_session_company=AsyncMock(return_value=stored))
@@ -451,7 +455,7 @@ class TestWebSocketAppliesTheSameCompanyRule:
             patch("security.session_ownership.SessionOwnershipValidator") as validator,
         ):
             validator.return_value.get_session_owner = AsyncMock(return_value=durable_owner)
-            return await ws_security.owns_chat_session(_socket(company), "s1", user)
+            return await ws_security.owns_chat_session(_socket(company, via_query), "s1", user)
 
     @pytest.mark.asyncio
     async def test_the_owner_of_a_chat_of_another_company_is_refused(self):
@@ -470,6 +474,23 @@ class TestWebSocketAppliesTheSameCompanyRule:
     async def test_no_active_company_changes_nothing(self):
         assert await self._owns({"username": "alice", "role": "user"}, CO_B, None) is True
         assert await self._owns({"username": "root", "role": "admin"}, CO_B, None) is True
+
+    @pytest.mark.asyncio
+    async def test_a_browser_socket_names_its_company_in_the_query_not_a_header(self):
+        """A browser WebSocket cannot set ``X-Organization-Id``: the ``company_id`` query parameter carries it."""
+        alice = {"username": "alice", "role": "user"}
+        assert await self._owns(alice, CO_A, CO_A, via_query=True) is True  # same company
+        assert await self._owns(alice, CO_B, CO_A, via_query=True) is False  # another company
+        assert await self._owns(alice, CO_B, None, via_query=True) is True  # untagged socket: no scope
+
+    @pytest.mark.asyncio
+    async def test_the_header_wins_over_the_query_as_on_http(self):
+        socket = _socket(CO_A)
+        socket.query_params = {session_company.ACTIVE_COMPANY_QUERY_PARAM: CO_B}
+        socket.state = State()
+        with patch.object(session_company, "may_act_in_company", new=AsyncMock(return_value=True)):
+            scope = await session_company.resolve_company_scope(socket, {"username": "alice", "role": "user"})
+        assert scope.active == CO_A
 
     @pytest.mark.asyncio
     async def test_a_non_owner_is_still_refused_in_the_same_company(self):

@@ -18,7 +18,7 @@ import { DEFAULT_CONFIG } from '@/config/defaults.js'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
-import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
+import { buildAuthenticatedWsSubprotocols, withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
 
@@ -250,7 +250,7 @@ class GlobalWebSocketService {
 
     return new Promise<void>((resolve, reject) => {
       try {
-        this.ws = new WebSocket(this.state.url, subprotocols)
+        this.ws = new WebSocket(withCompanyScope(this.state.url), subprotocols)
         this._setupEventHandlers(resolve, reject)
         this._setupConnectionTimeout(reject)
       } catch (error: unknown) {

@@ -44,7 +44,7 @@
 import { ref, computed, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, watch, type Ref, type ComputedRef } from 'vue'
 import { useChatStore, type UserContext, type SessionActivity } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
+import { buildAuthenticatedWsSubprotocols, withCompanyScope } from '@/utils/buildAuthenticatedWsUrl'
 import { getApiBase } from '@/config/ssot-config'
 import { syncOnlineUsers } from '@/composables/sessionPresenceSync'
 import { apiService, type PendingInvitationResponse } from '@/services/api'
@@ -370,7 +370,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       currentTab: 'chat'
     }
 
-    presenceSocket = new WebSocket(wsUrl, subprotocols)
+    presenceSocket = new WebSocket(withCompanyScope(wsUrl), subprotocols)
     presenceSocket.onopen = () => {
       wsConnected.value = true
       void _syncPresence()

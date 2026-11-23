@@ -5,7 +5,8 @@
 """The company a caller is acting in, and the refusal of a chat that belongs to another one (#21997).
 
 The active company is the one every Company OS route already uses (``docs/llc/tenant-context.md``): the
-``X-Organization-Id`` header the top-bar switcher sends (``fetchWithAuth.ts``), else the JWT ``org_id`` claim. A
+``X-Organization-Id`` header the top-bar switcher sends (``fetchWithAuth.ts``), else the ``company_id`` query
+parameter (a browser WebSocket cannot set a header, so it names its company there), else the JWT ``org_id`` claim. A
 header naming a company the caller is not a member of is refused, exactly as ``get_tenant_context`` refuses it;
 a platform admin may name any. A service principal, or a caller with no identity, acts in no company. Companies
 are internal entities, not tenants: this scopes what a person sees and opens, it is not an isolation boundary.
@@ -32,6 +33,9 @@ logger = get_logger(__name__)
 
 #: The header the company switcher sends on every request (the same one ``get_tenant_context`` reads).
 ACTIVE_COMPANY_HEADER = "X-Organization-Id"
+#: The query parameter a browser WebSocket names its company in, since it cannot set the header (the same parameter
+#: ``get_tenant_context`` falls back to, after the header).
+ACTIVE_COMPANY_QUERY_PARAM = "company_id"
 _STATE_KEY = "active_company_scope"
 #: The key a live connection's user payload carries its active company under, resolved once at connect.
 ACTIVE_COMPANY_KEY = "active_company"
@@ -91,7 +95,9 @@ async def _resolve_company_scope(request: Request, user: dict | None) -> ActiveC
     user = user if user is not None else _caller(request)
     if not user or user.get("service") or user.get("auth_disabled"):
         return ActiveCompany(None)
-    named = _parse(request.headers.get(ACTIVE_COMPANY_HEADER))
+    named = _parse(request.headers.get(ACTIVE_COMPANY_HEADER)) or _parse(
+        request.query_params.get(ACTIVE_COMPANY_QUERY_PARAM)
+    )
     if named is None:
         return ActiveCompany(_parse(user.get("org_id")))
     if not await may_act_in_company(named, user):

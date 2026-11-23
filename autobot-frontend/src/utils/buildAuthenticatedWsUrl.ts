@@ -21,6 +21,7 @@
  */
 
 import { useUserStore } from '@/stores/useUserStore'
+import { getSelectedCompanyId } from '@/utils/orgContext'
 
 function getWsAuthToken(): string | null {
   return useUserStore().authState.token || null
@@ -43,4 +44,16 @@ export function buildAuthenticatedWsUrl(baseUrl: string): string | null {
 export function buildAuthenticatedWsSubprotocols(): string[] | null {
   const token = getWsAuthToken()
   return token ? ['bearer', token] : null
+}
+
+/**
+ * A WebSocket URL naming the selected company in the `company_id` query parameter. A browser WebSocket cannot
+ * set the `X-Organization-Id` header, so this is how a socket tells the backend its active company; the backend
+ * checks the caller's membership exactly as it does for the header. Unchanged when no company is selected or the
+ * URL already names one.
+ */
+export function withCompanyScope(url: string): string {
+  const companyId = getSelectedCompanyId()
+  if (!companyId || /[?&]company_id=/.test(url)) return url
+  return `${url}${url.includes('?') ? '&' : '?'}company_id=${encodeURIComponent(companyId)}`
 }
