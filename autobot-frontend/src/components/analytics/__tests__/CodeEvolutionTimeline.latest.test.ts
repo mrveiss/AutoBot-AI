@@ -103,4 +103,12 @@ describe('CodeEvolutionTimeline fetchTimeline races (#20513)', () => {
     await flushPromises()
     expect(shown(wrapper).map(p => p.timestamp)).toEqual(['b'])
   })
+
+  it('the latest call failing shows the translated load-failed message, not English literals', async () => {
+    const wrapper = mount(CodeEvolutionTimeline, { global: { plugins: [i18n] } })
+    await flushPromises()
+    pending[0](null)
+    await flushPromises()
+    expect(wrapper.find('.error-state').text()).toContain(en.analytics.codeEvolution.loadFailed)
+  })
 })

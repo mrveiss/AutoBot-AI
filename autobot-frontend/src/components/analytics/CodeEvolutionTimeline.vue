@@ -306,7 +306,7 @@ async function fetchTimeline() {
       apiFetchPatterns()
     ])
     if (!timelineRequest.isCurrent(token)) return
-    if (!timelineResult || !trendsResult) throw new Error('Failed to fetch evolution data')
+    if (!timelineResult || !trendsResult) throw new Error(t('analytics.codeEvolution.loadFailed'))
 
     timelineData.value = timelineResult.timeline || []
     trends.value = trendsResult.trends || {}
@@ -316,7 +316,7 @@ async function fetchTimeline() {
       showToast(t('analytics.codeEvolution.demoDataWarning'), 'warning')
     }
   } catch (e: unknown) {
-    if (timelineRequest.isCurrent(token)) error.value = e instanceof Error ? e.message : 'Failed to load evolution data'
+    if (timelineRequest.isCurrent(token)) error.value = e instanceof Error ? e.message : t('analytics.codeEvolution.loadFailed')
   } finally {
     if (timelineRequest.isCurrent(token)) loading.value = false
   }

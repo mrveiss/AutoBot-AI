@@ -2624,6 +2624,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "Failed to load evolution data",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
