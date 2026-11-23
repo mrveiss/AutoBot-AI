@@ -12,7 +12,8 @@ all.
 
 What counts: a utility prefix (`bg`, `text`, `border`, `ring`, `from`/`via`/`to`,
 `divide`, `fill`, `stroke`, `outline`, `decoration`, `accent`, `caret`,
-`placeholder`, `shadow`) + a Tailwind palette family + a step (50, 100..900, 950),
+`placeholder`, `shadow`) + a Tailwind palette family + a numeric step of two or three
+digits (50, 100..900, 950, and off-scale ones such as 750),
 optionally `/opacity`, anywhere in a `.vue` file outside its `<style>` blocks.
 A variant prefix (`hover:`, `dark:`, `md:`) does not hide it.
 
@@ -47,7 +48,7 @@ _PREFIXES = (
     "bg|text|border|border-[trblxy]|ring|ring-offset|from|via|to|divide|fill|stroke|"
     "outline|decoration|accent|caret|placeholder|shadow"
 )
-RAW_PALETTE_CLASS = re.compile(rf"(?<![\w-])(?:{_PREFIXES})-(?:{_PALETTES})-(?:50|[1-9]00|950)(?:/\d{{1,3}})?(?![\w-])")
+RAW_PALETTE_CLASS = re.compile(rf"(?<![\w-])(?:{_PREFIXES})-(?:{_PALETTES})-\d{{2,3}}(?:/\d{{1,3}})?(?![\w-])")
 _STYLE_BLOCK = re.compile(r"<style\b[^>]*>.*?</style>", re.DOTALL | re.IGNORECASE)
 
 
@@ -56,6 +57,18 @@ _STYLE_BLOCK = re.compile(r"<style\b[^>]*>.*?</style>", re.DOTALL | re.IGNORECAS
 #: verdicts live with it) instead of declaring a second for the same files.
 REACH_PALETTE_FILES = REACH_IMPORTANT_FILES
 scanned_files = _important_scanned_files
+
+
+def _scan_text(path: Path, prefix: str) -> dict[str, int]:
+    """The control plane's HTML entry point: a `<body class>` there styles every page (#17566)."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return {}
+    counts: dict[str, int] = {}
+    for hit in RAW_PALETTE_CLASS.findall(text):
+        counts[prefix + hit] = counts.get(prefix + hit, 0) + 1
+    return counts
 
 
 def scan_tree(
@@ -93,4 +106,5 @@ def scan(repo: Path) -> dict[str, int]:
     slm = repo / _SLM_FRONTEND
     if slm.is_dir():
         counts.update(scan_tree(slm, SLM_KEY_PREFIX, SLM_SUFFIXES, read_style=True))
+        counts.update(_scan_text(slm.parent / "index.html", SLM_KEY_PREFIX))
     return counts

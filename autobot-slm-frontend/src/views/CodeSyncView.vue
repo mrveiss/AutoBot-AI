@@ -1452,7 +1452,7 @@ onUnmounted(() => {
                   <span
                     :class="{
                       'text-autobot-pill-warn-fg bg-autobot-pill-warn-bg px-2 py-0.5 rounded text-xs': file.status === 'modified' || file.status === 'untracked',
-                      'text-autobot-text-primary bg-autobot-pill-info-bg px-2 py-0.5 rounded text-xs': file.status === 'source_only',
+                      'text-autobot-pill-info-fg bg-autobot-pill-info-bg px-2 py-0.5 rounded text-xs': file.status === 'source_only',
                     }"
                   >
                     {{ file.status === 'modified' ? $t('codeSyncView.modified') : file.status === 'source_only' ? $t('codeSyncView.sourceOnly') : $t('codeSyncView.untracked') }}

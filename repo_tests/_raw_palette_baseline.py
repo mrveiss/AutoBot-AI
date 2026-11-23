@@ -6,7 +6,8 @@
 
 Measured at the commit that added this ratchet, by
 `repo_tests._raw_palette_detect.scan`: **594 occurrences of 175 distinct classes in
-the user frontend, 6214 of 211 in the SLM control plane** (keys behind `slm:`).
+the user frontend**; the SLM control plane then held 6214 occurrences of 211 distinct
+classes (keys behind `slm:`), a historical figure: it is now zero (see below).
 #14580 and #17566 counted 689 in 66 files and 6,213 in 104 files with a looser
 pattern that also read `<style>` blocks; this detector reads markup only, because
 `<style>` is `color-no-hex`'s job. A differing figure is a finding, not a rebase.

@@ -200,7 +200,7 @@ onMounted(() => {
         </p>
       </div>
       <button
-        class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-autobot-text-primary rounded-lg text-sm font-medium transition-colors"
+        class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
         @click="openCreate"
       >
         {{ $t('externalAgentsView.registerAgent') }}
@@ -245,7 +245,7 @@ onMounted(() => {
           <tr
             v-for="agent in registry.agents"
             :key="agent.id"
-            class="border-b border-autobot-border/50 hover:bg-gray-750 transition-colors"
+            class="border-b border-autobot-border/50 hover:bg-autobot-bg-hover transition-colors"
           >
             <td class="px-4 py-3">
               <button
@@ -398,7 +398,7 @@ onMounted(() => {
           {{ $t('externalAgentsView.cancel') }}
         </button>
         <button
-          class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-autobot-text-primary rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           :disabled="isSaving || !form.name || !form.base_url"
           @click="saveAgent"
         >

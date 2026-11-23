@@ -99,6 +99,16 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         (d / name).write_text(body, encoding="utf-8")
         assert sum(n for k, n in scan(tmp_path).items() if k.startswith(SLM_KEY_PREFIX)) == 1
 
+    def test_the_slm_reads_its_html_entry_point(self, tmp_path):
+        d = tmp_path / "autobot-slm-frontend"
+        (d / "src").mkdir(parents=True)
+        (d / "index.html").write_text('<body class="bg-gray-100">', encoding="utf-8")
+        assert scan(tmp_path) == {f"{SLM_KEY_PREFIX}bg-gray-100": 1}
+
+    def test_an_off_scale_step_is_found(self, tmp_path):
+        (tmp_path / "A.vue").write_text('<template><p class="hover:bg-gray-750"/></template>', encoding="utf-8")
+        assert scan_tree(tmp_path) == {"bg-gray-750": 1}
+
     def test_the_user_frontend_still_reads_markup_only(self, tmp_path):
         d = tmp_path / "autobot-frontend" / "src"
         d.mkdir(parents=True)
