@@ -27,9 +27,9 @@ from repo_tests._reach import declare
 
 _BASELINE = "repo_tests/_company_os_exception_text_baseline.py"
 _TABLE = "COMPANY_OS_EXCEPTION_TEXT_SITES"
-#: Measured 288 non-test modules (2026-11-15); growth 20 makes the pin mid-window (288 - 10). A new guard pins
+#: Measured 297 non-test modules (2026-11-23, #22106); growth 20 makes the pin mid-window (297 - 10). A new guard pins
 #: `floor=` until it lands on the base (#19676).
-_LLC_FILES_FLOOR = 278
+_LLC_FILES_FLOOR = 287
 
 REACH_LLC_EXCEPTION_TEXT_FILES = declare(
     "llc-exception-text-sweep-files-21579",
