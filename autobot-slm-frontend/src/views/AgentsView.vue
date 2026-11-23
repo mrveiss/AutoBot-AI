@@ -206,7 +206,7 @@ onMounted(() => {
     </header>
 
     <!-- Tab navigation -->
-    <div class="border-b border-gray-200 mb-6">
+    <div class="border-b border-autobot-border mb-6">
       <nav class="flex gap-4">
         <button
           @click="navigateToTab('local-agents')"
@@ -214,7 +214,7 @@ onMounted(() => {
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'local-agents'
               ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.localAgents') }}</button>
         <button
@@ -223,7 +223,7 @@ onMounted(() => {
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'external-agents'
               ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.externalAgents') }}</button>
         <button
@@ -232,7 +232,7 @@ onMounted(() => {
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'org-chart'
               ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.orgChart') }}</button>
         <button
@@ -241,7 +241,7 @@ onMounted(() => {
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'config-history'
               ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.configHistory') }}</button>
         <button
@@ -250,7 +250,7 @@ onMounted(() => {
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'processes'
               ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >{{ $t('agentsView.processes') }}</button>
       </nav>

@@ -166,6 +166,7 @@ async def test_failed_audit_on_transition_to_done_fails_the_transition():
 def _client(service: MagicMock) -> TestClient:
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
     from llc.api import work_items  # noqa: PLC0415
+    from llc.deps import get_session  # noqa: PLC0415
 
     app = FastAPI()
     app.include_router(work_items.router, prefix="/api/llc")
@@ -174,7 +175,7 @@ def _client(service: MagicMock) -> TestClient:
     async def _fake_session():
         yield session
 
-    app.dependency_overrides[work_items.get_session] = _fake_session
+    app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(_USER)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=_ORG, user_id=_USER, is_platform_admin=False

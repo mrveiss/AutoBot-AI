@@ -78,7 +78,7 @@ function goToCodeSync(): void {
         <div class="flex items-center gap-3">
           <!-- Warning icon -->
           <div class="shrink-0" aria-hidden="true">
-            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -88,8 +88,8 @@ function goToCodeSync(): void {
             </svg>
           </div>
           <!-- Message -->
-          <p class="text-sm font-medium text-amber-800">
-            <span class="font-semibold">{{ codeSync.outdatedCount.value }}</span>{{ $t('updateNotification.value0CodeUpdates', { value0: codeSync.outdatedCount.value === 1 ? $t('updateNotification.nodeNeeds') : $t('updateNotification.nodesNeed') }) }}<span v-if="codeSync.latestVersionShort.value" class="text-amber-600">{{ $t('updateNotification.latestValue0', { value0: codeSync.latestVersionShort.value }) }}</span>
+          <p class="text-sm font-medium text-autobot-pill-warn-fg">
+            <span class="font-semibold">{{ codeSync.outdatedCount.value }}</span>{{ $t('updateNotification.value0CodeUpdates', { value0: codeSync.outdatedCount.value === 1 ? $t('updateNotification.nodeNeeds') : $t('updateNotification.nodesNeed') }) }}<span v-if="codeSync.latestVersionShort.value" class="text-autobot-warning">{{ $t('updateNotification.latestValue0', { value0: codeSync.latestVersionShort.value }) }}</span>
           </p>
         </div>
 
@@ -97,14 +97,14 @@ function goToCodeSync(): void {
           <!-- View Updates button -->
           <button
             @click="goToCodeSync"
-            class="px-3 py-1.5 text-sm font-medium text-amber-800 bg-amber-200 hover:bg-amber-300 rounded-md transition-colors"
+            class="px-3 py-1.5 text-sm font-medium text-autobot-pill-warn-fg bg-autobot-pill-warn-bg hover:bg-autobot-warning-light rounded-md transition-colors"
           >
             {{ $t('updateNotification.viewUpdates') }}
           </button>
           <!-- Dismiss button -->
           <button
             @click="dismiss"
-            class="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-200 rounded-md transition-colors"
+            class="p-1.5 text-autobot-warning hover:text-autobot-pill-warn-fg hover:bg-autobot-pill-warn-bg rounded-md transition-colors"
             :aria-label="$t('updateNotification.dismissUpdateNotification')"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -119,8 +119,8 @@ function goToCodeSync(): void {
 
 <style scoped>
 .update-notification {
-  background: #fef3c7;
-  border-bottom: 1px solid #f59e0b;
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--color-warning);
   padding: 0.75rem 1.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
