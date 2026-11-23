@@ -214,6 +214,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseButton, saveBlob } from '@autobot/ui'
 import { useNotificationBus } from '@/composables/useNotificationBus'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useCodeEvolutionData } from '@/composables/analytics/useCodeEvolutionData'
 import type { TimelinePoint, TrendData, PatternPoint } from '@/composables/analytics/useCodeEvolutionData'
 import { createDateFormatter, isoDateStamp } from '@/utils/formatHelpers'
@@ -224,6 +225,7 @@ const { showToast } = useNotificationBus()
 const { fetchTimeline: apiFetchTimeline, fetchTrends: apiFetchTrends, fetchPatterns: apiFetchPatterns, fetchExport: apiFetchExport } = useCodeEvolutionData()
 
 // State
+const timelineRequest = useLatestRequest() // only the newest fetchTimeline may write state or clear `loading`
 const loading = ref(false)
 const error = ref<string | null>(null)
 const timelineData = ref<TimelinePoint[]>([])
@@ -291,9 +293,9 @@ const xAxisLabels = computed(() => {
 
 // API calls
 async function fetchTimeline() {
+  const token = timelineRequest.begin()
   loading.value = true
   error.value = null
-
   try {
     const endDate = isoDateStamp()
     const startDate = isoDateStamp(new Date(Date.now() - parseInt(selectedDays.value) * 24 * 60 * 60 * 1000))
@@ -303,10 +305,8 @@ async function fetchTimeline() {
       apiFetchTrends(selectedDays.value),
       apiFetchPatterns()
     ])
-
-    if (!timelineResult || !trendsResult) {
-      throw new Error('Failed to fetch evolution data')
-    }
+    if (!timelineRequest.isCurrent(token)) return
+    if (!timelineResult || !trendsResult) throw new Error('Failed to fetch evolution data')
 
     timelineData.value = timelineResult.timeline || []
     trends.value = trendsResult.trends || {}
@@ -315,11 +315,10 @@ async function fetchTimeline() {
     if (timelineResult.status === 'demo') {
       showToast(t('analytics.codeEvolution.demoDataWarning'), 'warning')
     }
-
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Failed to load evolution data'
+    if (timelineRequest.isCurrent(token)) error.value = e instanceof Error ? e.message : 'Failed to load evolution data'
   } finally {
-    loading.value = false
+    if (timelineRequest.isCurrent(token)) loading.value = false
   }
 }
 
