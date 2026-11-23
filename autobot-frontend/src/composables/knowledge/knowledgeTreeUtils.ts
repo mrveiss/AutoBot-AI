@@ -22,11 +22,17 @@ export interface KnowledgeFactLike {
   metadata?: Record<string, unknown>
 }
 
-/** Nested folder scaffold: each key is a directory, or the `_files` bucket of leaves. */
+/**
+ * Nested folder scaffold. Folders live in a Map and leaves in their own field, so a
+ * user-controlled path segment (`__proto__`, `constructor`, `_files`) can neither reach
+ * the prototype chain nor collide with the leaf bucket.
+ */
 interface NestedDir {
-  _files?: TreeNode[]
-  [segment: string]: NestedDir | TreeNode[] | undefined
+  files: TreeNode[]
+  dirs: Map<string, NestedDir>
 }
+
+const newDir = (): NestedDir => ({ files: [], dirs: new Map() })
 
 const AUTOBOT_DOC_HINTS = ['autobot', 'documentation', 'docs']
 const SYSTEM_HINTS = ['man', 'system', 'command', 'os', 'machine']
@@ -66,37 +72,38 @@ function insertFact(root: NestedDir, fact: KnowledgeFactLike, category: string, 
   let current = root
   parts.forEach((part, i) => {
     if (i === parts.length - 1) {
-      if (!current._files) current._files = []
-      current._files.push(toFileNode(fact, part, category, filename, idx))
+      current.files.push(toFileNode(fact, part, category, filename, idx))
       return
     }
-    if (!current[part]) current[part] = {}
-    current = current[part] as NestedDir
+    let next = current.dirs.get(part)
+    if (!next) {
+      next = newDir()
+      current.dirs.set(part, next)
+    }
+    current = next
   })
 }
 
 function toFolderNodes(dir: NestedDir, category: string, prefix = ''): TreeNode[] {
-  return Object.keys(dir)
-    .filter((key) => key !== '_files')
-    .map((key) => {
+  return Array.from(dir.dirs.entries())
+    .map(([key, sub]) => {
       const folderPath = prefix ? `${prefix}/${key}` : key
-      const sub = dir[key] as NestedDir
       return {
         id: `folder-${category}-${folderPath}`,
         name: key,
         type: 'folder' as const,
         path: `/${category}/${folderPath}`,
         category,
-        children: [...toFolderNodes(sub, category, folderPath), ...(sub._files ?? [])],
+        children: [...toFolderNodes(sub, category, folderPath), ...sub.files],
       }
     })
 }
 
 /** Nest a category's facts into folders by the path segments of their filename. */
 export function buildNestedTree(facts: Record<string, unknown>[], category: string): TreeNode[] {
-  const root: NestedDir = {}
+  const root = newDir()
   ;(facts as KnowledgeFactLike[]).forEach((fact, idx) => insertFact(root, fact, category, idx))
-  return [...toFolderNodes(root, category), ...(root._files ?? [])]
+  return [...toFolderNodes(root, category), ...root.files]
 }
 
 /** One top-level folder per category, each holding its nested tree. */

@@ -4,9 +4,11 @@
  * Selection and vectorize actions for the Knowledge Browser (#18244): one document,
  * a folder, the checked selection, retry of failures, and cancel.
  *
- * Moved out of KnowledgeBrowser.vue with its behaviour unchanged.
+ * Moved out of KnowledgeBrowser.vue. A failed action is reported through `onError`
+ * (a translated message) and by the action resolving `false`, never silently as success.
  */
 import { computed, ref } from 'vue'
+import i18n from '@/i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { collectUnvectorizedFiles } from '@/composables/knowledge/knowledgeTreeUtils'
 import type { TreeNode } from '@/components/knowledge/TreeNodeComponent.vue'
@@ -16,7 +18,7 @@ const logger = createLogger('KnowledgeBrowserSelection')
 
 type Vectorization = ReturnType<typeof useKnowledgeVectorization>
 
-export function useKnowledgeBrowserSelection(vec: Vectorization) {
+export function useKnowledgeBrowserSelection(vec: Vectorization, onError?: (message: string) => void) {
   const isVectorizing = ref(false)
   const showProgressModal = ref(false)
 
@@ -25,16 +27,32 @@ export function useKnowledgeBrowserSelection(vec: Vectorization) {
     () => vec.selectedDocumentsList.value.filter((id) => vec.documentStates.value.get(id)?.status !== 'vectorized').length,
   )
 
-  /** Run a vectorize action with the busy flag held, logging a failure instead of throwing. */
-  const guarded = async (label: string, run: () => Promise<unknown>, openModal = false) => {
+  // Identity of the latest run: a cancelled run can settle after a newer one started and must not clear its flag.
+  let activeRun = 0
+  const startRun = () => {
     isVectorizing.value = true
+    return ++activeRun
+  }
+  const endRun = (runId: number) => {
+    if (runId === activeRun) isVectorizing.value = false
+  }
+  const reportFailure = (label: string, err: unknown) => {
+    logger.error(`${label} failed:`, err)
+    onError?.(i18n.global.t('knowledge.browser.vectorizeFailed'))
+  }
+
+  /** Run a vectorize action with the busy flag held; resolves true on success, false on a reported failure. */
+  const guarded = async (label: string, run: () => Promise<unknown>, openModal = false): Promise<boolean> => {
+    const runId = startRun()
     if (openModal) showProgressModal.value = true
     try {
       logger.info(`${label} complete:`, await run())
+      return true
     } catch (err) {
-      logger.error(`${label} failed:`, err)
+      reportFailure(label, err)
+      return false
     } finally {
-      isVectorizing.value = false
+      endRun(runId)
     }
   }
 
@@ -46,26 +64,39 @@ export function useKnowledgeBrowserSelection(vec: Vectorization) {
     const ids = collectUnvectorizedFiles(folder, statusOf)
     if (ids.length === 0) {
       logger.info('No unvectorized documents found in this folder')
-      return
+      return true
     }
     logger.info(`Starting batch vectorization for ${ids.length} documents in folder: ${folder.name}`)
-    await guarded('Folder vectorization', () => vec.vectorizeBatch(ids), true)
+    return guarded('Folder vectorization', () => vec.vectorizeBatch(ids), true)
   }
 
-  const vectorizeSelected = () => guarded('Batch vectorization', () => vec.vectorizeSelected(), true)
+  /** Only the selected documents that are not vectorized yet (the set eligibleCount counts). */
+  const vectorizeSelected = () => {
+    const ids = vec.selectedDocumentsList.value.filter((id) => vec.documentStates.value.get(id)?.status !== 'vectorized')
+    return guarded(
+      'Batch vectorization',
+      async () => {
+        const result = ids.length ? await vec.vectorizeBatch(ids) : undefined
+        vec.deselectAll()
+        return result
+      },
+      ids.length > 0,
+    )
+  }
 
   const handleRetryFailed = async () => {
     const failed = Array.from(vec.documentStates.value.entries())
       .filter(([, state]) => state.status === 'failed')
       .map(([id]) => id)
-    if (failed.length === 0) return
-    isVectorizing.value = true
+    if (failed.length === 0) return true
+    const runId = startRun()
     // In parallel: no N+1 sequential calls.
     const results = await Promise.allSettled(failed.map((id) => vec.vectorizeDocument(id)))
-    results.forEach((result, i) => {
-      if (result.status === 'rejected') logger.error(`Failed to retry vectorization for ${failed[i]}:`, result.reason)
-    })
-    isVectorizing.value = false
+    const rejected = results.flatMap((result, i) => (result.status === 'rejected' ? [[failed[i], result.reason] as const] : []))
+    rejected.forEach(([id, reason]) => logger.error(`Failed to retry vectorization for ${id}:`, reason))
+    if (rejected.length) onError?.(i18n.global.t('knowledge.browser.vectorizeFailed'))
+    endRun(runId)
+    return rejected.length === 0
   }
 
   const handleCancelVectorization = () => {

@@ -22,6 +22,12 @@ describe('searchHighlight', () => {
     expect(highlightText('', 'x')).toBe('')
   })
 
+  it('matches in the original text, so entities are never split and literal HTML characters match', () => {
+    expect(highlightText('<', 'lt')).toBe('&lt;')
+    expect(highlightText('a &lt; b', 'lt')).toBe('a &amp;<mark class="kb-highlight">lt</mark>; b')
+    expect(highlightText('x <b> y', '<b>')).toBe('x <mark class="kb-highlight">&lt;b&gt;</mark> y')
+  })
+
   it('cuts a long snippet at 200 characters with an ellipsis', () => {
     expect(highlightSnippet('z'.repeat(250), 'q')).toBe(`${'z'.repeat(200)}…`)
     expect(highlightSnippet('short', 'q')).toBe('short')

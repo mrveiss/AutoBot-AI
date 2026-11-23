@@ -259,6 +259,14 @@ const formattedUpdatedAt = computed(() => {
   min-inline-size: 0;
 }
 
+/* BaseCard's body is a plain block; make it a column that fills the card so .editor-body can grow. */
+.ai-document-editor :deep(.aui-card__body) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+}
+
 .editor-header {
   display: flex;
   align-items: center;

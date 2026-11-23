@@ -12,6 +12,9 @@
     items : { id, label, to, active?, adv?, disabled?, class?, ariaLabel? }
     slots : icon ({ item }), trailing ({ item } - a count or badge), footer
 
+  A `disabled` item is drawn as a non-navigating `<span role="link" aria-disabled="true">`
+  (no `to` / `href`), so keyboard and pointer activation cannot navigate.
+
   `adv` puts the app's `.adv` class on the item (or the section label), so Minimal mode
   hides it with the same rule as every other advanced control. The active item carries
   `aria-current="page"`. Tokens only; logical properties, so the bar flips under dir="rtl".
@@ -52,13 +55,12 @@ const props = withDefaults(
 )
 
 function linkProps(item: SectionNavItem): Record<string, unknown> {
+  if (item.disabled) return { role: 'link', 'aria-label': item.ariaLabel, 'aria-disabled': 'true' }
   const target = props.linkAs === 'a' ? { href: item.to } : { to: item.to }
   return {
     ...target,
     'aria-current': item.active ? 'page' : undefined,
     'aria-label': item.ariaLabel,
-    'aria-disabled': item.disabled ? 'true' : undefined,
-    tabindex: item.disabled ? -1 : undefined,
   }
 }
 
@@ -76,7 +78,7 @@ const itemClass = (item: SectionNavItem) => [
       <p v-if="section.label" :class="['aui-section-nav__sect', { adv: section.adv }]">{{ section.label }}</p>
       <ul class="aui-section-nav__list" :class="{ adv: section.adv && !section.label }">
         <li v-for="item in section.items" :key="item.id" class="aui-section-nav__li" :class="{ adv: item.adv }">
-          <component :is="linkAs" v-bind="linkProps(item)" :class="itemClass(item)">
+          <component :is="item.disabled ? 'span' : linkAs" v-bind="linkProps(item)" :class="itemClass(item)">
             <span v-if="$slots.icon" class="aui-section-nav__icon"><slot name="icon" :item="item" /></span>
             <span class="aui-section-nav__text">{{ item.label }}</span>
             <span v-if="$slots.trailing" class="aui-section-nav__trailing"><slot name="trailing" :item="item" /></span>

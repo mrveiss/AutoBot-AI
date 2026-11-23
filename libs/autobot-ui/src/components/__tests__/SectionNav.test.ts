@@ -67,9 +67,22 @@ describe('SectionNav', () => {
     expect(w.find('.foot').text()).toBe('note')
   })
 
-  it('makes a disabled item inert for keyboard focus', () => {
+  it('draws a disabled item as a non-navigating element, so activation cannot navigate', async () => {
     const w = render({ sections: [{ id: 's', items: [{ id: 'a', label: 'A', to: '/a', disabled: true }] }] })
-    expect(w.find('a').attributes('aria-disabled')).toBe('true')
-    expect(w.find('a').attributes('tabindex')).toBe('-1')
+    expect(w.find('a').exists()).toBe(false)
+    const item = w.find('.aui-section-nav__link')
+    expect(item.element.tagName).toBe('SPAN')
+    expect(item.attributes('aria-disabled')).toBe('true')
+    expect(item.attributes('href')).toBeUndefined()
+    expect(item.attributes('role')).toBe('link')
+  })
+
+  it('does not hand a disabled item to the link component, and still does for an enabled one', () => {
+    const Link = defineComponent({ props: { to: { type: String, default: '' } }, setup: (p, { slots }) => () => h('a', { 'data-to': p.to }, slots.default?.()) })
+    const w = render({
+      linkAs: Link,
+      sections: [{ id: 's', items: [{ id: 'a', label: 'A', to: '/a', disabled: true }, { id: 'b', label: 'B', to: '/b' }] }],
+    })
+    expect(w.findAll('a').map((a) => a.attributes('data-to'))).toEqual(['/b'])
   })
 })

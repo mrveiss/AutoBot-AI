@@ -19,7 +19,11 @@ import { useKnowledgeBrowserCategories } from '../useKnowledgeBrowserCategories'
 
 const CAT = (id: string, count = 1) => ({ id, name: id, description: '', icon: 'book', color: '', count })
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  h.populateAutoBotDocs.mockReset().mockResolvedValue({ ok: true })
+  h.refreshSystemKnowledge.mockReset().mockResolvedValue({ ok: true })
+})
 afterEach(() => vi.useRealTimers())
 
 describe('useKnowledgeBrowserCategories', () => {
@@ -45,6 +49,9 @@ describe('useKnowledgeBrowserCategories', () => {
     await c.loadMainCategories()
     expect(c.kbFetchError.value).toBe(true)
     expect(c.mainCategories.value.map((x) => x.id)).toEqual(['autobot-documentation', 'system-knowledge', 'user-knowledge'])
+    // Names and descriptions are translated, not raw keys or hardcoded literals.
+    expect(c.mainCategories.value.map((x) => x.name)).toEqual(['AutoBot Documentation', 'System Knowledge', 'User Knowledge'])
+    c.mainCategories.value.forEach((x) => expect(x.description).not.toContain('knowledge.browser.'))
   })
 
   it('opens the edit modal on a card, then closes it on update or delete', async () => {
@@ -75,6 +82,17 @@ describe('useKnowledgeBrowserCategories', () => {
     expect(h.populateAutoBotDocs).not.toHaveBeenCalled()
     expect(reload).toHaveBeenCalledTimes(1)
     expect(c.populationStates.value['system-knowledge']).toEqual({ isPopulating: false, progress: 0 })
+  })
+
+  it('a failed Populate reports through onError, resets the card and allows a retry', async () => {
+    h.populateAutoBotDocs.mockRejectedValueOnce(new Error('boom'))
+    const onError = vi.fn()
+    const reload = vi.fn()
+    const c = useKnowledgeBrowserCategories(reload, onError)
+    await c.handlePopulate('autobot-documentation')
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(reload).not.toHaveBeenCalled()
+    expect(c.populationStates.value['autobot-documentation']).toEqual({ isPopulating: false, progress: 0 })
   })
 
   it('ignores a second Populate while one is running', async () => {

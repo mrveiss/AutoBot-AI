@@ -160,7 +160,7 @@ const vec = useKnowledgeVectorization()
 const { documentStates, selectedDocuments, hasSelection, selectionCount, canVectorizeSelection } = vec
 const { toggleDocumentSelection, deselectAll } = vec
 
-const categories = useKnowledgeBrowserCategories(() => tree.loadTree())
+const categories = useKnowledgeBrowserCategories(() => tree.loadTree(), (message) => showDocBranchError(message))
 const {
   mainCategories, selectedMainCategory, selectedCategory, kbConnected, kbFetchError, populationStates,
   showCategoryEditModal, categoryToEdit, selectMainCategory, handleEditCategory, handleCategoryUpdated,
@@ -175,6 +175,7 @@ const tree = useKnowledgeBrowserTree({
   selectedMainCategory,
   selectedCategory,
   fetchBatchStatus: vec.fetchBatchStatus,
+  onError: (message) => showDocBranchError(message),
   onFilePicked: () => {
     selectedDocId.value = null // picking a fact leaves the AI document editor
   },
@@ -188,7 +189,7 @@ const {
 const {
   isVectorizing, showProgressModal, eligibleCount, handleVectorizeDocument, handleVectorizeFolder,
   vectorizeSelected, handleRetryFailed, handleCancelVectorization,
-} = useKnowledgeBrowserSelection(vec)
+} = useKnowledgeBrowserSelection(vec, (message) => showDocBranchError(message))
 
 // Right pane priority: document editor > search results > reading pane.
 const rightPane = computed<'editor' | 'results' | 'viewer'>(() => {
@@ -220,8 +221,9 @@ function clearFilters() {
 /** Enter in the one search box: run the unified search with the box's text. */
 async function runSearch() {
   search.searchQuery.value = searchQuery.value
-  await search.handleSearch()
+  // Leave the editor first: a document picked while the search is pending must stay open.
   selectedDocId.value = null
+  await search.handleSearch()
 }
 
 function clearAllSearch() {

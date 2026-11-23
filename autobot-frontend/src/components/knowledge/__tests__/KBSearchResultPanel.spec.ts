@@ -53,6 +53,14 @@ describe('KBSearchResultPanel', () => {
     expect(w.emitted('close')).toHaveLength(1)
   })
 
+  it('Enter on the focused Close button is left to the button, not turned into an open-result', async () => {
+    const { w } = mountPanel()
+    const close = w.get('.panel-header button')
+    const before = w.emitted('select')?.length ?? 0
+    await close.trigger('keydown', { key: 'Enter' })
+    expect(w.emitted('select')?.length ?? 0).toBe(before)
+  })
+
   it('selecting a short hit fetches the full document and shows it in the pane', async () => {
     const { w, repository } = mountPanel()
     await w.findAll('[role="option"]')[0].trigger('click')

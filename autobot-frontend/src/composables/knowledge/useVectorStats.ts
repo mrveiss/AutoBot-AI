@@ -45,6 +45,8 @@ export const EMPTY_VECTOR_STATS: Readonly<VectorStats> = Object.freeze({
 
 export interface UseVectorStatsReturn {
   vectorStats: ComputedRef<VectorStats | null>
+  /** The backend's rag_available flag, true even for an empty knowledge base (vectorStats is null then). */
+  ragAvailable: ComputedRef<boolean>
   refresh: () => Promise<void>
 }
 
@@ -77,9 +79,11 @@ export function useVectorStats(): UseVectorStatsReturn {
     }
   })
 
+  const ragAvailable = computed(() => store.stats?.rag_available === true)
+
   async function refresh(): Promise<void> {
     await store.refreshStats()
   }
 
-  return { vectorStats, refresh }
+  return { vectorStats, ragAvailable, refresh }
 }

@@ -3312,7 +3312,27 @@
       "populateTip": "Auto-fill this category from its configured sources",
       "importTip": "Upload files or a JSON export into this category. Audio and video (mp3, m4a, wav, mp4, mov, mkv) are transcribed first, then the transcript is added as text.",
       "treeLabel": "Documents",
-      "filesLabel": "Files"
+      "filesLabel": "Files",
+      "folderLoadFailed": "Could not load this folder's documents. Open it again to retry.",
+      "loadMoreFailed": "Could not load more documents. Try again.",
+      "statusRefreshFailed": "Could not refresh the vectorization status. Try again.",
+      "contentUnavailable": "The full text of this document could not be loaded.",
+      "vectorizeFailed": "Vectorization failed. Check the document status and retry.",
+      "populateFailed": "Populate failed. Try again.",
+      "fallbackCategories": {
+        "autobotDocumentation": {
+          "name": "AutoBot Documentation",
+          "description": "AutoBot's initial knowledge - documentation and guides"
+        },
+        "systemKnowledge": {
+          "name": "System Knowledge",
+          "description": "AutoBot's initial knowledge - system info, man pages, OS knowledge"
+        },
+        "userKnowledge": {
+          "name": "User Knowledge",
+          "description": "What AutoBot is used for - user-provided domain knowledge"
+        }
+      }
     },
     "contentViewer": {
       "noFileSelected": "No file selected",

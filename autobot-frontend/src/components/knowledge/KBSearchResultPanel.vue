@@ -152,6 +152,8 @@ watch(selectedIndex, async (idx) => {
 
 function handleKeydown(event: KeyboardEvent): void {
   if (!props.results.length) return
+  // A focused button (e.g. Close) keeps its native Enter activation.
+  if (event.key === 'Enter' && event.target instanceof HTMLButtonElement) return
   const last = props.results.length - 1
   const moves: Record<string, () => void> = {
     ArrowDown: () => (selectedIndex.value = Math.min(selectedIndex.value + 1, last)),

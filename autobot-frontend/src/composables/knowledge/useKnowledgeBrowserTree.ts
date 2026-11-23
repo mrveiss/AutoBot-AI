@@ -12,6 +12,7 @@ import { computed, ref, type Ref } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useLoadingState } from '@/composables/useLoadingState'
 import { useDebounce } from '@/composables/useTimeout'
+import i18n from '@/i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { formatCategoryName } from '@/utils/formatHelpers'
 import type { TreeNode } from '@/components/knowledge/TreeNodeComponent.vue'
@@ -48,9 +49,13 @@ export interface BrowserTreeOptions {
   fetchBatchStatus: (ids: string[], names: Map<string, string>) => Promise<unknown>
   /** Called when a file (not a folder) is picked, so the caller can leave the AI document editor. */
   onFilePicked?: () => void
+  /** Called with a translated message when a background load fails, so the caller can show it. */
+  onError?: (message: string) => void
 }
 
 const asError = (err: unknown) => (err instanceof Error ? err : new Error(String(err)))
+
+const tr = (key: string) => i18n.global.t(`knowledge.browser.${key}`)
 
 function useTreeLoader(opts: BrowserTreeOptions) {
   const treeData = ref<TreeNode[]>([])
@@ -110,6 +115,7 @@ function useTreeLoader(opts: BrowserTreeOptions) {
       }
     } catch (err) {
       logger.error('Failed to load more categorized facts:', err)
+      opts.onError?.(tr('loadMoreFailed'))
     } finally {
       isLoadingMoreCategoryFacts.value = false
     }
@@ -131,6 +137,7 @@ function useTreeLoader(opts: BrowserTreeOptions) {
       logger.info('Vectorization status refreshed')
     } catch (err) {
       logger.error('Failed to refresh vectorization status:', err)
+      opts.onError?.(tr('statusRefreshFailed'))
     } finally {
       isRefreshingStatus.value = false
     }
@@ -194,6 +201,8 @@ function useTreeContent(treeData: Ref<TreeNode[]>, nodeExpansion: ReturnType<typ
       }))
     } catch (err: unknown) {
       logger.error('Failed to load folder contents:', err)
+      // The folder stays empty, so opening it again retries.
+      opts.onError?.(tr('folderLoadFailed'))
     }
   }
 
@@ -201,19 +210,27 @@ function useTreeContent(treeData: Ref<TreeNode[]>, nodeExpansion: ReturnType<typ
   const resolveContent = async (file: TreeNode): Promise<string> => {
     if (file.content && !file.content.endsWith('...')) return file.content
     const factKey = file.metadata?.key || file.path?.split('/').pop()
-    if (!factKey) return file.content || 'Content not available'
+    // No key, or the full load found nothing: a failure, not the cut-off snippet shown as if whole.
+    if (!factKey) throw new Error(tr('contentUnavailable'))
     const response = await fetchFactContent(factKey)
-    return response && response.content ? response.content : file.content || 'Content not available'
+    if (response && response.content) return response.content
+    throw new Error(tr('contentUnavailable'))
   }
 
+  // Bumped per load and by clearSelection, so only the latest load may write the pane.
+  let loadSeq = 0
+
   const loadFileContent = async (file: TreeNode) => {
+    const seq = ++loadSeq
     contentError.value = null
+    fileContent.value = ''
     await loadFileContentOp(async () => {
-      fileContent.value = await resolveContent(file)
+      const text = await resolveContent(file)
+      if (seq === loadSeq) fileContent.value = text
     }).catch((err) => {
-      contentError.value = asError(err)
+      if (seq === loadSeq) contentError.value = asError(err)
     })
-    if (selectedFile.value && fileContent.value) selectedFile.value.size = fileContent.value.length
+    if (seq === loadSeq && selectedFile.value && fileContent.value) selectedFile.value.size = fileContent.value.length
   }
 
   const toggleNode = (nodeId: string) => {
@@ -232,6 +249,7 @@ function useTreeContent(treeData: Ref<TreeNode[]>, nodeExpansion: ReturnType<typ
   }
 
   const clearSelection = () => {
+    loadSeq++
     selectedFile.value = null
     fileContent.value = ''
     contentError.value = null

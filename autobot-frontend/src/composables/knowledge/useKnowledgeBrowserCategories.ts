@@ -4,9 +4,11 @@
  * Main-category state for the Knowledge Browser (#18244): the three category cards,
  * the connectivity flags behind them, Populate, and the Edit modal.
  *
- * Moved out of KnowledgeBrowser.vue with its behaviour unchanged.
+ * Moved out of KnowledgeBrowser.vue. A failed Populate is reported through `onError`
+ * (a translated message), so it is distinguishable from one that completed.
  */
 import { ref } from 'vue'
+import i18n from '@/i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchMainCategories, type MainCategory } from '@/composables/knowledge/useKnowledgeBrowser'
 import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge'
@@ -24,38 +26,28 @@ const POPULATE_DONE_MS = 1000
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
-/** Shown when the categories endpoint fails, so the cards still render. */
-const FALLBACK_CATEGORIES: MainCategory[] = [
-  {
-    id: 'autobot-documentation',
-    name: 'AutoBot Documentation',
-    description: "AutoBot's initial knowledge - documentation and guides",
-    icon: 'book',
-    color: 'var(--i1)',
+/** The three cards' stable ids, with their i18n key, icon and colour. */
+const FALLBACK_CARDS = [
+  { id: 'autobot-documentation', key: 'autobotDocumentation', icon: 'book', color: 'var(--i1)' },
+  { id: 'system-knowledge', key: 'systemKnowledge', icon: 'server', color: 'var(--i2)' },
+  { id: 'user-knowledge', key: 'userKnowledge', icon: 'user-circle', color: 'var(--i3)' },
+] as const
+
+/** Shown when the categories endpoint fails, so the cards still render (translated at call time). */
+const fallbackCategories = (): MainCategory[] =>
+  FALLBACK_CARDS.map(({ id, key, icon, color }) => ({
+    id,
+    name: i18n.global.t(`knowledge.browser.fallbackCategories.${key}.name`),
+    description: i18n.global.t(`knowledge.browser.fallbackCategories.${key}.description`),
+    icon,
+    color,
     count: 0,
-  },
-  {
-    id: 'system-knowledge',
-    name: 'System Knowledge',
-    description: "AutoBot's initial knowledge - system info, man pages, OS knowledge",
-    icon: 'server',
-    color: 'var(--i2)',
-    count: 0,
-  },
-  {
-    id: 'user-knowledge',
-    name: 'User Knowledge',
-    description: 'What AutoBot is used for - user-provided domain knowledge',
-    icon: 'user-circle',
-    color: 'var(--i3)',
-    count: 0,
-  },
-]
+  }))
 
 type PopulationState = { isPopulating: boolean; progress: number }
 const IDLE: PopulationState = { isPopulating: false, progress: 0 }
 
-export function useKnowledgeBrowserCategories(reloadTree: () => Promise<unknown>) {
+export function useKnowledgeBrowserCategories(reloadTree: () => Promise<unknown>, onError?: (message: string) => void) {
   const { refreshSystemKnowledge } = useMachineKnowledge()
   const { populateAutoBotDocs } = useManPages()
 
@@ -85,7 +77,7 @@ export function useKnowledgeBrowserCategories(reloadTree: () => Promise<unknown>
     } catch (err) {
       logger.error('Failed to load main categories:', err)
       kbFetchError.value = true
-      mainCategories.value = FALLBACK_CATEGORIES.map((c) => ({ ...c }))
+      mainCategories.value = fallbackCategories()
     }
   }
 
@@ -144,6 +136,7 @@ export function useKnowledgeBrowserCategories(reloadTree: () => Promise<unknown>
     } catch (err) {
       logger.error(`Failed to populate ${categoryId}:`, err)
       populationStates.value[categoryId] = { ...IDLE }
+      onError?.(i18n.global.t('knowledge.browser.populateFailed'))
     }
   }
 

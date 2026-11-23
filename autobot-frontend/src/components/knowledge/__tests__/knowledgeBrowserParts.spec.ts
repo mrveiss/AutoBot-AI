@@ -18,10 +18,12 @@ import TreeNodeComponent from '../TreeNodeComponent.vue'
 import KnowledgeTreePane from '../KnowledgeTreePane.vue'
 import VectorizationStatusBadge from '../VectorizationStatusBadge.vue'
 
-const stats = vi.hoisted(() => ({ value: null as unknown, refresh: vi.fn() }))
+const stats = vi.hoisted(() => ({ value: null as unknown, rag: false, refresh: vi.fn() }))
 vi.mock('@/composables/knowledge/useVectorStats', async () => {
   const { computed } = await import('vue')
-  return { useVectorStats: () => ({ vectorStats: computed(() => stats.value), refresh: stats.refresh }) }
+  return {
+    useVectorStats: () => ({ vectorStats: computed(() => stats.value), ragAvailable: computed(() => stats.rag), refresh: stats.refresh }),
+  }
 })
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
@@ -39,6 +41,7 @@ function fakeSearch() {
 
 beforeEach(() => {
   stats.value = null
+  stats.rag = false
   stats.refresh.mockClear()
 })
 
@@ -143,12 +146,19 @@ describe('KnowledgeBatchToolbar — the one selection bar', () => {
 describe('KnowledgeHealthSummary', () => {
   it('shows the stats the backend serves, as an advanced region, and refreshes on mount', () => {
     stats.value = { total_facts: 15184, total_vectors: 184302, db_size: 2048, rag_available: true }
+    stats.rag = true
     const w = mount(KnowledgeHealthSummary, { global })
     expect(w.classes()).toContain('adv')
     expect(w.text()).toContain('15,184')
     expect(w.text()).toContain('184,302')
     expect(w.text()).toContain(en.knowledge.healthSummary.ragAvailable)
     expect(stats.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows RAG available for an empty knowledge base whose backend reports it', () => {
+    stats.rag = true
+    const w = mount(KnowledgeHealthSummary, { global })
+    expect(w.text()).toContain(en.knowledge.healthSummary.ragAvailable)
   })
 
   it('shows zeros and RAG unavailable before any stats exist, and draws no figure it has no source for', () => {

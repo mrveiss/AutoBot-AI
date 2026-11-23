@@ -51,9 +51,8 @@ import { formatFileSize } from '@/utils/formatHelpers'
 import { useVectorStats } from '@/composables/knowledge/useVectorStats'
 
 const { t } = useI18n()
-const { vectorStats, refresh } = useVectorStats()
+const { vectorStats, ragAvailable, refresh } = useVectorStats()
 
-const ragAvailable = computed(() => vectorStats.value?.rag_available === true)
 const ragTip = computed(() => (ragAvailable.value ? t('knowledge.healthSummary.ragTipOn') : t('knowledge.healthSummary.ragTipOff')))
 const count = (n?: number) => (n ?? 0).toLocaleString()
 

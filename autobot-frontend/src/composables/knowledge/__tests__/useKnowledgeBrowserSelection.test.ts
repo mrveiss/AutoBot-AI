@@ -14,7 +14,7 @@ function fakeVec(states: Record<string, string> = {}, selected: string[] = []) {
     getDocumentStatus: vi.fn(() => 'pending'),
     vectorizeDocument: vi.fn().mockResolvedValue({}),
     vectorizeBatch: vi.fn().mockResolvedValue({ succeeded: [], failed: [] }),
-    vectorizeSelected: vi.fn().mockResolvedValue({ succeeded: [], failed: [] }),
+    deselectAll: vi.fn(),
   }
 }
 
@@ -52,12 +52,57 @@ describe('useKnowledgeBrowserSelection', () => {
     expect(sel.showProgressModal.value).toBe(false)
   })
 
-  it('vectorizes the selection with the modal open, and survives a failure', async () => {
-    const vec = fakeVec()
-    vec.vectorizeSelected.mockRejectedValueOnce(new Error('boom'))
+  it('vectorizes only the eligible selected documents, with the modal open, then clears the selection', async () => {
+    const vec = fakeVec({ a: 'vectorized', b: 'pending' }, ['a', 'b', 'c'])
     const sel = useKnowledgeBrowserSelection(vec as never)
-    await expect(sel.vectorizeSelected()).resolves.toBeUndefined()
+    await expect(sel.vectorizeSelected()).resolves.toBe(true)
+    expect(vec.vectorizeBatch).toHaveBeenCalledWith(['b', 'c'])
+    expect(vec.deselectAll).toHaveBeenCalledTimes(1)
     expect(sel.showProgressModal.value).toBe(true)
+  })
+
+  it('a selection of only vectorized documents submits nothing and opens no modal', async () => {
+    const vec = fakeVec({ a: 'vectorized' }, ['a'])
+    const sel = useKnowledgeBrowserSelection(vec as never)
+    await expect(sel.vectorizeSelected()).resolves.toBe(true)
+    expect(vec.vectorizeBatch).not.toHaveBeenCalled()
+    expect(vec.deselectAll).toHaveBeenCalledTimes(1)
+    expect(sel.showProgressModal.value).toBe(false)
+  })
+
+  it('reports a failed batch (false + onError) and still clears the busy flag', async () => {
+    const vec = fakeVec({}, ['a'])
+    vec.vectorizeBatch.mockRejectedValueOnce(new Error('boom'))
+    const onError = vi.fn()
+    const sel = useKnowledgeBrowserSelection(vec as never, onError)
+    await expect(sel.vectorizeSelected()).resolves.toBe(false)
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(sel.isVectorizing.value).toBe(false)
+  })
+
+  it('a cancelled run settling late does not clear the busy flag of a newer run', async () => {
+    const vec = fakeVec()
+    let releaseFirst!: () => void
+    vec.vectorizeDocument
+      .mockImplementationOnce(() => new Promise((resolve) => { releaseFirst = () => resolve({}) }))
+      .mockImplementationOnce(() => new Promise(() => {}))
+    const sel = useKnowledgeBrowserSelection(vec as never)
+    const first = sel.handleVectorizeDocument('a')
+    sel.handleCancelVectorization()
+    void sel.handleVectorizeDocument('b')
+    expect(sel.isVectorizing.value).toBe(true)
+    releaseFirst()
+    await first
+    expect(sel.isVectorizing.value).toBe(true)
+  })
+
+  it('reports a rejected retry through onError', async () => {
+    const vec = fakeVec({ a: 'failed' })
+    vec.vectorizeDocument.mockRejectedValueOnce(new Error('boom'))
+    const onError = vi.fn()
+    const sel = useKnowledgeBrowserSelection(vec as never, onError)
+    await expect(sel.handleRetryFailed()).resolves.toBe(false)
+    expect(onError).toHaveBeenCalledTimes(1)
     expect(sel.isVectorizing.value).toBe(false)
   })
 

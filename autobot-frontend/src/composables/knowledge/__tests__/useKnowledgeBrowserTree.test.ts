@@ -32,6 +32,8 @@ function make(extra: Partial<Parameters<typeof useKnowledgeBrowserTree>[0]> = {}
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.fetchFactContent.mockReset()
+  h.fetchFolderContents.mockReset()
   h.fetchFactsByCategory.mockResolvedValueOnce(PAGE1)
 })
 afterEach(() => vi.useRealTimers())
@@ -143,6 +145,70 @@ describe('opening nodes', () => {
     expect([tree.selectedFile.value, tree.fileContent.value, tree.contentError.value]).toEqual([null, '', null])
   })
 
+  const truncatedTree = async (onError?: (m: string) => void) => {
+    h.fetchFactsByCategory.mockReset().mockResolvedValue({
+      categories: { c: [fact('one.md', 'fact:1', 'cut...'), fact('two.md', 'fact:2', 'cut...')] },
+    })
+    const made = make({ onError })
+    await made.tree.loadTree()
+    return { ...made, files: made.tree.treeData.value[0].children! }
+  }
+
+  it('a slower earlier load cannot overwrite the file selected after it', async () => {
+    const { tree, files } = await truncatedTree()
+    let releaseA!: (v: { content: string }) => void
+    h.fetchFactContent
+      .mockImplementationOnce(() => new Promise((resolve) => { releaseA = resolve }))
+      .mockResolvedValueOnce({ content: 'text of B' })
+    const loadA = tree.selectNode(files[0])
+    await tree.selectNode(files[1])
+    releaseA({ content: 'text of A' })
+    await loadA
+    expect(tree.selectedFile.value?.id).toBe('2')
+    expect(tree.fileContent.value).toBe('text of B')
+    expect(tree.selectedFile.value?.size).toBe('text of B'.length)
+  })
+
+  it('a load finishing after clearSelection does not refill the pane', async () => {
+    const { tree, files } = await truncatedTree()
+    let release!: (v: { content: string }) => void
+    h.fetchFactContent.mockImplementationOnce(() => new Promise((resolve) => { release = resolve }))
+    const load = tree.selectNode(files[0])
+    tree.clearSelection()
+    release({ content: 'late' })
+    await load
+    expect([tree.selectedFile.value, tree.fileContent.value]).toEqual([null, ''])
+  })
+
+  it('a failed load after a successful one does not leave the previous text under the new title', async () => {
+    const { tree, files } = await truncatedTree()
+    h.fetchFactContent.mockResolvedValueOnce({ content: 'text of A' }).mockRejectedValueOnce(new Error('gone'))
+    await tree.selectNode(files[0])
+    await tree.selectNode(files[1])
+    expect(tree.fileContent.value).toBe('')
+    expect(tree.contentError.value?.message).toBe('gone')
+    expect(tree.selectedFile.value?.size).toBe('cut...'.length)
+  })
+
+  it('an empty full-text response for a truncated snippet is an error, not the cut-off text', async () => {
+    const { tree, files } = await truncatedTree()
+    h.fetchFactContent.mockResolvedValueOnce({})
+    await tree.selectNode(files[0])
+    expect(tree.fileContent.value).toBe('')
+    expect(tree.contentError.value).toBeInstanceOf(Error)
+  })
+
+  it('a failed folder load is reported through onError and the folder stays empty for a retry', async () => {
+    h.fetchFactsByCategory.mockReset().mockResolvedValue({ categories: { empty: [] } })
+    h.fetchFolderContents.mockRejectedValue(new Error('500'))
+    const onError = vi.fn()
+    const { tree } = make({ onError })
+    await tree.loadTree()
+    tree.toggleNode('folder-0')
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1))
+    expect(tree.treeData.value[0].children ?? []).toHaveLength(0)
+  })
+
   it('opening an empty folder fetches its contents', async () => {
     h.fetchFactsByCategory.mockReset().mockResolvedValue({ categories: { empty: [] } })
     h.fetchFolderContents.mockResolvedValue({ results: [{ content: 'x', metadata: { title: 'doc.md' } }] })
@@ -162,5 +228,14 @@ describe('refreshing statuses', () => {
     await Promise.all([tree.refreshVectorizationStatus(), tree.refreshVectorizationStatus()])
     expect(fetchBatchStatus).toHaveBeenCalledTimes(1)
     expect(tree.isRefreshingStatus.value).toBe(false)
+  })
+
+  it('reports a failed status refresh through onError', async () => {
+    const onError = vi.fn()
+    const { tree, fetchBatchStatus } = make({ onError })
+    await tree.loadTree()
+    fetchBatchStatus.mockRejectedValueOnce(new Error('down'))
+    await tree.refreshVectorizationStatus()
+    expect(onError).toHaveBeenCalledTimes(1)
   })
 })

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * Query-term highlighting for the knowledge search results (#3296, moved out of
- * KBSearchResultPanel.vue in #18244). Text is HTML-escaped first, then the matched
- * terms are wrapped in `<mark class="kb-highlight">`, so the result is safe for v-html.
+ * KBSearchResultPanel.vue in #18244). Terms are matched in the original text; every
+ * fragment (matched or not) is HTML-escaped and only the fixed `<mark class="kb-highlight">`
+ * wrapper is added, so the result is safe for v-html and never splits an entity.
  */
 import { escapeHtml, type SemanticVariant } from '@autobot/ui'
 
@@ -30,8 +31,12 @@ export function buildHighlightRegex(query: string): RegExp | null {
 export function highlightText(text: string, query: string): string {
   if (!text) return ''
   const regex = buildHighlightRegex(query)
-  const escaped = escapeHtml(text)
-  return regex ? escaped.replace(regex, '<mark class="kb-highlight">$1</mark>') : escaped
+  if (!regex) return escapeHtml(text)
+  // The regex has one capture group, so split() puts every match at an odd index.
+  return text
+    .split(regex)
+    .map((part, i) => (i % 2 === 1 ? `<mark class="kb-highlight">${escapeHtml(part)}</mark>` : escapeHtml(part)))
+    .join('')
 }
 
 /** The first highlight (or the opening of the content), cut to a snippet and marked. */

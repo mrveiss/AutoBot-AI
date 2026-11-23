@@ -73,6 +73,18 @@ describe('buildNestedTree', () => {
   })
 })
 
+describe('buildNestedTree with hostile path segments', () => {
+  it('keeps __proto__ and _files as ordinary folders, with no prototype pollution and no throw', () => {
+    const build = () =>
+      buildNestedTree([fact('__proto__/x/y.md', 'fact:a'), fact('_files/a.md', 'fact:b'), fact('_files/b.md', 'fact:c')], 'cat')
+    expect(build).not.toThrow()
+    const tree = build()
+    expect(({} as Record<string, unknown>).x).toBeUndefined()
+    expect(tree.map((n) => n.name)).toEqual(['__proto__', '_files'])
+    expect(tree[1].children?.map((n) => n.name)).toEqual(['a.md', 'b.md'])
+  })
+})
+
 describe('buildTreeFromCategoryFacts / buildTreeFromEntries', () => {
   it('makes one numbered top-level folder per category, named by the formatter', () => {
     const nodes = buildTreeFromCategoryFacts({ a: [fact('x.md')], b: [] }, (c) => c.toUpperCase())
