@@ -98,8 +98,8 @@ describe('BaseBadge', () => {
     // .aui-badge or .aui-badge--solid would grow every existing kit badge by 2px (#14776 review).
     const css = badgeSource.split('<style scoped>')[1]
     const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')} \\{([^}]*)\\}`))?.[1] ?? ''
-    expect(rule('.aui-badge')).toContain('display: inline-flex')
-    expect(rule('.aui-badge')).not.toMatch(/\bborder\s*:/)
+    expect(rule('[data-slot="badge"]')).toContain('display: inline-flex')
+    expect(rule('[data-slot="badge"]')).not.toMatch(/\bborder\s*:/)
     expect(rule('.aui-badge--solid')).not.toMatch(/\bborder/)
     expect(css).toMatch(/\.aui-badge--subtle,\s*\.aui-badge--outline \{\s*border: 1px solid transparent;/)
   })

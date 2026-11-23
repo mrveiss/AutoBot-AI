@@ -76,7 +76,6 @@ async def app(session_factory):  # noqa: ANN001, ANN201
     from llc.api import agent_hires as hires_api
     from llc.api import budget as budget_api
     from llc.deps import get_session
-    from user_management.database import get_async_session
     from user_management.services import TenantContext
 
     application = FastAPI()
@@ -92,8 +91,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
                 await session.rollback()
                 raise
 
-    # budget.py still resolves get_async_session (PR 3 moves it); agent_hires resolves llc get_session.
-    application.dependency_overrides[get_async_session] = _override_session
+    # budget.py and agent_hires both resolve llc.deps.get_session (SESSION_DEP).
     application.dependency_overrides[get_session] = _override_session
 
     def _override_current_user() -> dict:
