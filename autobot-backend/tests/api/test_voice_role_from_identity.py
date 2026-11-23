@@ -5,7 +5,8 @@
 """A voice route takes the caller's role from the authenticated identity, never the form (#22143).
 
 ``/listen``, ``/speak``, ``/synthesize`` and ``/clone-voice`` each asked ``security_layer.check_permission`` about a
-``user_role`` form field, so any caller could name itself ``admin``. Each now ignores that field.
+``user_role`` form field, so any caller could name itself ``admin``, and ``/transcribe`` asked about a literal
+``"user"``. All five now use the session role and ignore that field.
 """
 
 from unittest.mock import MagicMock
@@ -20,6 +21,13 @@ from testkit.canonical_gate import no_user_middleware, real_admin_gate
 
 _AUTHENTICATED_ROLE = "readonly"
 _CLAIMED_ROLE = "admin"
+
+
+class _ListeningInterface:
+    """A voice interface whose recogniser succeeds, so an allowed ``/listen`` reaches a 200."""
+
+    async def listen_and_convert_to_text(self) -> dict:
+        return {"status": "success", "text": "hello"}
 
 
 class _RecordingSecurityLayer:
@@ -69,8 +77,10 @@ def test_admin_session_is_allowed_and_audited_as_admin(harness):
     """The converse: the session role is what is consulted, so an admin session is not refused."""
     client, layer = harness
     client.app.dependency_overrides[get_current_user] = lambda: {"user_id": "a1", "role": "admin"}
+    client.app.state.voice_interface = _ListeningInterface()
     response = client.post("/api/voice/listen", data={"user_role": "readonly"})
-    assert response.status_code != 403
+    assert response.status_code == 200
+    assert response.json()["text"] == "hello"
     assert layer.asked == ["admin"]
 
 
