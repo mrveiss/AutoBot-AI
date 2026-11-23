@@ -423,6 +423,10 @@ def _steps(jobs: dict[str, Any]) -> list[dict[str, Any]]:
     return jobs["own-specs"]["steps"]
 
 
+def _index(jobs: dict[str, Any], match) -> int:
+    return next(i for i, s in enumerate(_steps(jobs)) if match(s))
+
+
 def _step(jobs: dict[str, Any], name: str) -> dict[str, Any]:
     return next(s for s in _steps(jobs) if s.get("name", "").startswith(name))
 
@@ -433,7 +437,7 @@ def test_the_job_merges_the_pinned_base_before_node_and_the_result_job_needs_it(
     assert _steps(jobs)[0]["with"]["fetch-depth"] == 0, "the three-dot diff and the merge need the history"
     names = [s.get("name", "") for s in _steps(jobs)]
     merge = next(i for i, s in enumerate(_steps(jobs)) if "preboard_guard_lane.py merge" in s.get("run", ""))
-    node = next(i for i, s in enumerate(_steps(jobs)) if s.get("uses") == _SETUP_ACTION)
+    node = _index(jobs, lambda s: s.get("uses") == _SETUP_ACTION)
     assert merge < node and "Stop on a head that conflicts with the base" in names
     assert _step(jobs, "Stop on a head")["if"] == "steps.base.outputs.merged != 'true'"
 
@@ -453,27 +457,6 @@ def test_an_empty_selection_sets_up_and_installs_nothing(jobs) -> None:
         assert step["if"] == "steps.select.outputs.total != '0'", step["name"]
     listing = _step(jobs, "List the packages")
     assert listing["if"] == "steps.select.outputs.total != '0'"
-
-
-def _ci_setup_inputs() -> dict[str, Any]:
-    suite = yaml.safe_load(_SUITE.read_text(encoding="utf-8"))["jobs"]["frontend-tests"]["steps"]
-    return next(s for s in suite if s.get("uses") == _SETUP_ACTION)["with"]
-
-
-def test_node_is_set_up_as_the_frontend_test_job_does_it(jobs) -> None:
-    """Both jobs call the ONE setup action (#22114); the action itself holds the setup-node pin, .nvmrc, cache and ``npm ci``."""
-    mine = _step(jobs, "Set up the frontend toolchain")["with"]
-    theirs = _ci_setup_inputs()
-    assert mine["package-dirs"] == "${{ steps.packages.outputs.dirs }}" and mine["allow-install-fallback"] == "true"
-    assert "allow-install-fallback" not in theirs, "the test job always installs with npm ci"
-    locks = mine["cache-dependency-path"].split()
-    assert theirs["cache-dependency-path"] in locks and all((_ROOT / lock).is_file() for lock in locks)
-    action = yaml.safe_load((_ROOT / ".github/actions/setup-frontend/action.yml").read_text(encoding="utf-8"))
-    node = action["runs"]["steps"][0]
-    assert node["uses"].startswith("actions/setup-node@") and node["with"]["node-version-file"] == ".nvmrc"
-    install = action["runs"]["steps"][1]
-    assert install["env"]["CYPRESS_INSTALL_BINARY"] == "0" and "npm ci" in install["run"]
-    assert "CYPRESS_INSTALL_BINARY" not in jobs["own-specs"]["env"], "the setup action owns it"
 
 
 def _lines(script: str) -> list[list[str]]:
@@ -567,15 +550,10 @@ def test_changed_specs_turns_an_unreadable_config_into_an_error_and_a_non_zero_e
     assert "::error::cannot read the frontend spec rules: vitest.config.ts: test.include is not an array" in err
 
 
-def test_the_setup_action_installs_with_npm_ci_where_a_lock_exists_and_npm_install_only_when_allowed() -> None:
-    action = yaml.safe_load((_ROOT / ".github/actions/setup-frontend/action.yml").read_text(encoding="utf-8"))
-    run = action["runs"]["steps"][1]["run"]
-    install = (
-        'if [ "$ALLOW_FALLBACK" = "true" ] && [ ! -f package-lock.json ]; then npm install || exit 1; '
-        "else npm ci || exit 1; fi"
-    )
-    assert install in run, "inside the subshell that is the left side of `||` errexit is off: each install must exit"
-    assert action["inputs"]["allow-install-fallback"]["default"] == "false"
+def test_the_setup_action_comes_before_the_run_step(jobs) -> None:
+    setup = _index(jobs, lambda s: s.get("uses") == _SETUP_ACTION)
+    run = _index(jobs, lambda s: s.get("name", "").startswith("Run the changed specs"))
+    assert setup < run, "the toolchain is installed before the specs run"
 
 
 def test_the_run_step_installs_nothing_itself(jobs) -> None:

@@ -38,11 +38,17 @@ runs:
         PACKAGE_DIRS: ${{ inputs.package-dirs }}
         ALLOW_FALLBACK: ${{ inputs.allow-install-fallback }}
       run: |
+        # A package whose install fails does not stop the others: every failure is named, then the step fails (#21509).
+        failed=""
         for dir in $PACKAGE_DIRS; do
           echo "::group::install $dir"
           (
             cd "$dir" || exit 1
             if [ "$ALLOW_FALLBACK" = "true" ] && [ ! -f package-lock.json ]; then npm install || exit 1; else npm ci || exit 1; fi
-          ) < /dev/null || { echo "::error::installing the dependencies of $dir failed"; exit 1; }
+          ) < /dev/null || { echo "::error::installing the dependencies of $dir failed"; failed="$failed $dir"; }
           echo "::endgroup::"
         done
+        if [ -n "$failed" ]; then
+          echo "::error::dependency install failed in:$failed"
+          exit 1
+        fi
