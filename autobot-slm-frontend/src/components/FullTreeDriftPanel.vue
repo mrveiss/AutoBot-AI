@@ -205,6 +205,12 @@ function formatChecked(value: string | undefined): string {
               >
                 {{ prune.busyComponent.value === component.component ? $t('fullTreeDriftPanel.prune.previewing') : $t('fullTreeDriftPanel.prune.previewAction') }}
               </button>
+              <div v-else-if="prune.batch(component.component).total === 0" class="rounded-md border border-autobot-border bg-autobot-bg-secondary p-3" data-testid="drift-prune-empty">
+                <p class="text-xs text-autobot-text-secondary mb-2">{{ $t('fullTreeDriftPanel.prune.nothingToRemove') }}</p>
+                <button @click="prune.cancel(component.component)" class="btn btn-secondary text-sm">
+                  {{ $t('fullTreeDriftPanel.prune.cancel') }}
+                </button>
+              </div>
               <div v-else class="rounded-md border border-autobot-error bg-autobot-error-bg p-3" data-testid="drift-prune-confirm">
                 <div class="text-xs font-medium text-autobot-error mb-1">
                   {{ $t('fullTreeDriftPanel.prune.title', { count: prune.batch(component.component).files.length, component: component.component }) }}

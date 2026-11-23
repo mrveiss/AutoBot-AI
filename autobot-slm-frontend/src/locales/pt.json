@@ -2236,6 +2236,7 @@
       "cancel": "Cancelar",
       "confirm": "Confirmar a remoção de {count} arquivo(s)",
       "intro": "O Git comprova que estes arquivos foram excluídos da origem e ainda estão implantados. Somente estes arquivos são removidos. O estado do host, os pacotes de build e os arquivos modificados nunca são tocados.",
+      "nothingToRemove": "Nada a remover: nenhum arquivo implantado continua confirmado como excluído da origem. Execute a verificação de divergências novamente.",
       "previewAction": "Visualizar remoção",
       "previewing": "Carregando visualização…",
       "removing": "Removendo…",

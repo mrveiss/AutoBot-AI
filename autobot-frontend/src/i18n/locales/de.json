@@ -10021,6 +10021,7 @@
     "cancel": "Abbrechen",
     "confirm": "Entfernung von {count} Datei(en) bestätigen",
     "intro": "Git belegt, dass diese Dateien aus dem Quellcode gelöscht wurden und noch bereitgestellt sind. Nur diese Dateien werden entfernt. Host-Zustand, Build-Bundles und geänderte Dateien werden nie angetastet.",
+    "nothingToRemove": "Nichts zu entfernen: keine bereitgestellte Datei ist mehr als aus dem Quellcode gelöscht bestätigt. Führen Sie die Abweichungsprüfung erneut aus.",
     "previewAction": "Entfernung in der Vorschau anzeigen",
     "previewing": "Vorschau wird geladen…",
     "removing": "Wird entfernt…",

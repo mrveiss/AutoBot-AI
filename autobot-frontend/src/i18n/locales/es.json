@@ -10021,6 +10021,7 @@
     "cancel": "Cancelar",
     "confirm": "Confirmar la eliminación de {count} archivo(s)",
     "intro": "Git demuestra que estos archivos se eliminaron del código fuente y siguen desplegados. Solo se eliminan estos archivos. El estado del host, los paquetes de compilación y los archivos modificados nunca se tocan.",
+    "nothingToRemove": "Nada que eliminar: ningún archivo desplegado sigue confirmado como eliminado del código fuente. Vuelva a ejecutar la comprobación de desviaciones.",
     "previewAction": "Previsualizar eliminación",
     "previewing": "Cargando vista previa…",
     "removing": "Eliminando…",

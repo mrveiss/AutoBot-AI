@@ -83,6 +83,16 @@ describe('useDriftPrune batching (#22082)', () => {
     expect(prune.batch('plugins').files.map((f) => f.path)).toEqual(['f1.py'])
   })
 
+  it('keeps an empty preview as one source of truth and confirms nothing for it', async () => {
+    call.mockResolvedValueOnce({ component: 'plugins', files: [] })
+    const prune = useDriftPrune()
+    await prune.preview('plugins')
+    expect(prune.previews.value.plugins).toBeDefined()
+    expect(prune.batch('plugins')).toEqual({ files: [], total: 0 })
+    expect(await prune.confirm('plugins')).toBeNull()
+    expect(call).toHaveBeenCalledTimes(1)
+  })
+
   it('reports a failed request through the i18n key', async () => {
     call.mockRejectedValueOnce('boom')
     const prune = useDriftPrune()

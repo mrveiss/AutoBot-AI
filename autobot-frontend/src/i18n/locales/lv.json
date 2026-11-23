@@ -10021,6 +10021,7 @@
     "cancel": "Atcelt",
     "confirm": "Apstiprināt {count} failu(-u) noņemšanu",
     "intro": "Git pierāda, ka šie faili ir izdzēsti no pirmkoda un joprojām ir izvietoti. Tiek noņemti tikai šie faili. Resursdatora stāvoklis, būvējuma pakotnes un mainītie faili netiek skarti nekad.",
+    "nothingToRemove": "Nav ko noņemt: neviens izvietotais fails vairs nav apstiprināts kā izdzēsts no pirmkoda. Palaidiet neatbilstību pārbaudi vēlreiz.",
     "previewAction": "Priekšskatīt noņemšanu",
     "previewing": "Notiek priekšskatījuma ielāde…",
     "removing": "Notiek noņemšana…",

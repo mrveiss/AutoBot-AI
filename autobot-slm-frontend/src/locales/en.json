@@ -2236,6 +2236,7 @@
       "cancel": "Cancel",
       "confirm": "Confirm removal of {count} file(s)",
       "intro": "Git proves these files were deleted from source and they are still deployed. Only these files are removed. Host state, build bundles and modified files are never touched.",
+      "nothingToRemove": "Nothing to remove: no deployed file is confirmed as deleted from source any more. Re-run the drift check.",
       "previewAction": "Preview removal",
       "previewing": "Loading preview…",
       "removing": "Removing…",

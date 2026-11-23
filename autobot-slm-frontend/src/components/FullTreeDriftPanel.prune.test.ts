@@ -76,6 +76,18 @@ describe('FullTreeDriftPanel prune (#22082)', () => {
     expect(wrapper.find('[data-testid="drift-prune-confirm-button"]').exists()).toBe(true)
   })
 
+  it('shows an empty state, not a confirm button, when the preview has no files', async () => {
+    post.mockResolvedValueOnce({ component: 'plugins', files: [] })
+    const wrapper = mountPanel()
+
+    await wrapper.find('[data-testid="drift-prune-preview"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="drift-prune-empty"]').text()).toContain('Nothing to remove')
+    expect(wrapper.find('[data-testid="drift-prune-confirm-button"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="drift-prune-confirm"]').exists()).toBe(false)
+  })
+
   it('confirm sends exactly the previewed paths and re-runs the drift check', async () => {
     post
       .mockResolvedValueOnce({ component: 'plugins', files: [{ path: 'core-plugins/x/plugin.py', detail: 'abc' }] })

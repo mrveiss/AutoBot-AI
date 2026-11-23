@@ -2236,6 +2236,7 @@
       "cancel": "Anuluj",
       "confirm": "Potwierdź usunięcie {count} plik(ów)",
       "intro": "Git dowodzi, że te pliki zostały usunięte ze źródeł, a nadal są wdrożone. Usuwane są tylko te pliki. Stan hosta, paczki kompilacji i zmodyfikowane pliki nigdy nie są ruszane.",
+      "nothingToRemove": "Nic do usunięcia: żaden wdrożony plik nie jest już potwierdzony jako usunięty ze źródeł. Uruchom ponownie sprawdzanie rozbieżności.",
       "previewAction": "Podgląd usunięcia",
       "previewing": "Ładowanie podglądu…",
       "removing": "Usuwanie…",
