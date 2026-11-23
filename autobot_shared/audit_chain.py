@@ -31,6 +31,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Iterable, Mapping
 
+from autobot_shared.security.constant_time import equal_bytes
+
 #: First byte of every serialization: the format can change without invalidating older rows.
 FORMAT_VERSION = 1
 #: ``chain_seq`` of the genesis anchor; the first chained row is ``GENESIS_SEQ + 1``.
@@ -118,7 +120,7 @@ def is_digest(value: Any) -> bool:
 
 def same_digest(left: Any, right: Any) -> bool:
     """Constant-time equality of two stored values; safe for any string, including non-ASCII."""
-    return hmac.compare_digest(str(left or "").encode("utf-8"), str(right or "").encode("utf-8"))
+    return equal_bytes(str(left or "").encode("utf-8"), str(right or "").encode("utf-8"))
 
 
 def canonical_bytes(values: Mapping[str, Any]) -> bytes:
