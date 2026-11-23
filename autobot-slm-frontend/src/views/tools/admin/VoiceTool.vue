@@ -170,6 +170,8 @@ async function processVoiceInput(): Promise<void> {
 
 let player: HTMLAudioElement | null = null
 let playerUrl: string | null = null
+// Bumped by every new request, stop and teardown: a response that arrives after its generation moved on is dropped.
+let speakGeneration = 0
 
 function releasePlayer(): void {
   player?.pause()
@@ -190,7 +192,9 @@ function finishPlayback(): void {
 
 /** Fetch the synthesized `audio/wav` for *text* and play it; resolves once playback has started. */
 async function speakText(text: string): Promise<void> {
+  const generation = ++speakGeneration
   const audio = await api.voiceSpeak(text, { language: settings.value.language, voiceId: settings.value.voice.trim() })
+  if (generation !== speakGeneration) return
   releasePlayer()
   playerUrl = URL.createObjectURL(audio)
   player = new Audio(playerUrl)
@@ -207,6 +211,7 @@ async function speakText(text: string): Promise<void> {
 }
 
 function stopSpeaking(): void {
+  speakGeneration++
   releasePlayer()
   isSpeaking.value = false
 }
@@ -222,7 +227,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  speakGeneration++
   if (recognition) {
+    recognition.onstart = recognition.onresult = recognition.onend = recognition.onerror = null
     recognition.abort()
   }
   releasePlayer()

@@ -95,6 +95,25 @@ describe('VoiceTool speaks the transcript through the audio route', () => {
     expect((backendClient.rawRequest.mock.calls[0][1].body as FormData).get('voice_id')).toBe('voice-7')
   })
 
+  it('does not start playback when unmounted before the audio arrives', async () => {
+    let resolveAudio: (r: Response) => void = () => {}
+    backendClient.rawRequest.mockReturnValue(new Promise<Response>((resolve) => { resolveAudio = resolve }))
+    const wrapper = await dictate('hello')
+    wrapper.unmount()
+    resolveAudio(new Response(new Blob(['RIFF'], { type: 'audio/wav' }), { status: 200 }))
+    await flushPromises()
+    expect(play).not.toHaveBeenCalled()
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('ignores a late recognition result after unmount', async () => {
+    const wrapper = await dictate('first')
+    const recognition = FakeRecognition.last
+    wrapper.unmount()
+    expect(recognition?.onend).toBeNull()
+    expect(recognition?.onresult).toBeNull()
+  })
+
   it('shows the localised failure with the status, and plays nothing, when the route refuses', async () => {
     backendClient.rawRequest.mockResolvedValue(
       new Response(JSON.stringify({ message: 'Permission denied to speak via voice.' }), {

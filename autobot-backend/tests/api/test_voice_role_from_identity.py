@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from api.voice import router as voice_router
 from auth_middleware import check_admin_permission, get_current_user
+from security_layer import SecurityLayer
 from testkit.canonical_gate import no_user_middleware, real_admin_gate
 
 _AUTHENTICATED_ROLE = "readonly"
@@ -107,3 +108,30 @@ def test_real_admin_gate_refuses_anonymous_and_non_admin(user, status):
         response = client.post("/api/voice/speak", data={"text": "hi", "user_role": _CLAIMED_ROLE})
     assert response.status_code == status
     assert app.state.security_layer.asked == []
+
+
+class _RealRecordingLayer(SecurityLayer):
+    """The real RBAC resolver, recording each (role, action, verdict) it answers."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.verdicts: list[tuple[str, str, bool]] = []
+
+    def check_permission(self, user_role, action_type, resource=None):
+        verdict = super().check_permission(user_role, action_type, resource)
+        self.verdicts.append((user_role, action_type, verdict))
+        return verdict
+
+    def audit_log(self, *args, **kwargs) -> None:
+        pass
+
+
+@pytest.mark.parametrize(("path", "data", "files"), _ROUTES)
+def test_superadmin_holds_admins_voice_grants_on_every_route(harness, path, data, files):
+    """#19125: superadmin is the highest admin, so the real resolver must grant it what admin has."""
+    client, _ = harness
+    layer = _RealRecordingLayer()
+    client.app.state.security_layer = layer
+    client.app.dependency_overrides[get_current_user] = lambda: {"user_id": "s1", "role": "superadmin"}
+    client.post(path, data=data, files=files)
+    assert [(role, ok) for role, _action, ok in layer.verdicts] == [("superadmin", True)]

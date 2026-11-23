@@ -76,6 +76,7 @@ from api.schemas_system import (
     BrowserWaitForSelectorResponse,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.env_registry import env
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
@@ -124,7 +125,6 @@ ALLOWED_URL_SCHEMES = _guard.ALLOWED_URL_SCHEMES
 INTERNAL_HOST_EXCEPTIONS = _guard.INTERNAL_HOST_EXCEPTIONS
 is_url_allowed = _guard.is_url_allowed
 classify_url = _guard.classify_url
-
 BROWSER_VM_URL = ServiceURLs.BROWSER_SERVICE
 
 # #11539: the browser-worker keys one isolated BrowserContext per session_id
@@ -135,7 +135,7 @@ DEFAULT_BROWSER_SESSION_ID = "default"
 
 # Rate limiting: max requests per minute
 MAX_REQUESTS_PER_MINUTE = env_int_clamped("AUTOBOT_MCP_BROWSER_RATE_LIMIT", 60, min_v=1, max_v=1_000_000)
-RATE_LIMIT_WINDOW_SECONDS = env_int_clamped("AUTOBOT_MCP_BROWSER_RATE_WINDOW_S", 60, min_v=1, max_v=86_400)
+RATE_LIMIT_WINDOW_SECONDS = env("AUTOBOT_MCP_BROWSER_RATE_WINDOW_S")  # registered range: out of range -> 60
 # One global Redis-backed count shared by every worker (#18087); fails open when Redis is down.
 _rate_limiter = RateLimiter("mcp:browser", log_label="mcp:browser")
 _RATE_LIMIT_KEY = "global"
