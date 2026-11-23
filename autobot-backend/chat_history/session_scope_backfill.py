@@ -31,6 +31,12 @@ renamed, or moved.
 Not auto-run: nothing here executes on import, there is no scheduled or Celery
 hook, and the CLI defaults to a dry run. Writing requires ``--apply``.
 
+#21997 (owner decision): no chat is re-tagged automatically. Untagged chats, these legacy CEO chats included, are
+listed as Unassigned and a person assigns each to a company through ``POST /chat/sessions/{id}/company``, which
+leaves an audit record. This module must therefore keep no caller (no startup, migration, task or agent invokes
+it); ``api/chat_company_scope_21997_test.py`` pins that. Its ``--apply`` is a manual operator tool that writes no
+audit record, so a person assigning through the route is the supported path.
+
 Usage::
 
     python -m chat_history.session_scope_backfill              # dry run, writes nothing

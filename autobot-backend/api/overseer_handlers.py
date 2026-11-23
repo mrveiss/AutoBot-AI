@@ -26,7 +26,7 @@ from agents.overseer.types import (
 )
 from api.schemas_agent import OverseerQueryData
 from api.schemas_system import OverseerStatusResponse
-from api.ws_security import open_authenticated_ws, owns_chat_session
+from api.ws_security import in_active_company, open_authenticated_ws, owns_chat_session
 from auth_middleware import get_current_user
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -465,6 +465,12 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
         while True:
             # Receive message
             data = await websocket.receive_json()
+            # #21997: the chat may have been assigned to another company since connect; the socket's own active
+            # company is already resolved on the connection, so this reads only the stored one.
+            if not await in_active_company(websocket, session_id, {}):
+                await handler.disconnect()
+                await websocket.close(code=1008, reason="Forbidden")
+                return
             await handler.handle_message(data)
 
     except PEER_CLOSED_ERRORS:

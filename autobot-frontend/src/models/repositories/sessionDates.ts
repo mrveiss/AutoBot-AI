@@ -11,6 +11,8 @@ export interface ChatListEntry {
   createdAt?: Date
   updatedAt?: Date
   isActive: boolean
+  /** The chat carries no company yet (#21997). */
+  unassigned?: boolean
 }
 
 /**
@@ -25,4 +27,24 @@ export function toSessionDate(...candidates: Array<string | undefined>): Date | 
     if (!Number.isNaN(date.getTime()) && date.getTime() > 0) return date
   }
   return undefined
+}
+
+/** The session-list response: the active company's chats and, apart, the Unassigned ones (#21997). */
+export interface BackendSessionList<T> {
+  sessions?: T[]
+  unassigned?: T[]
+}
+
+/**
+ * The company's chats plus the Unassigned set, each chat once (#21997). With no active company the
+ * backend returns the same untagged chats in both lists, so an id in `unassigned` is flagged and
+ * never repeated.
+ */
+export function withUnassigned<T extends { id?: string; chatId?: string }>(
+  sessions: T[],
+  unassigned: T[],
+): Array<T & { unassigned?: boolean }> {
+  const idOf = (s: T) => s.id || s.chatId
+  const loose = new Set(unassigned.map(idOf))
+  return [...sessions.filter((s) => !loose.has(idOf(s))), ...unassigned.map((s) => ({ ...s, unassigned: true }))]
 }
