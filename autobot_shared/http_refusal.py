@@ -22,13 +22,20 @@ logger = get_logger(__name__)
 #: no handler word a refusal differently or let exception text through.
 REFUSAL_TEXT: dict[int, str] = {
     status.HTTP_400_BAD_REQUEST: "Invalid request",
+    status.HTTP_401_UNAUTHORIZED: "Unauthorized",
     status.HTTP_403_FORBIDDEN: "Forbidden",
     status.HTTP_404_NOT_FOUND: "Not found",
     status.HTTP_409_CONFLICT: "Conflict",
     status.HTTP_422_UNPROCESSABLE_ENTITY: "Unprocessable request",
+    status.HTTP_429_TOO_MANY_REQUESTS: "Too many requests",
     status.HTTP_503_SERVICE_UNAVAILABLE: "Service unavailable",
 }
 _REFUSAL_DEFAULT = "Request refused"
+
+
+def refusal_text(status_code: int) -> str:
+    """The one client wording for a refusal with *status_code* (#21943): ``REFUSAL_TEXT``, else the default."""
+    return REFUSAL_TEXT.get(status_code, _REFUSAL_DEFAULT)
 
 
 def http_refusal(status_code: int, exc: BaseException, *, scope: str) -> HTTPException:
@@ -56,9 +63,9 @@ def http_refusal(status_code: int, exc: BaseException, *, scope: str) -> HTTPExc
         type(exc).__name__,
         safe_log_text(exc),
     )
-    return HTTPException(status_code=status_code, detail=REFUSAL_TEXT.get(status_code, _REFUSAL_DEFAULT))
+    return HTTPException(status_code=status_code, detail=refusal_text(status_code))
 
 
 def fixed_refusal(status_code: int) -> HTTPException:
     """The refusal for *status_code* with its fixed text and nothing from any exception (#21559)."""
-    return HTTPException(status_code=status_code, detail=REFUSAL_TEXT.get(status_code, _REFUSAL_DEFAULT))
+    return HTTPException(status_code=status_code, detail=refusal_text(status_code))

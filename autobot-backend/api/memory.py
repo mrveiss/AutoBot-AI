@@ -60,6 +60,7 @@ from auth_middleware import check_admin_permission
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_memory_graph.owner_scope import UNSCOPED_ALL_USERS, OwnerScope
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from utils.request_utils import generate_request_id
@@ -772,10 +773,7 @@ async def get_entity_by_id(
 
         logger.info("[%s] Entity retrieved: %s", request_id, entity["name"])
 
-        return JSONResponse(
-            status_code=200,
-            content={"success": True, "data": entity, "request_id": request_id},
-        )
+        return JSONResponse(status_code=200, content={"success": True, "data": entity, "request_id": request_id})
 
     except HTTPException:
         raise
@@ -895,7 +893,7 @@ async def add_observations(
         raise
     except ValueError as e:
         logger.warning("[%s] Validation error adding observations: %s", request_id, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except Exception as e:
         logger.error("[%s] Error adding observations: %s", request_id, e)
         raise HTTPException(status_code=500, detail="Failed to add observations")
@@ -1019,7 +1017,7 @@ async def create_relation(
 
     except ValueError as e:
         logger.warning("[%s] Validation error creating relation: %s", request_id, e)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except Exception as e:
         logger.error("[%s] Error creating relation: %s", request_id, e)
         raise HTTPException(status_code=500, detail="Failed to create relation")
