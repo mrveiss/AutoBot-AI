@@ -2306,6 +2306,8 @@
         tasks_from: novnc
         apply:
           become: true
+      vars:
+        novnc_require_vnc_account: true  # never provisioned here: fail naming the account (#14319)
       when: "role_vnc_active | default(false) | bool"
       tags: [vnc, deploy]
 

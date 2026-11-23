@@ -9,15 +9,35 @@
 # whose noVNC pin (#13069) or websockify unit predates it, without re-running the
 # provisioning half of the role (apt, accounts, passwords).
 ---
-# --- Pinned noVNC from upstream (#13069) ---
-# The distro `novnc` package is 1.0.0 (2018) on Ubuntu 22.04 — it predates
-# VeNCrypt support and caused the unreachable-server failure in #13060. Removed
-# so the packaged copy and the pinned copy cannot diverge.
-- name: Remove distro noVNC package (superseded by pinned upstream; #13069)
-  ansible.builtin.apt:
-    name: novnc
-    state: absent
-  become: true
+# #14319: the fleet update includes this file without the rest of the role, so it bypasses
+# main.yml's emergency-admin rejection and the account creation. Both are checked here on that
+# path (novnc_require_vnc_account is set only by update-all-nodes.yml); provisioning runs
+# main.yml's own copy of the rejection before it creates any account.
+- name: "VNC | Reject the emergency admin account (fleet update, #14319)"
+  when: novnc_require_vnc_account | default(false) | bool
+  ansible.builtin.assert:
+    that:
+      - vnc_user != vnc_forbidden_user
+    fail_msg: >-
+      vnc_user is set to '{{ vnc_forbidden_user }}', the emergency admin
+      safety-net account (see roles/common/vars/main.yml
+      emergency_admin_user and playbooks/rotate-ssh-keys.yml). VNC must not
+      run under it -- see #14319. Set VNC_USER (or AUTOBOT_VNC_USER) to a
+      different account, or leave it unset to use the default
+      (autobot-vnc).
+    success_msg: "VNC will run as '{{ vnc_user }}'"
+
+# The fleet update (never provisioning) sets novnc_require_vnc_account: the unit below runs as
+# this account, so a node that was never provisioned fails here, naming the account, rather
+# than at a later restart. Provisioning creates the account after this file, so it leaves it unset.
+- name: "VNC | The service account and group exist (fleet update, #14319)"
+  ansible.builtin.getent:
+    database: "{{ item.db }}"
+    key: "{{ item.key }}"
+  loop:
+    - { db: passwd, key: "{{ vnc_user }}" }
+    - { db: group, key: "{{ vnc_group }}" }
+  when: novnc_require_vnc_account | default(false) | bool
 
 # Upstream publishes no release assets, so the tag archive is the distribution.
 # If GitHub ever re-compresses it the checksum fails loudly, which is the safe
@@ -48,6 +68,16 @@
     force: true
   become: true
   notify: restart websockify
+
+# The distro `novnc` package is 1.0.0 (2018) on Ubuntu 22.04 -- it predates VeNCrypt support
+# and caused the unreachable-server failure in #13060 (#13069). It is removed LAST, once the
+# pinned copy is downloaded, checksum-verified, unpacked and linked, so a failed download can
+# never leave a node without any noVNC.
+- name: Remove distro noVNC package (superseded by pinned upstream; #13069)
+  ansible.builtin.apt:
+    name: novnc
+    state: absent
+  become: true
 
 - name: Deploy websockify systemd service
   ansible.builtin.template:

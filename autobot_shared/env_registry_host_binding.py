@@ -48,3 +48,13 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_NOVNC_BIND_HOST",
+        type=str,
+        default="127.0.0.1",
+        description="Address a desktop session's websockify listens on; loopback unless a remote viewer needs it.",
+        component="backend",
+    )
+)

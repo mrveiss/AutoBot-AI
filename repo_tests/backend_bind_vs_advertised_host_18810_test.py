@@ -9,13 +9,14 @@ from jinja2 import ChainableUndefined, Environment
 
 from autobot_shared.egress_allowlist import _never_internal
 from autobot_shared.ssot_config import VMConfig
-from autobot_shared.ssot_reachable_host import reachable_host
+from autobot_shared.ssot_reachable_host import host_or_default, is_unspecified_host
 from autobot_shared.ssot_role_mirrors import NOVNC_PATH_DEFAULT
 
-ANSIBLE = Path(__file__).resolve().parents[1] / "autobot-slm-backend" / "ansible"
+ROOT = Path(__file__).resolve().parents[1]
+ANSIBLE = ROOT / "autobot-slm-backend" / "ansible"
 ENV_TEMPLATE = ANSIBLE / "roles" / "backend" / "templates" / "backend.env.j2"
 BACKEND_DEFAULTS = ANSIBLE / "roles" / "backend" / "defaults" / "main.yml"
-VNC_DEFAULTS = ANSIBLE / "roles" / "vnc" / "defaults" / "main.yml"
+ALL_VARS = ANSIBLE / "inventory" / "group_vars" / "all.yml"
 
 
 def _rendered(**variables) -> dict[str, str]:
@@ -46,18 +47,61 @@ def test_advertised_host_falls_back_to_loopback_without_inventory() -> None:
     assert _advertised("10.9.9.9", "10.1.2.3") == "10.9.9.9"
 
 
-def test_unspecified_vm_main_is_replaced_and_egress_accepts_the_result(monkeypatch) -> None:
+def test_unspecified_vm_main_is_kept_and_refused_not_substituted(monkeypatch) -> None:
+    """A bind-all dialed host is left as written: egress refuses it, startup fails naming it."""
     monkeypatch.setenv("AUTOBOT_BACKEND_HOST", "0.0.0.0")  # nosec B104
     host = VMConfig(_env_file=None).main
-    assert host == "127.0.0.1"
-    assert not _never_internal(f"http://{host}:8001")
-    assert _never_internal("http://0.0.0.0:8001")  # the guard itself is unchanged  # nosec B104
+    assert host == "0.0.0.0"  # nosec B104
+    assert _never_internal(f"http://{host}:8001")  # the guard itself is unchanged
+    assert not _never_internal("http://127.0.0.1:8001")
 
 
-def test_reachable_host_logs_loudly(caplog) -> None:
-    assert reachable_host("::") == "127.0.0.1"
-    assert "AUTOBOT_BACKEND_BIND_HOST" in caplog.text
-    assert reachable_host("backend.example") == "backend.example"
+def test_empty_host_settings_take_the_default_without_logging(monkeypatch, caplog) -> None:
+    monkeypatch.setenv("AUTOBOT_BACKEND_HOST", "")
+    monkeypatch.setenv("AUTOBOT_BACKEND_BIND_HOST", " ")
+    cfg = VMConfig(_env_file=None)
+    assert (cfg.main, cfg.main_bind) == ("127.0.0.1", "127.0.0.1")
+    assert not caplog.records
+    assert host_or_default("backend.example") == "backend.example"
+    assert is_unspecified_host("::") and is_unspecified_host("0.0.0.0")  # nosec B104
+    assert not is_unspecified_host("") and not is_unspecified_host("backend.example")
+
+
+def test_startup_validation_fails_naming_the_variable(monkeypatch) -> None:
+    monkeypatch.syspath_prepend(str(ROOT / "autobot-backend"))
+    import startup_validation
+
+    monkeypatch.setenv("AUTOBOT_BACKEND_HOST", "0.0.0.0")  # nosec B104
+    message = startup_validation.validate_advertised_host()
+    assert "AUTOBOT_BACKEND_HOST" in message and "AUTOBOT_BACKEND_BIND_HOST" in message
+    monkeypatch.setenv("AUTOBOT_BACKEND_HOST", "10.1.2.3")
+    assert startup_validation.validate_advertised_host() is None
+    monkeypatch.delenv("AUTOBOT_BACKEND_HOST")
+    assert startup_validation.validate_advertised_host() is None
+
+
+def test_unit_runs_the_startup_validation_before_the_backend() -> None:
+    unit = (ANSIBLE / "roles" / "backend" / "templates" / "autobot-backend.service.j2").read_text(encoding="utf-8")
+    assert "ExecStartPre" in unit and "startup_validation.py" in unit
+
+
+def test_loader_reads_the_bind_from_the_bind_variable() -> None:
+    """``backend.server_host`` (default: bind-all, ``config/defaults.py``) is a bind setting; only the bind variable sets it."""
+    loader = (ROOT / "autobot-backend/config/loader.py").read_text(encoding="utf-8")
+    assert '"AUTOBOT_BACKEND_BIND_HOST": ["backend", "server_host"]' in loader
+    assert '"AUTOBOT_BACKEND_HOST": ["backend"' not in loader
+
+
+def test_every_env_file_writer_carries_the_bind_host() -> None:
+    for name in (".env.example", ".env.base", ".env.localhost", ".env.network-template"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        assert "AUTOBOT_BACKEND_BIND_HOST=" in text, name
+    gen = (ROOT / "autobot-infrastructure/shared/scripts/generate-env-files.py").read_text(encoding="utf-8")
+    assert gen.count("AUTOBOT_BACKEND_BIND_HOST=") == gen.count('f"AUTOBOT_BACKEND_HOST=') == 5
+    deepseek = (ROOT / "autobot-infrastructure/shared/scripts/environment/set-env-deepseek.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "AUTOBOT_BACKEND_BIND_HOST=" in deepseek and "BACKEND_HOST:-0.0.0.0" not in deepseek
 
 
 def test_bind_host_is_its_own_setting(monkeypatch) -> None:
@@ -68,17 +112,33 @@ def test_bind_host_is_its_own_setting(monkeypatch) -> None:
 
 
 def test_novnc_path_has_one_home() -> None:
-    role = yaml.safe_load(VNC_DEFAULTS.read_text(encoding="utf-8"))["novnc_path"]
+    role = yaml.safe_load(ALL_VARS.read_text(encoding="utf-8"))["novnc_path"]
     assert role == NOVNC_PATH_DEFAULT
-    assert (
-        _rendered(backend_host="127.0.0.1", backend_advertised_host="127.0.0.1", novnc_path=role)["AUTOBOT_NOVNC_PATH"]
-        == role
-    )
+    vnc_defaults = (ANSIBLE / "roles" / "vnc" / "defaults" / "main.yml").read_text(encoding="utf-8")
+    assert "\nnovnc_path:" not in vnc_defaults  # not a second home
+    template = ENV_TEMPLATE.read_text(encoding="utf-8")
+    assert "AUTOBOT_NOVNC_PATH={{ novnc_path }}" in template and "novnc_path is defined" not in template
     unit = (ANSIBLE / "roles" / "vnc" / "templates" / "vnc-websockify.service.j2").read_text(encoding="utf-8")
     assert "--web={{ novnc_path }}" in unit
 
 
-def test_fleet_update_converges_the_vnc_pin() -> None:
+def test_fleet_update_converges_the_vnc_pin_with_the_account_guards() -> None:
     play = (ANSIBLE / "playbooks" / "update-all-nodes.yml").read_text(encoding="utf-8")
-    assert "tasks_from: novnc" in play
-    assert (ANSIBLE / "roles" / "vnc" / "tasks" / "novnc.yml").is_file()
+    assert "tasks_from: novnc" in play and "novnc_require_vnc_account: true" in play
+    tasks = yaml.safe_load((ANSIBLE / "roles" / "vnc" / "tasks" / "novnc.yml").read_text(encoding="utf-8"))
+    names = [t["name"] for t in tasks]
+    assert "ansible.builtin.assert" in tasks[0] and tasks[0]["when"]
+    assert any("account and group exist" in n for n in names[:2])
+    pin = [i for i, n in enumerate(names) if "Download noVNC" in n][0]
+    unpack = [i for i, n in enumerate(names) if "Unpack noVNC" in n][0]
+    link = [i for i, n in enumerate(names) if n.startswith("Point ")][0]
+    remove = [i for i, n in enumerate(names) if "Remove distro noVNC" in n][0]
+    assert pin < unpack < link < remove  # the distro copy goes only once the pinned one is in place
+    assert tasks[pin]["ansible.builtin.get_url"]["checksum"].startswith("sha256:")
+
+
+def test_updater_renders_the_env_before_it_restarts_the_backend() -> None:
+    play = (ANSIBLE / "playbooks" / "update-all-nodes.yml").read_text(encoding="utf-8")
+    env = play.index("tasks_from: env_only")
+    restart = play.index('- name: "[PLAY 2] Backend | Restart service"')
+    assert env < restart

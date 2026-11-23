@@ -59,7 +59,7 @@ from autobot_shared.ssot_chat_graph_settings import ChatGraphSettings
 from autobot_shared.ssot_codebase_index import CodebaseIndexSettings
 from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
-from autobot_shared.ssot_reachable_host import reachable_host
+from autobot_shared.ssot_reachable_host import HostOrDefault
 from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
     NOVNC_PATH_DEFAULT,
     SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
@@ -172,8 +172,8 @@ class VMConfig(RedactedSettings):
 
     # Issue #2953: Defaults changed to 127.0.0.1 for single-host installs.
     # Distributed installs override these via AUTOBOT_*_HOST env vars in .env.
-    main: Annotated[str, BeforeValidator(reachable_host)] = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_HOST")
-    main_bind: str = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_BIND_HOST")  # listen address (#18810)
+    main: HostOrDefault = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_HOST")
+    main_bind: HostOrDefault = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_BIND_HOST")  # listen address (#18810)
     frontend: str = Field(default="127.0.0.1", alias="AUTOBOT_FRONTEND_HOST")
     npu: str = Field(default="127.0.0.1", alias="AUTOBOT_NPU_WORKER_HOST")
     redis: str = Field(default="127.0.0.1", alias="AUTOBOT_REDIS_HOST")
@@ -1800,6 +1800,7 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     vllm_multi_step: str = Field(default="", alias="AUTOBOT_VLLM_MULTI_STEP")
     vllm_prefix_caching: str = Field(default="true", alias="AUTOBOT_VLLM_PREFIX_CACHING")
     vnc_host: str = Field(default="", alias="AUTOBOT_VNC_HOST")
+    novnc_bind_host: str = Field(default="127.0.0.1", alias="AUTOBOT_NOVNC_BIND_HOST")  # per-session websockify
     vosk_model_path: str = Field(default="", alias="AUTOBOT_VOSK_MODEL_PATH")
     weak_cache_size: int = Field(default=128, alias="AUTOBOT_WEAK_CACHE_SIZE")
     web_fetch_cache_ttl: str = Field(default="", alias="AUTOBOT_WEB_FETCH_CACHE_TTL")

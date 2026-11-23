@@ -511,6 +511,11 @@ chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | boo
 # matching role_xrdp_active below.
 # Migration: a backend/main host that relied on implicit activation must now list
 # 'vnc' in node_roles (or join vnc_nodes) to keep its desktop provisioned.
+# #22146: the ONE home of the noVNC web root. The vnc role installs noVNC here and its websockify
+# unit serves it (--web), the backend role writes it as AUTOBOT_NOVNC_PATH, and SSOT's
+# NOVNC_PATH_DEFAULT (autobot_shared/ssot_role_mirrors.py) is pinned to it by test.
+novnc_path: /opt/novnc
+
 role_vnc_active: >-
   {{ ('vnc' in (node_roles | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}

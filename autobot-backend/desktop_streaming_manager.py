@@ -36,6 +36,7 @@ from autobot_shared.ssot_config import config
 from config import config_manager
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
+from desktop_novnc_urls import NOVNC_URL_SCHEME, novnc_client_host
 from task_execution_tracker import TaskPriority, get_task_tracker
 
 # Type aliases for clarity
@@ -443,7 +444,7 @@ class VNCServerManager:
                 f"--cert={config.tls.remote_cert_dir}/server-cert.pem",
                 f"--key={config.tls.remote_cert_dir}/server-key.pem",
                 "--ssl-only",
-                f"{config.vm.main_bind}:{novnc_port}",
+                f"{config.misc.novnc_bind_host}:{novnc_port}",
                 f"{NetworkConstants.LOCALHOST_NAME}:{vnc_port}",
             ]
 
@@ -580,14 +581,14 @@ class VNCServerManager:
         Returns:
             Dictionary with connection details.
         """
-        client_host = config.misc.vnc_host or config.vm.main  # externally reachable, not localhost (#22146)
+        web_host = novnc_client_host()
         return {
             "session_id": session_id,
             "vnc_port": vnc_port,
             "novnc_port": novnc_port if self.novnc_available else None,
             "display": f":{display_num}",
-            "vnc_url": f"vnc://{client_host}:{vnc_port}",
-            "web_url": (f"http://{client_host}:{novnc_port}" if self.novnc_available else None),
+            "vnc_url": f"vnc://{NetworkConstants.LOCALHOST_NAME}:{vnc_port}",
+            "web_url": (f"{NOVNC_URL_SCHEME}://{web_host}:{novnc_port}" if self.novnc_available else None),
         }
 
     async def terminate_session(self, session_id: str) -> bool:
