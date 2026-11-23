@@ -43,7 +43,7 @@ from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.db_session import async_session_scope
+from autobot_shared.db_session import PostCommitCallbackError, async_session_scope
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text, sanitize_log_value
 from autobot_shared.singleton_factory import lazy_singleton
@@ -66,12 +66,34 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     exits after the route body and BEFORE the response is sent, so a 2xx means the write is committed,
     a failing commit never reaches the client as a 2xx, and a raising route rolls back.
 
+    A post-commit callback that fails AFTER the commit (``PostCommitCallbackError``) never turns the answer
+    into a failure: the change is saved, so the route answers 2xx and every callback error is logged as a
+    warning (owner decision 2026-11-22). A handler that itself raised keeps its own exception.
+
     Because every LLC router shares this single function object, a test's
     ``app.dependency_overrides[get_session]`` overrides the session for ALL
     migrated llc routers mounted on that app, not just one module.
     """
-    async with async_session_scope(get_async_session_factory()) as session:
-        yield session
+    handler_raised = False
+    try:
+        async with async_session_scope(get_async_session_factory()) as session:
+            try:
+                yield session
+            except BaseException:
+                handler_raised = True
+                raise
+    except PostCommitCallbackError as exc:
+        if handler_raised:
+            raise
+        _log_post_commit_failure(exc)
+
+
+def _log_post_commit_failure(exc: PostCommitCallbackError) -> None:
+    """One WARNING naming every failed callback of a write that is already committed (never re-raised)."""
+    logger.warning(
+        "post-commit callback(s) failed after the write committed; answering success: %s",
+        "; ".join(f"{type(e).__name__}: {safe_log_text(e)}" for e in exc.errors),
+    )
 
 
 #: THE session dependency of every LLC route (parameter default, sub-dependencies included). FastAPI's

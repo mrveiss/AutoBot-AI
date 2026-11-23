@@ -42,7 +42,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.user_management.models.user import resolve_display_name
-from llc.deps import assert_company_access, get_session, log_unexpected, service_dep
+from llc.deps import SESSION_DEP, assert_company_access, log_unexpected, service_dep
 from models.agent_org import AgentOrgNode
 from security.upload_filename_policy import require_safe_upload
 from user_management.models.user import User
@@ -370,7 +370,7 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
 @router.post("", status_code=201)
 async def create_work_item(
     body: WorkItemCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -426,7 +426,7 @@ async def list_work_items(
     label_ids: Optional[List[str]] = Query(None),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -457,7 +457,7 @@ async def list_work_items(
 @router.get("/{work_item_id}")
 async def get_work_item(
     work_item_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -471,7 +471,7 @@ async def get_work_item(
 async def update_work_item(
     work_item_id: str,
     body: WorkItemUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -494,7 +494,7 @@ async def update_work_item(
 @router.delete("/{work_item_id}", status_code=204)
 async def delete_work_item(
     work_item_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -523,7 +523,7 @@ async def _drop_kb_collection(work_item_id: str) -> None:
 async def checkout_work_item(
     work_item_id: str,
     body: CheckoutRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -554,7 +554,7 @@ async def checkout_work_item(
 async def release_work_item(
     work_item_id: str,
     body: ReleaseRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -579,7 +579,7 @@ async def release_work_item(
 async def transition_work_item(
     work_item_id: str,
     body: TransitionRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -603,7 +603,7 @@ async def transition_work_item(
 async def link_pr(
     work_item_id: str,
     body: LinkPrRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -640,7 +640,7 @@ async def link_pr(
 async def claim_work_item(
     work_item_id: str,
     body: HumanClaimRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -669,7 +669,7 @@ async def claim_work_item(
 async def unclaim_work_item(
     work_item_id: str,
     body: HumanUnclaimRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -694,7 +694,7 @@ async def unclaim_work_item(
 async def set_coworker(
     work_item_id: str,
     body: CoworkerRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -763,7 +763,7 @@ async def set_coworker(
 async def add_comment(
     work_item_id: str,
     body: CommentCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -788,7 +788,7 @@ async def add_comment(
 async def handoff_to_agent(
     work_item_id: str,
     body: HandoffToAgentRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -840,7 +840,7 @@ async def handoff_to_agent(
 async def handoff_to_human(
     work_item_id: str,
     body: HandoffToHumanRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -868,7 +868,7 @@ async def handoff_to_human(
 @router.post("/{work_item_id}/review/approve")
 async def review_approve(
     work_item_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -898,7 +898,7 @@ async def review_approve(
 async def review_request_changes(
     work_item_id: str,
     body: ReviewChangesRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -928,7 +928,7 @@ async def review_request_changes(
 @router.get("/{work_item_id}/handoff-brief")
 async def get_handoff_brief(
     work_item_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -948,7 +948,7 @@ async def list_work_products(
     work_item_id: str,
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -987,7 +987,7 @@ async def list_work_item_activity(
     work_item_id: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ActivityLogResponse:
@@ -1064,7 +1064,7 @@ class SuggestAcResponse(BaseModel):
 @router.post("/suggest-ac", response_model=SuggestAcResponse)
 async def suggest_acceptance_criteria(
     body: SuggestAcRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> SuggestAcResponse:
@@ -1133,7 +1133,7 @@ async def upload_attachment(
     work_item_id: str,
     company_id: str = Query(...),
     file: UploadFile = File(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -1162,7 +1162,7 @@ async def upload_attachment(
 async def list_attachments(
     work_item_id: str,
     company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -1179,7 +1179,7 @@ async def download_attachment(
     work_item_id: str,
     attachment_id: str,
     company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Response:
@@ -1208,7 +1208,7 @@ async def get_attachment_text(
     work_item_id: str,
     attachment_id: str,
     company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -1234,7 +1234,7 @@ async def delete_attachment(
     work_item_id: str,
     attachment_id: str,
     company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
