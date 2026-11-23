@@ -734,7 +734,11 @@ CQEOF
       bash -c 'cd "$0/autobot-frontend" && npm run test:integration && npm run test:coverage' "$REPO_ROOT"
   else
     # #22135: a stale install is a FAIL, not a skip -- a green local run on missing packages (reka-ui) said nothing.
-    selected "Unit & Integration Tests" && { fail "Unit & Integration Tests -- node_modules is stale"; printf '%s\n' "$FRONTEND_STALE" | head -12 | sed 's/^/        /'; }
+    # Same path filter as the gate it replaces, so a docs-only diff is not failed for a stale install.
+    if selected "Unit & Integration Tests" && { [ "$FULL" = "1" ] || [ "${#CHANGED[@]}" -eq 0 ] || printf '%s\n' "${CHANGED[@]}" | grep -qE '^autobot-frontend/'; }; then
+      fail "Unit & Integration Tests -- node_modules is stale or could not be checked"
+      printf '%s\n' "$FRONTEND_STALE" | head -12 | sed 's/^/        /'
+    fi
   fi
 
   # ---- gates this box cannot reproduce -----------------------------------
