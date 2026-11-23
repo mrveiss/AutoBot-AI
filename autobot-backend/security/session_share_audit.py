@@ -22,7 +22,8 @@ from services.audit_logger import AuditResult, audit_log
 
 logger = get_logger(__name__)
 
-_OPERATIONS = {"share": "session.share", "unshare": "session.unshare"}
+_FAILED_REASONS = {"unshare": "not_a_participant", "assign_company": "already_assigned"}
+_OPERATIONS = {"share": "session.share", "unshare": "session.unshare", "assign_company": "session.company_assign"}
 
 
 class ShareAuditError(Exception):
@@ -67,9 +68,14 @@ async def audited_change(
     session_id: str,
     participants: list[str],
     change: Callable[[], Awaitable[bool]],
+    *,
+    details: dict | None = None,
 ) -> bool:
-    """Run ``change`` between an ``attempted`` row and its outcome row; ``ShareAuditError`` if the first fails."""
-    details: dict = {"participants": participants}
+    """Run ``change`` between an ``attempted`` row and its outcome row; ``ShareAuditError`` if the first fails.
+
+    *details* replaces the participants as the row's detail, for a change that is not a share (#21997).
+    """
+    details = details if details is not None else {"participants": participants}
     if not await _write(action, "attempted", actor, session_id, details):
         raise ShareAuditError(action)
     try:
@@ -83,7 +89,7 @@ async def audited_change(
     if changed:
         await _record_outcome(action, "success", actor, session_id, details)
     else:
-        reason = "not_a_participant" if action == "unshare" else "not_recorded"
+        reason = _FAILED_REASONS.get(action, "not_recorded")
         await _record_outcome(action, "failed", actor, session_id, {**details, "reason": reason})
     return changed
 

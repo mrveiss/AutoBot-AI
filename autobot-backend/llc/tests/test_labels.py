@@ -170,7 +170,8 @@ async def test_service_remove_label_work_item_not_found(service):
 @pytest.fixture
 def app_client():
     from api.user_management.dependencies import get_current_user, require_org_context
-    from llc.api.labels import get_session, router
+    from llc.api.labels import router
+    from llc.deps import get_session
 
     app = FastAPI()
     app.include_router(router, prefix="/api/llc")

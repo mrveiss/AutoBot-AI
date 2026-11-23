@@ -85,7 +85,7 @@ class ManifestDeploy(BaseModel):
         default="",
         description=(
             "Directory the SLM code-sync rsyncs `source` INTO, and the path the role detector probes (#16025). "
-            "Not the install directory (`destination`). `{base_dir}` and `{agent_dir}` are filled in by "
+            "Equals `destination` since #21974. `{base_dir}` and `{agent_dir}` are filled in by "
             "`role_registry` from AUTOBOT_BASE_DIR / SLM_AGENT_DIR, so the environment override stays the one "
             "place those roots are decided; empty for a role with no sync target."
         ),
@@ -97,6 +97,15 @@ class ManifestDeploy(BaseModel):
             "No SLM consumer reads this yet: the SLM and Ansible paths ship the whole `source` directory."
         ),
     )
+
+    @field_validator("destination")
+    @classmethod
+    def destination_has_no_dot_segments(cls, value: str) -> str:
+        """A dot or empty segment would let a role removal reach the install root or outside it (#22030)."""
+        segments = value.rstrip("/").split("/")
+        if not value.strip("/") or any(seg in (".", "..") for seg in segments) or "//" in value:
+            raise ValueError(f"deploy.destination {value!r} must be a plain path with no '.', '..' or empty segment")
+        return value
 
     @model_validator(mode="after")
     def syncing_manifest_names_a_sync_target(self) -> "ManifestDeploy":
