@@ -44,6 +44,8 @@ appears, when an overlay repeats a `.env.base` key with the same value, or when 
 appears outside the known overlays.
 
 <!-- BEGIN_AUTOGEN_ENV_DOCS -->
+Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2027-03-01; before then they only warn.
+
 | Name | Component | Type | Default | Description |
 |---|---|---|---|---|
 | `AUTOBOT_A2A_CAPABILITY_TTL` | a2a | int | `300` | How long a fetched remote A2A capability descriptor is cached before the next check re-fetches it. Raising it reduces repeated cross-agent capability lookups; lowering it makes a capability change on the remote side (e.g. a tool removed) visible sooner (a2a/capability_verifier.py). |
