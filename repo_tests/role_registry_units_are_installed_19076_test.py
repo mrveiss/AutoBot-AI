@@ -12,17 +12,14 @@ units. A registry unit no role renders therefore turns a deployed role into
 
 from __future__ import annotations
 
-import ast
 import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
-
-from tools.lint import _parse_cache as parse_cache
+from repo_tests._registry_role_units import registry_role_units
 
 _SLM = "autobot-slm-backend"
-_REGISTRY = Path(_SLM) / "services" / "role_registry.py"
 _ANSIBLE = Path(_SLM) / "ansible"
 
 #: Units the distro package ships; no role renders them, and that is correct.
@@ -30,26 +27,14 @@ PACKAGE_UNITS = frozenset({"postgresql"})
 
 
 def _registry_units(root: Path) -> list[tuple[str, str]]:
-    if not (root / _REGISTRY).is_file():
-        return []  # an empty tree is an empty result; the floor below refuses it
-    tree = parse_cache.parse((root / _REGISTRY).read_text(encoding="utf-8"))
-    pairs: list[tuple[str, str]] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Dict):
-            continue
-        fields = {k.value: v for k, v in zip(node.keys, node.values) if isinstance(k, ast.Constant)}
-        name, unit = fields.get("name"), fields.get("systemd_service")
-        if not isinstance(name, ast.Constant) or unit is None:
-            continue
-        values = [unit] if isinstance(unit, ast.Constant) else list(getattr(unit, "elts", []))
-        pairs += [(name.value, v.value) for v in values if isinstance(v, ast.Constant) and v.value]
-    return pairs
+    """(role, unit) pairs DEFAULT_ROLES holds: a manifest's units where one resolves, else the registry literal (#16025)."""
+    return [(name, unit) for name, units in registry_role_units(root).items() for unit in units]
 
 
 REACH = declare(
     "role-registry-installed-units",
     discover=_registry_units,
-    what="(role, systemd unit) pairs declared in services/role_registry.py",
+    what="(role, systemd unit) pairs of services/role_registry.py, manifest units included",
 )
 
 
