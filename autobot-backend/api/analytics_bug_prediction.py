@@ -11,15 +11,26 @@ and targeted testing suggestions.
 """
 
 import asyncio
-import hashlib
 import json
 from datetime import datetime, timedelta, timezone
+from itertools import islice
 from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
 
+from api.analytics_bug_prediction_cache import get_cached_prediction, set_cached_prediction
+from api.analytics_bug_prediction_scope import (
+    check_include_pattern,
+    contained_files,
+    file_in_source,
+    scan_root,
+    scoped_key,
+    source_relative_path,
+    validate_include_pattern,
+)
 from api.analytics_shared import no_data_response
+from api.codebase_analytics.endpoints.shared import require_source_access
 from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.schemas_analytics import (
     BugPredictionAnalysisResponse,
@@ -37,6 +48,7 @@ from api.schemas_analytics import (
     BugRiskFactor,
     RiskLevel,
 )
+from api.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.git_probe import start_git
@@ -44,17 +56,20 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.status_enums import Severity
 from constants.threshold_constants import TimingConstants
-from constants.ttl_constants import TTL_5_MINUTES
 from tasks.analytics_tasks import run_bug_prediction_analysis
-from utils.celery_task_status import get_latest_task_result, known_task_status_or_404, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/bug-prediction", tags=["bug-prediction", "analytics"])
+router = APIRouter(
+    prefix="/bug-prediction",
+    tags=["bug-prediction", "analytics"],
+    dependencies=[Depends(validate_include_pattern)],
+)
 
-# Issue #1341: Cache configuration for bug prediction
-BUG_PREDICTION_CACHE_PREFIX = "codebase:bug_prediction:cache"
-BUG_PREDICTION_CACHE_TTL = TTL_5_MINUTES
+# Per-source authorization goes on the source-scoped routes only: /status, /factors and /tasks/clear-stuck
+# take no source, and the router-level form changed what an internal key gets there (401, not 403).
+_SOURCE_ACCESS = [Depends(require_source_access)]
 
 _REDIS_PREFIX = "bug_pred_task:"
 _BATCH_SIZE = 50
@@ -64,65 +79,6 @@ CONTROL_FLOW_KEYWORDS = {"if ", "elif ", "else:", "try:", "except:", "for ", "wh
 
 # Issue #380: Module-level tuple for function definition prefixes
 _FUNCTION_DEF_PREFIXES = ("def ", "async def ")
-
-
-def _get_bug_prediction_cache_key(path: str, include_pattern: str, limit: int) -> str:
-    """
-    Generate parameter-specific cache key for bug prediction.
-
-    Issue #1341: Include path, pattern, and limit in cache key
-    to prevent stale data across different query parameters.
-    """
-    raw = f"{path}:{include_pattern}:{limit}"
-    param_hash = hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()[:12]
-    return f"{BUG_PREDICTION_CACHE_PREFIX}:{param_hash}"
-
-
-async def _get_cached_bug_prediction(path: str, include_pattern: str, limit: int) -> dict | None:
-    """
-    Get cached bug prediction from Redis.
-
-    Issue #1341: Cache for 5 minutes to prevent re-running
-    expensive git subprocesses and complexity analysis.
-    """
-    try:
-        cache_key = _get_bug_prediction_cache_key(path, include_pattern, limit)
-        redis_client = get_redis_client(async_client=False, database="cache")
-        cached = redis_client.get(cache_key)
-        if cached:
-            logger.debug("Bug prediction cache hit for path: %s", path)
-            return json.loads(cached)
-    except Exception as e:
-        logger.debug("Cache read error (non-critical): %s", e)
-    return None
-
-
-async def _set_cached_bug_prediction(
-    path: str,
-    include_pattern: str,
-    limit: int,
-    data: dict,
-) -> None:
-    """
-    Cache bug prediction results in Redis.
-
-    Issue #1341: Cache for 5 minutes (300 seconds).
-    """
-    try:
-        cache_key = _get_bug_prediction_cache_key(path, include_pattern, limit)
-        redis_client = get_redis_client(async_client=False, database="cache")
-        redis_client.setex(
-            cache_key,
-            BUG_PREDICTION_CACHE_TTL,
-            json.dumps(data, default=str),
-        )
-        logger.debug(
-            "Bug prediction cached for %d seconds (path: %s)",
-            BUG_PREDICTION_CACHE_TTL,
-            path,
-        )
-    except Exception as e:
-        logger.debug("Cache write error (non-critical): %s", e)
 
 
 def _parse_git_bug_history_lines(lines: list[str]) -> dict[str, int]:
@@ -291,8 +247,8 @@ def get_suggested_tests(file_path: str, factors: dict[str, float]) -> list[str]:
     return suggestions[:4]
 
 
-async def get_git_bug_history() -> dict[str, Any]:
-    """Analyze git history for bug fixes."""
+async def get_git_bug_history(root: Path) -> dict[str, Any]:
+    """Analyze git history for bug fixes in the clone at ``root`` (#18030)."""
     try:
         # Get commits with bug-related keywords using async subprocess
         proc = await start_git(
@@ -305,6 +261,7 @@ async def get_git_bug_history() -> dict[str, Any]:
             "--grep=issue",
             "--all-match",
             "--name-only",
+            cwd=root,
         )
 
         try:
@@ -327,10 +284,10 @@ async def get_git_bug_history() -> dict[str, Any]:
         return {}
 
 
-async def get_file_change_frequency() -> dict[str, int]:
-    """Get change frequency for files in the last 90 days."""
+async def get_file_change_frequency(root: Path) -> dict[str, int]:
+    """Get change frequency for files in the last 90 days, in the clone at ``root``."""
     try:
-        proc = await start_git("log", "--since=90 days ago", "--name-only", "--pretty=format:")
+        proc = await start_git("log", "--since=90 days ago", "--name-only", "--pretty=format:", cwd=root)
 
         try:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TimingConstants.SHORT_TIMEOUT)
@@ -460,22 +417,23 @@ def _build_prediction_snapshot(
     }
 
 
-async def _persist_prediction_to_redis(redis, snapshot: Dict[str, Any], timestamp_ms: int) -> None:
+async def _persist_prediction_to_redis(redis, key: str, snapshot: Dict[str, Any], timestamp_ms: int) -> None:
     """Helper for _store_prediction_history. Ref: #1088."""
     await asyncio.to_thread(
         redis.zadd,
-        _PREDICTION_HISTORY_KEY,
+        key,
         {json.dumps(snapshot): timestamp_ms},
     )
     await asyncio.to_thread(
         redis.zremrangebyrank,
-        _PREDICTION_HISTORY_KEY,
+        key,
         0,
         -(_MAX_HISTORY_ENTRIES + 1),
     )
 
 
 async def _store_prediction_history(
+    source_id: str,
     total_files: int,
     high_risk_count: int,
     risk_distribution: Dict[str, int],
@@ -488,6 +446,7 @@ async def _store_prediction_history(
     Each prediction includes timestamp, file counts, risk distribution, and average risk.
 
     Args:
+        source_id: The source the snapshot belongs to (#18030)
         total_files: Total number of files analyzed
         high_risk_count: Number of files with risk score >= 60
         risk_distribution: Dict mapping risk levels to file counts
@@ -512,7 +471,9 @@ async def _store_prediction_history(
         )
 
         # Persist to Redis sorted set and trim old entries
-        await _persist_prediction_to_redis(redis, prediction_snapshot, timestamp_ms)
+        await _persist_prediction_to_redis(
+            redis, scoped_key(_PREDICTION_HISTORY_KEY, source_id), prediction_snapshot, timestamp_ms
+        )
 
         logger.debug("Stored prediction history snapshot at %s", timestamp.isoformat())
         return True
@@ -522,7 +483,7 @@ async def _store_prediction_history(
         return False
 
 
-async def _get_prediction_history(days: int) -> List[Dict[str, Any]]:
+async def _get_prediction_history(days: int, source_id: str) -> List[Dict[str, Any]]:
     """
     Retrieve prediction history for the specified time period.
 
@@ -548,7 +509,7 @@ async def _get_prediction_history(days: int) -> List[Dict[str, Any]]:
         # Fetch entries within time range
         entries = await asyncio.to_thread(
             redis.zrangebyscore,
-            _PREDICTION_HISTORY_KEY,
+            scoped_key(_PREDICTION_HISTORY_KEY, source_id),
             start_ms,
             end_ms,
         )
@@ -681,13 +642,13 @@ def _calculate_risk_level_trends(history: List[Dict[str, Any]]) -> Dict[str, Any
 # ============================================================================
 
 
-def _find_files_sync(path: str, include_pattern: str, limit: int) -> List[Path]:
-    """Find files matching pattern in directory (Issue #398: extracted)."""
+def _find_files_sync(root: Path, include_pattern: str, limit: int) -> List[Path]:
+    """Find files matching pattern under the source root (Issue #398: extracted)."""
+    check_include_pattern(include_pattern)  # outside the try: a bad pattern must not be swallowed
     result = []
     try:
-        root = Path(path)
         if root.is_dir():
-            result = list(root.rglob(include_pattern))[:limit]
+            result = list(islice(contained_files(root, root.rglob(include_pattern)), limit))
     except Exception as e:
         logger.debug("Path traversal error: %s", e)
     return result
@@ -699,6 +660,7 @@ _ANALYSIS_SEMAPHORE_LIMIT = 50
 
 async def _analyze_files_parallel(
     files: List[Path],
+    root: Path,
     change_freq: Dict[str, int],
     bug_history: Dict[str, int],
 ) -> List[Dict[str, Any]]:
@@ -712,19 +674,20 @@ async def _analyze_files_parallel(
 
     async def analyze_with_semaphore(fp: Path) -> Dict[str, Any]:
         async with semaphore:
-            return await _analyze_single_file(fp, change_freq, bug_history)
+            return await _analyze_single_file(fp, root, change_freq, bug_history)
 
     return list(await asyncio.gather(*[analyze_with_semaphore(fp) for fp in files]))
 
 
 async def _analyze_single_file(
     file_path: Path,
+    root: Path,
     change_freq: Dict[str, int],
     bug_history: Dict[str, int],
 ) -> Dict[str, Any]:
     """Analyze a single file for bug risk (Issue #398: extracted)."""
     str_path = str(file_path)
-    rel_path = str_path.replace(str(Path.cwd()) + "/", "")
+    rel_path = source_relative_path(file_path, root)
 
     complexity = await analyze_file_complexity(str_path)
     change_count = change_freq.get(rel_path, 0)
@@ -747,6 +710,7 @@ async def _analyze_single_file(
 
 
 async def _safe_store_prediction_history(
+    source_id: str,
     total_files: int,
     high_risk_count: int,
     risk_distribution: Dict[str, int],
@@ -760,6 +724,7 @@ async def _safe_store_prediction_history(
     """
     try:
         await _store_prediction_history(
+            source_id,
             total_files=total_files,
             high_risk_count=high_risk_count,
             risk_distribution=risk_distribution,
@@ -769,22 +734,23 @@ async def _safe_store_prediction_history(
         logger.error("Background prediction history storage failed: %s", e, exc_info=True)
 
 
-async def _run_bug_analysis(path: str, include_pattern: str, limit: int) -> dict[str, Any]:
+async def _run_bug_analysis(source_id: str, include_pattern: str, limit: int) -> dict[str, Any]:
     """Run full bug prediction analysis pipeline.
 
     Issue #1341: Extracted from predict_bug_risk_for_codebase to keep endpoint under
-    65-line limit. Ref: predict_bug_risk_for_codebase.
+    65-line limit. Ref: predict_bug_risk_for_codebase. Scans only the clone of ``source_id`` (#18030).
     """
+    root = await scan_root(source_id)
     bug_history, change_freq, files_to_analyze = await asyncio.gather(
-        get_git_bug_history(),
-        get_file_change_frequency(),
-        asyncio.to_thread(_find_files_sync, path, include_pattern, limit),
+        get_git_bug_history(root),
+        get_file_change_frequency(root),
+        asyncio.to_thread(_find_files_sync, root, include_pattern, limit),
     )
 
     if not files_to_analyze:
-        return no_data_response(f"No files matching '{include_pattern}' found in '{path}'", files=[], summary={})
+        return no_data_response(f"No files matching '{include_pattern}' found in the source", files=[], summary={})
 
-    analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
+    analyzed_files = await _analyze_files_parallel(files_to_analyze, root, change_freq, bug_history)
     analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
     high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
 
@@ -795,6 +761,7 @@ async def _run_bug_analysis(path: str, include_pattern: str, limit: int) -> dict
 
     asyncio.create_task(
         _safe_store_prediction_history(
+            source_id,
             total_files=len(files_to_analyze),
             high_risk_count=high_risk,
             risk_distribution=risk_dist,
@@ -813,15 +780,15 @@ async def _run_bug_analysis(path: str, include_pattern: str, limit: int) -> dict
     }
 
 
-@router.get("/analyze", response_model=BugPredictionAnalysisResponse)
+@router.get("/analyze", response_model=BugPredictionAnalysisResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
 async def predict_bug_risk_for_codebase(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
-    path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(10000, ge=1, le=100000, description="Maximum files to analyze"),
     refresh: bool = Query(False, description="Force refresh, bypass cache"),
@@ -831,17 +798,18 @@ async def predict_bug_risk_for_codebase(
     Issue #744: Requires admin authentication.
     Issue #1341: Results cached in Redis for 5 minutes.
     """
+    await scan_root(source_id)  # 404 for a source with no checkout, not a swallowed no_data
     try:
         if not refresh:
-            cached = await _get_cached_bug_prediction(path, include_pattern, limit)
+            cached = await get_cached_prediction(source_id, include_pattern, limit)
             if cached:
                 cached["from_cache"] = True
                 return cached
 
-        response_data = await _run_bug_analysis(path, include_pattern, limit)
+        response_data = await _run_bug_analysis(source_id, include_pattern, limit)
 
         if response_data.get("status") == "success":
-            await _set_cached_bug_prediction(path, include_pattern, limit, response_data)
+            await set_cached_prediction(source_id, include_pattern, limit, response_data)
 
         return response_data
 
@@ -874,40 +842,33 @@ def _build_analysis_result(
     }
 
 
-@router.get("/cached", response_model=BugPredictionCachedResponse)
+@router.get("/cached", response_model=BugPredictionCachedResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cached_bug_prediction",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
-async def get_cached_bug_prediction():
-    """Return the latest completed bug prediction result (#1540)."""
-    cached = await get_latest_task_result(_REDIS_PREFIX)
-    if cached and cached.get("result"):
-        return {
-            "status": "success",
-            "from_cache": True,
-            "completed_at": cached.get("completed_at"),
-            **cached["result"],
-        }
-    return no_data_response("No cached bug prediction available", files=[], summary={})
+async def get_cached_bug_prediction(source_id: SourceIdQuery):
+    """Return the latest completed bug prediction result of ONE source (#1540, #18030)."""
+    return await cached_task_result(_REDIS_PREFIX, source_id)
 
 
-@router.post("/analyze", response_model=BugPredictionAnalyzeResponse)
+@router.post("/analyze", response_model=BugPredictionAnalyzeResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_bug_analysis",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
 async def start_bug_analysis(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
-    path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(10000, ge=1, le=100000, description="Maximum files to analyze"),
 ):
-    """Enqueue bug prediction analysis as a Celery task (GH#6505)."""
-    result = run_bug_prediction_analysis.delay(path, include_pattern, limit)
-    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    """Enqueue bug prediction analysis of ONE source as a Celery task (GH#6505, #18030)."""
+    await scan_root(source_id)
+    result = run_bug_prediction_analysis.delay(source_id, include_pattern, limit)
+    await store_latest_task_id(source_scoped_prefix(_REDIS_PREFIX, source_id), result.id)
     return {"task_id": result.id, "status": "pending"}
 
 
@@ -934,17 +895,17 @@ add_clear_stuck_route(
 )
 
 
-@router.get("/high-risk", response_model=BugPredictionHighRiskResponse)
+@router.get("/high-risk", response_model=BugPredictionHighRiskResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_high_risk_files",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
 async def get_high_risk_files(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
     threshold: float = Query(60, ge=0, le=100),
     limit: int = Query(20, ge=1, le=100),
-    path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
 ) -> dict[str, Any]:
     """
@@ -953,19 +914,20 @@ async def get_high_risk_files(
 
     Returns files with risk score above the threshold.
     """
+    root = await scan_root(source_id)
     try:
         # Issue #664: Parallelize independent data fetches
         bug_history, change_freq, files_to_analyze = await asyncio.gather(
-            get_git_bug_history(),
-            get_file_change_frequency(),
-            asyncio.to_thread(_find_files_sync, path, include_pattern, 200),
+            get_git_bug_history(root),
+            get_file_change_frequency(root),
+            asyncio.to_thread(_find_files_sync, root, include_pattern, 200),
         )
 
         if not files_to_analyze:
-            return no_data_response(f"No files matching '{include_pattern}' found in '{path}'", files=[], summary={})
+            return no_data_response(f"No files matching '{include_pattern}' found in the source", files=[], summary={})
 
         # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
+        analyzed_files = await _analyze_files_parallel(files_to_analyze, root, change_freq, bug_history)
 
         # Filter high-risk files
         high_risk_files = [f for f in analyzed_files if f["risk_score"] >= threshold]
@@ -999,7 +961,7 @@ def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) 
     }
 
 
-@router.get("/file/{file_path:path}", response_model=BugPredictionFileResponse)
+@router.get("/file/{file_path:path}", response_model=BugPredictionFileResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_file_risk",
@@ -1007,22 +969,22 @@ def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) 
 )
 async def get_file_risk(
     file_path: str,
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
     """
     Get detailed risk assessment for a specific file (Issue #543: no demo data).
     Issue #744: Requires admin authentication.
     """
-    path = Path(file_path)
-    if not await asyncio.to_thread(path.exists):
-        return no_data_response(f"File not found: {file_path}", files=[], summary={})
+    root = await scan_root(source_id)
+    path = await asyncio.to_thread(file_in_source, root, file_path)
 
     try:
         # Issue #664: Parallelize independent data fetches
         complexity, bug_history, change_freq, file_stat = await asyncio.gather(
             analyze_file_complexity(str(path)),
-            get_git_bug_history(),
-            get_file_change_frequency(),
+            get_git_bug_history(root),
+            get_file_change_frequency(root),
             asyncio.to_thread(path.stat),
         )
 
@@ -1101,16 +1063,16 @@ def _get_flat_heatmap_data(files: list) -> list:
     ]
 
 
-@router.get("/heatmap", response_model=BugPredictionHeatmapResponse)
+@router.get("/heatmap", response_model=BugPredictionHeatmapResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_risk_heatmap",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
 async def get_risk_heatmap(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
     grouping: str = Query("directory", pattern=r"^(directory|module|flat)\z"),
-    path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(100, ge=1, le=300),
 ) -> dict[str, Any]:
@@ -1118,19 +1080,20 @@ async def get_risk_heatmap(
     Get risk heatmap data for visualization (Issue #543: no demo data).
     Issue #744: Requires admin authentication.
     """
+    root = await scan_root(source_id)
     try:
         # Issue #664: Parallelize independent data fetches
         bug_history, change_freq, files_to_analyze = await asyncio.gather(
-            get_git_bug_history(),
-            get_file_change_frequency(),
-            asyncio.to_thread(_find_files_sync, path, include_pattern, limit),
+            get_git_bug_history(root),
+            get_file_change_frequency(root),
+            asyncio.to_thread(_find_files_sync, root, include_pattern, limit),
         )
 
         if not files_to_analyze:
-            return no_data_response(f"No files matching '{include_pattern}' found in '{path}'", files=[], summary={})
+            return no_data_response(f"No files matching '{include_pattern}' found in the source", files=[], summary={})
 
         # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
+        analyzed_files = await _analyze_files_parallel(files_to_analyze, root, change_freq, bug_history)
 
         # Generate heatmap data
         data = (
@@ -1151,13 +1114,14 @@ async def get_risk_heatmap(
         return no_data_response("Heatmap generation failed", files=[], summary={})
 
 
-@router.get("/trends", response_model=BugPredictionTrendsResponse)
+@router.get("/trends", response_model=BugPredictionTrendsResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_prediction_trends",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
 async def get_prediction_trends(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", pattern=r"^(7d|30d|90d)\z"),
 ) -> dict[str, Any]:
@@ -1181,7 +1145,7 @@ async def get_prediction_trends(
     period_days = {"7d": 7, "30d": 30, "90d": 90}.get(period, 30)
 
     # Fetch historical prediction data
-    history = await _get_prediction_history(period_days)
+    history = await _get_prediction_history(period_days, source_id)
 
     if not history:
         return no_data_response(
@@ -1265,15 +1229,15 @@ def _generate_summary_recommendations(risk_dist: dict[str, int], analyzed_files:
     return recommendations[:5]
 
 
-@router.get("/summary", response_model=BugPredictionSummaryResponse)
+@router.get("/summary", response_model=BugPredictionSummaryResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_prediction_summary",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
 async def get_prediction_summary(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
-    path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(10000, ge=1, le=100000, description="Maximum files to analyze"),
 ) -> dict[str, Any]:
@@ -1284,19 +1248,20 @@ async def get_prediction_summary(
 
     Returns high-level metrics for dashboard display.
     """
+    root = await scan_root(source_id)
     try:
         # Issue #664: Parallelize independent data fetches
         bug_history, change_freq, files_to_analyze = await asyncio.gather(
-            get_git_bug_history(),
-            get_file_change_frequency(),
-            asyncio.to_thread(_find_files_sync, path, include_pattern, limit),
+            get_git_bug_history(root),
+            get_file_change_frequency(root),
+            asyncio.to_thread(_find_files_sync, root, include_pattern, limit),
         )
 
         if not files_to_analyze:
-            return no_data_response(f"No files matching '{include_pattern}' found in '{path}'", files=[], summary={})
+            return no_data_response(f"No files matching '{include_pattern}' found in the source", files=[], summary={})
 
         # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
+        analyzed_files = await _analyze_files_parallel(files_to_analyze, root, change_freq, bug_history)
 
         # Issue #620: Extracted to helper methods
         risk_dist = _calculate_risk_distribution(analyzed_files)
@@ -1378,13 +1343,14 @@ def _get_factor_description(factor: BugRiskFactor) -> str:
     return descriptions.get(factor, "Unknown factor")
 
 
-@router.post("/record-bug", response_model=BugPredictionRecordBugResponse)
+@router.post("/record-bug", response_model=BugPredictionRecordBugResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_bug",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
 async def record_bug(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
     file_path: str = None,
     description: str = "",
@@ -1408,8 +1374,12 @@ async def record_bug(
                 "recorded_at": datetime.now(tz=timezone.utc).isoformat(),
             }
             # Issue #361 - avoid blocking
-            await asyncio.to_thread(redis.lpush, "bug_prediction:recorded_bugs", json.dumps(bug_record))
-            await asyncio.to_thread(redis.ltrim, "bug_prediction:recorded_bugs", 0, 999)  # Keep last 1000
+            await asyncio.to_thread(
+                redis.lpush, scoped_key("bug_prediction:recorded_bugs", source_id), json.dumps(bug_record)
+            )
+            await asyncio.to_thread(
+                redis.ltrim, scoped_key("bug_prediction:recorded_bugs", source_id), 0, 999
+            )  # Keep last 1000
 
             return {
                 "status": "recorded",
