@@ -334,9 +334,11 @@ _CLOSED_ISSUES_CMD = [
     "--json",
     "number",
 ]
+OPEN_AUDIT_ISSUE_LIMIT = 1000
+# Unquoted, GitHub search drops the parentheses and matches nothing; quote the phrase and scope it to the title.
 _OPEN_AUDIT_CMD = [
-    *("gh", "issue", "list", "--state", "open", "--search", "discovery(unwired-tracker)"),
-    *("--limit", "1000", "--json", "number,title"),
+    *("gh", "issue", "list", "--state", "open", "--search", '"discovery(unwired-tracker)" in:title'),
+    *("--limit", str(OPEN_AUDIT_ISSUE_LIMIT), "--json", "number,title,body"),
 ]
 
 
@@ -366,20 +368,34 @@ def fetch_closed_tracker_set() -> set[int]:
         raise TrackerLookupError(f"closed issue list item without a number ({e!r})") from e
 
 
-def existing_audit_issues_by_tracker() -> set[int]:
-    """Return the set of trackers that already have an open audit-discovery issue.
+_TRACKER_RE = re.compile(r"tracker #(\d+) closed prematurely")
+_TITLE_STEM_RE = re.compile(r"wire in (\S+) \(tracker #")
+_BODY_PATH_RE = re.compile(r"\[`([^`]+)`\]\(")
 
-    Convention: audit-discovery issues are titled
-    `discovery(unwired-tracker): wire in <module> (tracker #NNNN closed prematurely)`.
-    We search by the exact title prefix to avoid filing duplicates. A failed lookup raises (#21582).
+
+def _audit_issue_key(item: dict) -> Optional[tuple[str, int]]:
+    """``(module, tracker)`` of one open audit issue; the module is the body's path link, else the title stem."""
+    title = item.get("title") or ""
+    if not (m := _TRACKER_RE.search(title)):
+        return None
+    found = _BODY_PATH_RE.search(item.get("body") or "") or _TITLE_STEM_RE.search(title)
+    return (found.group(1) if found else ""), int(m.group(1))
+
+
+def existing_audit_issue_keys() -> set[tuple[str, int]]:
+    """``(module, tracker)`` per open audit issue, so modules sharing a tracker do not shadow (#22199).
+
+    A failed or truncated lookup raises (#21582).
     """
-    out: set[int] = set()
-    pat = re.compile(r"tracker #(\d+) closed prematurely")
-    for item in _gh_json(_OPEN_AUDIT_CMD, 60, "open audit issue list"):
-        m = pat.search(item.get("title", ""))
-        if m:
-            out.add(int(m.group(1)))
-    return out
+    data = _gh_json(_OPEN_AUDIT_CMD, 60, "open audit issue list")
+    if len(data) >= OPEN_AUDIT_ISSUE_LIMIT:
+        raise TrackerLookupError(f"open audit issue list hit its {OPEN_AUDIT_ISSUE_LIMIT}-issue limit; some unseen")
+    return {k for k in map(_audit_issue_key, data) if k}
+
+
+def _already_filed(f: Finding, filed: set[tuple[str, int]]) -> bool:
+    """True when an open issue covers this module+tracker (by path, or by stem for a body-less issue)."""
+    return (f.file, f.tracker) in filed or (Path(f.file).stem, f.tracker) in filed
 
 
 def scan() -> list[Finding]:
@@ -538,8 +554,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _file_new_issues(findings: list[Finding], max_issues: int) -> None:
     """File discovery issues for findings not already filed, capped at *max_issues*."""
-    already_filed = existing_audit_issues_by_tracker()
-    new = [f for f in findings if f.tracker not in already_filed]
+    already_filed = existing_audit_issue_keys()
+    new = [f for f in findings if not _already_filed(f, already_filed)]
     capped = new[:max_issues]
     # WARNING, not INFO: INFO goes to stdout, which carries the report; WARNING goes to stderr.
     logger.warning(
