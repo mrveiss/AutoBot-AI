@@ -28,10 +28,10 @@ from tools.lint import _parse_cache as parse_cache
 
 SSOT_GLOB = "ssot*.py"
 REGISTRY_GLOB = "env_registry*.py"
-#: AUTOBOT_* aliases the census extracts from ssot*.py (452, re-measured with the #18810 host-binding modules); pinned with no margin.
+#: AUTOBOT_* aliases the census extracts from ssot*.py (re-measured after the merge); pinned with no margin.
 MIN_ALIASES_EXTRACTED = 452
-#: Source files read (52 when measured); the floor is pinned to it, with no margin, by the reach-floor gate.
-MIN_FILES_READ = 52
+#: Source files read (re-measured after the merge); pinned with no margin by the reach-floor gate.
+MIN_FILES_READ = 53
 
 
 def _sources(root: Path, pattern: str) -> list[Path]:
