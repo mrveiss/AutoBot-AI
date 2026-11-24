@@ -133,7 +133,6 @@ GRANDFATHERED = frozenset(
         "repo_tests/store_authority_test.py",
         "repo_tests/stranded_recorder_entries_test.py",
         "repo_tests/test_module_path_anchors_15181_test.py",
-        "repo_tests/with_error_handling_single_definition_test.py",
     }
 )
 
