@@ -516,6 +516,10 @@ chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | boo
 # NOVNC_PATH_DEFAULT (autobot_shared/ssot_role_mirrors.py) is pinned to it by test.
 novnc_path: /opt/novnc
 
+# #22146: the ONE home of the directory systemd loads admin-installed units from; the vnc role's
+# websockify unit is written here. Override per host/group to relocate it.
+systemd_unit_dir: /etc/systemd/system
+
 # #18810: the address clients dial, written as AUTOBOT_BACKEND_HOST. One home (inventory-wide, evaluated
 # where backend.env.j2 renders, role or playbook). Never an unspecified
 # bind address: that case falls back to the inventory backend host, else loopback.

@@ -247,6 +247,14 @@ def test_the_novnc_archive_has_one_path_variable() -> None:
     assert tasks.count("{{ novnc_archive_path }}") == 2 and "/tmp/noVNC" not in tasks
 
 
+def test_websockify_unit_destination_routes_through_the_systemd_unit_dir_var() -> None:
+    tasks = yaml.safe_load((ANSIBLE / "roles" / "vnc" / "tasks" / "novnc.yml").read_text(encoding="utf-8"))
+    unit = next(t for t in tasks if t.get("name") == "Deploy websockify systemd service")
+    assert unit["ansible.builtin.template"]["dest"] == "{{ systemd_unit_dir }}/{{ websockify_service_name }}.service"
+    group_vars = yaml.safe_load((ANSIBLE / "inventory" / "group_vars" / "all.yml").read_text(encoding="utf-8"))
+    assert group_vars["systemd_unit_dir"] == "/etc/systemd/system"
+
+
 def test_a_config_save_keeps_the_persisted_bind_host(monkeypatch, tmp_path) -> None:
     monkeypatch.syspath_prepend(str(ROOT / "autobot-backend"))
     from services.config_service import ConfigService, config_manager
