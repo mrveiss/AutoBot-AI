@@ -112,6 +112,17 @@
         quiet: true
       when: role_target_dir is defined
 
+    # #22211: removing xrdp from a node whose vnc role is not active would leave it with NO desktop.
+    - name: "Refuse to remove xrdp from a node without an active vnc role (#22211)"
+      ansible.builtin.assert:
+        that:
+          - role_name != 'xrdp' or (role_vnc_active | default(false) | bool) or (remove_xrdp_without_vnc | default(false) | bool)
+        fail_msg: >-
+          REFUSING to remove xrdp: this node has no active vnc role, so it would be left with no desktop.
+          Provision the vnc role first, or re-run with remove_xrdp_without_vnc=true to remove anyway.
+        quiet: true
+      when: role_name is defined
+
     - name: Validate required variables
       ansible.builtin.assert:
         that:

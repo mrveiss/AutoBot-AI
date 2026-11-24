@@ -272,9 +272,61 @@ def test_a_failed_update_provisions_nothing(monkeypatch) -> None:
     assert result["success"] is False
 
 
+def test_a_database_error_is_a_warning_not_a_failed_update(monkeypatch) -> None:
+    """The queries and the installing commit are outside the playbook try; they must not fail the update."""
+
+    @contextlib.asynccontextmanager
+    async def broken_session():
+        raise ConnectionError("database unavailable")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(prp, "db_service", SimpleNamespace(session=broken_session))
+    message = asyncio.run(prp.provision_pending_roles("n1"))
+    assert message.startswith("WARNING") and "code update succeeded" in message
+    result = asyncio.run(prp.run_update_all_nodes(_Executor(), "n1", ["localhost", "n1"], True))
+    assert result["success"] is True and "WARNING" in result["output"]
+
+
+def test_a_failing_pending_roles_query_is_a_warning(monkeypatch) -> None:
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=RuntimeError("query failed"))
+
+    @contextlib.asynccontextmanager
+    async def session():
+        yield db
+
+    monkeypatch.setattr(prp, "db_service", SimpleNamespace(session=session))
+    assert asyncio.run(prp.provision_pending_roles("n1")).startswith("WARNING")
+
+
+def _calls_to_update_all(path: Path) -> list[int]:
+    """Line numbers of execute_playbook calls naming update-all-nodes.yml, positionally or by keyword."""
+    import ast
+
+    hits = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "execute_playbook":
+            values = [*node.args, *(k.value for k in node.keywords)]
+            if any(isinstance(v, ast.Constant) and v.value == "update-all-nodes.yml" for v in values):
+                hits.append(node.lineno)
+    return hits
+
+
+def test_the_guard_sees_both_call_forms(tmp_path: Path) -> None:
+    sample = tmp_path / "sample.py"
+    sample.write_text(
+        "async def f(e):\n"
+        "    await e.execute_playbook('update-all-nodes.yml', limit=[])\n"
+        "    await e.execute_playbook(playbook_name='update-all-nodes.yml', limit=[])\n"
+        "    await e.execute_playbook('other.yml')\n",
+        encoding="utf-8",
+    )
+    assert _calls_to_update_all(sample) == [2, 3]
+
+
 def test_every_update_path_goes_through_the_helper() -> None:
-    """Fleet sync, single-node sync and the update-all orchestration; the SLM self-node is provisioned too."""
-    src = (_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
-    assert src.count("run_update_all_nodes(") == 3
-    assert "await provision_pending_roles(node_id)" in src, "the SLM host's own node is skipped by the fleet loop"
-    assert 'playbook_name="update-all-nodes.yml"' not in src, "a path bypasses the helper"
+    """Fleet sync, single-node sync, update-all, the SLM self-update; the SLM host's own node is provisioned too."""
+    path = _ROOT / "api" / "code_sync.py"
+    assert _calls_to_update_all(path) == [], "a path bypasses run_update_all_nodes"
+    assert path.read_text(encoding="utf-8").count("run_update_all_nodes(") == 4
+    assert "await provision_pending_roles(node_id)" in path.read_text(encoding="utf-8")

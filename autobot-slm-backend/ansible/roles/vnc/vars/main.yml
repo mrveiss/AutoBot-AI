@@ -4,6 +4,7 @@
 # Author: mrveiss
 ---
 # #22211: derived from vnc_display (defaults/main.yml). RFB display N listens on base + N.
+# Duplicates AUTOBOT_VNC_BASE_PORT (autobot_shared SSOT, added by #22173). Reconcile after #22173 lands.
 vnc_rfb_base_port: 5900
 vnc_rfb_port: "{{ vnc_rfb_base_port | int + vnc_display | int }}"
 # Seconds to wait for the RFB and websockify ports after provisioning (#22211).

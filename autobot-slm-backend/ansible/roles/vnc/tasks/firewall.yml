@@ -22,3 +22,14 @@
     proto: tcp
     src: "{{ network_subnet }}"
     comment: "noVNC websockify - internal only"
+
+# bootstrap-node.yml used to open the base port (5900) for every node, though display N serves 5900 + N.
+# Delete that stale rule when this node's RFB port is a different one; deleting an absent rule is a no-op.
+- name: vnc | Delete the stale base-port rule bootstrap used to open
+  community.general.ufw:
+    rule: allow
+    port: "{{ vnc_rfb_base_port | string }}"
+    proto: tcp
+    src: "{{ network_subnet }}"
+    delete: true
+  when: vnc_rfb_port | int != vnc_rfb_base_port | int

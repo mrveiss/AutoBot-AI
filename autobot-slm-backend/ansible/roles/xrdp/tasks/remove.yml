@@ -11,21 +11,29 @@
 # Never touches /home, the login users or the SLM database. The stored rdp credential rows are left
 # in place: deleting credentials is proposed to the approval queue (#17038), never done by a playbook.
 
-# Fails CLOSED (#22211): a missing or erroring loginctl fails the task, so "could not look" never reads as
-# "no session". A session that ends between the list and the show also fails it; re-run the provisioning.
+# Fails CLOSED (#22211): any failure to LOOK (loginctl missing, logind or dbus down, a session ending between the
+# list and the show) exits non-zero and fails the task, so "could not look" never reads as "no session".
+# `set -e` does that, and every loginctl output is captured into a variable rather than piped into a loop:
+# a failing command inside `a | while ...` would only end a subshell and the loop would see empty input.
+# A session logind does not know about is caught by the xrdp-sesexec check; only a pgrep exit above 1
+# (an error, as opposed to "no match") fails there. Executed against stub commands by the role's test.
 - name: xrdp | Find logged-in RDP sessions
   ansible.builtin.shell:
     cmd: |
-      set -o pipefail
+      set -eo pipefail
       command -v loginctl >/dev/null || { echo "loginctl not found: cannot check for RDP sessions" >&2; exit 1; }
-      loginctl list-sessions --no-legend | awk '{print $1}' | while read -r s; do
-        svc=$(loginctl show-session "$s" -p Service --value) || exit 1
+      listing=$(loginctl list-sessions --no-legend)
+      for s in $(printf '%s\n' "$listing" | awk '{print $1}'); do
+        svc=$(loginctl show-session "$s" -p Service --value)
         if [ "$svc" = "xrdp-sesman" ]; then
-          loginctl show-session "$s" -p Name --value || exit 1
+          name=$(loginctl show-session "$s" -p Name --value)
+          echo "$name"
         fi
       done
-      # a session process xrdp-sesman still owns, even when logind has no session for it
-      pgrep -x xrdp-sesexec >/dev/null && echo "xrdp-sesexec" || true
+      rc=0
+      pgrep -x xrdp-sesexec >/dev/null || rc=$?
+      if [ "$rc" -gt 1 ]; then echo "pgrep failed ($rc): cannot check for xrdp session processes" >&2; exit "$rc"; fi
+      if [ "$rc" -eq 0 ]; then echo "xrdp-sesexec"; fi
     executable: "{{ xrdp_shell }}"
   register: _xrdp_live_sessions
   changed_when: false

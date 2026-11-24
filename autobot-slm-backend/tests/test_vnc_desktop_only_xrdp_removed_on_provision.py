@@ -9,6 +9,8 @@ that the two static inventories agree.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -229,14 +231,80 @@ def test_role_remove_hooks_leave_stored_credentials_alone(path: Path) -> None:
     assert "ansible.builtin.uri" not in text and "/api/" not in text
 
 
-def test_the_live_session_check_fails_closed() -> None:
-    """A missing or erroring loginctl fails the task: "could not look" must never read as "no session"."""
+def _session_script() -> str:
     tasks = yaml.safe_load(_XRDP_REMOVE.read_text(encoding="utf-8"))
     find = next(t for t in tasks if t.get("register") == "_xrdp_live_sessions")
-    script = find["ansible.builtin.shell"]["cmd"]
-    assert "2>/dev/null" not in script.replace(">/dev/null || {", "")
-    assert "command -v loginctl" in script and "exit 1" in script and "set -o pipefail" in script
     assert "failed_when" not in find and "ignore_errors" not in find
+    return find["ansible.builtin.shell"]["cmd"]
+
+
+def _stub(directory: Path, name: str, body: str) -> None:
+    path = directory / name
+    path.write_text("#!/bin/bash\n" + body, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _run_script(tmp_path: Path, stubs: dict[str, str]) -> subprocess.CompletedProcess:
+    """Execute the real task script with stub commands first on PATH (bash, awk and printf from the host)."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("awk", "bash"):
+        found = shutil.which(tool)
+        assert found, f"{tool} is needed to run the script"
+        (bin_dir / tool).symlink_to(found)
+    for name, body in stubs.items():
+        _stub(bin_dir, name, body)
+    return subprocess.run(
+        [str(bin_dir / "bash"), "-c", _session_script()],
+        env={"PATH": str(bin_dir)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+_NO_PGREP = "exit 1\n"  # pgrep: no match
+_LOGINCTL_OK = (
+    'case "$1" in\n'
+    "  list-sessions) echo '7 1000 alice seat0'; echo '8 1001 bob seat0' ;;\n"
+    '  show-session) case "$2:$4" in\n'
+    "    7:Service) echo xrdp-sesman ;; 8:Service) echo sshd ;; 7:Name) echo alice ;; esac ;;\n"
+    "esac\n"
+)
+
+
+def test_the_live_session_check_reports_an_xrdp_session(tmp_path: Path) -> None:
+    done = _run_script(tmp_path, {"loginctl": _LOGINCTL_OK, "pgrep": _NO_PGREP})
+    assert done.returncode == 0 and done.stdout.split() == ["alice"], (done.stdout, done.stderr)
+
+
+def test_the_live_session_check_reports_nothing_when_there_is_no_session(tmp_path: Path) -> None:
+    done = _run_script(tmp_path, {"loginctl": "exit 0\n", "pgrep": _NO_PGREP})
+    assert done.returncode == 0 and done.stdout.strip() == ""
+
+
+def test_a_running_xrdp_session_process_counts_even_without_a_logind_session(tmp_path: Path) -> None:
+    done = _run_script(tmp_path, {"loginctl": "exit 0\n", "pgrep": "exit 0\n"})
+    assert done.returncode == 0 and done.stdout.split() == ["xrdp-sesexec"]
+
+
+@pytest.mark.parametrize(
+    "stubs",
+    [
+        {"loginctl": "echo 'logind is down' >&2; exit 1\n", "pgrep": _NO_PGREP},  # list-sessions fails
+        {  # list works, show-session fails: the loop must not swallow it
+            "loginctl": 'if [ "$1" = list-sessions ]; then echo "7 1000 alice seat0"; exit 0; fi; exit 1\n',
+            "pgrep": _NO_PGREP,
+        },
+        {"loginctl": "exit 0\n", "pgrep": "exit 2\n"},  # pgrep errors (not just "no match")
+        {"pgrep": _NO_PGREP},  # loginctl is not installed at all
+    ],
+    ids=["list-fails", "show-fails", "pgrep-errors", "no-loginctl"],
+)
+def test_the_live_session_check_fails_closed_when_it_cannot_look(tmp_path: Path, stubs: dict[str, str]) -> None:
+    """Executed, not matched: a loginctl/pgrep failure must exit non-zero so the task fails (not "no session")."""
+    done = _run_script(tmp_path, stubs)
+    assert done.returncode != 0, f"read as 'no live session': stdout={done.stdout!r}"
 
 
 def test_websockify_unit_uses_the_role_rfb_port_not_a_literal_base() -> None:
@@ -275,3 +343,43 @@ def test_the_vnc_restart_handlers_honour_a_sync_without_restarts() -> None:
     handlers = yaml.safe_load((_ANSIBLE / "roles" / "vnc" / "handlers" / "main.yml").read_text(encoding="utf-8"))
     restarts = [h for h in handlers if str(h["name"]).startswith("restart ")]
     assert len(restarts) == 2 and all("autobot_restart_services" in str(h["when"]) for h in restarts)
+
+
+def test_removing_xrdp_from_a_node_without_an_active_vnc_role_is_refused() -> None:
+    """remove-role.yml: evaluated through Jinja2 in both directions, plus the operator override."""
+    tasks = _tasks(_REMOVE_ROLE)
+    guard = next(t for t in tasks if str(t.get("name", "")).startswith("Refuse to remove xrdp from a node without"))
+    expr = guard["ansible.builtin.assert"]["that"][0]
+    env = jinja2.Environment()
+    env.filters["bool"] = lambda v: str(v).lower() in ("true", "1", "yes")
+    check = env.compile_expression(expr)
+
+    def passes(role: str, vnc: object, override: object = None) -> bool:
+        ctx: dict[str, Any] = {"role_name": role, "role_vnc_active": vnc}
+        if override is not None:
+            ctx["remove_xrdp_without_vnc"] = override
+        return bool(check(**ctx))
+
+    assert passes("xrdp", True) and not passes("xrdp", False)
+    assert passes("xrdp", False, override=True), "the operator override"
+    assert passes("redis", False), "other roles are unaffected"
+    names = [t.get("name", "") for t in tasks]
+    assert names.index(guard["name"]) < names.index(next(n for n in names if n.startswith("Look for a per-role")))
+
+
+def test_the_stale_bootstrap_base_port_rule_is_deleted_when_the_rfb_port_differs() -> None:
+    fw = yaml.safe_load((_ANSIBLE / "roles" / "vnc" / "tasks" / "firewall.yml").read_text(encoding="utf-8"))
+    stale = next(t for t in fw if "stale" in str(t["name"]))
+    assert stale["community.general.ufw"]["delete"] is True and "vnc_rfb_base_port" in str(
+        stale["community.general.ufw"]["port"]
+    )
+    env = jinja2.Environment()
+    gate = env.compile_expression(stale["when"])
+    assert gate(vnc_rfb_port=5901, vnc_rfb_base_port=5900) is True
+    assert gate(vnc_rfb_port=5900, vnc_rfb_base_port=5900) is False, "display 0 keeps its rule"
+
+
+def test_the_port_wait_seconds_are_registered_env_vars() -> None:
+    registry = (_ANSIBLE.parents[1] / "autobot_shared" / "env_registry_slm_roles.py").read_text(encoding="utf-8")
+    for name in ("VNC_PORT_WAIT_SECONDS", "XRDP_PORT_CLOSE_WAIT_SECONDS"):
+        assert name in registry

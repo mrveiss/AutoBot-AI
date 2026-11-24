@@ -131,7 +131,7 @@ async def _settle_installing(node_id: str, names: list[str]) -> None:
         logger.error("Could not reset roles %s on %s from installing: %s", names, node_id, exc)
 
 
-async def provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
+async def _provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
     """Provision the node's pending roles; returns a message for the node's output ('' when none ran).
 
     ``playbook_kwargs`` (the no-restart arguments of a sync with ``restart=False``) reach the provisioning run.
@@ -148,6 +148,18 @@ async def provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
         await db.commit()
         warning = await _run_provisioning(db, node_id, node, roles, **playbook_kwargs)
         return warning or f"provisioned newly assigned role(s) {', '.join(r.role_name for r in roles)}"
+
+
+async def provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
+    """``_provision_pending_roles``, with any error (the queries, the commit) turned into a warning.
+
+    By now the code update succeeded; a database error here must not fail it or break the fleet loop.
+    """
+    try:
+        return await _provision_pending_roles(node_id, **playbook_kwargs)
+    except Exception as exc:  # noqa: BLE001 - reported as a warning; CancelledError still propagates
+        logger.error("Pending-role provisioning for %s could not run: %s", node_id, exc)
+        return "WARNING: pending roles could not be provisioned (database error); the code update succeeded"
 
 
 async def run_update_all_nodes(executor: Any, node_id: str, limit: list, restart: bool, **playbook_kwargs: Any) -> dict:

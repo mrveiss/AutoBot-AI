@@ -717,6 +717,8 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `STABILITY_API_KEY` | image_generation | str | *(none)* | Stability AI API key for the image-generation plugin. Environment fallback only: credentials belong in the secrets service. |
 | `VERIFIER_MAX_TOKENS` | verifier | int | `512` | Token budget of the verifier LLM call (un-prefixed legacy name, kept for existing configs). Range: 1–8192. |
 | `VERIFIER_TIMEOUT_S` | verifier | float | `10.0` | Seconds the verifier LLM call may take (un-prefixed legacy name, kept for existing configs); past it the pass is a 'timeout' degradation (#21844). Range: 0.1–600.0. |
+| `VNC_PORT_WAIT_SECONDS` | slm | int | `60` | Seconds the vnc role's verify step waits for the RFB and websockify ports after provisioning, before xrdp removal is allowed (roles/vnc/vars/main.yml, #22211). Range: 1-3600. Range: 1–3600. |
+| `XRDP_PORT_CLOSE_WAIT_SECONDS` | slm | int | `30` | Seconds the xrdp removal waits for the RDP port to close after the units stop (roles/xrdp/defaults/main.yml, #22211). Range: 1-3600. Range: 1–3600. |
 <!-- END_AUTOGEN_ENV_DOCS -->
 
 ## Remote test node (`AUTOBOT_TEST_NODE_*`, #20935)

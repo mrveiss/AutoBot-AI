@@ -21,3 +21,31 @@ register_env_var(
         range=(1, 720),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="VNC_PORT_WAIT_SECONDS",
+        type=int,
+        default=60,
+        description=(
+            "Seconds the vnc role's verify step waits for the RFB and websockify ports after provisioning, "
+            "before xrdp removal is allowed (roles/vnc/vars/main.yml, #22211). Range: 1-3600."
+        ),
+        component="slm",
+        range=(1, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="XRDP_PORT_CLOSE_WAIT_SECONDS",
+        type=int,
+        default=30,
+        description=(
+            "Seconds the xrdp removal waits for the RDP port to close after the units stop "
+            "(roles/xrdp/defaults/main.yml, #22211). Range: 1-3600."
+        ),
+        component="slm",
+        range=(1, 3600),
+    )
+)
