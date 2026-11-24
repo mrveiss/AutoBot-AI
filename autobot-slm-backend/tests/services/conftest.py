@@ -86,6 +86,13 @@ with contextlib.suppress(ImportError):
     import aiohttp  # noqa: F401
 
 
+# Shared setup of the role_manifest_*_test.py files, loaded by path under a unique name through StubSet
+# (#13596), after the real `services` / `models` packages above are in place, since it imports
+# `services.manifest_loader`. A conftest in a test's own directory is imported before that directory's test
+# modules are collected, also under --import-mode=importlib, so `import _slm_role_manifest_fixtures` resolves.
+_stubs.real_load("_slm_role_manifest_fixtures", Path(__file__).parent / "_role_manifest_fixtures.py")
+
+
 def pytest_unconfigure(config) -> None:  # noqa: ARG001
     """Remove the hollow ``services`` / ``models`` packages this file installed."""
     _stubs.restore()
