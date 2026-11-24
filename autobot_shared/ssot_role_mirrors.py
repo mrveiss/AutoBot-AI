@@ -50,5 +50,5 @@ FEATURE_ROUTERS_STRICT_PRODUCTION = "0"
 
 # noVNC web root (#13069, #22146): inventory/group_vars/all.yml ``novnc_path`` (the vnc role installs here and its
 # websockify unit serves it) is the one home; the backend role writes the same value as
-# AUTOBOT_NOVNC_PATH. Pinned by ``repo_tests/backend_bind_vs_advertised_host_18810_test.py``.
+# AUTOBOT_NOVNC_PATH. Pinned by ``repo_tests/backend_bind_vs_advertised_host_test.py``.
 NOVNC_PATH_DEFAULT = "/opt/novnc"

@@ -289,7 +289,7 @@ services:
     # (#9759). NB: overriding entrypoint clears the image CMD, so the command
     # is re-declared here (kept in sync with docker/backend/Dockerfile).
     entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh", "/app/entrypoint.sh"]
-    command: ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1", "--app-dir", "/app/autobot-backend"]
+    command: ["python3", "-m", "uvicorn", "main:app", "--host", "${AUTOBOT_BACKEND_BIND_HOST:-0.0.0.0}", "--port", "8001", "--workers", "1", "--app-dir", "/app/autobot-backend"]
     env_file:
       - docker/.env.docker
     volumes:
@@ -328,7 +328,7 @@ services:
       - AUTOBOT_OLLAMA_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       # #18810: the listen address is the uvicorn --host above; AUTOBOT_BACKEND_HOST (the dialed host)
       # stays unset so it resolves to loopback inside the container, never 0.0.0.0.
-      - AUTOBOT_BACKEND_BIND_HOST=0.0.0.0
+      - AUTOBOT_BACKEND_BIND_HOST=${AUTOBOT_BACKEND_BIND_HOST:-0.0.0.0}
       - AUTOBOT_BACKEND_PORT=8001
       - AUTOBOT_LLM_PROVIDER=${AUTOBOT_LLM_PROVIDER:-ollama}
       - AUTOBOT_DEFAULT_LLM_MODEL=${AUTOBOT_DEFAULT_LLM_MODEL:-qwen3.5:9b}

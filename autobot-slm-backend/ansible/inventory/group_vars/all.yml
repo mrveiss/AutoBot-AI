@@ -516,6 +516,13 @@ chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | boo
 # NOVNC_PATH_DEFAULT (autobot_shared/ssot_role_mirrors.py) is pinned to it by test.
 novnc_path: /opt/novnc
 
+# #18810: the address clients dial, written as AUTOBOT_BACKEND_HOST. One home (inventory-wide, evaluated
+# where backend.env.j2 renders, role or playbook). Never an unspecified
+# bind address: that case falls back to the inventory backend host, else loopback.
+backend_advertised_host: >-
+  {{ backend_host if (backend_host | string | trim('[]') | lower) not in ['', '0.0.0.0', '::', '0:0:0:0:0:0:0:0']
+     else (infrastructure.hosts.backend if infrastructure is defined else slm_loopback_ipv4) }}
+
 role_vnc_active: >-
   {{ ('vnc' in (node_roles | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}

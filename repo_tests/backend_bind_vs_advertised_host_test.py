@@ -4,6 +4,7 @@
 
 from pathlib import Path
 
+import pytest
 import yaml
 from jinja2 import ChainableUndefined, Environment
 
@@ -15,7 +16,6 @@ from autobot_shared.ssot_role_mirrors import NOVNC_PATH_DEFAULT
 ROOT = Path(__file__).resolve().parents[1]
 ANSIBLE = ROOT / "autobot-slm-backend" / "ansible"
 ENV_TEMPLATE = ANSIBLE / "roles" / "backend" / "templates" / "backend.env.j2"
-BACKEND_DEFAULTS = ANSIBLE / "roles" / "backend" / "defaults" / "main.yml"
 ALL_VARS = ANSIBLE / "inventory" / "group_vars" / "all.yml"
 
 
@@ -30,9 +30,14 @@ def _rendered(**variables) -> dict[str, str]:
 
 def _advertised(backend_host: str, inventory_host: str | None) -> str:
     """Render ``backend_advertised_host`` from the role default with the real Jinja expression."""
-    expr = yaml.safe_load(BACKEND_DEFAULTS.read_text(encoding="utf-8"))["backend_advertised_host"]
+    expr = yaml.safe_load(ALL_VARS.read_text(encoding="utf-8"))["backend_advertised_host"]
     extra = {"infrastructure": {"hosts": {"backend": inventory_host}}} if inventory_host else {}
-    return Environment().from_string(expr).render(backend_host=backend_host, **extra).strip()
+    return (
+        Environment()
+        .from_string(expr)
+        .render(backend_host=backend_host, slm_loopback_ipv4="127.0.0.1", **extra)
+        .strip()
+    )
 
 
 def test_template_never_renders_bind_all_as_the_client_host() -> None:
@@ -82,7 +87,8 @@ def test_startup_validation_fails_naming_the_variable(monkeypatch) -> None:
 
 def test_unit_runs_the_startup_validation_before_the_backend() -> None:
     unit = (ANSIBLE / "roles" / "backend" / "templates" / "autobot-backend.service.j2").read_text(encoding="utf-8")
-    assert "ExecStartPre" in unit and "startup_validation.py" in unit
+    pre = [ln.split("=", 1)[1].split() for ln in unit.splitlines() if ln.startswith("ExecStartPre=")]
+    assert any(cmd[-1].endswith("/startup_validation.py") for cmd in pre), pre
 
 
 def test_loader_reads_the_bind_from_the_bind_variable() -> None:
@@ -142,3 +148,58 @@ def test_updater_renders_the_env_before_it_restarts_the_backend() -> None:
     env = play.index("tasks_from: env_only")
     restart = play.index('- name: "[PLAY 2] Backend | Restart service"')
     assert env < restart
+
+
+def _advertised_with(backend_host: str) -> str:
+    expr = yaml.safe_load(ALL_VARS.read_text(encoding="utf-8"))["backend_advertised_host"]
+    return (
+        Environment()
+        .from_string(expr)
+        .render(
+            backend_host=backend_host, slm_loopback_ipv4="127.0.0.1", infrastructure={"hosts": {"backend": "10.1.2.3"}}
+        )
+        .strip()
+    )
+
+
+@pytest.mark.parametrize(
+    "spelling", ["0.0.0.0", "::", "0:0:0:0:0:0:0:0", "[::]", "[0:0:0:0:0:0:0:0]", ""]
+)  # nosec B104
+def test_every_bind_all_spelling_falls_back_to_the_inventory_host(spelling) -> None:
+    assert _advertised_with(spelling) == "10.1.2.3"
+    assert is_unspecified_host(spelling) or spelling == ""  # agrees with validate_advertised_host
+
+
+def test_a_specific_backend_host_is_advertised_as_is() -> None:
+    assert _advertised_with("10.9.9.9") == "10.9.9.9"
+
+
+def test_config_service_reports_the_dial_host_not_the_bind_host() -> None:
+    source = (ROOT / "autobot-backend/services/config_service.py").read_text(encoding="utf-8")
+    assert "configured_host = BACKEND_HOST_IP" in source
+    assert 'get("backend.server_host"' not in source
+
+
+def test_vnc_convergence_runs_before_the_backend_restart_and_with_tags() -> None:
+    plays = yaml.safe_load((ANSIBLE / "playbooks" / "update-all-nodes.yml").read_text(encoding="utf-8"))
+    tasks = [t for play in plays for t in play.get("tasks", [])]
+    names = [t.get("name", "") for t in tasks]
+    vnc = next(i for i, n in enumerate(names) if "Converge the pinned noVNC" in n)
+    restart = names.index("[PLAY 2] Backend | Restart service")
+    assert vnc < restart  # VNCServerManager reads novnc_available once, at init
+    task = tasks[vnc]
+    assert task["ansible.builtin.include_role"]["apply"]["tags"] == ["vnc", "deploy"]
+    assert task["tags"] == ["vnc", "deploy"]
+
+
+def test_unpack_destination_follows_the_install_root() -> None:
+    tasks = yaml.safe_load((ANSIBLE / "roles" / "vnc" / "tasks" / "novnc.yml").read_text(encoding="utf-8"))
+    unpack = next(t for t in tasks if "ansible.builtin.unarchive" in t)["ansible.builtin.unarchive"]
+    assert unpack["dest"] == "{{ novnc_install_root | dirname }}"
+    assert unpack["creates"].startswith("{{ novnc_install_root }}")
+
+
+def test_compose_bind_host_has_one_variable_for_command_and_env() -> None:
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert compose.count("${AUTOBOT_BACKEND_BIND_HOST:-0.0.0.0}") == 2
+    assert "AUTOBOT_BACKEND_BIND_HOST=0.0.0.0" not in compose

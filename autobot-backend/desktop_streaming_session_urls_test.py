@@ -62,3 +62,19 @@ def test_websockify_is_found_through_the_ssot_search_path(which) -> None:
     with patch.object(dsm.shutil, "which", side_effect=[which, "/found/websockify"]) as lookup:
         assert _manager()._find_websockify_command() == "/found/websockify"
     assert lookup.call_args_list[1].kwargs["path"] == config.path.websockify_search_path
+
+
+@pytest.mark.parametrize(
+    ("bind", "expected"),
+    [
+        ("127.0.0.1", NetworkConstants.LOCALHOST_NAME),
+        ("::1", NetworkConstants.LOCALHOST_NAME),
+        ("0.0.0.0", "viewer.example"),  # nosec B104
+        ("::", "viewer.example"),
+        ("192.0.2.7", "192.0.2.7"),  # a specific address accepts connections only on itself
+    ],
+)
+def test_viewer_host_follows_what_the_listener_accepts(monkeypatch, bind, expected) -> None:
+    monkeypatch.setattr(config.misc, "novnc_bind_host", bind)
+    monkeypatch.setattr(config.misc, "vnc_host", "viewer.example")
+    assert dsm.novnc_client_host() == expected

@@ -53,7 +53,7 @@
 - name: Unpack noVNC {{ novnc_version }} to versioned root (#13069)
   ansible.builtin.unarchive:
     src: "/tmp/noVNC-{{ novnc_version }}.tar.gz"
-    dest: /opt
+    dest: "{{ novnc_install_root | dirname }}"
     remote_src: true
     owner: root
     group: root

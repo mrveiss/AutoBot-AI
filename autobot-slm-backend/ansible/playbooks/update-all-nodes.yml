@@ -1422,6 +1422,22 @@
       when: "'backend' in group_names"
       tags: [backend, access-control, enforcement]
 
+    # #22146: the fleet update never ran the vnc role, so a node installed before the
+    # #13069 pin kept the distro noVNC and its old websockify unit (--web=/usr/share/novnc)
+    # forever. Only the pin and the unit that serves it -- not the provisioning half. Before the
+    # backend restart below: VNCServerManager reads noVNC availability once, at init.
+    - name: "[PLAY 2] VNC | Converge the pinned noVNC and its websockify unit (#22146)"
+      ansible.builtin.include_role:
+        name: vnc
+        tasks_from: novnc
+        apply:
+          become: true
+          tags: [vnc, deploy]
+      vars:
+        novnc_require_vnc_account: true  # never provisioned here: fail naming the account (#14319)
+      when: "role_vnc_active | default(false) | bool"
+      tags: [vnc, deploy]
+
     - name: "[PLAY 2] Backend | Restart service"
       ansible.builtin.include_tasks:
         file: ../_shared/tasks/restart_unit.yml
@@ -2296,20 +2312,6 @@
           become: true
       when: "'browser' in group_names"
       tags: [browser, deploy]
-
-    # #22146: the fleet update never ran the vnc role, so a node installed before the
-    # #13069 pin kept the distro noVNC and its old websockify unit (--web=/usr/share/novnc)
-    # forever. Only the pin and the unit that serves it -- not the provisioning half.
-    - name: "[PLAY 2] VNC | Converge the pinned noVNC and its websockify unit (#22146)"
-      ansible.builtin.include_role:
-        name: vnc
-        tasks_from: novnc
-        apply:
-          become: true
-      vars:
-        novnc_require_vnc_account: true  # never provisioned here: fail naming the account (#14319)
-      when: "role_vnc_active | default(false) | bool"
-      tags: [vnc, deploy]
 
     - name: "[PLAY 2] Node Update Complete"
       debug:
