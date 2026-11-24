@@ -26,7 +26,6 @@ module:autobot-backend/agents/ac_verification_run.py	#10603
 module:autobot-backend/agents/browser/captcha_solver.py	#10603
 module:autobot-backend/agents/dev_loop_issue_gate.py	#10603
 module:autobot-backend/agents/knowledge_retrieval_agent.py	#10603
-module:autobot-backend/agents/task_retry_strategy.py	#10603
 module:autobot-backend/code_analysis/auto-tools/tool_base.py	#10603
 module:autobot-backend/code_analysis/setup.py	#10603
 module:autobot-backend/code_analysis/src/performance_analyzer.py	#10603
