@@ -95,7 +95,7 @@ async function load() {
   const query: EventLogQuery = {
     user_id: userId.value.trim() || undefined,
     event_type: eventType.value || undefined,
-    limit: PAGE_SIZE,
+    limit: PAGE_SIZE + 1, // one extra row says whether a next page exists (backend caps limit at 1000)
     offset: (page.value - 1) * PAGE_SIZE,
   }
   const result = await queryEventLogs(query)
@@ -105,9 +105,9 @@ async function load() {
     logger.warn('Event logs unavailable')
     return
   }
-  events.value = result.events
+  events.value = result.events.slice(0, PAGE_SIZE)
   eventTypes.value = result.available_event_types
-  hasNext.value = result.count === PAGE_SIZE
+  hasNext.value = result.events.length > PAGE_SIZE
 }
 
 function goToPage(next: number) {

@@ -9,6 +9,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
+import { formatDateTime } from '@/utils/formatHelpers'
 import AuditEventLogsPanel from '../AuditEventLogsPanel.vue'
 import AuditCommandHistoryPanel from '../AuditCommandHistoryPanel.vue'
 
@@ -41,7 +42,7 @@ describe('AuditEventLogsPanel', () => {
     const w = render(AuditEventLogsPanel)
     await flushPromises()
 
-    expect(queryEventLogs).toHaveBeenCalledWith({ user_id: undefined, event_type: undefined, limit: 50, offset: 0 })
+    expect(queryEventLogs).toHaveBeenCalledWith({ user_id: undefined, event_type: undefined, limit: 51, offset: 0 })
     expect(w.text()).toContain('alice')
     expect(w.text()).toContain('user.login')
   })
@@ -55,7 +56,7 @@ describe('AuditEventLogsPanel', () => {
     await w.findAll('button').find((b) => b.text() === en.audit.eventLogs.refresh)!.trigger('click')
     await flushPromises()
 
-    expect(queryEventLogs).toHaveBeenLastCalledWith({ user_id: 'bob', event_type: undefined, limit: 50, offset: 0 })
+    expect(queryEventLogs).toHaveBeenLastCalledWith({ user_id: 'bob', event_type: undefined, limit: 51, offset: 0 })
   })
 
   it('shows the empty state when no event matches', async () => {
@@ -64,6 +65,30 @@ describe('AuditEventLogsPanel', () => {
     await flushPromises()
 
     expect(w.text()).toContain(en.audit.eventLogs.empty)
+  })
+
+  const eventsOf = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ id: `e${i}`, action: 'a', actor_id: `u${i}`, occurred_at: 1_700_000_000, outcome: 'success' }))
+  const nextButton = (w: ReturnType<typeof render>) =>
+    w.findAll('button').find((b) => b.text() === en.audit.logTable.next)!
+
+  it('offers no next page when the total is an exact multiple of the page size', async () => {
+    queryEventLogs.mockResolvedValue({ ...EVENTS, events: eventsOf(50), count: 50 })
+    const w = render(AuditEventLogsPanel)
+    await flushPromises()
+
+    expect(w.text()).toContain('u49')
+    expect(nextButton(w).attributes('disabled')).toBeDefined()
+  })
+
+  it('offers a next page and shows only a page when one more row came back', async () => {
+    queryEventLogs.mockResolvedValue({ ...EVENTS, events: eventsOf(51), count: 51 })
+    const w = render(AuditEventLogsPanel)
+    await flushPromises()
+
+    expect(w.text()).toContain('u49')
+    expect(w.text()).not.toContain('u50')
+    expect(nextButton(w).attributes('disabled')).toBeUndefined()
   })
 
   it('shows an error with a retry when the call fails', async () => {
@@ -92,6 +117,15 @@ describe('AuditCommandHistoryPanel', () => {
     expect(getCommandHistory).toHaveBeenCalledWith({ user: undefined, limit: 50 })
     expect(w.text()).toContain('carol')
     expect(w.text()).toContain('command.execute')
+  })
+
+  it('formats the timestamp instead of showing the raw ISO text', async () => {
+    getCommandHistory.mockResolvedValue(HISTORY)
+    const w = render(AuditCommandHistoryPanel)
+    await flushPromises()
+
+    expect(w.text()).not.toContain('2026-01-01T00:00:00+00:00')
+    expect(w.text()).toContain(formatDateTime(new Date(HISTORY[0].timestamp)))
   })
 
   it('shows the empty state and the error state', async () => {

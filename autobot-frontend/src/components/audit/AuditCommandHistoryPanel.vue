@@ -38,6 +38,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseButton, BaseInput, BaseTable } from '@autobot/ui'
 import { useAuditApi, type CommandHistoryEntry, type CommandHistoryQuery } from '@/composables/useAuditApi'
+import { formatDateTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 
 const HISTORY_LIMIT = 50
@@ -57,7 +58,14 @@ const columns = computed(() => [
   { key: 'action', label: t('audit.commandHistory.action') },
   { key: 'outcome', label: t('audit.commandHistory.outcome') },
 ])
-const rows = computed(() => entries.value.map((e, i) => ({ ...e, key: `${e.timestamp}-${i}` })))
+// The API sends ISO-8601 text; an unparseable value stays as received rather than reading "Invalid Date".
+function shown(timestamp: string): string {
+  const at = new Date(timestamp)
+  return Number.isNaN(at.getTime()) ? timestamp : formatDateTime(at)
+}
+const rows = computed(() =>
+  entries.value.map((e, i) => ({ ...e, key: `${e.timestamp}-${i}`, timestamp: shown(e.timestamp) })),
+)
 
 async function load() {
   loading.value = true
