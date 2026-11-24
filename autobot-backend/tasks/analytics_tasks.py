@@ -358,8 +358,8 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
 
 @celery_app.task(bind=True, name="analytics.run_bug_prediction_analysis")
 @_binds_task_id
-def run_bug_prediction_analysis(self, path: str, include_pattern: str, limit: int) -> dict:
-    """Celery wrapper for bug prediction background analysis (#6505)."""
+def run_bug_prediction_analysis(self, source_id: str, include_pattern: str, limit: int) -> dict:
+    """Celery wrapper for bug prediction background analysis of ONE source (#6505, #18030)."""
     started = datetime.now(tz=timezone.utc).isoformat()
     _progress(self, "Gathering file data", 5.0, started)
 
@@ -367,7 +367,7 @@ def run_bug_prediction_analysis(self, path: str, include_pattern: str, limit: in
         from api.analytics_bug_prediction import _run_bug_analysis
 
         _progress(self, "Analyzing files", 10.0, started)
-        result = await _run_bug_analysis(path, include_pattern, limit)
+        result = await _run_bug_analysis(source_id, include_pattern, limit)
         _progress(self, "Finalizing results", 95.0, started)
         return result
 

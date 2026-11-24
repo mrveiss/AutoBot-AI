@@ -925,16 +925,6 @@ export function useAutobotApi() {
     return response
   }
 
-  async function getAvailableAgents(): Promise<Record<string, unknown>[]> {
-    const response = await client.get<Record<string, unknown>[]>('/agent/agents/available')
-    return response
-  }
-
-  async function getAgentsStatus(): Promise<Record<string, unknown>> {
-    const response = await client.get<Record<string, unknown>>('/agent/agents/status')
-    return response
-  }
-
   async function pauseAgent(): Promise<Record<string, unknown>> {
     const response = await client.post<Record<string, unknown>>('/agent/pause')
     return response
@@ -1790,8 +1780,6 @@ export function useAutobotApi() {
     // Agents (Issue #835)
     getAgent,
     getAgents,
-    getAvailableAgents,
-    getAgentsStatus,
     pauseAgent,
     resumeAgent,
     executeAgentGoal,
