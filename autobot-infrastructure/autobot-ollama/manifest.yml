@@ -38,6 +38,17 @@ health:
   retries: 3
   expected_status: 200
 
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  autobot-llm-cpu:
+    checked: true
+    port: 11434
+    path: /api/tags
+  autobot-llm-gpu:
+    checked: true
+    port: 11434
+    path: /api/tags
+
 secrets:
   own: []
   shared: []
