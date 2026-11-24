@@ -78,15 +78,15 @@ export async function createVncCompanion(
   created: unknown,
   form: { type: string; name: string; host: string; capabilities: string[]; vnc_password: string },
   hostData: Record<string, unknown>,
-  t: (key: string, params?: Record<string, unknown>) => string,
-  existing: SecretLike[] = []
+  t: (key: string, params?: Record<string, unknown>) => string
 ): Promise<void> {
   if (form.type !== 'infrastructure_host' || !form.capabilities.includes('vnc') || !form.vnc_password) return;
   const hostId = (created as { data?: { id?: string } } | null)?.data?.id;
   if (!hostId) throw new Error(t('security.secretsManager.vncCompanionNoHostId'));
-  // Refetch first: the list the form holds can be stale, and a second create would duplicate the secret.
-  const fresh = await secretsApiClient.getSecrets({}).catch(() => null) as { secrets?: SecretLike[] } | null
-  const known = [...(fresh?.secrets ?? []), ...existing]
+  // Refetch first: a stale list could duplicate the secret. A failed refetch surfaces (the caller's write
+  // failure path); it never falls back to a list that may be stale.
+  const fresh = (await secretsApiClient.getSecrets({})) as { secrets?: SecretLike[] }
+  const known = fresh.secrets ?? []
   const linked = known.find((s) => s.type === 'password' && s.metadata?.[VNC_COMPANION_HOST_KEY] === hostId);
   if (linked) {
     await secretsApiClient.updateSecret(linked.id, { value: form.vnc_password } as never, {

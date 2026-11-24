@@ -1440,13 +1440,13 @@ const saveSecret = async () => {
 
     if (showEditModal.value) {
       await secretsApiClient.updateSecret(secretForm.id, secretData, { chatId: secretData.chat_id as string | null | undefined });
-      await createVncCompanion({ data: { id: secretForm.id } }, secretForm, secretData, t, secrets.value);
+      await createVncCompanion({ data: { id: secretForm.id } }, secretForm, secretData, t);
     } else {
       if (secretForm.type !== 'infrastructure_host') {
         secretData.value = secretForm.value;
       }
       const created = await secretsApiClient.createSecret(secretData as unknown as Parameters<typeof secretsApiClient.createSecret>[0]);
-      await createVncCompanion(created, secretForm, secretData, t, secrets.value);
+      await createVncCompanion(created, secretForm, secretData, t);
     }
   });
   saving.value = false;

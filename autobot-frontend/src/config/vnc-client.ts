@@ -33,9 +33,20 @@ export interface VncClientHost {
   vnc_port?: number | null
 }
 
-/** The picker entry for AutoBot's desktop VM, from the SSOT desktop VNC host; never an address literal. */
-export function getDesktopVmHost(): { id: string; host: string; vnc_port?: undefined; capabilities: string[] } {
-  return { id: DESKTOP_VM_HOST_ID, host: getConfig().vnc.desktop.host, capabilities: ['vnc'] }
+/** What `GET /api/vnc-proxy/desktop/endpoint` returns: the one desktop-VM address the page and the controls share. */
+export interface DesktopVmEndpoint {
+  host: string
+  port: number
+  source?: string
+}
+
+/**
+ * The picker entry for AutoBot's desktop VM. The address is the backend's resolved endpoint (the SLM's
+ * registered VNC desktop node, main machine only when none exists): the same answer the controls use, so
+ * there is no separate frontend guess of the host.
+ */
+export function desktopVmEntry(endpoint: DesktopVmEndpoint): { id: string; host: string; vnc_port: number; capabilities: string[] } {
+  return { id: DESKTOP_VM_HOST_ID, host: endpoint.host, vnc_port: endpoint.port, capabilities: ['vnc'] }
 }
 
 /** noVNC web port for a host: its own port when set, else the SSOT desktop port. */

@@ -120,3 +120,17 @@ register_env_var(
         range=(1024, 67108864),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_VNC_REGISTRY_TTL_SECONDS",
+        type=int,
+        default=60,
+        description=(
+            "Seconds the desktop VM endpoint read from the SLM's registered VNC nodes is reused "
+            "(services/slm_vnc_registry.py). The node's password is never cached."
+        ),
+        component="desktop",
+        range=(1, 3600),
+    )
+)

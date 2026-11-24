@@ -23,13 +23,19 @@ from autobot_shared.ssot_config import config
 from constants.network_constants import NetworkConstants
 from security.secrets_store_errors import SecretsStoreUnavailable
 from security.vnc_rfb_auth import VncAuthError
+from services.slm_vnc_registry import (
+    DesktopVmEndpoint,
+    SlmRegistryUnavailable,
+    desktop_vnc_endpoint,
+    desktop_vnc_password,
+)
 
 logger = get_logger(__name__)
 
 # Picker id of AutoBot's own desktop VM (owner 2026-11-24: the chat Desktop offers it next to the user's
 # /secrets hosts). Distinct from any secret id; mirrored by DESKTOP_VM_HOST_ID in the frontend vnc-client.ts.
 DESKTOP_VM_HOST_ID = "autobot-desktop-vm"
-# The vnc_type under which the desktop VM's VNC password is registered (api/vnc_handshake_bridge.py).
+# Fallback only: the vnc_type of the single vault password used when no registry node exists.
 DESKTOP_VM_VNC_TYPE = "desktop"
 
 # Metadata key on the companion secret that holds a host's VNC password.
@@ -39,6 +45,8 @@ VNC_COMPANION_HOST_KEY = "vnc_host_id"
 VNC_AUTH_MISSING = "vnc_credential_missing"
 HOST_NOT_FOUND = "host_not_found"
 HOST_VNC_UNAVAILABLE = "host_vnc_unavailable"
+REGISTRY_UNAVAILABLE = "slm_registry_unavailable"
+FALLBACK_SOURCE = "main_machine_fallback"
 
 
 @dataclass(frozen=True)
@@ -106,16 +114,63 @@ def resolve_host_id(host_id: str) -> str:
     return _checked_host(host_id)["id"]
 
 
-async def _desktop_vm_target() -> VncTarget:
-    """The desktop VM: SSOT main-machine address, SSOT raw VNC port, and the vault's `desktop` password."""
+@dataclass(frozen=True)
+class DesktopVm:
+    """The resolved desktop VM: where the page and the controls both go."""
+
+    host: str
+    web_port: int  # noVNC / websockify
+    rfb_port: int  # raw VNC, for the controls
+    source: str  # "registry" or "main_machine_fallback"
+    endpoint: DesktopVmEndpoint | None = None
+
+
+async def resolve_desktop_vm() -> DesktopVm:
+    """The desktop VM from the SLM's registered VNC desktop node (owner 2026-11-24).
+
+    The fallback to the main machine applies ONLY when the registry holds no VNC desktop node, and is
+    logged. An unreadable registry is a 503, not an empty fleet.
+    """
     try:
-        password = await get_vnc_password(DESKTOP_VM_VNC_TYPE)
-    except VncAuthError as exc:
+        endpoint = await desktop_vnc_endpoint()
+    except SlmRegistryUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": REGISTRY_UNAVAILABLE, "message": "The SLM registry could not be read."},
+        ) from exc
+    if endpoint is not None:
+        return DesktopVm(
+            endpoint.host, endpoint.web_port, endpoint.rfb_port or config.port.vnc_server, "registry", endpoint
+        )
+    logger.warning("No VNC desktop node is registered in the SLM; using the main machine for the desktop VM")
+    return DesktopVm(NetworkConstants.MAIN_MACHINE_IP, config.port.vnc, config.port.vnc_server, FALLBACK_SOURCE)
+
+
+async def desktop_vm_password(vm: DesktopVm) -> bytes:
+    """The desktop VM's own password: the registry node's, else (fallback only) the vault's `desktop` one."""
+    try:
+        if vm.endpoint is not None:
+            password = await desktop_vnc_password(vm.endpoint)
+        else:
+            password = await get_vnc_password(DESKTOP_VM_VNC_TYPE)
+    except SlmRegistryUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": REGISTRY_UNAVAILABLE, "message": "The SLM registry could not be read."},
+        ) from exc
+    except VncAuthError:
+        password = None
+    if not password:
         raise HTTPException(
             status_code=422,
             detail={"code": VNC_AUTH_MISSING, "message": "No VNC password is registered for the desktop VM."},
-        ) from exc
-    return VncTarget(DESKTOP_VM_HOST_ID, NetworkConstants.MAIN_MACHINE_IP, config.port.vnc_server, password)
+        )
+    return password
+
+
+async def _desktop_vm_target() -> VncTarget:
+    vm = await resolve_desktop_vm()
+    return VncTarget(DESKTOP_VM_HOST_ID, vm.host, vm.rfb_port, await desktop_vm_password(vm))
 
 
 async def resolve_vnc_target(host_id: str) -> VncTarget:

@@ -13466,6 +13466,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/vnc-proxy/desktop/endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Desktop Vm Endpoint
+         * @description Where the desktop VM is, from the SLM registry (main machine only when none is registered).
+         */
+        get: operations["get_desktop_vm_endpoint_api_vnc_proxy_desktop_endpoint_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vnc-proxy/{vnc_type}/vnc.html": {
         parameters: {
             query?: never;
@@ -74721,6 +74741,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * DesktopVmEndpointResponse
+         * @description Where the chat Desktop's desktop VM is: the one answer both the page and the controls use.
+         */
+        DesktopVmEndpointResponse: {
+            /** Host */
+            host: string;
+            /**
+             * Port
+             * @description noVNC web port
+             */
+            port: number;
+            /**
+             * Source
+             * @description 'registry' (a registered SLM VNC node) or 'main_machine_fallback'
+             */
+            source: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * DetailedKnowledgeSizeMetrics
          * @description Size-breakdown block inside ``DetailedKnowledgeStats``.
          */
@@ -127445,6 +127485,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_desktop_vm_endpoint_api_vnc_proxy_desktop_endpoint_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopVmEndpointResponse"];
                 };
             };
         };

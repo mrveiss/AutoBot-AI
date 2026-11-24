@@ -20,10 +20,11 @@
  * Issue #6087
  */
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useHostSelection } from '@/composables/useHostSelection'
-import { getDesktopVmHost } from '@/config/vnc-client'
+import ApiClient from '@/utils/ApiClient'
+import { desktopVmEntry, type DesktopVmEndpoint } from '@/config/vnc-client'
 
 export interface SelectorHost {
   id: string
@@ -52,6 +53,17 @@ export function useHostSelector(options: UseHostSelectorOptions = {}) {
   const { hosts: infraHosts, loading, error, loadHosts: loadInfraHosts } = useHostSelection()
 
   // Map InfrastructureHost → SelectorHost; apply client-side capability filter when set
+  // The desktop VM's endpoint comes from the backend (the SLM registry), the same source the controls use.
+  const desktopVm = ref<DesktopVmEndpoint | null>(null)
+  const loadDesktopVm = async (): Promise<void> => {
+    if (!options.includeDesktopVm) return
+    try {
+      desktopVm.value = await ApiClient.call('get', '/api/vnc-proxy/desktop/endpoint')
+    } catch {
+      desktopVm.value = null // no endpoint, no entry: never a guessed address
+    }
+  }
+
   const hosts = computed<SelectorHost[]>(() => {
     let list: SelectorHost[] = infraHosts.value.map((h) => ({
       id: h.id,
@@ -68,13 +80,13 @@ export function useHostSelector(options: UseHostSelectorOptions = {}) {
       list = list.filter((h: SelectorHost) => h.capabilities?.includes(options.requiredCapability!))
     }
     if (options.includeDesktopVm) {
-      list = [{ ...getDesktopVmHost(), name: t('ui.hostSelection.desktopVm'), description: t('ui.hostSelection.desktopVmDesc') }, ...list]
+      list = !desktopVm.value ? list : [{ ...desktopVmEntry(desktopVm.value), name: t('ui.hostSelection.desktopVm'), description: t('ui.hostSelection.desktopVmDesc') }, ...list]
     }
     return list
   })
 
   const loadHosts = async (capability?: string, _chatId?: string): Promise<void> => {
-    await loadInfraHosts()
+    await Promise.all([loadInfraHosts(), loadDesktopVm()])
     // Re-assign so the filter in the computed picks up any runtime override
     if (capability) options.requiredCapability = capability
   }

@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useChatStore } from '../useChatStore'
-import { buildVncBaseUrl, getDesktopVmHost } from '@/config/vnc-client'
+import { buildVncBaseUrl, desktopVmEntry } from '@/config/vnc-client'
 
 describe('useChatStore.getDesktopUrl', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -21,7 +21,7 @@ describe('useChatStore.getDesktopUrl', () => {
 
   it("works for AutoBot's desktop VM entry and has no own-display fallback", () => {
     const store = useChatStore()
-    expect(store.getDesktopUrl('chat-1', getDesktopVmHost())).toContain(getDesktopVmHost().host)
+    expect(store.getDesktopUrl('chat-1', desktopVmEntry({ host: 'desk.example.test', port: 6090 }))).toContain('desk.example.test:6090')
     expect(store.getDesktopUrl('chat-1', null)).toBe('')
   })
 })

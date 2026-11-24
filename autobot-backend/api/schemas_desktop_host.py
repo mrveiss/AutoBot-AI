@@ -13,3 +13,11 @@ class DesktopHostRequest(BaseModel):
     host_id: str = Field(
         ..., min_length=1, description="Selected /secrets infrastructure host id; also the control-lock key"
     )
+
+
+class DesktopVmEndpointResponse(BaseModel):
+    """Where the chat Desktop's desktop VM is: the one answer both the page and the controls use."""
+
+    host: str
+    port: int = Field(..., description="noVNC web port")
+    source: str = Field(..., description="'registry' (a registered SLM VNC node) or 'main_machine_fallback'")

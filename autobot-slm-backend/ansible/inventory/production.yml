@@ -217,7 +217,7 @@ all:
             cpu_cores: 2
             disk_gb: 50      # LVM expansion target
           # (#2989) .25 is a headless Playwright worker, not a VNC host.
-          # VNC desktop is on .26 (llm node with vnc role).
+          # VNC desktop is on the llm node (vnc role, vnc_nodes group).
           node_roles:
             - browser
           services:
@@ -232,7 +232,7 @@ all:
     llm:
       hosts:
         autobot-llm:
-          ansible_host: "{{ lookup('env', 'AUTOBOT_LLM_HOST') | default('127.0.0.1', true) }}"  # LLM CPU + xrdp RDP desktop (GH#1525 — xrdp replaces VNC)
+          ansible_host: "{{ lookup('env', 'AUTOBOT_LLM_HOST') | default('127.0.0.1', true) }}"  # LLM CPU + desktop: VNC (vnc_nodes, the chat Desktop's VM) and xrdp RDP (GH#1525)
           vm_id: "autobot-llm-vm"
           vm_role: "llm"
           vm_hostname: "autobot-llm"
@@ -261,6 +261,12 @@ all:
           vm_role: "reserved"
           vm_hostname: "autobot-reserved"
           services: []
+
+# VNC desktop node(s): the desktop VM the chat Desktop offers. role_vnc_active reads this group
+# (group_vars/all.yml), so listing the host here and 'vnc' in its node_roles agree.
+vnc_nodes:
+  hosts:
+    autobot-llm:
 
 # Environment-specific groups
 production_vms:

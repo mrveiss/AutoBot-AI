@@ -25,6 +25,7 @@ from api.desktop_control_lock import (
     get_control_lock_state,
     release_human_control,
 )
+from api.schemas_desktop_host import DesktopVmEndpointResponse
 from api.schemas_system import (
     DesktopControlAcquireRequest,
     DesktopControlLockResponse,
@@ -32,7 +33,7 @@ from api.schemas_system import (
     VncProxyStatusResponse,
 )
 from api.vnc_handshake_bridge import authenticate_both_legs, get_vnc_password
-from api.vnc_host_target import resolve_host_id
+from api.vnc_host_target import desktop_vm_password, resolve_desktop_vm, resolve_host_id
 from api.ws_security import enforce_ws_desktop_auth, enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
@@ -55,6 +56,24 @@ VNC_UPSTREAM_SCHEME = env_str("AUTOBOT_VNC_UPSTREAM_SCHEME", "https")
 VNC_WS_SCHEMES = {"https": "wss", "http": "ws"}
 VNC_OBSERVATION_TIMEOUT_S = env_int("AUTOBOT_VNC_OBSERVATION_TIMEOUT_S", 1)
 VNC_STATUS_PROBE_TIMEOUT_S = env_int("AUTOBOT_VNC_STATUS_PROBE_TIMEOUT_S", 5)
+
+
+async def _upstream_endpoint(vnc_type: str) -> str:
+    """The upstream noVNC base URL: the registered desktop node for "desktop", else the static entry."""
+    if vnc_type == "desktop":
+        vm = await resolve_desktop_vm()
+        if vm.source == "registry":
+            return f"{VNC_UPSTREAM_SCHEME}://{vm.host}:{vm.web_port}"
+    return VNC_ENDPOINTS[vnc_type]
+
+
+async def _proxy_password(vnc_type: str) -> bytes:
+    """The password the proxy answers the VNC server with: the registry node's for the desktop VM."""
+    if vnc_type == "desktop":
+        vm = await resolve_desktop_vm()
+        if vm.source == "registry":
+            return await desktop_vm_password(vm)
+    return await get_vnc_password(vnc_type)
 
 
 def _websockify_url(endpoint: str) -> str:
@@ -131,7 +150,7 @@ async def _authenticate_then_relay(websocket: WebSocket, vnc_ws, vnc_type: str) 
     never falls back to an unauthenticated or partially-authenticated
     connection.
     """
-    password = await get_vnc_password(vnc_type)
+    password = await _proxy_password(vnc_type)
     vnc_leftover, browser_leftover = await authenticate_both_legs(vnc_ws, websocket, password)
     # Bytes already read past the handshake boundary on either leg belong to
     # the framebuffer protocol the plain relay is about to take over -- send
@@ -326,6 +345,18 @@ async def get_desktop_control_status(
     }
 
 
+@router.get("/desktop/endpoint", response_model=DesktopVmEndpointResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_desktop_vm_endpoint",
+    error_code_prefix="VNC_PROXY",
+)
+async def get_desktop_vm_endpoint(current_user: dict = Depends(get_current_user)):
+    """Where the desktop VM is, from the SLM registry (main machine only when none is registered)."""
+    vm = await resolve_desktop_vm()
+    return {"host": vm.host, "port": vm.web_port, "source": vm.source}
+
+
 @router.get("/{vnc_type}/vnc.html", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -344,7 +375,7 @@ async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current
     if vnc_type not in VNC_ENDPOINTS:
         raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
 
-    endpoint = VNC_ENDPOINTS[vnc_type]
+    endpoint = await _upstream_endpoint(vnc_type)
 
     try:
         http_client = get_http_client()
@@ -388,7 +419,7 @@ async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current
     if vnc_type not in VNC_ENDPOINTS:
         raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
 
-    endpoint = VNC_ENDPOINTS[vnc_type]
+    endpoint = await _upstream_endpoint(vnc_type)
 
     try:
         http_client = get_http_client()
@@ -433,7 +464,7 @@ async def proxy_vnc_assets(vnc_type: str, path: str, current_user: dict = Depend
     if vnc_type not in VNC_ENDPOINTS:
         raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
 
-    endpoint = VNC_ENDPOINTS[vnc_type]
+    endpoint = await _upstream_endpoint(vnc_type)
 
     try:
         http_client = get_http_client()
@@ -503,7 +534,7 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         await websocket.close(code=1003, reason=f"Unknown VNC type: {vnc_type}")
         return
 
-    endpoint = VNC_ENDPOINTS[vnc_type]
+    endpoint = await _upstream_endpoint(vnc_type)
     ws_url = _websockify_url(endpoint)
 
     await accept_websocket(websocket)

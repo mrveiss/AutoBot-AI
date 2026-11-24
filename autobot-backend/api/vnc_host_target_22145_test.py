@@ -23,6 +23,7 @@ from api.vnc_host_actions import keysym_for, run_on_host
 from api.vnc_host_target import DESKTOP_VM_HOST_ID, VncTarget, resolve_host_id, resolve_vnc_target
 from api.vnc_manager import vnc_mouse_click, vnc_screenshot
 from api.vnc_rfb_client import VncFrame, VncRfbSession, frame_to_png
+from services.slm_vnc_registry import DesktopVmEndpoint
 
 SECRETS_HOST = {
     "id": "h-secret",
@@ -375,11 +376,44 @@ class TestRequestBounds:
             MouseClickRequest(host_id="h", x=70000, y=1)
 
 
+REGISTRY_NODE = DesktopVmEndpoint(
+    node_id="n-desk", credential_id="c-desk", host="desk.example.test", web_port=6090, rfb_port=5907
+)
+
+
+@pytest.fixture
+def registry_node(monkeypatch):
+    """A fake SLM registry holding one VNC desktop node with its own password."""
+
+    async def endpoint(**_):
+        return REGISTRY_NODE
+
+    async def password(ep):
+        assert ep is REGISTRY_NODE
+        return b"node-own-pw"
+
+    monkeypatch.setattr("api.vnc_host_target.desktop_vnc_endpoint", endpoint)
+    monkeypatch.setattr("api.vnc_host_target.desktop_vnc_password", password)
+
+
+@pytest.fixture
+def empty_registry(monkeypatch):
+    async def endpoint(**_):
+        return None
+
+    monkeypatch.setattr("api.vnc_host_target.desktop_vnc_endpoint", endpoint)
+
+
 class TestDesktopVmEntry:
-    """Owner 2026-11-24: the picker lists AutoBot's desktop VM next to the user's /secrets hosts."""
+    """Owner 2026-11-24: the desktop VM is a fleet node running VNC, resolved from the SLM registry."""
 
     @pytest.mark.asyncio
-    async def test_desktop_vm_resolves_to_the_ssot_endpoint_and_vault_password(self, monkeypatch, secrets_hosts):
+    async def test_desktop_vm_resolves_from_the_registry_with_that_nodes_password(self, registry_node, secrets_hosts):
+        target = await resolve_vnc_target(DESKTOP_VM_HOST_ID)
+        assert target == VncTarget(DESKTOP_VM_HOST_ID, "desk.example.test", 5907, b"node-own-pw")
+
+    @pytest.mark.asyncio
+    async def test_no_registered_node_falls_back_to_main_and_logs(self, monkeypatch, empty_registry, secrets_hosts):
         from autobot_shared.ssot_config import config
         from constants.network_constants import NetworkConstants
 
@@ -388,10 +422,12 @@ class TestDesktopVmEntry:
             return b"vault-pw"
 
         monkeypatch.setattr("api.vnc_host_target.get_vnc_password", vault_pw)
-        target = await resolve_vnc_target(DESKTOP_VM_HOST_ID)
+        with patch("api.vnc_host_target.logger") as log:
+            target = await resolve_vnc_target(DESKTOP_VM_HOST_ID)
         assert target == VncTarget(
             DESKTOP_VM_HOST_ID, NetworkConstants.MAIN_MACHINE_IP, config.port.vnc_server, b"vault-pw"
         )
+        log.warning.assert_called_once()
 
     def test_desktop_vm_and_secrets_host_are_allowed_other_fleet_node_refused(self, secrets_hosts, password):
         assert resolve_host_id(DESKTOP_VM_HOST_ID) == DESKTOP_VM_HOST_ID
@@ -401,23 +437,51 @@ class TestDesktopVmEntry:
         assert exc.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_missing_vault_password_is_the_stable_code(self, monkeypatch, secrets_hosts):
-        from api.vnc_rfb_client import VncAuthError
+    async def test_registry_node_without_a_password_is_the_stable_code(self, monkeypatch, secrets_hosts):
+        async def endpoint(**_):
+            return REGISTRY_NODE
 
-        async def boom(vnc_type):
-            raise VncAuthError("none")
+        async def no_password(ep):
+            return None
 
-        monkeypatch.setattr("api.vnc_host_target.get_vnc_password", boom)
+        monkeypatch.setattr("api.vnc_host_target.desktop_vnc_endpoint", endpoint)
+        monkeypatch.setattr("api.vnc_host_target.desktop_vnc_password", no_password)
         with pytest.raises(HTTPException) as exc:
             await resolve_vnc_target(DESKTOP_VM_HOST_ID)
         assert exc.value.status_code == 422 and exc.value.detail["code"] == "vnc_credential_missing"
 
     @pytest.mark.asyncio
-    async def test_a_control_on_the_desktop_vm_connects_there(self, monkeypatch, fake_session):
-        async def vault_pw(vnc_type):
-            return b"vault-pw"
+    async def test_unreadable_registry_is_a_503_not_a_silent_fallback(self, monkeypatch, secrets_hosts):
+        from services.slm_vnc_registry import SlmRegistryUnavailable
 
-        monkeypatch.setattr("api.vnc_host_target.get_vnc_password", vault_pw)
+        async def down(**_):
+            raise SlmRegistryUnavailable("down")
+
+        monkeypatch.setattr("api.vnc_host_target.desktop_vnc_endpoint", down)
+        with pytest.raises(HTTPException) as exc:
+            await resolve_vnc_target(DESKTOP_VM_HOST_ID)
+        assert exc.value.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_a_control_on_the_desktop_vm_connects_to_the_registry_node(self, registry_node, fake_session):
         result = await run_on_host(DESKTOP_VM_HOST_ID, "click", x=1, y=1, button="left")
         assert result["status"] == "success"
-        assert fake_session.instances[0].args[2] == b"vault-pw"
+        assert fake_session.instances[0].args == ("desk.example.test", 5907, b"node-own-pw")
+
+    @pytest.mark.asyncio
+    async def test_page_proxy_and_controls_hit_the_same_machine(self, registry_node, secrets_hosts):
+        """The endpoint route the page reads, the proxy upstream and the controls all name one node."""
+        from api import vnc_proxy
+
+        route = await vnc_proxy.get_desktop_vm_endpoint(current_user={})
+        upstream = await vnc_proxy._upstream_endpoint("desktop")
+        target = await resolve_vnc_target(DESKTOP_VM_HOST_ID)
+        assert route == {"host": "desk.example.test", "port": 6090, "source": "registry"}
+        assert upstream == f"{vnc_proxy.VNC_UPSTREAM_SCHEME}://desk.example.test:6090"
+        assert target.address == route["host"]
+
+    @pytest.mark.asyncio
+    async def test_the_proxy_answers_with_the_registry_nodes_password(self, registry_node):
+        from api import vnc_proxy
+
+        assert await vnc_proxy._proxy_password("desktop") == b"node-own-pw"

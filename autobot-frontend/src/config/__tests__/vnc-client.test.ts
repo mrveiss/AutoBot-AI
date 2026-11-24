@@ -16,7 +16,7 @@ import {
   VNC_CLIENT_PATH,
   VNC_CLIENT_SCHEME,
   DESKTOP_VM_HOST_ID,
-  getDesktopVmHost,
+  desktopVmEntry,
 } from '../vnc-client'
 
 describe('vnc-client URL derivation', () => {
@@ -35,10 +35,10 @@ describe('vnc-client URL derivation', () => {
     expect(url).toBe(`https://box.example.test:6081${VNC_CLIENT_PATH}?autoconnect=true`)
   })
 
-  it("offers AutoBot's desktop VM from the SSOT desktop VNC host, under a stable id", () => {
-    const vm = getDesktopVmHost()
-    expect(vm.id).toBe(DESKTOP_VM_HOST_ID)
-    expect(vm.host).toBe(getConfig().vnc.desktop.host)
+  it("builds the desktop VM entry from the backend's endpoint, never from a frontend host setting", () => {
+    const vm = desktopVmEntry({ host: 'desk.example.test', port: 6090 })
+    expect(vm).toMatchObject({ id: DESKTOP_VM_HOST_ID, host: 'desk.example.test', vnc_port: 6090 })
     expect(vm.capabilities).toContain('vnc')
+    expect(buildVncClientUrl(vm)).toBe(`https://desk.example.test:6090${VNC_CLIENT_PATH}?autoconnect=true`)
   })
 })

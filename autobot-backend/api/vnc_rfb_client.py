@@ -170,9 +170,9 @@ class VncRfbSession:
         left[0] -= w * h * _WIRE_BYTES_PER_PIXEL
         if left[0] < 0:
             raise VncProtocolError("framebuffer exceeds the configured size cap")
-        raw = await s.read_exactly(w * h * 4)
+        raw = await s.read_exactly(w * h * _WIRE_BYTES_PER_PIXEL)
         for row in range(h):
-            line = raw[row * w * 4 : (row + 1) * w * 4]
+            line = raw[row * w * _WIRE_BYTES_PER_PIXEL : (row + 1) * w * _WIRE_BYTES_PER_PIXEL]
             start = ((y + row) * self.width + x) * 3
             # little-endian 32bpp is B, G, R, pad -> R, G, B
             canvas[start : start + w * 3 : 3] = line[2::4]
