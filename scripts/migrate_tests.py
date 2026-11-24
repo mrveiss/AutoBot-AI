@@ -91,8 +91,6 @@ UNIT_TEST_MAPPINGS = {
     "shared_caches": "autobot-backend/code_intelligence/shared",
     # src.chat_workflow.models
     "streaming_message": "autobot-backend/chat_workflow",
-    # src.agents.hierarchical_agent
-    "subordinate_delegation": "autobot-backend/agents",
     # src.llm_interface_pkg.tiered_routing
     "tiered_routing": "autobot-backend/llm_interface_pkg",
     # src.config
