@@ -37,7 +37,6 @@ const i18n = createI18n({
           title: 'Duplicate Code',
           clusters: 'clusters',
           totalClusters: 'Total Clusters',
-          truncated: 'Showing {shown} of {total} clusters',
           exactClusters: '{count} exact',
           structuralClusters: '{count} structural',
           totalLocations: '{count} locations',
@@ -185,8 +184,8 @@ describe('DuplicatesSection (#5369)', () => {
         const w = mountSection([makeDup(), makeDup()])
         expect(w.find('.summary-card.total .summary-value').text()).toBe((12345).toLocaleString())
         expect(w.find('h3 .total-count').text()).toContain((12345).toLocaleString())
-        expect(w.find('.duplicate-truncated').text()).toBe('Showing 2 of 12345 clusters')
-        expect(w.find('.duplicate-breakdown').text()).toContain('Excluded: external')
+        expect(w.find('[data-testid="truncation-server-limited"]').exists()).toBe(true)
+        expect(w.text()).toContain('Excluded: external')
       } finally {
         duplicateSummary.value = null
       }

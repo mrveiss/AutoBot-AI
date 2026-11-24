@@ -45,17 +45,15 @@
       </div>
 
       <!-- #22157: the true size of the scan; the rows below are only what the server returned -->
-      <div v-if="summary" class="duplicate-breakdown">
-        <span>{{ $t('analytics.duplicates.exactClusters', { count: summary.exactCount }) }}</span>
-        <span>{{ $t('analytics.duplicates.structuralClusters', { count: summary.structuralCount }) }}</span>
-        <span>{{ $t('analytics.duplicates.totalLocations', { count: summary.totalLocations }) }}</span>
-        <span v-if="summary.truncated" class="duplicate-truncated">
-          {{ $t('analytics.duplicates.truncated', { shown: duplicates.length, total: summary.totalCount }) }}
-        </span>
-        <span v-if="summary.excludedDirs.length">
+      <div v-if="summary" class="header-info">
+        <span class="header-count">{{ $t('analytics.duplicates.exactClusters', { count: summary.exactCount }) }}</span>
+        <span class="header-count">{{ $t('analytics.duplicates.structuralClusters', { count: summary.structuralCount }) }}</span>
+        <span class="header-count">{{ $t('analytics.duplicates.totalLocations', { count: summary.totalLocations }) }}</span>
+        <span v-if="summary.excludedDirs.length" class="header-count">
           {{ $t('analytics.duplicates.excluded', { dirs: summary.excludedDirs.join(', ') }) }}
         </span>
       </div>
+      <TruncationNotice v-if="summary" :shown="duplicates.length" :total="summary.totalCount" server-limited />
 
       <!-- Duplicates by Similarity Group -->
       <div class="accordion-groups">
@@ -90,7 +88,7 @@
               >
                 <div class="item-header">
                   <span class="item-similarity" :class="similarity">{{ duplicate.similarity }}% {{ $t('analytics.duplicates.similar') }}</span>
-                  <span v-if="duplicate.kind" class="item-kind">{{ $t(`analytics.duplicates.kind.${duplicate.kind}`) }}</span>
+                  <span v-if="duplicate.kind" class="item-lines">{{ $t(`analytics.duplicates.kind.${duplicate.kind}`) }}</span>
                   <span class="item-lines">{{ duplicate.lines }} {{ $t('analytics.duplicates.lines') }}</span>
                 </div>
                 <div class="item-files">
@@ -231,21 +229,6 @@ const formatSimilarityGroup = (similarity: string): string => {
   align-items: center;
   gap: var(--spacing-2-5);
   flex-wrap: wrap;
-}
-
-.duplicate-breakdown {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-3);
-  margin-bottom: var(--spacing-3);
-  color: var(--text-secondary);
-}
-
-.duplicate-truncated { color: var(--color-warning); }
-
-.item-kind {
-  color: var(--text-secondary);
-  text-transform: uppercase;
 }
 
 .total-count {

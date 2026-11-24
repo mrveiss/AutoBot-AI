@@ -2480,7 +2480,6 @@
       "exactClusters": "{count} exact (identical code)",
       "structuralClusters": "{count} structural (identical once string text is ignored)",
       "totalLocations": "{count} locations",
-      "truncated": "Showing {shown} of {total} clusters; the scan found all {total}.",
       "excluded": "Excluded from the scan: {dirs}",
       "kind": {
         "exact": "exact",
