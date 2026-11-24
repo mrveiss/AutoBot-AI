@@ -38,6 +38,7 @@ from autobot_shared.http_egress_guard import _EgressPolicy, apply_egress_guard
 # pure re-export of ssot_constants — so autobot_shared depended on the backend
 # to reach its own constants, and could not be imported standalone.
 from autobot_shared.ssot_constants import TimingConstants
+from autobot_shared.tracing import get_trace_context
 
 logger = logging.getLogger(__name__)
 
@@ -284,14 +285,9 @@ class HTTPClientManager:
         await self.increment_active()
 
         # Issue #697: Inject W3C trace context into outgoing headers
-        try:
-            from opentelemetry.propagate import inject
-
-            headers = kwargs.pop("headers", {}) or {}
-            inject(headers)
-            kwargs["headers"] = headers
-        except ImportError:
-            pass  # OTel not installed, skip propagation
+        headers = kwargs.pop("headers", {}) or {}
+        headers.update(get_trace_context())  # empty when OTel is not installed
+        kwargs["headers"] = headers
 
         try:
             response = await session.request(method, url, **kwargs)

@@ -5,6 +5,7 @@
 """FastAPI instrumentation options: excluded URLs and the AutoBot request-span hook (#21685)."""
 
 import os
+import re
 import sys
 import types
 from unittest.mock import MagicMock, patch
@@ -72,12 +73,15 @@ def test_a_broken_scope_never_raises():
 
 
 def test_health_and_metrics_are_excluded():
-    excluded = tracing.fastapi_instrumentation_kwargs()["excluded_urls"].split(",")
-    assert {"/health", "/api/health", "/metrics", "/api/metrics"} <= set(excluded)
+    patterns = [re.compile(p) for p in tracing.fastapi_instrumentation_kwargs()["excluded_urls"].split(",")]
+    for url in ("/health", "/api/health", "/metrics", "/api/metrics"):
+        assert any(p.search(url) for p in patterns), url
 
 
 def test_instrument_fastapi_passes_the_shared_options(monkeypatch):
-    monkeypatch.setenv("AUTOBOT_OTEL_ENABLED", "true")
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config.misc, "otel_enabled", "true")
     instrumentor = MagicMock()
     module = types.ModuleType("opentelemetry.instrumentation.fastapi")
     module.FastAPIInstrumentor = instrumentor
@@ -88,7 +92,7 @@ def test_instrument_fastapi_passes_the_shared_options(monkeypatch):
     kwargs = instrumentor.instrument_app.call_args.kwargs
     assert instrumentor.instrument_app.call_args.args == (app,)
     assert kwargs["server_request_hook"] is tracing._server_request_hook
-    assert "/health" in kwargs["excluded_urls"]
+    assert kwargs["excluded_urls"] == tracing._EXCLUDED_URLS
 
 
 # --- one provider: what the retired TracingService also did (#21685) ---------------------------
@@ -136,7 +140,7 @@ def test_console_exporter_is_added_only_when_asked(monkeypatch):
 def test_exporter_endpoint_falls_back_to_the_jaeger_setting(monkeypatch):
     from autobot_shared.ssot_config import config
 
-    monkeypatch.delenv("AUTOBOT_OTEL_ENDPOINT", raising=False)
+    monkeypatch.setattr(config.misc, "otel_endpoint", "")
     monkeypatch.setattr(config.misc, "jaeger_endpoint", "")
     assert tracing._create_exporter() is None
     monkeypatch.setattr(config.misc, "jaeger_endpoint", "collector:4317")
@@ -146,7 +150,6 @@ def test_exporter_endpoint_falls_back_to_the_jaeger_setting(monkeypatch):
 
 def test_provider_resource_carries_the_autobot_namespace(monkeypatch):
     pytest.importorskip("opentelemetry.sdk.trace")
-    monkeypatch.delenv("AUTOBOT_OTEL_ENDPOINT", raising=False)
     provider = tracing._create_tracer_provider("svc", "1.0")
     assert provider.resource.attributes["service.namespace"] == "autobot"
     assert provider.resource.attributes["service.name"] == "svc"
@@ -198,11 +201,118 @@ def test_the_deprecated_jaeger_endpoint_is_used_only_when_canonical_is_unset(mon
     from autobot_shared.ssot_config import config
 
     monkeypatch.setattr(config.misc, "jaeger_endpoint", "legacy:4317")
-    monkeypatch.setenv("AUTOBOT_OTEL_ENDPOINT", "canonical:4317")
+    monkeypatch.setattr(config.misc, "otel_endpoint", "canonical:4317")
     with caplog.at_level("WARNING"):
         tracing._create_exporter()
     assert "AUTOBOT_JAEGER_ENDPOINT is deprecated" not in caplog.text
-    monkeypatch.delenv("AUTOBOT_OTEL_ENDPOINT")
+    monkeypatch.setattr(config.misc, "otel_endpoint", "")
     with caplog.at_level("WARNING"):
         tracing._create_exporter()
     assert "AUTOBOT_JAEGER_ENDPOINT is deprecated" in caplog.text
+
+
+# --- sampling extremes, SSOT-read settings, URL patterns, request id (#21685) ----------------
+
+
+@pytest.mark.parametrize(
+    "rate,expected", [(0.0, "ALWAYS_OFF"), (-1.0, "ALWAYS_OFF"), (1.0, "ALWAYS_ON"), (3.0, "ALWAYS_ON")]
+)
+def test_the_extreme_rates_ignore_an_inbound_sampled_parent(rate, expected):
+    pytest.importorskip("opentelemetry.sdk.trace")
+    from opentelemetry.sdk.trace.sampling import ALWAYS_OFF, ALWAYS_ON
+
+    assert tracing._sampler_for(rate) is {"ALWAYS_OFF": ALWAYS_OFF, "ALWAYS_ON": ALWAYS_ON}[expected]
+
+
+def test_a_sampled_parent_cannot_force_export_at_rate_zero():
+    pytest.importorskip("opentelemetry.sdk.trace")
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+
+    sampler = tracing._sampler_for(0.0)
+    sampled_parent = trace.set_span_in_context(
+        trace.NonRecordingSpan(
+            trace.SpanContext(
+                trace_id=1, span_id=2, is_remote=True, trace_flags=trace.TraceFlags(trace.TraceFlags.SAMPLED)
+            )
+        )
+    )
+    spans = []
+    provider = TracerProvider(sampler=sampler)
+    with provider.get_tracer("t").start_as_current_span("s", context=sampled_parent) as span:
+        spans.append(span)
+    assert not spans[0].get_span_context().trace_flags.sampled
+
+
+def test_a_middle_rate_still_follows_the_parent():
+    pytest.importorskip("opentelemetry.sdk.trace")
+    from opentelemetry.sdk.trace.sampling import ParentBasedTraceIdRatio
+
+    assert isinstance(tracing._sampler_for(0.5), ParentBasedTraceIdRatio)
+
+
+def test_enabled_and_endpoint_values_in_a_dotenv_file_are_honoured(tmp_path):
+    from autobot_shared.ssot_config import MiscConfig
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("AUTOBOT_OTEL_ENABLED=true\nAUTOBOT_OTEL_ENDPOINT=collector:4317\n", encoding="utf-8")
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = MiscConfig(_env_file=str(env_file))
+    assert cfg.otel_enabled == "true"
+    assert cfg.otel_endpoint == "collector:4317"
+
+
+def test_tracing_reads_enabled_through_the_ssot_settings(monkeypatch):
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config.misc, "otel_enabled", "TRUE")
+    assert tracing._is_otel_enabled() is True
+    monkeypatch.setattr(config.misc, "otel_enabled", "false")
+    assert tracing._is_otel_enabled() is False
+
+
+@pytest.mark.parametrize("url", ["/health", "/health?probe=1", "http://host:8000/health", "/api/health/", "/metrics"])
+def test_excluded_urls_match_probes_in_path_or_full_url_form(url):
+    patterns = [re.compile(p) for p in tracing._EXCLUDED_URLS.split(",")]
+    assert any(p.search(url) for p in patterns), url
+
+
+@pytest.mark.parametrize(
+    "url", ["/api/healthcheck", "/api/chat/health-summary", "/api/metrics-export", "/api/static-analysis"]
+)
+def test_excluded_urls_do_not_swallow_real_routes(url):
+    patterns = [re.compile(p) for p in tracing._EXCLUDED_URLS.split(",")]
+    assert not any(p.search(url) for p in patterns), url
+
+
+def test_a_long_request_id_is_truncated():
+    span = _recording_span()
+    tracing._server_request_hook(span, _http_scope({"X-Request-ID": "x" * 5000}))
+    recorded = {c.args[0]: c.args[1] for c in span.set_attribute.call_args_list}
+    assert len(recorded["autobot.request_id"]) == tracing._MAX_REQUEST_ID_CHARS
+
+
+@pytest.mark.asyncio
+async def test_the_guarded_outbound_client_carries_the_active_trace_context():
+    """``HTTPClientManager.request`` sends the same headers ``get_trace_context`` builds (one propagation path)."""
+    pytest.importorskip("opentelemetry.sdk.trace")
+    from unittest.mock import AsyncMock
+
+    from opentelemetry.sdk.trace import TracerProvider
+
+    from autobot_shared.http_client_manager import HTTPClientManager
+
+    manager = HTTPClientManager.__new__(HTTPClientManager)
+    session = MagicMock()
+    session.request = AsyncMock(return_value="response")
+    manager.get_session = AsyncMock(return_value=session)
+    manager.increment_active = AsyncMock()
+    manager._adjust_pool_size = AsyncMock()
+
+    with TracerProvider().get_tracer("t").start_as_current_span("outbound"):
+        await manager.request("GET", "http://service.internal/ping", headers={"X-Own": "1"})
+    sent = session.request.call_args.kwargs["headers"]
+    assert "traceparent" in sent and sent["X-Own"] == "1"
+
+    await manager.request("GET", "http://service.internal/ping")  # no active span: nothing to propagate
+    assert "traceparent" not in session.request.call_args.kwargs["headers"]

@@ -34,6 +34,7 @@ Configuration via environment variables:
 
 import logging
 import os
+import re
 
 from autobot_shared.deployment_profile import environment_name
 from autobot_shared.ssot_constants import PATH_API_HEALTH, PATH_HEALTH
@@ -49,16 +50,31 @@ _NOOP_TRACER = None
 
 
 def _is_otel_enabled() -> bool:
-    """Check if OpenTelemetry tracing is enabled via environment."""
-    return os.getenv("AUTOBOT_OTEL_ENABLED", "false").lower() == "true"
+    """Whether ``AUTOBOT_OTEL_ENABLED`` is true (env or ``.env``, through the SSOT settings)."""
+    from autobot_shared.ssot_config import config
+
+    return config.misc.otel_enabled.lower() == "true"
 
 
-# URLs FastAPIInstrumentor leaves untraced: comma-separated regexes matched against the request URL.
-# Health probes, scrapes and static assets would otherwise dominate the trace volume.
-_EXCLUDED_URLS = ",".join((PATH_HEALTH, PATH_API_HEALTH, "/metrics", "/api/metrics", "/favicon.ico", "/static/"))
+def _url_pattern(path: str) -> str:
+    """A regex for *path* and what is under it, anchored so ``/health`` does not also match ``/api/healthcheck``.
+
+    FastAPIInstrumentor matches these with ``re.search`` against the request URL, which may carry its scheme and
+    host, so the pattern accepts either form.
+    """
+    return rf"^(?:[a-z]+://[^/]*)?{re.escape(path)}(?:[/?]|$)"
+
+
+# URLs FastAPIInstrumentor leaves untraced (comma-separated regexes). Health probes, scrapes and static assets
+# would otherwise dominate the trace volume.
+_EXCLUDED_URLS = ",".join(
+    _url_pattern(path) for path in (PATH_HEALTH, PATH_API_HEALTH, "/metrics", "/api/metrics", "/favicon.ico", "/static")
+)
 
 
 _DEFAULT_SAMPLE_RATE = 0.1
+#: A client-supplied ``X-Request-ID`` is cut to this many characters before it becomes a span attribute.
+_MAX_REQUEST_ID_CHARS = 128
 
 
 def _get_sample_rate() -> float:
@@ -118,6 +134,20 @@ def get_trace_context() -> dict:
     return headers
 
 
+def _sampler_for(rate: float):
+    """The sampler for *rate*: 0 samples nothing and 1 everything, whatever an inbound ``traceparent`` says.
+
+    ``ParentBasedTraceIdRatio`` follows a sampled parent, so at rate 0 an upstream caller could still force export.
+    """
+    from opentelemetry.sdk.trace.sampling import ALWAYS_OFF, ALWAYS_ON, ParentBasedTraceIdRatio
+
+    if rate <= 0.0:
+        return ALWAYS_OFF
+    if rate >= 1.0:
+        return ALWAYS_ON
+    return ParentBasedTraceIdRatio(rate)
+
+
 def _create_tracer_provider(service_name: str, service_version: str | None):
     """
     Create and configure the TracerProvider with resource, sampler, and exporter.
@@ -134,7 +164,6 @@ def _create_tracer_provider(service_name: str, service_version: str | None):
     from opentelemetry.sdk.resources import Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.sdk.trace.sampling import ParentBasedTraceIdRatio
 
     version = service_version or os.getenv("AUTOBOT_OTEL_SERVICE_VERSION", "1.5.0")
     resource = Resource.create(
@@ -147,7 +176,7 @@ def _create_tracer_provider(service_name: str, service_version: str | None):
     )
 
     sample_rate = _get_sample_rate()
-    sampler = ParentBasedTraceIdRatio(sample_rate)
+    sampler = _sampler_for(sample_rate)
 
     provider = TracerProvider(resource=resource, sampler=sampler)
 
@@ -221,7 +250,7 @@ def _create_exporter():
     """
     from autobot_shared.ssot_config import config
 
-    endpoint = os.getenv("AUTOBOT_OTEL_ENDPOINT")
+    endpoint = config.misc.otel_endpoint
     if not endpoint and config.misc.jaeger_endpoint:
         logger.warning("AUTOBOT_JAEGER_ENDPOINT is deprecated; set AUTOBOT_OTEL_ENDPOINT instead")
         endpoint = config.misc.jaeger_endpoint
@@ -334,7 +363,7 @@ def _server_request_hook(span, scope) -> None:
 
         request = Request(scope)
         if request_id := request.headers.get("x-request-id"):
-            span.set_attribute("autobot.request_id", request_id)
+            span.set_attribute("autobot.request_id", request_id[:_MAX_REQUEST_ID_CHARS])
         if client_ip := get_client_ip(request):
             span.set_attribute("http.client_ip", client_ip)
     except Exception as e:

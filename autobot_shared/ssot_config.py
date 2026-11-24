@@ -1789,6 +1789,8 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     # used only when the canonical name is unset (autobot_shared/tracing.py logs the warning). Strings: a bad value
     # falls back to the default at the read site instead of failing the whole config load (#21685).
     otel_sample_rate: str = Field(default="0.1", alias="AUTOBOT_OTEL_SAMPLE_RATE")
+    otel_enabled: str = Field(default="false", alias="AUTOBOT_OTEL_ENABLED")
+    otel_endpoint: str = Field(default="", alias="AUTOBOT_OTEL_ENDPOINT")
     trace_sample_rate: str | None = Field(default=None, alias="AUTOBOT_TRACE_SAMPLE_RATE")
     tts_stream_probe_ttl: str = Field(
         default="",
