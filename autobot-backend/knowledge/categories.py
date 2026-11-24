@@ -23,7 +23,12 @@ if TYPE_CHECKING:
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.category_keys import FACTS_KEY, QUARANTINED_KEY
-from knowledge.category_quarantine import add_to_category, remove_from_category, servable_fact_ids
+from knowledge.category_quarantine import (
+    add_to_category,
+    decrement_category_count,
+    remove_from_category,
+    servable_fact_ids,
+)
 from knowledge.quarantine import drop_quarantined_hashes
 
 logger = get_logger(__name__)
@@ -949,8 +954,4 @@ class CategoriesMixin:
 
     async def _decrement_category_count(self, category_id: str) -> None:
         """Decrement fact count for a category."""
-        current = await self.redis().hget(f"category:{category_id}", "fact_count")
-        if current:
-            count = int(current.decode("utf-8") if isinstance(current, bytes) else current)
-            if count > 0:
-                await self.redis().hset(f"category:{category_id}", "fact_count", count - 1)
+        await decrement_category_count(self.redis(), category_id)

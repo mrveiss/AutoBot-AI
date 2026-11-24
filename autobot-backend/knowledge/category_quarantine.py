@@ -111,10 +111,20 @@ async def category_of(redis_client: Any, fact_id: str) -> Any:
     return _text(raw) if raw else None
 
 
+async def decrement_category_count(redis: Any, category_id: str) -> None:
+    """Decrement the category hash's ``fact_count`` (never below zero); the one implementation (#21984)."""
+    current = await redis.hget(f"category:{category_id}", "fact_count")
+    if current:
+        count = int(_text(current))
+        if count > 0:
+            await redis.hset(f"category:{category_id}", "fact_count", count - 1)
+
+
 async def unindex_deleted_fact(redis: Any, fact_id: str, category_id: Any) -> None:
-    """A deleted fact leaves its category set and quarantine index (#21984); no-op when it had no category."""
+    """A deleted fact leaves its category set, quarantine index and ``fact_count`` (#21984); no-op if uncategorised."""
     if category_id:
         await remove_from_category(redis, fact_id, category_id)
+        await decrement_category_count(redis, category_id)
 
 
 async def sync_fact_quarantine(redis_client: Any, fact_id: str) -> None:

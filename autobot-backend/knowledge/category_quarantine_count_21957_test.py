@@ -369,9 +369,11 @@ async def _delete_kb() -> _DeleteKB:
 async def test_deleting_a_categorised_fact_drops_it_from_the_set_and_keeps_counts_and_pages_exact():
     """#21984: N servable facts, one deleted -> total_count == N-1 and every page full."""
     kb = await _delete_kb()
+    await kb.redis().hset("category:cat1", "fact_count", SERVABLE + 1)  # the fake's hincrby stores nothing
 
     assert (await kb.delete_fact("s0"))["status"] == "success"
 
+    assert kb.redis().hashes["category:cat1"][b"fact_count"] == str(SERVABLE).encode()  # decremented once
     assert "s0" not in kb.redis().sets[MEMBERS]
     assert await _total(kb) == SERVABLE - 1
     pages = await _page_through(kb, limit=2)
