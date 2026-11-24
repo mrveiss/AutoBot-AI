@@ -30,7 +30,11 @@ _NAMES_MECHANISM = re.compile(
     re.IGNORECASE,
 )
 #: A denial applies to the one claim it directly precedes, not to the rest of the sentence.
-_DENIES = re.compile(r"\b(?:not|never|no|nor|without|isn't|doesn't|cannot)\b\W+(?:\w+\W+){0,3}?$", re.IGNORECASE)
+_NEGATOR = r"\b(?:not|never|no|nor|without|isn't|doesn't|cannot)\b\W+"
+#: Only words that qualify the claim sit between the negation and the claim ("not strictly immutable"); a verb
+#: ("do not alter immutable rows") makes the claim a premise, not a denial.
+_QUALIFIERS = r"(?:(?:be|been|is|are|was|were|a|an|the|truly|really|fully|strictly|actually|yet|provide|provides|offer|offers|guarantee|guarantees)\W+){0,3}$"
+_DENIES = re.compile(_NEGATOR + _QUALIFIERS, re.IGNORECASE)
 _CLAUSE_BREAK = re.compile(r"[,;]|\b(?:but|and|or|yet|however|while|although)\b", re.IGNORECASE)
 _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 _AUDIT_PATH = re.compile(r"(?:^|/)(?:services/audit/|[^/]*audit[^/]*\.py$)")
@@ -116,6 +120,8 @@ def dishonest_claims(source: str) -> list[str]:
         ("unrelated comment blocks stay apart", "# Append-only\nx = 1\n# via the hash chain.\n", 1),
         ("a denial for one claim, a bare second claim", '"""This table is not append-only but is immutable."""\n', 1),
         ("a denial covering both claims", '"""This table is not append-only nor immutable."""\n', 0),
+        ("a prohibition asserts the property", '"""Do not alter immutable audit rows."""\n', 1),
+        ("a qualified denial", '"""These rows are not strictly immutable."""\n', 0),
         ("no claim", '"""Audit rows are sealed on insert."""\n', 0),
     ],
 )

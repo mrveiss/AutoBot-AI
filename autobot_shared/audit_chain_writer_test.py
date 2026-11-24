@@ -5,7 +5,7 @@
 """The audit chain writer's key handling and row completion (#17219).
 
 The lock, tail read and sequence under PostgreSQL are covered by
-``autobot-backend/tests/migrations/test_audit_chain_17219.py`` (a real database).
+``autobot-backend/tests/migrations/test_audit_chain.py`` (a real database).
 """
 
 import base64
