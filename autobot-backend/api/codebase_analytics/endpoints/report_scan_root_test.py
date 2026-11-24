@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.codebase_analytics.endpoints import report as report_mod
+from autobot_shared.isolated_git import make_repo
 
 _SCANNERS = (
     "_get_pattern_analysis",
@@ -85,9 +86,11 @@ async def test_pattern_analysis_scans_the_source_root_not_the_backend_dir(instal
 async def test_bug_prediction_reads_the_source_root_not_the_project_root(install_tree_sentinels):
     predictor = MagicMock()
     predictor.analyze_directory_async = AsyncMock(side_effect=RuntimeError("stop"))
+    # the source's own repository (#20513)
+    make_repo(install_tree_sentinels)
     with patch.object(report_mod, "BugPredictor", return_value=predictor) as predictor_class:
         await report_mod._get_bug_prediction(str(install_tree_sentinels), "src-1")
-    assert predictor_class.call_args.kwargs["project_root"] == str(install_tree_sentinels)
+    assert predictor_class.call_args.kwargs["project_root"] == str(install_tree_sentinels.resolve())
 
 
 @pytest.mark.asyncio
