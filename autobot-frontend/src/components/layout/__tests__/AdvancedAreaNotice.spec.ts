@@ -46,9 +46,9 @@ describe('AdvancedAreaNotice', () => {
     const rules = [/^html:not\(\[data-ui="minimal"\]\) \.only-min\s*\{[^}]*\}/m, /^html\[data-ui="minimal"\] \.only-min\s*\{[^}]*\}/m]
       .map((re) => componentsCss.match(re)?.[0])
     expect(rules.every(Boolean)).toBe(true)
-    // BaseCard's real scoped root rule (`.aui-card[data-v-x] { display: flex }`, 0,2,0) is what the
+    // BaseCard's real scoped root rule (`[data-slot="card"][data-v-x] { display: flex }`, 0,2,0) is what the
     // hide rule must outrank; its scope id is read from the mounted element below.
-    const cardRule = baseCardSource.match(/^\.aui-card\s*\{[^}]*\}/m)?.[0]
+    const cardRule = baseCardSource.match(/^\[data-slot="card"\]\s*\{[^}]*\}/m)?.[0]
     expect(cardRule).toContain('display: flex')
     const style = document.createElement('style')
     style.textContent = rules.join('\n')
@@ -61,7 +61,7 @@ describe('AdvancedAreaNotice', () => {
     // The root carries its own scope id and the parent's; one rule per id, so BaseCard's is included.
     const scopes = el.getAttributeNames().filter((n) => n.startsWith('data-v-'))
     expect(scopes.length).toBeGreaterThan(0)
-    style.textContent += scopes.map((sc) => `\n${cardRule!.replace('.aui-card', `.aui-card[${sc}]`)}`).join('')
+    style.textContent += scopes.map((sc) => `\n${cardRule!.replace('[data-slot="card"]', `[data-slot="card"][${sc}]`)}`).join('')
     document.documentElement.setAttribute('data-ui', 'full')
     expect(getComputedStyle(el).display).toBe('none')
     document.documentElement.setAttribute('data-ui', 'minimal')
