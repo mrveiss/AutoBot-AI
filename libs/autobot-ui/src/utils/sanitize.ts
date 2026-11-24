@@ -23,8 +23,8 @@ const PRESETS: Readonly<Record<SanitizePreset, DOMPurifyConfig>> = Object.freeze
     ALLOWED_TAGS: [...FORMAT_TAGS, 'a', 'div'],
     ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
   },
-  // Knowledge/document content: formatting only, no links.
-  knowledge: { ALLOWED_TAGS: FORMAT_TAGS, ALLOWED_ATTR: ['class'] },
+  // Knowledge/document content: formatting plus search-highlight <mark>, no links.
+  knowledge: { ALLOWED_TAGS: [...FORMAT_TAGS, 'mark'], ALLOWED_ATTR: ['class'] },
   // Syntax-highlighter output: spans carrying token classes.
   code: { ALLOWED_TAGS: ['span', 'br'], ALLOWED_ATTR: ['class'] },
   // Text only: every tag and attribute removed.

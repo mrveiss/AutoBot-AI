@@ -116,12 +116,12 @@ def _scanned_modules(root: Path) -> list[str]:
 
 #: A sweep that lost its reach (wrong root, inverted filter) would report "nothing found" with
 #: none of the evidence. ``floor=`` is pinned because a guard new in this PR has no declaration at
-#: the base to compute one from (#19676); it sits mid-window (live population 3829, growth 200).
+#: the base to compute one from (#19676); it sits mid-window (live population 3733, growth 200).
 #: Drop the pin once this guard is on main, so the floor is computed from the base again.
 REACH = declare(
     "one-rate-limiter-scan",
     discover=_scanned_modules,
-    floor=3729,
+    floor=3729,  # mid-window: population 3829, window (3629, 3829)
     growth=200,
     what="non-test Python modules",
     roots=SCANNED_TREES,
