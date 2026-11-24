@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from api import heartbeat, heartbeat_scope
 from api.schemas_heartbeat import HeartbeatConfigResponse
 from models.heartbeat import HeartbeatStatus
-from services.audit import outcome
+from services.audit import audit as audit_store
 
 _BASE = "/api/heartbeat/a1"
 _CALLER = {"id": "principal-7", "username": "alice", "role": "admin"}
@@ -72,7 +72,7 @@ def harness(real_auth_middleware, monkeypatch):
     scheduler = MagicMock(disable_agent=AsyncMock(), enable_agent=AsyncMock())
     get_state = AsyncMock(return_value=state)
     names = AsyncMock(return_value=None)
-    monkeypatch.setattr(outcome, "record_committed", _record)
+    monkeypatch.setattr(audit_store, "record_committed", _record)
     monkeypatch.setattr(heartbeat, "_get_or_create_state", get_state)
     monkeypatch.setattr(heartbeat, "_paused_by_name", names)
     app = FastAPI()
