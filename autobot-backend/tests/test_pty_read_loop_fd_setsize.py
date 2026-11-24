@@ -23,22 +23,18 @@ Two layers of coverage:
 """
 
 import ast
-import fcntl
 import os
 import pty
 import queue
-import resource
 import select
 import threading
-from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
+from autobot_shared.fd_testing import FD_SETSIZE, pty_above_fd_setsize
 from services.simple_pty import SimplePTY
 
-# FD_SETSIZE on Linux: the ceiling select() cannot see past.
-FD_SETSIZE = 1024
 _HIGH_FD_BASE = FD_SETSIZE + 176
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -46,43 +42,6 @@ _PTY_READINESS_SOURCES = (
     _BACKEND_ROOT / "services" / "simple_pty.py",
     _BACKEND_ROOT / "agents" / "interactive_terminal_agent.py",
 )
-
-
-def _free_fd_at_or_above(start: int) -> int:
-    """Return an unused descriptor number at or above ``start``."""
-    for candidate in range(start, start + 64):
-        try:
-            fcntl.fcntl(candidate, fcntl.F_GETFD)
-        except OSError:
-            return candidate
-    raise RuntimeError(f"no free descriptor number in [{start}, {start + 64})")
-
-
-@contextmanager
-def _pty_above_fd_setsize():
-    """Yield ``(master_fd, slave_fd)`` with ``master_fd`` >= FD_SETSIZE."""
-    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    target = _free_fd_at_or_above(_HIGH_FD_BASE)
-    raised = False
-    if soft <= target:
-        if hard != resource.RLIM_INFINITY and hard <= target:
-            pytest.skip(f"RLIMIT_NOFILE hard limit {hard} cannot reach descriptor {target}")
-        resource.setrlimit(resource.RLIMIT_NOFILE, (target + 1, hard))
-        raised = True
-
-    master, slave = pty.openpty()
-    try:
-        os.dup2(master, target)
-        os.close(master)
-        yield target, slave
-    finally:
-        for fd in (target, slave):
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-        if raised:
-            resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
 
 
 def _assert_select_cannot_reach(fd: int) -> None:
@@ -103,7 +62,7 @@ class TestSimplePtyReadLoopAboveFdSetsize:
     """SimplePTY._read_loop drives a real PTY whose master fd is >= 1024."""
 
     def test_streams_output_from_a_high_numbered_descriptor(self):
-        with _pty_above_fd_setsize() as (master_fd, slave_fd):
+        with pty_above_fd_setsize(_HIGH_FD_BASE) as (master_fd, slave_fd):
             _assert_select_cannot_reach(master_fd)
 
             session = SimplePTY("fd-setsize-regression")
@@ -125,7 +84,7 @@ class TestSimplePtyReadLoopAboveFdSetsize:
                 assert not reader.is_alive()
 
     def test_terminates_on_hangup_instead_of_spinning(self):
-        with _pty_above_fd_setsize() as (master_fd, slave_fd):
+        with pty_above_fd_setsize(_HIGH_FD_BASE) as (master_fd, slave_fd):
             _assert_select_cannot_reach(master_fd)
 
             session = SimplePTY("fd-setsize-hangup")

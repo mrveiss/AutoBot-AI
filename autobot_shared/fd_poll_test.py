@@ -14,59 +14,18 @@ exercising a low descriptor where ``select()`` would have worked anyway.
 """
 
 import errno
-import fcntl
 import os
 import pty
-import resource
 import select
 import time
-from contextlib import contextmanager
 
 import pytest
 
 from autobot_shared.fd_poll import poll_readable, seconds_to_poll_timeout_ms
+from autobot_shared.fd_testing import FD_SETSIZE, pty_above_fd_setsize
 
-# FD_SETSIZE on Linux. select() cannot address a descriptor at or above it.
-FD_SETSIZE = 1024
 # First descriptor number we try to relocate a PTY to; comfortably past the ceiling.
 _HIGH_FD_BASE = FD_SETSIZE + 76
-
-
-def _free_fd_at_or_above(start: int) -> int:
-    """Return an unused descriptor number at or above ``start``."""
-    for candidate in range(start, start + 64):
-        try:
-            fcntl.fcntl(candidate, fcntl.F_GETFD)
-        except OSError:
-            return candidate
-    raise RuntimeError(f"no free descriptor number in [{start}, {start + 64})")
-
-
-@contextmanager
-def _pty_above_fd_setsize():
-    """Yield ``(master_fd, slave_fd)`` with ``master_fd`` >= FD_SETSIZE."""
-    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    target = _free_fd_at_or_above(_HIGH_FD_BASE)
-    raised = False
-    if soft <= target:
-        if hard != resource.RLIM_INFINITY and hard <= target:
-            pytest.skip(f"RLIMIT_NOFILE hard limit {hard} cannot reach descriptor {target}")
-        resource.setrlimit(resource.RLIMIT_NOFILE, (target + 1, hard))
-        raised = True
-
-    master, slave = pty.openpty()
-    try:
-        os.dup2(master, target)
-        os.close(master)
-        yield target, slave
-    finally:
-        for fd in (target, slave):
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-        if raised:
-            resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
 
 
 def _select_rejects(fd: int) -> bool:
@@ -105,7 +64,7 @@ class TestPollReadableAboveFdSetsize:
     """The regression: readiness checks must survive descriptors >= 1024."""
 
     def test_reports_pending_data_where_select_raises(self):
-        with _pty_above_fd_setsize() as (master_fd, slave_fd):
+        with pty_above_fd_setsize(_HIGH_FD_BASE) as (master_fd, slave_fd):
             assert master_fd >= FD_SETSIZE
             # Guard against a vacuous pass: select() must genuinely fail here.
             assert _select_rejects(master_fd), "descriptor is below FD_SETSIZE — test proves nothing"
@@ -115,12 +74,12 @@ class TestPollReadableAboveFdSetsize:
             assert b"hello-from-high-fd" in os.read(master_fd, 4096)
 
     def test_reports_idle_descriptor_as_not_ready(self):
-        with _pty_above_fd_setsize() as (master_fd, _slave_fd):
+        with pty_above_fd_setsize(_HIGH_FD_BASE) as (master_fd, _slave_fd):
             assert _select_rejects(master_fd)
             assert poll_readable(master_fd, 0) is False
 
     def test_honours_the_millisecond_timeout(self):
-        with _pty_above_fd_setsize() as (master_fd, _slave_fd):
+        with pty_above_fd_setsize(_HIGH_FD_BASE) as (master_fd, _slave_fd):
             started = time.monotonic()
             assert poll_readable(master_fd, 50) is False
             elapsed = time.monotonic() - started
@@ -133,7 +92,7 @@ class TestPollReadableEventMask:
     """POLLHUP / POLLERR / POLLNVAL handling — events poll() reports unasked."""
 
     def test_hangup_is_ready_so_the_reader_terminates(self):
-        with _pty_above_fd_setsize() as (master_fd, slave_fd):
+        with pty_above_fd_setsize(_HIGH_FD_BASE) as (master_fd, slave_fd):
             os.write(slave_fd, b"line one\n")
             os.close(slave_fd)
 
