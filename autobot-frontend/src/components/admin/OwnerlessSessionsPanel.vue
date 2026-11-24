@@ -16,8 +16,8 @@
     <p v-else-if="report.count === 0">{{ t('admin.ownerless.none') }}</p>
     <template v-else>
       <BaseInput v-model="owner" :label="t('admin.ownerless.ownerLabel')" :placeholder="t('admin.ownerless.ownerPlaceholder')" />
-      <ul class="ownerless-list">
-        <li v-for="id in report.session_ids" :key="id" :data-testid="`ownerless-${id}`">
+      <ul class="my-3 list-none p-0">
+        <li class="flex items-center gap-3 py-1" v-for="id in report.session_ids" :key="id" :data-testid="`ownerless-${id}`">
           <code>{{ id }}</code>
           <span v-if="proposed.has(id)">{{ t('admin.ownerless.proposed') }}</span>
           <BaseButton v-else size="sm" :disabled="!owner.trim() || busy" @click="propose(id)">
@@ -80,18 +80,3 @@ async function propose(sessionId: string): Promise<void> {
 
 onMounted(() => void load())
 </script>
-
-<style scoped>
-.ownerless-list {
-  list-style: none;
-  padding: 0;
-  margin: var(--space-3, 0.75rem) 0;
-}
-
-.ownerless-list li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3, 0.75rem);
-  padding: var(--space-1, 0.25rem) 0;
-}
-</style>

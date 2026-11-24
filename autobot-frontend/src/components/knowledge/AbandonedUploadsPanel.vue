@@ -13,8 +13,8 @@
   >
     <BaseAlert v-if="loadFailed" variant="warning" :message="t('knowledge.abandonedUploads.loadFailed')" />
     <p v-else-if="uploads.length === 0">{{ t('knowledge.abandonedUploads.none') }}</p>
-    <ul v-else class="abandoned-list">
-      <li v-for="u in uploads" :key="u.upload_id" :data-testid="`abandoned-${u.upload_id}`">
+    <ul v-else class="list-none p-0">
+      <li class="flex items-center gap-3 py-1" v-for="u in uploads" :key="u.upload_id" :data-testid="`abandoned-${u.upload_id}`">
         <span>{{ u.filename }}</span>
         <span>{{ t('knowledge.abandonedUploads.progress', { received: formatFileSize(u.received), total: formatFileSize(u.total_size) }) }}</span>
         <BaseButton size="sm" :disabled="busyId !== ''" @click="free(u.upload_id)">
@@ -55,18 +55,3 @@ async function free(uploadId: string): Promise<void> {
 
 onMounted(() => void load())
 </script>
-
-<style scoped>
-.abandoned-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.abandoned-list li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3, 0.75rem);
-  padding: var(--space-1, 0.25rem) 0;
-}
-</style>
