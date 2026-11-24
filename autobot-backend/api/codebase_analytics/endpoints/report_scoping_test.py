@@ -22,14 +22,13 @@ returns another source's (or AutoBot's own) tree.
 
 import asyncio
 import logging
-import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from api.codebase_analytics.endpoints.shared import UnresolvedSourceError
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import make_repo
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +248,7 @@ class TestGetBugPredictionUsesAsyncPath:
     """Issue #12406: wire _get_bug_prediction to BugPredictor.analyze_directory_async."""
 
     async def test_calls_analyze_directory_async_not_sync(self, tmp_path):
-        subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=scrubbed_git_env())
+        make_repo(tmp_path)
         from api.codebase_analytics.endpoints import report as report_mod
 
         fake_result = MagicMock(analyzed_files=3, high_risk_count=0)
@@ -271,7 +270,7 @@ class TestGetBugPredictionUsesAsyncPath:
         assert result is fake_result
 
     async def test_constructs_predictor_with_semantic_flag_and_source_id(self, tmp_path):
-        subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=scrubbed_git_env())
+        make_repo(tmp_path)
         from api.codebase_analytics.endpoints import report as report_mod
 
         with patch.object(report_mod, "BugPredictor") as fake_cls:

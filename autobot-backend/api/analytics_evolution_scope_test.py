@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,7 +13,7 @@ import pytest
 from api import analytics_evolution as mod
 from api.codebase_analytics.endpoints import shared
 from api.schemas_analytics import EvolutionQualitySnapshot, PatternSnapshot
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import make_repo
 
 _SNAPSHOT = {
     "timestamp": "2026-11-22T10:00:00+00:00",
@@ -131,7 +130,7 @@ def test_a_source_with_no_checkout_is_a_404(route):
 
 def test_analyze_mines_the_sources_checkout_and_nothing_else(tmp_path):
     clone = tmp_path / "clone"
-    subprocess.run(["git", "init", "-q", str(clone)], check=True, env=scrubbed_git_env())
+    make_repo(clone)
     miner = MagicMock()
     miner.return_value.analyze_evolution.return_value = {"commits_analyzed": 1}
     with (

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,12 +14,12 @@ import pytest
 from api import analytics_shared as mod
 from api.codebase_analytics import source_paths
 from api.codebase_analytics.endpoints import report
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import make_repo
 
 
 def _real(tmp_path):
     root = tmp_path / "real"
-    subprocess.run(["git", "init", "-q", str(root)], check=True, env=scrubbed_git_env())
+    make_repo(root)
     return root
 
 
@@ -89,7 +88,7 @@ def test_an_empty_git_directory_inside_a_parent_repository_is_rejected(tmp_path)
 
 
 def test_a_nested_real_repository_inside_a_parent_repository_is_accepted(tmp_path):
-    subprocess.run(["git", "init", "-q", str(_real(tmp_path) / "nested")], check=True, env=scrubbed_git_env())
+    make_repo(_real(tmp_path) / "nested")
     nested = _real(tmp_path) / "nested"
     assert mod.git_root_of(nested) == nested.resolve()
 
