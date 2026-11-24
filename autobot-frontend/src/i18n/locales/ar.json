@@ -2395,6 +2395,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "فشل تحميل بيانات التطور",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"

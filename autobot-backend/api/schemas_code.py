@@ -1923,7 +1923,7 @@ class EvolutionPatternsResultResponse(BaseModel):
 
     status: str
     timestamp: str
-    path: str
+    source_id: str
     pattern_metrics: Dict[str, Any]
 
 
@@ -1932,7 +1932,7 @@ class EvolutionRefactoringsResultResponse(BaseModel):
 
     status: str
     timestamp: str
-    path: str
+    source_id: str
     refactorings: List[Any]
     total: int
 
@@ -1942,7 +1942,7 @@ class EvolutionTimelineResultResponse(BaseModel):
 
     status: str
     timestamp: str
-    path: str
+    source_id: str
     timeline: List[Any]
 
 
@@ -1951,7 +1951,7 @@ class EvolutionReportResultResponse(BaseModel):
 
     status: str
     timestamp: str
-    path: str
+    source_id: str
     evolution: Dict[str, Any]
     pattern_metrics: Dict[str, Any]
     timeline: List[Any]

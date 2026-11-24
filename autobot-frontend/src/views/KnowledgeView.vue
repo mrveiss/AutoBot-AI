@@ -1,378 +1,121 @@
+<!--
+  Copyright 2025-2026 mrveiss
+  SPDX-License-Identifier: Apache-2.0
+
+  KnowledgeView — the Knowledge section shell (#18244, Refined UI): the kit SectionNav
+  sub-sidebar in the mockup's order with advanced entries hidden in Minimal mode, the
+  "advanced area" notice on advanced pages, and the routed screen beside it.
+-->
 <template>
   <div class="knowledge-view">
-    <!-- Mobile overlay backdrop -->
-    <div
-      v-if="showMobileSidebar"
-      class="mobile-overlay"
-      aria-hidden="true"
-      @click="showMobileSidebar = false"
-    />
+    <div v-if="showMobileSidebar" class="mobile-overlay" aria-hidden="true" @click="closeSidebar" />
 
-    <!-- Sidebar Navigation - Issue #901: Technical Precision Design -->
-    <aside
-      class="knowledge-sidebar"
-      :class="{ 'mobile-open': showMobileSidebar }"
-    >
-      <div class="sidebar-header">
-        <h3>
-          <svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
-          </svg>
-          {{ $t('knowledge.views.title') }}
-        </h3>
-        <button
-          class="mobile-toggle"
-          :aria-label="showMobileSidebar ? $t('knowledge.views.closeSidebar') : $t('knowledge.views.openSidebar')"
-          :aria-expanded="showMobileSidebar"
-          @click="toggleMobileSidebar"
-        >
-          <svg v-if="showMobileSidebar" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          <svg v-else fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Category Navigation -->
-      <nav class="category-nav" :aria-label="$t('knowledge.views.navAriaLabel')" @click="onNavClick">
-        <div class="category-divider">
-          <span>{{ $t('knowledge.views.browse') }}</span>
-        </div>
-
-        <!-- TASK 1b: Transcriber — migrated from top nav into the Knowledge sidebar -->
-        <router-link
-          to="/knowledge/transcriber"
-          class="category-item"
-          :class="{ active: $route.path.startsWith('/knowledge/transcriber') }"
-          :aria-label="$t('knowledge.views.transcriberAriaLabel')"
-        >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
-          </svg>
-          <span>{{ $t('nav.transcriber') }}</span>
-        </router-link>
-
-        <!-- Issue #1256: Observable Research Panel -->
-        <router-link
-          to="/knowledge/research"
-          class="category-item"
-          :class="{ active: $route.name === 'knowledge-research' }"
-          :aria-label="$t('knowledge.views.researchAriaLabel')"
-        >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3
-                 m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547
-                 A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531
-                 c0-.895-.356-1.754-.988-2.386l-.548-.547z">
-            </path>
-          </svg>
-          <span>{{ $t('knowledge.views.research') }}</span>
-        </router-link>
-
-        <!-- MVA-2167: MCP Resources -->
-        <router-link
-          to="/knowledge/mcp-resources"
-          class="category-item"
-          :class="{ active: $route.name === 'knowledge-mcp-resources' }"
-          :aria-label="$t('knowledge.views.mcpResourcesAriaLabel')"
-        >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-            </path>
-          </svg>
-          <span>{{ $t('knowledge.views.mcpResources') }}</span>
-        </router-link>
-
-        <!-- #8999: ChromaDB / vector-store explorer; admin-only (#16666) -->
-        <router-link
-          v-if="userStore.isAdmin"
-          to="/knowledge/vector-store"
-          class="category-item"
-          :class="{ active: $route.name === 'knowledge-vector-store' }"
-          :aria-label="$t('knowledge.views.vectorStoreAriaLabel')"
-        >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75">
-            </path>
-          </svg>
-          <span>{{ $t('knowledge.views.vectorStore') }}</span>
-        </router-link>
-
-        <router-link
-          to="/knowledge/browser"
-          class="category-item"
-          :class="{ active: $route.name === 'knowledge-browser' }"
-          :aria-label="$t('knowledge.views.browserAriaLabel')"
-        >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
-          </svg>
-          <span>{{ $t('knowledge.views.browser') }}</span>
-        </router-link>
-
-        <!-- Issue #11555: System Docs — browseable and exportable AutoBot system documentation -->
-        <router-link
-          to="/knowledge/system-docs"
-          class="category-item"
-          :class="{ active: $route.name === 'knowledge-system-docs' }"
-          :aria-label="$t('knowledge.views.systemDocsAriaLabel')"
-        >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-          </svg>
-          <span>{{ $t('knowledge.views.systemDocs') }}</span>
-        </router-link>
-
-        <router-link
-          to="/knowledge/graph"
-          class="category-item"
-          :class="{ active: $route.name === 'knowledge-graph' }"
-          :aria-label="$t('knowledge.views.graphAriaLabel')"
-        >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
-          </svg>
-          <span>{{ $t('knowledge.views.graph') }}</span>
-        </router-link>
-
-        <div class="category-divider">
-          <span>{{ $t('knowledge.views.manage') }}</span>
-        </div>
-
-        <router-link
-          to="/knowledge/manage"
-          class="category-item"
-          :class="{ active: $route.name === 'knowledge-manage' }"
-          :aria-label="$t('knowledge.views.manageAriaLabel')"
-        >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-          </svg>
-          <span>{{ $t('knowledge.views.manage') }}</span>
-        </router-link>
-
-
-        <router-link
-          to="/knowledge/entities"
-          class="category-item"
-          :aria-label="$t('knowledge.views.entitiesAriaLabel')"
-          :class="{ active: $route.name === 'knowledge-entities' }"
-        >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-          </svg>
-          <span>{{ $t('knowledge.views.entities') }}</span>
-        </router-link>
-
-        <router-link
-          to="/knowledge/health"
-          class="category-item"
-          :class="{ active: $route.name === 'knowledge-health' }"
-          :aria-label="$t('knowledge.views.healthAriaLabel')"
-        >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-          </svg>
-          <span>{{ $t('knowledge.views.health') }}</span>
-        </router-link>
-
-        <div class="category-divider">
-          <span>{{ $t('knowledge.views.research') }}</span>
-        </div>
-
-        <!-- MVA-344: 4-tab web research panel -->
-
-      </nav>
+    <aside class="knowledge-sidebar" :class="{ 'mobile-open': showMobileSidebar }">
+      <BaseButton
+        variant="ghost"
+        size="sm"
+        class="mobile-toggle"
+        :aria-label="showMobileSidebar ? $t('knowledge.views.closeSidebar') : $t('knowledge.views.openSidebar')"
+        :aria-expanded="showMobileSidebar"
+        @click="toggleMobileSidebar"
+      >
+        <Icon :name="showMobileSidebar ? 'times' : 'bars'" aria-hidden="true" />
+      </BaseButton>
+      <SectionNav
+        class="knowledge-nav"
+        :label="$t('knowledge.views.navAriaLabel')"
+        :title="$t('knowledge.views.title')"
+        :sections="sections"
+        :link-as="RouterLink"
+        @click="onNavClick"
+      >
+        <template #icon="{ item }"><Icon :name="iconOf(item.id)" aria-hidden="true" /></template>
+      </SectionNav>
     </aside>
 
-    <!-- Main Content -->
     <main class="knowledge-content">
+      <AdvancedAreaNotice v-if="onAdvancedArea" />
       <router-view />
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
+import { BaseButton, SectionNav } from '@autobot/ui'
+import Icon from '@/components/ui/Icon.vue'
+import type { IconName } from '@/components/ui/Icon.vue'
+import AdvancedAreaNotice from '@/components/layout/AdvancedAreaNotice.vue'
 import { useUserStore } from '@/stores/useUserStore'
+import { useKnowledgeSectionNav, KNOWLEDGE_NAV_ICONS } from '@/composables/knowledge/useKnowledgeSectionNav'
 
 const STORAGE_KEY = 'knowledge-sidebar-mobile-open'
+const MOBILE_MAX_WIDTH = 768
+
 // #16666: the vector-store explorer is admin-only on the backend, so only admins see its link
 const userStore = useUserStore()
+const { sections, onAdvancedArea } = useKnowledgeSectionNav(computed(() => userStore.isAdmin))
 
 const showMobileSidebar = ref(false)
+const iconOf = (id: string): IconName => KNOWLEDGE_NAV_ICONS[id] ?? 'folder'
 
 onMounted(() => {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  showMobileSidebar.value = saved === 'true'
+  showMobileSidebar.value = localStorage.getItem(STORAGE_KEY) === 'true'
 })
 
-function toggleMobileSidebar() {
-  showMobileSidebar.value = !showMobileSidebar.value
-  localStorage.setItem(STORAGE_KEY, String(showMobileSidebar.value))
+function setSidebar(open: boolean) {
+  showMobileSidebar.value = open
+  localStorage.setItem(STORAGE_KEY, String(open))
 }
 
+const toggleMobileSidebar = () => setSidebar(!showMobileSidebar.value)
+const closeSidebar = () => setSidebar(false)
+
 function onNavClick(e: Event) {
-  if (window.innerWidth <= 768 && showMobileSidebar.value) {
-    const target = e.target as HTMLElement
-    if (target.closest('a')) {
-      showMobileSidebar.value = false
-      localStorage.setItem(STORAGE_KEY, 'false')
-    }
+  if (window.innerWidth <= MOBILE_MAX_WIDTH && showMobileSidebar.value && (e.target as HTMLElement).closest('a')) {
+    closeSidebar()
   }
 }
 </script>
 
 <style scoped>
-/* Issue #901: Technical Precision Knowledge View Design */
-
-/* ============================================
- * LAYOUT - Flexbox sidebar + content
- * ============================================ */
-
 .knowledge-view {
   contain: layout style paint;
   display: flex;
-  min-height: 100%;
-  min-height: 0;
-  background: var(--bg-primary);
+  min-block-size: 0;
+  background: var(--bg);
 }
-
-/* ============================================
- * SIDEBAR
- * ============================================ */
 
 .knowledge-sidebar {
-  width: 260px;
-  min-width: 260px;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-default);
+  inline-size: var(--subnav-w);
+  min-inline-size: var(--subnav-w);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-}
-
-.sidebar-header {
-  padding: var(--spacing-5);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.sidebar-header h3 {
-  margin: var(--spacing-0);
-  font-size: var(--text-base);
-  font-weight: 600;
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2-5);
-  line-height: 1.5;
-}
-
-.header-icon {
-  width: 18px;
-  height: 18px;
-  color: var(--color-info);
-  flex-shrink: 0;
-}
-
-/* ============================================
- * NAVIGATION
- * ============================================ */
-
-.category-nav {
-  flex: 1;
   overflow-y: auto;
-  padding: var(--spacing-3) var(--spacing-0);
+  background: var(--surface);
+  border-inline-end: var(--bw) solid var(--border);
 }
 
-.category-divider {
-  padding: var(--spacing-3) var(--spacing-5) var(--spacing-2);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-tertiary);
-  font-family: var(--font-sans);
-}
-
-.category-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-  padding: var(--spacing-2-5) var(--spacing-5);
-  cursor: pointer;
-  transition: all var(--duration-150) var(--ease-in-out);
-  color: var(--text-secondary);
-  text-decoration: none;
-  border: none;
-  background: transparent;
-  border-left: 2px solid transparent;
-}
-
-.category-item:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.category-item.active {
-  background: var(--color-info-bg);
-  color: var(--color-info);
-  border-left-color: var(--color-info);
-}
-
-.item-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-
-.category-item span {
+.knowledge-nav {
   flex: 1;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  font-family: var(--font-sans);
+  border-inline-end: 0;
 }
-
-/* ============================================
- * MAIN CONTENT
- * ============================================ */
 
 .knowledge-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  min-inline-size: 0;
   overflow-x: hidden;
-  min-width: 0;
-  background: var(--bg-primary);
+  overflow-y: auto;
+  background: var(--bg);
 }
 
-/* ============================================
- * MOBILE TOGGLE BUTTON (hidden on desktop)
- * ============================================ */
-
-.mobile-toggle {
-  display: none;
-}
-
-/* ============================================
- * MOBILE OVERLAY
- * ============================================ */
-
+.mobile-toggle,
 .mobile-overlay {
   display: none;
 }
-
-/* ============================================
- * RESPONSIVE - Mobile
- * ============================================ */
 
 @media (max-width: 768px) {
   .knowledge-view {
@@ -380,100 +123,41 @@ function onNavClick(e: Event) {
     position: relative;
   }
 
-  /* Collapsed header strip — no 50vh content, just the header bar */
   .knowledge-sidebar {
-    width: 100%;
-    min-width: 100%;
-    max-height: none;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--border-default);
-    overflow: hidden;
+    inline-size: 100%;
+    min-inline-size: 100%;
+    border-inline-end: 0;
+    border-block-end: var(--bw) solid var(--border);
     position: relative;
     z-index: var(--z-sticky);
   }
 
-  /* Hide nav in collapsed state */
-  .knowledge-sidebar:not(.mobile-open) .category-nav {
+  .mobile-toggle {
+    display: inline-flex;
+    align-self: flex-start;
+    margin: var(--spacing-2);
+  }
+
+  .knowledge-sidebar:not(.mobile-open) .knowledge-nav {
     display: none;
   }
 
-  /* Expanded drawer — overlays content, full-height */
   .knowledge-sidebar.mobile-open {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 80vw;
-    max-width: 320px;
-    height: 100dvh;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: 80vw;
+    max-inline-size: 320px;
+    min-inline-size: 0;
     z-index: var(--z-fixed);
-    border-right: 1px solid var(--border-default);
-    border-bottom: none;
-    overflow-y: auto;
   }
 
-  /* Overlay backdrop */
   .mobile-overlay {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: var(--bg-overlay);
     z-index: var(--z-drawer-backdrop);
-  }
-
-  /* Toggle button visible on mobile */
-  .mobile-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: transparent;
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md, 6px);
-    color: var(--text-secondary);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: background var(--duration-150) var(--ease-in-out);
-  }
-
-  .mobile-toggle:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  .mobile-toggle svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  .sidebar-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .sidebar-header h3 {
-    font-size: 15px;
-  }
-
-  .header-icon,
-  .item-icon {
-    width: 16px;
-    height: 16px;
-  }
-
-  .category-item {
-    padding: var(--spacing-3) var(--spacing-4);
-    min-height: 44px;
-  }
-
-  .category-item span {
-    font-size: var(--text-sm);
-  }
-
-  .category-divider {
-    padding: var(--spacing-2-5) var(--spacing-4) var(--spacing-1-5);
   }
 }
 </style>
