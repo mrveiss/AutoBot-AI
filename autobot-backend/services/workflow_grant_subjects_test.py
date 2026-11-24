@@ -56,9 +56,9 @@ async def test_a_user_that_already_holds_a_grant_is_not_overwritten() -> None:
 
 
 async def test_apply_remap_reports_each_skipped_row() -> None:
-    with patch.object(subjects, "_apply_one", AsyncMock(side_effect=[None, "why"])):
-        count, skipped = await subjects.apply_remap(MagicMock(), [_ITEM, _ITEM])
-    assert count == 1 and skipped == ["wf:alice: why"]
+    with patch.object(subjects, "_apply_one", AsyncMock(side_effect=[None, subjects._APPLIED, "why"])):
+        count, already, skipped = await subjects.apply_remap(MagicMock(), [_ITEM, _ITEM, _ITEM])
+    assert count == 1 and already == 1 and skipped == ["wf:alice: why"]
 
 
 _UID = str(uuid.uuid4())
