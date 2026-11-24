@@ -234,7 +234,10 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "audit:unified and audit:category:* sorted sets; nothing reads those keys as an answer.",
         note="#17225 D1: the owner chose to extend the existing audit_logs table rather than add "
         "a second Postgres audit table. Every audit_logs row is built by audit_rows.audit_row, "
-        "whether the canonical service or a shared RBAC/org/team writer records it.",
+        "whether the canonical service or a shared RBAC/org/team writer records it. #17219: every "
+        "new row is sealed into a hash chain with a keyed MAC by the before_insert listener in "
+        "autobot_shared/audit_chain_writer.py, so the ORM insert is the only write path; a core or raw "
+        "insert leaves an unchained row that services/audit/integrity.py reports.",
     ),
     "verbatim_memory": Concept(
         name="verbatim_memory",

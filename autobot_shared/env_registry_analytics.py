@@ -196,3 +196,18 @@ register_env_var(
         range=(100, 1000000),
     )
 )
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BUG_PREDICTION_MAX_PATTERN_LENGTH",
+        type=int,
+        default=128,
+        description=(
+            "Longest include_pattern (characters) the bug-prediction routes accept before it reaches the file walk "
+            "(#18030); a longer one is refused with 422."
+        ),
+        component="analytics",
+        range=(1, 1024),
+    )
+)
