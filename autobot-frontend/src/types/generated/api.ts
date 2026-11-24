@@ -24708,7 +24708,7 @@ export interface paths {
         put?: never;
         /**
          * Start Bug Analysis
-         * @description Enqueue bug prediction analysis as a Celery task (GH#6505).
+         * @description Enqueue bug prediction analysis of ONE source as a Celery task (GH#6505, #18030).
          */
         post: operations["start_bug_analysis_api_analytics_bug_prediction_analyze_post"];
         delete?: never;
@@ -24726,7 +24726,7 @@ export interface paths {
         };
         /**
          * Get Cached Bug Prediction
-         * @description Return the latest completed bug prediction result (#1540).
+         * @description Return the latest completed bug prediction result of ONE source (#1540, #18030).
          */
         get: operations["get_cached_bug_prediction_api_analytics_bug_prediction_cached_get"];
         put?: never;
@@ -142315,9 +142315,9 @@ export interface operations {
     };
     predict_bug_risk_for_codebase_api_analytics_bug_prediction_analyze_get: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description File pattern to include */
                 include_pattern?: string;
                 /** @description Maximum files to analyze */
@@ -142353,9 +142353,9 @@ export interface operations {
     };
     start_bug_analysis_api_analytics_bug_prediction_analyze_post: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description File pattern to include */
                 include_pattern?: string;
                 /** @description Maximum files to analyze */
@@ -142389,7 +142389,12 @@ export interface operations {
     };
     get_cached_bug_prediction_api_analytics_bug_prediction_cached_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -142405,11 +142410,23 @@ export interface operations {
                     "application/json": components["schemas"]["BugPredictionCachedResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_bug_prediction_status_api_analytics_bug_prediction_status__task_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description File pattern to include */
+                include_pattern?: string;
+            };
             header?: never;
             path: {
                 task_id: string;
@@ -142443,6 +142460,8 @@ export interface operations {
             query?: {
                 /** @description Force clear ALL running tasks */
                 force?: boolean;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path?: never;
@@ -142472,11 +142491,11 @@ export interface operations {
     };
     get_high_risk_files_api_analytics_bug_prediction_high_risk_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 threshold?: number;
                 limit?: number;
-                /** @description Path to analyze */
-                path?: string;
                 /** @description File pattern to include */
                 include_pattern?: string;
             };
@@ -142508,7 +142527,12 @@ export interface operations {
     };
     get_file_risk_api_analytics_bug_prediction_file__file_path__get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
+            };
             header?: never;
             path: {
                 file_path: string;
@@ -142539,10 +142563,10 @@ export interface operations {
     };
     get_risk_heatmap_api_analytics_bug_prediction_heatmap_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 grouping?: string;
-                /** @description Path to analyze */
-                path?: string;
                 /** @description File pattern to include */
                 include_pattern?: string;
                 limit?: number;
@@ -142575,8 +142599,12 @@ export interface operations {
     };
     get_prediction_trends_api_analytics_bug_prediction_trends_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 period?: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path?: never;
@@ -142606,9 +142634,9 @@ export interface operations {
     };
     get_prediction_summary_api_analytics_bug_prediction_summary_get: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description File pattern to include */
                 include_pattern?: string;
                 /** @description Maximum files to analyze */
@@ -142642,7 +142670,10 @@ export interface operations {
     };
     get_risk_factors_api_analytics_bug_prediction_factors_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description File pattern to include */
+                include_pattern?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -142658,14 +142689,27 @@ export interface operations {
                     "application/json": components["schemas"]["BugPredictionRiskFactorsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     record_bug_api_analytics_bug_prediction_record_bug_post: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 file_path?: string;
                 description?: string;
                 severity?: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path?: never;
