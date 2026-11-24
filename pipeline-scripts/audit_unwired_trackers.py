@@ -44,6 +44,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # so the repo root is added the way the sibling pipeline scripts do (pr_conflict_gate.py, generate_env_docs.py).
 sys.path.insert(0, str(REPO_ROOT))
 
+from audit_entry_points import CALLER_ONLY_DIRS, is_launched_module  # noqa: E402
 from audit_issue_lookup import (  # noqa: E402
     TrackerLookupError,
     already_filed,
@@ -70,6 +71,8 @@ SCAN_DIRS = [
     "autobot-infrastructure",
     "autobot-npu-worker",
 ]
+# Searched for callers but never scanned for findings: repo-root launcher scripts import backend modules (#22199).
+CALLER_SEARCH_DIRS = [*SCAN_DIRS, *CALLER_ONLY_DIRS]
 SOURCE_GLOBS = ("*.py", "*.ts", "*.vue")
 
 # Module stems too common to grep reliably. Skip — false-positive risk too high.
@@ -292,7 +295,7 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
         "-rn",
         "-E",
         pattern,
-        *(str(REPO_ROOT / d) for d in SCAN_DIRS if (REPO_ROOT / d).exists()),
+        *(str(REPO_ROOT / d) for d in CALLER_SEARCH_DIRS if (REPO_ROOT / d).exists()),
         "--include=*.py",
         "--include=*.ts",
         "--include=*.vue",
@@ -346,6 +349,9 @@ def scan() -> list[Finding]:
                 # import-grep below cannot detect.
                 module_path = derive_module_path(f)
                 if module_path and module_path in registry_modules:
+                    continue
+                # #22199: launched modules (__main__.py, benchmarks, own `python -m`) are reached without imports.
+                if is_launched_module(f, module_path):
                     continue
                 refs = extract_tracker_refs(f)
                 if not refs:
