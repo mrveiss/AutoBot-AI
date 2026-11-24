@@ -73,7 +73,7 @@ async def test_cached_bug_prediction_starts_no_scan():
 
     stored = {"result": {"files": [], "summary": {}}, "completed_at": "2026-11-06T10:00:00+00:00"}
     with (
-        patch.object(mod, "get_latest_task_result", AsyncMock(return_value=stored)) as read,
+        patch("utils.celery_task_status.get_latest_task_result", AsyncMock(return_value=stored)) as read,
         patch.object(mod, "store_latest_task_id", AsyncMock()) as store,
         patch.object(mod.run_bug_prediction_analysis, "delay", MagicMock()) as delay,
     ):

@@ -21,11 +21,13 @@ from fastapi import APIRouter, Depends, Query
 
 from api.analytics_bug_prediction_cache import get_cached_prediction, set_cached_prediction
 from api.analytics_bug_prediction_scope import (
+    check_include_pattern,
     contained_files,
     file_in_source,
     scan_root,
     scoped_key,
     source_relative_path,
+    validate_include_pattern,
 )
 from api.analytics_shared import no_data_response
 from api.codebase_analytics.endpoints.shared import require_source_access
@@ -46,7 +48,7 @@ from api.schemas_analytics import (
     BugRiskFactor,
     RiskLevel,
 )
-from api.source_scope import SourceIdQuery, source_scoped_prefix
+from api.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.git_probe import start_git
@@ -55,15 +57,19 @@ from autobot_shared.redis_client import get_redis_client
 from autobot_shared.status_enums import Severity
 from constants.threshold_constants import TimingConstants
 from tasks.analytics_tasks import run_bug_prediction_analysis
-from utils.celery_task_status import get_latest_task_result, known_task_status_or_404, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 
 logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/bug-prediction",
     tags=["bug-prediction", "analytics"],
-    dependencies=[Depends(require_source_access)],
+    dependencies=[Depends(validate_include_pattern)],
 )
+
+# Per-source authorization goes on the source-scoped routes only: /status, /factors and /tasks/clear-stuck
+# take no source, and the router-level form changed what an internal key gets there (401, not 403).
+_SOURCE_ACCESS = [Depends(require_source_access)]
 
 _REDIS_PREFIX = "bug_pred_task:"
 _BATCH_SIZE = 50
@@ -638,6 +644,7 @@ def _calculate_risk_level_trends(history: List[Dict[str, Any]]) -> Dict[str, Any
 
 def _find_files_sync(root: Path, include_pattern: str, limit: int) -> List[Path]:
     """Find files matching pattern under the source root (Issue #398: extracted)."""
+    check_include_pattern(include_pattern)  # outside the try: a bad pattern must not be swallowed
     result = []
     try:
         if root.is_dir():
@@ -773,7 +780,7 @@ async def _run_bug_analysis(source_id: str, include_pattern: str, limit: int) ->
     }
 
 
-@router.get("/analyze", response_model=BugPredictionAnalysisResponse)
+@router.get("/analyze", response_model=BugPredictionAnalysisResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_codebase",
@@ -835,7 +842,7 @@ def _build_analysis_result(
     }
 
 
-@router.get("/cached", response_model=BugPredictionCachedResponse)
+@router.get("/cached", response_model=BugPredictionCachedResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cached_bug_prediction",
@@ -843,18 +850,10 @@ def _build_analysis_result(
 )
 async def get_cached_bug_prediction(source_id: SourceIdQuery):
     """Return the latest completed bug prediction result of ONE source (#1540, #18030)."""
-    cached = await get_latest_task_result(source_scoped_prefix(_REDIS_PREFIX, source_id))
-    if cached and cached.get("result"):
-        return {
-            "status": "success",
-            "from_cache": True,
-            "completed_at": cached.get("completed_at"),
-            **cached["result"],
-        }
-    return no_data_response("No cached bug prediction available", files=[], summary={})
+    return await cached_task_result(_REDIS_PREFIX, source_id)
 
 
-@router.post("/analyze", response_model=BugPredictionAnalyzeResponse)
+@router.post("/analyze", response_model=BugPredictionAnalyzeResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_bug_analysis",
@@ -896,7 +895,7 @@ add_clear_stuck_route(
 )
 
 
-@router.get("/high-risk", response_model=BugPredictionHighRiskResponse)
+@router.get("/high-risk", response_model=BugPredictionHighRiskResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_high_risk_files",
@@ -962,7 +961,7 @@ def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) 
     }
 
 
-@router.get("/file/{file_path:path}", response_model=BugPredictionFileResponse)
+@router.get("/file/{file_path:path}", response_model=BugPredictionFileResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_file_risk",
@@ -1064,7 +1063,7 @@ def _get_flat_heatmap_data(files: list) -> list:
     ]
 
 
-@router.get("/heatmap", response_model=BugPredictionHeatmapResponse)
+@router.get("/heatmap", response_model=BugPredictionHeatmapResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_risk_heatmap",
@@ -1115,7 +1114,7 @@ async def get_risk_heatmap(
         return no_data_response("Heatmap generation failed", files=[], summary={})
 
 
-@router.get("/trends", response_model=BugPredictionTrendsResponse)
+@router.get("/trends", response_model=BugPredictionTrendsResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_prediction_trends",
@@ -1230,7 +1229,7 @@ def _generate_summary_recommendations(risk_dist: dict[str, int], analyzed_files:
     return recommendations[:5]
 
 
-@router.get("/summary", response_model=BugPredictionSummaryResponse)
+@router.get("/summary", response_model=BugPredictionSummaryResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_prediction_summary",
@@ -1344,7 +1343,7 @@ def _get_factor_description(factor: BugRiskFactor) -> str:
     return descriptions.get(factor, "Unknown factor")
 
 
-@router.post("/record-bug", response_model=BugPredictionRecordBugResponse)
+@router.post("/record-bug", response_model=BugPredictionRecordBugResponse, dependencies=_SOURCE_ACCESS)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="record_bug",

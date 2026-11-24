@@ -142225,6 +142225,8 @@ export interface operations {
             query: {
                 /** @description Required (#17758): the code source this result belongs to */
                 source_id: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path?: never;
@@ -142254,7 +142256,10 @@ export interface operations {
     };
     get_bug_prediction_status_api_analytics_bug_prediction_status__task_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description File pattern to include */
+                include_pattern?: string;
+            };
             header?: never;
             path: {
                 task_id: string;
@@ -142288,6 +142293,8 @@ export interface operations {
             query?: {
                 /** @description Force clear ALL running tasks */
                 force?: boolean;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path?: never;
@@ -142356,6 +142363,8 @@ export interface operations {
             query: {
                 /** @description Required (#17758): the code source this result belongs to */
                 source_id: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path: {
@@ -142427,6 +142436,8 @@ export interface operations {
                 /** @description Required (#17758): the code source this result belongs to */
                 source_id: string;
                 period?: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path?: never;
@@ -142492,7 +142503,10 @@ export interface operations {
     };
     get_risk_factors_api_analytics_bug_prediction_factors_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description File pattern to include */
+                include_pattern?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -142508,6 +142522,15 @@ export interface operations {
                     "application/json": components["schemas"]["BugPredictionRiskFactorsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     record_bug_api_analytics_bug_prediction_record_bug_post: {
@@ -142518,6 +142541,8 @@ export interface operations {
                 file_path?: string;
                 description?: string;
                 severity?: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path?: never;

@@ -199,7 +199,7 @@ async def test_start_and_cached_use_the_per_source_task_pointer(registered):
     ):
         await mod.start_bug_analysis(source_id="A", admin_check=True, include_pattern="*.py", limit=1)
     store.assert_awaited_once_with(prefix, "t1")
-    with patch.object(mod, "get_latest_task_result", AsyncMock(return_value=None)) as read:
+    with patch("utils.celery_task_status.get_latest_task_result", AsyncMock(return_value=None)) as read:
         await mod.get_cached_bug_prediction(source_id="A")
     read.assert_awaited_once_with(prefix)
     assert source_scoped_prefix(mod._REDIS_PREFIX, "B") != prefix

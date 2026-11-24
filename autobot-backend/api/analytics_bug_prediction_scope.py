@@ -12,14 +12,44 @@ source.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable, Iterator
 from pathlib import Path
+
+from fastapi import HTTPException, Query
 
 from api.codebase_analytics.endpoints.shared import resolve_scan_root
 from api.source_scope import require_source_id
 from autobot_shared.security.path_http import require_contained_relative_path
 
 _WHAT = "bug-prediction scan"
+_MAX_PATTERN_LENGTH = int(os.getenv("AUTOBOT_BUG_PREDICTION_MAX_PATTERN_LENGTH", "128"))
+
+
+def check_include_pattern(pattern: str) -> str:
+    """``pattern`` if it is a relative glob that stays under the scan root, else ``ValueError`` (#18030).
+
+    ``rglob`` is handed this string, so an absolute pattern, a ``..`` segment or a NUL byte would
+    aim the walk away from the source's checkout.
+    """
+    if not pattern or len(pattern) > _MAX_PATTERN_LENGTH:
+        raise ValueError("include_pattern is empty or too long")
+    if "\x00" in pattern:
+        raise ValueError("include_pattern contains a NUL byte")
+    normalised = pattern.replace("\\", "/")
+    if normalised.startswith("/") or (len(normalised) > 1 and normalised[1] == ":"):
+        raise ValueError("include_pattern must be relative")
+    if ".." in normalised.split("/"):
+        raise ValueError("include_pattern must not contain '..'")
+    return pattern
+
+
+def validate_include_pattern(include_pattern: str = Query("*.py", description="File pattern to include")) -> str:
+    """Router dependency: a bad ``include_pattern`` is a 422 before any handler runs."""
+    try:
+        return check_include_pattern(include_pattern)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 async def scan_root(source_id: str) -> Path:
