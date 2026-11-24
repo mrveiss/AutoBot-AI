@@ -52,8 +52,9 @@ def _run(monkeypatch, locations: list[str]):
     return create
 
 
-def test_it_chains_on_the_head_it_was_written_against() -> None:
-    assert _migration().down_revision == "20261122_121"
+def test_it_chains_on_the_audit_chain_revision() -> None:
+    """Main's head when this landed was the audit chain (#17219); a single head is required."""
+    assert _migration().down_revision == "20261122_122"
 
 
 def test_distinct_locations_build_the_index_and_a_duplicate_location_fails_naming_it(monkeypatch) -> None:
