@@ -165,7 +165,9 @@ def _create_tracer_provider(service_name: str, service_version: str | None):
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-    version = service_version or os.getenv("AUTOBOT_OTEL_SERVICE_VERSION", "1.5.0")
+    from autobot_shared.ssot_config import config
+
+    version = service_version or config.misc.otel_service_version
     resource = Resource.create(
         {
             "service.name": service_name,

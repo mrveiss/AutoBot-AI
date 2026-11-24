@@ -285,8 +285,10 @@ class HTTPClientManager:
         await self.increment_active()
 
         # Issue #697: Inject W3C trace context into outgoing headers
-        headers = kwargs.pop("headers", {}) or {}
-        headers.update(get_trace_context())  # empty when OTel is not installed
+        # A copy, so the caller's dict is not mutated; a trace header the caller already set is kept.
+        headers = dict(kwargs.pop("headers", None) or {})
+        present = {name.lower() for name in headers}
+        headers.update({k: v for k, v in get_trace_context().items() if k.lower() not in present})
         kwargs["headers"] = headers
 
         try:

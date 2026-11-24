@@ -255,11 +255,15 @@ def test_enabled_and_endpoint_values_in_a_dotenv_file_are_honoured(tmp_path):
     from autobot_shared.ssot_config import MiscConfig
 
     env_file = tmp_path / ".env"
-    env_file.write_text("AUTOBOT_OTEL_ENABLED=true\nAUTOBOT_OTEL_ENDPOINT=collector:4317\n", encoding="utf-8")
+    env_file.write_text(
+        "AUTOBOT_OTEL_ENABLED=true\nAUTOBOT_OTEL_ENDPOINT=collector:4317\nAUTOBOT_OTEL_SERVICE_VERSION=9.9.9\n",
+        encoding="utf-8",
+    )
     with patch.dict(os.environ, {}, clear=True):
         cfg = MiscConfig(_env_file=str(env_file))
     assert cfg.otel_enabled == "true"
     assert cfg.otel_endpoint == "collector:4317"
+    assert cfg.otel_service_version == "9.9.9"
 
 
 def test_tracing_reads_enabled_through_the_ssot_settings(monkeypatch):
@@ -316,3 +320,77 @@ async def test_the_guarded_outbound_client_carries_the_active_trace_context():
 
     await manager.request("GET", "http://service.internal/ping")  # no active span: nothing to propagate
     assert "traceparent" not in session.request.call_args.kwargs["headers"]
+
+
+def test_the_service_version_comes_from_the_ssot_settings(monkeypatch):
+    pytest.importorskip("opentelemetry.sdk.trace")
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config.misc, "otel_service_version", "4.5.6")
+    provider = tracing._create_tracer_provider("svc", None)
+    assert provider.resource.attributes["service.version"] == "4.5.6"
+    assert tracing._create_tracer_provider("svc", "7.0").resource.attributes["service.version"] == "7.0"
+
+
+@pytest.mark.asyncio
+async def test_a_caller_supplied_trace_header_is_kept_and_its_dict_is_not_mutated():
+    pytest.importorskip("opentelemetry.sdk.trace")
+    from unittest.mock import AsyncMock
+
+    from opentelemetry.sdk.trace import TracerProvider
+
+    from autobot_shared.http_client_manager import HTTPClientManager
+
+    manager = HTTPClientManager.__new__(HTTPClientManager)
+    session = MagicMock()
+    session.request = AsyncMock(return_value="response")
+    manager.get_session = AsyncMock(return_value=session)
+    manager.increment_active = AsyncMock()
+    manager._adjust_pool_size = AsyncMock()
+
+    caller_headers = {"TraceParent": "00-caller-trace-01", "X-Own": "1"}
+    with TracerProvider().get_tracer("t").start_as_current_span("outbound"):
+        await manager.request("GET", "http://service.internal/ping", headers=caller_headers)
+
+    sent = session.request.call_args.kwargs["headers"]
+    assert sent["TraceParent"] == "00-caller-trace-01"
+    assert "traceparent" not in sent  # no second, differently-cased copy
+    assert sent["X-Own"] == "1"
+    assert caller_headers == {"TraceParent": "00-caller-trace-01", "X-Own": "1"}  # the caller's dict is untouched
+
+
+@pytest.mark.asyncio
+async def test_a_real_instrumentor_traces_api_routes_and_skips_health():
+    """Drives the real FastAPIInstrumentor, so the URL form it matches the exclusion patterns against is proven."""
+    pytest.importorskip("opentelemetry.instrumentation.fastapi")
+    import httpx
+    from fastapi import FastAPI
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    app = FastAPI()
+
+    @app.get("/health")
+    async def health():
+        return {"ok": True}
+
+    @app.get("/api/x")
+    async def api_x():
+        return {"ok": True}
+
+    FastAPIInstrumentor.instrument_app(app, tracer_provider=provider, **tracing.fastapi_instrumentation_kwargs())
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+            await client.get("/health")
+            await client.get("/api/x", headers={"X-Request-ID": "req-7"})
+    finally:
+        FastAPIInstrumentor.uninstrument_app(app)
+
+    server_spans = [s for s in exporter.get_finished_spans() if "/health" in s.name or "/api/x" in s.name]
+    assert [s.name for s in server_spans] == ["GET /api/x"]
+    assert server_spans[0].attributes["autobot.request_id"] == "req-7"
