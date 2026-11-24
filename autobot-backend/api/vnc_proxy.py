@@ -540,13 +540,13 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     if user is None:
         return
 
+    # Origin and auth stay pre-accept (a refusal there IS a handshake rejection). Everything after accept
+    # closes with a code the client can read: a close before accept is only a 403 on ASGI.
+    await accept_websocket(websocket)
     if not _known_type(vnc_type):
         await websocket.close(code=1003, reason=f"Unknown VNC type: {vnc_type}")
         return
 
-    # Accept first: a close before accept is a 403 handshake rejection on ASGI, so the client would never
-    # see the close code or the reason (the stable code for "no desktop VM registered").
-    await accept_websocket(websocket)
     try:
         endpoint = await _upstream_endpoint(vnc_type)
     except HTTPException as exc:  # no desktop VM registered, or the registry is unreadable

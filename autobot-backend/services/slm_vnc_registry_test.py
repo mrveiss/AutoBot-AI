@@ -41,6 +41,14 @@ ENDPOINTS = {
 }
 
 
+NODES_PATH = reg.NODES_PATH
+
+
+def _nodes(*pairs):
+    """An SLM /api/nodes body: (node_id, roles) pairs."""
+    return {"nodes": [{"node_id": n, "roles": r} for n, r in pairs], "total": len(pairs)}
+
+
 @pytest.fixture(autouse=True)
 def _fresh():
     reg.reset_cache()
@@ -66,6 +74,7 @@ async def test_picks_the_active_desktop_node_with_its_raw_vnc_port(monkeypatch):
     request, calls = _fake(
         {
             ("GET", reg.ENDPOINTS_PATH): ENDPOINTS,
+            ("GET", NODES_PATH): _nodes(("n-b", ["browser"]), ("n-x", ["vnc"]), ("n-d", ["llm", "vnc"])),
             ("GET", reg.NODE_CREDENTIALS_PATH.format(node_id="n-d")): {
                 "credentials": [{"credential_id": "c-d", "vnc_port": 5903}]
             },
@@ -75,12 +84,17 @@ async def test_picks_the_active_desktop_node_with_its_raw_vnc_port(monkeypatch):
     ep = await reg.desktop_vnc_endpoint()
     assert ep == reg.DesktopVmEndpoint("n-d", "c-d", "203.0.113.3", 6090, 5903)
     await reg.desktop_vnc_endpoint()
-    assert len(calls) == 2  # the second call is served from the TTL cache
+    assert len(calls) == 3  # endpoints, node roles and the credential; the second call is served from the TTL cache
 
 
 @pytest.mark.asyncio
 async def test_no_desktop_node_registered_is_none(monkeypatch):
-    request, _ = _fake({("GET", reg.ENDPOINTS_PATH): {"endpoints": [ENDPOINTS["endpoints"][0]]}})
+    request, _ = _fake(
+        {
+            ("GET", reg.ENDPOINTS_PATH): {"endpoints": [ENDPOINTS["endpoints"][0]]},
+            ("GET", NODES_PATH): _nodes(("n-b", ["vnc"])),
+        }
+    )
     monkeypatch.setattr(reg, "_request", request)
     assert await reg.desktop_vnc_endpoint() is None
 
@@ -127,8 +141,69 @@ def test_the_pick_is_stable_on_hostname_then_node_id():
         {"vnc_type": "desktop", "hostname": "same", "node_id": "n-2", "is_active": True},
         {"vnc_type": "desktop", "hostname": "same", "node_id": "n-1", "is_active": True},
     ]
-    assert reg._pick_desktop(twins)["node_id"] == "n-1"
-    assert reg._pick_desktop(list(reversed(twins)))["node_id"] == "n-1"
+    both = frozenset({"n-1", "n-2"})
+    assert reg._pick_desktop(twins, both)["node_id"] == "n-1"
+    assert reg._pick_desktop(list(reversed(twins)), both)["node_id"] == "n-1"
+
+
+def test_an_endpoint_on_a_node_without_the_vnc_role_is_ignored():
+    """The live install's only credential sat on a node that is not the desktop: it must never be used."""
+    stale = {"vnc_type": "desktop", "hostname": "main", "node_id": "n-main", "is_active": True}
+    assert reg._pick_desktop([stale], frozenset({"n-real"})) is None
+    assert reg._pick_desktop([stale], frozenset()) is None
+
+
+def test_an_endpoint_on_a_vnc_node_is_picked_over_a_stale_one():
+    stale = {"vnc_type": "desktop", "hostname": "a-main", "node_id": "n-main", "is_active": True}
+    real = {"vnc_type": "desktop", "hostname": "z-desk", "node_id": "n-desk", "is_active": True}
+    assert reg._pick_desktop([stale, real], frozenset({"n-desk"}))["node_id"] == "n-desk"
+
+
+@pytest.mark.asyncio
+async def test_only_a_stale_credential_on_a_non_vnc_node_means_no_desktop_vm(monkeypatch):
+    """No node with the vnc role has a credential yet: desktop_vm_unavailable, not the main node's credential."""
+    stale = {
+        "credential_id": "c-m",
+        "node_id": "n-main",
+        "hostname": "main",
+        "ip_address": "203.0.113.1",
+        "vnc_type": "desktop",
+        "port": 6080,
+        "is_active": True,
+    }
+    request, calls = _fake(
+        {
+            ("GET", reg.ENDPOINTS_PATH): {"endpoints": [stale]},
+            ("GET", NODES_PATH): _nodes(("n-main", ["backend", "frontend"]), ("n-real", ["llm", "vnc"])),
+        }
+    )
+    monkeypatch.setattr(reg, "_request", request)
+    assert await reg.desktop_vnc_endpoint() is None
+    assert not any(c[0] != "GET" for c in calls)  # nothing stored is modified or deactivated
+
+
+@pytest.mark.asyncio
+async def test_node_roles_are_paged_and_cached_with_the_endpoint(monkeypatch):
+    pages = {
+        "1": {"nodes": [{"node_id": "n-a", "roles": ["llm"]}], "total": 2},
+        "2": {"nodes": [{"node_id": "n-d", "roles": ["vnc"]}], "total": 2},
+    }
+    seen = []
+
+    async def request(method, path, params=None):
+        seen.append((path, (params or {}).get("page")))
+        if path == reg.ENDPOINTS_PATH:
+            return ENDPOINTS
+        if path == NODES_PATH:
+            return pages[params["page"]]
+        return {"credentials": [{"credential_id": "c-d", "vnc_port": 5903}]}
+
+    monkeypatch.setattr(reg, "_request", request)
+    ep = await reg.desktop_vnc_endpoint()
+    assert ep.node_id == "n-d"
+    assert [p for path, p in seen if path == NODES_PATH] == ["1", "2"]
+    await reg.desktop_vnc_endpoint()
+    assert len([1 for path, _ in seen if path == NODES_PATH]) == 2  # cached with the endpoint
 
 
 @pytest.mark.asyncio

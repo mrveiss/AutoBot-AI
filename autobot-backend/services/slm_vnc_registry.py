@@ -31,6 +31,10 @@ NODE_CREDENTIALS_PATH = "/api/nodes/{node_id}/vnc-credentials"
 CONNECT_PATH = "/api/vnc/credentials/{credential_id}/connect"
 EXCHANGE_PATH = "/api/vnc/exchange-token"
 DESKTOP_VNC_TYPE = "desktop"
+VNC_ROLE = "vnc"
+NODES_PATH = "/api/nodes"
+_NODES_PER_PAGE = 100
+_MAX_NODE_PAGES = 50
 
 #: Seconds the resolved endpoint is reused. The password is never cached.
 REGISTRY_TTL_SECONDS = env_int("AUTOBOT_VNC_REGISTRY_TTL_SECONDS", TTL_1_MINUTE)
@@ -80,15 +84,35 @@ async def _request(method: str, path: str, params: dict | None = None) -> dict:
         raise SlmRegistryUnavailable(f"SLM registry request failed: {type(exc).__name__}") from exc
 
 
-def _pick_desktop(endpoints: list[dict]) -> dict | None:
-    """The first live desktop endpoint, in a stable (hostname, node_id) order."""
+def _pick_desktop(endpoints: list[dict], vnc_node_ids: frozenset[str]) -> dict | None:
+    """The first live desktop endpoint on a node that CURRENTLY has the `vnc` role, in a stable
+    (hostname, node_id) order. A credential left on a node without the role is stale and never used."""
     live = [e for e in endpoints if e.get("vnc_type") == DESKTOP_VNC_TYPE and e.get("is_active", True)]
-    if not live:
+    usable = [e for e in live if e.get("node_id") in vnc_node_ids]
+    if len(usable) < len(live):
+        stale = sorted(str(e.get("node_id")) for e in live if e.get("node_id") not in vnc_node_ids)
+        logger.warning("Ignoring VNC desktop endpoint(s) on node(s) without the '%s' role: %s", VNC_ROLE, stale)
+    if not usable:
         return None
-    picked = sorted(live, key=lambda e: (str(e.get("hostname", "")), str(e.get("node_id", ""))))[0]
-    if len(live) > 1:
-        logger.warning("%d VNC desktop nodes are registered; using node %s", len(live), picked.get("node_id"))
+    picked = sorted(usable, key=lambda e: (str(e.get("hostname", "")), str(e.get("node_id", ""))))[0]
+    if len(usable) > 1:
+        logger.warning("%d VNC desktop nodes are registered; using node %s", len(usable), picked.get("node_id"))
     return picked
+
+
+async def _vnc_role_node_ids() -> frozenset[str]:
+    """Ids of the nodes whose assigned roles include `vnc`, read from the SLM registry (paged)."""
+    ids: set[str] = set()
+    collected = 0
+    for page in range(1, _MAX_NODE_PAGES + 1):
+        body = await _request("GET", NODES_PATH, params={"page": str(page), "per_page": str(_NODES_PER_PAGE)})
+        batch = [n for n in body.get("nodes") or [] if isinstance(n, dict)]
+        ids.update(n["node_id"] for n in batch if VNC_ROLE in (n.get("roles") or []) and n.get("node_id"))
+        collected += len(batch)
+        total = body.get("total")
+        if not batch or not isinstance(total, int) or collected >= total:
+            break
+    return frozenset(ids)
 
 
 async def _rfb_port(node_id: str, credential_id: str) -> int | None:
@@ -101,7 +125,7 @@ async def _rfb_port(node_id: str, credential_id: str) -> int | None:
 
 async def _fetch_endpoint() -> DesktopVmEndpoint | None:
     body = await _request("GET", ENDPOINTS_PATH)
-    picked = _pick_desktop(body.get("endpoints", []))
+    picked = _pick_desktop(body.get("endpoints", []), await _vnc_role_node_ids())
     if picked is None:
         return None
     return DesktopVmEndpoint(

@@ -522,6 +522,13 @@ defineExpose({
   color: var(--color-success);
 }
 
+.desktop-vm-hint {
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
 .empty-state,
 .loading-state {
   display: flex;

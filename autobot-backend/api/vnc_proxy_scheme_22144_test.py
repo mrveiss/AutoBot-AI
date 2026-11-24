@@ -55,19 +55,50 @@ async def test_unknown_vnc_type_is_refused_for_every_proxy_route():
         await vnc_proxy.get_vnc_status("fleet-node-7", current_user={})
 
 
-@pytest.mark.asyncio
-async def test_unknown_vnc_type_closes_the_websocket_before_accept():
-    from unittest.mock import AsyncMock, MagicMock
+def _proxy_client():
+    from fastapi import FastAPI
+    from starlette.testclient import TestClient
 
-    ws = MagicMock()
-    ws.close = AsyncMock()
+    app = FastAPI()
+    app.include_router(vnc_proxy.router, prefix="/vnc-proxy")
+    return TestClient(app)
+
+
+def test_unknown_vnc_type_the_client_receives_1003_and_the_reason():
+    """Accepted first, then closed: a close before accept would reach a real client only as a 403."""
+    from unittest.mock import AsyncMock
+
+    from starlette.websockets import WebSocketDisconnect
+
     with (
         patch("api.vnc_proxy.enforce_ws_origin", new=AsyncMock(return_value=True)),
         patch("api.vnc_proxy.enforce_ws_desktop_auth", new=AsyncMock(return_value={"username": "a"})),
     ):
-        await vnc_proxy.websocket_proxy(ws, "fleet-node-7")
-    ws.close.assert_awaited_once()
-    assert ws.close.await_args.kwargs["code"] == 1003
+        with _proxy_client() as client:
+            with client.websocket_connect("/vnc-proxy/fleet-node-7/websockify") as ws:
+                with pytest.raises(WebSocketDisconnect) as closed:
+                    ws.receive_bytes()
+    assert closed.value.code == 1003
+    assert closed.value.reason == "Unknown VNC type: fleet-node-7"
+
+
+def test_origin_and_auth_refusals_stay_before_accept():
+    """A refusal by the origin or auth gate is a handshake rejection, never an accepted socket."""
+    from unittest.mock import AsyncMock
+
+    from starlette.websockets import WebSocketDisconnect
+
+    async def refuse(websocket):  # what enforce_ws_desktop_auth does for an unauthenticated caller
+        await websocket.close(code=1008)
+
+    with (
+        patch("api.vnc_proxy.enforce_ws_origin", new=AsyncMock(return_value=True)),
+        patch("api.vnc_proxy.enforce_ws_desktop_auth", new=refuse),
+    ):
+        with _proxy_client() as client:
+            with pytest.raises(WebSocketDisconnect):
+                with client.websocket_connect("/vnc-proxy/fleet-node-7/websockify"):
+                    pass
 
 
 def test_the_desktop_vm_is_a_registry_type_with_no_static_main_machine_entry():

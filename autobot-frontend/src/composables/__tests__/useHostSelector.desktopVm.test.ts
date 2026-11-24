@@ -20,7 +20,6 @@ vi.mock('@/composables/useHostSelection', () => ({
 }))
 
 import { useHostSelector } from '../useHostSelector'
-import { desktopVmBlockedKey } from '../useDesktopVm'
 import { DESKTOP_VM_HOST_ID } from '@/config/vnc-client'
 
 describe('chat Desktop picker', () => {
@@ -74,10 +73,23 @@ describe('chat Desktop picker', () => {
     expect(sel.desktopVmHint.value).toBe('')
   })
 
-  it('the viewer names the registry state when the registry cannot be read', async () => {
+  it('says the registry is unreadable (not "none registered") when the endpoint call fails', async () => {
     call.mockImplementation(async () => {
       throw new Error('503')
     })
-    expect(await desktopVmBlockedKey()).toBe('desktop.interface.registryUnavailable')
+    const sel = useHostSelector({ requiredCapability: 'vnc', includeDesktopVm: true })
+    await sel.loadHosts()
+    expect(sel.desktopVmHint.value).toBe('desktop.interface.registryUnavailable')
+  })
+
+  it('goes back to the none-registered hint once the registry answers null', async () => {
+    call.mockImplementationOnce(async () => {
+      throw new Error('503')
+    })
+    call.mockResolvedValueOnce(null)
+    const sel = useHostSelector({ requiredCapability: 'vnc', includeDesktopVm: true })
+    await sel.loadHosts()
+    await sel.loadHosts()
+    expect(sel.desktopVmHint.value).toBe('ui.hostSelection.noDesktopVm')
   })
 })

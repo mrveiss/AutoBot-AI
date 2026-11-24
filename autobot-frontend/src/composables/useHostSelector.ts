@@ -59,12 +59,15 @@ export function useHostSelector(options: UseHostSelectorOptions = {}) {
   // The desktop VM's endpoint comes from the backend (the SLM registry), the same source the controls use.
   const desktopVm = ref<DesktopVmEndpoint | null>(null)
   const loaded = ref(false)
+  const registryError = ref(false) // the registry could not be read: not the same as "none registered"
   const loadDesktopVm = async (): Promise<void> => {
     if (!options.includeDesktopVm) return
+    registryError.value = false
     try {
       desktopVm.value = await fetchDesktopVmEndpoint()
     } catch (err) {
       logger.warn('Desktop VM endpoint unavailable; no entry offered:', err)
+      registryError.value = true
       desktopVm.value = null // no endpoint, no entry: never a guessed address
     }
     loaded.value = true
@@ -98,7 +101,7 @@ export function useHostSelector(options: UseHostSelectorOptions = {}) {
   }
 
   // One localised line for the picker when it is asked to offer the desktop VM and none is registered.
-  const desktopVmHint = computed(() => (options.includeDesktopVm && loaded.value && !desktopVm.value ? t('ui.hostSelection.noDesktopVm') : ''))
+  const desktopVmHint = computed(() => (options.includeDesktopVm && loaded.value && !desktopVm.value ? t(registryError.value ? 'desktop.interface.registryUnavailable' : 'ui.hostSelection.noDesktopVm') : ''))
 
   return { hosts, loading, error, loadHosts, desktopVmHint }
 }
