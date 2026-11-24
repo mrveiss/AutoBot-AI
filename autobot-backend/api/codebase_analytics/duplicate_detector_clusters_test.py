@@ -17,7 +17,12 @@ import textwrap
 from pathlib import Path
 
 from api.codebase_analytics import duplicate_detector as det
-from api.codebase_analytics.duplicate_blocks import make_block, normalize_exact, normalize_structural
+from api.codebase_analytics.duplicate_blocks import (
+    MIN_DUPLICATE_CHARS,
+    make_block,
+    normalize_exact,
+    normalize_structural,
+)
 from api.codebase_analytics.duplicate_clusters import KIND_EXACT, KIND_SIMILAR, KIND_STRUCTURAL
 from utils.file_categorization import SKIP_DIRS
 
@@ -48,7 +53,7 @@ def test_a_block_qualifies_on_its_normalized_size():
     """AC1: fifty lines of prompt text normalize to a handful of tokens and are no block at all."""
     method = _prompt_method("alpha")
     assert len(method.splitlines()) >= 50
-    assert len(normalize_structural(method)) < det.MIN_DUPLICATE_CHARS
+    assert len(normalize_structural(method)) < MIN_DUPLICATE_CHARS
     assert make_block("x.py", 1, 51, method, 51) is None
     assert make_block("x.py", 1, 31, _helper(), 31) is not None
 

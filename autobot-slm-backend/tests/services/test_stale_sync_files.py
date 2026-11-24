@@ -257,7 +257,7 @@ async def test_after_an_ssh_failure_the_outcome_is_recorded_unknown_with_the_rel
         await env.mod.remove_approved(None, "n1", _APPROVAL)
     assert refused.value.status_code == 502 and "1 file(s) may have been removed" in refused.value.reason
     outcome, details = seen[-1]
-    assert outcome == "failed" and details["outcome"] == "unknown"
+    assert outcome == "failed" and details["removal"] == "unknown"
     assert details["may_have_removed"] == 1 and details["remaining"] == ["b.py"]
 
 

@@ -9,7 +9,7 @@ location in the backend's approval queue (#17038) through ``call_main_backend``;
 is proposed. ``remove_approved`` runs only when the backend's executor calls it after a human approved: fresh
 listing, intent audit row, then the claim (the backend verifies a human decided it for this node and spends it
 once), then removal of the approved files that are still stale and still byte-identical. Order follows
-``node_ssh_password.delete_stored_password`` (#20046): no audit row, no claim; no claim, no removal.
+the stored-password deletion in ``node_ssh_password`` (#20046): no audit row, no claim; no claim, no removal.
 """
 
 from __future__ import annotations
@@ -257,10 +257,10 @@ async def _after_ssh_failure(
     except (StaleRefused, StaleListingError):
         again = StaleListing(node_id, error="the node could not be listed again")
     if again.error:
-        return {"outcome": "unknown", "may_have_removed": len(keep), "remaining": None}
+        return {"removal": "unknown", "may_have_removed": len(keep), "remaining": None}
     still = {item.path for item in again.stale if item.old_target == approved.old_target}
     remaining = sorted(item.path for item in keep if item.path in still)
-    return {"outcome": "unknown", "may_have_removed": len(keep) - len(remaining), "remaining": remaining}
+    return {"removal": "unknown", "may_have_removed": len(keep) - len(remaining), "remaining": remaining}
 
 
 async def remove_approved(db: AsyncSession, node_id: str, approval_id: str) -> list[dict[str, str]]:
