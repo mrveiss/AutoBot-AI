@@ -144,8 +144,9 @@ def test_the_bot_pr_carries_the_milestone_label_and_a_proof_table() -> None:
     assert "| pending |" in run
 
 
-# The default `run:` shell on the runner when no `shell:` key is set: errexit is on there, so it is on here.
-_RUNNER_SHELL = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"]
+# The runner's `run:` shell when neither the step nor `defaults.run` sets `shell:` is `bash -e {0}`:
+# errexit on, pipefail off (pipefail comes only with an explicit `shell: bash`). Steps set their own pipefail.
+_RUNNER_SHELL = ["bash", "-e", "-c"]
 
 
 def _run_step(step: dict, tmp_path: Path, exit_code: int) -> subprocess.CompletedProcess:
