@@ -43011,7 +43011,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger Manual
-         * @description Immediately queue a manual heartbeat run for an agent (#1407).
+         * @description Immediately queue a manual heartbeat run for an agent; refused with 409 unless it is ACTIVE (#1407, #21992).
          */
         post: operations["trigger_manual_api_heartbeat__agent_id__trigger_post"];
         delete?: never;
