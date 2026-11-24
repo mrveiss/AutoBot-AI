@@ -6,8 +6,8 @@
 
 Two halves, one mechanism (the reach registry's own ``staleness`` rule, never a second one):
 
-* B -- main's own CI run enforces it. ``ci.yml`` sets ``AUTOBOT_REACH_AUDIT=1`` on a push to main
-  and on a merge group, so the merge that crossed the line is the one that goes red.
+* B -- main's own CI run enforces it. ``ci.yml`` enables the audit (``pipeline-scripts/reach_audit_scope.py``, shared with the
+  pre-board lane, #22147) on a push to main and on a merge group, so the merge that crossed the line is the one that goes red.
 * A -- ``repin-reach-floors.yml`` runs ``scripts/repin_reach_floors.py`` on main and opens, or
   updates, ONE pull request.
 
@@ -16,6 +16,7 @@ The detector is proved by contrast: a floor in the band is refused, one just abo
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import re
 import subprocess
@@ -64,11 +65,64 @@ def test_off_main_the_same_floor_only_warns(monkeypatch: pytest.MonkeyPatch) -> 
         _reach(_BAND_EDGE - 1).verify_floor(_ROOT)
 
 
-def _audit_step() -> dict:
-    steps = yaml.safe_load((_WORKFLOWS / "ci.yml").read_text(encoding="utf-8"))["jobs"]["python-shard"]["steps"]
-    found = [s for s in steps if f"{REACH_AUDIT_ENV}=1" in str(s.get("run", ""))]
-    assert len(found) == 1, "exactly one step sets the reach audit"
-    return found[0]
+_SCOPE = repo_root() / "pipeline-scripts" / "reach_audit_scope.py"
+_ENTRY = "python3 pipeline-scripts/reach_audit_scope.py"
+
+
+def _scope():
+    spec = importlib.util.spec_from_file_location("reach_audit_scope", _SCOPE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _workflow(name: str) -> dict:
+    return yaml.safe_load((_WORKFLOWS / name).read_text(encoding="utf-8"))
+
+
+def _entry_steps(workflow: dict) -> list[dict]:
+    steps = [s for job in workflow["jobs"].values() for s in job.get("steps", [])]
+    return [s for s in steps if _ENTRY in str(s.get("run", ""))]
+
+
+def test_the_entry_names_the_variable_the_reach_registry_reads() -> None:
+    assert _scope().REACH_AUDIT_ENV == REACH_AUDIT_ENV
+
+
+@pytest.mark.parametrize(
+    ("event", "head_ref", "ref", "expected"),
+    [
+        ("pull_request", "issue-1-feature", "refs/pull/1/merge", False),
+        ("pull_request", "train-t1", "refs/pull/2/merge", True),
+        ("merge_group", "", "refs/heads/gh-readonly-queue/main/pr-1", True),
+        ("push", "", "refs/heads/main", True),
+        ("push", "", "refs/heads/issue-1-feature", False),
+        ("workflow_dispatch", "", "refs/heads/issue-1-feature", False),
+        ("workflow_dispatch", "", "refs/heads/train-t1", True),
+    ],
+)
+def test_ci_and_the_lane_enforce_the_audit_only_where_main_is_judged(event, head_ref, ref, expected) -> None:
+    """#22110, #22147: one rule, judged over the contexts of PR CI and of the lane's dispatch."""
+    assert _scope().audit_applies(event, head_ref, ref) is expected
+
+
+def test_the_entry_writes_the_variable_only_where_it_applies(tmp_path: Path) -> None:
+    for env, expected in (
+        ({"GITHUB_EVENT_NAME": "pull_request", "GITHUB_HEAD_REF": "issue-1-x", "GITHUB_REF": "refs/pull/1/merge"}, ""),
+        ({"GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/main"}, f"{REACH_AUDIT_ENV}=1\n"),
+    ):
+        target = tmp_path / f"env-{bool(expected)}"
+        target.write_text("", encoding="utf-8")
+        assert _scope().main({**env, "GITHUB_ENV": str(target)}) == 0
+        assert target.read_text(encoding="utf-8") == expected
+
+
+def test_both_workflows_call_the_one_entry_and_nothing_else_sets_the_audit() -> None:
+    for name in ("ci.yml", "dispatch-preboard-guards.yml"):
+        assert _entry_steps(_workflow(name)), f"{name} does not call the shared entry"
+        text = (_WORKFLOWS / name).read_text(encoding="utf-8")
+        code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+        assert REACH_AUDIT_ENV not in code, f"{name} sets {REACH_AUDIT_ENV} on its own"
 
 
 def _evaluate(expr: str, **context: str) -> bool:
@@ -82,24 +136,6 @@ def _evaluate(expr: str, **context: str) -> bool:
     return bool(
         eval(expr, {"__builtins__": {}}, {**values, **functions, **context})
     )  # noqa: S307 - this repo's own workflow text
-
-
-def _audit_applies(**context: str) -> bool:
-    return _evaluate(str(_audit_step()["if"]), **context)
-
-
-@pytest.mark.parametrize(
-    ("context", "expected"),
-    [
-        ({"event_name": "pull_request", "head_ref": "issue-1-feature", "ref": "refs/pull/1/merge"}, False),
-        ({"event_name": "push", "ref": "refs/heads/main"}, True),
-        ({"event_name": "merge_group", "ref": "refs/heads/gh-readonly-queue/main/pr-1"}, True),
-        ({"event_name": "pull_request", "head_ref": "train-t1", "ref": "refs/pull/2/merge"}, True),
-        ({"event_name": "push", "ref": "refs/heads/issue-1-feature"}, False),
-    ],
-)
-def test_ci_enforces_the_audit_only_where_main_is_judged(context: dict, expected: bool) -> None:
-    assert _audit_applies(**context) is expected
 
 
 def _repin() -> dict:
