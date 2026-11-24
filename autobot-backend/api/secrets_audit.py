@@ -85,9 +85,17 @@ def _user_id(request: Request, actor: str | None) -> str | None:
 
 
 async def _secret_event(
-    operation: str, secret_id: str | None, request: Request, result: AuditResult, actor: str | None, details: dict
+    operation: str,
+    secret_id: str | None,
+    request: Request,
+    actor: str | None,
+    details: dict,
+    result: AuditResult = "success",
 ) -> AuditEvent:
-    """The canonical event of one secret operation, built exactly as ``audit_log`` builds it."""
+    """The canonical event of one secret operation, built exactly as ``audit_log`` builds it.
+
+    An attempt's event takes the default: ``record_audit_attempt`` stamps the ``attempted`` result when it writes.
+    """
     return (await get_audit_logger()).event(
         SECRET_OPERATIONS[operation],
         result,
@@ -99,14 +107,11 @@ async def _secret_event(
 
 
 async def _record_attempt(
-    operation: str, secret_id: str | None, request: Request, result: AuditResult, actor: str | None, details: dict
-):
-    """The ``attempted`` row through the shared helper: a 503 when it is not written, so nothing is changed (#20557).
-
-    *result* is the caller's own value; the helper stamps ``attempted`` on the row it writes.
-    """
+    operation: str, secret_id: str | None, request: Request, actor: str | None, details: dict
+) -> None:
+    """The ``attempted`` row through the shared helper: a 503 when it is not written, so nothing is changed (#20557)."""
     try:
-        event = await _secret_event(operation, secret_id, request, result, actor, details)
+        event = await _secret_event(operation, secret_id, request, actor, details)
     except Exception as exc:  # noqa: BLE001 -- an unbuildable record is an unwritten one
         logger.error("[Secrets Audit] could not build the %s attempt: %s", operation, type(exc).__name__)
         raise attempt_unrecorded() from None
@@ -119,7 +124,7 @@ async def _record_outcome(
     """The outcome row of a pending attempt, linked to it by ``attempt_id``; an unwritable one is logged, not raised."""
     attempt = _pending(request).pop(operation)
     try:
-        event = await _secret_event(operation, secret_id, request, result, actor, details)
+        event = await _secret_event(operation, secret_id, request, actor, details, result)
     except Exception as exc:  # noqa: BLE001 -- the change has happened or failed already; the miss is logged
         logger.error(
             "%s attempt_id=%s [Secrets Audit] could not build the %s outcome: %s",
@@ -176,7 +181,7 @@ async def audit_secret_op(
     ``required`` is kept for the callers that pass it; an attempt is always required.
     """
     if result == ATTEMPTED:
-        await _record_attempt(operation, secret_id, request, result, actor, details)
+        await _record_attempt(operation, secret_id, request, actor, details)
     elif operation in _pending(request):
         await _record_outcome(operation, secret_id, request, result, actor, details)
     else:
