@@ -81,6 +81,7 @@ def test_startup_validation_fails_naming_the_variable(monkeypatch) -> None:
     assert "AUTOBOT_BACKEND_HOST" in message and "AUTOBOT_BACKEND_BIND_HOST" in message
     monkeypatch.setattr(ssot, "main", "10.1.2.3")
     assert startup_validation.validate_advertised_host() is None
+    monkeypatch.setenv("AUTOBOT_BACKEND_HOST", "")  # the default-host case, whatever the runner exports
     monkeypatch.setattr(ssot, "main", VMConfig(_env_file=None).main)
     assert startup_validation.validate_advertised_host() is None
 
@@ -235,20 +236,34 @@ def test_websockify_restart_handler_honours_the_no_restart_sync() -> None:
     assert "autobot_restart_services" in handler["when"]
 
 
+def test_distro_novnc_stays_until_websockify_can_restart() -> None:
+    tasks = yaml.safe_load((ANSIBLE / "roles" / "vnc" / "tasks" / "novnc.yml").read_text(encoding="utf-8"))
+    removal = next(t for t in tasks if t.get("ansible.builtin.apt", {}).get("state") == "absent")
+    assert "autobot_restart_services" in removal["when"]
+
+
 def test_the_novnc_archive_has_one_path_variable() -> None:
     tasks = (ANSIBLE / "roles" / "vnc" / "tasks" / "novnc.yml").read_text(encoding="utf-8")
     assert tasks.count("{{ novnc_archive_path }}") == 2 and "/tmp/noVNC" not in tasks
 
 
-def test_a_config_save_keeps_the_persisted_bind_host(monkeypatch) -> None:
+def test_a_config_save_keeps_the_persisted_bind_host(monkeypatch, tmp_path) -> None:
     monkeypatch.syspath_prepend(str(ROOT / "autobot-backend"))
     from services.config_service import ConfigService, config_manager
 
-    monkeypatch.setattr(config_manager, "get_nested", lambda key, default=None: "0.0.0.0")  # nosec B104
+    cfg_file = tmp_path / "config.yaml"
+    monkeypatch.setattr(config_manager, "base_config_file", cfg_file)
+    # the merged config carries the environment override; the persisted value is read raw from the file
+    monkeypatch.setattr(config_manager, "get_nested", lambda key, default=None: "10.9.9.9")
+    cfg_file.write_text("backend:\n  server_host: 0.0.0.0\n", encoding="utf-8")  # nosec B104
     saved = {"backend": {"server_host": "10.1.2.3", "server_port": 8001}}
     ConfigService._keep_persisted_bind_host(saved)
     assert saved["backend"] == {"server_port": 8001, "server_host": "0.0.0.0"}  # nosec B104
-    monkeypatch.setattr(config_manager, "get_nested", lambda key, default=None: None)
+    cfg_file.write_text("backend: {}\n", encoding="utf-8")
     fresh = {"backend": {"server_host": "10.1.2.3"}}
     ConfigService._keep_persisted_bind_host(fresh)
     assert fresh["backend"] == {}  # nothing stored: the reported dial host is never persisted as the bind
+    cfg_file.unlink()
+    missing = {"backend": {"server_host": "10.1.2.3"}}
+    ConfigService._keep_persisted_bind_host(missing)
+    assert missing["backend"] == {}

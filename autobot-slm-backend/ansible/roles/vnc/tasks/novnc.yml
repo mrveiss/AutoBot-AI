@@ -72,12 +72,14 @@
 # The distro `novnc` package is 1.0.0 (2018) on Ubuntu 22.04 -- it predates VeNCrypt support
 # and caused the unreachable-server failure in #13060 (#13069). It is removed LAST, once the
 # pinned copy is downloaded, checksum-verified, unpacked and linked, so a failed download can
-# never leave a node without any noVNC.
+# never leave a node without any noVNC. A sync without restarts keeps it: the running websockify may still
+# serve --web from the distro path until the restart handler switches it to the pinned one.
 - name: Remove distro noVNC package (superseded by pinned upstream; #13069)
   ansible.builtin.apt:
     name: novnc
     state: absent
   become: true
+  when: autobot_restart_services | default(true) | bool
 
 - name: Deploy websockify systemd service
   ansible.builtin.template:

@@ -466,15 +466,15 @@ class ConfigService:
 
     @staticmethod
     def _keep_persisted_bind_host(config_data: Metadata) -> None:
-        """A saved config must not turn the reported dial host into the persisted bind setting (#18810).
+        """A saved config must not persist the reported dial host as the bind setting (#18810).
 
-        ``backend.server_host`` is the bind setting but the config report shows the dial address, so a
-        read/save round trip carries the wrong value: the stored bind value is restored (or the key dropped).
-        """
+        The stored value is read raw from ``config.yaml`` (the merged config carries the environment override)."""
         backend = config_data.get("backend")
         if not isinstance(backend, dict) or "server_host" not in backend:
             return
-        stored = config_manager.get_nested("backend.server_host")
+        path = config_manager.base_config_file
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None  # raw, not env-merged
+        stored = ((raw or {}).get("backend") or {}).get("server_host")
         backend = {k: v for k, v in backend.items() if k != "server_host"}
         config_data["backend"] = {**backend, "server_host": stored} if stored is not None else backend
 
