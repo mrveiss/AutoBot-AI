@@ -62,8 +62,6 @@ UNDEFINED_CSS_VAR_NAMES: dict[str, int] = {
     "--color-info-active": 1,
     "--color-info-bg-transparent": 1,
     "--color-info-border": 2,
-    "--color-primary-alpha-30": 4,
-    "--color-primary-bg-transparent": 1,
     "--color-primary-border": 1,
     "--color-primary-rgb": 1,
     "--color-purple-bg-transparent": 1,
@@ -78,7 +76,6 @@ UNDEFINED_CSS_VAR_NAMES: dict[str, int] = {
     "--font-size-md": 7,
     "--ring-primary": 4,
     "--shadow-error": 1,
-    "--shadow-success": 1,
     "--status-warning": 3,
     "--terminal-bg": 5,
     "--terminal-bg-dark": 1,
@@ -107,4 +104,4 @@ UNDEFINED_CSS_VAR_NAMES: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately so a per-name edit cannot drift it unseen.
-TOTAL_SITES = 125  # #18819: -5, the deleted ErrorBanner and ui/BaseAlert were the only users of five undefined vars
+TOTAL_SITES = 119  # #18244: -6 (three vars cleared); #18819: -5 (ErrorBanner, ui/BaseAlert)

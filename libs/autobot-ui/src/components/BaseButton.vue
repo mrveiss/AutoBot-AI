@@ -80,16 +80,17 @@ function blockInertClick(event: MouseEvent): void {
     :aria-busy="loading || undefined"
     @click="blockInertClick"
     v-bind="boundAttrs"
+    data-slot="button"
     :class="['aui-btn', `aui-btn--${variant}`, `aui-btn--${size}`, { 'aui-btn--block': block, 'aui-btn--loading': loading }]"
   >
-    <span v-if="loading" class="aui-btn__spinner" aria-hidden="true" />
+    <span v-if="loading" data-slot="button-spinner" class="aui-btn__spinner" aria-hidden="true" />
     <slot v-else name="icon-left" />
-    <span class="aui-btn__label"><slot /></span>
+    <span data-slot="button-label" class="aui-btn__label"><slot /></span>
   </component>
 </template>
 
 <style scoped>
-.aui-btn {
+[data-slot="button"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -105,13 +106,13 @@ function blockInertClick(event: MouseEvent): void {
   user-select: none;
 }
 
-.aui-btn:focus-visible {
+[data-slot="button"]:focus-visible {
   outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
   outline-offset: 1px;
 }
 
-.aui-btn:disabled,
-.aui-btn[aria-disabled='true'] {
+[data-slot="button"]:disabled,
+[data-slot="button"][aria-disabled='true'] {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -226,7 +227,7 @@ function blockInertClick(event: MouseEvent): void {
 }
 
 /* ---- pressed (toggle) state: a surface fill and an accent border ---- */
-.aui-btn[aria-pressed='true'] {
+[data-slot="button"][aria-pressed='true'] {
   background-color: var(--aui-color-surface-raised);
   border-color: var(--aui-color-primary);
   color: var(--aui-color-text);
@@ -239,7 +240,7 @@ function blockInertClick(event: MouseEvent): void {
 }
 
 /* ---- loading spinner ---- */
-.aui-btn__spinner {
+[data-slot="button-spinner"] {
   width: 1em;
   height: 1em;
   border: 2px solid currentColor;
@@ -255,7 +256,7 @@ function blockInertClick(event: MouseEvent): void {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .aui-btn__spinner {
+  [data-slot="button-spinner"] {
     animation-duration: 1.4s;
   }
 }

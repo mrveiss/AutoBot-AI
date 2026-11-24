@@ -628,6 +628,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/audit/integrity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Audit Integrity
+         * @description The last chain verification run by this process and the chain's current head (#17219).
+         */
+        get: operations["get_audit_integrity_api_audit_integrity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/audit/integrity/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Audit Integrity
+         * @description Verify the audit hash chain now. A failed verification is reported, never enforced (#17219).
+         */
+        post: operations["verify_audit_integrity_api_audit_integrity_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -23698,7 +23738,7 @@ export interface paths {
          *     Provides overview for dashboard display.
          *
          *     Issue #744: Requires admin authentication.
-         *     Issue #3436: Accepts optional source_id to scope results to a project.
+         *     Issue #3436: Requires source_id; results are that project's alone (#20513).
          */
         get: operations["get_evolution_summary_api_evolution_summary_get"];
         put?: never;
@@ -40262,7 +40302,7 @@ export interface paths {
          *     and refactoring events. Returns comprehensive evolution report.
          *
          *     Args:
-         *         path: Repository path to analyze
+         *         source_id: The code source whose checkout is analyzed
          *         start_date: Optional start date for analysis period (ISO format)
          *         end_date: Optional end date for analysis period (ISO format)
          *
@@ -40294,7 +40334,7 @@ export interface paths {
          *     adoption rates, trends (emerging/stable/declining), and first/last seen dates.
          *
          *     Args:
-         *         path: Repository path to analyze
+         *         source_id: The code source whose checkout is analyzed
          *         pattern_type: Optional filter for specific pattern type
          *
          *     Returns:
@@ -40327,7 +40367,7 @@ export interface paths {
          *     messages and file change patterns.
          *
          *     Args:
-         *         path: Repository path to analyze
+         *         source_id: The code source whose checkout is analyzed
          *         limit: Maximum number of refactorings to return
          *
          *     Returns:
@@ -40360,7 +40400,7 @@ export interface paths {
          *     visualization in charts/graphs.
          *
          *     Args:
-         *         path: Repository path to analyze
+         *         source_id: The code source whose checkout is analyzed
          *
          *     Returns:
          *         Timeline data with monthly pattern counts
@@ -40392,7 +40432,7 @@ export interface paths {
          *     into a single comprehensive report.
          *
          *     Args:
-         *         path: Repository path to analyze
+         *         source_id: The code source whose checkout is analyzed
          *         start_date: Optional start date for analysis period
          *         end_date: Optional end date for analysis period
          *
@@ -61373,6 +61413,74 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuditIntegrityFinding
+         * @description One finding of an audit-chain verification, positioned at the ``chain_seq`` where it was found (#17219).
+         */
+        AuditIntegrityFinding: {
+            /** Kind */
+            kind: string;
+            /** Seq */
+            seq: number;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuditIntegrityReport
+         * @description The result of one audit-chain verification (``services/audit/integrity.py``).
+         */
+        AuditIntegrityReport: {
+            /** Ok */
+            ok: boolean;
+            /** Checked At */
+            checked_at: string;
+            /** Rows Checked */
+            rows_checked: number;
+            /** Chain Started */
+            chain_started: boolean;
+            /** Head Seq */
+            head_seq: number;
+            /** Head Hash */
+            head_hash?: string | null;
+            /** Pre Chain Count */
+            pre_chain_count: number;
+            /** Unchained Count */
+            unchained_count: number;
+            /** From Seq */
+            from_seq: number;
+            /** Findings */
+            findings: components["schemas"]["AuditIntegrityFinding"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuditIntegrityRequest
+         * @description Body of the verify route: where to start (default: the genesis).
+         */
+        AuditIntegrityRequest: {
+            /** From Seq */
+            from_seq?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuditIntegrityStatus
+         * @description The last verification run in this process (None before the first) and the chain's current head.
+         */
+        AuditIntegrityStatus: {
+            last_result?: components["schemas"]["AuditIntegrityReport"] | null;
+            /** Head Seq */
+            head_seq: number;
+            /** Head Hash */
+            head_hash?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuditLogData
          * @description Response data for get_audit_log.
          */
@@ -77109,11 +77217,6 @@ export interface components {
          */
         EvolutionAnalysisRequest: {
             /**
-             * Repo Path
-             * @description Path to git repository to analyze
-             */
-            repo_path: string;
-            /**
              * Start Date
              * @description Start date for analysis (ISO format)
              */
@@ -77198,8 +77301,8 @@ export interface components {
             status: string;
             /** Timestamp */
             timestamp: string;
-            /** Path */
-            path: string;
+            /** Source Id */
+            source_id: string;
             /** Pattern Metrics */
             pattern_metrics: {
                 [key: string]: unknown;
@@ -77270,8 +77373,8 @@ export interface components {
             status: string;
             /** Timestamp */
             timestamp: string;
-            /** Path */
-            path: string;
+            /** Source Id */
+            source_id: string;
             /** Refactorings */
             refactorings: unknown[];
             /** Total */
@@ -77288,8 +77391,8 @@ export interface components {
             status: string;
             /** Timestamp */
             timestamp: string;
-            /** Path */
-            path: string;
+            /** Source Id */
+            source_id: string;
             /** Evolution */
             evolution: {
                 [key: string]: unknown;
@@ -77316,8 +77419,8 @@ export interface components {
             status: string;
             /** Timestamp */
             timestamp: string;
-            /** Path */
-            path: string;
+            /** Source Id */
+            source_id: string;
             /** Timeline */
             timeline: unknown[];
         } & {
@@ -110624,6 +110727,59 @@ export interface operations {
             };
         };
     };
+    get_audit_integrity_api_audit_integrity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditIntegrityStatus"];
+                };
+            };
+        };
+    };
+    verify_audit_integrity_api_audit_integrity_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AuditIntegrityRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditIntegrityReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     login_api_auth_login_post: {
         parameters: {
             query?: never;
@@ -140725,13 +140881,13 @@ export interface operations {
     };
     get_evolution_timeline_api_evolution_timeline_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Data granularity: hourly, daily, weekly, monthly */
                 granularity?: string;
                 /** @description Comma-separated metrics */
                 metrics?: string;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
                 /** @description Start date (YYYY-MM-DD) */
                 start_date?: string | null;
                 /** @description End date (YYYY-MM-DD) */
@@ -140765,15 +140921,15 @@ export interface operations {
     };
     get_pattern_evolution_api_evolution_patterns_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Filter by pattern type (e.g., god_class, long_method) */
                 pattern_type?: string | null;
                 /** @description Start date (ISO format) */
                 start_date?: string | null;
                 /** @description End date (ISO format) */
                 end_date?: string | null;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -140803,11 +140959,11 @@ export interface operations {
     };
     get_quality_trends_api_evolution_trends_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Number of days to analyze */
                 days?: number;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -140837,7 +140993,10 @@ export interface operations {
     };
     record_quality_snapshot_api_evolution_snapshot_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -140870,7 +141029,10 @@ export interface operations {
     };
     record_pattern_snapshot_api_evolution_pattern_snapshot_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -140903,7 +141065,9 @@ export interface operations {
     };
     export_evolution_data_api_evolution_export_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Export format: json, csv */
                 format?: string;
                 /** @description Start date (ISO format) */
@@ -140939,9 +141103,9 @@ export interface operations {
     };
     get_evolution_summary_api_evolution_summary_get: {
         parameters: {
-            query?: {
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -140971,7 +141135,10 @@ export interface operations {
     };
     trigger_evolution_analysis_api_evolution_analyze_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -163193,8 +163360,8 @@ export interface operations {
     analyze_code_evolution_api_code_intelligence_evolution_analyze_post: {
         parameters: {
             query: {
-                /** @description Repository path to analyze */
-                path: string;
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Start date (ISO format) */
                 start_date?: string | null;
                 /** @description End date (ISO format) */
@@ -163229,8 +163396,8 @@ export interface operations {
     get_pattern_evolution_api_code_intelligence_evolution_patterns_get: {
         parameters: {
             query: {
-                /** @description Repository path to analyze */
-                path: string;
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Filter by pattern type */
                 pattern_type?: string | null;
             };
@@ -163263,8 +163430,8 @@ export interface operations {
     detect_refactorings_api_code_intelligence_evolution_refactorings_get: {
         parameters: {
             query: {
-                /** @description Repository path to analyze */
-                path: string;
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Maximum results to return */
                 limit?: number;
             };
@@ -163297,8 +163464,8 @@ export interface operations {
     get_evolution_timeline_api_code_intelligence_evolution_timeline_get: {
         parameters: {
             query: {
-                /** @description Repository path to analyze */
-                path: string;
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -163329,8 +163496,8 @@ export interface operations {
     get_full_evolution_report_api_code_intelligence_evolution_report_get: {
         parameters: {
             query: {
-                /** @description Repository path to analyze */
-                path: string;
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Start date (ISO format) */
                 start_date?: string | null;
                 /** @description End date (ISO format) */

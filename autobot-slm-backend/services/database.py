@@ -16,6 +16,7 @@ from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from autobot_shared.audit_chain_writer import require_chain_key
 from autobot_shared.ssot_config import config as config_ssot
 from config import settings
 from models.auth_revocation import PasswordEpoch, RevokedToken
@@ -55,6 +56,8 @@ class DatabaseService:
         if self._initialized:
             return
 
+        # Fail closed (#17219): without the audit-chain MAC key no audit_logs row can be written.
+        require_chain_key()
         database_url = settings.database_url
         logger.info("Connecting to PostgreSQL database")
 

@@ -119,7 +119,10 @@ def _repin(reach) -> str:
     if dataclasses.replace(reach, pinned_floor=mid).staleness(_ROOT) is not None:
         return f"SKIP  {reach.name}: the mid-window value {mid} is still stale -- check skips=/growth="
     path.write_text(new, encoding="utf-8")
-    return f"PIN   {reach.name}: floor -> {mid} (population {count}) in {path.relative_to(_ROOT)}"
+    # The line of the floor value just rewritten, so a reader (the re-pin workflow's proof table) cites it
+    # without searching for the number, which a file can repeat.
+    line = _floor_node(new, reach.name).lineno
+    return f"PIN   {reach.name}: floor -> {mid} (population {count}) in {path.relative_to(_ROOT)}:{line}"
 
 
 _FLOOR_LINE = re.compile(r"^\s*floor=\d+,?\s*(#.*)?$")

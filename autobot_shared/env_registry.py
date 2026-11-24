@@ -65,6 +65,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_ai,
     env_registry_analytics,
     env_registry_approvals,
+    env_registry_audit_chain,
     env_registry_backend,
     env_registry_backend_services,
     env_registry_batch,
@@ -280,8 +281,6 @@ register_env_var(
         range=(1, 300),
     )
 )
-
-# --- logging: registered in env_registry_logging.py (#15774) -----------------
 
 # --- otel -------------------------------------------------------------------
 
