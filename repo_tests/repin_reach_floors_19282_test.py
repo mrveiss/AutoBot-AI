@@ -44,6 +44,24 @@ def test_the_named_declarations_literal_floor_is_rewritten_mid_window() -> None:
     assert new.count("floor=") == 2
 
 
+def _with_comment(comment: str) -> str:
+    return _SOURCE.replace("# mid-window: population 110, window (90, 110)", comment)
+
+
+def test_a_note_after_the_measurement_survives_the_refresh() -> None:
+    """#22197: notes follow the measurement after "; " -- only the measurement is refreshed."""
+    source = _with_comment("# mid-window: population 110, growth 20 (2026-11-23); pins until it lands (#19676)")
+    new, status = repin.repin_source(source, "the-scan", mid=140, count=150, low=130, high=150)
+    assert status == "re-pinned"
+    expected = "floor=140,  # mid-window: population 150, window (130, 150); pins until it lands (#19676)\n"
+    assert expected in new
+
+
+def test_a_comment_without_a_note_gains_none() -> None:
+    new, _ = repin.repin_source(_SOURCE, "the-scan", mid=140, count=150, low=130, high=150)
+    assert "floor=140,  # mid-window: population 150, window (130, 150)\n" in new and ";" not in new
+
+
 def test_an_expression_floor_is_left_for_a_human() -> None:
     source = 'R = declare(\n    "x",\n    discover=_d,\n    floor=_FLOOR,\n    growth=4,\n)\n'
     new, status = repin.repin_source(source, "x", mid=5, count=9, low=1, high=9)
