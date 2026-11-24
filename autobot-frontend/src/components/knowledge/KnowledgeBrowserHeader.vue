@@ -1,191 +1,97 @@
-<template>
-  <PageHeader class="browser-header">
-    <!-- Category Filter Tabs -->
-    <div class="category-tabs">
-      <BaseButton
-        v-for="cat in categories"
-        :key="cat.value ?? 'all'"
-        :variant="selectedCategory === cat.value ? 'primary' : 'outline'"
-        size="sm"
-        @click="$emit('select-category', cat.value)"
-        class="category-tab"
-      >
-        <Icon :name="cat.icon" />
-        {{ cat.label }}
-        <span v-if="cat.count > 0" class="category-count">{{ cat.count }}</span>
-      </BaseButton>
-    </div>
+<!--
+  Copyright 2025-2026 mrveiss
+  SPDX-License-Identifier: Apache-2.0
 
-    <!-- Search bar -->
-    <div class="search-bar">
-      <Icon name="search" />
-      <input
-        :value="searchQuery"
-        type="text"
-        :placeholder="$t('knowledge.browserHeader.searchPlaceholder')"
-        class="search-input"
-        @input="$emit('search', ($event.target as HTMLInputElement).value)"
-      />
-      <BaseButton
-        v-if="searchQuery"
-        variant="ghost"
-        size="xs"
-        @click="$emit('clear-search')"
-        class="clear-btn"
-        :aria-label="$t('knowledge.browserHeader.clearSearch')"
-      >
-        <Icon name="times" />
-      </BaseButton>
-    </div>
+  KnowledgeBrowserHeader — the Browser's one header and one search box (#18244, owner decision D2).
+  Typing filters the document tree at once (`filter`); Enter runs the unified knowledge search
+  (`submit`). The search options (RAG, access level) sit in an advanced popover beside the box.
+-->
+<template>
+  <PageHeader
+    class="kb-header"
+    :title="$t('knowledge.browserHeader.title')"
+    :subtitle="$t('knowledge.browserHeader.subtitle')"
+  >
+    <template #breadcrumb>
+      <span class="kb-crumb">{{ $t('knowledge.browserHeader.breadcrumb') }}</span>
+    </template>
+    <template #actions>
+      <div class="kb-search">
+        <BaseInput
+          :model-value="query"
+          type="search"
+          class="kb-search__box"
+          data-testid="knowledge-search"
+          :aria-label="$t('knowledge.browserHeader.searchLabel')"
+          :placeholder="$t('knowledge.browserHeader.searchPlaceholder')"
+          :clearable="true"
+          :clear-label="$t('knowledge.browserHeader.clearSearch')"
+          @update:model-value="$emit('filter', $event)"
+          @keydown.enter="$emit('submit')"
+          @clear="$emit('clear')"
+        >
+          <template #prefix><Icon name="search" aria-hidden="true" /></template>
+        </BaseInput>
+        <BasePopover :label="$t('knowledge.browserHeader.optionsLabel')" align="end">
+          <template #trigger>
+            <BaseButton
+              variant="outline"
+              size="md"
+              class="adv"
+              data-testid="knowledge-search-options-trigger"
+              :aria-label="$t('knowledge.browserHeader.optionsLabel')"
+            >
+              <Icon name="sliders-h" aria-hidden="true" />
+              {{ $t('knowledge.browserHeader.options') }}
+            </BaseButton>
+          </template>
+          <KnowledgeSearchBar :search="search" />
+        </BasePopover>
+      </div>
+    </template>
   </PageHeader>
 </template>
 
 <script setup lang="ts">
-// AutoBot - AI-Powered Automation Platform
-// Copyright (c) 2025 mrveiss
-// Author: mrveiss
-/**
- * Knowledge Browser Header Component
- *
- * Header with category tabs and search functionality.
- * Extracted from KnowledgeBrowser.vue for better maintainability.
- *
- * Issue #184: Split oversized Vue components
- */
-
-import type { IconName } from '@/components/ui/Icon.vue'
+import { BaseButton, BaseInput, BasePopover, PageHeader } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseButton, PageHeader } from '@autobot/ui'
+import KnowledgeSearchBar from './KnowledgeSearchBar.vue'
+import type { useKnowledgeSearch } from '@/composables/knowledge/useKnowledgeSearch'
 
-interface CategoryOption {
-  value: string | null
-  label: string
-  icon: IconName
-  count: number
-}
+defineProps<{
+  /** The text in the box: filters the tree as it changes. */
+  query: string
+  search: ReturnType<typeof useKnowledgeSearch>
+}>()
 
-interface Props {
-  categories: CategoryOption[]
-  selectedCategory: string | null
-  searchQuery: string
-}
-
-interface Emits {
-  (e: 'select-category', category: string | null): void
-  (e: 'search', query: string): void
-  (e: 'clear-search'): void
-}
-
-defineProps<Props>()
-defineEmits<Emits>()
+defineEmits<{
+  filter: [query: string]
+  submit: []
+  clear: []
+}>()
 </script>
 
 <style scoped>
-/* Issue #704: Migrated to CSS design tokens */
-/* A toolbar-only kit PageHeader (#17563): it owns the padding, wrap and bottom border. */
-.browser-header .search-bar {
-  margin-left: auto;
+.kb-header {
+  --aui-page-header-bg: transparent;
+  --aui-page-header-border: transparent;
+  --aui-page-header-px: 0;
+  --aui-page-header-py: 0;
 }
 
-.category-tabs {
+.kb-crumb {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.kb-search {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: var(--spacing-2);
 }
 
-.category-tab {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  padding: var(--spacing-2) var(--spacing-3);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  transition: all var(--duration-200) var(--ease-in-out);
-}
-
-.category-tab .icon {
-  width: var(--text-sm);
-  height: var(--text-sm);
-}
-
-.category-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 var(--spacing-1-5);
-  background: var(--color-primary-bg-transparent);
-  color: var(--color-primary);
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  border-radius: var(--radius-full);
-  margin-left: var(--spacing-1);
-}
-
-.search-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-3);
-  background: var(--bg-primary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  min-width: 250px;
-  max-width: 400px;
-  flex: 1;
-}
-
-.search-bar .icon {
-  color: var(--text-tertiary);
-  width: var(--text-sm);
-  height: var(--text-sm);
-}
-
-.search-input {
-  flex: 1;
-  border: none;
-  outline: none;
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  background: transparent;
-}
-
-.search-input:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.search-input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.clear-btn {
-  padding: var(--spacing-1);
-  color: var(--text-tertiary);
-}
-
-.clear-btn:hover {
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-}
-
-@media (max-width: 768px) {
-  .browser-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .category-tabs {
-    overflow-x: auto;
-    padding-bottom: var(--spacing-2);
-    margin-bottom: var(--spacing-neg-0-5);
-  }
-
-  .search-bar {
-    min-width: 100%;
-    max-width: 100%;
-  }
+.kb-search__box {
+  flex: 0 1 360px;
+  min-inline-size: 220px;
 }
 </style>

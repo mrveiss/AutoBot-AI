@@ -39,9 +39,13 @@ export function useKnowledgeSearch(selectedCategory: Ref<string | null>) {
       doc?.metadata?.access_level === selectedAccessLevel.value
   }
 
+  // Bumped per search and by clearResults, so only the latest uncleared search may write any result or flag.
+  let searchSeq = 0
+
   const handleSearch = async () => {
     if (!searchQuery.value.trim()) return
 
+    const seq = ++searchSeq
     isSearching.value = true
     ragError.value = null
     ragResponse.value = null
@@ -53,15 +57,17 @@ export function useKnowledgeSearch(selectedCategory: Ref<string | null>) {
       if (useRagSearch.value) {
         // Use RAG-enhanced search
         try {
-          ragResponse.value = await knowledgeRepository.ragSearch({
+          const response = await knowledgeRepository.ragSearch({
             query: searchQuery.value,
             limit: ragOptions.value.limit,
             reformulate_query: ragOptions.value.reformulateQuery
           })
+          if (seq !== searchSeq) return
+          ragResponse.value = response
 
-          if (ragResponse.value.results) {
+          if (response.results) {
             // Filter results by category client-side for RAG (backend doesn't support category filter)
-            let results = ragResponse.value.results
+            let results = response.results
             if (selectedCategory.value) {
               results = results.filter(r => {
                 const docCategory = r.document?.category
@@ -82,6 +88,7 @@ export function useKnowledgeSearch(selectedCategory: Ref<string | null>) {
             searchResults.value = results
           }
         } catch (ragErr: unknown) {
+          if (seq !== searchSeq) return
           const errorMessage = ragErr instanceof Error ? ragErr.message : 'RAG functionality is currently unavailable'
           ragError.value = errorMessage
 
@@ -93,6 +100,7 @@ export function useKnowledgeSearch(selectedCategory: Ref<string | null>) {
             enable_reranking: ragOptions.value.enableReranking,
             filters: categoryFilter
           })
+          if (seq !== searchSeq) return
           searchResults.value = results
         }
       } else {
@@ -104,6 +112,7 @@ export function useKnowledgeSearch(selectedCategory: Ref<string | null>) {
           enable_reranking: false,
           filters: categoryFilter
         })
+        if (seq !== searchSeq) return
         // Issue #685: Filter by access level client-side
         if (selectedAccessLevel.value) {
           results = results.filter(matchesAccessLevel)
@@ -112,14 +121,17 @@ export function useKnowledgeSearch(selectedCategory: Ref<string | null>) {
       }
     } catch (error) {
       logger.error('Knowledge search failed:', error)
+      if (seq !== searchSeq) return
       searchResults.value = []
       if (useRagSearch.value) {
         ragError.value = 'Search failed - backend may be unavailable'
       }
     } finally {
-      isSearching.value = false
-      searchPerformed.value = true
-      lastSearchQuery.value = searchQuery.value
+      if (seq === searchSeq) {
+        isSearching.value = false
+        searchPerformed.value = true
+        lastSearchQuery.value = searchQuery.value
+      }
     }
   }
 
@@ -134,6 +146,8 @@ export function useKnowledgeSearch(selectedCategory: Ref<string | null>) {
   }
 
   const clearResults = () => {
+    searchSeq++
+    isSearching.value = false
     searchResults.value = []
     searchPerformed.value = false
     ragResponse.value = null

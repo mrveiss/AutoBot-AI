@@ -174,7 +174,9 @@ pattern the system is for).
 
 Each ratchet freezes the measured population in a baseline module and fails only on growth, with
 a message that names the token to use. Baselines move one way: when a count falls, lower its
-entry. The stylelint step is not yet whole-tree: that switch waits until the `<style>` hex
+entry. The SLM control plane is the exception: its raw-palette count reached zero (#17566) and
+`raw_palette_class_ratchet_14580_test.py` holds it there for `.vue`, `.ts` and `.css` sources alike, `<style>`
+blocks and `@apply` lines included (#17567); no baseline entry or allowlist is allowed for it. The stylelint step is not yet whole-tree: that switch waits until the `<style>` hex
 population reaches zero (#17567).
 
 ## Palette-step to token mapping for the SLM frontend (#17566)
