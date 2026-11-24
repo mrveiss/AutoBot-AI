@@ -4,9 +4,10 @@
 # Author: mrveiss
 """FastAPI instrumentation options: excluded URLs and the AutoBot request-span hook (#21685)."""
 
+import os
 import sys
 import types
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -149,3 +150,59 @@ def test_provider_resource_carries_the_autobot_namespace(monkeypatch):
     provider = tracing._create_tracer_provider("svc", "1.0")
     assert provider.resource.attributes["service.namespace"] == "autobot"
     assert provider.resource.attributes["service.name"] == "svc"
+
+
+# --- one sampling setting; the old name is a deprecated alias (#21685) -------------------------
+
+
+def _rate_with(monkeypatch, env: dict):
+    from autobot_shared.ssot_config import MiscConfig, config
+
+    with patch.dict(os.environ, env, clear=True):
+        monkeypatch.setattr(config, "misc", MiscConfig(_env_file=None))
+        return tracing._get_sample_rate()
+
+
+def test_the_canonical_sample_rate_is_used(monkeypatch, caplog):
+    assert _rate_with(monkeypatch, {"AUTOBOT_OTEL_SAMPLE_RATE": "0.4"}) == 0.4
+    assert "deprecated" not in caplog.text
+
+
+def test_only_the_deprecated_alias_is_used_and_warns(monkeypatch, caplog):
+    with caplog.at_level("WARNING"):
+        assert _rate_with(monkeypatch, {"AUTOBOT_TRACE_SAMPLE_RATE": "0.7"}) == 0.7
+    assert "AUTOBOT_TRACE_SAMPLE_RATE is deprecated" in caplog.text
+    assert "AUTOBOT_OTEL_SAMPLE_RATE" in caplog.text
+
+
+def test_the_canonical_name_wins_when_both_are_set(monkeypatch, caplog):
+    env = {"AUTOBOT_OTEL_SAMPLE_RATE": "0.2", "AUTOBOT_TRACE_SAMPLE_RATE": "0.9"}
+    with caplog.at_level("WARNING"):
+        assert _rate_with(monkeypatch, env) == 0.2
+    assert "deprecated" not in caplog.text
+
+
+def test_neither_set_gives_the_default(monkeypatch):
+    assert _rate_with(monkeypatch, {}) == 0.1
+
+
+def test_an_unreadable_rate_falls_back_to_the_default(monkeypatch):
+    assert _rate_with(monkeypatch, {"AUTOBOT_OTEL_SAMPLE_RATE": "lots"}) == 0.1
+
+
+def test_a_rate_is_clamped_to_the_unit_interval(monkeypatch):
+    assert _rate_with(monkeypatch, {"AUTOBOT_OTEL_SAMPLE_RATE": "7"}) == 1.0
+
+
+def test_the_deprecated_jaeger_endpoint_is_used_only_when_canonical_is_unset(monkeypatch, caplog):
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config.misc, "jaeger_endpoint", "legacy:4317")
+    monkeypatch.setenv("AUTOBOT_OTEL_ENDPOINT", "canonical:4317")
+    with caplog.at_level("WARNING"):
+        tracing._create_exporter()
+    assert "AUTOBOT_JAEGER_ENDPOINT is deprecated" not in caplog.text
+    monkeypatch.delenv("AUTOBOT_OTEL_ENDPOINT")
+    with caplog.at_level("WARNING"):
+        tracing._create_exporter()
+    assert "AUTOBOT_JAEGER_ENDPOINT is deprecated" in caplog.text

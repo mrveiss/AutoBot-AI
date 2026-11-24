@@ -58,13 +58,22 @@ def _is_otel_enabled() -> bool:
 _EXCLUDED_URLS = ",".join((PATH_HEALTH, PATH_API_HEALTH, "/metrics", "/api/metrics", "/favicon.ico", "/static/"))
 
 
+_DEFAULT_SAMPLE_RATE = 0.1
+
+
 def _get_sample_rate() -> float:
-    """Get configured sampling rate."""
+    """Sampling rate: ``AUTOBOT_OTEL_SAMPLE_RATE``, or the deprecated ``AUTOBOT_TRACE_SAMPLE_RATE`` when unset."""
+    from autobot_shared.ssot_config import config
+
+    misc = config.misc
+    raw = misc.otel_sample_rate
+    if "otel_sample_rate" not in misc.model_fields_set and misc.trace_sample_rate is not None:
+        logger.warning("AUTOBOT_TRACE_SAMPLE_RATE is deprecated; set AUTOBOT_OTEL_SAMPLE_RATE instead")
+        raw = misc.trace_sample_rate
     try:
-        rate = float(os.getenv("AUTOBOT_OTEL_SAMPLE_RATE", "0.1"))
-        return max(0.0, min(1.0, rate))
+        return max(0.0, min(1.0, float(raw)))
     except ValueError:
-        return 0.1
+        return _DEFAULT_SAMPLE_RATE
 
 
 def _add_console_exporter(provider) -> None:
@@ -212,7 +221,10 @@ def _create_exporter():
     """
     from autobot_shared.ssot_config import config
 
-    endpoint = os.getenv("AUTOBOT_OTEL_ENDPOINT") or config.misc.jaeger_endpoint
+    endpoint = os.getenv("AUTOBOT_OTEL_ENDPOINT")
+    if not endpoint and config.misc.jaeger_endpoint:
+        logger.warning("AUTOBOT_JAEGER_ENDPOINT is deprecated; set AUTOBOT_OTEL_ENDPOINT instead")
+        endpoint = config.misc.jaeger_endpoint
     if not endpoint:
         logger.info("No AUTOBOT_OTEL_ENDPOINT configured, traces will not be exported")
         return None

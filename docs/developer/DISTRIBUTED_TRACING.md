@@ -51,7 +51,7 @@ AUTOBOT_JAEGER_ENDPOINT=http://<database-ip>:4317
 # Trace sampling rate (0.0-1.0)
 # 1.0 = trace everything (development)
 # 0.1 = trace 10% of requests (production)
-AUTOBOT_TRACE_SAMPLE_RATE=1.0
+AUTOBOT_OTEL_SAMPLE_RATE=1.0
 
 # Enable console span export for debugging
 AUTOBOT_TRACE_CONSOLE=false
@@ -62,7 +62,7 @@ AUTOBOT_TRACE_CONSOLE=false
 The sampling strategy uses `ParentBasedTraceIdRatio`:
 - **Respects parent decisions** - If a parent span is sampled, all children are too
 - **Probabilistic sampling** - Samples based on trace ID hash for consistent decisions
-- **Configurable rate** - Set via `AUTOBOT_TRACE_SAMPLE_RATE`
+- **Configurable rate** - Set via `AUTOBOT_OTEL_SAMPLE_RATE`
 
 | Environment | Recommended Rate |
 |-------------|------------------|
@@ -259,7 +259,7 @@ instrument_fastapi(app)
 
 3. **Check sampling rate:**
    ```bash
-   AUTOBOT_TRACE_SAMPLE_RATE=1.0  # Trace everything
+   AUTOBOT_OTEL_SAMPLE_RATE=1.0  # Trace everything
    ```
 
 ### Missing Spans

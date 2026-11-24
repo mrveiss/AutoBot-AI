@@ -1785,7 +1785,11 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     tls_cert_path: str = Field(default="", alias="AUTOBOT_TLS_CERT_PATH")
     tls_key_path: str = Field(default="", alias="AUTOBOT_TLS_KEY_PATH")
     trace_console: str = Field(default="", alias="AUTOBOT_TRACE_CONSOLE")
-    trace_sample_rate: float = Field(default=1.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")  # #13264 batch 3
+    # Trace sampling: AUTOBOT_OTEL_SAMPLE_RATE is the one setting. AUTOBOT_TRACE_SAMPLE_RATE is a deprecated alias,
+    # used only when the canonical name is unset (autobot_shared/tracing.py logs the warning). Strings: a bad value
+    # falls back to the default at the read site instead of failing the whole config load (#21685).
+    otel_sample_rate: str = Field(default="0.1", alias="AUTOBOT_OTEL_SAMPLE_RATE")
+    trace_sample_rate: str | None = Field(default=None, alias="AUTOBOT_TRACE_SAMPLE_RATE")
     tts_stream_probe_ttl: str = Field(
         default="",
         alias="AUTOBOT_TTS_STREAM_PROBE_TTL",
