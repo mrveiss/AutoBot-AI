@@ -31,7 +31,6 @@ autobot-frontend/src/components/file-browser/FileTreeView.vue
 autobot-frontend/src/components/knowledge/DeduplicationManager.vue
 autobot-frontend/src/components/knowledge/DocumentChangeFeed.vue
 autobot-frontend/src/components/knowledge/FailedVectorizationsManager.vue
-autobot-frontend/src/components/knowledge/KnowledgeBrowser.vue
 autobot-frontend/src/components/knowledge/KnowledgeEntries.vue
 autobot-frontend/src/components/knowledge/KnowledgeSearchResults.vue
 autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue

@@ -33,6 +33,8 @@ import logging
 import pytest
 
 import api.codebase_analytics.endpoints.ownership as own_mod
+from api.codebase_analytics.endpoints import shared
+from autobot_shared.isolated_git import make_repo
 
 
 @pytest.fixture
@@ -42,7 +44,7 @@ def two_roots(tmp_path):
     project_root = tmp_path / "code_source"
     clone = tmp_path / "data" / "code-sources" / "abc123"
     project_root.mkdir(parents=True)
-    clone.mkdir(parents=True)
+    make_repo(clone)  # blame reads this checkout's own history (#20513)
     return project_root, clone
 
 
@@ -60,7 +62,7 @@ class TestValidationUsesTheResolvedScanRoot:
         async def _resolve(source_id):
             return clone
 
-        monkeypatch.setattr(own_mod, "resolve_scan_root", _resolve)
+        monkeypatch.setattr(shared, "resolve_scan_root", _resolve)
         monkeypatch.setattr(own_mod, "_validate_path_security", _capture)
         monkeypatch.setattr(own_mod, "_check_ownership_cache", _none_cache)
         monkeypatch.setattr(own_mod, "_get_ownership_analyzer", lambda: None)
@@ -78,6 +80,57 @@ class TestValidationUsesTheResolvedScanRoot:
         assert captured["path"] == str(clone)
 
 
+@pytest.fixture
+def gitfile_checkout(tmp_path):
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    (checkout / ".git").write_text("gitdir: ../elsewhere\n", encoding="utf-8")
+    return checkout
+
+
+class TestAGitfileCheckoutIsRejected:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ["get_ownership_analysis", "get_expertise_scores", "get_knowledge_gaps"])
+    async def test_blame_never_runs_on_a_checkout_whose_git_is_a_gitfile(self, monkeypatch, gitfile_checkout, endpoint):
+        from fastapi import HTTPException
+
+        checkout = gitfile_checkout
+
+        async def _resolve(source_id):
+            return checkout
+
+        monkeypatch.setattr(shared, "resolve_scan_root", _resolve)
+        monkeypatch.setattr(own_mod, "_check_ownership_cache", _none_cache)
+        monkeypatch.setattr(own_mod, "_get_ownership_analyzer", lambda: pytest.fail("analyzer reached"))
+        kwargs = {"path": None, "source_id": "abc123"}
+        if endpoint == "get_ownership_analysis":
+            kwargs.update(refresh=False, patterns="**/*.py", days=90)
+        if endpoint == "get_knowledge_gaps":
+            kwargs["risk_level"] = None
+        with pytest.raises(HTTPException) as exc:
+            await getattr(own_mod, endpoint)(**kwargs)
+        assert exc.value.status_code == 400
+
+
+class TestAWarmCacheDoesNotBypassTheRejection:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ["get_expertise_scores", "get_knowledge_gaps"])
+    async def test_a_cached_result_is_not_served_for_a_gitfile_checkout(self, monkeypatch, gitfile_checkout, endpoint):
+        from fastapi import HTTPException
+
+        async def _resolve(source_id):
+            return gitfile_checkout
+
+        monkeypatch.setattr(shared, "resolve_scan_root", _resolve)
+        warm = {"abc123": {"expertise_scores": [{"x": 1}], "knowledge_gaps": [{"y": 1}]}}
+        monkeypatch.setattr(own_mod, "_ownership_analysis_cache", warm)
+        with pytest.raises(HTTPException) as exc:
+            await getattr(own_mod, endpoint)(
+                path=None, source_id="abc123", **({"risk_level": None} if endpoint == "get_knowledge_gaps" else {})
+            )
+        assert exc.value.status_code == 400
+
+
 class TestSiblingEndpointsAreScopedToo:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("endpoint", ["get_expertise_scores", "get_knowledge_gaps"])
@@ -91,7 +144,7 @@ class TestSiblingEndpointsAreScopedToo:
             assert source_id == "abc123", "the requested source must reach the resolver"
             return clone
 
-        monkeypatch.setattr(own_mod, "resolve_scan_root", _resolve)
+        monkeypatch.setattr(shared, "resolve_scan_root", _resolve)
         monkeypatch.setattr(own_mod, "_validate_path_security", lambda p, r: captured.update(root=r))
         monkeypatch.setattr(own_mod, "_get_ownership_analyzer", lambda: None)
         monkeypatch.setattr(own_mod, "_check_ownership_cache", _none_cache)
