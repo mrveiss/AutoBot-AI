@@ -10,16 +10,17 @@
  * Extracted from CodeEvolutionTimeline.vue (Issue #6072).
  *
  * Endpoints (all under /api/evolution/*):
+ *   (every route below also takes the required source_id, #20513)
  *   GET  /evolution/timeline?start_date=<d>&end_date=<d>&granularity=<g>&metrics=<m>
  *   GET  /evolution/trends?days=<n>
  *   GET  /evolution/patterns
  *   GET  /evolution/export?format=csv&start_date=<d>&end_date=<d>
  */
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useCodeEvolutionData')
@@ -66,6 +67,10 @@ export interface PatternsResult {
 }
 
 export function useCodeEvolutionData() {
+  // #20513: every evolution route requires its source (the codebase/:sourceId parent); with none, no request is made
+  const route = useRoute()
+  const sourceId = computed(() => route.params.sourceId as string | undefined)
+  const withSourceId = (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=${encodeURIComponent(sourceId.value ?? '')}`
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -76,6 +81,7 @@ export function useCodeEvolutionData() {
     metrics: string[]
   ): Promise<TimelineResult | null> {
     error.value = null
+    if (!sourceId.value) return null
     try {
       const params = new URLSearchParams({
         start_date: startDate,
@@ -84,7 +90,7 @@ export function useCodeEvolutionData() {
         metrics: metrics.join(','),
       })
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
-      return await apiClient.get<TimelineResult>(`${getApiBase()}/evolution/timeline?${params}`)
+      return await apiClient.get<TimelineResult>(withSourceId(`/api/evolution/timeline?${params}`))
     } catch (e) {
       logger.error('Failed to load evolution timeline:', e)
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -94,9 +100,10 @@ export function useCodeEvolutionData() {
 
   async function fetchTrends(days: string): Promise<TrendsResult | null> {
     error.value = null
+    if (!sourceId.value) return null
     try {
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
-      return await apiClient.get<TrendsResult>(`${getApiBase()}/evolution/trends?days=${days}`)
+      return await apiClient.get<TrendsResult>(withSourceId(`/api/evolution/trends?days=${days}`))
     } catch (e) {
       logger.error('Failed to load evolution trends:', e)
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -106,9 +113,10 @@ export function useCodeEvolutionData() {
 
   async function fetchPatterns(): Promise<PatternsResult | null> {
     error.value = null
+    if (!sourceId.value) return null
     try {
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
-      return await apiClient.get<PatternsResult>(`${getApiBase()}/evolution/patterns`)
+      return await apiClient.get<PatternsResult>(withSourceId('/api/evolution/patterns'))
     } catch (e) {
       logger.error('Failed to load evolution patterns:', e)
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -118,10 +126,11 @@ export function useCodeEvolutionData() {
 
   async function fetchExport(startDate: string, endDate: string): Promise<Blob | null> {
     error.value = null
+    if (!sourceId.value) return null
     try {
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
       const response = await fetchWithAuth( // fetchWithAuth retained: binary blob response — exempt from Wave 5 (#6224)
-        `${getApiBase()}/evolution/export?format=csv&start_date=${startDate}&end_date=${endDate}`
+        withSourceId(`/api/evolution/export?format=csv&start_date=${startDate}&end_date=${endDate}`)
       )
       if (!response.ok) {
         logger.warn('Failed to export evolution data: HTTP', response.status)
@@ -136,6 +145,7 @@ export function useCodeEvolutionData() {
   }
 
   return {
+    sourceId,
     isLoading,
     error,
     fetchTimeline,
