@@ -21,7 +21,7 @@ Both services read the names and the paths from here, so the two ends cannot dri
 
 from __future__ import annotations
 
-from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.slm_credential_actions import SlmApprovalAction
 
 STALE_SYNC_FILES_CLEANUP = SlmApprovalAction(
@@ -32,6 +32,12 @@ STALE_SYNC_FILES_CLEANUP = SlmApprovalAction(
 
 #: The most files one proposal lists; the cap counts items and never shortens a path (#22033, owner D5).
 MAX_FILES_PER_PROPOSAL = env_int_clamped("SLM_STALE_SYNC_FILES_MAX_PER_PROPOSAL", 200, 1, 1000)
+
+#: Seconds one listing or removal over ssh may run; the backend waits for twice that (a listing and a removal).
+SSH_TIMEOUT_SECONDS = env_float_clamped("SLM_STALE_SYNC_FILES_SSH_TIMEOUT_SECONDS", 120.0, 5.0, 900.0)
+
+#: The ``context`` key naming the one old sync location of one node a proposal covers (``<node>:<old target>``).
+LOCATION_KEY = "location"
 
 #: The backend path a proposal is POSTed to (internal key only).
 PROPOSAL_PATH = "/api/internal/slm/stale-file-proposals"
@@ -58,3 +64,8 @@ def removal_path(node_id: str) -> str:
 def api_relative(path: str) -> str:
     """*path* without its ``/api/`` prefix, the form ``call_main_backend`` takes."""
     return path.removeprefix("/api/")
+
+
+def location(node_id: str, old_target: str) -> str:
+    """The key of one old sync location on one node: at most one proposal is pending for it."""
+    return f"{node_id}:{old_target}"
