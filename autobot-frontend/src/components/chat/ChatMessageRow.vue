@@ -110,6 +110,7 @@ import {
   getSenderName,
   messageTypeOf,
 } from '@/composables/chat/useChatMessageView'
+import { useToast } from '@/composables/useToast'
 import { useAIDocument } from '@/composables/useAIDocument'
 import { formatTime } from '@/utils/formatHelpers'
 import { shownModel } from '@/utils/internalMessage'
@@ -132,6 +133,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const { saveMessageAsDocument } = useAIDocument()
+const { showToast } = useToast()
 const isSavingDocument = ref(false)
 
 async function saveAsDocument() {
@@ -140,6 +142,8 @@ async function saveAsDocument() {
   try {
     const doc = await saveMessageAsDocument({ content: props.message.content, messageId: props.message.id })
     emit('save-as-document', doc.id)
+  } catch {
+    showToast(t('chat.messages.saveAsDocumentFailed'), 'error')
   } finally {
     isSavingDocument.value = false
   }

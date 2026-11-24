@@ -42,6 +42,11 @@ describe('useChatMessageActions', () => {
     expect(h.controller.sendMessage).toHaveBeenCalledTimes(1)
   })
 
+  it('retry rethrows a failed send so the caller can tell it from a success', async () => {
+    h.controller.sendMessage.mockRejectedValueOnce(new Error('down'))
+    await expect(useChatMessageActions().retryMessage('m1')).rejects.toThrow('down')
+  })
+
   it('saveEdit goes to the controller', () => {
     useChatMessageActions().saveEdit('m1', 'new')
     expect(h.controller.editMessage).toHaveBeenCalledWith('m1', 'new')

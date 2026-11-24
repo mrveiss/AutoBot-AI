@@ -427,6 +427,8 @@
       "error": "Translation failed. Please try again."
     },
     "messages": {
+      "newMessageAnnouncement": "New message from {sender}: {preview}",
+      "saveAsDocumentFailed": "Could not save the message as a document.",
       "conversation": "Conversation messages",
       "aiAssistant": "AI Assistant",
       "editMessage": "Edit Message",

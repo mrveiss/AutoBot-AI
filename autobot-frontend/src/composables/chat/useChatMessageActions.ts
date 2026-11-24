@@ -54,6 +54,7 @@ export function useChatMessageActions() {
       await controller.sendMessage(message.content)
     } catch (error) {
       logger.error('Failed to retry message:', error)
+      throw error
     }
   }
 

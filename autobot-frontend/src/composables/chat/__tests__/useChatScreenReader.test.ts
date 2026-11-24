@@ -9,7 +9,7 @@ import { nextTick, reactive } from 'vue'
 
 vi.mock('@/utils/sanitize', () => ({ sanitizeChatHtml: (h: string) => h }))
 
-import { announcementText, useChatScreenReader } from '../useChatScreenReader'
+import { announcementPreview, useChatScreenReader } from '../useChatScreenReader'
 import type { ChatMessage } from '@/stores/useChatStore'
 
 const msg = (id: string, content = 'hello', sender = 'assistant') => ({ id, sender, content, timestamp: 't' }) as unknown as ChatMessage
@@ -17,10 +17,10 @@ const msg = (id: string, content = 'hello', sender = 'assistant') => ({ id, send
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
-describe('announcementText', () => {
+describe('announcementPreview', () => {
   it('strips tags and adds an ellipsis only when the preview is shorter than the message', () => {
-    expect(announcementText(msg('1', '<b>hi</b>'), 'AI')).toBe('New message from AI: hi...')
-    expect(announcementText(msg('1', 'hi'), 'AI')).toBe('New message from AI: hi')
+    expect(announcementPreview(msg('1', '<b>hi</b>'))).toBe('hi...')
+    expect(announcementPreview(msg('1', 'hi'))).toBe('hi')
   })
 })
 
@@ -28,7 +28,7 @@ describe('useChatScreenReader', () => {
   it('scrolls on every length change, announces only an added message, and clears after 2s', async () => {
     const store = reactive({ currentMessages: [msg('1')] })
     const scroll = vi.fn()
-    const { screenReaderStatus } = useChatScreenReader(store, scroll, (s) => 'who:' + s)
+    const { screenReaderStatus } = useChatScreenReader(store, scroll, (s, p) => `New message from who:${s}: ${p}`)
     store.currentMessages.push(msg('2', 'hello', 'user'))
     await nextTick()
     await nextTick()
@@ -40,6 +40,20 @@ describe('useChatScreenReader', () => {
     await nextTick()
     await nextTick()
     expect(scroll).toHaveBeenCalledTimes(2)
+    expect(screenReaderStatus.value).toBe('')
+  })
+
+  it('an earlier message timer does not clear a later announcement early', async () => {
+    const store = reactive({ currentMessages: [msg('1')] })
+    const { screenReaderStatus } = useChatScreenReader(store, vi.fn(), (s, p) => p)
+    store.currentMessages.push(msg('2', 'A', 'user'))
+    await nextTick(); await nextTick()
+    vi.advanceTimersByTime(1990)
+    store.currentMessages.push(msg('3', 'B', 'user'))
+    await nextTick(); await nextTick()
+    vi.advanceTimersByTime(10)
+    expect(screenReaderStatus.value).toBe('B')
+    vi.advanceTimersByTime(1990)
     expect(screenReaderStatus.value).toBe('')
   })
 })

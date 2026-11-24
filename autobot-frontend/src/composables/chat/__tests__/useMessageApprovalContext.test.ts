@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { mount } from '@vue/test-utils'
 
-const state = vi.hoisted(() => ({ approveCommand: vi.fn() }))
+const state = vi.hoisted(() => ({ approveCommand: vi.fn(), routed: vi.fn(), routing: vi.fn() }))
 vi.mock('@/composables/useCommandApproval', async () => {
   const { ref } = await import('vue')
   return {
@@ -18,7 +18,7 @@ vi.mock('@/composables/useCommandApproval', async () => {
     }),
   }
 })
-vi.mock('@/composables/useGraphApproval', () => ({ useApprovalRouting: (fn: unknown) => fn }))
+vi.mock('@/composables/useGraphApproval', () => ({ useApprovalRouting: (fn: unknown) => { state.routing(fn); return state.routed } }))
 vi.mock('@/stores/usePermissionStore', () => ({ usePermissionStore: () => ({ isEnabled: true }) }))
 
 import { provideMessageApproval, useMessageApproval } from '../useMessageApprovalContext'
@@ -38,7 +38,8 @@ describe('message approval context', () => {
     let ctx: ReturnType<typeof useMessageApproval> | undefined
     const Parent = defineComponent({ setup() { ctx = provideMessageApproval(); return () => h('i') } })
     mount(Parent)
-    expect(ctx?.approveCommand).toBe(state.approveCommand)
+    expect(state.routing).toHaveBeenCalledWith(state.approveCommand)
+    expect(ctx?.approveCommand).toBe(state.routed)
   })
 
   it('throws a clear error without a provider', () => {

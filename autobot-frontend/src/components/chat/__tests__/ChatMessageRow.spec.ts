@@ -9,6 +9,8 @@ import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 const save = vi.hoisted(() => vi.fn())
+const toast = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ showToast: toast }) }))
 vi.mock('@/composables/useAIDocument', () => ({ useAIDocument: () => ({ saveMessageAsDocument: save }) }))
 import ChatMessageRow from '../ChatMessageRow.vue'
 import type { ChatMessage } from '@/stores/useChatStore'
@@ -36,7 +38,7 @@ describe('ChatMessageRow', () => {
   it('offers Edit only on a user message; Copy and Delete on every one', () => {
     const labels = (w: ReturnType<typeof render>) => w.findAll('.message-actions button').map((b) => b.attributes('aria-label'))
     expect(labels(render(msg({ sender: 'user' })))).toEqual(['Edit message', 'Copy message', 'Delete message'])
-    expect(labels(render(msg()))).toEqual(['Copy message', 'Delete message'])
+    expect(labels(render(msg()))).toEqual(['Copy message', 'Save as document', 'Delete message'])
   })
 
   it('emits the message for edit, copy and delete', async () => {
@@ -77,5 +79,14 @@ describe('ChatMessageRow', () => {
     const src = readFileSync(resolve(__dirname, '../ChatMessageRow.vue'), 'utf-8')
     expect(src).toMatch(/\.message-wrapper:focus-within \.message-actions\s*\{ opacity: 1/)
     expect(src).toMatch(/@media \(hover: none\)\s*\{ \.message-actions\s*\{ opacity: 1/)
+  })
+
+  it('toasts a failure and emits nothing when saving as a document rejects', async () => {
+    save.mockRejectedValueOnce(new Error('boom'))
+    const w = render(msg())
+    await w.get('[aria-label="Save as document"]').trigger('click')
+    await new Promise((r) => setTimeout(r))
+    expect(toast).toHaveBeenCalledWith('Could not save the message as a document.', 'error')
+    expect(w.emitted('save-as-document')).toBeUndefined()
   })
 })

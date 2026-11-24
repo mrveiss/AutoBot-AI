@@ -139,7 +139,8 @@ const { virtualItems, totalSize, measureElement, scrollToBottom, scrollToStep } 
   currentSessionId: computed(() => store.currentSessionId),
 })
 
-const { screenReaderStatus } = useChatScreenReader(store, scrollToBottom, (sender) => getSenderName(sender, t))
+const { screenReaderStatus } = useChatScreenReader(store, scrollToBottom, (sender, preview) =>
+  t('chat.messages.newMessageAnnouncement', { sender: getSenderName(sender, t), preview }))
 
 const isLastMessage = (message: ChatMessage): boolean => {
   const messages = store.currentMessages
