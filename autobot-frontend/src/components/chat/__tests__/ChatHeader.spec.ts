@@ -11,6 +11,7 @@ import en from '@/i18n/locales/en.json'
 import ChatHeader from '../ChatHeader.vue'
 import ChatHeaderActions from '../ChatHeaderActions.vue'
 import { useUiMode } from '@/composables/useUiMode'
+import { useChatKnowledge } from '@/composables/chat/useChatKnowledge'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const base = {
@@ -19,9 +20,21 @@ const base = {
 const render = (props: Record<string, unknown> = {}) =>
   mount(ChatHeader, { props: { ...base, ...props }, attachTo: document.body, global: { plugins: [i18n] } })
 
-beforeEach(() => useUiMode().setMode('full'))
+beforeEach(() => {
+  useUiMode().setMode('full')
+  useChatKnowledge().enabled.value = true
+})
 
 describe('ChatHeader', () => {
+  it('shows Knowledge on or off from the state the composer chip shares (#18243)', async () => {
+    const w = render()
+    expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOn)
+    useChatKnowledge().enabled.value = false
+    await flushPromises()
+    expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOff)
+    w.unmount()
+  })
+
   it('shows the title and sub-line', () => {
     const w = render()
     expect(w.text()).toContain('Fleet check')

@@ -4,19 +4,24 @@
   AutoBot - AI-Powered Automation Platform
   Author: mrveiss
 
-  ChatInputStatusBar — the line under the chat input: typing hint, character count, voice
-  status, keyboard hint, and the Stop control while a reply is streaming (#17829).
-  Moved out of ChatInput.vue, which is at its size ceiling.
+  ChatInputStatusBar -- the line under the chat input: typing hint, character counter (with the room left near the
+  limit), voice status, keyboard hint, and the Stop control while a reply is streaming (#17829). Kit button and
+  tokens only (#18243).
 -->
 <template>
-  <div class="flex items-center justify-between text-xs text-autobot-text-muted">
+  <div class="mt-2 flex items-center justify-between gap-3 text-xs text-[var(--aui-color-text-muted)]">
     <div class="flex items-center gap-3">
-      <span v-if="typingVisible" class="flex items-center gap-1 text-autobot-primary">
-        <Icon name="keyboard" />
+      <span v-if="typingVisible" class="inline-flex items-center gap-1 text-[var(--aui-color-primary)]">
+        <Icon name="keyboard" size="sm" />
         {{ $t('chat.input.typing') }}
       </span>
-      <span v-if="characterCount > 0" class="transition-colors" :class="{ 'text-autobot-warning font-medium': nearLimit }">
-        {{ characterCount }}/{{ maxCharacters }}
+      <span
+        v-if="characterCount > 0"
+        class="font-mono transition-colors"
+        :class="nearLimit ? 'font-medium text-[var(--aui-color-warning)]' : ''"
+        data-testid="character-count"
+      >
+        {{ characterCount }}/{{ maxCharacters }}<template v-if="nearLimit"> · {{ $t('chat.input.charactersLeft', { count: maxCharacters - characterCount }) }}</template>
       </span>
     </div>
 
@@ -29,15 +34,15 @@
         data-testid="stop-generating"
         @click="stop"
       >
-        <Icon name="stop" aria-hidden="true" />
+        <template #icon-left><Icon name="stop" size="sm" aria-hidden="true" /></template>
         {{ $t('chat.stopGenerating') }}
       </BaseButton>
-      <span v-if="failed" class="text-autobot-error" role="status" data-testid="stop-failed">{{ $t('chat.input.stopFailed') }}</span>
-      <span v-if="voiceRecording" class="flex items-center gap-1 text-autobot-error">
-        <Icon name="circle" class="text-red-500 animate-pulse" />
+      <span v-if="failed" class="text-[var(--aui-color-error)]" role="status" data-testid="stop-failed">{{ $t('chat.input.stopFailed') }}</span>
+      <span v-if="voiceRecording" class="inline-flex items-center gap-1 text-[var(--aui-color-error)]" role="status">
+        <Icon name="circle" size="xs" class="animate-pulse fill-current motion-reduce:animate-none" />
         {{ $t('chat.input.recording') }}
       </span>
-      <span class="hidden sm:block">{{ $t('chat.input.keyboardHint') }}</span>
+      <span class="hidden sm:block">{{ $t('chat.input.keyboardHint') }}<span class="adv"> · {{ $t('chat.input.keyboardHintAdvanced') }}</span></span>
     </div>
   </div>
 </template>

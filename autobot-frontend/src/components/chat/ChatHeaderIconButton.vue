@@ -2,14 +2,14 @@
   Copyright 2025-2026 mrveiss
   SPDX-License-Identifier: Apache-2.0
 
-  ChatHeaderIconButton -- one icon-only button of the chat header (#18243): a kit ghost
+  ChatHeaderIconButton -- one icon-only button of the chat header and composer (#18243): a kit ghost
   BaseButton inside a BaseTooltip. `label` is both the accessible name and the tooltip, so an
   icon-only control can never ship without either. `pressed` is a toggle (aria-pressed, styled by
   the kit); `expanded` + `controls` name a disclosure panel. `adv` hides it in Minimal mode.
   Emits `el` with the button element (and null on unmount) for focus return after a panel closes.
 -->
 <template>
-  <BaseTooltip :text="label" placement="bottom" :class="{ adv }">
+  <BaseTooltip :text="label" :placement="placement" :class="{ adv }">
     <template #default="{ describedby }">
       <BaseButton
         ref="button"
@@ -21,6 +21,7 @@
         :aria-pressed="pressed"
         :aria-expanded="expanded"
         :aria-controls="controls"
+        :disabled="disabled"
         @click="emit('click')"
       >
         <Icon :name="icon" :class="iconClass" />
@@ -32,6 +33,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { BaseButton, BaseTooltip } from '@autobot/ui'
+import type { TooltipPlacement } from '@autobot/ui'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
 
 // pressed / expanded default to undefined, not false: Vue casts an absent Boolean prop to false, which
@@ -45,8 +47,11 @@ withDefaults(
     expanded?: boolean
     controls?: string
     adv?: boolean
+    /** Where the tooltip opens: the header's buttons open below, the composer's above. */
+    placement?: TooltipPlacement
+    disabled?: boolean
   }>(),
-  { iconClass: undefined, pressed: undefined, expanded: undefined, controls: undefined, adv: false },
+  { iconClass: undefined, pressed: undefined, expanded: undefined, controls: undefined, adv: false, placement: 'bottom', disabled: false },
 )
 const emit = defineEmits<{ click: []; el: [element: HTMLElement | null] }>()
 
