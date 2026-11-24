@@ -324,7 +324,7 @@ const loadVncUrlFn = async () => {
   // Issue #4977: when a host prop is supplied, derive URL directly — no AppConfig call needed
   if (!props.host) throw new Error(t('desktop.interface.noHostSelected'))
   const blocked = props.host.id === DESKTOP_VM_HOST_ID ? await desktopVmBlockedKey() : null
-  if (blocked) { error.value = t(blocked); loading.value = false; connectionStatus.value = 'Configuration Error'; return }
+  if (blocked) return handleDesktopError(new Error(t(blocked)))  // the localised desktop-VM state, not an iframe
   vncUrl.value = buildHostVncUrl(props.host)
   // Clear any previous errors and update status
   error.value = null;
