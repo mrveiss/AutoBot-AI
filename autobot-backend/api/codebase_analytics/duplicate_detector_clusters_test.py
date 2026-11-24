@@ -12,12 +12,13 @@ against the pairs it used to be counted as.
 
 from __future__ import annotations
 
+import asyncio
 import textwrap
 from pathlib import Path
 
 from api.codebase_analytics import duplicate_detector as det
 from api.codebase_analytics.duplicate_blocks import make_block, normalize_exact, normalize_structural
-from api.codebase_analytics.duplicate_clusters import KIND_EXACT, KIND_STRUCTURAL
+from api.codebase_analytics.duplicate_clusters import KIND_EXACT, KIND_SIMILAR, KIND_STRUCTURAL
 from utils.file_categorization import SKIP_DIRS
 
 
@@ -125,3 +126,81 @@ def test_a_cached_analysis_round_trips_through_to_dict(tmp_path):
     restored = det.DuplicateAnalysis.from_dict(analysis.to_dict())
     assert restored.to_dict() == analysis.to_dict()
     assert restored.duplicates[0].locations == analysis.duplicates[0].locations
+
+
+def _reordered(reverse: bool) -> str:
+    """The same forty statements in either order: equal token sets, different text."""
+    body = [f"    v{k} = {k} + base" for k in range(40)]
+    return "def total(base):\n" + "\n".join(reversed(body) if reverse else body) + "\n    return v0\n"
+
+
+def test_a_non_exact_match_is_never_one_hundred_percent_even_with_equal_token_sets(tmp_path):
+    _plant(tmp_path, {"a/m.py": _reordered(False), "b/m.py": _reordered(True)})
+    analysis = _scan(tmp_path)
+    (row,) = analysis.duplicates
+    assert normalize_exact(_reordered(False)) != normalize_exact(_reordered(True))
+    assert row.kind == KIND_SIMILAR and row.similarity < 1.0
+    assert analysis.to_dict()["duplicates"][0]["similarity"] < 100
+
+
+def test_overlapping_sliding_windows_of_one_file_pair_merge_into_one_range(tmp_path):
+    lines = "".join(f"value_{k} = {k} * seed_{k}\n" for k in range(20))  # no def: sliding windows of 10, step 5
+    _plant(tmp_path, {"a/m.py": lines, "b/m.py": lines})
+    exact = [d for d in _scan(tmp_path).duplicates if d.kind == KIND_EXACT]
+    assert len(exact) == 1, "overlapping windows stayed separate rows"
+    assert [(loc.start_line, loc.end_line) for loc in exact[0].locations] == [(1, 20), (1, 20)]
+    assert exact[0].line_count == 20
+
+
+def test_an_old_pair_shaped_cache_entry_is_a_miss_not_a_crash():
+    old = {
+        "total_duplicates": 1,
+        "high_similarity_count": 1,
+        "medium_similarity_count": 0,
+        "low_similarity_count": 0,
+        "total_duplicate_lines": 5,
+        "duplicates": [{"file1": "a.py", "file2": "b.py", "similarity": 100.0, "lines": 5}],
+    }
+    assert det.DuplicateAnalysis.from_cache(old) is None
+    assert det.DuplicateAnalysis.from_cache(None) is None
+
+
+def test_the_cache_key_carries_the_schema_version_and_an_old_entry_cannot_crash_the_scan(tmp_path):
+    asked: list[str] = []
+
+    class _Cached(det.DuplicateCodeDetector):
+        async def _get_cached_result(self, key, prefix=""):
+            asked.append(key)
+            return {"duplicates": [{"file1": "a.py"}]}
+
+        async def _cache_result(self, *args, **kwargs):
+            return None
+
+        async def _find_semantic_duplicates_async(self, all_blocks, seen_pairs):
+            return []
+
+    scanner = _Cached(project_root=str(tmp_path))
+    scanner.use_semantic_analysis = True
+    analysis = asyncio.run(scanner.run_analysis_async())
+    assert asked and f":v{det.DUPLICATE_CACHE_SCHEMA_VERSION}:" in asked[0]
+    assert analysis.total_duplicates == 0
+
+
+def test_python_floor_division_is_code_and_a_js_comment_is_not():
+    assert normalize_exact("y = a // b") != normalize_exact("y = a // c")
+    assert normalize_exact("x = 1 // c\ny = 2", js_family=True) == "x = 1 y = 2"
+
+
+def test_a_string_holding_a_block_comment_marker_does_not_swallow_code():
+    code = 'a = "/*"; b(); c = "*/"'
+    assert normalize_exact(code, js_family=True) == code
+    assert "b()" in normalize_exact('d = """/* x\n"""\ny = b()')
+
+
+def test_a_block_listed_by_an_exact_and_a_structural_cluster_counts_once(tmp_path):
+    _plant(tmp_path, {"a/m.py": _helper("left"), "b/m.py": _helper("left"), "c/m.py": _helper("right")})
+    analysis = _scan(tmp_path)
+    exact = next(d for d in analysis.duplicates if d.kind == KIND_EXACT)
+    assert analysis.exact_cluster_count == 1 and analysis.structural_cluster_count == 1
+    assert analysis.total_locations == 3, "the exact pair was counted again inside the structural cluster"
+    assert analysis.total_duplicate_lines == exact.line_count * 2

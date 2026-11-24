@@ -13,7 +13,7 @@
  * TIMED OUT carrying what it had. Empty means it learned nothing, so it is a
  * failure wearing a success's status string.
  */
-import { ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import type { DuplicateCode, DuplicateSummary } from './analyticsTypes'
 
 /** done: a real result (possibly empty); not_scanned: nothing to show yet; failed: the scan did not run. */
@@ -27,6 +27,12 @@ export interface DuplicateReading {
 
 /** The latest scan's true totals, read by the panel next to its (capped) rows (#22157). */
 export const duplicateSummary = ref<DuplicateSummary | null>(null)
+
+/** Clear the duplicate rows and their summary together, so a cleared panel never keeps the last scan's totals (#22157). */
+export function clearDuplicateResults<T>(rows: Ref<T[]>): void {
+  rows.value = []
+  duplicateSummary.value = null
+}
 
 /** The response's own totals; a payload that carries none yields null, never a count of its rows. */
 function readSummary(payload: Record<string, unknown>, rows: DuplicateCode[]): DuplicateSummary | null {

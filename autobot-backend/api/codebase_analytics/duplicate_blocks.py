@@ -25,10 +25,17 @@ MIN_DUPLICATE_LINES = 4
 # Minimum characters of the NORMALIZED block (#22157: was measured on the raw text)
 MIN_DUPLICATE_CHARS = 80
 
-# A quoted string is matched first so a comment marker inside it is not a comment.
-_STRING_OR_COMMENT_RE = re.compile(
-    r"""(?P<string>"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|\#[^\n]*|//[^\n]*""",
-)
+# Files whose comments are ``//`` and ``/* */``; every other scanned file is Python (``#``).
+JS_FAMILY_SUFFIXES = (".js", ".ts", ".vue", ".jsx", ".tsx")
+
+# A quoted string is matched first, in the same pass as the comment, so a comment marker inside
+# one is not a comment. Python also has triple-quoted strings; JS also has template literals.
+_DQ = r'"(?:\\.|[^"\\\n])*"'
+_SQ = r"'(?:\\.|[^'\\\n])*'"
+_PY_STRING = r'(?P<string>""".*?"""' + r"|'''.*?'''" + "|" + _DQ + "|" + _SQ + ")"
+_JS_STRING = "(?P<string>" + _DQ + "|" + _SQ + r"|`(?:\\.|[^`\\])*`)"
+_PY_COMMENT_RE = re.compile(_PY_STRING + r"|\#[^\n]*", re.DOTALL)
+_JS_COMMENT_RE = re.compile(_JS_STRING + r"|//[^\n]*|/\*.*?\*/", re.DOTALL)
 
 
 @dataclass
@@ -71,10 +78,14 @@ def normalize_structural(content: str) -> str:
     return content.strip().lower()
 
 
-def normalize_exact(content: str) -> str:
-    """Normalize by removing comments and whitespace variation ONLY; strings and case are kept."""
-    content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
-    content = _STRING_OR_COMMENT_RE.sub(lambda m: m.group("string") or "", content)
+def normalize_exact(content: str, js_family: bool = False) -> str:
+    """Normalize by removing comments and whitespace variation ONLY; strings and case are kept.
+
+    Comments are ``#`` in Python and ``//`` / ``/* */`` in the JS family; the other file
+    type's markers are code (``a // b`` is Python floor division).
+    """
+    pattern = _JS_COMMENT_RE if js_family else _PY_COMMENT_RE
+    content = pattern.sub(lambda m: m.group("string") or "", content)
     return re.sub(r"\s+", " ", content).strip()
 
 
@@ -92,5 +103,5 @@ def make_block(file_path: str, start_line: int, end_line: int, content: str, lin
         content_hash=content_digest(normalized),
         line_count=line_count,
         token_set=set(normalized.split()),
-        exact_hash=content_digest(normalize_exact(content)),
+        exact_hash=content_digest(normalize_exact(content, file_path.endswith(JS_FAMILY_SUFFIXES))),
     )

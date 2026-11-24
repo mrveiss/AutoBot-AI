@@ -24,7 +24,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
@@ -37,12 +37,13 @@ from utils.file_categorization import (
     is_skipped_path,
 )
 
-from .duplicate_blocks import MIN_DUPLICATE_LINES, CodeBlock, make_block
+from .duplicate_blocks import JS_FAMILY_SUFFIXES, MIN_DUPLICATE_LINES, CodeBlock, make_block
 from .duplicate_clusters import (
     KIND_EXACT,
     KIND_STRUCTURAL,
     DuplicateCluster,
     cluster_similar_pairs,
+    count_distinct_locations,
     find_identical_clusters,
     merge_adjacent_clusters,
 )
@@ -80,6 +81,9 @@ LOW_SIMILARITY_THRESHOLD = 0.50
 # Maximum files to scan (0 = no limit, scan all files)
 # Issue #609: No limit on files - scan entire codebase
 MAX_FILES_TO_SCAN = 0
+# Shape of a cached analysis, part of its Redis key: an entry written under another shape (the
+# pair-shaped one before #22157) is never read, so a deploy cannot hand old rows to ``from_dict``.
+DUPLICATE_CACHE_SCHEMA_VERSION = 2
 # Maximum duplicate clusters RETURNED (0 = no limit). The count and the statistics
 # always describe every cluster found; only the list is cut, and the analysis says so
 # (`truncated`). "No artificial limit" (#609) meant 2.5 million pairs on AutoBot's
@@ -159,6 +163,17 @@ class DuplicateAnalysis:
         fields = {k: v for k, v in cached.items() if k not in ("truncated", "duplicates")}
         return cls(duplicates=[DuplicateCluster.from_dict(r) for r in cached.get("duplicates", [])], **fields)
 
+    @classmethod
+    def from_cache(cls, cached: Optional[Dict]) -> Optional["DuplicateAnalysis"]:
+        """The analysis a cache entry holds, or None (a miss) when it is absent or of another shape."""
+        if not cached:
+            return None
+        try:
+            return cls.from_dict(cached)
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("Ignoring unreadable cached duplicate analysis: %r", exc)
+            return None
+
     @property
     def truncated(self) -> bool:
         """True when ``duplicates`` is shorter than ``total_duplicates`` (#18067)."""
@@ -206,7 +221,7 @@ def _extract_code_blocks(file_path: str, content: str) -> List[CodeBlock]:
         blocks.extend(_extract_python_blocks(file_path, lines))
 
     # Extract function blocks for JS/TS/Vue
-    elif any(file_path.endswith(ext) for ext in [".js", ".ts", ".vue", ".jsx", ".tsx"]):
+    elif file_path.endswith(JS_FAMILY_SUFFIXES):
         blocks.extend(_extract_js_blocks(file_path, lines))
 
     # Fallback: sliding window for generic blocks
@@ -321,10 +336,13 @@ def _is_new_semantic_pair(block1: CodeBlock, block2: CodeBlock, seen_pairs: Set[
 
 
 def _cluster_totals(clusters: List[DuplicateCluster]) -> Tuple[int, int, int, int]:
-    """``(clusters, locations, exact clusters, structural clusters)`` of ``clusters``."""
+    """``(clusters, distinct locations, exact clusters, structural clusters)`` of ``clusters``.
+
+    A structural cluster lists the blocks of its exact subgroups too; each place counts once.
+    """
     return (
         len(clusters),
-        sum(len(d.locations) for d in clusters),
+        count_distinct_locations(clusters)[0],
         sum(1 for d in clusters if d.kind == KIND_EXACT),
         sum(1 for d in clusters if d.kind == KIND_STRUCTURAL),
     )
@@ -646,8 +664,8 @@ class DuplicateCodeDetector(_BaseClass):
             1 for d in duplicates if MEDIUM_SIMILARITY_THRESHOLD <= d.similarity < HIGH_SIMILARITY_THRESHOLD
         )
         low_count = sum(1 for d in duplicates if LOW_SIMILARITY_THRESHOLD <= d.similarity < MEDIUM_SIMILARITY_THRESHOLD)
-        # k copies hold k-1 redundant ones (a pair: one)
-        total_lines = sum(d.line_count * (len(d.locations) - 1) for d in duplicates)
+        # k copies hold k-1 redundant ones (a pair: one); a block listed by two clusters counts once
+        total_lines = count_distinct_locations(duplicates)[1]
         return high_count, medium_count, low_count, total_lines
 
     def run_analysis(self) -> DuplicateAnalysis:
@@ -834,12 +852,12 @@ class DuplicateCodeDetector(_BaseClass):
         )
 
         # Check for cached results first
-        cache_key = f"dup_analysis:{self.project_root}"
+        cache_key = f"dup_analysis:v{DUPLICATE_CACHE_SCHEMA_VERSION}:{self.project_root}"
         if self.use_semantic_analysis:
-            cached = await self._get_cached_result(cache_key, prefix="duplicate_detector")
+            cached = DuplicateAnalysis.from_cache(await self._get_cached_result(cache_key, prefix="duplicate_detector"))
             if cached:
                 logger.info("Returning cached duplicate analysis")
-                return DuplicateAnalysis.from_dict(cached)
+                return cached
 
         files = self._get_files_to_scan()
         logger.info("Found %d files to scan", len(files))

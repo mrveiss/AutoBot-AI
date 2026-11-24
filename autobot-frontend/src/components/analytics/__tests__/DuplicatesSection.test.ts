@@ -10,7 +10,8 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import DuplicatesSection from '../DuplicatesSection.vue'
-import { duplicateSummary } from '@/composables/analytics/duplicatePayload'
+import { ref } from 'vue'
+import { clearDuplicateResults, duplicateSummary } from '@/composables/analytics/duplicatePayload'
 
 interface Duplicate {
   similarity: number
@@ -189,6 +190,16 @@ describe('DuplicatesSection (#5369)', () => {
       } finally {
         duplicateSummary.value = null
       }
+    })
+
+    it('clears the rows and the summary together, so a cleared panel keeps no stale total', () => {
+      duplicateSummary.value = {
+        totalCount: 12345, truncated: true, totalLocations: 1, exactCount: 1, structuralCount: 0, excludedDirs: [],
+      }
+      const rows = ref([makeDup()])
+      clearDuplicateResults(rows)
+      expect(rows.value).toEqual([])
+      expect(duplicateSummary.value).toBeNull()
     })
 
     it('lists every location of a cluster', async () => {

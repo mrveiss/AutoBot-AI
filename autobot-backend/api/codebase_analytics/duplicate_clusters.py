@@ -24,6 +24,9 @@ KIND_SIMILAR = "similar"
 
 # A structural match is high-confidence but is not equal code, so it is below 1.0.
 STRUCTURAL_SIMILARITY = 0.95
+# A non-exact row is never 100%: token-set similarity (fuzzy or semantic) reaches 1.0 for blocks
+# that are different code, and 100% is reserved for text equal after comment normalization.
+MAX_NON_EXACT_SIMILARITY = 0.99
 # Two blocks of one file pair are adjacent when no more than one blank line separates them.
 ADJACENT_LINE_GAP = 2
 
@@ -170,7 +173,7 @@ def cluster_similar_pairs(pairs: Iterable[Any]) -> List[DuplicateCluster]:
     return [
         DuplicateCluster(
             kind=KIND_SIMILAR,
-            similarity=weakest[root].similarity,
+            similarity=min(weakest[root].similarity, MAX_NON_EXACT_SIMILARITY),
             line_count=weakest[root].line_count,
             locations=sorted(locs, key=lambda loc: (loc.file, loc.start_line)),
             code_snippet=weakest[root].code_snippet,
@@ -181,17 +184,43 @@ def cluster_similar_pairs(pairs: Iterable[Any]) -> List[DuplicateCluster]:
 
 
 def _follows(prev: DuplicateCluster, cur: DuplicateCluster) -> bool:
-    return all(0 <= b.start_line - a.end_line <= ADJACENT_LINE_GAP for a, b in zip(prev.locations, cur.locations))
+    """``cur`` begins after ``prev`` does and no later than one blank line past its end (overlap merges)."""
+    return all(
+        a.start_line < b.start_line <= a.end_line + ADJACENT_LINE_GAP for a, b in zip(prev.locations, cur.locations)
+    )
 
 
 def _join(prev: DuplicateCluster, cur: DuplicateCluster) -> DuplicateCluster:
+    places = [
+        DuplicateLocation(a.file, a.start_line, max(a.end_line, b.end_line))
+        for a, b in zip(prev.locations, cur.locations)
+    ]
     return DuplicateCluster(
         kind=prev.kind,
         similarity=min(prev.similarity, cur.similarity),
-        line_count=prev.line_count + cur.line_count,
-        locations=[DuplicateLocation(a.file, a.start_line, b.end_line) for a, b in zip(prev.locations, cur.locations)],
+        line_count=places[0].end_line - places[0].start_line + 1,
+        locations=places,
         code_snippet=prev.code_snippet,
     )
+
+
+_KIND_RANK = {KIND_EXACT: 0, KIND_STRUCTURAL: 1, KIND_SIMILAR: 2}
+
+
+def count_distinct_locations(clusters: Iterable[DuplicateCluster]) -> Tuple[int, int]:
+    """``(distinct locations, redundant lines)`` over ``clusters``, each place counted once.
+
+    A structural cluster lists the blocks of its exact subgroups as well. Strongest kinds
+    count first; a cluster contributes a redundant copy for each place not yet counted,
+    less the one original when none of its places was.
+    """
+    seen: set = set()
+    redundant = 0
+    for cluster in sorted(clusters, key=lambda c: _KIND_RANK.get(c.kind, len(_KIND_RANK))):
+        fresh = [loc for loc in cluster.locations if loc not in seen]
+        seen.update(cluster.locations)
+        redundant += cluster.line_count * (len(fresh) - (1 if len(fresh) == len(cluster.locations) else 0))
+    return len(seen), redundant
 
 
 def merge_adjacent_clusters(clusters: Iterable[DuplicateCluster]) -> List[DuplicateCluster]:

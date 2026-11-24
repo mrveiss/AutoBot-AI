@@ -29,7 +29,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { duplicateSummary, readDuplicatePayload, type DuplicateScanState } from './duplicatePayload'
+import { clearDuplicateResults, duplicateSummary, readDuplicatePayload, type DuplicateScanState } from './duplicatePayload'
 import { useCodeSmellProblems } from './useCodeSmellProblems'
 import { toDeclarationPanelRows } from './declarationPanelRows'
 import { loadProjectRoot } from './projectRoot'
@@ -129,7 +129,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   // renders, and they would survive behind the failure notice.
   const failDuplicates = () => {
     staleResults.clear('duplicates')
-    duplicateAnalysis.value = []
+    clearDuplicateResults(duplicateAnalysis)
     duplicateScanState.value = 'failed'
   }
   const declarationAnalysis = ref<Declaration[]>([])
@@ -311,7 +311,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true, requireSource: true,
       label: 'Cached duplicates endpoint', pickData: (raw) => raw, onError: failDuplicates,
       onSuccess: (raw, _body, forSource) => { showDuplicates(raw); staleResults.markFromCached('duplicates', raw, forSource) },
-      onNoData: (forSource) => { duplicateAnalysis.value = []; duplicateScanState.value = 'not_scanned'; staleResults.clear('duplicates', forSource) } },
+      onNoData: (forSource) => { clearDuplicateResults(duplicateAnalysis); duplicateScanState.value = 'not_scanned'; staleResults.clear('duplicates', forSource) } },
     { withSourceId },
   )
 
