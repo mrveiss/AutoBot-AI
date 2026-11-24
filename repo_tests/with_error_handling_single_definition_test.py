@@ -146,14 +146,6 @@ _CANONICAL_DEFINER = (_REPO / "autobot_shared" / "error_boundaries" / "decorator
 # moving the floor much, so the floor alone would not catch it.
 _TREES_THAT_MUST_BE_SCANNED = ("autobot_shared", "autobot-slm-backend", "scripts", "tools")
 
-#: Population floor for the tracked scan, declared so the reach registry measures it and
-#: ``scripts/repin_reach_floors.py`` re-pins it when the tree outgrows it (#22110). It was a bare
-#: bare ``_SOURCE_FLOOR`` that decayed into red on unrelated PRs twice in a day (#22103). Measured at
-#: 4,597 sources on 2026-11-23; growth 300 puts the pin mid-window (4597 - 150). The four trees
-#: above measured about 384, 344, 49 and 86 sources on 2026-11-22. Losing `autobot_shared` or
-#: `autobot-slm-backend` falls through the floor; `scripts` and `tools` are smaller than the
-#: margin, so `test_the_scan_reaches_every_tree...` pins them per tree instead.
-
 #: Tracked sources that do not parse, and are therefore inspected blind. Empty
 #: on purpose: measured at 0 of 3,099. Down-only -- an entry here is a statement
 #: that a tracked source is syntactically broken, which is a defect to fix, not
@@ -214,6 +206,13 @@ def _tracked_sources(root: Path = _REPO) -> List[Path]:
     return [path for path in _production_sources(root) if path in tracked]
 
 
+#: Population floor for the tracked scan, declared so the reach registry measures it and
+#: ``scripts/repin_reach_floors.py`` re-pins it when the tree outgrows it (#22110). It was a bare
+#: ``_SOURCE_FLOOR`` that decayed into red on unrelated PRs twice in a day (#22103). Measured at
+#: 4,597 sources on 2026-11-23; growth 300 puts the pin mid-window (4597 - 150). The four trees
+#: above measured about 384, 344, 49 and 86 sources on 2026-11-22. Losing `autobot_shared` or
+#: `autobot-slm-backend` falls through the floor; `scripts` and `tools` are smaller than the
+#: margin, so `test_the_scan_reaches_every_tree...` pins them per tree instead.
 REACH = declare(
     "with-error-handling-tracked-sources",
     discover=_tracked_sources,
@@ -280,7 +279,9 @@ def test_the_floor_has_not_decayed_into_slack(tracked_sources):
     """#15202 item 4: a floor far below the population stops catching anything.
 
     The 1.5x cap this held was a second, hand-kept copy of the rule `declare()` states with
-    `growth=` (#22110); `verify_floor` now answers it, and fails in the audit that re-pins it.
+    `growth=` (#22110); `verify_floor` now answers it. It fails on slack only under
+    `AUTOBOT_REACH_AUDIT` (merge trains, a push to main, a merge group), not on an ordinary PR,
+    where a stale floor only warns; a real loss below the floor fails everywhere.
     """
     REACH.verify_floor(_REPO)
 

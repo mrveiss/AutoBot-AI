@@ -16,12 +16,16 @@ The detector is proved by contrast: a floor in the band is refused, one just abo
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
 import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import REACH_AUDIT_ENV, Reach, ReachFloorError
+
+from autobot_shared.isolated_git import make_repo
 
 _ROOT = Path("/nonexistent-root-never-read")
 _WORKFLOWS = repo_root() / ".github" / "workflows"
@@ -66,15 +70,38 @@ def _audit_step() -> dict:
     return found[0]
 
 
-def test_ci_enforces_the_audit_on_a_push_to_main_and_a_merge_group() -> None:
-    condition = str(_audit_step()["if"])
-    assert "github.event_name == 'push' && github.ref == 'refs/heads/main'" in condition
-    assert "github.event_name == 'merge_group'" in condition
-    assert "startsWith(github.head_ref, 'train-')" in condition
+def _audit_applies(**context: str) -> bool:
+    """Evaluate ci.yml's real ``if:`` expression over one event context (no substring matching)."""
+    expr = str(_audit_step()["if"])
+    for name in ("head_ref", "event_name", "ref"):
+        expr = expr.replace(f"github.{name}", name)
+    expr = expr.replace("&&", " and ").replace("||", " or ")
+    values = {"head_ref": "", "event_name": "", "ref": "", "startsWith": lambda text, prefix: text.startswith(prefix)}
+    return bool(eval(expr, {"__builtins__": {}}, {**values, **context}))  # noqa: S307 - this repo's own workflow text
+
+
+@pytest.mark.parametrize(
+    ("context", "expected"),
+    [
+        ({"event_name": "pull_request", "head_ref": "issue-1-feature", "ref": "refs/pull/1/merge"}, False),
+        ({"event_name": "push", "ref": "refs/heads/main"}, True),
+        ({"event_name": "merge_group", "ref": "refs/heads/gh-readonly-queue/main/pr-1"}, True),
+        ({"event_name": "pull_request", "head_ref": "train-t1", "ref": "refs/pull/2/merge"}, True),
+        ({"event_name": "push", "ref": "refs/heads/issue-1-feature"}, False),
+    ],
+)
+def test_ci_enforces_the_audit_only_where_main_is_judged(context: dict, expected: bool) -> None:
+    assert _audit_applies(**context) is expected
 
 
 def _repin() -> dict:
     return yaml.safe_load((_WORKFLOWS / "repin-reach-floors.yml").read_text(encoding="utf-8"))
+
+
+def _step(name_part: str) -> dict:
+    found = [s for s in _repin()["jobs"]["repin"]["steps"] if name_part in str(s.get("name", ""))]
+    assert len(found) == 1, name_part
+    return found[0]
 
 
 def test_the_repin_workflow_runs_on_main_and_on_a_schedule() -> None:
@@ -83,11 +110,57 @@ def test_the_repin_workflow_runs_on_main_and_on_a_schedule() -> None:
     assert triggers["schedule"] and "workflow_dispatch" in triggers
 
 
-def test_the_repin_workflow_opens_one_pr_and_updates_it_in_place() -> None:
+def test_the_repin_workflow_pushes_only_the_bot_branch_and_looks_up_open_prs() -> None:
     text = (_WORKFLOWS / "repin-reach-floors.yml").read_text(encoding="utf-8")
-    assert "scripts/repin_reach_floors.py" in text
+    pushes = [line.strip() for line in text.splitlines() if line.strip().startswith("git push")]
+    assert pushes, "the workflow no longer pushes the bot branch"
+    for line in pushes:
+        assert line.split()[-1] == '"$BRANCH"', f"a push whose refspec is not the bot branch: {line}"
+        assert "main" not in line.split(), line
+    assert _step("Open or update")["env"]["BRANCH"] not in ("main", "release")
     assert 'gh pr list --head "$BRANCH" --state open' in text, "gh pr view matches closed PRs too (#20057)"
-    assert "gh pr view" not in text
-    assert "secrets.AUTOBOT_PUSH_TOKEN" in text and "secrets.GITHUB_TOKEN" not in text
-    assert "--force-with-lease" in text
-    assert "git push" in text and "origin main" not in text
+    assert "gh pr view" not in _step("Open or update")["run"]
+    assert "gh pr close" not in text, "no PR is closed without a merge"
+    assert "gh pr comment" in _step("no longer needed")["run"], "an obsolete re-pin PR gets a comment, never a close"
+    assert "secrets.GITHUB_TOKEN" not in text
+
+
+def test_the_bot_pr_carries_the_milestone_label_and_a_proof_table() -> None:
+    run = _step("Open or update")["run"]
+    assert '--milestone "$PR_MILESTONE" --label "$PR_PHASE_LABEL"' in run
+    env = _repin()["env"]
+    assert env["PR_MILESTONE"].startswith("M5") and env["PR_PHASE_LABEL"] == "phase:M5.7"
+    assert "| AC | Precondition | Postcondition | Establishing lines | Argument | Reviewer |" in run
+    assert "| pending |" in run
+
+
+def _run_step(step: dict, tmp_path: Path, exit_code: int) -> subprocess.CompletedProcess:
+    """Run a workflow step's shell with a stub ``python`` that exits *exit_code* after a SKIP line."""
+    make_repo(tmp_path, default_branch="main")
+    stub = tmp_path / "bin"
+    stub.mkdir(exist_ok=True)
+    (stub / "python").write_text(f'#!/bin/sh\necho "SKIP  floor-x: reason"\nexit {exit_code}\n', encoding="utf-8")
+    (stub / "python").chmod(0o755)
+    out = tmp_path / "out"
+    out.touch()
+    env = {**os.environ, "PATH": f"{stub}:{os.environ['PATH']}", "GITHUB_OUTPUT": str(out)}
+    return subprocess.run(["bash", "-c", step["run"]], cwd=tmp_path, env=env, capture_output=True, text=True)
+
+
+def test_a_floor_left_stale_fails_the_job_and_names_it(tmp_path: Path) -> None:
+    first = _run_step(_step("Re-pin every stale floor"), tmp_path, exit_code=1)
+    assert first.returncode == 0, "the PR for the floors that WERE re-pinned must still open"
+    assert "stale_left=true" in (tmp_path / "out").read_text(encoding="utf-8")
+    last = _step("Fail while a floor stays stale")
+    assert "steps.repin.outputs.stale_left == 'true'" in last["if"]
+    failed = subprocess.run(["bash", "-c", last["run"]], cwd=tmp_path, capture_output=True, text=True)
+    assert failed.returncode == 1
+    assert "::error::reach floor needs a hand re-pin: floor-x: reason" in failed.stdout
+
+
+def test_a_clean_run_sets_no_stale_flag_and_an_unmeasured_guard_fails(tmp_path: Path) -> None:
+    clean = _run_step(_step("Re-pin every stale floor"), tmp_path, exit_code=0)
+    assert clean.returncode == 0
+    assert "stale_left" not in (tmp_path / "out").read_text(encoding="utf-8")
+    broken = _run_step(_step("Re-pin every stale floor"), tmp_path, exit_code=2)
+    assert broken.returncode == 2, "an import failure is never read as clean"
