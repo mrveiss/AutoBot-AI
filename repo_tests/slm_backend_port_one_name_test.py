@@ -34,7 +34,7 @@ REACH_ANSIBLE_FILES = declare(
         if p.suffix in _SUFFIXES and p.is_file()
     ],
     roots=("autobot-slm-backend/ansible",),
-    floor=442,  # mid-window: population 462 when measured, growth 40
+    floor=459,  # mid-window: population 479, window (439, 479)
     growth=40,
     skips=0,
     what="ansible YAML and template files scanned for the retired slm_port name",
