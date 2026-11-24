@@ -56,6 +56,6 @@ def contained_files(root: Path, candidates: Iterable[Path]) -> Iterator[Path]:
             continue
 
 
-def relative_to_root(file_path: Path, root: Path) -> str:
+def source_relative_path(file_path: Path, root: Path) -> str:
     """The repo-relative POSIX path git reports for ``file_path``."""
     return file_path.relative_to(root).as_posix()

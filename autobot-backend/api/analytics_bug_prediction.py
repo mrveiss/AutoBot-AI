@@ -23,9 +23,9 @@ from api.analytics_bug_prediction_cache import get_cached_prediction, set_cached
 from api.analytics_bug_prediction_scope import (
     contained_files,
     file_in_source,
-    relative_to_root,
     scan_root,
     scoped_key,
+    source_relative_path,
 )
 from api.analytics_shared import no_data_response
 from api.codebase_analytics.endpoints.shared import require_source_access
@@ -680,7 +680,7 @@ async def _analyze_single_file(
 ) -> Dict[str, Any]:
     """Analyze a single file for bug risk (Issue #398: extracted)."""
     str_path = str(file_path)
-    rel_path = relative_to_root(file_path, root)
+    rel_path = source_relative_path(file_path, root)
 
     complexity = await analyze_file_complexity(str_path)
     change_count = change_freq.get(rel_path, 0)
