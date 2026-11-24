@@ -92,3 +92,20 @@ async def load_imported_credential(secret_id: str, owner_id: str) -> dict | None
     factory = get_async_session_factory()
     async with factory() as session:
         return await read_imported_credential_in_session(session, secret_id, owner_id, root_key)
+
+
+async def find_connector_secret_id(connector_id: str) -> str | None:
+    """The id of the one credential filed under *connector_id*, or ``None`` when none is stored (#13710).
+
+    Keyed to a fixed connector id -- used by service-owned providers, whose credential is stored once and
+    replaced (not duplicated) on re-authorization. Returns no value, only the id.
+    """
+    import asyncio
+
+    from services.credential_write import connector_secret_name
+    from services.secrets_service import get_secrets_service
+
+    secret = await asyncio.to_thread(
+        get_secrets_service().get_secret, name=connector_secret_name(connector_id), scope="user"
+    )
+    return secret["id"] if secret else None

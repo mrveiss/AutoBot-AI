@@ -8,13 +8,15 @@ Microsoft 365 Integration API Endpoints (Issue #13710)
 FastAPI router for the Outlook mail surface of ``Microsoft365Integration``:
 connection test, list/search messages, list folders and send mail.
 
-The access token is never accepted from the request: it is read from the
-secrets store (``SecretsService``, the home of the /secrets page) under
-``MICROSOFT365_CREDENTIAL_ENTRY``. The router serves an authenticated administrator
-only and does NOT feed the knowledge base (that is #13712).
+This is the COMPANY MAILBOX: one shared, service-owned credential (owner
+``system``, connector id ``microsoft365``), connected once by an administrator
+through the ``microsoft-mail`` OAuth provider. Every call is admin-only and
+reads and sends as that mailbox. The credential is never taken from the
+request: a fresh access token is obtained from ``ConnectorCredentialStore``
+(which refreshes and rotates it) per call and is not persisted here. The
+router does NOT feed the knowledge base (that is #13712).
 """
 
-import asyncio
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -25,14 +27,18 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.microsoft365_integration import Microsoft365Integration
+from knowledge.connectors import oauth_flow
+from knowledge.connectors.credential_store import get_credential_store
+from services.credential_read import find_connector_secret_id
 from services.gateway.egress_governor import egress_governor
-from services.secrets_service import get_secrets_service
 
 logger = get_logger(__name__)
 
-#: Name of the secrets-store entry (scope ``general``) holding the Graph access token.
-MICROSOFT365_CREDENTIAL_ENTRY = "microsoft365_access_token"
-_ACCESSED_BY = "integration_microsoft365"
+#: The company mailbox's credential: the service owner and fixed connector id declared by the
+#: ``microsoft-mail`` OAuth provider, the one definition.
+_MAILBOX_PROVIDER = oauth_flow.get_provider("microsoft-mail")
+MAILBOX_OWNER_ID = _MAILBOX_PROVIDER.service_owner_id
+MAILBOX_CONNECTOR_ID = _MAILBOX_PROVIDER.service_connector_id
 _EGRESS_PLATFORM = "microsoft365"
 
 router = APIRouter(
@@ -137,27 +143,24 @@ async def send_email(message: SendEmailRequest) -> Dict[str, Any]:
 
 
 async def _load_token() -> str:
-    """Read the Graph access token from the secrets store, never from the request."""
+    """A fresh access token for the company mailbox, refreshed by the credential store."""
     try:
-        secret = await asyncio.to_thread(
-            get_secrets_service().get_secret,
-            name=MICROSOFT365_CREDENTIAL_ENTRY,
-            scope="general",
-            include_value=True,
-            accessed_by=_ACCESSED_BY,
-        )
+        secret_id = await find_connector_secret_id(MAILBOX_CONNECTOR_ID)
+        if secret_id is None:
+            raise LookupError("mailbox not connected")
+        return await get_credential_store().get_access_token(secret_id, MAILBOX_OWNER_ID)
+    except (LookupError, PermissionError) as exc:
+        logger.warning("Microsoft 365 mailbox credential unavailable: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Microsoft 365 mailbox is not connected",
+        ) from exc
     except Exception as exc:
-        logger.warning("Microsoft 365 secrets lookup failed: %s", type(exc).__name__)
+        logger.warning("Microsoft 365 token resolution failed: %s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error",
         ) from exc
-    if not secret or not secret.get("value"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Microsoft 365 access token is not configured in the secrets store",
-        )
-    return secret["value"]
 
 
 async def _create_integration() -> Microsoft365Integration:

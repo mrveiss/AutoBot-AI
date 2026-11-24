@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """#13710: the Microsoft 365 (Outlook mail) router through a real FastAPI app.
 
-The integration and the secrets store are mocked: no Graph call, no credential.
+The integration and the credential store are mocked: no Graph call, no credential.
 Auth is the REAL ``check_admin_permission``.
 """
 
@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from api import integration_microsoft365 as m365
 from integrations.base import IntegrationHealth, IntegrationStatus
+from knowledge.connectors import oauth_flow
 
 PREFIX = "/integrations/microsoft365"
 
@@ -36,19 +37,20 @@ def as_user(real_auth_middleware):
 
 @pytest.fixture
 def integration():
-    """A mocked integration, with the secrets store returning a dummy token."""
+    """A mocked integration; the credential store and the secret lookup are mocked too."""
     mock = MagicMock()
     mock.execute_action = AsyncMock(return_value={"value": []})
     mock.test_connection = AsyncMock(
         return_value=IntegrationHealth(provider="microsoft365", status=IntegrationStatus.CONNECTED)
     )
-    svc = MagicMock()
-    svc.get_secret.return_value = {"value": "dummy-token"}
+    store = MagicMock()
+    store.get_access_token = AsyncMock(return_value="dummy-token")
     with (
-        patch.object(m365, "get_secrets_service", return_value=svc),
+        patch.object(m365, "find_connector_secret_id", new=AsyncMock(return_value="sid-1")) as find,
+        patch.object(m365, "get_credential_store", return_value=store),
         patch.object(m365, "Microsoft365Integration", return_value=mock) as cls,
     ):
-        mock.cls, mock.svc = cls, svc
+        mock.cls, mock.store, mock.find = cls, store, find
         yield mock
 
 
@@ -64,22 +66,45 @@ def test_list_messages(admin, integration):
     integration.execute_action.assert_awaited_once_with("list_messages", {"folder_id": "inbox", "limit": 5})
 
 
-def test_token_comes_from_the_secrets_store(admin, integration):
+def test_stored_credential_gives_a_token_for_the_call(admin, integration):
     admin.get(f"{PREFIX}/folders")
-    kwargs = integration.svc.get_secret.call_args.kwargs
-    assert kwargs["name"] == m365.MICROSOFT365_CREDENTIAL_ENTRY and kwargs["include_value"] is True
+    integration.find.assert_awaited_once_with("microsoft365")
+    integration.store.get_access_token.assert_awaited_once_with("sid-1", "system")
     assert integration.cls.call_args.args[0].token == "dummy-token"
 
 
-def test_token_query_parameter_is_not_accepted(admin, integration):
+def test_expired_token_is_refreshed_by_the_store(admin, integration):
+    integration.store.get_access_token.side_effect = ["refreshed-token"]
+    admin.get(f"{PREFIX}/folders")
+    assert integration.cls.call_args.args[0].token == "refreshed-token"
+
+
+def test_query_token_is_ignored(admin, integration):
     admin.get(f"{PREFIX}/folders", params={"token": "attacker"})
     assert integration.cls.call_args.args[0].token == "dummy-token"
 
 
-def test_missing_secret_is_a_400(admin, integration):
-    integration.svc.get_secret.return_value = None
-    assert admin.get(f"{PREFIX}/messages").status_code == 400
+def test_missing_credential_is_a_400(admin, integration):
+    integration.find.return_value = None
+    resp = admin.get(f"{PREFIX}/messages")
+    assert resp.status_code == 400 and "not connected" in resp.text
     integration.execute_action.assert_not_awaited()
+
+
+@pytest.mark.parametrize("exc", [LookupError("secret detail"), PermissionError("secret detail")])
+def test_store_refusal_is_a_fixed_400(admin, integration, exc):
+    integration.store.get_access_token.side_effect = exc
+    resp = admin.get(f"{PREFIX}/messages")
+    assert resp.status_code == 400 and "secret detail" not in resp.text
+
+
+def test_mail_provider_scopes_and_microsoft_unchanged():
+    mail = oauth_flow.get_provider("microsoft-mail")
+    assert mail.default_scopes == ("offline_access", "Mail.Read", "Mail.Send")
+    assert (mail.service_owner_id, mail.service_connector_id) == ("system", "microsoft365")
+    drive = oauth_flow.get_provider("microsoft")
+    assert drive.default_scopes == ("offline_access", "Files.Read.All", "Sites.Read.All")
+    assert not drive.service_owner_id and not drive.service_connector_id
 
 
 def test_search_messages(admin, integration):
@@ -141,3 +166,70 @@ def test_non_admin_is_refused(app, as_user, integration, method, path):
         resp = getattr(client, method)(PREFIX + path)
     assert resp.status_code == 403
     integration.execute_action.assert_not_awaited()
+
+
+# --- the OAuth flow files the mailbox credential under the service owner (#13710) ---
+
+
+@pytest.fixture
+def oauth_client(monkeypatch):
+    from api import knowledge_connector_oauth as oauth_api
+
+    app = FastAPI()
+    app.include_router(oauth_api.router)
+    app.dependency_overrides[oauth_api.get_current_user] = lambda: {"user_id": "alice", "role": "admin"}
+    monkeypatch.setattr(oauth_api, "_validate_redirect_uri", lambda uri: None)
+    monkeypatch.setattr(oauth_api.oauth_flow, "resolve_client_credentials", lambda prov: ("cid", "csec"))
+    setex = AsyncMock()
+    monkeypatch.setattr(oauth_api, "client_setex", setex)
+    monkeypatch.setattr(oauth_api, "get_redis_client", MagicMock())
+    return TestClient(app, raise_server_exceptions=False), oauth_api, setex
+
+
+def _stored_payload(setex):
+    import json
+
+    return json.loads(setex.await_args.args[3])
+
+
+def test_mail_provider_flow_is_filed_under_the_service_owner(oauth_client):
+    client, oauth_api, setex = oauth_client
+    with patch.object(oauth_api, "check_admin_permission", new=AsyncMock(return_value=True)) as admin_check:
+        resp = client.post("/knowledge_base/connectors/oauth/microsoft-mail/authorize", json={"redirect_uri": "x"})
+    assert resp.status_code == 200 and resp.json()["connector_id"] == "microsoft365"
+    admin_check.assert_awaited_once()
+    assert _stored_payload(setex)["owner_id"] == "system"
+
+
+def test_mail_provider_flow_is_admin_only(oauth_client):
+    from fastapi import HTTPException
+
+    client, oauth_api, setex = oauth_client
+    deny = AsyncMock(side_effect=HTTPException(status_code=403, detail="no"))
+    with patch.object(oauth_api, "check_admin_permission", new=deny):
+        resp = client.post("/knowledge_base/connectors/oauth/microsoft-mail/authorize", json={"redirect_uri": "x"})
+    assert resp.status_code == 403
+    setex.assert_not_awaited()
+
+
+def test_per_user_provider_flow_is_unchanged(oauth_client):
+    client, oauth_api, setex = oauth_client
+    with patch.object(oauth_api, "check_admin_permission", new=AsyncMock()) as admin_check:
+        resp = client.post("/knowledge_base/connectors/oauth/microsoft/authorize", json={"redirect_uri": "x"})
+    assert resp.status_code == 200 and resp.json()["connector_id"] != "microsoft365"
+    admin_check.assert_not_awaited()
+    assert _stored_payload(setex)["owner_id"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_reauthorizing_replaces_the_previous_credential():
+    from api import knowledge_connector_oauth as oauth_api
+
+    store = MagicMock()
+    store.revoke = AsyncMock()
+    with (
+        patch.object(oauth_api, "find_connector_secret_id", new=AsyncMock(return_value="old")),
+        patch.object(oauth_api, "get_credential_store", return_value=store),
+    ):
+        await oauth_api._revoke_previous_service_credential("microsoft365", "system")
+    store.revoke.assert_awaited_once_with("old", "system")
