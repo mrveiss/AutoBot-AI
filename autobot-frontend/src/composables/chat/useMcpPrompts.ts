@@ -19,7 +19,7 @@ export type McpBridge = (typeof MCP_BRIDGES)[number]
 export interface McpPromptArgument { name: string; description?: string; required?: boolean }
 export interface McpPrompt { name: string; description?: string; arguments?: McpPromptArgument[] }
 interface PromptMessage { role: string; content: unknown }
-interface PromptResponse { description?: string; messages: PromptMessage[] }
+interface RenderedPrompt { description?: string; messages: PromptMessage[] }
 export interface FormError { key: string; params?: Record<string, string> }
 
 /** The text of one message's content: a string, `{ text }`, or an array of either. */
@@ -33,7 +33,7 @@ function contentText(content: unknown): string {
 }
 
 /** The draft text of a rendered prompt: its non-empty messages, blank-line separated. */
-export function promptDraftText(response: PromptResponse): string {
+export function promptDraftText(response: RenderedPrompt): string {
   return response.messages
     .map((msg) => contentText(msg.content))
     .filter((text) => text.trim() !== '')
@@ -104,7 +104,7 @@ export function useMcpPrompts() {
     }
     insertLoading.value = true
     try {
-      const response = await api.post<PromptResponse>(`/api/${activeBridge.value}/mcp/prompts/get`, {
+      const response = await api.post<RenderedPrompt>(`/api/${activeBridge.value}/mcp/prompts/get`, {
         name: prompt.name,
         arguments: formValues.value,
       })
