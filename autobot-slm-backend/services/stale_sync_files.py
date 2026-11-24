@@ -23,11 +23,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_stale_file_actions import (
+    CLAIM_PATH_TEMPLATE,
     MAX_FILES_PER_PROPOSAL,
     PROPOSAL_PATH,
     STALE_SYNC_FILES_CLEANUP,
     api_relative,
-    claim_path,
 )
 from models.database import Node, NodeRole
 from services import stale_sync_audit as audit
@@ -183,7 +183,7 @@ async def propose_cleanup(db: AsyncSession, node_id: str, actor: str | None) -> 
 async def _record(actor: str | None, node_id: str, phase: str, outcome: str = audit.SUCCESS, **details: Any) -> None:
     """The audit entry that must exist first; its absence is a 503 and nothing else happens."""
     try:
-        await audit.record(actor=actor, node_id=node_id, outcome=outcome, phase=phase, **details)
+        await audit.record_cleanup_step(actor=actor, node_id=node_id, outcome=outcome, phase=phase, **details)
     except audit.StaleFileAuditUnavailable as exc:
         raise StaleRefused(503, "the audit trail is unavailable, so nothing was done") from exc
 
@@ -200,7 +200,7 @@ async def _claim(approval_id: str, node_id: str) -> Approved:
     """Have the backend verify the approval is a human's, for this node, and unused -- and spend it."""
     response = await call_main_backend(
         "POST",
-        api_relative(claim_path(approval_id)),
+        api_relative(CLAIM_PATH_TEMPLATE.format(approval_id=approval_id)),
         content=json.dumps({"action": STALE_SYNC_FILES_CLEANUP.name, "node_id": node_id}).encode("utf-8"),
         content_type="application/json",
         service="Stale file cleanup",
@@ -291,7 +291,7 @@ async def remove_approved(db: AsyncSession, node_id: str, approval_id: str) -> l
 async def _finish(actor: str, node_id: str, approval_id: str, outcome: str, **details: Any) -> None:
     """The completion row; the approval is already spent, so a failed write is logged loudly, never raised."""
     try:
-        await audit.record(
+        await audit.record_cleanup_step(
             actor=actor,
             node_id=node_id,
             outcome=outcome,

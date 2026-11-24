@@ -106,7 +106,7 @@ def env(monkeypatch):
     _module(monkeypatch, "services.role_registry", DEFAULT_ROLES=[])
     _module(monkeypatch, "services.stale_sync_remote", remove_files=remove_files, stat_candidates=None)
     _module(monkeypatch, "models.database", Node=object, NodeRole=object)
-    monkeypatch.setattr(audit, "record", record)
+    monkeypatch.setattr(audit, "record_cleanup_step", record)
     spec = importlib.util.spec_from_file_location(
         "_stale_sync_files_under_test", _BACKEND / "services/stale_sync_files.py"
     )

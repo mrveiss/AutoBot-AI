@@ -19,11 +19,11 @@ from fastapi.testclient import TestClient
 
 from api import internal_slm_stale_file_proposals as route
 from autobot_shared.slm_stale_file_actions import (
+    CLAIM_PATH_TEMPLATE,
     LOCATION_KEY,
     MAX_FILES_PER_PROPOSAL,
     PROPOSAL_PATH,
     STALE_SYNC_FILES_CLEANUP,
-    claim_path,
 )
 from models.approval import ApprovalStatus
 from testkit.fake_async_session import FakeAsyncSession, FakeResult
@@ -157,7 +157,7 @@ def _claim(approval, node_id: str = "node-a", audit: bool = True, rowcount: int 
     session = FakeAsyncSession(default_result=FakeResult(rowcount=rowcount), on_get=lambda entity, ident: approval)
     with patch.object(route, "audit_log", AsyncMock(return_value=audit)) as written:
         response = _client(session).post(
-            claim_path(str(_ID)),
+            CLAIM_PATH_TEMPLATE.format(approval_id=_ID),
             json={"action": ACTION, "node_id": node_id},
             headers={"X-Internal-API-Key": _KEY},
         )
@@ -216,5 +216,7 @@ def test_a_user_jwt_without_the_internal_key_is_refused_on_both_internal_routes(
     assert _propose(service, headers=jwt)[0].status_code == 403
     service.create_approval.assert_not_awaited()
     session = FakeAsyncSession(default_result=FakeResult(rowcount=1), on_get=lambda entity, ident: _approval())
-    claim = _client(session).post(claim_path(str(_ID)), json={"action": ACTION, "node_id": "node-a"}, headers=jwt)
+    claim = _client(session).post(
+        CLAIM_PATH_TEMPLATE.format(approval_id=_ID), json={"action": ACTION, "node_id": "node-a"}, headers=jwt
+    )
     assert claim.status_code == 403 and session.commits == 0 and session.statements == []

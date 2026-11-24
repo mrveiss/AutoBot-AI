@@ -35,7 +35,7 @@ class StaleFileAuditUnavailable(Exception):
     """The entry could not be made durable."""
 
 
-async def record(*, actor: str | None, node_id: str, outcome: str, phase: str, **details: Any) -> None:
+async def record_cleanup_step(*, actor: str | None, node_id: str, outcome: str, phase: str, **details: Any) -> None:
     """Commit one audit entry; raises ``StaleFileAuditUnavailable`` when it cannot be stored."""
     if outcome not in OUTCOMES:
         raise ValueError(f"unknown audit outcome: {outcome!r}")

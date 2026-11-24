@@ -24,10 +24,10 @@ from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_credential_actions import APPROVAL_QUERY, slm_direct_url
 from autobot_shared.slm_stale_file_actions import (
+    REMOVAL_PATH_TEMPLATE,
     RESULT_REMOVED,
     SSH_TIMEOUT_SECONDS,
     STALE_SYNC_FILES_CLEANUP,
-    removal_path,
 )
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action, verified_decider
@@ -49,7 +49,7 @@ async def _remove_in_slm(node_id: str, approval_id: str) -> dict[str, Any]:
     """Ask the SLM to remove the approved files; it re-verifies *approval_id* with this backend first."""
     if not node_proxy.internal_api_key():
         raise RuntimeError("the internal service key is not configured")
-    url = f"{slm_direct_url()}{removal_path(node_id)}"
+    url = f"{slm_direct_url()}{REMOVAL_PATH_TEMPLATE.format(node_id=node_id)}"
     await assert_egress_policy(url)  # #17576
     timeout = aiohttp.ClientTimeout(total=max(node_proxy.node_timeout(), SSH_TIMEOUT_SECONDS * 2))
     async with aiohttp.ClientSession(headers=node_proxy.internal_headers()) as http:

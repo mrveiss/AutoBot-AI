@@ -42,7 +42,7 @@ from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 from services.kb_cleanup_proposals import create_proposal_once, record_cleanup_proposed
 from services.slm_credential_claim import ClaimNotRecorded, ClaimRefused, claim_approval
-from services.slm_stale_file_texts import proposal_text
+from services.slm_stale_file_texts import stale_files_proposal_text
 from services.slm_stale_sync_files_action import register_stale_sync_files_action
 
 logger = get_logger(__name__)
@@ -83,7 +83,7 @@ async def _create_approval(
         operation=AuditAction.CODE_SYNC_STALE_FILES_CLEANUP,
         resource=f"node:{body.node_id}",
     )
-    title, description = proposal_text(
+    title, description = stale_files_proposal_text(
         body.node_id, body.old_target, [entry.model_dump() for entry in body.files], body.total_found
     )
     return await service.create_approval(

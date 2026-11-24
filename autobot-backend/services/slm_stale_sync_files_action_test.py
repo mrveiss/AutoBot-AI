@@ -122,7 +122,7 @@ def test_the_description_lists_each_file_with_path_size_and_age() -> None:
         {"path": "api/x.py", "size_bytes": 2048, "modified_at": datetime(2026, 11, 14, tzinfo=timezone.utc)},
         {"path": "y.py", "size_bytes": 5, "modified_at": "2026-11-23T00:00:00+00:00"},
     ]
-    title, description = texts.proposal_text("node-a", "/opt/node-root", files, 2, now)
+    title, description = texts.stale_files_proposal_text("node-a", "/opt/node-root", files, 2, now)
     lines = description.splitlines()
     assert "node-a" in title and "/opt/node-root" in title
     assert lines[-2].startswith("/opt/node-root/api/x.py  2.0 KiB  10 days old")
@@ -131,5 +131,5 @@ def test_the_description_lists_each_file_with_path_size_and_age() -> None:
 
 def test_a_capped_proposal_says_how_many_more_follow_and_a_complete_one_does_not() -> None:
     one = [{"path": "a.py", "size_bytes": 1, "modified_at": "2026-11-23T00:00:00+00:00"}]
-    assert "4 more are proposed" in texts.proposal_text("n", "/t", one, 5)[1]
-    assert "more are proposed" not in texts.proposal_text("n", "/t", one, 1)[1]
+    assert "4 more are proposed" in texts.stale_files_proposal_text("n", "/t", one, 5)[1]
+    assert "more are proposed" not in texts.stale_files_proposal_text("n", "/t", one, 1)[1]

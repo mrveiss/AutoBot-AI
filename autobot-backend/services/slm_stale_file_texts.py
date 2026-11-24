@@ -38,7 +38,7 @@ def file_line(old_target: str, entry: Mapping[str, object], now: datetime) -> st
     )
 
 
-def proposal_text(
+def stale_files_proposal_text(
     node_id: str, old_target: str, files: Iterable[Mapping[str, object]], total_found: int, now: datetime | None = None
 ) -> tuple[str, str]:
     """The approval's title and description: the header, then every listed file on its own line."""
