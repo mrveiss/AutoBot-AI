@@ -52,8 +52,9 @@ PINNED: dict[str, tuple[str, int]] = {
     "autobot-infrastructure/autobot-database/templates/db-start.sh": (r"(?:ChromaDB \(|127\.0\.0\.1:)(\d+)", 2),
     "autobot-infrastructure/autobot-database/templates/db-status.sh": (r"(?:ChromaDB \(|127\.0\.0\.1:)(\d+)", 2),
     "autobot-infrastructure/autobot-database/manifest.yml": (
-        r'(?:- port: (\d+)\n(?:.*\n){3}\s*description: "ChromaDB|localhost:(\d+)/api/v2|ChromaDB on :(\d+))',
-        3,
+        r'(?:- port: (\d+)\n(?:.*\n){3}\s*description: "ChromaDB|localhost:(\d+)/api/v2|ChromaDB on :(\d+)'
+        r"|^  chromadb:\n    checked: true\n    port: (\d+))",  # #22032: the role_health entry
+        4,
     ),
     "autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml": (r"^chromadb_port: (\d+)", 1),
     "autobot-slm-backend/ansible/roles/redis/defaults/main.yml": (r"^chromadb_port: (\d+)", 1),

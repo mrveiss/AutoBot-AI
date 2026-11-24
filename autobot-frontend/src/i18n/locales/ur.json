@@ -1753,6 +1753,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "ارتقا کا ڈیٹا لوڈ کرنے میں ناکامی",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -10028,5 +10029,17 @@
     "requestFailed": "ڈرفٹ صفائی کی درخواست ناکام ہو گئی",
     "result": "{removed} فائل(یں) ہٹا دی گئیں؛ {left} اپنی جگہ پر چھوڑ دی گئیں",
     "title": "{component} سے {count} فائل(یں) ہٹائی جائیں گی"
+  },
+  "slmAgentsTool": {
+    "globalControls": "یہ کنٹرولز تمام ایجنٹس کو روکتے یا دوبارہ شروع کرتے ہیں، کسی ایک کو نہیں",
+    "loadFailed": "ایجنٹس لوڈ کرنے میں ناکامی",
+    "noLastActivity": "کوئی سرگرمی رپورٹ نہیں ہوئی",
+    "notReported": "رپورٹ نہیں کیا گیا",
+    "pauseAll": "تمام ایجنٹس کو روکیں",
+    "pauseFailed": "ایجنٹس کو روکنے میں ناکامی",
+    "resumeAll": "تمام ایجنٹس دوبارہ شروع کریں",
+    "resumeFailed": "ایجنٹس کو دوبارہ شروع کرنے میں ناکامی",
+    "successRate": "کامیابی کی شرح",
+    "tasksCompleted": "مکمل شدہ کام"
   }
 }

@@ -2393,6 +2393,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "Nie udało się wczytać danych ewolucji",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -10028,5 +10029,17 @@
     "requestFailed": "Żądanie czyszczenia rozbieżności nie powiodło się",
     "result": "Usunięto {removed} plik(ów); {left} pozostawiono na miejscu",
     "title": "Z {component} zostałoby usuniętych {count} plik(ów)"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Te kontrolki wstrzymują lub wznawiają wszystkich agentów, a nie pojedynczego",
+    "loadFailed": "Nie udało się załadować agentów",
+    "noLastActivity": "Brak zgłoszonej aktywności",
+    "notReported": "Brak danych",
+    "pauseAll": "Wstrzymaj wszystkich agentów",
+    "pauseFailed": "Nie udało się wstrzymać agentów",
+    "resumeAll": "Wznów wszystkich agentów",
+    "resumeFailed": "Nie udało się wznowić agentów",
+    "successRate": "Wskaźnik powodzenia",
+    "tasksCompleted": "Ukończone zadania"
   }
 }

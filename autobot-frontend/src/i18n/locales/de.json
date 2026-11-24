@@ -2393,6 +2393,7 @@
       "demoDataWarning": "Demo-Daten-Warnung",
       "exportSuccess": "Export erfolgreich",
       "exportFailed": "Export fehlgeschlagen",
+      "loadFailed": "Evolutionsdaten konnten nicht geladen werden",
       "noTrendData": "Keine Trenddaten",
       "stable": "Stabil",
       "sinceStart": "Seit Beginn"
@@ -10028,5 +10029,17 @@
     "requestFailed": "Anfrage zur Bereinigung der Abweichungen fehlgeschlagen",
     "result": "{removed} Datei(en) entfernt; {left} unverändert belassen",
     "title": "{count} Datei(en) würden aus {component} entfernt"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Diese Schaltflächen pausieren oder setzen alle Agenten fort, nicht nur einen einzelnen",
+    "loadFailed": "Agenten konnten nicht geladen werden",
+    "noLastActivity": "Keine Aktivität gemeldet",
+    "notReported": "Nicht gemeldet",
+    "pauseAll": "Alle Agenten pausieren",
+    "pauseFailed": "Agenten konnten nicht pausiert werden",
+    "resumeAll": "Alle Agenten fortsetzen",
+    "resumeFailed": "Agenten konnten nicht fortgesetzt werden",
+    "successRate": "Erfolgsquote",
+    "tasksCompleted": "Abgeschlossene Aufgaben"
   }
 }

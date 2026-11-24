@@ -45,6 +45,13 @@ health:
   retries: 3
   expected_status: 200
 
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  frontend:
+    checked: true
+    port: 443
+    path: /api/health
+
 secrets:
   own:
     - tls_cert

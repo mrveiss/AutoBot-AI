@@ -19,6 +19,11 @@ ports: []
 
 health: null
 
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  autobot_shared:
+    checked: false
+
 secrets:
   own: []
   shared: []

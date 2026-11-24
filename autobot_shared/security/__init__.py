@@ -9,6 +9,8 @@ Shared path validation, safe error responses, input sanitization, and
 SSRF protection used across all backend services.
 """
 
+from typing import TYPE_CHECKING, Any
+
 from autobot_shared.secret_redaction import redact_mapping, redact_text
 from autobot_shared.security.input_sanitizer import (
     escape_regex,
@@ -21,12 +23,28 @@ from autobot_shared.security.password_weakness import check_password_weakness
 from autobot_shared.security.path_validator import validate_path, validate_relative_path
 from autobot_shared.security.safe_response import safe_error_response
 from autobot_shared.security.sql_identifier import validate_sql_identifier
-from autobot_shared.security.ssrf_guard import (
-    SSRFError,
-    fetch_safe_url,
-    resolve_safe_ip,
-    safe_aiohttp_resolver,
-)
+
+if TYPE_CHECKING:
+    from autobot_shared.security.ssrf_guard import (
+        SSRFError,
+        fetch_safe_url,
+        resolve_safe_ip,
+        safe_aiohttp_resolver,
+    )
+
+# ssrf_guard imports aiohttp; resolve its names on first access (PEP 562) so
+# importing a light submodule such as constant_time loads no network stack.
+_SSRF_GUARD_NAMES = frozenset({"SSRFError", "fetch_safe_url", "resolve_safe_ip", "safe_aiohttp_resolver"})
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily resolve the ssrf_guard re-exports."""
+    if name in _SSRF_GUARD_NAMES:
+        from autobot_shared.security import ssrf_guard
+
+        return getattr(ssrf_guard, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "validate_path",

@@ -50,6 +50,8 @@ from autobot_shared.principal import resolve_principal_id
 from autobot_shared.time_utils import now_utc
 from llc.services.member_standing import display_name_of
 from models.heartbeat import (
+    DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
+    DEFAULT_MAX_RUN_DURATION_SECONDS,
     AgentRuntimeState,
     AgentWakeupRequest,
     HeartbeatRun,
@@ -58,7 +60,7 @@ from models.heartbeat import (
     new_control_id,
 )
 from services.audit.taxonomy import AuditAction
-from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
+from services.heartbeat_scheduler import HeartbeatScheduler, _find_state, _get_or_create_state
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -82,6 +84,16 @@ def _get_scheduler() -> HeartbeatScheduler:
     return _scheduler
 
 
+def _default_state(agent_id: str) -> AgentRuntimeState:
+    """The state an agent with no row reports: heartbeat off, default timings. Never added to a session (#21992)."""
+    return AgentRuntimeState(
+        agent_id=agent_id,
+        status=HeartbeatStatus.DISABLED.value,
+        heartbeat_interval_seconds=DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
+        max_run_duration_seconds=DEFAULT_MAX_RUN_DURATION_SECONDS,
+    )
+
+
 @router.get("/{agent_id}/config", response_model=HeartbeatConfigResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -94,8 +106,7 @@ async def get_heartbeat_config(
     scope: AgentScope = Depends(read_scope),
 ) -> HeartbeatConfigResponse:
     """Return heartbeat config and runtime state for an agent (#1407)."""
-    state = await _get_or_create_state(session, agent_id)
-    await session.commit()
+    state = await _find_state(session, agent_id) or _default_state(agent_id)  # a read writes nothing (#21992)
     return await _state_response(session, state, scope)
 
 
@@ -265,7 +276,9 @@ async def trigger_manual(
     scheduler: HeartbeatScheduler = Depends(_get_scheduler),
     _scope: AgentScope = Depends(manage_scope),
 ) -> Dict[str, str]:
-    """Immediately queue a manual heartbeat run for an agent (#1407)."""
+    """Immediately queue a manual heartbeat run for an agent; refused with 409 unless it is ACTIVE (#1407, #21992)."""
+    if await scheduler._should_skip_heartbeat(agent_id):
+        raise HTTPException(status_code=409, detail="Agent is not active, so it cannot be run now")
     fire_and_forget(
         scheduler._run_once(agent_id, WakeupTrigger.MANUAL),
         name=f"hb-manual-{agent_id}",

@@ -2393,6 +2393,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "Neizdevās ielādēt evolūcijas datus",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -10028,5 +10029,17 @@
     "requestFailed": "Neatbilstību tīrīšanas pieprasījums neizdevās",
     "result": "Noņemti {removed} failu(-u); {left} atstāti vietā",
     "title": "No {component} tiktu noņemti {count} failu(-u)"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Šīs vadīklas aptur vai atsāk visus aģentus, nevis vienu",
+    "loadFailed": "Neizdevās ielādēt aģentus",
+    "noLastActivity": "Aktivitāte nav ziņota",
+    "notReported": "Nav ziņots",
+    "pauseAll": "Apturēt visus aģentus",
+    "pauseFailed": "Neizdevās apturēt aģentus",
+    "resumeAll": "Atsākt visus aģentus",
+    "resumeFailed": "Neizdevās atsākt aģentus",
+    "successRate": "Veiksmes rādītājs",
+    "tasksCompleted": "Pabeigtie uzdevumi"
   }
 }

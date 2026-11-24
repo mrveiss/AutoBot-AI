@@ -56,6 +56,9 @@ def _run(tmp_path: Path, extra_env: dict[str, str]) -> subprocess.CompletedProce
     env = {k: v for k, v in os.environ.items() if k not in (_ADMIN, _REQUIRE, "PYTEST_ADDOPTS", "PYTEST_PLUGINS")}
     env.update(extra_env)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    # The copied conftest imports `testkit` and `autobot_shared` as the repo's pytest.ini `pythonpath` resolves them (#17219).
+    root = repo_root()
+    env["PYTHONPATH"] = os.pathsep.join([str(root), str(root / "autobot-backend")])
     return subprocess.run(
         [
             sys.executable,

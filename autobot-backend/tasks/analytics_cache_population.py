@@ -75,7 +75,7 @@ async def _dispatch(task, args: tuple, prefix: str | None, countdown: int) -> st
 def _build_modules(project_root: str, source_ids: tuple[str, ...] = ()) -> list[tuple]:
     """Build the (name, task, args, redis_prefix) tuples for all modules.
 
-    The three source-scoped modules (dependencies, duplicates, import_tree) get one entry per id
+    The four source-scoped modules (dependencies, duplicates, import_tree, bug_prediction) get one entry per id
     in *source_ids*, named ``<module>:<id>`` and recorded under that source's own prefix (#20513).
 
     Imported lazily inside the task body (not module scope) to avoid a
@@ -105,12 +105,24 @@ def _build_modules(project_root: str, source_ids: tuple[str, ...] = ()) -> list[
         )
         for sid in source_ids
     ]
-    return scoped + [
-        ("bug_prediction", run_bug_prediction_analysis, (project_root, "*.py", 10000), _BUG_PREFIX),
-        ("security_score", run_security_analysis, (project_root,), _SEC_PREFIX),
-        # No redis_prefix: AntiPatternDetector.analyze() writes its own cache directly.
-        ("anti_pattern", run_anti_pattern_analysis, (project_root,), None),
+    bug_prediction = [
+        (
+            f"bug_prediction:{sid}",
+            run_bug_prediction_analysis,
+            (sid, "*.py", 10000),
+            source_scoped_prefix(_BUG_PREFIX, sid),
+        )
+        for sid in source_ids
     ]
+    return (
+        scoped
+        + bug_prediction
+        + [
+            ("security_score", run_security_analysis, (project_root,), _SEC_PREFIX),
+            # No redis_prefix: AntiPatternDetector.analyze() writes its own cache directly.
+            ("anti_pattern", run_anti_pattern_analysis, (project_root,), None),
+        ]
+    )
 
 
 async def _sources_with_checkout() -> tuple[str, ...]:

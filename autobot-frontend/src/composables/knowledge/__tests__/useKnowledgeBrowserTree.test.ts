@@ -1,0 +1,332 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * Tree state of the Knowledge Browser (#18244), pinned against the behaviour
+ * KnowledgeBrowser.vue had before it moved: paging (#12394), expansion kept across a
+ * rebuild, the main-category filter, the debounced query, lazy content (#12370).
+ */
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
+import { ref } from 'vue'
+
+const h = vi.hoisted(() => ({
+  fetchFactsByCategory: vi.fn(),
+  fetchEntriesPage: vi.fn(),
+  fetchFolderContents: vi.fn(),
+  fetchFactContent: vi.fn(),
+}))
+vi.mock('@/composables/knowledge/useKnowledgeBrowser', () => h)
+
+import i18n from '@/i18n'
+import en from '@/i18n/locales/en.json'
+import { useKnowledgeBrowserTree } from '../useKnowledgeBrowserTree'
+
+// The app's i18n starts with no messages (#12342) and initI18n() loads them before mount; a unit
+// test has no bootstrap, so load the real English bundle into the same global instance.
+beforeAll(() => {
+  i18n.global.setLocaleMessage('en', en as never)
+  i18n.global.locale.value = 'en'
+})
+
+const fact = (name: string, key: string, content = 'short') => ({ key, title: name, content, metadata: { filename: name } })
+const PAGE1 = { categories: { autobot_docs: [fact('docs/a.md', 'fact:a')], cooking: [fact('pasta.md', 'fact:p')] }, has_more: true }
+const PAGE2 = { categories: { cooking: [fact('rice.md', 'fact:r')] }, has_more: false }
+
+function make(extra: Partial<Parameters<typeof useKnowledgeBrowserTree>[0]> = {}) {
+  const fetchBatchStatus = vi.fn().mockResolvedValue(undefined)
+  const selectedMainCategory = ref<string | null>(null)
+  const selectedCategory = ref<string | null>(null)
+  const tree = useKnowledgeBrowserTree({ selectedMainCategory, selectedCategory, fetchBatchStatus, ...extra })
+  return { tree, fetchBatchStatus, selectedMainCategory, selectedCategory }
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  h.fetchFactContent.mockReset()
+  h.fetchFolderContents.mockReset()
+  h.fetchFactsByCategory.mockResolvedValueOnce(PAGE1)
+})
+afterEach(() => vi.useRealTimers())
+
+describe('loading', () => {
+  it('builds one folder per category from the first page and asks for every file\'s status', async () => {
+    const { tree, fetchBatchStatus } = make()
+    await tree.loadTree()
+    expect(h.fetchFactsByCategory).toHaveBeenCalledWith({ limit: 100, offset: 0 })
+    expect(tree.treeData.value.map((n) => n.category)).toEqual(['autobot_docs', 'cooking'])
+    expect(tree.hasMoreCategoryFacts.value).toBe(true)
+    expect([...fetchBatchStatus.mock.calls[0][0]].sort()).toEqual(['a', 'p'])
+  })
+
+  it('puts a failed load in `error` rather than throwing', async () => {
+    h.fetchFactsByCategory.mockReset().mockRejectedValue(new Error('down'))
+    const { tree } = make()
+    await tree.loadTree()
+    expect(tree.error.value?.message).toBe('down')
+    await tree.loadTree()
+    expect(tree.isLoading.value).toBe(false)
+  })
+
+  it('Load More merges the next page and keeps expanded folders open', async () => {
+    h.fetchFactsByCategory.mockResolvedValueOnce(PAGE2)
+    const { tree } = make()
+    await tree.loadTree()
+    tree.nodeExpansion.expand('folder-1') // cooking
+    await tree.loadMoreCategoryFacts()
+    expect(h.fetchFactsByCategory).toHaveBeenLastCalledWith({ limit: 100, offset: 100 })
+    expect(tree.treeData.value[1].children?.map((n) => n.name)).toEqual(['pasta.md', 'rice.md'])
+    expect(tree.expandedNodes.value.has('folder-1')).toBe(true)
+    expect(tree.hasMoreCategoryFacts.value).toBe(false)
+    await tree.loadMoreCategoryFacts() // nothing more: no third fetch
+    expect(h.fetchFactsByCategory).toHaveBeenCalledTimes(2)
+  })
+
+  it('an older first page settling after a newer load neither replaces the tree nor sets error', async () => {
+    let release!: (page: unknown) => void
+    let fail!: (e: Error) => void
+    h.fetchFactsByCategory.mockReset()
+      .mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+      .mockReturnValueOnce(new Promise((_, reject) => { fail = reject }))
+      .mockResolvedValueOnce(PAGE1)
+    const { tree } = make()
+    const older = tree.loadTree()
+    const middle = tree.loadTree()
+    await tree.loadTree()
+    release({ categories: { stale: [fact('s.md', 'fact:s')] }, has_more: false })
+    fail(new Error('late'))
+    await Promise.all([older, middle])
+    expect(tree.treeData.value.map((n) => n.category)).toEqual(['autobot_docs', 'cooking'])
+    expect(tree.error.value).toBeNull()
+  })
+
+  it('a folder collapsed while a page is loading stays collapsed after the merge', async () => {
+    let release!: (page: unknown) => void
+    h.fetchFactsByCategory.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+    const { tree } = make()
+    await tree.loadTree()
+    tree.nodeExpansion.expand('folder-1')
+    const pending = tree.loadMoreCategoryFacts()
+    tree.nodeExpansion.collapse('folder-1')
+    release(PAGE2)
+    await pending
+    expect(tree.expandedNodes.value.has('folder-1')).toBe(false)
+  })
+
+  it('merges a category named like an Object.prototype member as data', async () => {
+    h.fetchFactsByCategory.mockResolvedValueOnce({ categories: { constructor: [fact('c.md', 'fact:c')] }, has_more: false })
+    const { tree } = make()
+    await tree.loadTree()
+    await tree.loadMoreCategoryFacts()
+    expect(tree.treeData.value.map((n) => n.category)).toEqual(['autobot_docs', 'cooking', 'constructor'])
+  })
+
+  it('drops a page requested before a reload instead of merging it into the new tree', async () => {
+    let release!: (page: unknown) => void
+    h.fetchFactsByCategory.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+    const { tree } = make()
+    await tree.loadTree()
+    const stale = tree.loadMoreCategoryFacts()
+    h.fetchFactsByCategory.mockResolvedValueOnce(PAGE1)
+    await tree.loadTree()
+    release(PAGE2)
+    await stale
+    expect(tree.treeData.value[1].children?.map((n) => n.name)).toEqual(['pasta.md'])
+    expect(tree.hasMoreCategoryFacts.value).toBe(true)
+    expect(tree.isLoadingMoreCategoryFacts.value).toBe(false)
+  })
+})
+
+describe('entries paging', () => {
+  it('keeps the tree and rethrows when an entries page request fails', async () => {
+    h.fetchEntriesPage.mockRejectedValueOnce(new Error('down'))
+    const { tree } = make()
+    await tree.loadTree()
+    const before = tree.treeData.value
+    await expect(tree.loadUserKnowledge()).rejects.toThrow('down')
+    expect(tree.treeData.value).toBe(before)
+  })
+
+  it('names fallbacks through i18n: an entry without a title and a category', async () => {
+    h.fetchEntriesPage.mockResolvedValueOnce({ items: [{ content: 'x' }], nextCursor: '0', hasMore: false })
+    const { tree } = make()
+    await tree.loadUserKnowledge()
+    expect(tree.treeData.value[0].name).toBe('Uncategorized')
+    expect(tree.treeData.value[0].children?.[0].name).toBe('Entry 1')
+  })
+})
+
+describe('filtering', () => {
+  it('filters by main category, then by subcategory', async () => {
+    const { tree, selectedMainCategory, selectedCategory } = make()
+    await tree.loadTree()
+    selectedMainCategory.value = 'user-knowledge'
+    expect(tree.filteredTree.value.map((n) => n.category)).toEqual(['cooking'])
+    selectedMainCategory.value = null
+    selectedCategory.value = 'autobot_docs'
+    expect(tree.filteredTree.value.map((n) => n.category)).toEqual(['autobot_docs'])
+  })
+
+  it('filters by the typed query after the debounce, and opens the folders that hold a match', async () => {
+    vi.useFakeTimers()
+    const { tree } = make()
+    await tree.loadTree()
+    tree.handleSearch('PASTA')
+    expect(tree.filteredTree.value).toHaveLength(2) // not yet: debounced
+    await vi.advanceTimersByTimeAsync(300)
+    expect(tree.filteredTree.value.map((n) => n.category)).toEqual(['cooking'])
+    expect(tree.expandedNodes.value.has('folder-1')).toBe(true)
+  })
+
+  it('clearSearch resets the query and collapses everything', async () => {
+    vi.useFakeTimers()
+    const { tree } = make()
+    await tree.loadTree()
+    tree.nodeExpansion.expand('folder-0')
+    tree.handleSearch('pasta')
+    tree.clearSearch()
+    await vi.advanceTimersByTimeAsync(400)
+    expect(tree.searchQuery.value).toBe('')
+    expect(tree.filteredTree.value).toHaveLength(2)
+    expect(tree.expandedNodes.value.size).toBe(0)
+  })
+})
+
+describe('opening nodes', () => {
+  it('a folder click toggles it; a file click selects it, leaves the editor and shows the snippet', async () => {
+    const onFilePicked = vi.fn()
+    const { tree } = make({ onFilePicked })
+    await tree.loadTree()
+    const folder = tree.treeData.value[1]
+    await tree.selectNode(folder)
+    expect(tree.expandedNodes.value.has(folder.id)).toBe(true)
+    const file = folder.children![0]
+    await tree.selectNode(file)
+    expect(onFilePicked).toHaveBeenCalledTimes(1)
+    expect(tree.selectedFile.value?.id).toBe('p')
+    expect(tree.fileContent.value).toBe('short')
+    expect(h.fetchFactContent).not.toHaveBeenCalled()
+  })
+
+  it('lazy-loads the full text of a truncated snippet from the fact endpoint', async () => {
+    h.fetchFactsByCategory.mockReset().mockResolvedValue({ categories: { c: [fact('long.md', 'fact:l', 'cut...')] } })
+    h.fetchFactContent.mockResolvedValue({ content: 'the whole document' })
+    const { tree } = make()
+    await tree.loadTree()
+    await tree.selectNode(tree.treeData.value[0].children![0])
+    expect(h.fetchFactContent).toHaveBeenCalledWith('fact:l')
+    expect(tree.fileContent.value).toBe('the whole document')
+  })
+
+  it('a failed content load lands in contentError; clearSelection resets the pane', async () => {
+    h.fetchFactsByCategory.mockReset().mockResolvedValue({ categories: { c: [fact('long.md', 'fact:l', 'cut...')] } })
+    h.fetchFactContent.mockRejectedValue(new Error('gone'))
+    const { tree } = make()
+    await tree.loadTree()
+    await tree.selectNode(tree.treeData.value[0].children![0])
+    expect(tree.contentError.value?.message).toBe('gone')
+    tree.clearSelection()
+    expect([tree.selectedFile.value, tree.fileContent.value, tree.contentError.value]).toEqual([null, '', null])
+  })
+
+  const truncatedTree = async (onError?: (m: string) => void) => {
+    h.fetchFactsByCategory.mockReset().mockResolvedValue({
+      categories: { c: [fact('one.md', 'fact:1', 'cut...'), fact('two.md', 'fact:2', 'cut...')] },
+    })
+    const made = make({ onError })
+    await made.tree.loadTree()
+    return { ...made, files: made.tree.treeData.value[0].children! }
+  }
+
+  it('a slower earlier load cannot overwrite the file selected after it', async () => {
+    const { tree, files } = await truncatedTree()
+    let releaseA!: (v: { content: string }) => void
+    h.fetchFactContent
+      .mockImplementationOnce(() => new Promise((resolve) => { releaseA = resolve }))
+      .mockResolvedValueOnce({ content: 'text of B' })
+    const loadA = tree.selectNode(files[0])
+    await tree.selectNode(files[1])
+    releaseA({ content: 'text of A' })
+    await loadA
+    expect(tree.selectedFile.value?.id).toBe('2')
+    expect(tree.fileContent.value).toBe('text of B')
+    expect(tree.selectedFile.value?.size).toBe('text of B'.length)
+  })
+
+  it('a load finishing after clearSelection does not refill the pane', async () => {
+    const { tree, files } = await truncatedTree()
+    let release!: (v: { content: string }) => void
+    h.fetchFactContent.mockImplementationOnce(() => new Promise((resolve) => { release = resolve }))
+    const load = tree.selectNode(files[0])
+    tree.clearSelection()
+    release({ content: 'late' })
+    await load
+    expect([tree.selectedFile.value, tree.fileContent.value]).toEqual([null, ''])
+  })
+
+  it('a failed load after a successful one does not leave the previous text under the new title', async () => {
+    const { tree, files } = await truncatedTree()
+    h.fetchFactContent.mockResolvedValueOnce({ content: 'text of A' }).mockRejectedValueOnce(new Error('gone'))
+    await tree.selectNode(files[0])
+    await tree.selectNode(files[1])
+    expect(tree.fileContent.value).toBe('')
+    expect(tree.contentError.value?.message).toBe('gone')
+    expect(tree.selectedFile.value?.size).toBe('cut...'.length)
+  })
+
+  it('an empty full-text response for a truncated snippet is an error, not the cut-off text', async () => {
+    const { tree, files } = await truncatedTree()
+    h.fetchFactContent.mockResolvedValueOnce({})
+    await tree.selectNode(files[0])
+    expect(tree.fileContent.value).toBe('')
+    expect(tree.contentError.value).toBeInstanceOf(Error)
+  })
+
+  it('a failed folder load is reported through onError and the folder stays empty for a retry', async () => {
+    h.fetchFactsByCategory.mockReset().mockResolvedValue({ categories: { empty: [] } })
+    h.fetchFolderContents.mockRejectedValue(new Error('500'))
+    const onError = vi.fn()
+    const { tree } = make({ onError })
+    await tree.loadTree()
+    tree.toggleNode('folder-0')
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1))
+    expect(tree.treeData.value[0].children ?? []).toHaveLength(0)
+  })
+
+  it('opening an empty folder fetches its contents', async () => {
+    h.fetchFactsByCategory.mockReset().mockResolvedValue({ categories: { empty: [] } })
+    h.fetchFolderContents.mockResolvedValue({ results: [{ content: 'x', metadata: { title: 'doc.md' } }] })
+    const { tree } = make()
+    await tree.loadTree()
+    tree.toggleNode('folder-0')
+    await vi.waitFor(() => expect(tree.treeData.value[0].children).toHaveLength(1))
+    expect(h.fetchFolderContents).toHaveBeenCalledWith('empty')
+  })
+})
+
+describe('refreshing statuses', () => {
+  it('re-fetches the status of every file once, ignoring a second call while busy', async () => {
+    const { tree, fetchBatchStatus } = make()
+    await tree.loadTree()
+    fetchBatchStatus.mockClear()
+    await Promise.all([tree.refreshVectorizationStatus(), tree.refreshVectorizationStatus()])
+    expect(fetchBatchStatus).toHaveBeenCalledTimes(1)
+    expect(tree.isRefreshingStatus.value).toBe(false)
+  })
+
+  it('reports a status refresh that resolves false (the production binding never rejects)', async () => {
+    const onError = vi.fn()
+    const { tree, fetchBatchStatus } = make({ onError })
+    await tree.loadTree()
+    fetchBatchStatus.mockResolvedValueOnce(false)
+    await tree.refreshVectorizationStatus()
+    expect(onError).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a failed status refresh through onError', async () => {
+    const onError = vi.fn()
+    const { tree, fetchBatchStatus } = make({ onError })
+    await tree.loadTree()
+    fetchBatchStatus.mockRejectedValueOnce(new Error('down'))
+    await tree.refreshVectorizationStatus()
+    expect(onError).toHaveBeenCalledTimes(1)
+  })
+})

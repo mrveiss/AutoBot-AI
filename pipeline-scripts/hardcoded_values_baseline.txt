@@ -424,7 +424,6 @@
 1|other|autobot-backend/services/agents/subagent_spawner.py|30
 1|other|autobot-backend/services/agents/subagent_task.py|300
 2|other|autobot-backend/services/ai_stack_client.py|10
-1|other|autobot-backend/services/ai_stack_client.py|60
 1|other|autobot-backend/services/approval_gate_service.py|50
 2|other|autobot-backend/services/audit/audit.py|100
 1|other|autobot-backend/services/audit_logger.py|100
@@ -635,8 +634,6 @@
 2|ssot|autobot-frontend/src/test/vitest-setup.ts|:3000
 2|other|autobot-frontend/src/utils/ApiClient.ts|'user'
 1|other|autobot-frontend/src/utils/urlUtils.ts|https://duckduckgo.com/?q=${encodeURIComponent(input
-1|other|autobot-frontend/src/views/EvolutionView.vue|"/opt/autobot
-1|other|autobot-frontend/src/views/EvolutionView.vue|'/opt/autobot
 2|other|autobot-frontend/src/views/SharedChatView.vue|'user'
 1|other|autobot-frontend/src/views/llc/ProjectBrowserView.vue|https://github.com/${p.code_source.repo}
 3|ssot|autobot-frontend/start-frontend-dev.sh|:5173
