@@ -32,11 +32,11 @@
 # than at a later restart. Provisioning creates the account after this file, so it leaves it unset.
 - name: "VNC | The service account and group exist (fleet update, #14319)"
   ansible.builtin.getent:
-    database: "{{ item.db }}"
+    database: "{{ item.getent_database }}"
     key: "{{ item.key }}"
   loop:
-    - { db: passwd, key: "{{ vnc_user }}" }
-    - { db: group, key: "{{ vnc_group }}" }
+    - { getent_database: passwd, key: "{{ vnc_user }}" }
+    - { getent_database: group, key: "{{ vnc_group }}" }
   when: novnc_require_vnc_account | default(false) | bool
 
 # Upstream publishes no release assets, so the tag archive is the distribution.

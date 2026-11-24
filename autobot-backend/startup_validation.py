@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.ssot_reachable_host import is_unspecified_host
 
 logger = get_logger(__name__)
@@ -76,7 +77,7 @@ def validate_advertised_host() -> str | None:
     guard, so every outbound backend call (MCP bridges, VNC status) fails. The listen address
     belongs in AUTOBOT_BACKEND_BIND_HOST.
     """
-    host = os.environ.get("AUTOBOT_BACKEND_HOST", "")
+    host = config.vm.main  # SSOT: empty or unset is already the default (127.0.0.1)
     if not is_unspecified_host(host):
         return None
     return (

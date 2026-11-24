@@ -3,18 +3,19 @@
 """#18810 / #22146: bind vs advertised host, and the one noVNC path home."""
 
 import re
-from pathlib import Path
 
 import pytest
 import yaml
 from jinja2 import ChainableUndefined, Environment
+from repo_tests._paths import repo_root
 
 from autobot_shared.egress_allowlist import _never_internal
 from autobot_shared.ssot_config import VMConfig
 from autobot_shared.ssot_reachable_host import host_or_default, is_unspecified_host
 from autobot_shared.ssot_role_mirrors import NOVNC_PATH_DEFAULT
+from tools.lint._comment_syntax import code_text
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = repo_root()
 ANSIBLE = ROOT / "autobot-slm-backend" / "ansible"
 ENV_TEMPLATE = ANSIBLE / "roles" / "backend" / "templates" / "backend.env.j2"
 ALL_VARS = ANSIBLE / "inventory" / "group_vars" / "all.yml"
@@ -25,7 +26,7 @@ def _rendered(**variables) -> dict[str, str]:
     env.filters["bool"] = bool  # Ansible-only filter the template uses
     variables = {"backend_redis_password": "", "backend_redis_host": "h", **variables}
     text = env.from_string(ENV_TEMPLATE.read_text(encoding="utf-8")).render(**variables)
-    pairs = (ln.split("=", 1) for ln in text.splitlines() if "=" in ln and not ln.startswith("#"))
+    pairs = (ln.split("=", 1) for ln in code_text(text, name="backend.env").splitlines() if "=" in ln)
     return {k: v for k, v in pairs}
 
 
@@ -74,12 +75,13 @@ def test_startup_validation_fails_naming_the_variable(monkeypatch) -> None:
     monkeypatch.syspath_prepend(str(ROOT / "autobot-backend"))
     import startup_validation
 
-    monkeypatch.setenv("AUTOBOT_BACKEND_HOST", "0.0.0.0")  # nosec B104
+    ssot = startup_validation.config.vm  # the canonical reader; empty or unset already means the default
+    monkeypatch.setattr(ssot, "main", "0.0.0.0")  # nosec B104
     message = startup_validation.validate_advertised_host()
     assert "AUTOBOT_BACKEND_HOST" in message and "AUTOBOT_BACKEND_BIND_HOST" in message
-    monkeypatch.setenv("AUTOBOT_BACKEND_HOST", "10.1.2.3")
+    monkeypatch.setattr(ssot, "main", "10.1.2.3")
     assert startup_validation.validate_advertised_host() is None
-    monkeypatch.delenv("AUTOBOT_BACKEND_HOST")
+    monkeypatch.setattr(ssot, "main", VMConfig(_env_file=None).main)
     assert startup_validation.validate_advertised_host() is None
 
 
