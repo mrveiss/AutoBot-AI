@@ -40,7 +40,6 @@ PROJECT_ROOT = Path(__file__).parent.parent
 UNIT_TEST_MAPPINGS = {
     # Direct name matches -> autobot-backend root
     "advanced_rag_optimizer": "autobot-backend",
-    "chat_intent_detector": "autobot-backend",
     "circuit_breaker": "autobot-backend",
     "encryption_service": "autobot-backend",
     "slash_command_handler": "autobot-backend",

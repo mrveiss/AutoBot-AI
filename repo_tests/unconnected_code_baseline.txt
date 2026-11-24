@@ -28,7 +28,6 @@ module:autobot-backend/agents/dev_loop_issue_gate.py	#10603
 module:autobot-backend/agents/hierarchical_agent.py	#10603
 module:autobot-backend/agents/knowledge_retrieval_agent.py	#10603
 module:autobot-backend/agents/task_retry_strategy.py	#10603
-module:autobot-backend/chat_intent_detector.py	#10603
 module:autobot-backend/code_analysis/auto-tools/tool_base.py	#10603
 module:autobot-backend/code_analysis/setup.py	#10603
 module:autobot-backend/code_analysis/src/performance_analyzer.py	#10603

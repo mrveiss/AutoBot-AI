@@ -22,11 +22,112 @@ from enum import Enum
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from prompt_manager import get_prompt
 
 logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for acknowledgment word detection
 _ACKNOWLEDGMENT_WORDS = frozenset({"ok", "okay", "yes", "no", "sure", "thanks", "thank you"})
+
+# Phrases where an exit word names a technical concept, not a request to leave
+# (carried over from the retired chat_intent_detector, #21678)
+NON_EXIT_CONTEXT_PHRASES = frozenset(
+    {
+        "exit code",
+        "exit status",
+        "exit signal",
+        "exit value",
+        "exit point",
+        "quit command",
+        "quit signal",
+        "stop signal",
+        "stop command",
+        "about exit",
+        "about the exit",
+        "the exit",
+        "what exit",
+        "which exit",
+        "bye command",
+        "the bye",
+        "how to quit",
+    }
+)
+
+# Topic keywords (what the user is asking ABOUT) and the prompt each selects
+TOPIC_KEYWORDS = {
+    "installation": {
+        "install",
+        "setup",
+        "configure",
+        "deployment",
+        "deploy",
+        "first time",
+        "getting started",
+        "how to start",
+        "run autobot",
+        "start autobot",
+        "vm setup",
+        "distributed setup",
+    },
+    "architecture": {
+        "architecture",
+        "design",
+        "why",
+        "how does",
+        "how is",
+        "vm",
+        "virtual machine",
+        "distributed",
+        "infrastructure",
+        "service",
+        "component",
+        "system design",
+        "how many",
+    },
+    "troubleshooting": {
+        "error",
+        "issue",
+        "problem",
+        "not working",
+        "broken",
+        "failed",
+        "fail",
+        "crash",
+        "timeout",
+        "can't",
+        "cannot",
+        "stuck",
+        "help",
+        "fix",
+        "debug",
+        "troubleshoot",
+    },
+    "api": {
+        "api",
+        "endpoint",
+        "request",
+        "response",
+        "integration",
+        "curl",
+        "http",
+        "rest",
+        "websocket",
+        "stream",
+        "documentation",
+        "docs",
+        "how to call",
+        "how to use",
+    },
+}
+TOPIC_PROMPT_MAP = {
+    "installation": "chat.installation_help",
+    "architecture": "chat.architecture_explanation",
+    "troubleshooting": "chat.troubleshooting",
+    "api": "chat.api_documentation",
+}
+GENERAL_TOPIC = "general"
+_CONTEXT_BOOST = 0.5
+_CONTEXT_HISTORY_TURNS = 2
 
 
 class ConversationIntent(Enum):
@@ -227,6 +328,7 @@ class IntentClassifier:
             "has_clarification_word": any(word in self.CLARIFICATION_WORDS for word in words),
             "has_continuation_word": any(word in self.CONTINUATION_WORDS for word in words),
             "has_exit_phrase": any(phrase in message_lower for phrase in self.EXIT_PHRASES),
+            "has_non_exit_context": any(ctx in message_lower for ctx in NON_EXIT_CONTEXT_PHRASES),
         }
 
         # Classify based on signals
@@ -256,8 +358,8 @@ class IntentClassifier:
                 signals=signals,
             )
 
-        # Exit phrase with continuation context = continue
-        if signals["has_continuation_word"]:
+        # Exit phrase with continuation context, or naming a technical concept = continue
+        if signals["has_continuation_word"] or signals["has_non_exit_context"]:
             return IntentClassification(
                 intent=ConversationIntent.CONTINUE,
                 confidence=0.90,
@@ -430,3 +532,42 @@ class IntentClassifier:
 
         # RULES 3-6 + DEFAULT: delegate to lower-priority helper
         return self._classify_lower_priority_signals(words, signals, conversation_history)
+
+
+def detect_topic(message: str, conversation_history: List[Dict[str, str]] | None = None) -> str:
+    """Classify what a message is ABOUT (installation, architecture, troubleshooting, api, general).
+
+    Keyword hits in the message score each topic; keywords in the last assistant
+    turns add a small boost. Returns ``general`` when nothing matches.
+    """
+    message_lower = message.lower().strip()
+    scores = {topic: float(sum(1 for kw in kws if kw in message_lower)) for topic, kws in TOPIC_KEYWORDS.items()}
+    recent = [turn.get("assistant", "") for turn in (conversation_history or [])[-_CONTEXT_HISTORY_TURNS:]]
+    context = " ".join(recent).lower()
+    for topic, kws in TOPIC_KEYWORDS.items():
+        if any(kw in context for kw in kws):
+            scores[topic] += _CONTEXT_BOOST
+    best = max(scores, key=scores.get)
+    if scores[best] <= 0:
+        return GENERAL_TOPIC
+    logger.debug("Topic detected: %s (score: %s)", best, scores[best])
+    return best
+
+
+def select_context_prompt(topic: str, base_prompt: str) -> str:
+    """Append the topic-specific guidance prompt to ``base_prompt``.
+
+    Falls back to ``base_prompt`` for ``general``, an unknown topic, or a prompt that fails to load.
+    """
+    if topic not in TOPIC_PROMPT_MAP:
+        return base_prompt
+    try:
+        context_prompt = get_prompt(TOPIC_PROMPT_MAP[topic])
+    except Exception as e:
+        logger.warning("Failed to load context prompt for topic '%s': %s", topic, e)
+        return base_prompt
+    return (
+        f"{base_prompt}\n\n---\n\n## CONTEXT-SPECIFIC GUIDANCE\n\n{context_prompt}\n\n---\n\n"
+        f"**Remember**: Follow both the general conversation management rules above AND the "
+        f"context-specific guidance for this {topic} conversation."
+    )
