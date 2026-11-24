@@ -98,15 +98,19 @@ async def _secret_event(
     )
 
 
-async def _record_attempt(operation: str, secret_id: str | None, request: Request, actor: str | None, details: dict):
-    """The ``attempted`` row through the shared helper: a 503 when it is not written, so nothing is changed (#20557)."""
+async def _record_attempt(
+    operation: str, secret_id: str | None, request: Request, result: AuditResult, actor: str | None, details: dict
+):
+    """The ``attempted`` row through the shared helper: a 503 when it is not written, so nothing is changed (#20557).
+
+    *result* is the caller's own value; the helper stamps ``attempted`` on the row it writes.
+    """
     try:
-        event = await _secret_event(operation, secret_id, request, ATTEMPTED, actor, details)
+        event = await _secret_event(operation, secret_id, request, result, actor, details)
     except Exception as exc:  # noqa: BLE001 -- an unbuildable record is an unwritten one
         logger.error("[Secrets Audit] could not build the %s attempt: %s", operation, type(exc).__name__)
         raise attempt_unrecorded() from None
-    await record_audit_attempt(event)
-    _pending(request)[operation] = event
+    _pending(request)[operation] = await record_audit_attempt(event)
 
 
 async def _record_outcome(
@@ -172,7 +176,7 @@ async def audit_secret_op(
     ``required`` is kept for the callers that pass it; an attempt is always required.
     """
     if result == ATTEMPTED:
-        await _record_attempt(operation, secret_id, request, actor, details)
+        await _record_attempt(operation, secret_id, request, result, actor, details)
     elif operation in _pending(request):
         await _record_outcome(operation, secret_id, request, result, actor, details)
     else:

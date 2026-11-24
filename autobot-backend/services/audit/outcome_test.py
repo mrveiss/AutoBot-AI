@@ -17,6 +17,8 @@ their own ``_audit(..., "attempted")`` helpers; they are not routes and are trac
 import ast
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
+
 API_DIR = Path(__file__).resolve().parents[2] / "api"
 _SHARED = frozenset({"audit_secret_op", "record_audit_attempt"})
 
@@ -44,7 +46,11 @@ def unshared_attempts(source: str) -> list[int]:
 
 
 def _route_modules() -> list[Path]:
-    return [p for p in sorted(API_DIR.rglob("*.py")) if not p.name.endswith("_test.py") and "tests" not in p.parts]
+    return [
+        p
+        for p in sorted(API_DIR.rglob("*.py"))
+        if not is_test_filename(p.name, include_js=False) and "tests" not in p.parts
+    ]
 
 
 def test_every_attempted_row_of_a_route_goes_through_the_shared_helper() -> None:
@@ -72,6 +78,12 @@ def test_planted_second_mechanisms_are_caught() -> None:
         assert unshared_attempts(source) == [1], source
     assert unshared_attempts('await audit_secret_op("DELETE", ref, request, "attempted", required=True)') == []
     assert unshared_attempts("await record_audit_attempt(event)") == []
+
+
+def test_the_secrets_route_names_attempted_only_where_the_guard_allows() -> None:
+    """Positive control on the real module: it compares against ``attempted`` but never passes it to a writer."""
+    source = (API_DIR / "secrets_audit.py").read_text(encoding="utf-8")
+    assert "ATTEMPTED" in source and unshared_attempts(source) == []
 
 
 def binds_record_committed(source: str) -> bool:

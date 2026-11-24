@@ -48,11 +48,17 @@ async def _written(event: AuditEvent) -> bool:
         return False
 
 
-async def record_audit_attempt(event: AuditEvent) -> None:
-    """Durably record the intent; raise 503 when the write fails so nothing is changed."""
-    if not await _written(replace(event, outcome=ATTEMPTED)):
+async def record_audit_attempt(event: AuditEvent) -> AuditEvent:
+    """Durably record the intent; raise 503 when the write fails so nothing is changed.
+
+    This is the one place the ``attempted`` result is stamped, whatever outcome *event* was built with. Returns
+    the event as written (its id is the ``attempt_id`` the outcome row links to).
+    """
+    attempt = replace(event, outcome=ATTEMPTED)
+    if not await _written(attempt):
         logger.error("audit: attempt row for %s (%s) was not written; refusing with 503", event.action, event.id)
         raise attempt_unrecorded()
+    return attempt
 
 
 async def record_audit_outcome(
