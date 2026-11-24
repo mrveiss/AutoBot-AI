@@ -8,16 +8,17 @@
  * One watcher on the array LENGTH only (O(1) per streaming chunk). Moved out of ChatMessages.vue.
  */
 import { nextTick, onScopeDispose, ref, watch } from 'vue'
-import { sanitizeChatHtml } from '@/utils/sanitize'
 import type { ChatMessage } from '@/stores/useChatStore'
 
 const ANNOUNCE_CLEAR_MS = 2000
 
-/** Plain-text preview: DOMPurify-backed sanitiser first, then any remaining tag is stripped. */
+/**
+ * Plain-text preview. The HTML is parsed into an inert document (scripts never run there) and only its
+ * text is read, so no markup can survive the way it can through a single-pass tag-stripping regex.
+ */
 export function announcementPreview(message: ChatMessage): string {
-  const preview = sanitizeChatHtml(message.content.substring(0, 200))
-    .replace(/<[^>]*>/g, '')
-    .substring(0, 100)
+  const parsed = new DOMParser().parseFromString(message.content.substring(0, 200), 'text/html')
+  const preview = (parsed.body.textContent ?? '').substring(0, 100)
   return `${preview}${preview.length < message.content.length ? '...' : ''}`
 }
 

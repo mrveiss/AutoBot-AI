@@ -7,8 +7,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { nextTick, reactive } from 'vue'
 
-vi.mock('@/utils/sanitize', () => ({ sanitizeChatHtml: (h: string) => h }))
-
 import { announcementPreview, useChatScreenReader } from '../useChatScreenReader'
 import type { ChatMessage } from '@/stores/useChatStore'
 
@@ -21,6 +19,12 @@ describe('announcementPreview', () => {
   it('strips tags and adds an ellipsis only when the preview is shorter than the message', () => {
     expect(announcementPreview(msg('1', '<b>hi</b>'))).toBe('hi...')
     expect(announcementPreview(msg('1', 'hi'))).toBe('hi')
+  })
+
+  it('leaves no markup when tags are nested to rebuild one after a single strip pass', () => {
+    const preview = announcementPreview(msg('1', '<scr<script>ipt>alert(1)</script><img src=x onerror=alert(1)>ok'))
+    expect(preview).not.toMatch(/<\s*(script|img)/i)
+    expect(preview).toContain('ok')
   })
 })
 
