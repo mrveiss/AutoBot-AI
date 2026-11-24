@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.analytics_bug_prediction import _REDIS_PREFIX as _BUG
-from api.codebase_analytics.endpoints.dependencies import _REDIS_PREFIX as _DEP
+from api.codebase_analytics.endpoints.dependencies import DEPENDENCIES_TASK_PREFIX as _DEP
 from api.codebase_analytics.endpoints.duplicates import _REDIS_PREFIX as _DUP
 from api.codebase_analytics.endpoints.import_tree import _REDIS_PREFIX as _IMP
 from api.source_scope import source_scoped_prefix

@@ -38,13 +38,17 @@ server {
     listen [::]:80;
     server_name _;
 
+{% if (slm_nginx_tls_port | int) == (slm_https_implicit_port | int) %}
     return 301 https://$host$request_uri;
+{% else %}
+    return 301 https://$host:{{ slm_nginx_tls_port }}$request_uri;
+{% endif %}
 }
 
 # HTTPS server
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen {{ slm_nginx_tls_port }} ssl http2;
+    listen [::]:{{ slm_nginx_tls_port }} ssl http2;
     server_name _;
 
     # SSL configuration
@@ -62,7 +66,7 @@ server {
     include /etc/nginx/snippets/autobot-security-headers-strict.conf;
 
     # Issue #1090: Allow SLM agent event sync payloads (typically 1.5-2MB)
-    client_max_body_size 10m;
+    client_max_body_size {{ slm_client_max_body_size }};
 
     # Logging
     access_log {{ slm_log_dir }}/nginx-access.log;
@@ -243,7 +247,7 @@ server {
         # transcriber/knowledge media uploads (audio/video — .mp4/.m4a/.wav etc.)
         # with 413. User-backend uploads need a generous cap; the app enforces its
         # own per-file limit. Scoped here so SLM agent paths keep the 10m default.
-        {{ lookup('file', role_path ~ '/../../_shared/files/upload-cap.conf') }}
+        {{ lookup('file', proxy_upload_cap_file) }}
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;

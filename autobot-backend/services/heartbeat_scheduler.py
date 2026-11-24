@@ -429,9 +429,14 @@ class HeartbeatScheduler:
         return {}
 
 
-async def _get_or_create_state(session: AsyncSession, agent_id: str) -> AgentRuntimeState:
-    """Return existing AgentRuntimeState or create one for agent_id (#1407)."""
-    result = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id))
+async def _get_or_create_state(session: AsyncSession, agent_id: str, *, for_update: bool = False) -> AgentRuntimeState:
+    """Return existing AgentRuntimeState or create one for agent_id (#1407).
+
+    *for_update* takes the row lock, so a second control on the same agent waits for the first to commit
+    and then reads the state it left (#21375).
+    """
+    stmt = select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id)
+    result = await session.execute(stmt.with_for_update() if for_update else stmt)
     state = result.scalar_one_or_none()
     if state is None:
         state = AgentRuntimeState(id=uuid.uuid4(), agent_id=agent_id)

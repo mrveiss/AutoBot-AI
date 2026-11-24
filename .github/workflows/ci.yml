@@ -919,6 +919,83 @@ jobs:
           draft: ${{ github.event.pull_request.draft == true }}
           held: ${{ needs.changes.outputs.held }}
 
+  # #22114: the specs that import what a pull request changed, run first. The full frontend suites type-check, lint and run
+  # the integration suite before their unit tests, so a spec that cannot load (a `vi.mock` factory missing an export the changed
+  # code now imports) used to turn the pull request red only at the end of that job. This job starts as soon as `changes`
+  # and `short-check` (#20552: a job that starts from detection waits for it) are done, installs only the app a changed file belongs to (both for a shared-kit change), and runs `vitest related` on the files
+  # the pull request changed. It is an early signal, not a gate: no required context depends on it, and the full suites are unchanged.
+  frontend-related-specs:
+    name: frontend-related-specs
+    needs: [changes, short-check]
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.ready == 'true' && needs.changes.outputs.held != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read  # list the pull request's files
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v7
+
+      # The pull request's own file list (what the pull request changes, not a two-dot diff of two tips); removed files are dropped.
+      # Each app's files go to `$RUNNER_TEMP/related/<app>.txt`, one per line: the app's own files relative to the app, then the
+      # shared kit's files (libs/autobot-ui) as absolute paths. Both apps pin `@autobot/ui` to the in-tree kit by file path
+      # (libs/autobot-ui/vite-resolve.ts, used by both vite configs), so `vitest related` finds the specs that import a kit file;
+      # a kit change therefore selects the consumer specs of BOTH apps.
+      - name: Changed frontend files
+        id: files
+        run: |
+          mkdir -p "$RUNNER_TEMP/related"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[] | select(.status != "removed") | .filename' > "$RUNNER_TEMP/related/all.txt"
+          sed -n "s|^\(libs/autobot-ui/.*\)|${GITHUB_WORKSPACE}/\1|p" "$RUNNER_TEMP/related/all.txt" > "$RUNNER_TEMP/related/kit.txt"
+          echo "libs/autobot-ui: $(wc -l < "$RUNNER_TEMP/related/kit.txt") changed file(s)"
+          apps=""
+          for app in autobot-frontend autobot-slm-frontend; do
+            sed -n "s|^${app}/||p" "$RUNNER_TEMP/related/all.txt" > "$RUNNER_TEMP/related/${app}.txt"
+            cat "$RUNNER_TEMP/related/kit.txt" >> "$RUNNER_TEMP/related/${app}.txt"
+            if [ -s "$RUNNER_TEMP/related/${app}.txt" ]; then
+              apps="${apps} ${app}"
+              echo "${app}: $(wc -l < "$RUNNER_TEMP/related/${app}.txt") file(s) to select specs from"
+            fi
+          done
+          if [ -z "$apps" ]; then
+            echo "No frontend changes in this pull request: nothing to run (reporting success)."
+          fi
+          echo "apps=${apps# }" >> "$GITHUB_OUTPUT"
+
+      # The one frontend setup (.github/actions/setup-frontend, #22114): Node from .nvmrc, the npm cache, `npm ci` per app.
+      - name: Set up the frontend toolchain
+        if: steps.files.outputs.apps != ''
+        uses: ./.github/actions/setup-frontend
+        with:
+          package-dirs: ${{ steps.files.outputs.apps }}
+          cache-dependency-path: |
+            autobot-frontend/package-lock.json
+            autobot-slm-frontend/package-lock.json
+
+      # Per app: `vitest related --run` on just the changed files. A file no spec
+      # imports selects no spec (`--passWithNoTests`). Every app runs even after one fails, so the run lists every red spec.
+      - name: Run the related specs
+        if: steps.files.outputs.apps != ''
+        env:
+          APPS: ${{ steps.files.outputs.apps }}
+        run: |
+          rc=0
+          for app in $APPS; do
+            mapfile -t FILES < "$RUNNER_TEMP/related/${app}.txt"
+            echo "::group::${app}: vitest related on ${#FILES[@]} changed file(s)"
+            (
+              cd "$app" || exit 1
+              npx --no-install vitest related --run --passWithNoTests "${FILES[@]}"
+            ) < /dev/null || { echo "::error::the specs related to the changed files of ${app} failed"; rc=1; }
+            echo "::endgroup::"
+          done
+          exit "$rc"
+
   frontend-tests:
     needs: [changes, short-check]
     if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_frontend_tests == 'true' }}
@@ -926,22 +1003,11 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v7
+    - name: Set up the frontend toolchain
+      uses: ./.github/actions/setup-frontend
       with:
-        node-version-file: .nvmrc
-        cache: 'npm'
+        package-dirs: autobot-frontend
         cache-dependency-path: autobot-frontend/package-lock.json
-
-    - name: Install frontend dependencies
-      # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so
-      # skip the ~100MB CDN download — a Cypress CDN 504 must never red out a
-      # required check. Local dev `npm ci` is unaffected and still gets it.
-      env:
-        CYPRESS_INSTALL_BINARY: '0'
-      run: |
-        cd autobot-frontend
-        npm ci
 
     - name: Run frontend linting
       run: |

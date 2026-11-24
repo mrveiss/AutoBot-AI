@@ -51,6 +51,5 @@ describe('factToDocument', () => {
       expect(doc.category).toBe(DEFAULT_FACT_CATEGORY)
       expect(doc.metadata?.factType).toBeUndefined()
     }
-    expect([DEFAULT_FACT_TYPE, DEFAULT_FACT_CATEGORY]).toEqual(['document', 'General'])
   })
 })

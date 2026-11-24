@@ -91,4 +91,12 @@ describe('PageHeader', () => {
     expect(text.exists()).toBe(true)
     expect(text.text()).toBe('A very long chat session title')
   })
+
+  it('renders the eyebrow slot above the title, and no eyebrow element without it', () => {
+    const w = mount(PageHeader, { props: { title: 'Chat' }, slots: { eyebrow: 'Overseer on' } })
+    const html = w.html()
+    expect(w.get('.aui-page-header__eyebrow').text()).toBe('Overseer on')
+    expect(html.indexOf('aui-page-header__eyebrow')).toBeLessThan(html.indexOf('<h1'))
+    expect(mount(PageHeader, { props: { title: 'Chat' } }).find('.aui-page-header__eyebrow').exists()).toBe(false)
+  })
 })

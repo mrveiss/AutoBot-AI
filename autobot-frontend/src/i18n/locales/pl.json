@@ -7369,7 +7369,8 @@
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
       "toggleViewAriaLabel": "Toggle view mode",
-      "uploadFailedHint": "Sprawdź limity rozmiaru pliku i wymagania dotyczące formatu"
+      "uploadFailedHint": "Sprawdź limity rozmiaru pliku i wymagania dotyczące formatu",
+      "uploadAlreadyExists": "A file with this name already exists"
     },
     "header": {
       "title": "File Browser",
@@ -10014,5 +10015,18 @@
     "invalid_generic": "Ten harmonogram jest nieprawidłowy.",
     "conflicting_fields": "Harmonogram zapisuje się albo jako cron, albo jako reguła kalendarzowa lub uruchomienie jednorazowe, nigdy jako oba.",
     "gatedNote": "Ostatni dzień, dzień tygodnia w miesiącu, dni 29–31 i uruchomienia jednorazowe będą dostępne po aktualizacji harmonogramatora."
+  },
+  "driftPrune": {
+    "batch": "Partia {count} z {total} plik(ów); potwierdź, aby usunąć tę partię, następna zostanie wyświetlona potem",
+    "cancel": "Anuluj",
+    "confirm": "Potwierdź usunięcie {count} plik(ów)",
+    "intro": "Git dowodzi, że te pliki zostały usunięte ze źródeł, a nadal są wdrożone. Usuwane są tylko te pliki. Stan hosta, paczki kompilacji i zmodyfikowane pliki nigdy nie są ruszane.",
+    "nothingToRemove": "Nic do usunięcia: żaden wdrożony plik nie jest już potwierdzony jako usunięty ze źródeł. Uruchom ponownie sprawdzanie rozbieżności.",
+    "previewAction": "Podgląd usunięcia",
+    "previewing": "Ładowanie podglądu…",
+    "removing": "Usuwanie…",
+    "requestFailed": "Żądanie czyszczenia rozbieżności nie powiodło się",
+    "result": "Usunięto {removed} plik(ów); {left} pozostawiono na miejscu",
+    "title": "Z {component} zostałoby usuniętych {count} plik(ów)"
   }
 }

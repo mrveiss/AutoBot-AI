@@ -76,6 +76,42 @@
         - /var/lib/grafana
 
   tasks:
+    # #22030: validated before ANY other task. role_target_dir is deleted as "<base_dir>/<role_target_dir>", so a
+    # value that is empty, absolute, holds a "." / ".." / empty segment, or resolves outside base_dir would delete
+    # the install root or something that is not this role's. The SLM sends a relative, multi-segment path (the agent's
+    # is "autobot-slm-agent/slm/agent"); the same checks run in autobot_shared.install_paths.safe_relative_dir.
+    - name: "Refuse an unsafe role_target_dir before any task runs (#22030)"
+      ansible.builtin.assert:
+        that:
+          - role_target_dir is string
+          - role_target_dir | length > 0
+          - not role_target_dir.startswith('/')
+          - role_target_dir is not regex('[^A-Za-z0-9._/+@-]')
+          - role_target_dir.split('/') | select('in', ['', '.', '..']) | list | length == 0
+        fail_msg: "role_target_dir must be a relative path of plain segments, got {{ role_target_dir | to_json }}"
+        quiet: true
+      when: role_target_dir is defined
+
+    - name: "Resolve the install root and the role directory (#22030)"
+      ansible.builtin.command:
+        argv: [realpath, -m, --, "{{ item }}"]
+      loop:
+        - "{{ autobot.base_dir }}"
+        - "{{ autobot.base_dir }}/{{ role_target_dir }}"
+      register: _real_paths
+      changed_when: false
+      check_mode: false
+      when: role_target_dir is defined
+
+    - name: "Refuse a role directory that is not strictly under the install root (#22030)"
+      ansible.builtin.assert:
+        that:
+          - _real_paths.results[1].stdout.startswith(_real_paths.results[0].stdout ~ '/')
+          - _real_paths.results[1].stdout != _real_paths.results[0].stdout
+        fail_msg: "{{ role_target_dir | to_json }} resolves outside {{ autobot.base_dir }}"
+        quiet: true
+      when: role_target_dir is defined
+
     - name: Validate required variables
       ansible.builtin.assert:
         that:

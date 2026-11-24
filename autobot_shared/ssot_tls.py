@@ -19,12 +19,13 @@ from pathlib import Path
 from typing import ClassVar, FrozenSet, List
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
 
 # The TLS cert-dir defaults' one home (#19317), read by the Field defaults below.
 from autobot_shared.env_registry_tls import DEFAULT_TLS_CERT_DIR, DEFAULT_TLS_REMOTE_CERT_DIR
 from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_ssh import SSHIdentitySettings
 
 PROJECT_ROOT = project_root()
 
@@ -49,7 +50,7 @@ class VMCertificateInfo:
     san_entries: List[str] = field(default_factory=list)
 
 
-class TLSConfig(RedactedReprMixin, BaseSettings):
+class TLSConfig(RedactedReprMixin, SSHIdentitySettings):
     """TLS/PKI configuration for secure communications (Issue #164).
 
     Manages all TLS-related settings for the AutoBot distributed architecture.
@@ -126,19 +127,6 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
         description="Certificate directory on remote VMs",
     )
 
-    # SSH configuration for distribution
-    ssh_key: str = Field(
-        default="~/.ssh/autobot_key",
-        alias="AUTOBOT_SSH_KEY",
-        description="Path to SSH key for VM access",
-    )
-
-    ssh_user: str = Field(
-        default="autobot",
-        alias="AUTOBOT_SSH_USER",
-        description="SSH user for VM access",
-    )
-
     # Redis TLS
     redis_tls_enabled: bool = Field(
         default=False,
@@ -199,7 +187,7 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
     @property
     def ssh_key_path(self) -> Path:
         """Get absolute path to SSH key."""
-        return Path(os.path.expanduser(self.ssh_key))
+        return Path(os.path.expanduser(self.management_ssh_key_path))
 
     @property
     def is_enabled(self) -> bool:

@@ -34,7 +34,7 @@
           <div class="citation-content">
             <div class="citation-text">
               <a
-                v-if="citation.type === 'web' && citation.url && isSafeUrl(citation.url)"
+                v-if="citation.url && isSafeUrl(citation.url)"
                 :href="citation.url"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -54,6 +54,21 @@
               class="citation-excerpt"
             >
               {{ $t('chat.citations.model') }} {{ citation.model }}
+            </div>
+            <div v-if="stepDetails(citation).length" class="citation-excerpt">
+              <div v-for="detail in stepDetails(citation)" :key="detail">{{ detail }}</div>
+            </div>
+            <div v-if="resultLinks(citation).length" class="citation-excerpt">
+              {{ $t('chat.citations.resultLinks') }}
+              <a
+                v-for="link in resultLinks(citation)"
+                :key="link"
+                :href="link"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="citation-link"
+                @click.stop
+              >{{ link }}</a>
             </div>
             <div class="citation-meta">
               <span
@@ -78,6 +93,13 @@
                 {{ formatSourcePath(citation.source) }}
               </span>
             </div>
+          </div>
+        </div>
+        <div v-if="unproven.length || partial" class="citation-item" role="note">
+          <div class="citation-content">
+            <div v-if="unproven.length" class="citation-text">{{ $t('chat.citations.unprovenTitle') }} {{ unproven.join(', ') }}</div>
+            <div v-if="unproven.length" class="citation-excerpt">{{ $t('chat.citations.unprovenHint') }}</div>
+            <div v-if="partial" class="citation-excerpt">{{ $t('chat.citations.checkPartial') }}</div>
           </div>
         </div>
       </div>
@@ -115,15 +137,22 @@ interface Citation {
   score?: number
   source?: string
   // New fields (Issue #1186)
-  type?: 'knowledge_base' | 'llm_training' | 'web'
-  reliability?: 'verified' | 'high' | 'medium' | 'low'
+  type?: string // knowledge_base, llm_training, web_search, web_page, system_state, tool_output (#21976)
+  reliability?: string
   title?: string
   model?: string
   url?: string
+  step_id?: string
+  /** A tool step's `tool`, redacted `args`, `origin` (host, exit code, page, result URLs) and times. */
+  metadata?: Record<string, unknown>
 }
 
 interface Props {
   citations: Citation[]
+  /** Quoted values found in no tool result of the turn (#21976). */
+  unproven?: string[]
+  /** The check read only part of a step's output (or could not read it): say so (#21976). */
+  partial?: boolean
   maxLength?: number
   initiallyExpanded?: boolean
 }
@@ -135,6 +164,8 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   maxLength: 200,
+  unproven: () => [],
+  partial: false,
   initiallyExpanded: false
 })
 
@@ -174,7 +205,9 @@ const sourceIcon = (citation: Citation): IconName => {
   switch (citation.type) {
     case 'knowledge_base': return 'book'
     case 'llm_training':   return 'robot'
-    case 'web':            return 'globe'
+    case 'web':
+    case 'web_page':
+    case 'web_search':     return 'globe'
     default:               return 'file-alt'
   }
 }
@@ -195,6 +228,26 @@ const reliabilityLabel = (reliability: string | undefined): string => {
   return t(key)
 }
 
+/** The lines that say how a tool step produced its result: tool, arguments, host, exit code (#21976). */
+const stepDetails = (citation: Citation): string[] => {
+  const meta = citation.metadata
+  if (!meta?.tool) return []
+  const origin = (meta.origin ?? {}) as Record<string, unknown>
+  const args = meta.args && Object.keys(meta.args as object).length ? JSON.stringify(meta.args) : ''
+  return [
+    `${t('chat.citations.tool')} ${meta.tool}`,
+    args && `${t('chat.citations.arguments')} ${args}`,
+    origin.host && `${t('chat.citations.host')} ${origin.host}`,
+    origin.return_code != null && `${t('chat.citations.exitCode')} ${origin.return_code}`,
+  ].filter((line): line is string => typeof line === 'string' && line !== '')
+}
+
+/** The safe result URLs of a search step: all of them, none primary (#21976). */
+const resultLinks = (citation: Citation): string[] => {
+  const urls = (citation.metadata?.origin as { urls?: unknown } | undefined)?.urls
+  return Array.isArray(urls) ? urls.filter((u): u is string => typeof u === 'string' && isSafeUrl(u)) : []
+}
+
 const isSafeUrl = (url: string): boolean => {
   try {
     const parsed = new URL(url)
@@ -207,7 +260,7 @@ const isSafeUrl = (url: string): boolean => {
 const citationTitle = (citation: Citation): string => {
   if (citation.title) return citation.title
   if (citation.type === 'llm_training') return t('chat.citations.aiTrainingData')
-  if (citation.type === 'web') return citation.url || t('chat.citations.webSource')
+  if (citation.type === 'web' || citation.type === 'web_page') return citation.url || t('chat.citations.webSource')
   return citation.source ? formatSourcePath(citation.source) : t('chat.citations.knowledgeBase')
 }
 </script>
@@ -384,7 +437,7 @@ const citationTitle = (citation: Citation): string => {
 
 .reliability-low {
   background: rgba(239, 68, 68, 0.15);
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
 }
 
 /* Transition */

@@ -84,7 +84,7 @@ def _build_modules(project_root: str, source_ids: tuple[str, ...] = ()) -> list[
     """
     from api.analytics_bug_prediction import _REDIS_PREFIX as _BUG_PREFIX
     from api.code_intelligence import _REDIS_PREFIX as _SEC_PREFIX
-    from api.codebase_analytics.endpoints.dependencies import _REDIS_PREFIX as _DEP_PREFIX
+    from api.codebase_analytics.endpoints.dependencies import DEPENDENCIES_TASK_PREFIX as _DEP_PREFIX
     from api.codebase_analytics.endpoints.duplicates import _REDIS_PREFIX as _DUP_PREFIX
     from api.codebase_analytics.endpoints.import_tree import _REDIS_PREFIX as _IMPORT_PREFIX
     from tasks.analytics_tasks import (

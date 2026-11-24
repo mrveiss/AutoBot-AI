@@ -906,7 +906,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     # GH#10220: forward parsed token usage to the agent's budget. BudgetExhausted
     # is re-raised (GH#8215 hard-stop → run marked FAILED); other cost errors are
     # best-effort and never fail an otherwise-successful run.
-    await _ingest_adapter_usage(agent, result)
+    await _ingest_adapter_usage(agent, result, external_run_id)
 
     # GH#9622: surface non-success terminal states so _run_adapter records the
     # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
@@ -916,8 +916,8 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     return external_run_id
 
 
-async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus) -> None:
-    """Record a finished registry run's token usage: a failed run spent tokens too (#20202)."""
+async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus, run_id: Optional[str] = None) -> None:
+    """Record a finished run's token usage (a failed run spent tokens too, #20202); ``run_id`` dedupes (#21332)."""
     if result.tokens_in is None and result.tokens_out is None:
         return  # adapter did not report usage (e.g. CLI without stream-json result)
     agent_id: str = agent["agent_id"]
@@ -926,7 +926,7 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
         factory = get_async_session_factory()
         async with factory() as session:
             usage = (int(result.tokens_in or 0), int(result.tokens_out or 0))
-            await ingest_run_cost(get_budget_service(), session, result, agent_id, company, usage, model)
+            await ingest_run_cost(get_budget_service(), session, result, agent_id, company, usage, model, run_id)
             await session.commit()
     except BudgetExhausted:
         raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED

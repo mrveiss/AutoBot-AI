@@ -16,8 +16,7 @@
 
     <div class="mb-3 flex flex-col gap-1 text-autobot-text-secondary">
       <span>{{ t('batchJobs.progress', { value: job.progress }) }}</span>
-      <!-- Native <progress>: the kit has no progress primitive yet (#21662). -->
-      <progress class="w-full" :value="job.progress" max="100" :aria-label="t('batchJobs.progressLabel', { name: job.name })" />
+      <BaseProgress :value="job.progress" :variant="statusVariant" :label="t('batchJobs.progressLabel', { name: job.name })" />
     </div>
 
     <dl class="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -57,7 +56,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseAlert, BaseBadge, BaseButton, BaseCard, formatDateTime, formatDuration } from '@autobot/ui'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseProgress, formatDateTime, formatDuration } from '@autobot/ui'
 import type { BatchJob, BatchJobStatus } from '@/types/batch-processing'
 
 const props = defineProps<{ job: BatchJob; busy?: boolean }>()

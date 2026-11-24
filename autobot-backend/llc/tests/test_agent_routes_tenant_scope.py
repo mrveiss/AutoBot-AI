@@ -32,7 +32,7 @@ def _make_app(router_name: str, caller_org_id: str, session: AsyncMock):
     """FastAPI app carrying one LLC agent router with auth/session overridden."""
     # Deferred imports: must not be at module level (see test_suggest_ac_endpoint.py).
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
-    from user_management.database import get_async_session  # noqa: PLC0415
+    from llc.deps import get_session  # noqa: PLC0415
 
     if router_name == "api_keys":
         from llc.api.api_keys import router  # noqa: PLC0415
@@ -45,7 +45,7 @@ def _make_app(router_name: str, caller_org_id: str, session: AsyncMock):
     async def _fake_session():
         yield session
 
-    app.dependency_overrides[get_async_session] = _fake_session
+    app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(_USER_ID), "user_id": str(_USER_ID)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=uuid.UUID(caller_org_id), user_id=_USER_ID, is_platform_admin=False

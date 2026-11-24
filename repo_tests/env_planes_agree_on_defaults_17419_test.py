@@ -29,10 +29,6 @@ MIN_NAMES_COMPARED = 20
 MIN_ALIASES_SCANNED = 300
 
 
-#: Aliases still bound by two fields (the SSH identity in PathConfig and TLSConfig), shrink-only.
-KNOWN_DOUBLE_BINDINGS = frozenset({"AUTOBOT_SSH_KEY", "AUTOBOT_SSH_USER"})
-
-
 def _normalized(value: Any) -> str:
     return "" if value is None else str(value)
 
@@ -107,11 +103,7 @@ def double_bindings(classes: Iterator[type[BaseSettings]]) -> set[str]:
 def test_every_alias_binds_one_field() -> None:
     scanned = sum(1 for cls in _settings_classes() for _ in _own_aliases(cls))
     assert scanned >= MIN_ALIASES_SCANNED, f"scanned only {scanned} aliases"
-    assert double_bindings(_settings_classes()) - KNOWN_DOUBLE_BINDINGS == set()
-
-
-def test_the_double_binding_exemptions_are_not_stale() -> None:
-    assert KNOWN_DOUBLE_BINDINGS <= double_bindings(_settings_classes())
+    assert double_bindings(_settings_classes()) == set()
 
 
 def test_a_second_binding_is_caught_and_an_inherited_field_is_not() -> None:

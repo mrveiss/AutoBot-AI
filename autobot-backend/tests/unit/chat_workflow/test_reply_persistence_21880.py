@@ -131,3 +131,46 @@ def test_the_shared_case_table_the_frontend_also_pins(case):
         return
     respond = {"sender": "assistant", "text": case["answer"], "metadata": {"message_type": "respond_tool"}}
     assert is_redundant_prose(case["narration"], [respond]) is case["redundant"]
+
+
+CALL = '<TOOL_CALL name="respond" params=\'{"text":"%s"}\'>Task complete</TOOL_CALL>' % ANSWER
+
+
+def _stored(batch):
+    return [e for e in batch if e["sender"] == "assistant"]
+
+
+def test_narration_with_the_respond_call_stores_one_reply_and_no_markup():
+    batch = _build([_respond(ANSWER, 1)], [f"{ANSWER} {CALL}"])
+    assert _texts(batch) == [ANSWER]
+    assert not any("TOOL_CALL" in e["text"] for e in batch)
+
+
+def test_a_call_only_iteration_stores_one_reply():
+    assert _texts(_build([_respond(ANSWER, 1)], [CALL])) == [ANSWER]
+
+
+def test_a_lead_in_before_the_respond_call_is_kept_without_markup():
+    lead = "I could not reach the second site, so this is the first one only."
+    batch = _build([_respond(ANSWER, 1)], [f"{lead} {CALL}"])
+    assert _texts(batch) == [lead, ANSWER]
+
+
+def test_an_unclosed_thought_before_the_call_is_a_thought_and_one_reply():
+    batch = _build([_respond(ANSWER, 1)], [f"[THOUGHT]The original request was the weather. {CALL}"])
+    kinds = [(e["messageType"], e["text"]) for e in _stored(batch)]
+    assert kinds == [("thought", "The original request was the weather."), ("response", ANSWER)]
+    assert not any("TOOL_CALL" in e["text"] for e in batch)
+
+
+def test_a_closed_thought_with_a_fence_in_the_call_params_still_splits():
+    call = '<TOOL_CALL name="respond" params=\'{"text":"```x```"}\'>Task complete</TOOL_CALL>'
+    batch = _build([_respond("```x```", 1)], [f"[THOUGHT]```plan``` [/THOUGHT]{call}"])
+    assert [e["messageType"] for e in _stored(batch)] == ["thought", "response"]
+
+
+def test_the_surviving_reply_is_the_respond_entry():
+    batch = _build([_respond(ANSWER, 1)], [f"[THOUGHT]plan {CALL}"], selected_model="model-a")
+    survivor = _stored(batch)[-1]
+    assert survivor["metadata"]["message_type"] == "respond_tool"
+    assert survivor["metadata"]["model"] == "model-a"

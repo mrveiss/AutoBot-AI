@@ -46,7 +46,7 @@ def strict_world(monkeypatch):
 
     def _scope(user, owner="alice", attachments=("x",)):
         monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", lambda request: _History(owner))
-        request = SimpleNamespace(method="POST")
+        request = SimpleNamespace(method="POST", headers={}, query_params={})
         return asyncio.run(attach_scope(user, "chat-1", request, {"attachments": list(attachments)}))
 
     def _tripwire(*_a, **_k):

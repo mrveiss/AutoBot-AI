@@ -27,6 +27,7 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from auth_service_opt_in import service_opt_in
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from enterprise_feature_manager import FeatureCategory, FeatureStatus, get_enterprise_manager
 
@@ -331,7 +332,7 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
             )
 
     except ValueError:
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise fixed_refusal(400)
     except Exception as e:
         logger.error("Error enabling enterprise feature %s: %s", request.feature_name, e)
         raise HTTPException(status_code=500, detail="Failed to enable feature")
@@ -534,10 +535,7 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
         manager = get_enterprise_manager()
 
         if not manager._check_resource_capabilities():
-            raise HTTPException(
-                status_code=400,
-                detail="Resource optimization features must be enabled first",
-            )
+            raise HTTPException(status_code=400, detail="Resource optimization features must be enabled first")
 
         optimization_results = _build_optimization_results(request)
 

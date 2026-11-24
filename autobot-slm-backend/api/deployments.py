@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.http_refusal import fixed_refusal
 from models.schemas import (
     DeploymentCreate,
     DeploymentListResponse,
@@ -248,10 +249,7 @@ async def create_deployment(
         )
         return deployment
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
 
 
 @router.get("/{deployment_id}", response_model=DeploymentResponse)
@@ -292,10 +290,7 @@ async def cancel_deployment(
         return deployment
 
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
 
 
 @router.post("/{deployment_id}/rollback", response_model=DeploymentResponse)
@@ -318,10 +313,7 @@ async def rollback_deployment(
         return deployment
 
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
 
 
 @router.post("/{deployment_id}/retry", response_model=DeploymentResponse)
@@ -346,7 +338,4 @@ async def retry_deployment(
         return deployment
 
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)

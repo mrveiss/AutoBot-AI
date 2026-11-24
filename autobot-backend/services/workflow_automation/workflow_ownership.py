@@ -20,54 +20,36 @@ from fastapi import HTTPException
 
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_principal_id
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 
 logger = get_logger(__name__)
-
-# The claims a user dict may carry, in the order a workflow owner is taken from it.
-# `get_current_user` returns `user_id` for a session login and for the synthetic
-# admin it mints for an internal API-key call; `sub` comes from a run-scoped JWT
-# (#6473). `username` is last because it is the only one a caller can change.
-_ID_CLAIMS = ("user_id", "sub", "username")
 
 
 def caller_id(user: dict | None) -> str | None:
     """The identity to record as a workflow's owner, or to compare one against.
 
+    The canonical resolver (#13688), so the recorded owner and the compared identity
+    are the same string. ``username`` is never a claim: a caller can change it, so
+    keying ownership on it lets a rename lose access or take over another's (#21655).
     Returns ``None`` when no claim is present, which every check below treats as
     "not the owner" rather than as a wildcard.
     """
-    if not user:
-        return None
-    for claim in _ID_CLAIMS:
-        value = user.get(claim)
-        if value:
-            return str(value)
-    return None
+    return resolve_principal_id(user)
 
 
 def is_owner_or_admin(workflow, user: dict | None) -> bool:
     """Whether *user* may read or steer *workflow*.
 
     An admin always may. Otherwise the workflow must record an owner **and** that
-    owner must match one of the caller's claims. A workflow with no recorded owner
-    is steerable only by an admin -- fail closed, because the alternative reading
-    ("nobody owns it, so anybody may") is the hole #17014 is about.
+    owner must equal the caller's resolved principal id. A workflow with no recorded
+    owner is steerable only by an admin -- fail closed, because the alternative
+    reading ("nobody owns it, so anybody may") is the hole #17014 is about.
     """
     if user and is_admin_role(user.get("role")):
         return True
     owner = getattr(workflow, "owner_id", None)
-    if not owner:
-        return False
-    return owner in {value for claim in _ID_CLAIMS if (value := _claim(user, claim))}
-
-
-def _claim(user: dict | None, claim: str) -> str | None:
-    """One claim off *user* as a string, or None."""
-    if not user:
-        return None
-    value = user.get(claim)
-    return str(value) if value else None
+    return bool(owner) and owner == resolve_principal_id(user)
 
 
 def require_owner_or_admin(workflow, user: dict | None) -> None:

@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 // #21136: the panel shows who paused an agent by name and never sends the actor itself.
+// #21377: it sends stable reason codes, never English text, and renders them through i18n.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
@@ -67,6 +68,30 @@ describe('HeartbeatPanel paused-by', () => {
     await flushPromises()
     const call = rawRequest.mock.calls.find((c) => String(c[0]).endsWith('/pause'))
     expect(call).toBeDefined()
-    expect(call![1].body).toEqual({ reason: 'Manual pause from UI' })
+    expect(call![1].body).toEqual({ reason: 'manual_pause_ui' })
+  })
+})
+
+describe('HeartbeatPanel reasons (#21377)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('sends the manual wakeup reason as a code', async () => {
+    const w = await load(config({ status: 'active', paused_by: null }))
+    await w.find('.btn-queue').trigger('click')
+    await flushPromises()
+    const call = rawRequest.mock.calls.find((c) => String(c[0]).endsWith('/wakeup') && c[1]?.method === 'POST')
+    expect(call).toBeDefined()
+    expect(call![1].body).toEqual({ priority: 0, reason: 'manual_wakeup_ui' })
+  })
+
+  it('renders a known reason code through its i18n key, not the raw code', async () => {
+    const w = await load(config({ paused_reason: 'manual_pause_ui' }))
+    expect(w.text()).toContain(en.agent.heartbeatReasons.manual_pause_ui)
+    expect(w.text()).not.toContain('manual_pause_ui')
+  })
+
+  it('renders a legacy free-text reason unchanged', async () => {
+    const w = await load(config({ paused_reason: 'Manual pause from UI (legacy)' }))
+    expect(w.text()).toContain('Manual pause from UI (legacy)')
   })
 })
