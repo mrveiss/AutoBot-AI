@@ -36,7 +36,7 @@ vi.mock('@/config/ssot-config', () => ({
 }))
 
 vi.mock('@/utils/ApiClient', () => ({
-  default: { get: vi.fn(), post: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), call: vi.fn() },
 }))
 
 vi.mock('@/composables/useEventBus', () => ({
@@ -56,6 +56,7 @@ vi.mock('@/utils/debugUtils', () => ({
 }))
 
 import { captchaTypeLabelKeyFor, useCaptchaStatus } from '../research/useCaptchaStatus'
+import apiClient from '@/utils/ApiClient'
 
 /** Run the composable inside a scope, as its siblings' specs do -- it registers
  *  an `onUnmounted` hook and would warn outside one. */
@@ -157,5 +158,67 @@ describe('captchaTypeLabelKeyFor', () => {
       for (const key of keys) expect(types[key.split('.').pop()!], `${file}: ${key}`).toBeTruthy()
     }
     expect(Object.keys(en.research.captcha.types)).toHaveLength(8)
+  })
+})
+
+describe('loadPendingCaptchas (#22215)', () => {
+  const get = apiClient.call as unknown as ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    get.mockReset()
+    mockLoggerError.mockReset()
+  })
+
+  it('calls GET /captcha/pending and shows the first still-pending CAPTCHA', async () => {
+    get.mockResolvedValue({
+      success: true,
+      count: 2,
+      timestamp: 't0',
+      pending_captchas: { done: { status: 'solved' }, waiting: { status: 'pending' } },
+    })
+
+    const shown = await withCaptchaStatus(async (api) => {
+      await api.loadPendingCaptchas()
+      return api.activeCaptcha.value
+    })
+
+    expect(get).toHaveBeenCalledOnce()
+    expect(get).toHaveBeenCalledWith('get', '/api/captcha/pending')
+    expect(shown?.captcha_id).toBe('waiting')
+    expect(shown?.timeout_seconds).toBeGreaterThan(0)
+  })
+
+  it('reads the DataResponse-wrapped body the contract declares as well', async () => {
+    get.mockResolvedValue({ success: true, data: { success: true, count: 1, timestamp: 't0', pending_captchas: { w: { status: 'pending' } } } })
+
+    const shown = await withCaptchaStatus(async (api) => {
+      await api.loadPendingCaptchas()
+      return api.activeCaptcha.value
+    })
+
+    expect(shown?.captcha_id).toBe('w')
+  })
+
+  it('shows nothing when none is pending', async () => {
+    get.mockResolvedValue({ success: true, count: 0, timestamp: 't0', pending_captchas: {} })
+
+    const shown = await withCaptchaStatus(async (api) => {
+      await api.loadPendingCaptchas()
+      return api.activeCaptcha.value
+    })
+
+    expect(shown).toBeNull()
+  })
+
+  it('logs and shows nothing when the route fails', async () => {
+    get.mockRejectedValue(new Error('500'))
+
+    const shown = await withCaptchaStatus(async (api) => {
+      await api.loadPendingCaptchas()
+      return api.activeCaptcha.value
+    })
+
+    expect(shown).toBeNull()
+    expect(mockLoggerError).toHaveBeenCalledOnce()
   })
 })

@@ -138,7 +138,6 @@ route:autobot-backend/api/auth.py:GET /roles/{role}/permissions
 route:autobot-backend/api/cache_management.py:GET /advanced-stats
 route:autobot-backend/api/cache_management.py:POST /clear-all
 route:autobot-backend/api/cache_management.py:POST /warm
-route:autobot-backend/api/captcha.py:GET /pending
 route:autobot-backend/api/chat_knowledge_delete.py:DELETE /context-orphans
 route:autobot-backend/api/chat_knowledge_delete.py:GET /context-orphans
 route:autobot-backend/api/code_intelligence.py:GET /evolution/patterns

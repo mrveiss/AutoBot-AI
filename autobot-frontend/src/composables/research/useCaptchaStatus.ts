@@ -15,8 +15,19 @@ import apiClient from '@/utils/ApiClient'
 import { getApiBase, getServiceUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDuration } from '@/utils/formatHelpers'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('useCaptchaStatus')
+
+/** Backend shape of `GET /captcha/pending` (source of truth: generated api.ts). */
+type CaptchaPendingData = components['schemas']['CaptchaPendingData']
+
+/**
+ * The countdown a restored CAPTCHA starts from. `GET /captcha/pending` reports only each id and its
+ * status, not the deadline, so this mirrors the backend's default wait (`CaptchaHumanLoop`, 120 s); the
+ * backend's own timeout still decides when the wait ends (#22215).
+ */
+const RESTORED_CAPTCHA_TIMEOUT_SECONDS = 120
 
 // ============================================================================
 // Types
@@ -178,6 +189,37 @@ export function useCaptchaStatus() {
     window.open(vncUrl, '_blank', 'noopener,noreferrer')
   }
 
+  /**
+   * Show a CAPTCHA that was already waiting when this view mounted (#22215).
+   *
+   * Events only announce a CAPTCHA once, so a reload would lose one still awaiting a human. The pending
+   * route lists `{captcha_id: {status}}`; the first still-pending one is shown unless an event already
+   * put one on screen. The route carries no URL or screenshot, so the card shows what it has.
+   */
+  async function loadPendingCaptchas() {
+    try {
+      // The route returns `CaptchaPendingData` flat (a JSONResponse), while its response_model wraps it in
+      // `DataResponse`; read either so a later switch to the wrapped body does not blank the card.
+      const reply = (await apiClient.call('get', '/api/captcha/pending')) as unknown as
+        | CaptchaPendingData
+        | { data?: CaptchaPendingData | null }
+      const data = ('data' in reply && reply.data ? reply.data : reply) as CaptchaPendingData
+      const pending = (data?.pending_captchas ?? {}) as Record<string, { status?: string }>
+      const id = Object.keys(pending).find((key) => pending[key]?.status === 'pending')
+      if (!id || activeCaptcha.value) return
+      handleCaptchaDetected({
+        captcha_id: id,
+        url: '',
+        captcha_type: 'unknown',
+        timeout_seconds: RESTORED_CAPTCHA_TIMEOUT_SECONDS,
+        timestamp: data.timestamp ?? '',
+        message: '',
+      })
+    } catch (error) {
+      logger.error('Failed to load pending CAPTCHAs:', error)
+    }
+  }
+
   // --------------------------------------------------------------------------
   // Mutations
   // --------------------------------------------------------------------------
@@ -239,6 +281,7 @@ export function useCaptchaStatus() {
     progressPercentage,
     formatTime: formatClock,
     openVnc,
+    loadPendingCaptchas,
     markSolved,
     skipCaptcha,
   }

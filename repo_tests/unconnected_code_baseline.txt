@@ -1004,7 +1004,6 @@ route:autobot-backend/api/auth.py:GET /roles/{role}/permissions	#20971
 route:autobot-backend/api/cache_management.py:GET /advanced-stats	#20974
 route:autobot-backend/api/cache_management.py:POST /clear-all	#20974
 route:autobot-backend/api/cache_management.py:POST /warm	#20974
-route:autobot-backend/api/captcha.py:GET /pending	#20971
 route:autobot-backend/api/chat_knowledge_delete.py:DELETE /context-orphans	#20975
 route:autobot-backend/api/chat_knowledge_delete.py:GET /context-orphans	#20975
 route:autobot-backend/api/code_intelligence.py:GET /evolution/patterns	#20973

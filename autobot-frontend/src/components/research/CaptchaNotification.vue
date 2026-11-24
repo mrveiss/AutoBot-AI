@@ -23,7 +23,7 @@
             <p class="captcha-message">
               {{ $t('research.captcha.message') }}
             </p>
-            <p class="captcha-url">
+            <p v-if="activeCaptcha.url" class="captcha-url">
               <Icon name="link" />
               <a :href="activeCaptcha.url" target="_blank" rel="noopener">{{ truncatedUrl }}</a>
             </p>
@@ -74,6 +74,7 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useCaptchaStatus } from '@/composables/research/useCaptchaStatus'
 
@@ -89,7 +90,11 @@ const {
   openVnc,
   markSolved,
   skipCaptcha,
+  loadPendingCaptchas,
 } = useCaptchaStatus()
+
+// A reload must still show a CAPTCHA that was already waiting (#22215).
+onMounted(loadPendingCaptchas)
 </script>
 
 <style scoped>
