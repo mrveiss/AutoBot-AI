@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """#18810 / #22146: bind vs advertised host, and the one noVNC path home."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -32,12 +33,9 @@ def _advertised(backend_host: str, inventory_host: str | None) -> str:
     """Render ``backend_advertised_host`` from the role default with the real Jinja expression."""
     expr = yaml.safe_load(ALL_VARS.read_text(encoding="utf-8"))["backend_advertised_host"]
     extra = {"infrastructure": {"hosts": {"backend": inventory_host}}} if inventory_host else {}
-    return (
-        Environment()
-        .from_string(expr)
-        .render(backend_host=backend_host, slm_loopback_ipv4="127.0.0.1", **extra)
-        .strip()
-    )
+    env = Environment()
+    env.filters["regex_search"] = lambda v, p: (lambda m: m.group(0) if m else None)(re.search(p, v))  # Ansible filter
+    return env.from_string(expr).render(backend_host=backend_host, slm_loopback_ipv4="127.0.0.1", **extra).strip()
 
 
 def test_template_never_renders_bind_all_as_the_client_host() -> None:
@@ -152,9 +150,10 @@ def test_updater_renders_the_env_before_it_restarts_the_backend() -> None:
 
 def _advertised_with(backend_host: str) -> str:
     expr = yaml.safe_load(ALL_VARS.read_text(encoding="utf-8"))["backend_advertised_host"]
+    env = Environment()
+    env.filters["regex_search"] = lambda v, p: (lambda m: m.group(0) if m else None)(re.search(p, v))  # Ansible filter
     return (
-        Environment()
-        .from_string(expr)
+        env.from_string(expr)
         .render(
             backend_host=backend_host, slm_loopback_ipv4="127.0.0.1", infrastructure={"hosts": {"backend": "10.1.2.3"}}
         )
@@ -162,13 +161,28 @@ def _advertised_with(backend_host: str) -> str:
     )
 
 
-_BIND_ALL_SPELLINGS = ["0.0.0.0", "::", "0:0:0:0:0:0:0:0", "[::]", "[0:0:0:0:0:0:0:0]", ""]  # nosec B104
+_BIND_ALL_SPELLINGS = [  # nosec B104
+    "0.0.0.0",
+    "",
+    "::",
+    "::0",
+    "0::0",
+    "0:0::0",
+    "0:0:0:0:0:0:0:0",
+    "0000:0000:0000:0000:0000:0000:0000:0000",
+    "::0.0.0.0",
+    "[::]",
+    "[::0]",
+    "[0:0:0:0:0:0:0:0]",
+    " :: ",
+    "0:0:0:0:0:0:0:0".upper(),
+]
 
 
 @pytest.mark.parametrize("spelling", _BIND_ALL_SPELLINGS)
 def test_every_bind_all_spelling_falls_back_to_the_inventory_host(spelling) -> None:
     assert _advertised_with(spelling) == "10.1.2.3"
-    assert is_unspecified_host(spelling) or spelling == ""  # agrees with validate_advertised_host
+    assert is_unspecified_host(spelling.strip()) or spelling == ""  # agrees with validate_advertised_host
 
 
 def test_a_specific_backend_host_is_advertised_as_is() -> None:
@@ -204,3 +218,10 @@ def test_compose_bind_host_has_one_variable_for_command_and_env() -> None:
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     assert compose.count("${AUTOBOT_BACKEND_BIND_HOST:-0.0.0.0}") == 2
     assert "AUTOBOT_BACKEND_BIND_HOST=0.0.0.0" not in compose
+
+
+@pytest.mark.parametrize(
+    "specific", ["10.9.9.9", "2001:db8::1", "[2001:db8::1]", "backend.example", "::1", "0:0:0:0:0:0:0:1"]
+)
+def test_a_specific_or_loopback_host_is_never_taken_for_bind_all(specific) -> None:
+    assert _advertised_with(specific) == specific

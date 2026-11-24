@@ -13,15 +13,23 @@ from constants.network_constants import NetworkConstants
 NOVNC_URL_SCHEME = "https"
 
 
+def _url_host(host: str) -> str:
+    """*host* as a URL authority host: an IPv6 literal is bracketed, anything else is unchanged."""
+    try:
+        return f"[{host}]" if ipaddress.ip_address(host).version == 6 else host
+    except ValueError:
+        return host
+
+
 def novnc_client_host() -> str:
-    """The host a viewer dials for a session's websockify listener (#22146).
+    """The host a viewer dials for a session's websockify listener (#22146), ready for a URL.
 
     The listener binds ``config.misc.novnc_bind_host`` (loopback unless set, never the API bind):
     loopback is only reachable from this host, so the URL says localhost; bind-all is dialed at the
     externally reachable host; a specific address accepts connections only on that address, so the
-    URL uses it.
+    URL uses it (an IPv6 literal bracketed).
     """
-    bind = config.misc.novnc_bind_host
+    bind = config.misc.novnc_bind_host.strip("[]")
     try:
         address = ipaddress.ip_address(bind)
     except ValueError:
@@ -29,5 +37,5 @@ def novnc_client_host() -> str:
     if address.is_loopback:
         return NetworkConstants.LOCALHOST_NAME
     if address.is_unspecified:
-        return config.misc.vnc_host or config.vm.main
-    return bind
+        return _url_host(config.misc.vnc_host or config.vm.main)
+    return _url_host(bind)

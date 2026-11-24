@@ -71,6 +71,8 @@ def test_websockify_is_found_through_the_ssot_search_path(which) -> None:
         ("::1", NetworkConstants.LOCALHOST_NAME),
         ("0.0.0.0", "viewer.example"),  # nosec B104
         ("::", "viewer.example"),
+        ("2001:db8::7", "[2001:db8::7]"),  # an IPv6 literal must be bracketed in a URL
+        ("[::]", "viewer.example"),
         ("192.0.2.7", "192.0.2.7"),  # a specific address accepts connections only on itself
     ],
 )

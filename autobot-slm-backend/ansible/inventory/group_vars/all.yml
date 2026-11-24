@@ -519,8 +519,12 @@ novnc_path: /opt/novnc
 # #18810: the address clients dial, written as AUTOBOT_BACKEND_HOST. One home (inventory-wide, evaluated
 # where backend.env.j2 renders, role or playbook). Never an unspecified
 # bind address: that case falls back to the inventory backend host, else loopback.
+# "Unspecified" matches autobot_shared/ssot_reachable_host.py::is_unspecified_host (ipaddress.is_unspecified):
+# empty, 0.0.0.0, and every IPv6 spelling made only of zeros and colons (::, ::0, 0::0, 0:0::0, the full
+# eight groups, ::0.0.0.0), bracketed or not. No ipaddr filter: ansible.utils is not a repo dependency.
 backend_advertised_host: >-
-  {{ backend_host if (backend_host | string | trim('[]') | lower) not in ['', '0.0.0.0', '::', '0:0:0:0:0:0:0:0']
+  {%- set _bind = backend_host | string | trim | lower | replace('[', '') | replace(']', '') -%}
+  {{ backend_host if (_bind != '' and (_bind | regex_search('^(0[.]0[.]0[.]0|[0:]*:[0:]*|[0:]*:0[.]0[.]0[.]0)$')) is none)
      else (infrastructure.hosts.backend if infrastructure is defined else slm_loopback_ipv4) }}
 
 role_vnc_active: >-
