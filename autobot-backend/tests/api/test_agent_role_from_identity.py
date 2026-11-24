@@ -91,4 +91,4 @@ def test_admin_session_is_allowed_on_the_json_routes(path, body):
     ):
         response = client.post(path, json=body)
     assert response.status_code == 200, response.text
-    assert layer.asked[0] == "admin"
+    assert layer.asked == ["admin"]
