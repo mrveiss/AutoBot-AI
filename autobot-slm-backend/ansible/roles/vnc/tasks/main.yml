@@ -324,7 +324,7 @@
 - name: Deploy VNC server systemd service
   ansible.builtin.template:
     src: vnc-server.service.j2
-    dest: /etc/systemd/system/{{ vnc_service_name }}.service
+    dest: "{{ systemd_unit_dir }}/{{ vnc_service_name }}.service"
     mode: "0644"
   become: true
   notify:

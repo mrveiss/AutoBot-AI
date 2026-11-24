@@ -255,6 +255,26 @@ def test_websockify_unit_destination_routes_through_the_systemd_unit_dir_var() -
     assert group_vars["systemd_unit_dir"] == "/etc/systemd/system"
 
 
+def test_no_vnc_role_file_spells_the_systemd_unit_dir_and_the_variable_has_one_home() -> None:
+    role_files = [f for f in (ANSIBLE / "roles" / "vnc").rglob("*") if f.is_file()]
+    assert len(role_files) >= 8  # floor: the role's tasks, templates and defaults were all read
+    literal = [
+        f"{f.relative_to(ANSIBLE)}:{n}"
+        for f in role_files
+        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1)
+        if "/etc/systemd/system" in line
+    ]
+    assert literal == []
+    playbook_files = [f for f in ANSIBLE.rglob("*.yml") if "tests" not in f.relative_to(ANSIBLE).parts]
+    assert len(playbook_files) >= 300  # floor: the whole ansible tree was scanned for a second definition
+    definitions = [
+        f.relative_to(ANSIBLE)
+        for f in playbook_files
+        if re.search(r"^systemd_unit_dir:", f.read_text(encoding="utf-8"), re.MULTILINE)
+    ]
+    assert definitions == [ALL_VARS.relative_to(ANSIBLE)]
+
+
 def test_a_config_save_keeps_the_persisted_bind_host(monkeypatch, tmp_path) -> None:
     monkeypatch.syspath_prepend(str(ROOT / "autobot-backend"))
     from services.config_service import ConfigService, config_manager
