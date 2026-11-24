@@ -68,6 +68,20 @@ describe('the location total of a payload without total_locations (#22157)', () 
     expect(reading.summary?.totalLocations).toBe(2)
   })
 
+  it('keeps legacy rows at different positions apart and names their ranges', () => {
+    const at = (s1: number, s2: number) => ({ ...legacyRow, start1: s1, start2: s2 })
+    const reading = readDuplicatePayload({ status: 'success', total_count: 2, duplicates: [at(1, 1), at(50, 50)] })
+    expect(reading.summary?.totalLocations).toBe(4)
+    expect(generateSectionMarkdown('duplicates', [at(1, 50)])).toContain('a.py:1-30<br>b.py:50-79')
+  })
+
+  it('translates a recognised kind and keeps an unknown one and the dash', () => {
+    const md = generateSectionMarkdown('duplicates', [cluster, { ...cluster, kind: 'novel' }, { ...cluster, kind: undefined }])
+    expect(md).toContain('| exact | 100.0% |')
+    expect(md).toContain('| novel | 100.0% |')
+    expect(md).toContain('| - | 100.0% |')
+  })
+
   it('keeps an explicit total_locations and leaves a cut list unknown', () => {
     const explicit = readDuplicatePayload({ status: 'success', total_count: 1, total_locations: 7, duplicates: [legacyRow] })
     expect(explicit.summary?.totalLocations).toBe(7)

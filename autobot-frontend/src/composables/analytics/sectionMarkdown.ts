@@ -157,7 +157,8 @@ function _generateDuplicatesMd(dups: SectionDataMap['duplicates']): string {
   if (dups.length > 0) {
     const cols = ['locations', 'kind', 'similarity', 'lines'].map(c => t(`export.columns.${c}`))
     md += `| ${cols.join(' | ')} |\n|${cols.map(() => '---').join('|')}|\n`
-    dups.forEach(d => { md += `| ${rowPlaces(d).join('<br>')} | ${d.kind ?? '-'} | ${d.similarity.toFixed(1)}% | ${d.lines} |\n` })
+    const kind = (k?: string) => (k && i18n.global.te(`analytics.duplicates.kind.${k}`) ? t(`kind.${k}`) : (k ?? '-'))
+    dups.forEach(d => { md += `| ${rowPlaces(d).join('<br>')} | ${kind(d.kind)} | ${d.similarity.toFixed(1)}% | ${d.lines} |\n` })
   }
   return md
 }

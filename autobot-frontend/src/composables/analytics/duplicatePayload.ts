@@ -34,11 +34,16 @@ export function clearDuplicateResults<T>(rows: Ref<T[]>): void {
   duplicateSummary.value = null
 }
 
-/** A row's places, `file:start-end`; a legacy row with no (or an empty) `locations` list names its two files. */
+/** `file:start-end` when the legacy row carries the start, else the file name alone. */
+function legacyPlace(file: string, start: number | undefined, lines: number): string {
+  return typeof start === 'number' ? `${file}:${start}-${start + Math.max(lines, 1) - 1}` : file
+}
+
+/** A row's places, `file:start-end`; a legacy row with no (or an empty) `locations` list names its two ranges. */
 export function rowPlaces(row: DuplicateCode): string[] {
   return row.locations?.length
     ? row.locations.map(l => `${l.file}:${l.start_line}-${l.end_line}`)
-    : [row.file1, row.file2]
+    : [legacyPlace(row.file1, row.start1, row.lines), legacyPlace(row.file2, row.start2, row.lines)]
 }
 
 /** The payload's location total; else the distinct places of a COMPLETE row list; else unknown (null). */
