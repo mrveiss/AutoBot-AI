@@ -1753,6 +1753,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "بارگذاری داده‌های تکامل ناموفق بود",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"

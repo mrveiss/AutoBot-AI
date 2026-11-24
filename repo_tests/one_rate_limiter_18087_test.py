@@ -121,7 +121,7 @@ def _scanned_modules(root: Path) -> list[str]:
 REACH = declare(
     "one-rate-limiter-scan",
     discover=_scanned_modules,
-    floor=3623,
+    floor=3729,  # mid-window: population 3829, window (3629, 3829)
     growth=200,
     what="non-test Python modules",
     roots=SCANNED_TREES,

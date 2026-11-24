@@ -357,4 +357,10 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "Non-test .py under the backend and shared roots, against all tracked .py there; the test-file share "
         "drifts on its own.",
     ),
+    "with-error-handling-tracked-sources": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked non-test .py, a subset of tracked Python; the test share grows at its own rate, so a "
+        "share of all Python would sink with nothing wrong.",
+    ),
 }

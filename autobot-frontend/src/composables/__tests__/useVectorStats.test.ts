@@ -38,6 +38,18 @@ describe('useVectorStats', () => {
     expect(vectorStats.value).toBeNull()
   })
 
+  it('reports rag_available even when the knowledge base has no facts', () => {
+    mockStore({ total_facts: 0, rag_available: true })
+    const { vectorStats, ragAvailable } = useVectorStats()
+    expect(vectorStats.value).toBeNull()
+    expect(ragAvailable.value).toBe(true)
+  })
+
+  it('reports RAG unavailable when the flag is absent or false', () => {
+    mockStore({})
+    expect(useVectorStats().ragAvailable.value).toBe(false)
+  })
+
   it('maps store.stats to VectorStats when total_facts > 0', () => {
     mockStore({
       total_facts: 10,

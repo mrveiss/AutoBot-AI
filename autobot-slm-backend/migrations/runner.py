@@ -92,6 +92,8 @@ MIGRATIONS = [
     # Issue #17225: audit_logs is the audit trail's system of record; the shared
     # AuditLog model gained category/actor/session_id/resource_ref.
     "add_audit_logs_canonical_columns",
+    # Issue #17219: the tamper-evident hash chain columns and audit_chain_anchors on the same table.
+    "add_audit_logs_chain_columns",
     # Issue #17455: one row per post-sync command/restart a code sync executed.
     "add_post_sync_action_runs_table",
     # Issue #18663: the jti denylist and password epoch move from Redis to PostgreSQL,
