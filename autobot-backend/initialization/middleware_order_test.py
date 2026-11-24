@@ -31,6 +31,8 @@ from initialization.middleware import configure_middleware
 AUDIT = "AuditMiddleware"
 SERVICE_AUTH = "enforce_service_auth"
 IDEMPOTENCY = "IdempotencyMiddleware"
+ANALYTICS = "AnalyticsMiddleware"
+SUNSET = "SunsetLegacyHealthMiddleware"
 
 
 def _runtime_order(app: FastAPI) -> list[str]:
@@ -99,3 +101,22 @@ class TestEffectiveRuntimeOrder:
         runtime_order = sorted(source_order, key=order.index)
 
         assert runtime_order == [AUDIT, SERVICE_AUTH, IDEMPOTENCY]
+
+
+class TestAnalyticsPosition:
+    """Analytics wraps every functional layer so its timing and status are end to end (#21684)."""
+
+    def test_analytics_is_mounted(self, order):
+        assert ANALYTICS in order, f"AnalyticsMiddleware never reached the stack; order was {order}"
+
+    @pytest.mark.parametrize("inner", [AUDIT, SERVICE_AUTH, IDEMPOTENCY])
+    def test_analytics_wraps_auth_audit_and_idempotency(self, order, inner):
+        assert order.index(ANALYTICS) < order.index(inner), f"analytics must be outside {inner}; order was {order}"
+
+    def test_only_the_header_only_sunset_layer_is_outside_analytics(self, order):
+        assert order.index(SUNSET) < order.index(ANALYTICS)
+
+    def test_analytics_can_be_left_out(self):
+        app = FastAPI()
+        configure_middleware(app, allow_origins=["*"], enable_llm_awareness=False, enable_analytics=False)
+        assert ANALYTICS not in _runtime_order(app)

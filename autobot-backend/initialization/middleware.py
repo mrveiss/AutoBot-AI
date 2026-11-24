@@ -9,6 +9,7 @@ Configures all middleware for FastAPI application:
 - CORS (Cross-Origin Resource Sharing)
 - GZip compression
 - Service authentication
+- API call analytics (opt-out via the telemetry setting)
 """
 
 from typing import List
@@ -273,6 +274,28 @@ def configure_sunset_legacy_health(app: FastAPI):
         logger.warning("Sunset-legacy-health middleware not available: %s", e)
 
 
+def configure_analytics(app: FastAPI):
+    """Mount API call analytics, which honours the telemetry opt-out (#21684, #9035).
+
+    The opt-out is read from ``config.telemetry.enabled`` on every request inside
+    ``AnalyticsMiddleware`` rather than once here, so an admin turning telemetry
+    off through the settings API takes effect at once, not at the next restart.
+    Disabled, the middleware passes straight through: nothing is tracked and no
+    analytics header is added.
+
+    Args:
+        app: FastAPI application instance
+    """
+    try:
+        from api.analytics_controller import analytics_controller
+        from middleware.analytics_middleware import AnalyticsMiddleware
+
+        app.add_middleware(AnalyticsMiddleware, analytics_controller=analytics_controller)
+        logger.info("Analytics middleware enabled (honours the telemetry opt-out)")
+    except ImportError as e:
+        logger.warning("Analytics middleware not available: %s", e)
+
+
 def configure_middleware(
     app: FastAPI,
     allow_origins: List[str] | None = None,
@@ -281,6 +304,7 @@ def configure_middleware(
     enable_llm_awareness: bool = True,
     enable_audit: bool = True,
     enable_validation: bool = True,
+    enable_analytics: bool = True,
 ):
     """
     Configure all middleware for FastAPI application
@@ -293,6 +317,7 @@ def configure_middleware(
         enable_llm_awareness: Enable LLM awareness context injection (default: True)
         enable_audit: Enable audit logging middleware (default: True)
         enable_validation: Enable centralised input validation middleware (default: True)
+        enable_analytics: Mount API call analytics, gated at runtime by the telemetry setting (default: True)
 
     Example:
         ```python
@@ -355,6 +380,13 @@ def configure_middleware(
     if enable_llm_awareness:
         configure_llm_awareness(app)
 
+    # API call analytics (#21684) — registered after every functional layer so it is
+    # outside them: its X-Response-Time covers authentication, validation and the
+    # handler, and the status it records includes a 401 or 422 raised by those
+    # layers. Only the response-header-only sunset layer below sits outside it.
+    if enable_analytics:
+        configure_analytics(app)
+
     # Issue #6902: Sunset/Deprecation headers on legacy /api/<module>/health
     # routes. Registered last so it runs first on the response path and any
     # earlier middleware can still inspect/modify the response body.
@@ -374,4 +406,5 @@ __all__ = [
     "configure_llm_awareness",
     "configure_validation",
     "configure_llc_agent_auth",
+    "configure_analytics",
 ]
