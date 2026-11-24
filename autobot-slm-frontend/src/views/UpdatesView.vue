@@ -54,14 +54,14 @@ function navigateToTab(tab: UpdatesTab): void {
   <div class="p-6 max-w-7xl mx-auto">
     <!-- Header -->
     <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">{{ $t('updatesView.updates') }}</h1>
-      <p class="text-sm text-gray-500 mt-1">
+      <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('updatesView.updates') }}</h1>
+      <p class="text-sm text-autobot-text-tertiary mt-1">
         {{ $t('updatesView.manageSystemUpdatesAnd') }}
       </p>
     </div>
 
     <!-- Tab navigation -->
-    <div class="border-b border-gray-200 mb-6">
+    <div class="border-b border-autobot-border mb-6">
       <nav class="flex gap-4">
         <button
           v-for="tab in tabs"
@@ -71,7 +71,7 @@ function navigateToTab(tab: UpdatesTab): void {
             'py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2',
             activeTab === tab.id
               ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >
           {{ tab.label }}

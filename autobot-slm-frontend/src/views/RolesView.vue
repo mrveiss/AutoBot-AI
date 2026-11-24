@@ -118,12 +118,12 @@ const nodeStatusSummary = computed(() => {
   }
 })
 const healthClass = computed(() => {
-  if (!fleetHealth.value) return 'bg-gray-100 text-gray-600'
+  if (!fleetHealth.value) return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
   return {
-    healthy: 'bg-green-100 text-green-700',
-    degraded: 'bg-yellow-100 text-yellow-700',
-    critical: 'bg-red-100 text-red-700',
-  }[fleetHealth.value.health] ?? 'bg-gray-100 text-gray-600'
+    healthy: 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg',
+    degraded: 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg',
+    critical: 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg',
+  }[fleetHealth.value.health] ?? 'bg-autobot-bg-tertiary text-autobot-text-secondary'
 })
 
 /**
@@ -351,8 +351,8 @@ onMounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">{{ $t('rolesView.roleRegistry') }}</h1>
-        <p class="text-sm text-gray-500 mt-1">{{ $t('rolesView.manageRoleDefinitionsFor') }}</p>
+        <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('rolesView.roleRegistry') }}</h1>
+        <p class="text-sm text-autobot-text-tertiary mt-1">{{ $t('rolesView.manageRoleDefinitionsFor') }}</p>
       </div>
       <div class="flex items-center gap-2">
         <!-- Fleet health badge -->
@@ -361,11 +361,11 @@ onMounted(() => {
           <span v-if="fleetHealth.required_down.length">{{ $t('rolesView.countCritical', { count: fleetHealth.required_down.length }) }}</span>
         </span>
         <button @click="fetchRoles(); fetchFleetHealth()" :disabled="isLoading"
-          class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+          class="px-4 py-2 border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50">
           {{ isLoading ? $t('rolesView.loading') : $t('rolesView.refresh') }}
         </button>
         <button @click="openCreateForm"
-          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover">
           {{ $t('rolesView.createRole') }}
         </button>
       </div>
@@ -381,21 +381,21 @@ onMounted(() => {
 
     <!-- Node Status Summary -->
     <div class="grid grid-cols-4 gap-4 mb-6">
-      <div class="bg-white rounded-lg border border-gray-200 p-4">
-        <p class="text-sm text-gray-500">{{ $t('rolesView.totalNodes') }}</p>
-        <p class="text-3xl font-bold text-gray-900">{{ nodeStatusSummary.total }}</p>
+      <div class="bg-white rounded-lg border border-autobot-border p-4">
+        <p class="text-sm text-autobot-text-tertiary">{{ $t('rolesView.totalNodes') }}</p>
+        <p class="text-3xl font-bold text-autobot-text-primary">{{ nodeStatusSummary.total }}</p>
       </div>
-      <div class="bg-white rounded-lg border border-green-200 p-4">
-        <p class="text-sm text-green-600">{{ $t('rolesView.online') }}</p>
-        <p class="text-3xl font-bold text-green-700">{{ nodeStatusSummary.online }}</p>
+      <div class="bg-white rounded-lg border border-autobot-success-light p-4">
+        <p class="text-sm text-autobot-success">{{ $t('rolesView.online') }}</p>
+        <p class="text-3xl font-bold text-autobot-pill-ok-fg">{{ nodeStatusSummary.online }}</p>
       </div>
-      <div class="bg-white rounded-lg border border-red-200 p-4">
-        <p class="text-sm text-red-600">{{ $t('rolesView.offline') }}</p>
-        <p class="text-3xl font-bold text-red-700">{{ nodeStatusSummary.offline }}</p>
+      <div class="bg-white rounded-lg border border-autobot-error-light p-4">
+        <p class="text-sm text-autobot-error">{{ $t('rolesView.offline') }}</p>
+        <p class="text-3xl font-bold text-autobot-pill-bad-fg">{{ nodeStatusSummary.offline }}</p>
       </div>
-      <div class="bg-white rounded-lg border border-yellow-200 p-4">
-        <p class="text-sm text-yellow-600">{{ $t('rolesView.pending') }}</p>
-        <p class="text-3xl font-bold text-yellow-700">{{ nodeStatusSummary.pending }}</p>
+      <div class="bg-white rounded-lg border border-autobot-warning-light p-4">
+        <p class="text-sm text-autobot-warning">{{ $t('rolesView.pending') }}</p>
+        <p class="text-3xl font-bold text-autobot-pill-warn-fg">{{ nodeStatusSummary.pending }}</p>
       </div>
     </div>
 
@@ -405,24 +405,24 @@ onMounted(() => {
 
     <!-- Role Form (Create/Edit) -->
     <div v-if="showForm" class="bg-white rounded-lg border mb-6">
-      <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
-        <h2 class="font-medium text-gray-900">{{ formTitle }}</h2>
-        <button @click="showForm = false" class="text-gray-400 hover:text-gray-600">{{ $t('rolesView.times') }}</button>
+      <div class="px-4 py-3 bg-autobot-bg-secondary border-b flex items-center justify-between">
+        <h2 class="font-medium text-autobot-text-primary">{{ formTitle }}</h2>
+        <button @click="showForm = false" class="text-autobot-text-tertiary hover:text-autobot-text-secondary">{{ $t('rolesView.times') }}</button>
       </div>
       <form @submit.prevent="saveRole" class="p-4 space-y-4">
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.name') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.name') }}</label>
             <input v-model="formData.name" :disabled="!!editingRole" required
-              class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-100" :placeholder="$t('rolesView.placeholderName')" />
+              class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-autobot-bg-tertiary" :placeholder="$t('rolesView.placeholderName')" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.displayName') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.displayName') }}</label>
             <input v-model="formData.display_name"
               class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderDisplayName')" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.syncType') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.syncType') }}</label>
             <select v-model="formData.sync_type" class="w-full px-3 py-2 border rounded-lg text-sm">
               <option value="component">{{ $t('rolesView.component') }}</option>
               <option value="full">{{ $t('rolesView.full') }}</option>
@@ -430,118 +430,118 @@ onMounted(() => {
             </select>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.targetPath') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.targetPath') }}</label>
             <input v-model="formData.target_path" required
               class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderTargetPath')" />
           </div>
           <div class="col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.sourcePathsCommaSeparated') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.sourcePathsCommaSeparated') }}</label>
             <input v-model="formData.source_paths"
               class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderSourcePaths')" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.systemdService') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.systemdService') }}</label>
             <input v-model="formData.systemd_service"
               class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderSystemdService')" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.ansiblePlaybook') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.ansiblePlaybook') }}</label>
             <input v-model="formData.ansible_playbook"
               class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderAnsiblePlaybook')" />
           </div>
           <div class="flex items-center gap-4 pt-6">
-            <label class="flex items-center gap-2 text-sm text-gray-700">
+            <label class="flex items-center gap-2 text-sm text-autobot-text-secondary">
               <input type="checkbox" v-model="formData.auto_restart" class="rounded-sm" />
               {{ $t('rolesView.autoRestartOnDeploy') }}
             </label>
-            <label class="flex items-center gap-2 text-sm text-gray-700">
+            <label class="flex items-center gap-2 text-sm text-autobot-text-secondary">
               <input type="checkbox" v-model="formData.required" class="rounded-sm" />
               {{ $t('rolesView.requiredRole') }}
             </label>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.healthCheckPort') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.healthCheckPort') }}</label>
             <input v-model="formData.health_check_port" type="number"
               class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderHealthCheckPort')" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.healthCheckPath') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.healthCheckPath') }}</label>
             <input v-model="formData.health_check_path"
               class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderHealthCheckPath')" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.preSyncCommand') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.preSyncCommand') }}</label>
             <input v-model="formData.pre_sync_cmd"
               class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderPreSyncCmd')" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.postSyncCommand') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.postSyncCommand') }}</label>
             <input v-model="formData.post_sync_cmd"
               class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderPostSyncCmd')" />
           </div>
         </div>
         <div class="flex gap-2 pt-2">
-          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+          <button type="submit" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover text-sm">
             {{ editingRole ? $t('rolesView.update') : $t('rolesView.create') }}
           </button>
           <button type="button" @click="showForm = false"
-            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">{{ $t('rolesView.cancel') }}</button>
+            class="px-4 py-2 border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover text-sm">{{ $t('rolesView.cancel') }}</button>
         </div>
       </form>
     </div>
 
     <!-- Roles Table -->
     <div class="bg-white rounded-lg border">
-      <div class="px-4 py-3 bg-gray-50 border-b">
-        <h2 class="font-medium text-gray-900">{{ $t('rolesView.registeredRoles', { count: filteredRoles.length }) }}</h2>
+      <div class="px-4 py-3 bg-autobot-bg-secondary border-b">
+        <h2 class="font-medium text-autobot-text-primary">{{ $t('rolesView.registeredRoles', { count: filteredRoles.length }) }}</h2>
       </div>
       <table class="w-full">
-        <thead class="bg-gray-50">
+        <thead class="bg-autobot-bg-secondary">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.name1') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.syncType') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.target') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.service') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.health') }}</th>
-            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ $t('rolesView.actions') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('rolesView.name1') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('rolesView.syncType') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('rolesView.target') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('rolesView.service') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('rolesView.health') }}</th>
+            <th class="px-4 py-3 text-right text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('rolesView.actions') }}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200">
-          <tr v-for="role in filteredRoles" :key="role.name" class="hover:bg-gray-50">
+        <tbody class="divide-y divide-autobot-border">
+          <tr v-for="role in filteredRoles" :key="role.name" class="hover:bg-autobot-bg-hover">
             <td class="px-4 py-3">
               <div class="flex items-center gap-2">
-                <p class="text-sm font-medium text-gray-900">{{ role.display_name || role.name }}</p>
+                <p class="text-sm font-medium text-autobot-text-primary">{{ role.display_name || role.name }}</p>
                 <span v-if="role.required"
-                  class="px-1.5 py-0.5 text-xs rounded-sm bg-red-100 text-red-700 font-medium">{{ $t('rolesView.required') }}</span>
+                  class="px-1.5 py-0.5 text-xs rounded-sm bg-autobot-pill-bad-bg text-autobot-pill-bad-fg font-medium">{{ $t('rolesView.required') }}</span>
               </div>
-              <p v-if="role.display_name" class="text-xs text-gray-500">{{ role.name }}</p>
+              <p v-if="role.display_name" class="text-xs text-autobot-text-tertiary">{{ role.name }}</p>
             </td>
             <td class="px-4 py-3">
-              <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">{{ role.sync_type || $t('rolesView.component2') }}</span>
+              <span class="px-2 py-1 text-xs rounded-full bg-autobot-pill-info-bg text-autobot-text-primary">{{ role.sync_type || $t('rolesView.component2') }}</span>
             </td>
-            <td class="px-4 py-3 text-sm text-gray-600 font-mono">{{ role.target_path }}</td>
-            <td class="px-4 py-3 text-sm text-gray-600">{{ joinSystemdUnits(role.systemd_service) || '-' }}</td>
-            <td class="px-4 py-3 text-sm text-gray-600">
+            <td class="px-4 py-3 text-sm text-autobot-text-secondary font-mono">{{ role.target_path }}</td>
+            <td class="px-4 py-3 text-sm text-autobot-text-secondary">{{ joinSystemdUnits(role.systemd_service) || '-' }}</td>
+            <td class="px-4 py-3 text-sm text-autobot-text-secondary">
               <span v-if="role.health_check_port">:{{ role.health_check_port }}{{ role.health_check_path || '' }}</span>
-              <span v-else class="text-gray-400">-</span>
+              <span v-else class="text-autobot-text-tertiary">-</span>
             </td>
             <td class="px-4 py-3 text-right space-x-1">
               <button @click="openEditForm(role)"
-                class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200">{{ $t('rolesView.edit') }}</button>
+                class="px-2 py-1 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm hover:bg-autobot-bg-active">{{ $t('rolesView.edit') }}</button>
               <button v-if="role.ansible_playbook" @click="openMigrateDialog(role)"
-                class="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-sm hover:bg-purple-200">{{ $t('rolesView.migrate') }}</button>
+                class="px-2 py-1 text-xs bg-autobot-illus-2-tint text-autobot-text-primary rounded-sm hover:bg-autobot-illus-2-tint">{{ $t('rolesView.migrate') }}</button>
               <button v-if="role.ansible_playbook" @click="openRedeployDialog(role)"
-                class="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-sm hover:bg-indigo-200">{{ $t('rolesView.redeploy') }}</button>
+                class="px-2 py-1 text-xs bg-autobot-illus-1-tint text-autobot-text-primary rounded-sm hover:bg-autobot-primary-bg">{{ $t('rolesView.redeploy') }}</button>
               <button @click="deleteRole(role.name)"
-                class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200">{{ $t('rolesView.delete') }}</button>
+                class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-autobot-pill-bad-bg">{{ $t('rolesView.delete') }}</button>
             </td>
           </tr>
         </tbody>
       </table>
-      <div v-if="!filteredRoles.length && !isLoading" class="p-8 text-center text-gray-500">
+      <div v-if="!filteredRoles.length && !isLoading" class="p-8 text-center text-autobot-text-tertiary">
         {{ $t('rolesView.noRolesDefinedClick') }}
       </div>
-      <div v-if="isLoading" class="p-8 text-center text-gray-500">{{ $t('rolesView.loadingRoles') }}</div>
+      <div v-if="isLoading" class="p-8 text-center text-autobot-text-tertiary">{{ $t('rolesView.loadingRoles') }}</div>
     </div>
 
     <!-- Migrate Role Dialog: locked while the playbook runs, as Cancel is (#14777) -->
@@ -554,14 +554,14 @@ onMounted(() => {
       @close="migrateOutput = null"
     >
       <div class="space-y-4">
-        <div v-if="isRedeploy" class="text-xs text-indigo-700 bg-indigo-50 p-2 rounded-sm">
+        <div v-if="isRedeploy" class="text-xs text-autobot-text-primary bg-autobot-illus-1-tint p-2 rounded-sm">
           {{ $t('rolesView.redeployHint') }}
         </div>
-        <div v-if="migratingRole?.ansible_playbook" class="text-sm text-gray-600">
-          {{ $t('rolesView.playbook') }} <code class="bg-gray-100 px-1 rounded-sm">{{ migratingRole.ansible_playbook }}</code>
+        <div v-if="migratingRole?.ansible_playbook" class="text-sm text-autobot-text-secondary">
+          {{ $t('rolesView.playbook') }} <code class="bg-autobot-bg-tertiary px-1 rounded-sm">{{ migratingRole.ansible_playbook }}</code>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.targetNode') }}</label>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.targetNode') }}</label>
           <select v-model="targetNodeId" class="w-full px-3 py-2 border rounded-lg text-sm">
             <option value="">{{ $t('rolesView.selectTargetNode') }}</option>
             <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
@@ -577,17 +577,17 @@ onMounted(() => {
         />
         <!-- Output -->
         <div v-if="migrateOutput" class="mt-2">
-          <p class="text-xs font-medium text-gray-600 mb-1">{{ $t('rolesView.playbookOutput') }}</p>
-          <pre class="bg-gray-900 text-green-300 text-xs p-3 rounded-sm overflow-auto max-h-48">{{ migrateOutput }}</pre>
+          <p class="text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('rolesView.playbookOutput') }}</p>
+          <pre class="bg-autobot-bg-tertiary text-autobot-success text-xs p-3 rounded-sm overflow-auto max-h-48">{{ migrateOutput }}</pre>
         </div>
       </div>
       <template #actions>
         <div class="flex justify-end gap-2">
           <button @click="showMigrateDialog = false; migrateOutput = null" :disabled="migrateLoading"
-            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm disabled:opacity-50">{{ $t('rolesView.cancel') }}</button>
+            class="px-4 py-2 border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover text-sm disabled:opacity-50">{{ $t('rolesView.cancel') }}</button>
           <button @click="executeMigrate" :disabled="!targetNodeId || migrateLoading"
-            :class="isRedeploy ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-purple-600 hover:bg-purple-700'"
-            class="px-4 py-2 text-white rounded-lg disabled:opacity-50 text-sm">
+            :class="isRedeploy ? 'bg-autobot-primary hover:bg-autobot-primary-hover' : 'bg-autobot-ink hover:bg-autobot-ink-hover'"
+            class="px-4 py-2 text-autobot-text-on-primary rounded-lg disabled:opacity-50 text-sm">
             {{ migrateLoading
               ? $t('rolesView.running')
               : (isRedeploy ? $t('rolesView.runRedeploy') : $t('rolesView.runMigration')) }}

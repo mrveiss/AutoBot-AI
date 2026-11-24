@@ -41,7 +41,7 @@ describe('RestartConfirmDialog message sanitisation (#19118)', () => {
       },
       global: { mocks: { $t: (k: string) => k }, stubs: { teleport: true } },
     })
-    const box = w.find('.text-gray-600')
+    const box = w.find('.text-autobot-text-secondary')
     expect(box.find('strong').exists()).toBe(true)
     expect(box.find('img').exists()).toBe(false)
     expect(box.find('script').exists()).toBe(false)
@@ -53,7 +53,7 @@ describe('RestartConfirmDialog message sanitisation (#19118)', () => {
       props: { show: true, message: 'restart <a href="https://evil.example">host</a>' },
       global: { mocks: { $t: (k: string) => k }, stubs: { teleport: true } },
     })
-    const box = w.find('.text-gray-600')
+    const box = w.find('.text-autobot-text-secondary')
     expect(box.find('a').exists()).toBe(false)
     expect(box.text()).toContain('host')
   })
