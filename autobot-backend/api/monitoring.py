@@ -63,6 +63,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_version_url
 from autobot_shared.ssot_config import get_config
 from autobot_shared.time_utils import to_rfc3339
 from config.registry import ConfigRegistry
@@ -418,7 +419,7 @@ def _resolve_service_urls() -> tuple:
     try:
         npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
         browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
-        ollama_url = f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}/api/version"
+        ollama_url = ollama_version_url(f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}")
         chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}{CHROMADB_HEARTBEAT_PATH}"  # #19321, #19423
     except Exception:
         # Issue #1229: Use ConfigRegistry (defaults from SSOT via registry_defaults)
@@ -426,12 +427,10 @@ def _resolve_service_urls() -> tuple:
         npu_port = ConfigRegistry.get("port.npu")
         browser_host = ConfigRegistry.get("vm.browser")
         browser_port = ConfigRegistry.get("port.browser")
-        ollama_host = ConfigRegistry.get("vm.llm")
-        ollama_port = ConfigRegistry.get("port.ollama")
         chromadb_host = ConfigRegistry.get("vm.chromadb")  # #19321: was the AI-stack host/port
         npu_url = f"http://{npu_host}:{npu_port}/health"
         browser_url = f"http://{browser_host}:{browser_port}/health"
-        ollama_url = f"http://{ollama_host}:{ollama_port}/api/version"
+        ollama_url = ollama_version_url(f"http://{ConfigRegistry.get('vm.llm')}:{ConfigRegistry.get('port.ollama')}")
         chromadb_url = f"http://{chromadb_host}:{ConfigRegistry.get('port.chromadb')}{CHROMADB_HEARTBEAT_PATH}"
     return npu_url, browser_url, ollama_url, chromadb_url
 

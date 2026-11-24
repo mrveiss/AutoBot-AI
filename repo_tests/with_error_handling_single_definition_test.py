@@ -146,15 +146,16 @@ _CANONICAL_DEFINER = (_REPO / "autobot_shared" / "error_boundaries" / "decorator
 # moving the floor much, so the floor alone would not catch it.
 _TREES_THAT_MUST_BE_SCANNED = ("autobot_shared", "autobot-slm-backend", "scripts", "tools")
 
-#: Population floor for the tracked scan. Measured at 3,199 sources after
-#: #15258 narrowed the `tests` exclusion to file name (was 3,099 with the
-#: directory pruned wholesale); the floor sits 149 below that, same margin as
-#: before. For scale, the largest number of `.py` files deleted by any single
-#: merge in the last 300 first-parent commits is 3, so ordinary churn has
-#: ~50x headroom, while losing any one of the four trees above (217, 175, 55,
-#: 22 files) or any comparable subtree fails. RATCHET: raise it when the
-#: population genuinely grows; lower it only with a stated reason.
-_SOURCE_FLOOR = 3050
+#: Population floor for the tracked scan. Measured at 4,574 sources on
+#: 2026-11-22 (#22103); the floor sits 149 below that. The four trees above
+#: measured about 384, 344, 49 and 86 sources then. Losing `autobot_shared`
+#: or `autobot-slm-backend` falls through the floor; `scripts` and `tools`
+#: are smaller than the margin, so `test_the_scan_reaches_every_tree...` pins
+#: them per tree instead. Ordinary churn of a few files trips neither. The
+#: slack test below caps the population at `_MAX_FLOOR_SLACK` times this
+#: floor. RATCHET: raise it when the population genuinely grows; lower it
+#: only with a stated reason.
+_SOURCE_FLOOR = 4425
 
 #: How far the population may outgrow the floor before the floor is stale. The
 #: floor started at 100 against 2,308 files -- 23x slack -- which is how it
@@ -293,9 +294,10 @@ def test_the_floor_has_not_decayed_into_slack(tracked_sources):
 def test_the_scan_reaches_every_tree_the_docstring_claims(tracked_sources, tree):
     """#15202 item 1: the scan must cover what its name and docstring promise.
 
-    Pinned per tree rather than by count: narrowing the scan back to
-    `autobot-backend/` loses 787 of 3,099 sources, which the floor would catch,
-    but losing `scripts/` alone (22 files) it would not.
+    Pinned per tree rather than by count. When this was written (3,099
+    sources), narrowing the scan back to `autobot-backend/` lost 787 of them,
+    which the floor would catch, but losing `scripts/` alone (22 files then)
+    it would not. The per-tree pin keeps that true whatever the margin is.
     """
     scanned = {path.relative_to(_REPO).parts[0] for path in tracked_sources}
     assert tree in scanned, (

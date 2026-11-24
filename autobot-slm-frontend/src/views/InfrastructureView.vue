@@ -83,17 +83,17 @@ function getCategoryIcon(category: string): string {
 function getCategoryColor(category: string): string {
   switch (category) {
     case 'database':
-      return 'bg-blue-100 text-blue-800'
+      return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
     case 'monitoring':
-      return 'bg-purple-100 text-purple-800'
+      return 'bg-autobot-illus-2-tint text-autobot-text-primary'
     case 'security':
-      return 'bg-green-100 text-green-800'
+      return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
     case 'networking':
-      return 'bg-cyan-100 text-cyan-800'
+      return 'bg-autobot-info-bg text-autobot-pill-info-fg'
     case 'storage':
-      return 'bg-orange-100 text-orange-800'
+      return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
     default:
-      return 'bg-gray-100 text-gray-800'
+      return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 }
 </script>
@@ -103,8 +103,8 @@ function getCategoryColor(category: string): string {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">{{ $t('infrastructureView.infrastructureSetup') }}</h1>
-        <p class="text-gray-500 mt-1">
+        <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('infrastructureView.infrastructureSetup') }}</h1>
+        <p class="text-autobot-text-tertiary mt-1">
           {{ $t('infrastructureView.deployAndConfigureInfrastructure') }}
         </p>
       </div>
@@ -131,7 +131,7 @@ function getCategoryColor(category: string): string {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getCategoryIcon(category)" />
             </svg>
           </div>
-          <h2 class="text-lg font-semibold text-gray-900 capitalize">{{ category }}</h2>
+          <h2 class="text-lg font-semibold text-autobot-text-primary capitalize">{{ category }}</h2>
         </div>
 
         <!-- Playbook Cards -->
@@ -139,17 +139,17 @@ function getCategoryColor(category: string): string {
           <div
             v-for="playbook in categoryPlaybooks"
             :key="playbook.id"
-            class="bg-white rounded-lg border border-gray-200 p-5 hover:shadow-md transition-shadow"
+            class="bg-white rounded-lg border border-autobot-border p-5 hover:shadow-md transition-shadow"
           >
             <div class="flex items-start justify-between mb-3">
-              <h3 class="font-semibold text-gray-900">{{ playbook.name }}</h3>
+              <h3 class="font-semibold text-autobot-text-primary">{{ playbook.name }}</h3>
               <span
                 :class="['px-2 py-1 text-xs font-medium rounded-full', getCategoryColor(category)]"
               >
                 {{ category }}
               </span>
             </div>
-            <p class="text-sm text-gray-600 mb-4 line-clamp-2">
+            <p class="text-sm text-autobot-text-secondary mb-4 line-clamp-2">
               {{ playbook.description }}
             </p>
             <div class="flex items-center justify-between">
@@ -157,18 +157,18 @@ function getCategoryColor(category: string): string {
                 <span
                   v-for="host in playbook.target_hosts.slice(0, 2)"
                   :key="host"
-                  class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
+                  class="px-2 py-0.5 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm"
                 >
                   {{ host }}
                 </span>
                 <span
                   v-if="playbook.target_hosts.length > 2"
-                  class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
+                  class="px-2 py-0.5 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm"
                 >
                   +{{ playbook.target_hosts.length - 2 }}
                 </span>
               </div>
-              <span class="text-xs text-gray-500">
+              <span class="text-xs text-autobot-text-tertiary">
                 ~{{ playbook.estimated_duration }}
               </span>
             </div>
@@ -186,13 +186,13 @@ function getCategoryColor(category: string): string {
     <!-- Empty State -->
     <div
       v-if="!isLoading && playbooks.length === 0"
-      class="text-center py-12 bg-white rounded-lg border border-gray-200"
+      class="text-center py-12 bg-white rounded-lg border border-autobot-border"
     >
-      <svg class="w-12 h-12 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-12 h-12 mx-auto text-autobot-text-tertiary mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
       </svg>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">{{ $t('infrastructureView.noPlaybooksAvailable') }}</h3>
-      <p class="text-gray-500 mb-4">
+      <h3 class="text-lg font-medium text-autobot-text-primary mb-2">{{ $t('infrastructureView.noPlaybooksAvailable') }}</h3>
+      <p class="text-autobot-text-tertiary mb-4">
         {{ $t('infrastructureView.infrastructurePlaybooksHaveNot') }}
       </p>
     </div>

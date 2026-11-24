@@ -117,7 +117,7 @@ async def _contact_still_exists(session_factory, contact_id: uuid.UUID) -> bool:
 def _client_for(session_factory, caller_company_id: uuid.UUID, actor_user_id: uuid.UUID) -> httpx.AsyncClient:
     """A real ASGI app mounting the real router, with only auth/session faked.
 
-    ``get_async_session`` yields a session from the same in-memory database the
+    ``get_session`` yields a session from the same in-memory database the
     seed helpers write to — so the route reads back exactly what was seeded,
     rather than a mock standing in for the database.
     """
@@ -125,7 +125,7 @@ def _client_for(session_factory, caller_company_id: uuid.UUID, actor_user_id: uu
 
     from api.user_management.dependencies import get_current_user, require_org_context
     from llc.api.contacts import router as contacts_router
-    from user_management.database import get_async_session
+    from llc.deps import get_session
     from user_management.services import TenantContext
 
     app = FastAPI()
@@ -135,7 +135,7 @@ def _client_for(session_factory, caller_company_id: uuid.UUID, actor_user_id: uu
         async with session_factory() as session:
             yield session
 
-    app.dependency_overrides[get_async_session] = _override_session
+    app.dependency_overrides[get_session] = _override_session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(actor_user_id)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=caller_company_id, user_id=actor_user_id, is_platform_admin=False

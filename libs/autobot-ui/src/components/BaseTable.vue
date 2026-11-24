@@ -272,23 +272,23 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div class="aui-table" :class="`aui-table--${size}`">
-    <div v-if="$slots.controls" class="aui-table__controls"><slot name="controls" /></div>
-    <div v-if="columnsMenuLabel && menuItems.length" class="aui-table__tools">
+  <div data-slot="table" class="aui-table" :class="`aui-table--${size}`">
+    <div v-if="$slots.controls" data-slot="table-controls" class="aui-table__controls"><slot name="controls" /></div>
+    <div v-if="columnsMenuLabel && menuItems.length" data-slot="table-tools" class="aui-table__tools">
       <BaseTableColumnsMenu :label="columnsMenuLabel" :items="menuItems" @toggle="toggleColumn" />
     </div>
-    <div v-if="loading && loadingLabel" class="aui-table__sr" role="status">{{ loadingLabel }}</div>
-    <div class="aui-table__scroll">
-      <table class="aui-table__table" :aria-label="caption ? undefined : ariaLabel" :aria-busy="loading">
-        <caption v-if="$slots.caption || caption" class="aui-table__caption">
+    <div v-if="loading && loadingLabel" data-slot="table-sr" class="aui-table__sr" role="status">{{ loadingLabel }}</div>
+    <div data-slot="table-scroll" class="aui-table__scroll">
+      <table data-slot="table-grid" class="aui-table__table" :aria-label="caption ? undefined : ariaLabel" :aria-busy="loading">
+        <caption v-if="$slots.caption || caption" data-slot="table-caption" class="aui-table__caption">
           <slot name="caption">{{ caption }}</slot>
         </caption>
         <thead>
           <tr>
-            <th v-if="selectable" scope="col" class="aui-table__check">
+            <th v-if="selectable" scope="col" data-slot="table-check" class="aui-table__check">
               <input
                 type="checkbox"
-                class="aui-table__checkbox"
+                data-slot="table-checkbox" class="aui-table__checkbox"
                 :checked="allSelected"
                 :aria-label="selectAllLabel"
                 @change="toggleAll"
@@ -298,6 +298,7 @@ watchEffect(() => {
               v-for="col in shownColumns"
               :key="col.key"
               scope="col"
+              data-slot="table-head-cell"
               class="aui-table__th"
               :class="cellClasses(col)"
               :style="{ width: col.width }"
@@ -308,33 +309,33 @@ watchEffect(() => {
                   <button
                     v-if="col.sortable"
                     type="button"
-                    class="aui-table__sort"
+                    data-slot="table-sort" class="aui-table__sort"
                     :aria-describedby="describedby"
                     @click="onSort(col.key)"
                   >
                     {{ col.label }}
-                    <span class="aui-table__arrow" :class="arrowClasses(col.key)" aria-hidden="true" />
+                    <span data-slot="table-arrow" class="aui-table__arrow" :class="arrowClasses(col.key)" aria-hidden="true" />
                   </button>
                   <span v-else tabindex="0" :aria-describedby="describedby">{{ col.label }}</span>
                 </template>
               </BaseTooltip>
-              <button v-else-if="col.sortable" type="button" class="aui-table__sort" @click="onSort(col.key)">
+              <button v-else-if="col.sortable" type="button" data-slot="table-sort" class="aui-table__sort" @click="onSort(col.key)">
                 {{ col.label }}
-                <span class="aui-table__arrow" :class="arrowClasses(col.key)" aria-hidden="true" />
+                <span data-slot="table-arrow" class="aui-table__arrow" :class="arrowClasses(col.key)" aria-hidden="true" />
               </button>
               <template v-else>{{ col.label }}</template>
             </th>
-            <th v-if="$slots.actions" scope="col" class="aui-table__th aui-table__cell--right">{{ actionsLabel }}</th>
+            <th v-if="$slots.actions" scope="col" data-slot="table-head-cell" class="aui-table__th aui-table__cell--right">{{ actionsLabel }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td :colspan="colspan" class="aui-table__state">
+            <td :colspan="colspan" data-slot="table-state" class="aui-table__state">
               <slot name="loading">{{ loadingLabel }}</slot>
             </td>
           </tr>
           <tr v-else-if="shownRows.length === 0">
-            <td :colspan="colspan" class="aui-table__state">
+            <td :colspan="colspan" data-slot="table-state" class="aui-table__state">
               <slot v-if="noMatches" name="no-matches">
                 <EmptyState :title="noMatchesTitle ?? emptyTitle" :description="noMatchesDescription ?? emptyDescription" />
               </slot>
@@ -347,22 +348,23 @@ watchEffect(() => {
             <tr
               v-for="(row, index) in shownRows"
               :key="rowKeyOf(row)"
+              data-slot="table-row"
               class="aui-table__row"
               :class="rowClasses(row, index)"
             >
-              <td v-if="selectable" class="aui-table__check">
+              <td v-if="selectable" data-slot="table-check" class="aui-table__check">
                 <input
                   type="checkbox"
-                  class="aui-table__checkbox"
+                  data-slot="table-checkbox" class="aui-table__checkbox"
                   :checked="selected.has(rowKeyOf(row))"
                   :aria-label="selectRowLabel?.(index + 1)"
                   @change="toggleRow(rowKeyOf(row))"
                 />
               </td>
-              <td v-for="col in shownColumns" :key="col.key" class="aui-table__cell" :class="cellClasses(col)">
+              <td v-for="col in shownColumns" :key="col.key" data-slot="table-cell" class="aui-table__cell" :class="cellClasses(col)">
                 <slot :name="`cell-${col.key}`" :row="row" :value="row[col.key]">{{ formatCell(row, col) }}</slot>
               </td>
-              <td v-if="$slots.actions" class="aui-table__cell aui-table__cell--right">
+              <td v-if="$slots.actions" data-slot="table-cell" class="aui-table__cell aui-table__cell--right">
                 <slot name="actions" :row="row" />
               </td>
             </tr>
@@ -370,7 +372,7 @@ watchEffect(() => {
         </tbody>
       </table>
     </div>
-    <div v-if="paged || $slots.footer" class="aui-table__footer">
+    <div v-if="paged || $slots.footer" data-slot="table-footer" class="aui-table__footer">
       <BasePagination
         v-if="paged"
         :page="activePage"
@@ -387,7 +389,7 @@ watchEffect(() => {
 </template>
 
 <style scoped>
-.aui-table {
+[data-slot="table"] {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -399,23 +401,23 @@ watchEffect(() => {
   border-radius: var(--aui-radius-md);
 }
 
-.aui-table__controls,
-.aui-table__tools,
-.aui-table__footer {
+[data-slot="table-controls"],
+[data-slot="table-tools"],
+[data-slot="table-footer"] {
   padding: var(--aui-space-3) var(--aui-space-4);
 }
 
-.aui-table__controls,
-.aui-table__tools { border-bottom: var(--aui-table-border); }
+[data-slot="table-controls"],
+[data-slot="table-tools"] { border-bottom: var(--aui-table-border); }
 
-.aui-table__tools {
+[data-slot="table-tools"] {
   display: flex;
   justify-content: flex-end;
 }
 
-.aui-table__footer { border-top: var(--aui-table-border); }
+[data-slot="table-footer"] { border-top: var(--aui-table-border); }
 
-.aui-table__sr {
+[data-slot="table-sr"] {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -424,26 +426,26 @@ watchEffect(() => {
   white-space: nowrap;
 }
 
-.aui-table__scroll {
+[data-slot="table-scroll"] {
   overflow-x: auto;
   width: 100%;
 }
 
-.aui-table__table {
+[data-slot="table-grid"] {
   width: 100%;
   min-width: max-content;
   border-collapse: collapse;
   font-variant-numeric: var(--aui-table-num);
 }
 
-.aui-table__caption {
+[data-slot="table-caption"] {
   padding: var(--aui-space-3) var(--aui-table-cell-px);
   text-align: left;
   font-weight: var(--aui-font-weight-semibold);
   color: var(--aui-color-text);
 }
 
-.aui-table__th {
+[data-slot="table-head-cell"] {
   height: var(--aui-table-head-h);
   padding: 0 var(--aui-table-cell-px);
   background: var(--aui-table-head-bg);
@@ -455,15 +457,15 @@ watchEffect(() => {
   white-space: nowrap;
 }
 
-.aui-table__check {
+[data-slot="table-check"] {
   width: var(--aui-table-check-w);
   padding: 0 var(--aui-table-cell-px);
   background: var(--aui-table-head-bg);
 }
 
-tbody .aui-table__check { background: transparent; }
+tbody [data-slot="table-check"] { background: transparent; }
 
-.aui-table__cell {
+[data-slot="table-cell"] {
   height: var(--aui-table-row-h);
   padding: var(--aui-table-cell-py) var(--aui-table-cell-px);
   min-width: var(--aui-table-min-col);
@@ -471,7 +473,7 @@ tbody .aui-table__check { background: transparent; }
   white-space: nowrap;
 }
 
-.aui-table--compact .aui-table__cell { height: auto; }
+.aui-table--compact [data-slot="table-cell"] { height: auto; }
 
 .aui-table__cell--wrap {
   white-space: normal;
@@ -494,13 +496,13 @@ tbody .aui-table__check { background: transparent; }
 .aui-table__row--warning { background: color-mix(in srgb, var(--aui-color-warning) var(--aui-table-row-tint), transparent); }
 .aui-table__row--error { background: color-mix(in srgb, var(--aui-color-error) var(--aui-table-row-tint), transparent); }
 .aui-table__row--info { background: color-mix(in srgb, var(--aui-color-info) var(--aui-table-row-tint), transparent); }
-.aui-table__row:hover { background: var(--aui-table-row-hover); }
+[data-slot="table-row"]:hover { background: var(--aui-table-row-hover); }
 .aui-table__row--selected { background: var(--aui-table-row-selected); }
 .aui-table__row--selected > :first-child { border-left: var(--aui-table-row-selected-edge); }
 
-.aui-table__state { padding: var(--aui-space-4); text-align: center; }
+[data-slot="table-state"] { padding: var(--aui-space-4); text-align: center; }
 
-.aui-table__sort {
+[data-slot="table-sort"] {
   display: inline-flex;
   align-items: center;
   gap: var(--aui-space-1);
@@ -514,14 +516,14 @@ tbody .aui-table__check { background: transparent; }
   cursor: pointer;
 }
 
-.aui-table__sort:focus-visible,
-.aui-table__th span[tabindex]:focus-visible,
-.aui-table__checkbox:focus-visible {
+[data-slot="table-sort"]:focus-visible,
+[data-slot="table-head-cell"] span[tabindex]:focus-visible,
+[data-slot="table-checkbox"]:focus-visible {
   outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
   outline-offset: 2px;
 }
 
-.aui-table__arrow {
+[data-slot="table-arrow"] {
   display: inline-block;
   width: 0;
   height: 0;
@@ -535,6 +537,6 @@ tbody .aui-table__check { background: transparent; }
 .aui-table__arrow--asc { transform: rotate(180deg); }
 
 @media (prefers-reduced-motion: no-preference) {
-  .aui-table__arrow { transition: transform var(--aui-transition-fast); }
+  [data-slot="table-arrow"] { transition: transform var(--aui-transition-fast); }
 }
 </style>

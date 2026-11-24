@@ -26,9 +26,25 @@ def _read(rel: str) -> str:
     return (repo_root() / rel).read_text(encoding="utf-8")
 
 
+_SLM_CAP = "client_max_body_size {{ slm_client_max_body_size }};"
+
+
 def _location_cap_lines(rel: str) -> list[str]:
-    """Literal caps at location depth (8 spaces); the slm template's 10m server default is at 4."""
-    return [ln.strip() for ln in _read(rel).splitlines() if ln.startswith("        ") and "client_max_body_size" in ln]
+    """Literal caps at location depth (8 spaces); the slm template's 10m server default is at 4.
+
+    The frontend's /slm/api locations take the SLM's single cap home (#19832), never a literal.
+    """
+    return [
+        ln.strip()
+        for ln in _read(rel).splitlines()
+        if ln.startswith("        ") and "client_max_body_size" in ln and ln.strip() != _SLM_CAP
+    ]
+
+
+def test_the_frontend_slm_locations_take_the_slm_cap_home() -> None:
+    text = _read(_TEMPLATES[0])
+    assert text.count(_SLM_CAP) == 2, "/slm/api/ and /slm/api/ws/ each read slm_client_max_body_size"
+    assert "frontend_slm_client_max_body_size" not in text
 
 
 def test_the_home_declares_exactly_the_cap() -> None:

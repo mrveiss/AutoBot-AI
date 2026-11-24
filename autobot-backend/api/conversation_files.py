@@ -45,6 +45,7 @@ from api.schemas_knowledge import (
 )
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from conversation_file_mcp_dispatch import dispatch_mcp_tool
 from conversation_file_quota_owner import mcp_quota_owner, resolve_agent_quota_owner
@@ -475,13 +476,7 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
         if not deleted:
             raise_not_found("File", file_id)
 
-        _audit_file_operation(
-            request,
-            "file.delete",
-            user_data,
-            session_id,
-            {"file_id": file_id},
-        )
+        _audit_file_operation(request, "file.delete", user_data, session_id, {"file_id": file_id})
 
         return _build_delete_response(session_id, file_id)
 
@@ -647,7 +642,7 @@ async def get_file_content(request: Request, session_id: str, file_id: str):
     except RuntimeError as e:
         if "not found" in str(e).lower():
             raise_not_found("File")
-        raise_invalid_input("request", "Internal server error")
+        raise fixed_refusal(400) from e
     except Exception as e:
         logger.error("Error getting file content: %s", e)
         raise_internal_error("Error reading file")
@@ -682,7 +677,7 @@ async def update_file_content(request: Request, session_id: str, file_id: str, b
     except RuntimeError as e:
         if "not found" in str(e).lower():
             raise_not_found("File")
-        raise_invalid_input("request", "Internal server error")
+        raise fixed_refusal(400) from e
     except Exception as e:
         logger.error("Error updating file content: %s", e)
         raise_internal_error("Error updating file")
@@ -906,7 +901,7 @@ async def session_mcp_call_tool(request: Request, session_id: str, body: MCPTool
     except RuntimeError as e:
         if "not found" in str(e).lower():
             raise_not_found("Resource")
-        raise_invalid_input("request", "Internal server error")
+        raise fixed_refusal(400) from e
     except Exception as e:
         logger.error("Error in MCP tool call: %s", e)
         raise_internal_error("Error executing tool")

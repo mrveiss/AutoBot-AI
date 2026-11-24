@@ -22,6 +22,9 @@
             </div>
           </div>
 
+          <!-- The previews failed to load: an error, not an empty result. Deleting is still possible. -->
+          <BaseAlert v-if="previewFailed" variant="error" :message="$t('chat.sidebar.previewFailed')" />
+
           <!-- Knowledge Base Facts Section (Issue #547) -->
           <div v-if="kbFacts && kbFacts.length > 0" class="space-y-3">
             <div class="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
@@ -267,7 +270,7 @@ import type { FileStats } from '@/composables/useConversationFiles'
 import type { SessionFact } from '@/models/repositories/ChatRepository'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { useBatchSelection } from '@/composables/useBatchSelection'
-import { BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
 const { t } = useI18n()
 
@@ -278,6 +281,8 @@ const props = defineProps<{
   fileStats?: FileStats | null
   kbFacts?: SessionFact[] | null
   kbFactsLoading?: boolean
+  /** The file or knowledge preview could not be loaded: say so, rather than showing it as empty. */
+  previewFailed?: boolean
 }>()
 
 type FileTransferOptions =

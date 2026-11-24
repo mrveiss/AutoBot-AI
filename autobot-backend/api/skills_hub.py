@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_skills_hub import InstalledSkillOut, SkillHubInstallRequest, SkillListingOut, SkillUpdateOut
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from skills.hub import get_skill_hub
 
@@ -46,10 +47,10 @@ async def install_skill(body: SkillHubInstallRequest, _: None = Depends(check_ad
         installed = await hub.install(body.skill_id)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error") from exc
+        raise fixed_refusal(404) from exc
     except PermissionError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=403, detail="Internal server error") from exc
+        raise fixed_refusal(403) from exc
     except Exception as exc:
         logger.exception("Hub install failed for '%s'", body.skill_id)
         raise HTTPException(status_code=500, detail=f"Install failed: {exc}") from exc
@@ -64,7 +65,7 @@ async def uninstall_skill(skill_id: str, _: None = Depends(check_admin_permissio
         await hub.uninstall(skill_id)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error") from exc
+        raise fixed_refusal(404) from exc
     except Exception as exc:
         logger.exception("Hub uninstall failed for '%s'", skill_id)
         raise HTTPException(status_code=500, detail=f"Uninstall failed: {exc}") from exc

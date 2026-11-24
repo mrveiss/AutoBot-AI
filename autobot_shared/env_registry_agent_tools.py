@@ -256,3 +256,16 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PROOF_SCAN_MAX_CHARS",
+        type=int,
+        default=200000,
+        description=(
+            "Most characters of one tool step's output (or of an answer) that the answer-proof check reads for "
+            "quotable values (#21976). More is read up to this size and the proof is marked partial."
+        ),
+        component="chat_workflow",
+    )
+)

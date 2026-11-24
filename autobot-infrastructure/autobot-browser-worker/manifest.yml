@@ -6,7 +6,7 @@ target_node: browser
 deploy:
   source: autobot-browser-worker/
   destination: /opt/autobot/autobot-browser-worker/
-  sync_target: "{base_dir}/autobot-browser-worker"   # #16025: what role_registry rsyncs INTO (not `destination`)
+  sync_target: "{base_dir}/autobot-browser-worker"   # #16025, #21974: what role_registry rsyncs INTO; equals `destination`
   shared: true
   infrastructure: true
   # #21852: the ONE list of the worker's shipped modules. Every deploy path reads it through

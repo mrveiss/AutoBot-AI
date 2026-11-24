@@ -273,9 +273,7 @@ def _load_sso_auth_with_real_endpoints() -> object:
 
         return decorator
 
-    fake_router = MagicMock()
-    fake_router.get = _identity_deco
-    fake_router.post = _identity_deco
+    fake_router = MagicMock(get=_identity_deco, post=_identity_deco)
 
     fastapi_stub = MagicMock()
     fastapi_stub.APIRouter = MagicMock(return_value=fake_router)
@@ -317,8 +315,10 @@ def _load_sso_auth_with_real_endpoints() -> object:
 
     services_database_stub.get_db = _fake_get_db
 
+    refusal_stub = SimpleNamespace(fixed_refusal=lambda st: _MockHTTPException(st, f"refused {st}"))
     stubs = {
         "autobot_shared": MagicMock(),
+        "autobot_shared.http_refusal": refusal_stub,
         "autobot_shared.proxy_utils": proxy_utils_stub,
         "autobot_shared.rate_limiter": rate_limiter_stub,
         "autobot_shared.ssot_config": MagicMock(),

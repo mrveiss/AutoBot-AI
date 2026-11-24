@@ -179,3 +179,15 @@ describe('describeFailedResponse — the status line stays first and intact', ()
     expect(conflict.includes('HTTP 409')).toBe(true)
   })
 })
+
+describe('nested client-safe reason (#22015, #21999)', () => {
+  it('reads error.details.reason before the generic error.message', async () => {
+    const body = JSON.stringify({ error: { message: 'The operation failed.', details: { reason: 'File too large.' } } })
+    expect(await extractResponseErrorDetail(failing(413, 'Too Large', body))).toBe('File too large.')
+  })
+
+  it('still reads error.message when details carries no reason', async () => {
+    const body = JSON.stringify({ error: { message: 'Plain message', details: { operation: 'upload_file' } } })
+    expect(await extractResponseErrorDetail(failing(500, 'Server Error', body))).toBe('Plain message')
+  })
+})

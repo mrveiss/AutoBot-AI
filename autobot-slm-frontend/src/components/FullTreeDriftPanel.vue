@@ -32,10 +32,13 @@ import {
   type FullTreeComponentDrift,
   type FullTreeFileVerdict,
 } from '@/composables/useCodeSync'
+import { useDriftPrune } from '@/composables/useDriftPrune'
 
 // No script-side i18n needed here -- every string is rendered through the
 // template's global `$t` (registered app-wide, see @/i18n/index.ts).
 const codeSync = useCodeSync()
+// #22082: preview, then confirm, the removal of the removed_from_source files.
+const prune = useDriftPrune()
 
 type VerdictFilter = 'all' | 'modified' | 'removed_from_source' | 'build_bundle' | 'host_state'
 
@@ -89,17 +92,32 @@ async function handleCheck(): Promise<void> {
   isChecking.value = false
 }
 
+async function handlePrunePreview(component: string): Promise<void> {
+  await prune.preview(component)
+}
+
+async function handlePruneConfirm(component: string): Promise<void> {
+  const outcome = await prune.confirm(component)
+  // The removal changes what the drift check would report, so re-run it.
+  if (outcome) await codeSync.fetchFullTreeDrift()
+}
+
+function pruneOutcomeDetails(component: string): [string, string][] {
+  const outcome = prune.results.value[component]
+  return outcome ? [...Object.entries(outcome.refused), ...Object.entries(outcome.failed)] : []
+}
+
 function formatChecked(value: string | undefined): string {
   return value ? formatFleetDateTime(value) : '-'
 }
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-xs border border-gray-200">
-    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+  <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-autobot-border">
       <div>
-        <h3 class="text-base font-semibold text-gray-900">{{ $t('fullTreeDriftPanel.title') }}</h3>
-        <p class="text-xs text-gray-500">{{ $t('fullTreeDriftPanel.description') }}</p>
+        <h3 class="text-base font-semibold text-autobot-text-primary">{{ $t('fullTreeDriftPanel.title') }}</h3>
+        <p class="text-xs text-autobot-text-tertiary">{{ $t('fullTreeDriftPanel.description') }}</p>
       </div>
       <button
         @click="handleCheck"
@@ -115,17 +133,18 @@ function formatChecked(value: string | undefined): string {
     </div>
 
     <BaseAlert v-if="codeSync.fullTreeDriftError.value" variant="error" size="compact" :message="codeSync.fullTreeDriftError.value" />
+    <BaseAlert v-if="prune.error.value" variant="error" size="compact" :message="prune.error.value" />
 
     <div v-if="report" class="px-4 py-3" data-testid="full-tree-drift-report">
-      <div class="flex items-center gap-3 mb-3 text-sm text-gray-500">
+      <div class="flex items-center gap-3 mb-3 text-sm text-autobot-text-tertiary">
         <span>{{ $t('fullTreeDriftPanel.checkedAt', { value: formatChecked(report.checked_at) }) }}</span>
         <span>{{ $t('fullTreeDriftPanel.totalCompared', { count: report.total_compared }) }}</span>
-        <span :class="report.total_drift > 0 ? 'text-red-700 font-medium' : 'text-green-700 font-medium'">
+        <span :class="report.total_drift > 0 ? 'text-autobot-pill-bad-fg font-medium' : 'text-autobot-pill-ok-fg font-medium'">
           {{ $t('fullTreeDriftPanel.totalDrift', { count: report.total_drift }) }}
         </span>
       </div>
 
-      <div v-if="report.errors.length" class="mb-3 text-sm text-red-700">
+      <div v-if="report.errors.length" class="mb-3 text-sm text-autobot-pill-bad-fg">
         <div v-for="msg in report.errors" :key="msg">{{ msg }}</div>
       </div>
 
@@ -138,7 +157,7 @@ function formatChecked(value: string | undefined): string {
             'px-3 py-1 rounded-full text-xs font-medium border',
             verdictFilter === option
               ? 'bg-primary-600 text-white border-primary-600'
-              : 'bg-white text-gray-600 border-gray-300',
+              : 'bg-white text-autobot-text-secondary border-autobot-border-strong',
           ]"
         >
           {{ $t(`fullTreeDriftPanel.filter.${option}`) }}
@@ -147,48 +166,97 @@ function formatChecked(value: string | undefined): string {
 
       <div v-for="component in components" :key="component.component" class="mb-5 last:mb-0" data-testid="full-tree-drift-component">
         <div class="flex items-center gap-2 mb-2">
-          <h4 class="text-sm font-semibold text-gray-800">{{ component.component }}</h4>
-          <span v-if="component.skipped" class="text-xs text-gray-400">{{ $t('fullTreeDriftPanel.skipped') }}</span>
-          <span v-else-if="component.error" class="text-xs text-red-600">{{ component.error }}</span>
-          <span v-else class="text-xs text-gray-400">{{ $t('fullTreeDriftPanel.filesCompared', { count: component.compared }) }}</span>
+          <h4 class="text-sm font-semibold text-autobot-text-primary">{{ component.component }}</h4>
+          <span v-if="component.skipped" class="text-xs text-autobot-text-tertiary">{{ $t('fullTreeDriftPanel.skipped') }}</span>
+          <span v-else-if="component.error" class="text-xs text-autobot-error">{{ component.error }}</span>
+          <span v-else class="text-xs text-autobot-text-tertiary">{{ $t('fullTreeDriftPanel.filesCompared', { count: component.compared }) }}</span>
         </div>
 
         <template v-if="!component.skipped && !component.error">
+          <div v-if="prune.results.value[component.component]" class="mt-2 text-xs text-autobot-text-primary" data-testid="drift-prune-result">
+            {{ $t('fullTreeDriftPanel.prune.result', { removed: prune.results.value[component.component].removed.length, left: pruneOutcomeDetails(component.component).length }) }}
+            <div v-for="[path, reason] in pruneOutcomeDetails(component.component)" :key="path" class="font-mono text-autobot-text-tertiary">
+              {{ $t('fullTreeDriftPanel.prune.resultDetail', { path, reason }) }}
+            </div>
+          </div>
+
           <div v-if="showsGroup('modified') && filesByVerdict(component, 'modified').length" class="mb-2">
-            <div class="text-xs font-medium text-yellow-700 mb-1">{{ $t('fullTreeDriftPanel.filter.modified') }}</div>
-            <ul class="text-xs font-mono text-gray-700 space-y-0.5">
+            <div class="text-xs font-medium text-autobot-pill-warn-fg mb-1">{{ $t('fullTreeDriftPanel.filter.modified') }}</div>
+            <ul class="text-xs font-mono text-autobot-text-secondary space-y-0.5">
               <li v-for="file in filesByVerdict(component, 'modified')" :key="file.path">{{ file.path }}</li>
             </ul>
           </div>
 
           <div v-if="showsGroup('removed_from_source') && filesByVerdict(component, 'removed_from_source').length" class="mb-2">
-            <div class="text-xs font-medium text-red-700 mb-1">{{ $t('fullTreeDriftPanel.filter.removed_from_source') }}</div>
-            <ul class="text-xs font-mono text-gray-700 space-y-0.5">
+            <div class="text-xs font-medium text-autobot-pill-bad-fg mb-1">{{ $t('fullTreeDriftPanel.filter.removed_from_source') }}</div>
+            <ul class="text-xs font-mono text-autobot-text-secondary space-y-0.5">
               <li v-for="file in filesByVerdict(component, 'removed_from_source')" :key="file.path">
                 {{ file.path }}
-                <span class="text-gray-400">{{ $t('fullTreeDriftPanel.removedAtCommit', { commit: file.detail ?? '' }) }}</span>
+                <span class="text-autobot-text-tertiary">{{ $t('fullTreeDriftPanel.removedAtCommit', { commit: file.detail ?? '' }) }}</span>
               </li>
             </ul>
+            <div class="mt-2" data-testid="drift-prune">
+              <button
+                v-if="!prune.previews.value[component.component]"
+                @click="handlePrunePreview(component.component)"
+                :disabled="prune.busyComponent.value !== null"
+                class="btn btn-secondary text-sm"
+                data-testid="drift-prune-preview"
+              >
+                {{ prune.busyComponent.value === component.component ? $t('fullTreeDriftPanel.prune.previewing') : $t('fullTreeDriftPanel.prune.previewAction') }}
+              </button>
+              <div v-else-if="prune.batch(component.component).total === 0" class="rounded-md border border-autobot-border bg-autobot-bg-secondary p-3" data-testid="drift-prune-empty">
+                <p class="text-xs text-autobot-text-secondary mb-2">{{ $t('fullTreeDriftPanel.prune.nothingToRemove') }}</p>
+                <button @click="prune.cancel(component.component)" class="btn btn-secondary text-sm">
+                  {{ $t('fullTreeDriftPanel.prune.cancel') }}
+                </button>
+              </div>
+              <div v-else class="rounded-md border border-autobot-error bg-autobot-error-bg p-3" data-testid="drift-prune-confirm">
+                <div class="text-xs font-medium text-autobot-error mb-1">
+                  {{ $t('fullTreeDriftPanel.prune.title', { count: prune.batch(component.component).files.length, component: component.component }) }}
+                </div>
+                <p v-if="prune.batchNote(component.component)" class="text-xs font-medium text-autobot-error mb-1" data-testid="drift-prune-batch">
+                  {{ prune.batchNote(component.component) }}
+                </p>
+                <p class="text-xs text-autobot-text-secondary mb-2">{{ $t('fullTreeDriftPanel.prune.intro') }}</p>
+                <ul class="text-xs font-mono text-autobot-text-primary space-y-0.5 mb-2" data-testid="drift-prune-files">
+                  <li v-for="file in prune.batch(component.component).files" :key="file.path">{{ file.path }}</li>
+                </ul>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="handlePruneConfirm(component.component)"
+                    :disabled="prune.busyComponent.value !== null"
+                    class="btn btn-primary text-sm"
+                    data-testid="drift-prune-confirm-button"
+                  >
+                    {{ prune.busyComponent.value === component.component ? $t('fullTreeDriftPanel.prune.removing') : $t('fullTreeDriftPanel.prune.confirm', { count: prune.batch(component.component).files.length }) }}
+                  </button>
+                  <button @click="prune.cancel(component.component)" class="btn btn-secondary text-sm">
+                    {{ $t('fullTreeDriftPanel.prune.cancel') }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div v-if="showsGroup('build_bundle') && buildBundleCount(component) > 0" class="text-xs text-gray-500 mb-2">
+          <div v-if="showsGroup('build_bundle') && buildBundleCount(component) > 0" class="text-xs text-autobot-text-tertiary mb-2">
             {{ $t('fullTreeDriftPanel.buildBundleCount', { count: buildBundleCount(component) }) }}
           </div>
 
-          <div v-if="showsGroup('host_state') && hostStateEntries(component).length" class="text-xs text-gray-500">
+          <div v-if="showsGroup('host_state') && hostStateEntries(component).length" class="text-xs text-autobot-text-tertiary">
             <div v-for="[name, count] in hostStateEntries(component)" :key="name">
               {{ $t('fullTreeDriftPanel.hostStateCategory', { category: name, count }) }}
             </div>
           </div>
 
-          <div v-if="isComponentClean(component)" class="text-xs text-green-700">
+          <div v-if="isComponentClean(component)" class="text-xs text-autobot-pill-ok-fg">
             {{ $t('fullTreeDriftPanel.noDrift') }}
           </div>
         </template>
       </div>
     </div>
 
-    <div v-else class="px-4 py-6 text-center text-sm text-gray-400">
+    <div v-else class="px-4 py-6 text-center text-sm text-autobot-text-tertiary">
       {{ $t('fullTreeDriftPanel.noReportYet') }}
     </div>
   </div>
