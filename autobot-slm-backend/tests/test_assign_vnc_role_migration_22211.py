@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import inspect
 import re
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -25,60 +26,49 @@ class _World:
         self.commits = 0
 
 
-class _Cursor:
-    def __init__(self, w: _World):
-        self.w = w
-        self._rows: list = []
-
-    def execute(self, sql, params=()):
-        q = " ".join(sql.split()).lower()
-        if q.startswith("select distinct node_id from node_credentials"):
-            self._rows = [(n,) for n in sorted(self.w.rdp)]
-        elif q.startswith("select distinct node_id from services"):
-            self._rows = [(n,) for n in sorted(self.w.services)]
-        elif q.startswith("select node_id from nodes"):
-            self._rows = [(n,) for n in params[0] if n in self.w.nodes]
-        elif q.startswith("select 1 from node_roles"):
-            self._rows = [(1,)] if any(r[:2] == tuple(params) for r in self.w.roles) else []
-        elif q.startswith("insert into node_roles"):
-            self.w.roles.add((params[0], params[1], params[2]))
-        elif q.startswith("update nodes set roles = (coalesce(roles::jsonb, '[]'::jsonb) ||"):
-            if params[0] not in self.w.nodes[params[1]]:
-                self.w.nodes[params[1]].append(params[0])
-        elif q.startswith("update nodes set roles = (coalesce(roles::jsonb, '[]'::jsonb) -"):
-            self.w.nodes[params[1]] = [r for r in self.w.nodes[params[1]] if r != params[0]]
-        elif q.startswith("delete from node_roles"):
-            gone = [r for r in self.w.roles if r[1] == params[0] and r[2] == params[1]]
-            self.w.roles -= set(gone)
-            self._rows = [(r[0],) for r in gone]
-        else:
-            raise AssertionError(f"unexpected SQL: {q}")
-
-    def fetchall(self):
-        return self._rows
-
-    def fetchone(self):
-        return self._rows[0] if self._rows else None
+def _handle(w: _World, state: dict, sql: str, params=()) -> None:
+    q = " ".join(sql.split()).lower()
+    state["rows"] = []
+    if q.startswith("select distinct node_id from node_credentials"):
+        state["rows"] = [(n,) for n in sorted(w.rdp)]
+    elif q.startswith("select distinct node_id from services"):
+        state["rows"] = [(n,) for n in sorted(w.services)]
+    elif q.startswith("select node_id from nodes"):
+        state["rows"] = [(n,) for n in params[0] if n in w.nodes]
+    elif q.startswith("select 1 from node_roles"):
+        state["rows"] = [(1,)] if any(r[:2] == tuple(params) for r in w.roles) else []
+    elif q.startswith("insert into node_roles"):
+        w.roles.add((params[0], params[1], params[2]))
+    elif q.startswith("update nodes set roles = (coalesce(roles::jsonb, '[]'::jsonb) ||"):
+        if params[0] not in w.nodes[params[1]]:
+            w.nodes[params[1]].append(params[0])
+    elif q.startswith("update nodes set roles = (coalesce(roles::jsonb, '[]'::jsonb) -"):
+        w.nodes[params[1]] = [r for r in w.nodes[params[1]] if r != params[0]]
+    elif q.startswith("delete from node_roles"):
+        gone = [r for r in w.roles if r[1] == params[0] and r[2] == params[1]]
+        w.roles -= set(gone)
+        state["rows"] = [(r[0],) for r in gone]
+    else:
+        raise AssertionError(f"unexpected SQL: {q}")
 
 
-class _Conn:
-    def __init__(self, w):
-        self.w = w
-
-    def cursor(self):
-        return _Cursor(self.w)
-
-    def commit(self):
-        self.w.commits += 1
-
-    def close(self):
-        pass
+def _connection(w: _World) -> MagicMock:
+    """A psycopg2 connection whose cursor applies the three tables' semantics to `w`."""
+    state: dict = {"rows": []}
+    cur = MagicMock()
+    cur.execute.side_effect = lambda sql, params=(): _handle(w, state, sql, params)
+    cur.fetchall.side_effect = lambda: state["rows"]
+    cur.fetchone.side_effect = lambda: state["rows"][0] if state["rows"] else None
+    conn = MagicMock()
+    conn.cursor.return_value = cur
+    conn.commit.side_effect = lambda: setattr(w, "commits", w.commits + 1)
+    return conn
 
 
 @pytest.fixture
 def run(monkeypatch):
     def _run(world, fn=mig.migrate):
-        monkeypatch.setattr(mig, "get_connection", lambda url: _Conn(world))
+        monkeypatch.setattr(mig, "get_connection", lambda url: _connection(world))
         monkeypatch.setattr(mig, "table_exists", lambda cur, name: True)
         fn("postgresql://unused")
         return world
