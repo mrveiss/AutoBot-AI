@@ -23,6 +23,14 @@ export interface Problem {
   suggestion?: string
 }
 
+/** One place a duplicated block lives (#22157). */
+export interface DuplicateLocation {
+  file: string
+  start_line: number
+  end_line: number
+}
+
+/** One duplicate CLUSTER: a group of matching blocks and every location (#22157). */
 export interface DuplicateCode {
   similarity: number
   lines: number
@@ -30,6 +38,19 @@ export interface DuplicateCode {
   file2: string
   start1?: number
   start2?: number
+  /** exact (identical code) | structural (identical once string text is ignored) | similar. */
+  kind?: string
+  locations?: DuplicateLocation[]
+}
+
+/** The scan's true size; the rows are only the first `returned_count` clusters (#22157). */
+export interface DuplicateSummary {
+  totalCount: number
+  truncated: boolean
+  totalLocations: number
+  exactCount: number
+  structuralCount: number
+  excludedDirs: string[]
 }
 
 export interface Declaration {

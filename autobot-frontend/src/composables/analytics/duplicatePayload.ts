@@ -13,7 +13,8 @@
  * TIMED OUT carrying what it had. Empty means it learned nothing, so it is a
  * failure wearing a success's status string.
  */
-import type { DuplicateCode } from './analyticsTypes'
+import { ref } from 'vue'
+import type { DuplicateCode, DuplicateSummary } from './analyticsTypes'
 
 /** done: a real result (possibly empty); not_scanned: nothing to show yet; failed: the scan did not run. */
 export type DuplicateScanState = 'done' | 'not_scanned' | 'failed'
@@ -21,16 +22,33 @@ export type DuplicateScanState = 'done' | 'not_scanned' | 'failed'
 export interface DuplicateReading {
   state: DuplicateScanState
   duplicates: DuplicateCode[]
+  summary: DuplicateSummary | null
+}
+
+/** The latest scan's true totals, read by the panel next to its (capped) rows (#22157). */
+export const duplicateSummary = ref<DuplicateSummary | null>(null)
+
+/** The response's own totals; a payload that carries none yields null, never a count of its rows. */
+function readSummary(payload: Record<string, unknown>, rows: DuplicateCode[]): DuplicateSummary | null {
+  if (typeof payload.total_count !== 'number') return null
+  return {
+    totalCount: payload.total_count,
+    truncated: payload.truncated === true,
+    totalLocations: Number(payload.total_locations ?? rows.length),
+    exactCount: Number(payload.exact_cluster_count ?? 0),
+    structuralCount: Number(payload.structural_cluster_count ?? 0),
+    excludedDirs: Array.isArray(payload.excluded_dirs) ? (payload.excluded_dirs as string[]) : [],
+  }
 }
 
 export function readDuplicatePayload(raw: unknown): DuplicateReading {
-  const payload = (raw ?? {}) as { status?: unknown; duplicates?: unknown }
+  const payload = (raw ?? {}) as Record<string, unknown>
   const found = Array.isArray(payload.duplicates) ? (payload.duplicates as DuplicateCode[]) : null
 
   // `success` is a real answer even when the list is empty: the scan ran and
   // found nothing, which is the one case allowed to render "none found".
   if (payload.status === 'success' && found) {
-    return { state: 'done', duplicates: found }
+    return { state: 'done', duplicates: found, summary: readSummary(payload, found) }
   }
 
   // `partial` is a TIMEOUT carrying whatever was found before the clock ran out,
@@ -44,9 +62,9 @@ export function readDuplicatePayload(raw: unknown): DuplicateReading {
   //    "duplicates":[],"total_count":0,"storage_type":"timeout"}
   if (payload.status === 'partial' && found) {
     return found.length > 0
-      ? { state: 'done', duplicates: found }
-      : { state: 'failed', duplicates: [] }
+      ? { state: 'done', duplicates: found, summary: readSummary(payload, found) }
+      : { state: 'failed', duplicates: [], summary: null }
   }
 
-  return { state: payload.status === 'error' ? 'failed' : 'not_scanned', duplicates: [] }
+  return { state: payload.status === 'error' ? 'failed' : 'not_scanned', duplicates: [], summary: null }
 }

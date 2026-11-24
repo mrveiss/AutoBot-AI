@@ -2475,8 +2475,18 @@
     },
     "duplicates": {
       "title": "Duplicate Code",
-      "pairs": "pairs",
-      "totalPairs": "Total Pairs",
+      "clusters": "clusters",
+      "totalClusters": "Total Clusters",
+      "exactClusters": "{count} exact (identical code)",
+      "structuralClusters": "{count} structural (identical once string text is ignored)",
+      "totalLocations": "{count} locations",
+      "truncated": "Showing {shown} of {total} clusters; the scan found all {total}.",
+      "excluded": "Excluded from the scan: {dirs}",
+      "kind": {
+        "exact": "exact",
+        "structural": "structural",
+        "similar": "similar"
+      },
       "highLabel": "High",
       "mediumLabel": "Medium",
       "lowLabel": "Low",
