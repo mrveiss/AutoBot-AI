@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import audit_issue_lookup as lookup
 import audit_unwired_trackers as audit
 import pytest
 
@@ -86,7 +87,7 @@ def test_unparsable_dedupe_lookup_raises() -> None:
     fake = MagicMock(returncode=0, stdout="<<not json>>", stderr="")
     with patch.object(audit.subprocess, "run", return_value=fake):
         with pytest.raises(audit.TrackerLookupError):
-            audit.existing_audit_issue_keys()
+            lookup.existing_audit_issue_keys()
 
 
 def test_unreadable_registry_file_raises_naming_the_file(tmp_path: Path) -> None:
@@ -98,38 +99,49 @@ def test_unreadable_registry_file_raises_naming_the_file(tmp_path: Path) -> None
 
 def test_closed_issue_list_at_the_limit_raises() -> None:
     """A result the size of --limit may be truncated; older closed trackers would read as open."""
-    full = json.dumps([{"number": n} for n in range(audit.CLOSED_ISSUE_LIMIT)])
+    full = json.dumps([{"number": n} for n in range(lookup.CLOSED_ISSUE_LIMIT)])
     with patch.object(audit.subprocess, "run", return_value=MagicMock(returncode=0, stdout=full, stderr="")):
-        with pytest.raises(audit.TrackerLookupError, match=str(audit.CLOSED_ISSUE_LIMIT)):
-            audit.fetch_closed_tracker_set()
+        with pytest.raises(audit.TrackerLookupError, match=str(lookup.CLOSED_ISSUE_LIMIT)):
+            lookup.fetch_closed_tracker_set()
 
 
 def test_closed_issue_list_under_the_limit_is_returned() -> None:
-    short = json.dumps([{"number": n} for n in range(audit.CLOSED_ISSUE_LIMIT - 1)])
+    short = json.dumps([{"number": n} for n in range(lookup.CLOSED_ISSUE_LIMIT - 1)])
     with patch.object(audit.subprocess, "run", return_value=MagicMock(returncode=0, stdout=short, stderr="")):
-        assert len(audit.fetch_closed_tracker_set()) == audit.CLOSED_ISSUE_LIMIT - 1
+        assert len(lookup.fetch_closed_tracker_set()) == lookup.CLOSED_ISSUE_LIMIT - 1
 
 
 # ---------------------------------------------------------------------------
-# #22199 — search query shape, (module, tracker) dedup, open-list truncation
+# #22199 — search query shape, (module, tracker) dedup, truncation, closed-issue handling
 # ---------------------------------------------------------------------------
 
 
-def _issue(num: int, stem: str, tracker: int, path: str | None = None) -> dict:
+def _issue(num: int, stem: str, tracker: int, path: str | None = None, **extra) -> dict:
     body = f"[`{path}`]({path}) cites tracker" if path else ""
-    return {
-        "number": num,
-        "title": f"discovery(unwired-tracker): wire in {stem} (tracker #{tracker} closed prematurely)",
-        "body": body,
-    }
+    title = f"discovery(unwired-tracker): wire in {stem} (tracker #{tracker} closed prematurely)"
+    return {"number": num, "title": title, "body": body, **extra}
 
 
 def _finding(path: str, tracker: int) -> audit.Finding:
     return audit.Finding(file=path, tracker=tracker, tracker_state="CLOSED", production_callers=0)
 
 
-def _search_arg(cmd: list[str]) -> str:
-    return cmd[cmd.index("--search") + 1]
+def _gh_stub(open_items: list[dict], closed_items: list[dict]):
+    """``_gh_json`` stand-in answering the open and the closed audit listing."""
+
+    def fake(cmd: list[str], _timeout: int, _what: str) -> list[dict]:
+        return closed_items if cmd[cmd.index("--state") + 1] == "closed" else open_items
+
+    return fake
+
+
+def _filed_files(open_items: list[dict], closed_items: list[dict], findings: list[audit.Finding]) -> list[str]:
+    with (
+        patch.object(lookup, "_gh_json", side_effect=_gh_stub(open_items, closed_items)),
+        patch.object(audit, "file_discovery_issue", return_value=1) as filed,
+    ):
+        audit._file_new_issues(findings, 20)
+    return [c.args[0].file for c in filed.call_args_list]
 
 
 def _query_is_effective(q: str) -> bool:
@@ -137,45 +149,61 @@ def _query_is_effective(q: str) -> bool:
     return q.startswith('"discovery(unwired-tracker)"') and "in:title" in q
 
 
-def test_open_audit_query_is_a_quoted_title_phrase() -> None:
-    assert _query_is_effective(_search_arg(audit._OPEN_AUDIT_CMD))
+def test_audit_queries_are_a_quoted_title_phrase() -> None:
+    for cmd in (lookup._OPEN_AUDIT_CMD, lookup._CLOSED_AUDIT_CMD):
+        assert _query_is_effective(cmd[cmd.index("--search") + 1])
     assert not _query_is_effective("discovery(unwired-tracker)")  # contrast: the old, zero-hit form
+    assert "stateReason" in lookup._CLOSED_AUDIT_CMD[-1] and "comments" in lookup._CLOSED_AUDIT_CMD[-1]
 
 
 def test_same_tracker_different_modules_are_both_filed_once() -> None:
     findings = [_finding("a/hierarchical_agent.py", 657), _finding("b/delegate_tool.py", 657)]
-    with (
-        patch.object(audit, "existing_audit_issue_keys", return_value=set()),
-        patch.object(audit, "file_discovery_issue", return_value=1) as filed,
-    ):
-        audit._file_new_issues(findings, 20)
-    assert [c.args[0].file for c in filed.call_args_list] == ["a/hierarchical_agent.py", "b/delegate_tool.py"]
+    assert _filed_files([], [], findings) == ["a/hierarchical_agent.py", "b/delegate_tool.py"]
 
 
 def test_open_issue_for_one_module_does_not_shadow_its_sibling() -> None:
     open_issues = [_issue(1, "hierarchical_agent", 657, "a/hierarchical_agent.py")]
     findings = [_finding("a/hierarchical_agent.py", 657), _finding("b/delegate_tool.py", 657)]
-    with (
-        patch.object(audit, "_gh_json", return_value=open_issues),
-        patch.object(audit, "file_discovery_issue", return_value=2) as filed,
-    ):
-        audit._file_new_issues(findings, 20)
-    assert [c.args[0].file for c in filed.call_args_list] == ["b/delegate_tool.py"]
+    assert _filed_files(open_issues, [], findings) == ["b/delegate_tool.py"]
 
 
 def test_title_stem_fallback_dedups_an_issue_without_a_body_path() -> None:
-    with (
-        patch.object(audit, "_gh_json", return_value=[_issue(1, "foo", 5)]),
-        patch.object(audit, "file_discovery_issue") as filed,
-    ):
-        audit._file_new_issues([_finding("x/foo.py", 5)], 20)
-    filed.assert_not_called()
+    assert _filed_files([_issue(1, "foo", 5)], [], [_finding("x/foo.py", 5)]) == []
 
 
-def test_open_audit_list_at_the_limit_raises() -> None:
-    full = [_issue(n, f"m{n}", n, f"p/m{n}.py") for n in range(audit.OPEN_AUDIT_ISSUE_LIMIT)]
-    with patch.object(audit, "_gh_json", return_value=full):
-        with pytest.raises(audit.TrackerLookupError, match=str(audit.OPEN_AUDIT_ISSUE_LIMIT)):
-            audit.existing_audit_issue_keys()
-    with patch.object(audit, "_gh_json", return_value=full[:-1]):
-        assert len(audit.existing_audit_issue_keys()) == audit.OPEN_AUDIT_ISSUE_LIMIT - 1
+def test_not_planned_closed_issue_is_not_refiled() -> None:
+    closed = [_issue(2, "foo", 5, "x/foo.py", stateReason="NOT_PLANNED", comments=[])]
+    assert _filed_files([], closed, [_finding("x/foo.py", 5)]) == []
+
+
+def test_deferral_note_in_a_comment_or_body_is_not_refiled() -> None:
+    note = {"body": "### Wire-in deferred\nscaffold for a future feature"}
+    in_comment = _issue(2, "foo", 5, "x/foo.py", stateReason="COMPLETED", comments=[note])
+    in_body = _issue(3, "bar", 6, "x/bar.py", stateReason="COMPLETED", comments=[])
+    in_body["body"] += "\n### Wire-in deferred\nnot needed"
+    findings = [_finding("x/foo.py", 5), _finding("x/bar.py", 6)]
+    assert _filed_files([], [in_comment, in_body], findings) == []
+
+
+def test_template_mention_of_the_deferral_marker_is_not_a_deferral() -> None:
+    """The body template names the marker inline in backticks; that must not count as a note."""
+    templ = _issue(2, "foo", 5, "x/foo.py", stateReason="COMPLETED", comments=[])
+    templ["body"] += "\n- [ ] Or this issue is closed with a `### Wire-in deferred` note"
+    assert _filed_files([], [templ], [_finding("x/foo.py", 5)]) == ["x/foo.py"]
+
+
+def test_completed_closed_issue_that_is_still_unwired_is_refiled() -> None:
+    """Regression: closed COMPLETED without a deferral note, yet the module is still unwired."""
+    closed = [_issue(2, "foo", 5, "x/foo.py", stateReason="COMPLETED", comments=[{"body": "done"}])]
+    assert _filed_files([], closed, [_finding("x/foo.py", 5)]) == ["x/foo.py"]
+
+
+def test_audit_issue_lists_at_the_limit_raise() -> None:
+    full = [_issue(n, f"m{n}", n, f"p/m{n}.py") for n in range(lookup.OPEN_AUDIT_ISSUE_LIMIT)]
+    for open_items, closed_items in ((full, []), ([], full)):
+        with patch.object(lookup, "_gh_json", side_effect=_gh_stub(open_items, closed_items)):
+            with pytest.raises(audit.TrackerLookupError, match=str(lookup.OPEN_AUDIT_ISSUE_LIMIT)):
+                lookup.existing_audit_issue_keys()
+    # contrast: one under the limit is accepted
+    with patch.object(lookup, "_gh_json", side_effect=_gh_stub(full[:-1], [])):
+        assert len(lookup.existing_audit_issue_keys()) == lookup.OPEN_AUDIT_ISSUE_LIMIT - 1

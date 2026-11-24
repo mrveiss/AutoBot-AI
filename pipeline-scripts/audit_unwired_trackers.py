@@ -16,7 +16,7 @@ Usage:
 
     pipeline-scripts/audit_unwired_trackers.py --file-issues
         File a GitHub discovery issue for each finding (deduped against
-        existing open issues by tracker number).
+        open issues and deliberately-closed ones, by module and tracker).
 
 Exit codes:
     0  no findings
@@ -43,6 +43,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # CI runs this as a bare ``python3 pipeline-scripts/...`` with only pytest installed and no PYTHONPATH,
 # so the repo root is added the way the sibling pipeline scripts do (pr_conflict_gate.py, generate_env_docs.py).
 sys.path.insert(0, str(REPO_ROOT))
+
+from audit_issue_lookup import (  # noqa: E402
+    TrackerLookupError,
+    already_filed,
+    existing_audit_issue_keys,
+    fetch_closed_tracker_set,
+)
 
 from autobot_shared.logging_manager import get_logger  # noqa: E402
 
@@ -313,91 +320,6 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
     return count
 
 
-class TrackerLookupError(RuntimeError):
-    """The closed-tracker lookup failed or was unreadable (#21582).
-
-    An empty closed set makes ``scan`` skip every file (state != CLOSED), so a failed lookup would
-    render as a clean audit. "Could not look" must not read as "found nothing".
-    """
-
-
-#: ``gh issue list --limit`` for closed issues. A result of exactly this size may be truncated, so it fails.
-CLOSED_ISSUE_LIMIT = 10000
-_CLOSED_ISSUES_CMD = [
-    "gh",
-    "issue",
-    "list",
-    "--state",
-    "closed",
-    "--limit",
-    str(CLOSED_ISSUE_LIMIT),
-    "--json",
-    "number",
-]
-OPEN_AUDIT_ISSUE_LIMIT = 1000
-# Unquoted, GitHub search drops the parentheses and matches nothing; quote the phrase and scope it to the title.
-_OPEN_AUDIT_CMD = [
-    *("gh", "issue", "list", "--state", "open", "--search", '"discovery(unwired-tracker)" in:title'),
-    *("--limit", str(OPEN_AUDIT_ISSUE_LIMIT), "--json", "number,title,body"),
-]
-
-
-def _gh_json(cmd: list[str], timeout: int, what: str) -> list[dict]:
-    """Run a ``gh ... --json`` listing; raise ``TrackerLookupError`` unless it yields a JSON list of objects."""
-    try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=True).stdout
-        data = json.loads(out)
-    except (subprocess.SubprocessError, FileNotFoundError, json.JSONDecodeError) as e:
-        raise TrackerLookupError(f"{what} failed or was unreadable ({e!r})") from e
-    if not isinstance(data, list) or not all(isinstance(i, dict) for i in data):
-        raise TrackerLookupError(f"{what} was not a list of objects")
-    return data
-
-
-def fetch_closed_tracker_set() -> set[int]:
-    """One-shot fetch of all CLOSED issues so per-finding lookups are O(1).
-
-    Raises ``TrackerLookupError`` when ``gh`` fails, its output is unusable, or it hit the limit.
-    """
-    data = _gh_json(_CLOSED_ISSUES_CMD, 120, "closed issue list")
-    if len(data) >= CLOSED_ISSUE_LIMIT:
-        raise TrackerLookupError(f"closed issue list hit its {CLOSED_ISSUE_LIMIT}-issue limit; older trackers unseen")
-    try:
-        return {item["number"] for item in data}
-    except KeyError as e:
-        raise TrackerLookupError(f"closed issue list item without a number ({e!r})") from e
-
-
-_TRACKER_RE = re.compile(r"tracker #(\d+) closed prematurely")
-_TITLE_STEM_RE = re.compile(r"wire in (\S+) \(tracker #")
-_BODY_PATH_RE = re.compile(r"\[`([^`]+)`\]\(")
-
-
-def _audit_issue_key(item: dict) -> Optional[tuple[str, int]]:
-    """``(module, tracker)`` of one open audit issue; the module is the body's path link, else the title stem."""
-    title = item.get("title") or ""
-    if not (m := _TRACKER_RE.search(title)):
-        return None
-    found = _BODY_PATH_RE.search(item.get("body") or "") or _TITLE_STEM_RE.search(title)
-    return (found.group(1) if found else ""), int(m.group(1))
-
-
-def existing_audit_issue_keys() -> set[tuple[str, int]]:
-    """``(module, tracker)`` per open audit issue, so modules sharing a tracker do not shadow (#22199).
-
-    A failed or truncated lookup raises (#21582).
-    """
-    data = _gh_json(_OPEN_AUDIT_CMD, 60, "open audit issue list")
-    if len(data) >= OPEN_AUDIT_ISSUE_LIMIT:
-        raise TrackerLookupError(f"open audit issue list hit its {OPEN_AUDIT_ISSUE_LIMIT}-issue limit; some unseen")
-    return {k for k in map(_audit_issue_key, data) if k}
-
-
-def _already_filed(f: Finding, filed: set[tuple[str, int]]) -> bool:
-    """True when an open issue covers this module+tracker (by path, or by stem for a body-less issue)."""
-    return (f.file, f.tracker) in filed or (Path(f.file).stem, f.tracker) in filed
-
-
 def scan() -> list[Finding]:
     closed_set = fetch_closed_tracker_set()
     registry_modules = load_router_registry_modules()
@@ -554,8 +476,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _file_new_issues(findings: list[Finding], max_issues: int) -> None:
     """File discovery issues for findings not already filed, capped at *max_issues*."""
-    already_filed = existing_audit_issue_keys()
-    new = [f for f in findings if not _already_filed(f, already_filed)]
+    filed_keys = existing_audit_issue_keys()
+    new = [f for f in findings if not already_filed(f.file, f.tracker, filed_keys)]
     capped = new[:max_issues]
     # WARNING, not INFO: INFO goes to stdout, which carries the report; WARNING goes to stderr.
     logger.warning(
