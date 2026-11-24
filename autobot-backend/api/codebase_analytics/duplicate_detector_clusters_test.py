@@ -124,6 +124,20 @@ def test_the_report_lists_every_location_of_a_cluster(tmp_path):
     assert all(f"d{n}/m.py" in text for n in range(3)), "the report named only the first two copies"
 
 
+def test_the_report_says_when_the_analysis_cap_cut_clusters_and_not_when_it_did_not(tmp_path):
+    import dataclasses
+
+    from api.codebase_analytics.endpoints import report
+
+    _plant(tmp_path, {f"d{n}/m.py": _helper() for n in range(3)})
+    whole = _scan(tmp_path)
+    cut = dataclasses.replace(whole, total_duplicates=4)  # four found, one returned
+    assert cut.truncated and not whole.truncated
+    text = "\n".join(report._generate_duplicate_code_section(cut))
+    assert "Total Duplicate Clusters | 4" in text and "Only 1 of 4 clusters were returned." in text
+    assert "clusters were returned" not in "\n".join(report._generate_duplicate_code_section(whole))
+
+
 def test_a_cached_analysis_round_trips_through_to_dict(tmp_path):
     """The cache read was ``DuplicateAnalysis(**cached)``: the derived ``truncated`` key raised TypeError."""
     _plant(tmp_path, {f"d{n}/m.py": _helper() for n in range(3)})
@@ -194,6 +208,30 @@ def test_the_cache_key_carries_the_schema_version_and_an_old_entry_cannot_crash_
 def test_python_floor_division_is_code_and_a_js_comment_is_not():
     assert normalize_exact("y = a // b") != normalize_exact("y = a // c")
     assert normalize_exact("x = 1 // c\ny = 2", js_family=True) == "x = 1 y = 2"
+
+
+def test_a_python_block_of_floor_divisions_keeps_its_operands_and_qualifies():
+    body = "\n".join(f"    q{k} = a // denominator_value_{k}" for k in range(3))
+    method = f"def r(a):\n{body}"
+    assert "// denominator_value_2" in normalize_structural(method)
+    assert make_block("x.py", 1, 4, method, 4) is not None  # the old ``//.*$`` strip left it under the size gate
+    assert "denominator" not in normalize_structural(method, js_family=True)  # in JS the same text is a comment
+
+
+def test_whitespace_inside_a_string_literal_is_part_of_its_value():
+    assert normalize_exact('k = "first  name"') != normalize_exact('k = "first name"')
+    assert normalize_exact("k = `a  b`", js_family=True) != normalize_exact("k = `a b`", js_family=True)
+    assert normalize_exact('k  =  "a"   # note') == normalize_exact('k = "a"')  # outside a literal it is not
+
+
+def test_a_four_line_js_function_is_a_block():
+    code = "function sumAllTheValues(values, offset) {\n  const total = values.reduce((a, b) => a + b, offset);\n"
+    code += "  return total * multiplierForTheseValues;\n}"
+    lines = code.splitlines()
+    assert len(lines) == det.MIN_DUPLICATE_LINES == 4
+    (block,) = det._extract_js_blocks("x.js", lines)
+    assert (block.start_line, block.end_line, block.line_count) == (1, 4, 4)
+    assert det._extract_js_blocks("x.js", lines[:2] + lines[3:]) == []  # three lines are below the minimum
 
 
 def test_a_string_holding_a_block_comment_marker_does_not_swallow_code():

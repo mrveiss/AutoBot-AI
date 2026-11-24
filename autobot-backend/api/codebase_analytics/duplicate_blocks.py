@@ -37,6 +37,9 @@ _PY_STRING = r'(?P<string>""".*?"""' + r"|'''.*?'''" + "|" + _DQ + "|" + _SQ + "
 _JS_STRING = "(?P<string>" + _DQ + "|" + _SQ + r"|`(?:\\.|[^`\\])*`)"
 _PY_COMMENT_RE = re.compile(_PY_STRING + r"|\#[^\n]*", re.DOTALL)
 _JS_COMMENT_RE = re.compile(_JS_STRING + r"|//[^\n]*|/\*.*?\*/", re.DOTALL)
+# The same strings, then a whitespace run: collapsing whitespace must not reach inside a literal.
+_PY_SPACE_RE = re.compile(_PY_STRING + r"|\s+", re.DOTALL)
+_JS_SPACE_RE = re.compile(_JS_STRING + r"|\s+", re.DOTALL)
 
 
 @dataclass
@@ -58,41 +61,38 @@ class CodeBlock:
     exact_hash: str = ""
 
 
-def normalize_structural(content: str) -> str:
-    """Normalize code for structural comparison by removing comments, string text and whitespace variation."""
-    # Remove single-line comments
-    content = re.sub(r"#.*$", "", content, flags=re.MULTILINE)
-    content = re.sub(r"//.*$", "", content, flags=re.MULTILINE)
+def _strip_comments(content: str, js_family: bool, string_as: Optional[str] = None) -> str:
+    """*content* without comments, by the file's own syntax; strings kept verbatim, or replaced by *string_as*."""
+    pattern = _JS_COMMENT_RE if js_family else _PY_COMMENT_RE
+    return pattern.sub(lambda m: (string_as or m.group("string")) if m.group("string") else "", content)
 
-    # Remove multi-line comments
-    content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
-    content = re.sub(r'""".*?"""', '""', content, flags=re.DOTALL)
-    content = re.sub(r"'''.*?'''", "''", content, flags=re.DOTALL)
 
-    # Normalize string literals
-    content = re.sub(r'"[^"]*"', '"STR"', content)
-    content = re.sub(r"'[^']*'", "'STR'", content)
+def normalize_structural(content: str, js_family: bool = False) -> str:
+    """Normalize for structural comparison: comments removed, every string's text erased, whitespace collapsed.
 
-    # Normalize whitespace
-    content = re.sub(r"\s+", " ", content)
-
-    return content.strip().lower()
+    Comments are removed by the file's own syntax, as in ``normalize_exact``: ``a // b`` is Python floor
+    division and stays, so a block full of it keeps its real size against ``MIN_DUPLICATE_CHARS``.
+    """
+    content = _strip_comments(content, js_family, string_as='"STR"')
+    return re.sub(r"\s+", " ", content).strip().lower()
 
 
 def normalize_exact(content: str, js_family: bool = False) -> str:
     """Normalize by removing comments and whitespace variation ONLY; strings and case are kept.
 
     Comments are ``#`` in Python and ``//`` / ``/* */`` in the JS family; the other file
-    type's markers are code (``a // b`` is Python floor division).
+    type's markers are code (``a // b`` is Python floor division). Whitespace is collapsed
+    outside string literals only: ``"first  name"`` and ``"first name"`` are different values.
     """
-    pattern = _JS_COMMENT_RE if js_family else _PY_COMMENT_RE
-    content = pattern.sub(lambda m: m.group("string") or "", content)
-    return re.sub(r"\s+", " ", content).strip()
+    string_re = _JS_SPACE_RE if js_family else _PY_SPACE_RE
+    content = _strip_comments(content, js_family)
+    return string_re.sub(lambda m: m.group("string") or " ", content).strip()
 
 
 def make_block(file_path: str, start_line: int, end_line: int, content: str, line_count: int) -> Optional[CodeBlock]:
     """Build a block, or None when its normalized form is too small to be a duplicate (#22157)."""
-    normalized = normalize_structural(content)
+    js_family = file_path.endswith(JS_FAMILY_SUFFIXES)
+    normalized = normalize_structural(content, js_family)
     if len(normalized) < MIN_DUPLICATE_CHARS:
         return None
     return CodeBlock(
@@ -104,5 +104,5 @@ def make_block(file_path: str, start_line: int, end_line: int, content: str, lin
         content_hash=content_digest(normalized),
         line_count=line_count,
         token_set=set(normalized.split()),
-        exact_hash=content_digest(normalize_exact(content, file_path.endswith(JS_FAMILY_SUFFIXES))),
+        exact_hash=content_digest(normalize_exact(content, js_family)),
     )

@@ -264,11 +264,10 @@ def _extract_js_blocks(file_path: str, lines: List[str]) -> List[CodeBlock]:
         start_line = content[: match.start()].count("\n")
         pos = _js_block_end(content, match)
         end_line = content[:pos].count("\n")
-        if (end_line - start_line) < MIN_DUPLICATE_LINES:
+        line_count = end_line - start_line + 1  # inclusive: a function on lines 1-4 is four lines
+        if line_count < MIN_DUPLICATE_LINES:
             continue
-        block = make_block(
-            file_path, start_line + 1, end_line + 1, content[match.start() : pos], end_line - start_line + 1
-        )
+        block = make_block(file_path, start_line + 1, end_line + 1, content[match.start() : pos], line_count)
         if block:
             blocks.append(block)
 

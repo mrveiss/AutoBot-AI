@@ -11,7 +11,8 @@
  * Author: mrveiss
  */
 import type { HardcodedValue, Problem, DuplicateCode, Declaration } from '@/composables/analytics/analyticsTypes'
-import { duplicateSummary } from './duplicatePayload'
+import i18n from '@/i18n'
+import { duplicateSummary, rowPlaces } from './duplicatePayload'
 import type {
   BugPredictionResult,
   ApiEndpointAnalysisResult,
@@ -146,15 +147,17 @@ function _generateStatisticsMd(stats: SectionDataMap['statistics']): string {
 
 function _generateDuplicatesMd(dups: SectionDataMap['duplicates']): string {
   // #22157: rows are clusters; the totals are the scan's, not the number of rows returned.
-  const total = duplicateSummary.value?.totalCount ?? dups.length
-  const places = (d: SectionDataMap['duplicates'][number]) =>
-    d.locations?.map(l => `${l.file}:${l.start_line}-${l.end_line}`) ?? [d.file1, d.file2]
-  const locations = duplicateSummary.value?.totalLocations ?? dups.reduce((n, d) => n + places(d).length, 0)
-  let md = `## Duplicate Code Analysis\n\n**Total Duplicate Clusters Found:** ${total} (${locations} locations)\n\n`
-  if (duplicateSummary.value?.truncated) md += `Showing ${dups.length} of ${total} clusters.\n\n`
+  const t = (key: string, params: Record<string, string | number> = {}) => i18n.global.t(`analytics.duplicates.${key}`, params)
+  const summary = duplicateSummary.value
+  const total = summary?.totalCount ?? dups.length
+  const locations = summary ? summary.totalLocations : new Set(dups.flatMap(rowPlaces)).size
+  const counted = locations === null ? '' : ` (${t('totalLocations', { count: locations })})`
+  let md = `## ${t('export.heading')}\n\n**${t('export.totalFound')}:** ${total}${counted}\n\n`
+  if (summary?.truncated) md += `${t('export.showing', { shown: dups.length, total })}\n\n`
   if (dups.length > 0) {
-    md += `| Locations | Kind | Similarity | Lines |\n|-----------|------|------------|-------|\n`
-    dups.forEach(d => { md += `| ${places(d).join('<br>')} | ${d.kind ?? '-'} | ${d.similarity.toFixed(1)}% | ${d.lines} |\n` })
+    const cols = ['locations', 'kind', 'similarity', 'lines'].map(c => t(`export.columns.${c}`))
+    md += `| ${cols.join(' | ')} |\n|${cols.map(() => '---').join('|')}|\n`
+    dups.forEach(d => { md += `| ${rowPlaces(d).join('<br>')} | ${d.kind ?? '-'} | ${d.similarity.toFixed(1)}% | ${d.lines} |\n` })
   }
   return md
 }

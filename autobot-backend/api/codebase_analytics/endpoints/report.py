@@ -663,6 +663,8 @@ def _generate_duplicate_overview(analysis: DuplicateAnalysis) -> List[str]:
         f"| Total Duplicate Lines | {analysis.total_duplicate_lines} |",
         "",
     ]
+    if analysis.truncated:  # the analysis's own return cap, separate from each table's display limit
+        lines += [f"> Only {len(analysis.duplicates)} of {analysis.total_duplicates} clusters were returned.", ""]
     return lines
 
 

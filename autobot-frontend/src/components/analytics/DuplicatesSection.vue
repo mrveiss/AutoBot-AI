@@ -48,7 +48,7 @@
       <div v-if="summary" class="header-info">
         <span class="header-count">{{ $t('analytics.duplicates.exactClusters', { count: summary.exactCount }) }}</span>
         <span class="header-count">{{ $t('analytics.duplicates.structuralClusters', { count: summary.structuralCount }) }}</span>
-        <span class="header-count">{{ $t('analytics.duplicates.totalLocations', { count: summary.totalLocations }) }}</span>
+        <span v-if="summary.totalLocations !== null" class="header-count">{{ $t('analytics.duplicates.totalLocations', { count: summary.totalLocations }) }}</span>
         <span v-if="summary.excludedDirs.length" class="header-count">
           {{ $t('analytics.duplicates.excluded', { dirs: summary.excludedDirs.join(', ') }) }}
         </span>

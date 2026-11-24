@@ -5,7 +5,7 @@
  * not the first two files of a pair.
  */
 import { describe, it, expect, afterEach } from 'vitest'
-import { duplicateSummary } from '../duplicatePayload'
+import { duplicateSummary, readDuplicatePayload } from '../duplicatePayload'
 import { generateSectionMarkdown } from '../sectionMarkdown'
 
 const cluster = {
@@ -35,5 +35,43 @@ describe('duplicates markdown export (#22157)', () => {
     const md = generateSectionMarkdown('duplicates', [cluster])
     expect(md).toContain('**Total Duplicate Clusters Found:** 9000 (20000 locations)')
     expect(md).toContain('Showing 1 of 9000 clusters.')
+  })
+
+  it('falls back to file1/file2 for a row whose locations list is empty', () => {
+    const md = generateSectionMarkdown('duplicates', [{ ...cluster, locations: [] }])
+    expect(md).toContain('| a.py<br>b.py | exact |')
+    expect(md).toContain('(2 locations)')
+  })
+
+  it('routes every export label through i18n (en)', () => {
+    const md = generateSectionMarkdown('duplicates', [cluster])
+    expect(md).toContain('## Duplicate Code Analysis')
+    expect(md).toContain('| Locations | Kind | Similarity | Lines |')
+    expect(md).not.toContain('analytics.duplicates.')
+  })
+
+  it('omits the location count when the payload cannot establish it', () => {
+    duplicateSummary.value = {
+      totalCount: 4, truncated: true, totalLocations: null, exactCount: 4, structuralCount: 0, excludedDirs: [],
+    }
+    const md = generateSectionMarkdown('duplicates', [cluster])
+    expect(md).toContain('**Total Duplicate Clusters Found:** 4\n')
+    expect(md).not.toContain('locations)')
+  })
+})
+
+describe('the location total of a payload without total_locations (#22157)', () => {
+  const legacyRow = { kind: 'exact', similarity: 100, lines: 30, file1: 'a.py', file2: 'b.py' }
+
+  it('counts the distinct places of a complete legacy result, never the cluster count', () => {
+    const reading = readDuplicatePayload({ status: 'success', total_count: 1, duplicates: [legacyRow] })
+    expect(reading.summary?.totalLocations).toBe(2)
+  })
+
+  it('keeps an explicit total_locations and leaves a cut list unknown', () => {
+    const explicit = readDuplicatePayload({ status: 'success', total_count: 1, total_locations: 7, duplicates: [legacyRow] })
+    expect(explicit.summary?.totalLocations).toBe(7)
+    const cut = readDuplicatePayload({ status: 'success', total_count: 5, truncated: true, duplicates: [legacyRow] })
+    expect(cut.summary?.totalLocations).toBeNull()
   })
 })

@@ -47,7 +47,8 @@ export interface DuplicateCode {
 export interface DuplicateSummary {
   totalCount: number
   truncated: boolean
-  totalLocations: number
+  /** null when the payload carries no total and its rows cannot establish one (a cut or timed-out list). */
+  totalLocations: number | null
   exactCount: number
   structuralCount: number
   excludedDirs: string[]

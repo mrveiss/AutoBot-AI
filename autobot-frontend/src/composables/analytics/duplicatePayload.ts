@@ -34,13 +34,27 @@ export function clearDuplicateResults<T>(rows: Ref<T[]>): void {
   duplicateSummary.value = null
 }
 
+/** A row's places, `file:start-end`; a legacy row with no (or an empty) `locations` list names its two files. */
+export function rowPlaces(row: DuplicateCode): string[] {
+  return row.locations?.length
+    ? row.locations.map(l => `${l.file}:${l.start_line}-${l.end_line}`)
+    : [row.file1, row.file2]
+}
+
+/** The payload's location total; else the distinct places of a COMPLETE row list; else unknown (null). */
+function readTotalLocations(payload: Record<string, unknown>, rows: DuplicateCode[], complete: boolean): number | null {
+  if (typeof payload.total_locations === 'number') return payload.total_locations
+  if (!complete || payload.truncated === true) return null
+  return new Set(rows.flatMap(rowPlaces)).size
+}
+
 /** The response's own totals; a payload that carries none yields null, never a count of its rows. */
-function readSummary(payload: Record<string, unknown>, rows: DuplicateCode[]): DuplicateSummary | null {
+function readSummary(payload: Record<string, unknown>, rows: DuplicateCode[], complete: boolean): DuplicateSummary | null {
   if (typeof payload.total_count !== 'number') return null
   return {
     totalCount: payload.total_count,
     truncated: payload.truncated === true,
-    totalLocations: Number(payload.total_locations ?? rows.length),
+    totalLocations: readTotalLocations(payload, rows, complete),
     exactCount: Number(payload.exact_cluster_count ?? 0),
     structuralCount: Number(payload.structural_cluster_count ?? 0),
     excludedDirs: Array.isArray(payload.excluded_dirs) ? (payload.excluded_dirs as string[]) : [],
@@ -54,7 +68,7 @@ export function readDuplicatePayload(raw: unknown): DuplicateReading {
   // `success` is a real answer even when the list is empty: the scan ran and
   // found nothing, which is the one case allowed to render "none found".
   if (payload.status === 'success' && found) {
-    return { state: 'done', duplicates: found, summary: readSummary(payload, found) }
+    return { state: 'done', duplicates: found, summary: readSummary(payload, found, true) }
   }
 
   // `partial` is a TIMEOUT carrying whatever was found before the clock ran out,
@@ -68,7 +82,7 @@ export function readDuplicatePayload(raw: unknown): DuplicateReading {
   //    "duplicates":[],"total_count":0,"storage_type":"timeout"}
   if (payload.status === 'partial' && found) {
     return found.length > 0
-      ? { state: 'done', duplicates: found, summary: readSummary(payload, found) }
+      ? { state: 'done', duplicates: found, summary: readSummary(payload, found, false) }
       : { state: 'failed', duplicates: [], summary: null }
   }
 
