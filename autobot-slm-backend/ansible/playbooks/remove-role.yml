@@ -195,6 +195,12 @@
     # #22211: the canonical "role removed -> cleanup" hook. A role that owns more than its primary unit
     # (the vnc role's websockify unit and firewall rules) ships tasks/remove.yml; it runs here, after
     # the primary unit is stopped. Roles without one are unchanged.
+    #
+    # CONTRACT for a role's tasks/remove.yml: idempotent (a second run, or a node that never had the role,
+    # passes) and non-destructive (stops units, closes ports, purges packages it installed; never deletes
+    # user data, credentials or SLM rows, and never `file: state=absent` on a path -- the guarded
+    # remove_component_dir.yml primitive owns directory removal). Credential removal is proposed to the
+    # approval queue, never done here (#17038).
     - name: "Look for a per-role remove.yml hook (#22211)"
       ansible.builtin.stat:
         path: "{{ playbook_dir }}/../roles/{{ role_name }}/tasks/remove.yml"

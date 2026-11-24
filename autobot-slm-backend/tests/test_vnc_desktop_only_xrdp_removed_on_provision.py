@@ -222,3 +222,23 @@ def test_role_remove_hooks_leave_stored_credentials_alone(path: Path) -> None:
     """Credential deletion is only proposed to the approval queue (#17038): no SLM API call in a removal."""
     text = path.read_text(encoding="utf-8").lower()
     assert "ansible.builtin.uri" not in text and "/api/" not in text
+
+
+def test_the_live_session_check_fails_closed() -> None:
+    """A missing or erroring loginctl fails the task: "could not look" must never read as "no session"."""
+    tasks = yaml.safe_load(_XRDP_REMOVE.read_text(encoding="utf-8"))
+    find = next(t for t in tasks if t.get("register") == "_xrdp_live_sessions")
+    script = find["ansible.builtin.shell"]["cmd"]
+    assert "2>/dev/null" not in script.replace(">/dev/null || {", "")
+    assert "command -v loginctl" in script and "exit 1" in script and "set -o pipefail" in script
+    assert "failed_when" not in find and "ignore_errors" not in find
+
+
+def test_websockify_unit_uses_the_role_rfb_port_not_a_literal_base() -> None:
+    unit = (_ANSIBLE / "roles" / "vnc" / "templates" / "vnc-websockify.service.j2").read_text(encoding="utf-8")
+    assert "{{ vnc_rfb_port }}" in unit and "5900 +" not in unit.replace("(5900 + display)", "")
+
+
+def test_the_remove_role_hook_documents_its_contract() -> None:
+    text = _REMOVE_ROLE.read_text(encoding="utf-8")
+    assert "CONTRACT for a role's tasks/remove.yml" in text and "idempotent" in text and "non-destructive" in text

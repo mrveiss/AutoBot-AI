@@ -11,15 +11,21 @@
 # Never touches /home, the login users or the SLM database. The stored rdp credential rows are left
 # in place: deleting credentials is proposed to the approval queue (#17038), never done by a playbook.
 
+# Fails CLOSED (#22211): a missing or erroring loginctl fails the task, so "could not look" never reads as
+# "no session". A session that ends between the list and the show also fails it; re-run the provisioning.
 - name: xrdp | Find logged-in RDP sessions
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}' | while read -r s; do
-        if [ "$(loginctl show-session "$s" -p Service --value 2>/dev/null)" = "xrdp-sesman" ]; then
-          loginctl show-session "$s" -p Name --value
+      command -v loginctl >/dev/null || { echo "loginctl not found: cannot check for RDP sessions" >&2; exit 1; }
+      loginctl list-sessions --no-legend | awk '{print $1}' | while read -r s; do
+        svc=$(loginctl show-session "$s" -p Service --value) || exit 1
+        if [ "$svc" = "xrdp-sesman" ]; then
+          loginctl show-session "$s" -p Name --value || exit 1
         fi
       done
+      # a session process xrdp-sesman still owns, even when logind has no session for it
+      pgrep -x xrdp-sesexec >/dev/null && echo "xrdp-sesexec" || true
     executable: /bin/bash
   register: _xrdp_live_sessions
   changed_when: false
