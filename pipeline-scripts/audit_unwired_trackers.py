@@ -307,20 +307,27 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
     if result.returncode > 1:  # 0 = matches, 1 = no matches, >1 = error
         raise TrackerLookupError(f"caller grep for {stem!r} failed (exit {result.returncode})")
     self_str = str(self_path)
-    count = 0
-    for line in result.stdout.splitlines():
-        if not line:
-            continue
-        if "/__pycache__/" in line:
-            continue
-        if any(frag in line for frag in TEST_PATH_FRAGMENTS):
-            continue
-        # Strip "path:lineno:" prefix to compare against self_path
-        head = line.split(":", 1)[0]
-        if head == self_str:
-            continue
-        count += 1
-    return count
+    return sum(1 for line in result.stdout.splitlines() if _is_production_caller_line(line, self_str))
+
+
+COMMENT_PREFIXES = {".py": ("#",), ".ts": ("//", "/*", "*"), ".vue": ("//", "/*", "*", "<!--")}
+
+
+def _is_comment_line(path: str, code: str) -> bool:
+    """True when the matched source line is only a comment (``# from x import y``), not a real import (#22199)."""
+    return code.lstrip().startswith(COMMENT_PREFIXES.get(Path(path).suffix, ()))
+
+
+def _is_production_caller_line(line: str, self_str: str) -> bool:
+    """One ``path:lineno:code`` grep hit: a caller unless pycache, a test, the module itself, or a comment."""
+    if not line or "/__pycache__/" in line:
+        return False
+    if any(frag in line for frag in TEST_PATH_FRAGMENTS):
+        return False
+    path, _, rest = line.partition(":")
+    if path == self_str:
+        return False
+    return not _is_comment_line(path, rest.partition(":")[2])
 
 
 def scan() -> list[Finding]:

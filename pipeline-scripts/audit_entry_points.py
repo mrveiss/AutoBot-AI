@@ -20,6 +20,7 @@ from typing import Optional
 CALLER_ONLY_DIRS = ("scripts",)
 BENCHMARK_DIR_NAME = "benchmarks"
 BENCHMARK_FILE_SUFFIXES = ("_benchmark.py", "_benchmarks.py")
+MAIN_BLOCK_RE = re.compile(r"^if\s+__name__\s*==\s*[\"']__main__[\"']\s*:", re.MULTILINE)
 MODULE_RUN_RE = re.compile(r"\bpython(?:3(?:\.\d+)?)?\s+-m\s+([A-Za-z_][\w.]*)")
 
 
@@ -35,18 +36,24 @@ def is_benchmark(path: Path) -> bool:
     return BENCHMARK_DIR_NAME in path.parts[:-1] or path.name.endswith(BENCHMARK_FILE_SUFFIXES)
 
 
-def _module_docstring(path: Path) -> str:
+def _read_module(path: Path) -> tuple[str, str]:
+    """Return ``(module docstring, source)``; both empty when the file cannot be read or parsed."""
     try:
-        return ast.get_docstring(ast.parse(path.read_text(encoding="utf-8"))) or ""
+        source = path.read_text(encoding="utf-8")
+        return ast.get_docstring(ast.parse(source)) or "", source
     except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
-        return ""
+        return "", ""
 
 
 def documents_own_module_run(path: Path, module_path: Optional[str]) -> bool:
-    """True when the module docstring documents ``python -m <this module's own dotted path>``."""
+    """True when the docstring documents ``python -m <own dotted path>`` AND the module has a main block.
+
+    The main-block requirement keeps a documented-but-not-runnable module counted as unwired.
+    """
     if not module_path or path.suffix != ".py":
         return False
-    return module_path in MODULE_RUN_RE.findall(_module_docstring(path))
+    doc, source = _read_module(path)
+    return module_path in MODULE_RUN_RE.findall(doc) and bool(MAIN_BLOCK_RE.search(source))
 
 
 def is_launched_module(path: Path, module_path: Optional[str]) -> bool:
