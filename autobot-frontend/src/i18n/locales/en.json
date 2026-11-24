@@ -10448,6 +10448,18 @@
       "noMessagesBody": "This conversation has no messages on this page.",
       "unknownSender": "Unknown sender",
       "transcriptPages": "Transcript pages"
+    },
+    "ownerless": {
+      "title": "Ownerless chat sessions",
+      "description": "These sessions record no owner. A proposal waits in the approvals inbox; nothing is assigned until a person approves it.",
+      "none": "Every chat session has an owner.",
+      "loadFailed": "The ownerless session report could not be loaded.",
+      "ownerLabel": "Proposed owner (username)",
+      "ownerPlaceholder": "Username of an active user",
+      "propose": "Propose owner",
+      "proposed": "Proposal pending approval",
+      "refusedConflict": "That session is no longer ownerless or already has a pending proposal.",
+      "refusedOwner": "That owner is not an active user."
     }
   },
   "components": {
