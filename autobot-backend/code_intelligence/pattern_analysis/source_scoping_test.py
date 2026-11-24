@@ -23,10 +23,7 @@ These tests assert the fix end-to-end:
   legacy untagged records is proven too).
 """
 
-import importlib.util
-import sys
 from pathlib import Path
-from types import ModuleType
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -34,6 +31,7 @@ import pytest
 
 from api.codebase_analytics.endpoints.pattern_analysis import _build_chromadb_where_filter
 from autobot_shared.status_enums import Severity
+from testkit.real_pattern_analysis import load_real_pattern_analysis_package
 
 
 # ---------------------------------------------------------------------------
@@ -45,28 +43,7 @@ from autobot_shared.status_enums import Severity
 # ---------------------------------------------------------------------------
 def _load_real_pattern_analysis_package():
     base = Path(__file__).resolve().parent  # code_intelligence/pattern_analysis/
-    pkg_name = "_real_pattern_analysis_12384"
-
-    if pkg_name not in sys.modules:
-        pkg = ModuleType(pkg_name)
-        pkg.__path__ = [str(base)]
-        pkg.__package__ = pkg_name
-        sys.modules[pkg_name] = pkg
-        for sub in (
-            "types",
-            "complexity_analyzer",
-            "refactoring_generator",
-            "regex_detector",
-            "storage",
-            "analyzer",
-        ):
-            spec = importlib.util.spec_from_file_location(f"{pkg_name}.{sub}", base / f"{sub}.py")
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[f"{pkg_name}.{sub}"] = module
-            spec.loader.exec_module(module)
-            setattr(pkg, sub, module)
-
-    return sys.modules[pkg_name]
+    return load_real_pattern_analysis_package(base, "_real_pattern_analysis_12384")
 
 
 @pytest.fixture
