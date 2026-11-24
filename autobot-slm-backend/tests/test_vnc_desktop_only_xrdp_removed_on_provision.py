@@ -345,26 +345,35 @@ def test_the_vnc_restart_handlers_honour_a_sync_without_restarts() -> None:
     assert len(restarts) == 2 and all("autobot_restart_services" in str(h["when"]) for h in restarts)
 
 
-def test_removing_xrdp_from_a_node_without_an_active_vnc_role_is_refused() -> None:
-    """remove-role.yml: evaluated through Jinja2 in both directions, plus the operator override."""
+def test_removing_xrdp_needs_verified_vnc_or_the_operator_override() -> None:
+    """remove-role.yml: the same verify step runs first; the assert needs what it records (Jinja2, both ways)."""
     tasks = _tasks(_REMOVE_ROLE)
+    names = [t.get("name", "") for t in tasks]
+    verify = next(t for t in tasks if _role_include(t) == ("vnc", "verify"))
     guard = next(t for t in tasks if str(t.get("name", "")).startswith("Refuse to remove xrdp from a node without"))
-    expr = guard["ansible.builtin.assert"]["that"][0]
+    hook_look = next(n for n in names if n.startswith("Look for a per-role"))
+    assert names.index(verify["name"]) < names.index(guard["name"]) < names.index(hook_look)
+    gate = " ".join(str(c) for c in verify["when"])
+    assert "role_name == 'xrdp'" in gate and "remove_xrdp_without_vnc" in gate, "the bypass skips the verify too"
+
     env = jinja2.Environment()
     env.filters["bool"] = lambda v: str(v).lower() in ("true", "1", "yes")
-    check = env.compile_expression(expr)
+    check = env.compile_expression(guard["ansible.builtin.assert"]["that"][0])
 
-    def passes(role: str, vnc: object, override: object = None) -> bool:
-        ctx: dict[str, Any] = {"role_name": role, "role_vnc_active": vnc}
+    def passes(role: str, active: object, verified: object = None, override: object = None) -> bool:
+        ctx: dict[str, Any] = {"role_name": role, "role_vnc_active": active}
+        if verified is not None:
+            ctx["vnc_ports_verified"] = verified
         if override is not None:
             ctx["remove_xrdp_without_vnc"] = override
         return bool(check(**ctx))
 
-    assert passes("xrdp", True) and not passes("xrdp", False)
-    assert passes("xrdp", False, override=True), "the operator override"
+    assert passes("xrdp", True, verified=True), "active and verified"
+    assert not passes("xrdp", True), "active but never verified"
+    assert not passes("xrdp", True, verified=False)
+    assert not passes("xrdp", False, verified=True), "verified ports without the role are not a desktop this node owns"
+    assert passes("xrdp", False, override=True) and passes("xrdp", True, override=True), "the only bypass"
     assert passes("redis", False), "other roles are unaffected"
-    names = [t.get("name", "") for t in tasks]
-    assert names.index(guard["name"]) < names.index(next(n for n in names if n.startswith("Look for a per-role")))
 
 
 def test_the_stale_bootstrap_base_port_rule_is_deleted_when_the_rfb_port_differs() -> None:
@@ -374,12 +383,34 @@ def test_the_stale_bootstrap_base_port_rule_is_deleted_when_the_rfb_port_differs
         stale["community.general.ufw"]["port"]
     )
     env = jinja2.Environment()
-    gate = env.compile_expression(stale["when"])
-    assert gate(vnc_rfb_port=5901, vnc_rfb_base_port=5900) is True
-    assert gate(vnc_rfb_port=5900, vnc_rfb_base_port=5900) is False, "display 0 keeps its rule"
+
+    def deletes(rfb: int, websockify: int, base: int = 5900) -> bool:
+        ctx = {"vnc_rfb_port": rfb, "vnc_rfb_base_port": base, "websockify_port": websockify}
+        return all(bool(env.compile_expression(c)(**ctx)) for c in stale["when"])
+
+    assert deletes(5901, 6080) is True
+    assert deletes(5900, 6080) is False, "display 0 keeps its rule"
+    assert deletes(5901, 5900) is False, "websockify on the base port: the delete would remove ITS allow rule"
 
 
 def test_the_port_wait_seconds_are_registered_env_vars() -> None:
     registry = (_ANSIBLE.parents[1] / "autobot_shared" / "env_registry_slm_roles.py").read_text(encoding="utf-8")
     for name in ("VNC_PORT_WAIT_SECONDS", "XRDP_PORT_CLOSE_WAIT_SECONDS"):
         assert name in registry
+
+
+def test_the_credential_name_uses_the_node_hostname_with_a_fallback() -> None:
+    reg = yaml.safe_load(
+        (_ANSIBLE / "roles" / "vnc" / "tasks" / "register-credentials.yml").read_text(encoding="utf-8")
+    )
+    text = str(reg)
+    assert "node_hostname | default(inventory_hostname)" in text
+    env = jinja2.Environment()
+    name = env.from_string("{{ node_hostname | default(inventory_hostname) }} VNC")
+    assert name.render(node_hostname="desk-1", inventory_hostname="provision_target") == "desk-1 VNC"
+    assert name.render(inventory_hostname="n5") == "n5 VNC"
+
+
+def test_the_provisioning_inventory_carries_the_node_hostname() -> None:
+    src = (_ANSIBLE.parent / "api" / "nodes.py").read_text(encoding="utf-8")
+    assert "node_hostname: {json.dumps(node.hostname)}" in src and "slm_node_id: {node_id}" in src

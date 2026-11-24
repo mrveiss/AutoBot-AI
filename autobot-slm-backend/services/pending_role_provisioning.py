@@ -162,17 +162,31 @@ async def provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
         return "WARNING: pending roles could not be provisioned (database error); the code update succeeded"
 
 
-async def run_update_all_nodes(executor: Any, node_id: str, limit: list, restart: bool, **playbook_kwargs: Any) -> dict:
+async def run_update_all_nodes(
+    executor: Any, node_id: str, limit: list, restart: bool, resume_after_restart: bool = False, **playbook_kwargs: Any
+) -> dict:
     """Run ``update-all-nodes.yml`` for a node, then provision its pending roles (#22211).
 
     The code deploy is the node's update. Provisioning runs only after it succeeded, with the same restart
     policy, and a failure of it is appended to the output as a warning: it never turns a successful update
-    into a failed one.
+    into a failed one. ``resume_after_restart`` is for a run that restarts THIS process (the SLM's own
+    self-update): the node is marked first and, when the restart cuts the run, the restarted process
+    provisions it (``services/pending_role_resume.py``) instead of this one.
     """
+    from services.pending_role_resume import clear_provision_marker, mark_provision_after_restart
+
+    if resume_after_restart:
+        await mark_provision_after_restart(node_id)
     restart_args = no_restart_args(restart)  # #20743
     result = await executor.execute_playbook(
         playbook_name="update-all-nodes.yml", limit=limit, **playbook_kwargs, **restart_args
     )
+    if resume_after_restart:
+        from api._resume_plan import restart_cut_the_wait
+
+        if restart_cut_the_wait(result, node_id):
+            return result  # the marker stays; the restarted process provisions
+        await clear_provision_marker(node_id)
     if not result.get("success"):
         return result
     message = await provision_pending_roles(node_id, **restart_args)

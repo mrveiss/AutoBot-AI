@@ -120,6 +120,7 @@ from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.node_events import get_slm_self_node, split_enrollment_failed
 from services.pending_role_provisioning import provision_pending_roles, run_update_all_nodes
+from services.pending_role_resume import schedule_marked_provisioning
 from services.playbook_executor import get_playbook_executor
 from services.schedule_executor import get_schedule_target_nodes
 from services.single_flight_cache import SingleFlightCache
@@ -3220,7 +3221,9 @@ async def _ansible_self_update(node_id: str, on_failure: Optional[Callable[[str]
     executor = get_playbook_executor()
     limit = ["localhost", *await _colocated_node_ids(node_id)]
     try:
-        result = await run_update_all_nodes(executor, node_id, limit, True, detach=True, must_run=[node_id])  # #22211
+        result = await run_update_all_nodes(
+            executor, node_id, limit, True, resume_after_restart=True, detach=True, must_run=[node_id]
+        )
         if restart_cut_the_wait(result, node_id):  # #19139: the restarted process owns the plan now
             return
         failure = None if result["success"] else summarize_playbook_failure(result["output"])
@@ -5531,6 +5534,7 @@ async def resume_update_all_orchestration() -> None:
     """
     global _resume_task
 
+    schedule_marked_provisioning()  # #22211: a single-node self-update restart cut its in-process provisioning
     plan = await _read_and_validate_resume_plan()
     if plan is None:
         return

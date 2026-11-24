@@ -14,8 +14,12 @@
 #   systemd_service  - Service unit name (e.g. redis-stack-server, ollama)
 #
 # Optional vars:
+#   remove_xrdp_without_vnc - Remove xrdp from a node without a verified VNC desktop (default: refuse, #22211)
 #   backup_before_removal - Create data backup first (default: false)
 #   role_target_dir  - Target directory to remove (e.g. autobot-npu-worker)
+#
+# Per-role hook (#22211): when roles/<role_name>/tasks/remove.yml exists it runs before the generic service
+# stop (idempotent and non-destructive; see the CONTRACT note at the hook task below).
 #
 # Usage:
 #   ansible-playbook playbooks/remove-role.yml \
@@ -112,14 +116,29 @@
         quiet: true
       when: role_target_dir is defined
 
-    # #22211: removing xrdp from a node whose vnc role is not active would leave it with NO desktop.
-    - name: "Refuse to remove xrdp from a node without an active vnc role (#22211)"
+    # #22211: removing xrdp from a node without a WORKING vnc desktop would leave it with none. The same
+    # verify step provisioning uses runs first (it fails the play when the ports do not answer, and
+    # records vnc_ports_verified when they do); the assert then needs that fact. `remove_xrdp_without_vnc`
+    # is the only bypass.
+    - name: "Verify VNC is up before xrdp is removed (#22211)"
+      ansible.builtin.include_role:
+        name: vnc
+        tasks_from: verify
+      when:
+        - role_name == 'xrdp'
+        - role_vnc_active | default(false) | bool
+        - not (remove_xrdp_without_vnc | default(false) | bool)
+
+    - name: "Refuse to remove xrdp from a node without verified VNC (#22211)"
       ansible.builtin.assert:
         that:
-          - role_name != 'xrdp' or (role_vnc_active | default(false) | bool) or (remove_xrdp_without_vnc | default(false) | bool)
+          - >-
+            role_name != 'xrdp' or (remove_xrdp_without_vnc | default(false) | bool)
+            or ((role_vnc_active | default(false) | bool) and (vnc_ports_verified | default(false) | bool))
         fail_msg: >-
-          REFUSING to remove xrdp: this node has no active vnc role, so it would be left with no desktop.
-          Provision the vnc role first, or re-run with remove_xrdp_without_vnc=true to remove anyway.
+          REFUSING to remove xrdp: this node has no verified VNC desktop (the vnc role is inactive or its ports
+          do not answer), so it would be left with no desktop. Provision the vnc role first, or re-run with
+          remove_xrdp_without_vnc=true to remove anyway.
         quiet: true
       when: role_name is defined
 

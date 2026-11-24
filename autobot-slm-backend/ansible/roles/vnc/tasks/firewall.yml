@@ -32,4 +32,7 @@
     proto: tcp
     src: "{{ network_subnet }}"
     delete: true
-  when: vnc_rfb_port | int != vnc_rfb_base_port | int
+  when:
+    - vnc_rfb_port | int != vnc_rfb_base_port | int
+    # websockify may itself listen on the base port; the delete would remove that allow rule (same port/proto/src)
+    - websockify_port | int != vnc_rfb_base_port | int

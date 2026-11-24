@@ -1017,12 +1017,13 @@ async def _execute_provision_playbook(
     node_roles (same pattern as setup_wizard.py) so provision-fleet-roles.yml
     phase conditions evaluate correctly for the target node.
     """
+    import json
+
     from services.playbook_executor import get_playbook_executor
     from services.role_registry import ROLE_DEPENDENCIES
 
     executor = get_playbook_executor()
     ssh_user = node.ssh_user or "autobot"
-
     roles_yaml = "".join(f"        - {r}\n" for r in target_roles)
 
     deps: set = set()
@@ -1034,6 +1035,7 @@ async def _execute_provision_playbook(
         "all:\n"
         "  hosts:\n"
         "    provision_target:\n"
+        f"      node_hostname: {json.dumps(node.hostname)}\n"  # the credential name uses it (#22211)
         f"      slm_node_id: {node_id}\n"  # the vnc role registers its credential only when this is set (#22211)
         f"      ansible_host: {node.ip_address}\n"
         f"      ansible_user: {ssh_user}\n"
