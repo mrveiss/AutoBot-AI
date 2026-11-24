@@ -49,6 +49,14 @@ class FakeAudio {
   pause(): void {}
 }
 
+/**
+ * A 200 `audio/wav` reply. The body is bytes, not a jsdom `Blob`: Node 22's `Response` calls `.stream()` on a Blob
+ * body, which jsdom's Blob does not have, so `new Response(new Blob(...))` throws there (Node 24 tolerates it).
+ */
+function wavResponse(): Response {
+  return new Response(new Uint8Array([0x52, 0x49, 0x46, 0x46]), { status: 200, headers: { 'content-type': 'audio/wav' } })
+}
+
 async function dictate(text: string) {
   const wrapper = mount(VoiceTool, { global: { plugins: [i18n] } })
   await wrapper.get('button').trigger('click')
@@ -70,7 +78,7 @@ describe('VoiceTool speaks the transcript through the audio route', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('plays the returned audio and never shows the old fallback', async () => {
-    backendClient.rawRequest.mockResolvedValue(new Response(new Blob(['RIFF'], { type: 'audio/wav' }), { status: 200 }))
+    backendClient.rawRequest.mockResolvedValue(wavResponse())
     const wrapper = await dictate('hello there')
 
     const [path, options] = backendClient.rawRequest.mock.calls[0]
@@ -85,7 +93,7 @@ describe('VoiceTool speaks the transcript through the audio route', () => {
   })
 
   it('sends the chosen voice id with the language', async () => {
-    backendClient.rawRequest.mockResolvedValue(new Response(new Blob(['RIFF'], { type: 'audio/wav' }), { status: 200 }))
+    backendClient.rawRequest.mockResolvedValue(wavResponse())
     const wrapper = mount(VoiceTool, { global: { plugins: [i18n] } })
     await wrapper.get('input[type="text"]').setValue(' voice-7 ')
     await wrapper.get('button').trigger('click')
@@ -100,7 +108,7 @@ describe('VoiceTool speaks the transcript through the audio route', () => {
     backendClient.rawRequest.mockReturnValue(new Promise<Response>((resolve) => { resolveAudio = resolve }))
     const wrapper = await dictate('hello')
     wrapper.unmount()
-    resolveAudio(new Response(new Blob(['RIFF'], { type: 'audio/wav' }), { status: 200 }))
+    resolveAudio(wavResponse())
     await flushPromises()
     expect(play).not.toHaveBeenCalled()
     expect(URL.createObjectURL).not.toHaveBeenCalled()
