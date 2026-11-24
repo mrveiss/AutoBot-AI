@@ -30,9 +30,9 @@ const render = (metadata: Record<string, unknown>, ctx = context()) =>
 
 describe('ChatMessageApproval', () => {
   it.each([
-    ['pre_approved', 'approval-pre-approved', 'Auto-approved'],
-    ['approved', 'approval-approved', 'Command approved'],
-    ['denied', 'approval-denied', 'Command denied'],
+    ['pre_approved', 'approval-pre-approved', en.chat.approval.autoApproved],
+    ['approved', 'approval-approved', en.chat.approval.commandApproved],
+    ['denied', 'approval-denied', en.chat.approval.commandDenied],
   ])('shows the decided state %s with its command', (status, cls, title) => {
     const w = render({ approval_status: status, command: 'ls', approval_comment: 'because' })
     expect(w.get('.approval-confirmed').classes()).toContain(cls)
@@ -60,9 +60,10 @@ describe('ChatMessageApproval', () => {
   it('Comment opens the comment box for that session and is hidden for a graph approval', async () => {
     const ctx = context()
     const w = render(pending, ctx)
-    await w.get('button[aria-label="Add comment"]').trigger('click')
+    const comment = `button[aria-label="${en.chat.approval.addComment}"]`
+    await w.get(comment).trigger('click')
     expect(ctx.promptForComment).toHaveBeenCalledWith('s1')
-    expect(render({ ...pending, calls: [{}] }).find('button[aria-label="Add comment"]').exists()).toBe(false)
+    expect(render({ ...pending, calls: [{}] }).find(comment).exists()).toBe(false)
   })
 
   it('locks every action while an approval is processing or the comment box is open', () => {

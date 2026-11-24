@@ -25,7 +25,7 @@ describe('MessageAttachments', () => {
     expect(items[0].find('[data-icon]').attributes('data-icon')).toBe('file-pdf')
     expect(items[1].find('[data-icon]').attributes('data-icon')).toBe('image')
     expect(items[0].find('.attachment-size').text()).toBe('1.5 KB')
-    expect(items[1].find('.attachment-size').text()).toBe('0 B')
+    expect(items[1].find('.attachment-size').text()).toBe('0 Bytes') // the kit formatter, as main's stream used
   })
 
   it('emits view on click and Enter, and download without also emitting view', async () => {
