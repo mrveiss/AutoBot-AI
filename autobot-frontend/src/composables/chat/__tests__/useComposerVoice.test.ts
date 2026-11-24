@@ -101,6 +101,20 @@ describe('useComposerVoice', () => {
     expect(first.stop).toHaveBeenCalledTimes(1)
   })
 
+  it('a start() that throws leaves no dead recogniser: it toasts and the next toggle starts again', () => {
+    win.SpeechRecognition = class extends FakeRecognition {
+      start = vi.fn(() => { throw new Error('InvalidStateError') })
+    }
+    const { isVoiceRecording, toggleVoiceInput } = useComposerVoice(ref(''))
+    toggleVoiceInput()
+    const failed = FakeRecognition.last!
+    expect(isVoiceRecording.value).toBe(false)
+    expect(showToast).toHaveBeenCalledWith('chat.input.micDenied', 'error')
+    toggleVoiceInput()
+    expect(failed.stop).not.toHaveBeenCalled() // it started a new one rather than stopping the dead one
+    expect(FakeRecognition.last).not.toBe(failed)
+  })
+
   it('ignores callbacks of an older recogniser', () => {
     const text = ref('')
     const { isVoiceRecording, toggleVoiceInput } = useComposerVoice(text)

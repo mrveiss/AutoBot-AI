@@ -17,9 +17,10 @@ const m = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   unlockAudio: vi.fn(),
   reasoning: { value: 'auto' } as { value: string },
+  store: { currentSessionId: 'sess-1' as string | null },
 }))
 
-vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => ({ addMessage: m.addMessage, deleteMessage: m.deleteMessage }) }))
+vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => Object.assign(m.store, { addMessage: m.addMessage, deleteMessage: m.deleteMessage }) }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => ({ sendMessage: m.sendMessage }) }))
 vi.mock('@/composables/usePreferences', () => ({ usePreferences: () => ({ reasoningEffort: m.reasoning }) }))
 vi.mock('@/composables/useVoiceOutput', () => ({ useVoiceOutput: () => ({ unlockAudio: m.unlockAudio }) }))
@@ -73,6 +74,7 @@ beforeEach(() => {
   Object.values(m).forEach((f) => typeof f === 'function' && 'mockReset' in f && f.mockReset())
   m.sendMessage.mockResolvedValue('id')
   m.reasoning.value = 'auto'
+  m.store.currentSessionId = 'sess-1'
   resetChatKnowledgeState()
 })
 
@@ -168,7 +170,7 @@ describe('sendMessage, Overseer route (#690)', () => {
     const submit = vi.fn().mockResolvedValue(true)
     const h1 = setup(true, submit)
     await h1.api.sendMessage()
-    expect(m.addMessage).toHaveBeenCalledWith({ content: 'hello', sender: 'user', status: 'sent', type: 'message' })
+    expect(m.addMessage).toHaveBeenCalledWith({ content: 'hello', sender: 'user', status: 'sent', type: 'message' }, 'sess-1')
     expect(submit).toHaveBeenCalledWith('hello')
     expect(m.sendMessage).not.toHaveBeenCalled()
   })
@@ -177,7 +179,18 @@ describe('sendMessage, Overseer route (#690)', () => {
     m.addMessage.mockReturnValue('shown-1')
     const h1 = setup(true, async () => false)
     await h1.api.sendMessage()
-    expect(m.deleteMessage).toHaveBeenCalledWith('shown-1') // the controller adds its own user message
+    expect(m.deleteMessage).toHaveBeenCalledWith('shown-1', 'sess-1') // the controller adds its own user message
     expect(m.sendMessage).toHaveBeenCalledWith('hello', expect.objectContaining({ use_knowledge: true }))
+  })
+
+  it('removes the duplicate from the chat it was added to when the user switched chats meanwhile', async () => {
+    m.addMessage.mockReturnValue('shown-1')
+    const h1 = setup(true, async () => {
+      m.store.currentSessionId = 'sess-2' // the user opens another chat during the overseer call
+      return false
+    })
+    await h1.api.sendMessage()
+    expect(m.addMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'hello' }), 'sess-1')
+    expect(m.deleteMessage).toHaveBeenCalledWith('shown-1', 'sess-1')
   })
 })

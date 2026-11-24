@@ -91,7 +91,15 @@ export function useComposerVoice(messageText: Ref<string>) {
     recognition.interimResults = true
     recognition.lang = RECOGNITION_LANG
     bindHandlers(recognition)
-    recognition.start()
+    try {
+      recognition.start()
+    } catch (err) {
+      // a throwing start() must not leave a dead recogniser behind: the next toggle has to start again
+      logger.error('Voice recognition failed to start:', err)
+      recognition = null
+      isVoiceRecording.value = false
+      showToast(t('chat.input.micDenied'), 'error')
+    }
   }
 
   function stopVoiceRecording(): void {

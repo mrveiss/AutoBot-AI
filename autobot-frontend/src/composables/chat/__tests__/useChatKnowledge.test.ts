@@ -3,10 +3,10 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 import { describe, it, expect, beforeEach } from 'vitest'
-import { nextTick } from 'vue'
+import { effectScope, nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { useChatStore } from '@/stores/useChatStore'
-import { KNOWLEDGE_STORAGE_KEY, MAX_REMEMBERED_SESSIONS, resetChatKnowledgeState, useChatKnowledge } from '../useChatKnowledge'
+import { KNOWLEDGE_STORAGE_KEY, MAX_REMEMBERED_SESSIONS, expectDraftAdoption, resetChatKnowledgeState, useChatKnowledge } from '../useChatKnowledge'
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -63,9 +63,40 @@ describe('useChatKnowledge', () => {
     store.currentSessionId = null
     const { enabled } = useChatKnowledge()
     enabled.value = false
+    expectDraftAdoption() // the composer's send marks the session it is about to create
     store.createNewSession('First', 'session-first')
     await nextTick()
     expect(enabled.value).toBe(false)
     expect(JSON.parse(localStorage.getItem(KNOWLEDGE_STORAGE_KEY)!)['session-first']).toBe(false)
+  })
+
+  it('a draft choice does not leak onto an existing chat opened afterwards', async () => {
+    const store = useChatStore()
+    const existing = store.createNewSession('Old', 'session-old')
+    store.currentSessionId = null
+    const { enabled } = useChatKnowledge()
+    enabled.value = false // toggled with no chat open, and no send follows
+    store.switchToSession(existing)
+    await nextTick()
+    expect(enabled.value).toBe(true) // the default, not the draft
+    expect(JSON.parse(localStorage.getItem(KNOWLEDGE_STORAGE_KEY)!)).toEqual({})
+  })
+
+  it('re-reads the map another tab stored, and stops listening when its scope ends', async () => {
+    const store = useChatStore()
+    const id = store.createNewSession('A', 'session-a')
+    const scope = effectScope()
+    const { enabled } = scope.run(() => useChatKnowledge())!
+    expect(enabled.value).toBe(true)
+    const fromOtherTab = (): void => {
+      localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify({ [id]: false }))
+      window.dispatchEvent(new StorageEvent('storage', { key: KNOWLEDGE_STORAGE_KEY }))
+    }
+    fromOtherTab()
+    expect(enabled.value).toBe(false)
+    scope.stop()
+    localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify({ [id]: true }))
+    window.dispatchEvent(new StorageEvent('storage', { key: KNOWLEDGE_STORAGE_KEY }))
+    expect(enabled.value).toBe(false) // no longer synced
   })
 })

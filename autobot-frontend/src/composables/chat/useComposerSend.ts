@@ -15,7 +15,7 @@ import { usePreferences } from '@/composables/usePreferences'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { usesCanonicalRoute } from '@/utils/conversationFileUpload'
 import { createLogger } from '@/utils/debugUtils'
-import { useChatKnowledge } from './useChatKnowledge'
+import { cancelDraftAdoption, expectDraftAdoption, useChatKnowledge } from './useChatKnowledge'
 
 const logger = createLogger('ChatInput')
 const LOG_PREVIEW_CHARS = 50
@@ -67,11 +67,13 @@ export function useComposerSend(deps: ComposerSendDeps) {
     }
     logger.info('[ChatInput] Sending via Overseer Agent:', message.substring(0, LOG_PREVIEW_CHARS))
     // The user's message appears immediately; the overseer answers over the WebSocket.
-    const shownId = store.addMessage({ content: message, sender: 'user', status: 'sent', type: 'message' })
+    // the chat may change during the awaits below: the duplicate is removed from the chat it was added to
+    const shownIn = store.currentSessionId ?? undefined
+    const shownId = store.addMessage({ content: message, sender: 'user', status: 'sent', type: 'message' }, shownIn)
     if (await submitOverseerQuery(message)) return
     logger.warn('[ChatInput] Overseer submission failed, falling back to normal flow')
     // the controller adds the user turn itself: drop ours so the fall-back yields exactly one
-    if (shownId) store.deleteMessage(shownId)
+    if (shownId) store.deleteMessage(shownId, shownIn)
     await controller.sendMessage(message, options)
   }
 
@@ -85,10 +87,12 @@ export function useComposerSend(deps: ComposerSendDeps) {
     deps.resetTextareaHeight()
     isSending.value = true
     const attachmentIds = deps.serverFileIds(files) // #20195: the server ids, never browser File objects
+    if (!store.currentSessionId) expectDraftAdoption() // this send creates the chat the draft choice belongs to
     try {
       await dispatch(message, sendOptionsFor(attachmentIds), attachmentIds)
     } catch (error) {
       logger.error('Failed to send message:', error)
+      cancelDraftAdoption()
       deps.messageText.value = message
       deps.attachedFiles.value = [...files, ...deps.attachedFiles.value] // keep a file that finished uploading meanwhile
     } finally {

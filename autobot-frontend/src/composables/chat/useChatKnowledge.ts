@@ -8,9 +8,11 @@
  * sub-line (#18243). It is kept per session, like extended thinking (`useThinkingMode`): switching chats shows
  * that chat's own state and a new chat starts on. Unlike thinking mode there is no server preference endpoint,
  * so the state persists in this browser only (localStorage, bounded). A choice made before the first message
- * (no session yet) moves to the session that message creates.
+ * (no session yet) moves to the session that message creates -- only that one: the composer marks the send
+ * (`expectDraftAdoption`), so an existing chat opened later never inherits it. Several tabs share the stored
+ * map; a change another tab makes is re-read on the `storage` event, and within one tab the last writer wins.
  */
-import { computed, reactive, watch, type WritableComputedRef } from 'vue'
+import { computed, onScopeDispose, getCurrentScope, reactive, watch, type WritableComputedRef } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 
 export const KNOWLEDGE_STORAGE_KEY = 'autobot_chat_knowledge_by_session'
@@ -27,6 +29,24 @@ function read(): Record<string, boolean> {
 }
 
 const states = reactive<Record<string, boolean>>(read())
+let adoptionPending = false // the composer's send is about to create the session the draft choice belongs to
+
+/** Called by the composer when a send starts with no chat open. */
+export function expectDraftAdoption(): void {
+  adoptionPending = true
+}
+
+/** The send failed: no session was created for the draft choice. */
+export function cancelDraftAdoption(): void {
+  adoptionPending = false
+}
+
+/** Replace the in-memory map with what another tab stored. */
+function syncFromStorage(event: StorageEvent): void {
+  if (event.key !== null && event.key !== KNOWLEDGE_STORAGE_KEY) return
+  Object.keys(states).forEach((k) => delete states[k])
+  Object.assign(states, read())
+}
 
 function persist(): void {
   const keys = Object.keys(states)
@@ -40,6 +60,7 @@ function persist(): void {
 
 /** Forget every remembered choice (specs; also what a storage clear amounts to). */
 export function resetChatKnowledgeState(): void {
+  adoptionPending = false
   Object.keys(states).forEach((k) => delete states[k])
   try {
     localStorage.removeItem(KNOWLEDGE_STORAGE_KEY)
@@ -52,14 +73,20 @@ export function useChatKnowledge(): { enabled: WritableComputedRef<boolean> } {
   const store = useChatStore()
   const key = (): string => store.currentSessionId ?? DRAFT
 
-  // A draft choice follows the first message into the session it creates.
+  // A draft choice follows the first message into the session it creates; any other session discards it.
   watch(() => store.currentSessionId, (id, previous) => {
-    if (id && !previous && states[DRAFT] !== undefined && states[id] === undefined) {
-      states[id] = states[DRAFT]
-      delete states[DRAFT]
-      persist()
-    }
+    if (!id || previous) return
+    const adopt = adoptionPending
+    adoptionPending = false // consumed by the first session that appears, whatever it is
+    if (states[DRAFT] === undefined) return
+    if (adopt && states[id] === undefined) states[id] = states[DRAFT]
+    delete states[DRAFT]
+    persist()
   })
+  if (getCurrentScope()) {
+    window.addEventListener('storage', syncFromStorage)
+    onScopeDispose(() => window.removeEventListener('storage', syncFromStorage))
+  }
 
   const enabled = computed<boolean>({
     get: () => states[key()] ?? true, // on by default, as before
