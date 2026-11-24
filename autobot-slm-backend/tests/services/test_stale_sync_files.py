@@ -52,9 +52,9 @@ def _module(monkeypatch, name: str, **attrs) -> types.ModuleType:
     return mod
 
 
-@pytest.fixture
-def env(monkeypatch):
-    state = SimpleNamespace(
+def _state() -> SimpleNamespace:
+    """What the fakes read and record; each test sets the fields its case needs."""
+    return SimpleNamespace(
         events=[],
         posts=[],
         removed=[],
@@ -71,6 +71,10 @@ def env(monkeypatch):
         node=SimpleNamespace(node_id="n1", auth_method="key"),
     )
 
+
+def _fake_backend(state: SimpleNamespace):
+    """``call_main_backend``: the claim answers with ``claim_files``; a proposal POST echoes its counts."""
+
     async def call_main_backend(method, path, *, content=None, **_kw):
         body = json.loads(content)
         if path.endswith("/claim"):
@@ -86,6 +90,12 @@ def env(monkeypatch):
             status_code=status_code, json=lambda: {**reply, "proposed": proposed, "total_found": total}
         )
 
+    return call_main_backend
+
+
+def _fake_node(state: SimpleNamespace):
+    """The key probe and the node-side removal, both answering from *state*."""
+
     async def key_ok(_node):
         return state.key_ok
 
@@ -96,16 +106,23 @@ def env(monkeypatch):
             raise sys.modules["services.stale_sync_targets"].StaleListingError("ssh down")
         return {f.path: state.remove_result for f in files}
 
+    return key_ok, remove_files
+
+
+def _install_stubs(monkeypatch, state: SimpleNamespace) -> None:
+    """Stub the module's heavy collaborators (node, backend, git); the audit records events into *state*."""
+
     async def record(*, actor, node_id, outcome, phase, **details):
         if state.audit_down and phase != audit.PHASE_FINISHED:
             raise audit.StaleFileAuditUnavailable("down")
         state.events.append(f"audit:{phase}:{outcome}")
 
+    key_ok, remove_files = _fake_node(state)
     _module(monkeypatch, "services.git_tracker", DEFAULT_REPO_PATH="/srv/code_source")
     _module(
         monkeypatch,
         "services.main_backend_client",
-        call_main_backend=call_main_backend,
+        call_main_backend=_fake_backend(state),
         MainBackendUnavailable=_Unavailable,
     )
     _module(monkeypatch, "services.node_ssh_key_probe", key_auth_and_sudo_work=key_ok)
@@ -113,12 +130,23 @@ def env(monkeypatch):
     _module(monkeypatch, "services.stale_sync_remote", remove_files=remove_files, stat_candidates=None)
     _module(monkeypatch, "models.database", Node=object, NodeRole=object)
     monkeypatch.setattr(audit, "record_cleanup_step", record)
+
+
+def _load_module(monkeypatch) -> types.ModuleType:
     spec = importlib.util.spec_from_file_location(
         "_stale_sync_files_under_test", _BACKEND / "services/stale_sync_files.py"
     )
     mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     monkeypatch.setitem(sys.modules, "_stale_sync_files_under_test", mod)
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+@pytest.fixture
+def env(monkeypatch):
+    state = _state()
+    _install_stubs(monkeypatch, state)
+    mod = _load_module(monkeypatch)
 
     async def load_node(_db, _node_id):
         return state.node

@@ -128,6 +128,28 @@ def _repo_with_a_merge_only_version(repo: Path) -> None:
     _commit_all(repo, {"autobot-backend/a.py": b"resolved\n"}, "merge")
 
 
+def _repo_whose_merge_discarded_a_side_version(repo: Path) -> None:
+    """The side branch changes a.py to ``side``; the merge keeps ``base``, so path simplification would prune it."""
+    (repo / "autobot-backend").mkdir()
+    _git(repo, "init", "-q")
+    _commit_all(repo, {"autobot-backend/a.py": b"base\n"}, "base")
+    _git(repo, "checkout", "-qb", "side")
+    _commit_all(repo, {"autobot-backend/a.py": b"side\n"}, "side")
+    _git(repo, "checkout", "-q", "-")
+    _git(repo, "merge", "-q", "--no-ff", "--no-commit", "side")
+    _commit_all(repo, {"autobot-backend/a.py": b"base\n"}, "merge keeps base")
+
+
+async def test_a_side_branch_version_the_merge_discarded_is_still_tracked(tmp_path, monkeypatch) -> None:
+    async def full(_repo):
+        return t.ShallowCheck.FULL
+
+    monkeypatch.setattr(t, "is_shallow_repository", full)
+    _repo_whose_merge_discarded_a_side_version(tmp_path)
+    blobs = await t.historical_blobs(str(tmp_path), "autobot-backend")
+    assert blobs["a.py"] == {_blob(b"base\n"), _blob(b"side\n")}  # git tracked both exact byte sequences
+
+
 async def test_a_version_only_a_merge_resolution_introduced_is_tracked(tmp_path, monkeypatch) -> None:
     async def full(_repo):
         return t.ShallowCheck.FULL

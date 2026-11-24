@@ -288,8 +288,16 @@ class TestSampleNetBytesPerSec:
         assert abs(result - 32_000_000.0) < 1.0
 
 
-def test_the_psutil_stub_is_removed_again_after_the_load() -> None:
+def test_the_psutil_stub_is_removed_again_after_the_load(monkeypatch) -> None:
     """A fake ``psutil`` left in ``sys.modules`` would reach every later test in the process."""
-    before = sys.modules.get("psutil")
+    monkeypatch.delitem(sys.modules, "psutil", raising=False)  # the absent case: the loader creates the fake
     loaded = load_business_intelligence_dashboard(stub_psutil=True)
-    assert sys.modules.get("psutil") is before and hasattr(loaded.psutil, "net_io_counters")
+    assert "psutil" not in sys.modules
+    assert hasattr(loaded.psutil, "net_io_counters")
+
+
+def test_an_already_loaded_psutil_stays_after_the_load(monkeypatch) -> None:
+    existing = MagicMock(name="psutil")
+    monkeypatch.setitem(sys.modules, "psutil", existing)
+    load_business_intelligence_dashboard(stub_psutil=True)
+    assert sys.modules["psutil"] is existing
