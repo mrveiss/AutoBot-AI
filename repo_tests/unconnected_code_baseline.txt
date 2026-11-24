@@ -1001,9 +1001,6 @@ route:autobot-backend/api/auth.py:GET /all-permissions	#20971
 route:autobot-backend/api/auth.py:GET /permissions/{operation}	#20971
 route:autobot-backend/api/auth.py:GET /roles	#20971
 route:autobot-backend/api/auth.py:GET /roles/{role}/permissions	#20971
-route:autobot-backend/api/auth.py:POST /revoke-rs256-token	#20971
-route:autobot-backend/api/auth.py:POST /signup	#20971
-route:autobot-backend/api/auth.py:POST /validate	#20971
 route:autobot-backend/api/cache_management.py:GET /advanced-stats	#20974
 route:autobot-backend/api/cache_management.py:POST /clear-all	#20974
 route:autobot-backend/api/cache_management.py:POST /warm	#20974
@@ -1052,9 +1049,6 @@ route:autobot-backend/api/embeddings.py:POST /switch	#20975
 route:autobot-backend/api/embeddings.py:PUT /settings	#20975
 route:autobot-backend/api/enterprise_features.py:GET /features	#20971
 route:autobot-backend/api/entity_extraction.py:POST /extract-batch	#20975
-route:autobot-backend/api/envelope_secrets.py:DELETE /system/{secret_id}	#20971
-route:autobot-backend/api/envelope_secrets.py:GET /system/{secret_id}	#20971
-route:autobot-backend/api/envelope_secrets.py:PUT /system/{secret_id}	#20971
 route:autobot-backend/api/error_resilience.py:GET /circuit-breakers	#20974
 route:autobot-backend/api/error_resilience.py:GET /error-budgets	#20974
 route:autobot-backend/api/gpu_monitoring.py:GET /capabilities	#20974

@@ -407,6 +407,40 @@ def test_a_caller_that_does_not_count_leaves_the_case_unconnected(
     assert any(k.startswith(kind) for k in _fired(tmp_path, {**files, **decoy})), label
 
 
+_SYSTEM_ROUTES = (
+    'from fastapi import APIRouter\nrouter = APIRouter(prefix="/planted")\n\n\n'
+    '@router.get("/system/{i}")\nasync def a(i):\n    return {}\n\n\n'
+    '@router.get("/other/{i}")\nasync def b(i):\n    return {}\n'
+)
+
+
+def test_a_declared_external_prefix_counts_and_an_undeclared_sibling_does_not_22212(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    files = {"autobot-backend/api/planted_route.py": _SYSTEM_ROUTES, **_WIRED}
+    monkeypatch.setitem(routes.EXTERNAL_CALLER_PREFIXES, "/api/planted/system", "a planted external caller")
+    assert _fired(tmp_path, files) == {"route:autobot-backend/api/planted_route.py:GET /other/{i}"}
+
+
+@pytest.mark.parametrize(
+    "served",
+    ["/api/auth/validate", "/api/auth/revoke-rs256-token", "/api/auth/signup", "/api/v2/secrets/system/{id}"],
+)
+def test_the_declared_identity_routes_are_external_and_their_siblings_are_not_22212(served: str) -> None:
+    declared = tuple(routes.EXTERNAL_CALLER_PREFIXES)
+    assert served.startswith(declared)
+    for sibling in (
+        "/api/v2/secrets/{id}",
+        "/api/v2/secrets/{id}/access",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/refresh",
+        "/api/auth/check",
+        "/api/auth/jwks",
+    ):
+        assert not sibling.startswith(declared), sibling
+
+
 def test_the_module_detector_finds_a_real_module_once_its_importers_are_removed() -> None:
     """Known positive on real files: `autobot_shared/paths.py` is connected; alone, it is not."""
     root, name = repo_root(), "autobot_shared.paths"

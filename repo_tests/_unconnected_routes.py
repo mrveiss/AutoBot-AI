@@ -89,6 +89,18 @@ EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
     # #20910: the OAuth2 redirect URI (api/sso_auth.py GET /callback). The identity provider sends the user's browser
     # here after sign-in; nothing in this repository requests it.
     "/api/auth/sso/callback": "the identity provider's browser redirect after sign-in",
+    # #22212: the SLM backend's vault client (user_management/services/vault_client.py) calls the system vault with
+    # f"{_SYSTEM_VAULT_PATH}/{secret_id}" -- GET, PUT, DELETE and the rewrap -- so the detector sees no `/api/`
+    # literal. Making it follow module constants would also wire unrelated `/{secret_id}/...` routes by shape, so
+    # it is declared here. The prefix also covers `/system` (list, create) and `/system/{id}/rewrap`: the same
+    # client calls both. It matches no route outside the system vault.
+    "/api/v2/secrets/system": "the SLM backend's vault client (user_management/services/vault_client.py), over HTTP",
+    # #22212: token introspection; a service presents X-Internal-API-Key (api/auth.py POST /validate).
+    "/api/auth/validate": "internal services introspecting a token with X-Internal-API-Key",
+    # #22212: the SLM pushes a revoked RS256 token's id to the denylist its JWKS verifiers read (api/auth.py).
+    "/api/auth/revoke-rs256-token": "the SLM's JWKS denylist, over HTTP",
+    # #22212: the documented self-registration API (docs/developer/AUTHENTICATION_RBAC.md); no screen uses it.
+    "/api/auth/signup": "self-registering clients of the documented signup API, over HTTP",
 }
 
 
