@@ -45,7 +45,7 @@ def test_absent_package_fails_and_names_it(tmp_path):
     assert result.returncode == 1
     assert "reka-ui: installed (absent)" in result.stdout
     # The fix command comes before the package list so a head-truncated report still carries it.
-    assert result.stdout.index("npm --prefix") < result.stdout.index("reka-ui")
+    assert result.stdout.index("npm --prefix") < result.stdout.index("\n  reka-ui")
 
 
 def test_older_version_than_lockfile_fails(tmp_path):
@@ -66,8 +66,9 @@ def test_transitive_only_bump_fails(tmp_path):
     (nested / "package.json").write_text(json.dumps({"version": "2.9.0"}), encoding="utf-8")
     result = _run(ws)
     assert result.returncode == 1
-    assert "a/node_modules/transitive: installed 2.9.0, lockfile 3.0.0" in result.stdout
-    assert result.stdout.index("npm --prefix") < result.stdout.index("transitive")
+    assert "\n  a/node_modules/transitive: installed 2.9.0, lockfile 3.0.0" in result.stdout
+    # Anchored on the offender LINE: the bare name also occurs inside the tmp path.
+    assert result.stdout.index("npm --prefix") < result.stdout.index("\n  a/node_modules/transitive")
 
 
 def test_absent_optional_package_is_not_drift(tmp_path):

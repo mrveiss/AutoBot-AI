@@ -709,7 +709,9 @@ CQEOF
   #
   # A stale tree is a `skip_check`, not a `note`: the gate COULD NOT RUN, and
   # the distinction those two draw is the whole reason SKIPPED is counted.
-  frontend_deps_current() { FRONTEND_STALE=$(scripts/check-frontend-deps-current.sh autobot-frontend 2>&1); }
+  frontend_deps_current() {
+    FRONTEND_STALE=$(scripts/check-frontend-deps-current.sh autobot-frontend 2>&1)
+  }
 
   # verify-generated-types needs NO node_modules, which is worth stating because
   # the issue and this script both assumed it did. `npm run verify:types` is
