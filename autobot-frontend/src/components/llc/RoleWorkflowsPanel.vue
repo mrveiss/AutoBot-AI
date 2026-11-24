@@ -16,6 +16,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseButton, BaseSelectMenu } from '@autobot/ui'
+import Icon from '@/components/ui/Icon.vue'
 import { useApiClient } from '@/plugins/api'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
 import { useCompanyMembers } from '@/composables/llc/useCompanyMembers'
@@ -123,17 +124,17 @@ function onCreated(_id: string, attachedNow: boolean): void {
         class="inline-flex items-center gap-1 rounded-md bg-autobot-bg-secondary px-2 py-1 font-mono text-sm text-autobot-text-primary"
       >
         <span>{{ id }}</span>
-        <button
+        <BaseButton
           v-if="viewerCanManage"
-          type="button"
-          class="cursor-pointer border-0 bg-transparent p-0 leading-none text-autobot-text-secondary disabled:cursor-not-allowed disabled:opacity-50"
+          variant="ghost"
+          size="xs"
           :disabled="working"
           :aria-label="`${t('llcRoles.detach')}: ${id}`"
           :data-testid="`role-workflow-detach-${id}`"
           @click="detach(id)"
         >
-          ×
-        </button>
+          <Icon name="times" />
+        </BaseButton>
       </li>
     </ul>
 
