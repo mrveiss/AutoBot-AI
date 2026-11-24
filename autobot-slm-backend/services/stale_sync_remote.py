@@ -22,37 +22,46 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_stale_file_actions import SSH_TIMEOUT_SECONDS
 from models.database import Node
 from services.backup_ssh import run_command
-from services.node_ssh_key_probe import key_only_ssh_command
+from services.node_ssh_key_probe import SlmKeyUnusable, key_only_ssh_command
 from services.ssh_utils import InvalidSshDestination
 from services.stale_sync_targets import PresentFile, StaleFile, StaleListingError
 
 logger = get_logger(__name__)
 
-#: One line per path found: ``size<TAB>mtime<TAB>blob<TAB>relative path``. Read-only.
-LIST_SCRIPT = r"""
+#: Shared by both scripts: the approved root must already be canonical -- not a symlink, no symlinked parent --
+#: so the directory the scripts work in is exactly the one ``candidates`` vetted; anything else exits 3 (an error).
+#: ``pipefail`` makes a failed ``cat`` fail the hash, so a partial read is never published as a digest.
+_ROOT_PREAMBLE = r"""
+set -o pipefail
 root=$(realpath -e -- "$1") || exit 3
+[ "$root" = "$1" ] || exit 3
+"""
+
+#: One line per path found: ``size<TAB>mtime<TAB>blob<TAB>relative path``. Read-only; an unreadable file exits 4.
+LIST_SCRIPT = _ROOT_PREAMBLE + r"""
 while IFS= read -r rel; do
   f="$root/$rel"
   [ -f "$f" ] && [ ! -L "$f" ] || continue
   [ "$(realpath -m -- "$f")" = "$f" ] || continue
-  size=$(stat -c %s -- "$f") || continue
-  mtime=$(stat -c %Y -- "$f") || continue
-  blob=$({ printf 'blob %s\0' "$size"; cat -- "$f"; } | sha1sum | cut -d' ' -f1)
+  size=$(stat -c %s -- "$f") || exit 4
+  mtime=$(stat -c %Y -- "$f") || exit 4
+  blob=$({ printf 'blob %s\0' "$size"; cat -- "$f"; } | sha1sum | cut -d' ' -f1) || exit 4
   printf '%s\t%s\t%s\t%s\n' "$size" "$mtime" "$blob" "$rel"
 done
 """
 
 #: Reads ``blob<TAB>relative path`` lines; one line per path: ``removed|refused|changed|absent|failed<TAB>path``.
-REMOVE_SCRIPT = r"""
-root=$(realpath -e -- "$1") || exit 3
+REMOVE_SCRIPT = _ROOT_PREAMBLE + r"""
 while IFS=$'\t' read -r want rel; do
   f="$root/$rel"
   if [ ! -e "$f" ] && [ ! -L "$f" ]; then printf 'absent\t%s\n' "$rel"; continue; fi
   if [ -L "$f" ] || [ ! -f "$f" ] || [ "$(realpath -m -- "$f")" != "$f" ]; then
     printf 'refused\t%s\n' "$rel"; continue
   fi
-  size=$(stat -c %s -- "$f")
-  have=$({ printf 'blob %s\0' "$size"; cat -- "$f"; } | sha1sum | cut -d' ' -f1)
+  size=$(stat -c %s -- "$f") || { printf 'failed\t%s\n' "$rel"; continue; }
+  have=$({ printf 'blob %s\0' "$size"; cat -- "$f"; } | sha1sum | cut -d' ' -f1) || {
+    printf 'failed\t%s\n' "$rel"; continue
+  }
   if [ "$have" != "$want" ]; then printf 'changed\t%s\n' "$rel"; continue; fi
   # Re-check type and containment immediately before rm. The window between this check and rm remains (a
   # process on the node that swaps the file or a parent in microseconds); only a root-owned tree closes it.
@@ -68,11 +77,13 @@ _REMOVED = re.compile(r"^(removed|refused|changed|absent|failed)\t(.+)$")
 
 
 def _command(node: Node, script: str, root: str) -> list[str]:
-    """``ssh ... sudo -n /bin/bash -c <script> <name> <root>``; raises StaleListingError for a bad destination."""
+    """``ssh ... sudo -n /bin/bash -c <script> <name> <root>``; StaleListingError for a bad destination or key."""
     try:
         base = key_only_ssh_command(node)
     except InvalidSshDestination as exc:
         raise StaleListingError("the node's SSH destination is invalid") from exc
+    except SlmKeyUnusable as exc:
+        raise StaleListingError("the SLM's SSH key is missing or unreadable") from exc
     return [*base, f"sudo -n /bin/bash -c {shlex.quote(script)} stale-sync {shlex.quote(root)}"]
 
 

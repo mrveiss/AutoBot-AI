@@ -89,6 +89,43 @@ async def test_a_failing_slm_call_is_audited_failed_and_raised() -> None:
     assert audit.await_args.kwargs["result"] == "failed"
 
 
+async def test_a_failed_comment_commit_cannot_lose_the_completion_entry() -> None:
+    session = FakeAsyncSession()
+    session.commit = AsyncMock(side_effect=RuntimeError("db down"))
+    with (
+        patch.object(action, "_remove_in_slm", AsyncMock(return_value=_REPORT)) as remove,
+        patch.object(action, "audit_log", AsyncMock(return_value=True)) as audit,
+        pytest.raises(RuntimeError),
+    ):
+        await action.execute_stale_sync_files_cleanup(_approval(), session)
+    remove.assert_awaited_once()  # the comment's failure never asks the SLM again
+    completion = audit.await_args_list[-1].kwargs
+    assert completion["details"]["phase"] == "completion" and completion["details"]["removed"] == 1
+
+
+async def test_an_unwritten_completion_entry_is_said_on_the_approval_and_raised() -> None:
+    session = FakeAsyncSession()
+    with (
+        patch.object(action, "_remove_in_slm", AsyncMock(return_value=_REPORT)) as remove,
+        patch.object(action, "audit_log", AsyncMock(side_effect=[True, False])),
+        pytest.raises(ValueError, match="completion audit entry"),
+    ):
+        await action.execute_stale_sync_files_cleanup(_approval(), session)
+    remove.assert_awaited_once()
+    assert "1 removed" in session.added[-2].body and "could not be written" in session.added[-1].body
+
+
+@pytest.mark.parametrize(("result", "outcome"), [("failed", "failed"), ("changed", "success")])
+async def test_a_failed_unlink_makes_the_completion_entry_failed(result: str, outcome: str) -> None:
+    report = {"results": [{"path": "a.py", "result": "removed"}, {"path": "b.py", "result": result}]}
+    with (
+        patch.object(action, "_remove_in_slm", AsyncMock(return_value=report)),
+        patch.object(action, "audit_log", AsyncMock(return_value=True)) as audit,
+    ):
+        await action.execute_stale_sync_files_cleanup(_approval(), FakeAsyncSession())
+    assert audit.await_args.kwargs["result"] == outcome and audit.await_args.kwargs["details"]["removed"] == 1
+
+
 async def _decide(method: str) -> AsyncMock:
     """Approve or reject through the real gate service; returns the SLM removal mock."""
     action.register_stale_sync_files_action()

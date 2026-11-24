@@ -68,11 +68,16 @@ class StaleFileProposal(BaseModel):
 
 
 class StaleFileProposalResponse(BaseModel):
-    """The location's open approval, and whether this call created it."""
+    """The location's open approval, whether this call created it, and the counts of that STORED approval.
+
+    A reused proposal keeps the file set a reviewer will open, so its counts can differ from this request's.
+    """
 
     approval_id: str
     status: str
     created: bool
+    proposed: int
+    total_found: int
 
 
 class StaleFileClaim(BaseModel):

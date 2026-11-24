@@ -96,6 +96,19 @@ async def _create_approval(
     )
 
 
+def _response(approval: Approval, created: bool) -> StaleFileProposalResponse:
+    """The stored approval's own counts: what the reviewer opens, not what this request asked for."""
+    context = approval.context or {}
+    files = context.get("files") or []
+    return StaleFileProposalResponse(
+        approval_id=str(approval.id),
+        status=approval.status,
+        created=created,
+        proposed=len(files),
+        total_found=int(context.get("total_found", len(files))),
+    )
+
+
 @router.post("/stale-file-proposals", response_model=StaleFileProposalResponse, status_code=status.HTTP_201_CREATED)
 @service_opt_in(SLM_CALLER)
 async def propose_stale_file_cleanup(
@@ -122,7 +135,7 @@ async def propose_stale_file_cleanup(
         current_user=current_user,
         resource=f"node:{body.node_id}",
     )
-    return StaleFileProposalResponse(approval_id=str(approval.id), status=approval.status, created=approval.id in made)
+    return _response(approval, created=approval.id in made)
 
 
 async def _record_claim(approval: Approval) -> bool:

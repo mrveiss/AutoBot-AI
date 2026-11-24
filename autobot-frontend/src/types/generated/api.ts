@@ -101828,7 +101828,9 @@ export interface components {
         };
         /**
          * StaleFileProposalResponse
-         * @description The location's open approval, and whether this call created it.
+         * @description The location's open approval, whether this call created it, and the counts of that STORED approval.
+         *
+         *     A reused proposal keeps the file set a reviewer will open, so its counts can differ from this request's.
          */
         StaleFileProposalResponse: {
             /** Approval Id */
@@ -101837,6 +101839,10 @@ export interface components {
             status: string;
             /** Created */
             created: boolean;
+            /** Proposed */
+            proposed: number;
+            /** Total Found */
+            total_found: number;
         } & {
             [key: string]: unknown;
         };

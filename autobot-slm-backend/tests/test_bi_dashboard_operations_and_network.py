@@ -15,6 +15,7 @@ Covers:
 """
 
 import logging
+import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -285,3 +286,10 @@ class TestSampleNetBytesPerSec:
             result = _sample_net_bytes_per_sec()
 
         assert abs(result - 32_000_000.0) < 1.0
+
+
+def test_the_psutil_stub_is_removed_again_after_the_load() -> None:
+    """A fake ``psutil`` left in ``sys.modules`` would reach every later test in the process."""
+    before = sys.modules.get("psutil")
+    loaded = load_business_intelligence_dashboard(stub_psutil=True)
+    assert sys.modules.get("psutil") is before and hasattr(loaded.psutil, "net_io_counters")

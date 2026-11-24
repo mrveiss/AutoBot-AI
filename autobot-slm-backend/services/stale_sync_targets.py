@@ -124,12 +124,16 @@ def parse_raw_log(output: str, pathspec: str) -> dict[str, set[str]]:
 async def historical_blobs(repo_root: str, pathspec: str) -> dict[str, set[str]]:
     """Every blob git ever had at each path under *pathspec*; raises :class:`StaleListingError` when it cannot know.
 
-    One git call. A shallow or undeterminable clone cannot answer: an empty history there would read as "nothing
-    is stale", so it is an error instead (the same refusal as ``compute_bootstrap_plan``).
+    One git call. ``--diff-merges=separate`` diffs a merge against each parent, so a version only a merge
+    resolution introduced is tracked too (plain ``git log`` shows no diff for a merge). A shallow or
+    undeterminable clone cannot answer: an empty history there would read as "nothing is stale", so it is an
+    error instead (the same refusal as ``compute_bootstrap_plan``).
     """
     if await is_shallow_repository(repo_root) is not ShallowCheck.FULL:
         raise StaleListingError("the code_source clone is shallow or its depth is unknown; unshallow it and retry")
-    output, rc = await run_git_capture(repo_root, "log", "-M", "--raw", "--no-abbrev", "--format=", "--", pathspec)
+    output, rc = await run_git_capture(
+        repo_root, "log", "-M", "--raw", "--no-abbrev", "--diff-merges=separate", "--format=", "--", pathspec
+    )
     if rc != 0:
         raise StaleListingError("git log of the source history failed")
     return parse_raw_log(output, pathspec)

@@ -25,6 +25,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_credential_actions import APPROVAL_QUERY, slm_direct_url
 from autobot_shared.slm_stale_file_actions import (
     REMOVAL_PATH_TEMPLATE,
+    RESULT_FAILED,
     RESULT_REMOVED,
     SSH_TIMEOUT_SECONDS,
     STALE_SYNC_FILES_CLEANUP,
@@ -96,11 +97,27 @@ async def execute_stale_sync_files_cleanup(approval: "Approval", session: "Async
     except Exception as exc:
         await _audit(approval, "failed", phase="completion", error=type(exc).__name__)
         raise
-    counts = _summary(report)
-    body = "Stale code-sync files: " + (", ".join(f"{n} {name}" for name, n in sorted(counts.items())) or "none listed")
+    await _finish(approval, session, _summary(report))
+
+
+async def _comment(approval: "Approval", session: "AsyncSession", body: str) -> None:
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
     await session.commit()
-    await _audit(approval, "success", phase="completion", removed=counts[RESULT_REMOVED], results=dict(counts))
+
+
+async def _finish(approval: "Approval", session: "AsyncSession", counts: Counter) -> None:
+    """The completion entry first, on its own: a failed comment commit cannot lose the known removal results.
+
+    A completion entry that could not be written is said on the approval and raised -- never retried by asking
+    the SLM again (the claim is spent, so the removal is never repeated).
+    """
+    outcome = "failed" if counts[RESULT_FAILED] else "success"
+    written = await _audit(approval, outcome, phase="completion", removed=counts[RESULT_REMOVED], results=dict(counts))
+    listed = ", ".join(f"{n} {name}" for name, n in sorted(counts.items())) or "none listed"
+    await _comment(approval, session, f"Stale code-sync files: {listed}")
+    if not written:
+        await _comment(approval, session, "The removal ran but its completion audit entry could not be written.")
+        raise ValueError("the completion audit entry could not be written, though the SLM finished the removal")
 
 
 def register_stale_sync_files_action() -> None:

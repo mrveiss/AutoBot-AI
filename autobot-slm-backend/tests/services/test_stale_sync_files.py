@@ -59,6 +59,9 @@ def env(monkeypatch):
         posts=[],
         removed=[],
         backend_status=201,
+        backend_statuses=[],
+        stored_counts=None,
+        remove_result="removed",
         claim_status=200,
         claim_files=[],
         audit_down=False,
@@ -76,8 +79,11 @@ def env(monkeypatch):
             return SimpleNamespace(status_code=state.claim_status, json=lambda: data)
         state.events.append("post")
         state.posts.append(body)
+        proposed, total = state.stored_counts or (len(body["files"]), body["total_found"])
+        reply = {"approval_id": f"ap{len(state.posts)}", "status": "pending", "created": not state.stored_counts}
+        status_code = state.backend_statuses.pop(0) if state.backend_statuses else state.backend_status
         return SimpleNamespace(
-            status_code=state.backend_status, json=lambda: {"approval_id": "ap1", "status": "pending", "created": True}
+            status_code=status_code, json=lambda: {**reply, "proposed": proposed, "total_found": total}
         )
 
     async def key_ok(_node):
@@ -88,7 +94,7 @@ def env(monkeypatch):
         state.removed.append((root, [f.path for f in files]))
         if state.ssh_down:
             raise sys.modules["services.stale_sync_targets"].StaleListingError("ssh down")
-        return {f.path: "removed" for f in files}
+        return {f.path: state.remove_result for f in files}
 
     async def record(*, actor, node_id, outcome, phase, **details):
         if state.audit_down and phase != audit.PHASE_FINISHED:
@@ -118,6 +124,7 @@ def env(monkeypatch):
         return state.node
 
     async def list_stale(_db, node_id):
+        state.events.append("list")
         return mod.StaleListing(node_id, commit="c0ffee1", stale=state.fresh)
 
     monkeypatch.setattr(mod, "_load_node", load_node)
@@ -131,7 +138,7 @@ def env(monkeypatch):
 
 async def test_nothing_stale_proposes_nothing_and_writes_no_audit_row(env) -> None:
     assert await env.mod.propose_cleanup(None, "n1", "alice") == []
-    assert env.events == []
+    assert env.events == ["list"]
 
 
 async def test_one_proposal_per_old_location_with_a_capped_count_and_whole_paths(env) -> None:
@@ -145,7 +152,24 @@ async def test_one_proposal_per_old_location_with_a_capped_count_and_whole_paths
         and by_target[_ROOT]["total_found"] == MAX_FILES_PER_PROPOSAL + 3
     )
     assert by_target["/srv/agent"]["files"][0]["path"] == long_path  # the cap counts items, never shortens a path
-    assert env.events[0] == "audit:proposed:success"
+    assert env.events[:2] == ["list", "audit:proposed:success"]
+    assert [r["proposed"] for r in results] == [MAX_FILES_PER_PROPOSAL, 1]
+
+
+async def test_a_reused_proposal_reports_the_stored_approvals_counts_not_this_requests(env) -> None:
+    env.fresh = [_file("a.py"), _file("b.py")]
+    env.stored_counts = (1, 1)  # the pending approval a reviewer opens lists one file
+    [result] = await env.mod.propose_cleanup(None, "n1", "alice")
+    assert len(env.posts[0]["files"]) == 2 and result["proposed"] == 1 and result["total_found"] == 1
+    assert result["created"] is False
+
+
+async def test_a_later_location_failing_names_the_proposals_already_filed(env) -> None:
+    env.fresh = [_file("a.py"), _file("b.py", old="/srv/agent")]
+    env.backend_statuses = [201, 500]
+    with pytest.raises(env.mod.StaleRefused) as refused:
+        await env.mod.propose_cleanup(None, "n1", "alice")
+    assert refused.value.status_code == 502 and "approval ap1" in refused.value.reason
 
 
 async def test_an_unavailable_audit_trail_proposes_nothing(env) -> None:
@@ -182,7 +206,7 @@ async def test_the_order_is_fresh_listing_then_intent_row_then_claim_then_remova
     env.fresh = [_file("a.py")]
     env.claim_files = [_entry("a.py")]
     report = await env.mod.remove_approved(None, "n1", _APPROVAL)
-    assert env.events == ["audit:intent:success", "claim", "remove", "audit:finished:success"]
+    assert env.events == ["list", "audit:intent:success", "claim", "remove", "audit:finished:success"]
     assert report == [{"old_target": _ROOT, "path": "a.py", "result": "removed"}]
 
 
@@ -215,6 +239,16 @@ async def test_only_approved_files_that_are_still_stale_are_removed(env) -> None
     assert env.removed == [(_ROOT, ["approved.py"])]  # keep.py was never approved; the others are no longer stale
     results = {row["path"]: row["result"] for row in report}
     assert results == {"approved.py": "removed", "gone.py": "no_longer_stale", "moved.py": "no_longer_stale"}
+
+
+async def test_a_failed_unlink_is_a_failed_completion_row_and_a_changed_file_is_not(env) -> None:
+    env.fresh, env.claim_files, env.remove_result = [_file("a.py")], [_entry("a.py")], "failed"
+    report = await env.mod.remove_approved(None, "n1", _APPROVAL)
+    assert env.events[-1] == "audit:finished:failed" and report[0]["result"] == "failed"
+    env.events.clear()
+    env.remove_result = "changed"
+    await env.mod.remove_approved(None, "n1", _APPROVAL)
+    assert env.events[-1] == "audit:finished:success"
 
 
 async def test_an_ssh_failure_after_the_spend_is_reported_failed_and_audited(env) -> None:
@@ -255,10 +289,10 @@ async def test_after_an_ssh_failure_the_outcome_is_recorded_unknown_with_the_rel
     monkeypatch.setattr(env.mod, "_finish", finish)
     with pytest.raises(env.mod.StaleRefused) as refused:
         await env.mod.remove_approved(None, "n1", _APPROVAL)
-    assert refused.value.status_code == 502 and "1 file(s) may have been removed" in refused.value.reason
+    assert refused.value.status_code == 502 and "1 file(s) still stale" in refused.value.reason
     outcome, details = seen[-1]
-    assert outcome == "failed" and details["removal"] == "unknown"
-    assert details["may_have_removed"] == 1 and details["remaining"] == ["b.py"]
+    assert outcome == "failed" and details["removal"] == "unknown"  # a.py was removed OR changed: unknown which
+    assert details["not_stale_now"] == 1 and details["still_stale"] == ["b.py"]
 
 
 async def test_contrast_when_the_relisting_fails_too_the_remainder_is_unknown_not_guessed(env, monkeypatch) -> None:
@@ -279,4 +313,4 @@ async def test_contrast_when_the_relisting_fails_too_the_remainder_is_unknown_no
     monkeypatch.setattr(env.mod, "_finish", finish)
     with pytest.raises(env.mod.StaleRefused):
         await env.mod.remove_approved(None, "n1", _APPROVAL)
-    assert seen[-1]["remaining"] is None and seen[-1]["may_have_removed"] == 1
+    assert seen[-1]["still_stale"] is None and seen[-1]["not_stale_now"] is None

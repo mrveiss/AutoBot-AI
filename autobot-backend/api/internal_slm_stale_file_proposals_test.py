@@ -31,7 +31,6 @@ from testkit.fake_async_session import FakeAsyncSession, FakeResult
 ACTION = STALE_SYNC_FILES_CLEANUP.name
 _KEY = "k" * 40  # pragma: allowlist secret
 _ID = uuid.UUID("00000000-0000-4000-8000-000000000022")
-_NEW_ID = uuid.UUID("00000000-0000-4000-8000-000000000023")
 _BLOB = "a" * 40
 _FILE = {"path": "main.py", "size_bytes": 12, "modified_at": "2026-01-02T03:04:05Z", "blob": _BLOB}
 _TARGET = "/opt/node-root"
@@ -58,7 +57,11 @@ def _client(session: FakeAsyncSession | None = None) -> TestClient:
 def _service(existing: list):
     service = MagicMock()
     service.list_approvals = AsyncMock(return_value=existing)
-    service.create_approval = AsyncMock(return_value=SimpleNamespace(id=_NEW_ID, status="pending"))
+    service.create_approval = AsyncMock(
+        side_effect=lambda **kwargs: SimpleNamespace(
+            id=kwargs["approval_id"], status="pending", context=kwargs["context"]
+        )
+    )
     return service
 
 
@@ -83,6 +86,7 @@ def test_a_proposal_lists_every_file_and_freezes_them_in_the_context() -> None:
     service = _service([])
     response, _ = _propose(service)
     assert response.status_code == 201 and response.json()["created"] is True
+    assert response.json()["proposed"] == 1 and response.json()["total_found"] == 1
     kwargs = service.create_approval.await_args.kwargs
     assert kwargs["approval_type"] == "destructive_action" and kwargs["requested_by_agent"] == "slm-code-sync:node-a"
     assert kwargs["context"]["action"] == ACTION and kwargs["context"][LOCATION_KEY] == f"node-a:{_TARGET}"
@@ -91,9 +95,18 @@ def test_a_proposal_lists_every_file_and_freezes_them_in_the_context() -> None:
 
 
 def test_a_location_with_a_pending_proposal_gets_that_one_not_a_second() -> None:
-    service = _service([SimpleNamespace(id=_ID, status="pending")])
-    response, _ = _propose(service)
-    assert response.json() == {"approval_id": str(_ID), "status": "pending", "created": False}
+    stored = {"files": [_FILE], "total_found": 1}
+    service = _service([SimpleNamespace(id=_ID, status="pending", context=stored)])
+    second = {**_FILE, "path": "other.py"}
+    response, _ = _propose(service, _body(files=[_FILE, second], total_found=2))
+    # the counts are the stored approval's -- the one file a reviewer will open -- never this request's two
+    assert response.json() == {
+        "approval_id": str(_ID),
+        "status": "pending",
+        "created": False,
+        "proposed": 1,
+        "total_found": 1,
+    }
     service.create_approval.assert_not_awaited()
 
 

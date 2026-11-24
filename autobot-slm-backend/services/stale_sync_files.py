@@ -26,6 +26,7 @@ from autobot_shared.slm_stale_file_actions import (
     CLAIM_PATH_TEMPLATE,
     MAX_FILES_PER_PROPOSAL,
     PROPOSAL_PATH,
+    RESULT_FAILED,
     STALE_SYNC_FILES_CLEANUP,
     api_relative,
 )
@@ -33,7 +34,7 @@ from models.database import Node, NodeRole
 from services import stale_sync_audit as audit
 from services.git_subprocess import run_git_capture
 from services.git_tracker import DEFAULT_REPO_PATH
-from services.main_backend_client import call_main_backend
+from services.main_backend_client import MainBackendUnavailable, call_main_backend
 from services.node_ssh_key_probe import key_auth_and_sudo_work
 from services.role_registry import DEFAULT_ROLES
 from services.stale_sync_remote import remove_files, stat_candidates
@@ -104,9 +105,8 @@ async def _scan_location(
     present = await stat_candidates(node, old_target, sorted({rel for rels in wanted.values() for rel in rels}))
     stale: dict[str, StaleFile] = {}
     for source in sources:
-        found, other = classify(
-            source, [p for p in present if p.rel in set(wanted[source.role])], histories[source.role]
-        )
+        asked = set(wanted[source.role])  # built once per role, not once per present file
+        found, other = classify(source, [p for p in present if p.rel in asked], histories[source.role])
         stale.update({item.path: item for item in found if item.path not in stale})
         kept += other
     return sorted(stale.values(), key=lambda item: item.path), [k for k in kept if k.path not in stale]
@@ -164,7 +164,24 @@ async def _post_proposal(node_id: str, commit: str, old_target: str, found: list
         raise StaleRefused(
             409 if response.status_code == 409 else 502, f"the backend answered HTTP {response.status_code}"
         )
-    return {**response.json(), "old_target": old_target, "proposed": len(body["files"]), "total_found": len(found)}
+    # The counts are the backend's: a reused pending proposal keeps the file set its reviewer will open.
+    return {**response.json(), "old_target": old_target}
+
+
+async def _post_all(node_id: str, commit: str, groups: dict[str, list[StaleFile]]) -> list[dict[str, Any]]:
+    """Post every location's proposal; a failure after some were filed names those still-pending approvals."""
+    done: list[dict[str, Any]] = []
+    for target, found in groups.items():
+        try:
+            done.append(await _post_proposal(node_id, commit, target, found))
+        except (StaleRefused, MainBackendUnavailable) as exc:
+            if not done:
+                raise
+            filed = ", ".join(f"{item['old_target']} -> approval {item['approval_id']}" for item in done)
+            status_code = exc.status_code
+            reason = exc.reason if isinstance(exc, StaleRefused) else str(exc.detail)
+            raise StaleRefused(status_code, f"{reason}; already proposed and pending: {filed}") from exc
+    return done
 
 
 async def propose_cleanup(db: AsyncSession, node_id: str, actor: str | None) -> list[dict[str, Any]]:
@@ -177,7 +194,7 @@ async def propose_cleanup(db: AsyncSession, node_id: str, actor: str | None) -> 
     if not groups:
         return []
     await _record(actor, node_id, audit.PHASE_PROPOSED, locations=sorted(groups), stale=len(listing.stale))
-    return [await _post_proposal(node_id, listing.commit or "", target, found) for target, found in groups.items()]
+    return await _post_all(node_id, listing.commit or "", groups)
 
 
 async def _record(actor: str | None, node_id: str, phase: str, outcome: str = audit.SUCCESS, **details: Any) -> None:
@@ -248,19 +265,27 @@ async def _claim_still_stale(
 async def _after_ssh_failure(
     db: AsyncSession, node_id: str, approved: Approved, keep: list[StaleFile]
 ) -> dict[str, Any]:
-    """What is known after ssh died mid-removal: some of *keep* may already be gone, so look again.
+    """What is known after ssh died mid-removal: which of *keep* a fresh listing still offers as stale.
 
-    The re-listing is itself best effort; when it fails the remainder is unknown, which is said, not guessed.
+    A file missing from that listing was removed OR changed (or restored with other bytes); the listing cannot
+    tell which, so the removal stays ``unknown`` and the rest is ``not_stale_now``, never "removed". When the
+    re-listing fails too, both are unknown (``None``), which is said, not guessed.
     """
     try:
         again = await list_stale_files(db, node_id)
     except (StaleRefused, StaleListingError):
         again = StaleListing(node_id, error="the node could not be listed again")
     if again.error:
-        return {"removal": "unknown", "may_have_removed": len(keep), "remaining": None}
-    still = {item.path for item in again.stale if item.old_target == approved.old_target}
-    remaining = sorted(item.path for item in keep if item.path in still)
-    return {"removal": "unknown", "may_have_removed": len(keep) - len(remaining), "remaining": remaining}
+        return {"removal": "unknown", "still_stale": None, "not_stale_now": None}
+    listed = {item.path for item in again.stale if item.old_target == approved.old_target}
+    still_stale = sorted(item.path for item in keep if item.path in listed)
+    return {"removal": "unknown", "still_stale": still_stale, "not_stale_now": len(keep) - len(still_stale)}
+
+
+def _unknown_outcome(exc: StaleListingError, known: dict[str, Any]) -> str:
+    if known["still_stale"] is None:
+        return f"{exc}; outcome unknown and the node could not be listed again"
+    return f"{exc}; outcome unknown, {len(known['still_stale'])} file(s) still stale, the rest removed or changed"
 
 
 async def remove_approved(db: AsyncSession, node_id: str, approval_id: str) -> list[dict[str, str]]:
@@ -279,12 +304,12 @@ async def remove_approved(db: AsyncSession, node_id: str, approval_id: str) -> l
     except StaleListingError as exc:
         known = await _after_ssh_failure(db, node_id, approved, keep)
         await _finish(actor, node_id, approval_id, audit.FAILED, error=str(exc), **known)
-        raise StaleRefused(
-            502, f"{exc}; outcome unknown, {known['may_have_removed']} file(s) may have been removed"
-        ) from exc
+        raise StaleRefused(502, _unknown_outcome(exc, known)) from exc
     report = _report(approved, gone, results)
     removed = sum(r["result"] == "removed" for r in report)
-    await _finish(actor, node_id, approval_id, audit.SUCCESS, removed=removed, results=report)
+    # An unlink that failed is a failed removal; changed, absent or refused files are the check working.
+    outcome = audit.FAILED if any(r["result"] == RESULT_FAILED for r in report) else audit.SUCCESS
+    await _finish(actor, node_id, approval_id, outcome, removed=removed, results=report)
     return report
 
 

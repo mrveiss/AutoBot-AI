@@ -34,7 +34,9 @@ STALE_SYNC_FILES_CLEANUP = SlmApprovalAction(
 MAX_FILES_PER_PROPOSAL = env_int_clamped("SLM_STALE_SYNC_FILES_MAX_PER_PROPOSAL", 200, 1, 1000)
 
 #: Seconds one listing or removal over ssh may run; the backend waits for twice that (a listing and a removal).
-SSH_TIMEOUT_SECONDS = env_float_clamped("SLM_STALE_SYNC_FILES_SSH_TIMEOUT_SECONDS", 120.0, 5.0, 900.0)
+SSH_TIMEOUT_SECONDS = env_float_clamped(
+    "SLM_STALE_SYNC_FILES_SSH_TIMEOUT_SECONDS", 120.0, 5.0, 900.0, positive_finite=True
+)
 
 #: The ``context`` key naming the one old sync location of one node a proposal covers (``<node>:<old target>``).
 LOCATION_KEY = "location"
@@ -46,9 +48,11 @@ CLAIM_PATH_TEMPLATE = "/api/internal/slm/stale-file-approvals/{approval_id}/clai
 #: The SLM path the backend POSTs to once approved (internal key only); the approval id is the query parameter.
 REMOVAL_PATH_TEMPLATE = "/api/internal/nodes/{node_id}/stale-sync-files/removal"
 
-#: ``result`` of one file in a removal report; only ``removed`` means the file is gone.
+#: ``result`` of one file in a removal report; only ``removed`` means the file is gone, and ``failed`` -- an
+#: unlink or a read that failed, or a path the node did not answer for -- makes the whole removal a failure.
 RESULT_REMOVED = "removed"
-RESULTS = frozenset({RESULT_REMOVED, "refused", "changed", "absent", "no_longer_stale", "failed"})
+RESULT_FAILED = "failed"
+RESULTS = frozenset({RESULT_REMOVED, "refused", "changed", "absent", "no_longer_stale", RESULT_FAILED})
 
 
 def api_relative(path: str) -> str:

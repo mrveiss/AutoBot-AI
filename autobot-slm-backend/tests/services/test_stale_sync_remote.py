@@ -12,6 +12,7 @@ must not be.
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 from pathlib import Path
 
@@ -28,14 +29,21 @@ def blob_id(content: bytes) -> str:
     return hashlib.sha1(b"blob %d\0" % len(content) + content, usedforsecurity=False).hexdigest()
 
 
-def run_script(script: str, root: Path, lines: list[str]) -> list[str]:
-    done = subprocess.run(
+_HELLO = hashlib.sha1(b"blob 6\0hello\n", usedforsecurity=False).hexdigest()  # a.py's blob in ``tree``
+
+
+def run_done(script: str, root: Path, lines: list[str], **kwargs) -> subprocess.CompletedProcess:
+    return subprocess.run(
         ["/bin/bash", "-c", script, "stale-sync", str(root)],
         input="".join(f"{line}\n" for line in lines).encode("utf-8"),
         capture_output=True,
         check=False,
+        **kwargs,
     )
-    return done.stdout.decode("utf-8").splitlines()
+
+
+def run_script(script: str, root: Path, lines: list[str]) -> list[str]:
+    return run_done(script, root, lines).stdout.decode("utf-8").splitlines()
 
 
 @pytest.fixture
@@ -64,10 +72,16 @@ def test_listing_reports_size_mtime_and_the_git_blob_of_a_regular_file_only(tree
 
 def test_a_candidate_that_looks_like_shell_is_a_file_name_and_nothing_runs(tree, tmp_path) -> None:
     root, _ = tree
-    marker = tmp_path / "pwned"
-    run_script(remote.LIST_SCRIPT, root, [f"$(touch {marker})", f"`touch {marker}`", f"x; touch {marker}"])
-    run_script(remote.REMOVE_SCRIPT, root, [f"{_ZERO}\t$(touch {marker})"])
-    assert not marker.exists()
+    names = ["$(touch pwned)", "`touch pwned`", "x; touch pwned"]
+    for name in names:
+        (root / name).write_bytes(b"literal")
+    listed = run_done(remote.LIST_SCRIPT, root, names, cwd=tmp_path)
+    assert listed.returncode == 0  # the script ran to the end: the names below were processed, not skipped
+    assert [line.split("\t")[3] for line in listed.stdout.decode("utf-8").splitlines()] == names
+    removal = run_done(remote.REMOVE_SCRIPT, root, [f"{blob_id(b'literal')}\t{names[0]}"], cwd=tmp_path)
+    assert removal.returncode == 0 and removal.stdout.decode("utf-8").splitlines() == [f"removed\t{names[0]}"]
+    assert not (tmp_path / "pwned").exists() and not (root / "pwned").exists()
+    assert not (root / names[0]).exists() and (root / names[1]).exists()
 
 
 def test_a_file_equal_to_its_approved_blob_is_removed_and_a_changed_one_is_kept(tree) -> None:
@@ -121,3 +135,32 @@ async def test_a_node_that_cannot_be_reached_is_an_error_not_an_empty_listing(mo
     monkeypatch.setattr(remote, "key_only_ssh_command", lambda _node: ["ssh", "--", "u@h"])
     with pytest.raises(StaleListingError):
         await remote.stat_candidates(type("N", (), {"node_id": "n"})(), "/srv", ["a.py"])
+
+
+def test_a_symlinked_root_is_refused_by_both_scripts_and_nothing_is_listed_or_removed(tree, tmp_path) -> None:
+    root, _ = tree
+    alias = tmp_path / "alias"
+    alias.symlink_to(root)
+    listed = run_done(remote.LIST_SCRIPT, alias, ["a.py"])
+    removal = run_done(remote.REMOVE_SCRIPT, alias, [f"{_HELLO}\ta.py"])
+    assert (listed.returncode, listed.stdout) == (3, b"") and (removal.returncode, removal.stdout) == (3, b"")
+    assert (root / "a.py").exists()  # the contrast, the canonical root, lists and removes in the tests above
+
+
+@pytest.fixture
+def failing_cat(tmp_path) -> dict:
+    """A PATH whose ``cat`` writes part of the file and then fails, as a read error mid-file would."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    cat = bin_dir / "cat"
+    cat.write_text("#!/bin/sh\nprintf partial\nexit 1\n", encoding="utf-8")
+    cat.chmod(0o755)
+    return {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
+
+
+def test_an_unreadable_file_is_a_listing_error_and_a_failed_removal_never_a_partial_hash(tree, failing_cat) -> None:
+    root, _ = tree
+    listed = run_done(remote.LIST_SCRIPT, root, ["a.py"], env=failing_cat)
+    assert listed.returncode == 4 and listed.stdout == b""
+    removal = run_done(remote.REMOVE_SCRIPT, root, [f"{_HELLO}\ta.py"], env=failing_cat)
+    assert removal.stdout.decode("utf-8").splitlines() == ["failed\ta.py"] and (root / "a.py").exists()

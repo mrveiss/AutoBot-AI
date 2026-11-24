@@ -149,6 +149,8 @@ def load_business_intelligence_dashboard(stub_psutil: bool = False) -> types.Mod
     ``stub_psutil`` installs the fake ``psutil`` the network-utilisation tests need.
     """
     pre_bootstrap = {key: sys.modules.get(key) for key in _TOUCHED_KEYS}
+    if stub_psutil:  # restore or remove the fake too; a real psutil the unstubbed path imports stays loaded
+        pre_bootstrap["psutil"] = sys.modules.get("psutil")
     _stub_third_party(stub_psutil)
     _stub_autobot_shared()
     path = _SLM_ROOT / "monitoring" / "business_intelligence_dashboard.py"
