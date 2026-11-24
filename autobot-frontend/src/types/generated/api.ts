@@ -19783,6 +19783,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/internal/slm/stale-file-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Stale File Cleanup
+         * @description Propose removing the files -- a request, not an execution; one open proposal per location per node.
+         */
+        post: operations["propose_stale_file_cleanup_api_internal_slm_stale_file_proposals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/slm/stale-file-approvals/{approval_id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Stale File Approval
+         * @description The SLM's last check: a human approved THESE files for this node, unused -- now spent; they come back.
+         */
+        post: operations["claim_stale_file_approval_api_internal_slm_stale_file_approvals__approval_id__claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/env-copies-cleanup": {
         parameters: {
             query?: never;
@@ -101627,6 +101667,88 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * StaleFileClaim
+         * @description The SLM names the action and the node it is about to clean; the approval must name the same.
+         */
+        StaleFileClaim: {
+            /**
+             * Action
+             * @constant
+             */
+            action: "slm_node_stale_sync_files_cleanup";
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileClaimResponse
+         * @description The approval was a human's and is now spent: what it approved, to be re-checked by the SLM.
+         */
+        StaleFileClaimResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Node Id */
+            node_id: string;
+            /** Old Target */
+            old_target: string;
+            /** Files */
+            files: components["schemas"]["StaleFileEntry"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileEntry
+         * @description One file offered for removal: where, how big, how old, and the git blob it is byte-identical to.
+         */
+        StaleFileEntry: {
+            /** Path */
+            path: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Modified At
+             * Format: date-time
+             */
+            modified_at: string;
+            /** Blob */
+            blob: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileProposal
+         * @description What the SLM proposes: the files of ONE old sync location on ONE node, never file contents.
+         */
+        StaleFileProposal: {
+            /** Node Id */
+            node_id: string;
+            /** Old Target */
+            old_target: string;
+            /** Commit */
+            commit: string;
+            /** Files */
+            files: components["schemas"]["StaleFileEntry"][];
+            /** Total Found */
+            total_found: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileProposalResponse
+         * @description The location's open approval, and whether this call created it.
+         */
+        StaleFileProposalResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Created */
+            created: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * StartLintResponse
          * @description Shape of ``POST /lint``.
          */
@@ -135943,6 +136065,78 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_stale_file_cleanup_api_internal_slm_stale_file_proposals_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaleFileProposal"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFileProposalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_stale_file_approval_api_internal_slm_stale_file_approvals__approval_id__claim_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaleFileClaim"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFileClaimResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
