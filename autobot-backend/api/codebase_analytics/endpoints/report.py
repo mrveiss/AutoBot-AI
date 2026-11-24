@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter
 
+from api.analytics_shared import git_root_of
 from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
 from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
@@ -1748,11 +1749,9 @@ async def _get_bug_prediction(
     collection when use_semantic=True; with use_semantic=False (the
     pipeline default) it degrades to the same synchronous per-file
     analysis as the old sync path, so this is a safe default baseline.
-
     Issue #554: Enhanced with optional semantic analysis:
     - use_semantic=True enables LLM-based bug pattern matching
     - Uses ChromaDB for vector similarity and Redis for caching
-
     Issue #12384: Threads source_id into the detector so a report requested
     for one source never reads another source's (or AutoBot's own) learned
     bug patterns from the shared ``bug_pattern_vectors`` collection.
@@ -1766,12 +1765,13 @@ async def _get_bug_prediction(
     Returns:
         PredictionResult or None if analysis fails or times out
     """
+    root = await asyncio.to_thread(git_root_of, Path(project_root))  # own repository only (#20513)
+    if root is None:  # `git log` would read another repository's history: this section fails closed
+        logger.warning("Bug prediction skipped: the source checkout is not a git repository of its own")
+        return None
     try:
-        root = project_root  # the source's checkout; never the install tree (#20513)
-
-        # Issue #554: Pass semantic analysis flag
-        # Issue #12384: Pass source_id for ChromaDB metadata/query scoping
-        predictor = BugPredictor(project_root=root, use_semantic_analysis=use_semantic, source_id=source_id)
+        # Issue #554/#12384: semantic flag; source_id scopes the ChromaDB metadata/query
+        predictor = BugPredictor(project_root=str(root), use_semantic_analysis=use_semantic, source_id=source_id)
 
         # Issue #12406: analyze_directory_async is the path that writes/reads
         # the source_id-scoped bug_pattern_vectors collection; the previous
