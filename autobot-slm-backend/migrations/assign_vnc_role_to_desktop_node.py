@@ -14,6 +14,8 @@ never from an address or a hostname. xrdp is not an SLM role, so the purpose is 
 xrdp role leaves behind: a registered `rdp` credential (`node_credentials.credential_type`) or a
 monitored `xrdp` service row (`services.service_name`).
 
+  * a node already holds the vnc role -> nothing to assign: the desktop server is whichever node holds
+    it, and the fleet update provisions it (registering its credential);
   * exactly one such node -> it gets the role;
   * none -> nothing to do (a fresh install, or the role was assigned by hand);
   * more than one -> ambiguous, so NO node is changed and a warning names the candidates. One
@@ -72,6 +74,12 @@ def _existing_nodes(cursor, node_ids: List[str]) -> List[str]:
     return sorted(row[0] for row in cursor.fetchall())
 
 
+def _vnc_holders(cursor) -> List[str]:
+    """Nodes that already carry the vnc role: the desktop server is whichever node holds it."""
+    cursor.execute("SELECT DISTINCT node_id FROM node_roles WHERE role_name = %s", (VNC_ROLE,))
+    return sorted(row[0] for row in cursor.fetchall())
+
+
 def _assign(cursor, node_id: str) -> bool:
     """Insert the NodeRole row and declare the role; False when the node already has the row."""
     cursor.execute("SELECT 1 FROM node_roles WHERE node_id = %s AND role_name = %s", (node_id, VNC_ROLE))
@@ -92,6 +100,15 @@ def migrate(db_url: str) -> None:
         cursor = conn.cursor()
         if not (table_exists(cursor, "nodes") and table_exists(cursor, "node_roles")):
             logger.info("assign_vnc_role_to_desktop_node: no nodes/node_roles table, nothing to assign")
+            return
+        holder = _vnc_holders(cursor)
+        if holder:
+            logger.info(
+                "assign_vnc_role_to_desktop_node: %s already holds the %s role, nothing to assign "
+                "(the fleet update provisions it)",
+                holder,
+                VNC_ROLE,
+            )
             return
         candidates = _existing_nodes(cursor, _desktop_candidates(cursor))
         if len(candidates) != 1:

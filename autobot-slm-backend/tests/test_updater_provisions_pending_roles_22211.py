@@ -78,3 +78,33 @@ def test_only_vnc_is_provisioned_by_the_updater_and_failures_are_retried() -> No
 def test_the_fleet_sync_path_goes_through_it() -> None:
     src = (_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
     assert "run_update_all_nodes(executor, node_state.node_id, limit, restart)" in src
+
+
+class _Role:
+    def __init__(self, role_name: str, status: str):
+        self.role_name, self.status = role_name, status
+
+
+@pytest.mark.parametrize(
+    ("status", "creds", "needs"),
+    [
+        ("not_installed", {"vnc"}, True),  # assigned, never provisioned
+        ("failed", {"vnc"}, True),  # a failed run is retried
+        ("active", set(), True),  # row reads active, no VNC credential registered
+        ("installed", {"ssh"}, True),  # other credential types do not count
+        ("active", {"vnc"}, False),  # provisioned and registered: left alone
+        ("installing", {"vnc"}, False),
+    ],
+)
+def test_the_vnc_role_is_provisioned_when_pending_or_without_a_vnc_credential(status, creds, needs) -> None:
+    assert prp._needs_provisioning(_Role("vnc", status), creds) is needs
+
+
+def test_a_role_that_registers_no_credential_is_only_pending_by_status() -> None:
+    assert prp._needs_provisioning(_Role("other", "active"), set()) is False
+    assert prp._needs_provisioning(_Role("other", "not_installed"), set()) is True
+
+
+def test_both_sync_paths_go_through_the_helper() -> None:
+    src = (_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
+    assert src.count("run_update_all_nodes(") == 2

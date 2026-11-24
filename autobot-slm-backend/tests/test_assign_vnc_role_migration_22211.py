@@ -35,6 +35,8 @@ def _handle(w: _World, state: dict, sql: str, params=()) -> None:
         state["rows"] = [(n,) for n in sorted(w.services)]
     elif q.startswith("select node_id from nodes"):
         state["rows"] = [(n,) for n in params[0] if n in w.nodes]
+    elif q.startswith("select distinct node_id from node_roles"):
+        state["rows"] = [(r[0],) for r in sorted(w.roles) if r[1] == params[0]]
     elif q.startswith("select 1 from node_roles"):
         state["rows"] = [(1,)] if any(r[:2] == tuple(params) for r in w.roles) else []
     elif q.startswith("insert into node_roles"):
@@ -124,3 +126,9 @@ def test_is_registered_with_the_runner() -> None:
     from migrations.runner import MIGRATIONS
 
     assert MIGRATIONS.count("assign_vnc_role_to_desktop_node") == 1
+
+
+def test_a_node_that_already_holds_vnc_means_nothing_to_assign(run) -> None:
+    """The desktop server is whichever node holds the role, even when an xrdp node also exists."""
+    w = run(_World(["vnc-node", "old"], rdp_creds=["old"], roles=[("vnc-node", "vnc", "manual")]))
+    assert w.roles == {("vnc-node", "vnc", "manual")} and w.nodes["old"] == [] and w.commits == 0

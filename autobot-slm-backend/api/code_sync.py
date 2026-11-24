@@ -127,7 +127,7 @@ from services.slm_frontend_build import build_slm_frontend as _build_slm_fronten
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable, ssh_remote_path
 from services.sync_orchestrator import get_sync_orchestrator
-from services.sync_restart import no_restart_args, record_backend_start
+from services.sync_restart import record_backend_start
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -3069,11 +3069,8 @@ async def _execute_node_playbook(
     # hostname is user-editable and can drift from inventory host names (#921)
     # Issue #1091: Include localhost so Play 0 (archive build) runs
     limit = ["localhost", node.node_id]
-    playbook_result = await executor.execute_playbook(
-        playbook_name="update-all-nodes.yml",
-        limit=limit,
-        progress_callback=progress_callback,
-        **no_restart_args(request.restart),  # #20743
+    playbook_result = await run_update_all_nodes(
+        executor, node.node_id, limit, request.restart, progress_callback=progress_callback  # #22211
     )
 
     if playbook_result["success"]:

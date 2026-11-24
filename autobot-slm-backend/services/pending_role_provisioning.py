@@ -10,7 +10,8 @@ therefore sat at ``not_installed`` until an operator pressed "provision" in the 
 
 For the roles listed in ``UPDATER_PROVISIONED_ROLES`` the fleet update now finishes the job: after
 ``update-all-nodes.yml`` succeeds on a node, the node's assigned-but-unprovisioned rows for those
-roles are provisioned through the SLM's own provisioning path (``provision-fleet-roles.yml`` via
+roles (and a vnc role whose node has no registered VNC credential) are provisioned through the
+SLM's own provisioning path (``provision-fleet-roles.yml`` via
 ``api.nodes._execute_provision_playbook``). A failed provisioning fails the node's update, and the
 row is left ``failed`` so the next update retries it.
 """
@@ -20,7 +21,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from models.database import Node, NodeRole
+from models.database import Node, NodeCredential, NodeRole
 from services.database import db_service
 from services.sync_restart import no_restart_args
 from status_enums import RoleStatus
@@ -31,19 +32,39 @@ logger = logging.getLogger(__name__)
 UPDATER_PROVISIONED_ROLES = ("vnc",)
 #: NodeRole statuses that mean "assigned, still to be provisioned" (a failed run is retried).
 PENDING_STATUSES = (RoleStatus.NOT_INSTALLED.value, "failed")
+#: A role whose provisioning registers a credential, mapped to its `node_credentials.credential_type`.
+#: Such a role is provisioned again when the node has none, whatever the role row's status: the row can
+#: read active (the units were installed or detected) while the registration never happened (#22211).
+CREDENTIAL_REGISTERED_BY_ROLE = {"vnc": "vnc"}
 _INSTALLING = "installing"
 
 
+async def _credential_types(db, node_id: str) -> set[str]:
+    rows = await db.execute(select(NodeCredential.credential_type).where(NodeCredential.node_id == node_id))
+    return {r[0] for r in rows.all()}
+
+
+def _needs_provisioning(role, credential_types: set[str]) -> bool:
+    if role.status in PENDING_STATUSES:
+        return True
+    wanted = CREDENTIAL_REGISTERED_BY_ROLE.get(role.role_name)
+    return wanted is not None and wanted not in credential_types
+
+
 async def pending_roles(db, node_id: str) -> list:
-    """The node's NodeRole rows for updater-provisioned roles that still need provisioning."""
+    """The node's updater-provisioned NodeRole rows that still need provisioning.
+
+    A row needs it when it is assigned-but-unprovisioned (``PENDING_STATUSES``), or when the role
+    registers a credential (``CREDENTIAL_REGISTERED_BY_ROLE``) and the node has none of that type.
+    """
     rows = await db.execute(
-        select(NodeRole).where(
-            NodeRole.node_id == node_id,
-            NodeRole.role_name.in_(UPDATER_PROVISIONED_ROLES),
-            NodeRole.status.in_(PENDING_STATUSES),
-        )
+        select(NodeRole).where(NodeRole.node_id == node_id, NodeRole.role_name.in_(UPDATER_PROVISIONED_ROLES))
     )
-    return list(rows.scalars().all())
+    roles = list(rows.scalars().all())
+    if not roles:
+        return []
+    creds = await _credential_types(db, node_id)
+    return [r for r in roles if _needs_provisioning(r, creds)]
 
 
 async def provision_pending_roles(node_id: str) -> tuple[bool, str]:
@@ -69,10 +90,10 @@ async def provision_pending_roles(node_id: str) -> tuple[bool, str]:
         return True, f"provisioned newly assigned role(s) {', '.join(names)}"
 
 
-async def run_update_all_nodes(executor: Any, node_id: str, limit: list, restart: bool) -> dict:
+async def run_update_all_nodes(executor: Any, node_id: str, limit: list, restart: bool, **playbook_kwargs: Any) -> dict:
     """Run ``update-all-nodes.yml`` for a node, then provision its pending roles (#22211)."""
     result = await executor.execute_playbook(
-        playbook_name="update-all-nodes.yml", limit=limit, **no_restart_args(restart)  # #20743
+        playbook_name="update-all-nodes.yml", limit=limit, **playbook_kwargs, **no_restart_args(restart)  # #20743
     )
     if not result.get("success"):
         return result
