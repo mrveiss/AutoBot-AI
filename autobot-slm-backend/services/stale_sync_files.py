@@ -83,7 +83,8 @@ async def _load_node(db: AsyncSession, node_id: str) -> Node:
 async def _sources_on(db: AsyncSession, node_id: str) -> list[RoleSource]:
     """The moved roles assigned to the node."""
     rows = (await db.execute(select(NodeRole.role_name).where(NodeRole.node_id == node_id))).scalars().all()
-    return [source for source in moved_role_sources(DEFAULT_ROLES) if source.role in set(rows)]
+    assigned = set(rows)
+    return [source for source in moved_role_sources(DEFAULT_ROLES) if source.role in assigned]
 
 
 def _protected_dirs() -> list[str]:
@@ -227,6 +228,41 @@ def _report(approved: Approved, gone: list[dict[str, Any]], results: dict[str, s
     ]
 
 
+async def _claim_still_stale(
+    actor: str, node_id: str, approval_id: str, fresh: StaleListing
+) -> tuple[Approved, list[StaleFile], list[dict[str, Any]]]:
+    """Spend the approval, then split its files into those still stale and those no longer offered.
+
+    A refused claim leaves a denied completion row and removes nothing. A file whose old target is absent from
+    the fresh listing is in neither list of the fresh set, so it lands in ``gone`` and is never removed.
+    """
+    try:
+        approved = await _claim(approval_id, node_id)
+    except StaleRefused as refusal:
+        await _finish(actor, node_id, approval_id, audit.DENIED, reason=refusal.reason)
+        raise
+    keep, gone = _still_stale(approved, fresh)
+    return approved, keep, gone
+
+
+async def _after_ssh_failure(
+    db: AsyncSession, node_id: str, approved: Approved, keep: list[StaleFile]
+) -> dict[str, Any]:
+    """What is known after ssh died mid-removal: some of *keep* may already be gone, so look again.
+
+    The re-listing is itself best effort; when it fails the remainder is unknown, which is said, not guessed.
+    """
+    try:
+        again = await list_stale_files(db, node_id)
+    except (StaleRefused, StaleListingError):
+        again = StaleListing(node_id, error="the node could not be listed again")
+    if again.error:
+        return {"outcome": "unknown", "may_have_removed": len(keep), "remaining": None}
+    still = {item.path for item in again.stale if item.old_target == approved.old_target}
+    remaining = sorted(item.path for item in keep if item.path in still)
+    return {"outcome": "unknown", "may_have_removed": len(keep) - len(remaining), "remaining": remaining}
+
+
 async def remove_approved(db: AsyncSession, node_id: str, approval_id: str) -> list[dict[str, str]]:
     """Remove the files a human approved, only where they are still stale; raises ``StaleRefused``."""
     node = await _load_node(db, node_id)
@@ -237,26 +273,18 @@ async def remove_approved(db: AsyncSession, node_id: str, approval_id: str) -> l
         raise StaleRefused(409, fresh.error)
     actor = f"approval:{approval_id}"
     await _record(actor, node_id, audit.PHASE_INTENT, approval_id=approval_id, stale=len(fresh.stale))
-    try:
-        approved = await _claim(approval_id, node_id)
-    except StaleRefused as refusal:
-        await _finish(actor, node_id, approval_id, audit.DENIED, reason=refusal.reason)
-        raise
-    keep, gone = _still_stale(approved, fresh)
+    approved, keep, gone = await _claim_still_stale(actor, node_id, approval_id, fresh)
     try:
         results = await remove_files(node, approved.old_target, keep)
     except StaleListingError as exc:
-        await _finish(actor, node_id, approval_id, audit.FAILED, error=str(exc))
-        raise StaleRefused(502, str(exc)) from exc
+        known = await _after_ssh_failure(db, node_id, approved, keep)
+        await _finish(actor, node_id, approval_id, audit.FAILED, error=str(exc), **known)
+        raise StaleRefused(
+            502, f"{exc}; outcome unknown, {known['may_have_removed']} file(s) may have been removed"
+        ) from exc
     report = _report(approved, gone, results)
-    await _finish(
-        actor,
-        node_id,
-        approval_id,
-        audit.SUCCESS,
-        removed=sum(r["result"] == "removed" for r in report),
-        results=report,
-    )
+    removed = sum(r["result"] == "removed" for r in report)
+    await _finish(actor, node_id, approval_id, audit.SUCCESS, removed=removed, results=report)
     return report
 
 

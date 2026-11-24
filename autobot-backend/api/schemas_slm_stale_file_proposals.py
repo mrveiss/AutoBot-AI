@@ -19,6 +19,8 @@ _NODE_ID = Field(min_length=1, max_length=64, pattern=NODE_ID_PATTERN)
 _BLOB = Field(pattern=r"^[0-9a-f]{40}$")
 #: A path is one line of text in the approval and in the removal script: no control characters.
 _MAX_PATH = 1024
+#: An install root is never the filesystem root nor a top-level directory.
+_MIN_TARGET_SEGMENTS = 2
 
 
 def _is_clean_relative(path: str) -> bool:
@@ -58,6 +60,10 @@ class StaleFileProposal(BaseModel):
     def _target_has_no_dot_segments(cls, value: str) -> str:
         if any(part in ("..", ".") for part in value.split("/")):
             raise ValueError("old_target must not contain '.' or '..' segments")
+        # The backend cannot know the SLM's install root (AUTOBOT_BASE_DIR / SLM_AGENT_DIR are the SLM's), so it
+        # refuses what no install root can be: "/" and any path shallower than two segments.
+        if len([part for part in value.split("/") if part]) < _MIN_TARGET_SEGMENTS:
+            raise ValueError("old_target must have at least two path segments")
         return value
 
 

@@ -167,3 +167,8 @@ def test_a_refused_claim_surfaces_as_403_with_nothing_reported_removed(env) -> N
     env.refuse = 403
     response = _remove(env, {"X-Internal-API-Key": _KEY})
     assert response.status_code == 403 and "removed" not in response.json()
+
+
+def test_a_user_jwt_without_the_internal_key_is_refused_on_the_removal_route(env) -> None:
+    response = _remove(env, {"Authorization": "Bearer eyJhbGciOiJSUzI1NiJ9.e30.sig"})  # pragma: allowlist secret
+    assert response.status_code == 403 and env.calls == []

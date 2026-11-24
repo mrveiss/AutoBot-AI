@@ -54,6 +54,11 @@ while IFS=$'\t' read -r want rel; do
   size=$(stat -c %s -- "$f")
   have=$({ printf 'blob %s\0' "$size"; cat -- "$f"; } | sha1sum | cut -d' ' -f1)
   if [ "$have" != "$want" ]; then printf 'changed\t%s\n' "$rel"; continue; fi
+  # Re-check type and containment immediately before rm. The window between this check and rm remains (a
+  # process on the node that swaps the file or a parent in microseconds); only a root-owned tree closes it.
+  if [ -L "$f" ] || [ ! -f "$f" ] || [ "$(realpath -m -- "$f")" != "$f" ]; then
+    printf 'refused\t%s\n' "$rel"; continue
+  fi
   if rm -f -- "$f"; then printf 'removed\t%s\n' "$rel"; else printf 'failed\t%s\n' "$rel"; fi
 done
 """

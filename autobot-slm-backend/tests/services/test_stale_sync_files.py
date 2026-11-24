@@ -222,3 +222,61 @@ async def test_an_ssh_failure_after_the_spend_is_reported_failed_and_audited(env
     with pytest.raises(env.mod.StaleRefused) as refused:
         await env.mod.remove_approved(None, "n1", _APPROVAL)
     assert refused.value.status_code == 502 and env.events[-1] == "audit:finished:failed"
+
+
+async def test_an_approved_file_whose_old_target_is_absent_from_the_fresh_listing_is_dropped(env) -> None:
+    env.fresh = [_file("a.py", old="/srv/other")]  # the same path and blob, but under another old target
+    env.claim_files = [_entry("a.py")]
+    report = await env.mod.remove_approved(None, "n1", _APPROVAL)
+    assert env.removed == [(_ROOT, [])] and report == [
+        {"old_target": _ROOT, "path": "a.py", "result": "no_longer_stale"}
+    ]
+
+
+async def test_after_an_ssh_failure_the_outcome_is_recorded_unknown_with_the_relisted_remainder(
+    env, monkeypatch
+) -> None:
+    env.fresh, env.claim_files, env.ssh_down = [_file("a.py"), _file("b.py")], [_entry("a.py"), _entry("b.py")], True
+    seen = []
+
+    async def relist(_db, node_id):  # a.py is gone by now, b.py is still there
+        return env.mod.StaleListing(node_id, stale=[_file("b.py")])
+
+    async def finish(actor, node_id, approval_id, outcome, **details):
+        seen.append((outcome, details))
+
+    calls = iter([env.fresh, None])
+    original = env.mod.list_stale_files
+
+    async def listing(db, node_id):
+        return await (original if next(calls) else relist)(db, node_id)
+
+    monkeypatch.setattr(env.mod, "list_stale_files", listing)
+    monkeypatch.setattr(env.mod, "_finish", finish)
+    with pytest.raises(env.mod.StaleRefused) as refused:
+        await env.mod.remove_approved(None, "n1", _APPROVAL)
+    assert refused.value.status_code == 502 and "1 file(s) may have been removed" in refused.value.reason
+    outcome, details = seen[-1]
+    assert outcome == "failed" and details["outcome"] == "unknown"
+    assert details["may_have_removed"] == 1 and details["remaining"] == ["b.py"]
+
+
+async def test_contrast_when_the_relisting_fails_too_the_remainder_is_unknown_not_guessed(env, monkeypatch) -> None:
+    env.fresh, env.claim_files, env.ssh_down = [_file("a.py")], [_entry("a.py")], True
+    seen = []
+    calls = iter([True, False])
+    original = env.mod.list_stale_files
+
+    async def listing(db, node_id):
+        if next(calls):
+            return await original(db, node_id)
+        return env.mod.StaleListing(node_id, error="unreachable")
+
+    async def finish(actor, node_id, approval_id, outcome, **details):
+        seen.append(details)
+
+    monkeypatch.setattr(env.mod, "list_stale_files", listing)
+    monkeypatch.setattr(env.mod, "_finish", finish)
+    with pytest.raises(env.mod.StaleRefused):
+        await env.mod.remove_approved(None, "n1", _APPROVAL)
+    assert seen[-1]["remaining"] is None and seen[-1]["may_have_removed"] == 1

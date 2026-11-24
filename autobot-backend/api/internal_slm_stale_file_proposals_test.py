@@ -127,7 +127,7 @@ def test_the_file_count_is_capped_but_a_path_is_never_truncated() -> None:
     assert service.create_approval.await_args.kwargs["context"]["files"][0]["path"] == long_path
 
 
-@pytest.mark.parametrize("old_target", ["relative/dir", "/opt/../etc", "/opt/./x"])
+@pytest.mark.parametrize("old_target", ["relative/dir", "/opt/../etc", "/opt/./x", "/", "/opt", "//"])
 def test_an_old_target_must_be_an_absolute_plain_path(old_target: str) -> None:
     assert _propose(_service([]), _body(old_target=old_target))[0].status_code == 422
 
@@ -203,3 +203,18 @@ def test_a_second_claim_that_loses_the_spend_race_is_refused() -> None:
 def test_a_claim_whose_audit_row_cannot_be_written_spends_nothing() -> None:
     response, session, _ = _claim(_approval(), audit=False)
     assert response.status_code == 503 and session.commits == 0 and session.statements == []
+
+
+def test_contrast_a_two_segment_old_target_is_accepted() -> None:
+    assert _propose(_service([]), _body(old_target="/opt/root"))[0].status_code == 201
+
+
+def test_a_user_jwt_without_the_internal_key_is_refused_on_both_internal_routes() -> None:
+    """A bearer token is not the service key: the key check refuses it before any handler runs (#22033)."""
+    service = _service([])
+    jwt = {"Authorization": "Bearer eyJhbGciOiJSUzI1NiJ9.e30.sig"}  # pragma: allowlist secret
+    assert _propose(service, headers=jwt)[0].status_code == 403
+    service.create_approval.assert_not_awaited()
+    session = FakeAsyncSession(default_result=FakeResult(rowcount=1), on_get=lambda entity, ident: _approval())
+    claim = _client(session).post(claim_path(str(_ID)), json={"action": ACTION, "node_id": "node-a"}, headers=jwt)
+    assert claim.status_code == 403 and session.commits == 0 and session.statements == []
