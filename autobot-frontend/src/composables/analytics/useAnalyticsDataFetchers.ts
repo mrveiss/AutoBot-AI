@@ -463,7 +463,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
       async () => {
         await duplicatesSilent.load(undefined, deps.sourceIdParam.value)
         if (duplicatesSilent.error.value || duplicateScanState.value === 'failed') return null
-        return { count: duplicateAnalysis.value.length }
+        return { count: duplicateSummary.value?.totalCount ?? duplicateAnalysis.value.length }
       },
       'analytics.codebase.notify.duplicatesFound',
       'analytics.codebase.notify.duplicatesFailed',

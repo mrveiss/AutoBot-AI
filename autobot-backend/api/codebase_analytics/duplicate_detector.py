@@ -149,6 +149,16 @@ class DuplicateAnalysis:
     structural_cluster_count: int = 0
     excluded_dirs: List[str] = field(default_factory=lambda: sorted(SKIP_DIRS))
 
+    @classmethod
+    def from_dict(cls, cached: Dict) -> "DuplicateAnalysis":
+        """Rebuild an analysis from its ``to_dict`` form (the Redis cache entry).
+
+        ``to_dict`` carries derived keys (``truncated``) and cluster rows as dicts, so
+        ``cls(**cached)`` raised TypeError and every cache hit fell through (#22157).
+        """
+        fields = {k: v for k, v in cached.items() if k not in ("truncated", "duplicates")}
+        return cls(duplicates=[DuplicateCluster.from_dict(r) for r in cached.get("duplicates", [])], **fields)
+
     @property
     def truncated(self) -> bool:
         """True when ``duplicates`` is shorter than ``total_duplicates`` (#18067)."""
@@ -861,7 +871,7 @@ class DuplicateCodeDetector(_BaseClass):
             cached = await self._get_cached_result(cache_key, prefix="duplicate_detector")
             if cached:
                 logger.info("Returning cached duplicate analysis")
-                return DuplicateAnalysis(**cached)
+                return DuplicateAnalysis.from_dict(cached)
 
         files = self._get_files_to_scan()
         logger.info("Found %d files to scan", len(files))

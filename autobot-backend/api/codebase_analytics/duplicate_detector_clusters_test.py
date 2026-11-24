@@ -107,3 +107,21 @@ def test_vendored_trees_are_excluded_and_the_exclusion_is_in_the_output(tmp_path
     assert "external" in SKIP_DIRS and analysis.total_duplicates == 0
     assert "external" in analysis.to_dict()["excluded_dirs"]
     assert analysis.files_analyzed == 0
+
+
+def test_the_report_lists_every_location_of_a_cluster(tmp_path):
+    from api.codebase_analytics.endpoints import report
+
+    _plant(tmp_path, {f"d{n}/m.py": _helper() for n in range(3)})
+    text = "\n".join(report._generate_duplicate_code_section(_scan(tmp_path)))
+    assert "Total Duplicate Clusters | 1 (3 locations)" in text
+    assert all(f"d{n}/m.py" in text for n in range(3)), "the report named only the first two copies"
+
+
+def test_a_cached_analysis_round_trips_through_to_dict(tmp_path):
+    """The cache read was ``DuplicateAnalysis(**cached)``: the derived ``truncated`` key raised TypeError."""
+    _plant(tmp_path, {f"d{n}/m.py": _helper() for n in range(3)})
+    analysis = _scan(tmp_path)
+    restored = det.DuplicateAnalysis.from_dict(analysis.to_dict())
+    assert restored.to_dict() == analysis.to_dict()
+    assert restored.duplicates[0].locations == analysis.duplicates[0].locations

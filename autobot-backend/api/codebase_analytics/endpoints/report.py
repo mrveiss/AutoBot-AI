@@ -654,7 +654,8 @@ def _generate_duplicate_overview(analysis: DuplicateAnalysis) -> List[str]:
         "| Metric | Value |",
         "|--------|-------|",
         f"| Files Analyzed | {analysis.files_analyzed} |",
-        f"| Total Duplicate Pairs | {analysis.total_duplicates} |",
+        f"| Total Duplicate Clusters | {analysis.total_duplicates} ({analysis.total_locations} locations) |",
+        f"| Exact / Structural Clusters | {analysis.exact_cluster_count} / {analysis.structural_cluster_count} |",
         f"| High Similarity (90%+) | {analysis.high_similarity_count} |",
         f"| Medium Similarity (70-89%) | {analysis.medium_similarity_count} |",
         f"| Low Similarity (50-69%) | {analysis.low_similarity_count} |",
@@ -662,6 +663,11 @@ def _generate_duplicate_overview(analysis: DuplicateAnalysis) -> List[str]:
         "",
     ]
     return lines
+
+
+def _cluster_locations(cluster) -> str:
+    """Every location of a duplicate cluster, ``file:start-end`` (#22157)."""
+    return "<br>".join(f"`{_shorten_path(loc.file)}`:{loc.start_line}-{loc.end_line}" for loc in cluster.locations)
 
 
 def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
@@ -675,21 +681,15 @@ def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[st
         "",
         "> These are exact or near-exact duplicates. Consider extracting to shared utility.",
         "",
-        "| File 1 | Lines | File 2 | Lines | Similarity |",
-        "|--------|-------|--------|-------|------------|",
+        "| Locations | Kind | Lines | Similarity |",
+        "|-----------|------|-------|------------|",
     ]
 
     for dup in high_similarity_dups[:15]:  # Limit to top 15
-        file1_short = _shorten_path(dup.file1)
-        file2_short = _shorten_path(dup.file2)
-        lines.append(
-            f"| `{file1_short}` | {dup.start_line1}-{dup.end_line1} | "
-            f"`{file2_short}` | {dup.start_line2}-{dup.end_line2} | "
-            f"{dup.similarity * 100:.0f}% |"
-        )
+        lines.append(f"| {_cluster_locations(dup)} | {dup.kind} | {dup.line_count} | {dup.similarity * 100:.0f}% |")
 
     if len(high_similarity_dups) > 15:
-        lines.append(f"| ... | *{len(high_similarity_dups) - 15} more* | | | |")
+        lines.append(f"| ... | *{len(high_similarity_dups) - 15} more* | | |")
 
     lines.append("")
     return lines
@@ -708,14 +708,12 @@ def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[
         "",
         "> Similar patterns that may benefit from consolidation.",
         "",
-        "| File 1 | File 2 | Similarity | Lines |",
-        "|--------|--------|------------|-------|",
+        "| Locations | Similarity | Lines |",
+        "|-----------|------------|-------|",
     ]
 
     for dup in medium_similarity_dups[:10]:  # Limit to top 10
-        file1_short = _shorten_path(dup.file1)
-        file2_short = _shorten_path(dup.file2)
-        lines.append(f"| `{file1_short}` | `{file2_short}` | " f"{dup.similarity * 100:.0f}% | {dup.line_count} |")
+        lines.append(f"| {_cluster_locations(dup)} | {dup.similarity * 100:.0f}% | {dup.line_count} |")
 
     if len(medium_similarity_dups) > 10:
         lines.append(f"| ... | *{len(medium_similarity_dups) - 10} more* | | |")
@@ -768,7 +766,7 @@ def _generate_duplicate_code_section(
                 "### Recommendations",
                 "",
                 "- **Extract common code** to shared utilities or base classes",
-                "- **Review high-similarity pairs** for potential consolidation",
+                "- **Review high-similarity clusters** for potential consolidation",
                 "- **Consider design patterns** like Template Method or Strategy for similar logic",
                 "",
             ]

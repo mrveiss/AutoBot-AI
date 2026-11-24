@@ -2246,8 +2246,6 @@
     },
     "duplicates": {
       "title": "Duplikate",
-      "pairs": "Paare",
-      "totalPairs": "Paare gesamt",
       "highLabel": "Hoch",
       "mediumLabel": "Mittel",
       "lowLabel": "Niedrig",

@@ -2246,8 +2246,6 @@
     },
     "duplicates": {
       "title": "Doublons",
-      "pairs": "Paires",
-      "totalPairs": "Paires totales",
       "highLabel": "Élevé",
       "mediumLabel": "Moyen",
       "lowLabel": "Faible",

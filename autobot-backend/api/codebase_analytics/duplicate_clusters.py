@@ -72,6 +72,17 @@ class DuplicateCluster:
     def end_line2(self) -> int:
         return self.locations[1].end_line
 
+    @classmethod
+    def from_dict(cls, row: Dict[str, Any]) -> "DuplicateCluster":
+        """Rebuild a cluster from a ``to_dict`` row (a cached analysis)."""
+        return cls(
+            kind=row["kind"],
+            similarity=row["similarity"] / 100,
+            line_count=row["lines"],
+            locations=[DuplicateLocation(p["file"], p["start_line"], p["end_line"]) for p in row["locations"]],
+            code_snippet=row.get("code_snippet", ""),
+        )
+
     def to_dict(self, path_fn: Optional[Callable[[str], str]] = None) -> Dict[str, Any]:
         """JSON row; ``path_fn`` maps an absolute path to the one displayed."""
         show = path_fn or (lambda path: path)
