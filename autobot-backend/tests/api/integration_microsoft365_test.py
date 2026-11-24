@@ -273,7 +273,7 @@ def exchange(monkeypatch):
     store.store_oauth = AsyncMock(return_value="new")
     store.revoke = AsyncMock()
     monkeypatch.setattr(oauth_api, "get_credential_store", lambda: store)
-    monkeypatch.setattr(oauth_api, "find_connector_secret_id", AsyncMock(return_value="old"))
+    monkeypatch.setattr(oauth_api, "find_connector_secret_ids", AsyncMock(return_value=["old"]))
     payload = {
         "provider": "microsoft-mail",
         "owner_id": "system",
@@ -296,7 +296,7 @@ async def test_store_failure_leaves_the_old_credential_intact(exchange):
 @pytest.mark.asyncio
 async def test_old_credential_is_revoked_after_the_new_one_is_stored(exchange):
     oauth_api, store, payload = exchange
-    assert await oauth_api._exchange_and_store(payload, "code") == "new"
+    assert await oauth_api._exchange_and_store(payload, "code") == ("new", False)
     store.revoke.assert_awaited_once_with("old", "system")
 
 
@@ -304,7 +304,7 @@ async def test_old_credential_is_revoked_after_the_new_one_is_stored(exchange):
 async def test_revoke_failure_does_not_fail_the_authorization(exchange):
     oauth_api, store, payload = exchange
     store.revoke.side_effect = RuntimeError("boom")
-    assert await oauth_api._exchange_and_store(payload, "code") == "new"
+    assert await oauth_api._exchange_and_store(payload, "code") == ("new", True)
 
 
 # --- a connector can never attach the company mailbox credential (#13710) ---
@@ -341,3 +341,66 @@ async def test_attachable_secret_id(secret, owner, ok):
             with pytest.raises(HTTPException) as raised:
                 await oauth_api.attachable_secret_id("s1", owner)
             assert raised.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_next_reauthorization_revokes_every_older_row_after_a_failed_revoke(exchange, monkeypatch, caplog):
+    oauth_api, store, payload = exchange
+    store.revoke.side_effect = RuntimeError("boom")
+    with caplog.at_level("WARNING"):
+        assert await oauth_api._exchange_and_store(payload, "code") == ("new", True)
+    assert "old" in caplog.text and "dummy" not in caplog.text
+    # The failed row is still active; the next authorization stores "newer" and revokes BOTH older rows.
+    store.revoke.side_effect = None
+    store.revoke.reset_mock()
+    store.store_oauth.return_value = "newer"
+    monkeypatch.setattr(oauth_api, "find_connector_secret_ids", AsyncMock(return_value=["new", "old"]))
+    assert await oauth_api._exchange_and_store(payload, "code") == ("newer", False)
+    revoked = [call.args[0] for call in store.revoke.await_args_list]
+    assert revoked == ["new", "old"]
+
+
+def test_callback_page_warns_when_a_replaced_credential_is_left():
+    page = oauth_api_result_page(warning="could not be removed")
+    assert "could not be removed" in page.body.decode()
+
+
+def oauth_api_result_page(**kwargs):
+    from api import knowledge_connector_oauth as oauth_api
+
+    return oauth_api._result_page(secret_id="s", provider="microsoft-mail", connector_id="microsoft365", **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_lookup_picks_the_newest_of_two_active_rows(tmp_path):
+    from cryptography.fernet import Fernet
+
+    from services.credential_read import find_connector_secret_id
+    from services.credential_write import connector_secret_name
+    from services.secrets_service import SecretsService
+
+    svc = SecretsService(db_path=str(tmp_path / "s.db"), encryption_key=Fernet.generate_key().decode())
+    name, kind, first, second = connector_secret_name("microsoft365"), "connector_oauth_token", "a", "b"
+    old = svc.create_secret(name=name, secret_type=kind, value=first, scope="user", created_by="system")
+    new = svc.create_secret(name=name, secret_type=kind, value=second, scope="user", created_by="system")
+    assert old["id"] != new["id"]  # two active rows under one name: chat_id is NULL, so UNIQUE does not stop it
+    with patch("services.secrets_service.get_secrets_service", return_value=svc):
+        assert await find_connector_secret_id("microsoft365") == new["id"]
+        svc.delete_secret(secret_id=new["id"], deleted_by="system")
+        assert await find_connector_secret_id("microsoft365") == old["id"]
+
+
+def test_create_connector_route_refuses_the_mailbox_secret(monkeypatch):
+    from api import knowledge_connectors as kc
+
+    app = FastAPI()
+    app.include_router(kc.router)
+    app.dependency_overrides[kc.get_current_user] = lambda: {"user_id": "alice", "role": "admin"}
+    monkeypatch.setattr(kc, "validated_connector_auth", lambda request: (MagicMock(tier=0), None, "OAuthRefreshAuth"))
+    svc = MagicMock()
+    svc.get_secret.return_value = {"id": "mb", "name": "connector:microsoft365:auth", "created_by": "system"}
+    body = {"connector_type": "file_server", "name": "n", "secret_id": "mb"}
+    with patch("services.secrets_service.get_secrets_service", return_value=svc):
+        resp = TestClient(app, raise_server_exceptions=False).post("/knowledge_base/connectors", json=body)
+    assert resp.status_code == 400
+    svc.get_secret.assert_called_once()  # refused by the guard, not by an earlier validation

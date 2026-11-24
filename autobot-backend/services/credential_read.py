@@ -94,21 +94,44 @@ async def load_imported_credential(secret_id: str, owner_id: str) -> dict | None
         return await read_imported_credential_in_session(session, secret_id, owner_id, root_key)
 
 
-async def find_connector_secret_id(connector_id: str) -> str | None:
-    """The id of the one credential filed under *connector_id*, or ``None`` when none is stored (#13710).
+def _active_secret_ids_newest_first(db_path: str, name: str) -> list[str]:
+    """Ids of every active, unexpired ``user``-scope secret named *name*, newest first (ids only, no values)."""
+    import sqlite3
 
-    Keyed to a fixed connector id -- used by service-owned providers, whose credential is stored once and
-    replaced (not duplicated) on re-authorization. Returns no value, only the id.
+    from autobot_shared.time_utils import now_utc
+
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT id FROM secrets WHERE is_active = 1 AND name = ? AND scope = 'user' "
+            "AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC, rowid DESC",
+            (name, now_utc().isoformat()),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [row[0] for row in rows]
+
+
+async def find_connector_secret_ids(connector_id: str) -> list[str]:
+    """Every active credential id filed under *connector_id*, NEWEST first (#13710).
+
+    ``UNIQUE(name, scope, chat_id)`` does not stop duplicates (``chat_id`` is NULL, and SQLite treats NULLs as
+    distinct), and ``get_secret(name=...)`` takes an arbitrary first row, so a stale duplicate could win.
     """
     import asyncio
 
     from services.credential_write import connector_secret_name
     from services.secrets_service import get_secrets_service
 
-    secret = await asyncio.to_thread(
-        get_secrets_service().get_secret, name=connector_secret_name(connector_id), scope="user"
+    return await asyncio.to_thread(
+        _active_secret_ids_newest_first, get_secrets_service().db_path, connector_secret_name(connector_id)
     )
-    return secret["id"] if secret else None
+
+
+async def find_connector_secret_id(connector_id: str) -> str | None:
+    """The id of the NEWEST credential filed under *connector_id*, or ``None`` when none is stored (#13710)."""
+    ids = await find_connector_secret_ids(connector_id)
+    return ids[0] if ids else None
 
 
 async def assert_attachable_secret(secret_id: str, owner_id: str) -> None:

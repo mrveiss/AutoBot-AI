@@ -34,7 +34,7 @@ from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config
 from knowledge.connectors import oauth_flow
 from knowledge.connectors.credential_store import get_credential_store
-from services.credential_read import assert_attachable_secret, find_connector_secret_id
+from services.credential_read import assert_attachable_secret, find_connector_secret_ids
 
 logger = get_logger(__name__)
 
@@ -45,6 +45,8 @@ _OAUTH_STATE_TTL_SECONDS = 600
 _OAUTH_STATE_PREFIX = "connector:oauth:state:"
 # Double-submit cookie binding the completing browser to the initiating one (CSRF).
 _OAUTH_STATE_COOKIE = "connector_oauth_state"
+# Fixed, non-secret notice for a re-authorization whose replaced credential could not be removed (#13710).
+_STALE_CREDENTIAL_WARNING = "A previous credential could not be removed; it will be retried on the next authorization."
 _OAUTH_CALLBACK_PATH = "/api/knowledge_base/connectors/oauth/callback"
 
 
@@ -175,7 +177,7 @@ async def oauth_callback(
         return _clear_cookie(_result_page(error="missing_authorization_code", provider=payload.get("provider")))
 
     try:
-        secret_id = await _exchange_and_store(payload, code)
+        secret_id, stale_left = await _exchange_and_store(payload, code)
     except (ValueError, KeyError) as exc:
         logger.error("OAuth callback config error: %s", exc)
         return _clear_cookie(_result_page(error="provider_not_configured", provider=payload.get("provider")))
@@ -188,18 +190,19 @@ async def oauth_callback(
             secret_id=secret_id,
             provider=payload.get("provider"),
             connector_id=payload.get("connector_id"),
+            warning=_STALE_CREDENTIAL_WARNING if stale_left else None,
         )
     )
 
 
-async def _exchange_and_store(payload: dict, code: str) -> str:
-    """Exchange the auth code and persist tokens; return the secret id."""
+async def _exchange_and_store(payload: dict, code: str) -> tuple[str, bool]:
+    """Exchange the auth code and persist tokens; return ``(secret_id, a_replaced_credential_is_still_active)``."""
     prov = oauth_flow.get_provider(payload["provider"])
     client_id, client_secret = oauth_flow.resolve_client_credentials(prov)
     token_response = await oauth_flow.exchange_code(
         prov, client_id, client_secret, code, payload["redirect_uri"], payload["code_verifier"]
     )
-    previous = await find_connector_secret_id(payload["connector_id"]) if prov.service_owner_id else None
+    previous = await find_connector_secret_ids(payload["connector_id"]) if prov.service_owner_id else []
     secret_id = await get_credential_store().store_oauth(
         connector_id=payload["connector_id"],
         owner_id=payload["owner_id"],
@@ -208,9 +211,8 @@ async def _exchange_and_store(payload: dict, code: str) -> str:
         token_url=prov.token_url,
         scopes=payload.get("scopes") or list(prov.default_scopes),
     )
-    if previous and previous != secret_id:
-        await _revoke_replaced_credential(previous, prov.service_owner_id)
-    return secret_id
+    stale_left = await _revoke_replaced_credentials([i for i in previous if i != secret_id], prov.service_owner_id)
+    return secret_id, stale_left
 
 
 def _result_page(
@@ -218,9 +220,11 @@ def _result_page(
     provider: str | None = None,
     connector_id: str | None = None,
     error: str | None = None,
+    warning: str | None = None,
 ) -> HTMLResponse:
     """Render the popup result page that messages the opener and self-closes."""
     message = {
+        "warning": warning,
         "type": "connector-oauth",
         "ok": error is None,
         "secret_id": secret_id,
@@ -229,6 +233,8 @@ def _result_page(
         "error": error,
     }
     status = "Connected — you can close this window." if error is None else ("Connection failed: %s" % error)
+    if warning:
+        status = "%s %s" % (status, warning)
     # Every attacker-influenced value (error is a provider query param) reaches the
     # response only through html.escape, a recognized XSS sanitizer. The visible
     # status is escaped as HTML text; the postMessage payload is serialized to JSON,
@@ -269,16 +275,22 @@ async def attachable_secret_id(secret_id: str, owner_id: str) -> str:
     return secret_id
 
 
-async def _revoke_replaced_credential(previous_id: str, owner_id: str) -> None:
-    """Revoke the credential a service-owned re-authorization replaced, AFTER the new one is stored (#13710).
+async def _revoke_replaced_credentials(previous_ids: list[str], owner_id: str) -> bool:
+    """Revoke every credential a service-owned re-authorization replaced, AFTER the new one is stored (#13710).
 
-    Never the new id, and never before the store: a failed store must leave the old credential intact. A failed
-    revoke is logged, not raised: the new credential is stored and the authorization has succeeded.
+    Never the new id, and never before the store: a failed store must leave the old credential intact. Every
+    older row is attempted, so an earlier failed revoke is retried here. A failure is logged with the old id (never
+    a value) and reported, not raised: the new credential is stored and is the newest, so it is the one used.
+    Returns True when any replaced credential is still active.
     """
-    try:
-        await get_credential_store().revoke(previous_id, owner_id)
-    except Exception as exc:  # noqa: BLE001 - the new credential is already stored
-        logger.warning("Could not revoke the replaced service credential: %s", type(exc).__name__)
+    stale_left = False
+    for previous_id in previous_ids:
+        try:
+            await get_credential_store().revoke(previous_id, owner_id)
+        except Exception as exc:  # noqa: BLE001 - the new credential is already stored
+            stale_left = True
+            logger.warning("Could not revoke replaced service credential %s: %s", previous_id, type(exc).__name__)
+    return stale_left
 
 
 # Redis single-use-state helpers now live in autobot_shared.redis_client
