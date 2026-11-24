@@ -58,9 +58,11 @@ REBUILD_BATCH = env_int_clamped("AUTOBOT_KB_CATEGORY_INDEX_REBUILD_BATCH", 500, 
 CONVERGE_PASSES = env_int_clamped("AUTOBOT_KB_CATEGORY_INDEX_CONVERGE_PASSES", 5, 1, 50)
 #: Join a category set and set the quarantine index entry, only while the fact hash still holds that
 #: ``category_id`` (so not for a deleted or moved fact); ``ARGV = category_id, fact_id, held ("1"/"0")`` (#21984).
+#: The category's ``fact_count`` (``KEYS[4]``) moves only when the id newly enters the set, so a re-run
+#: pass never double-counts and a refused join never counts: this is the one increment path for a join.
 _MEMBERSHIP_LUA = """
 if redis.call('HGET', KEYS[1], 'category_id') ~= ARGV[1] then return 0 end
-redis.call('SADD', KEYS[2], ARGV[2])
+if redis.call('SADD', KEYS[2], ARGV[2]) == 1 then redis.call('HINCRBY', KEYS[4], 'fact_count', 1) end
 if ARGV[3] == '1' then redis.call('SADD', KEYS[3], ARGV[2]) else redis.call('SREM', KEYS[3], ARGV[2]) end
 return 1
 """
@@ -100,10 +102,11 @@ async def _write_membership(redis: Any, fact_id: str, category_id: str, held: bo
     """Join the set and set the index entry for *held* in one script, refused if the fact left the category."""
     await redis.eval(
         _MEMBERSHIP_LUA,
-        3,
+        4,
         f"fact:{fact_id}",
         FACTS_KEY.format(category_id),
         QUARANTINED_KEY.format(category_id),
+        f"category:{category_id}",
         category_id,
         fact_id,
         "1" if held else "0",

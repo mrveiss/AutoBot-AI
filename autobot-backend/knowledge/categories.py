@@ -936,11 +936,9 @@ class CategoriesMixin:
         # category_id first: add_to_category's race handling relies on this order (#21957)
         await self.redis().hset(f"fact:{fact_id}", "category_id", category_id)
 
-        # Add to category's fact set, with its quarantine index entry (one MULTI)
+        # Join the fact set, its quarantine index entry and the category's fact_count: one script, so the
+        # count moves only when the id actually enters the set (#21984)
         await add_to_category(self.redis(), fact_id, category_id)
-
-        # Increment category count
-        await self.redis().hincrby(f"category:{category_id}", "fact_count", 1)
 
     async def _remove_fact_category(self, fact_id: str) -> None:
         """Remove category assignment from a fact."""

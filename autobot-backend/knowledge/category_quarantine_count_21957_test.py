@@ -554,3 +554,32 @@ async def test_a_rebuild_batch_that_does_not_settle_does_not_write_the_marker(mo
     assert await rebuild_category_quarantine_index(kb.redis()) == 1
 
     assert REBUILT_MARKER not in kb.redis().strings
+
+
+def _count(kb, category_id="cat1") -> int:
+    return int(kb.redis().hashes.get(f"category:{category_id}", {}).get(b"fact_count", b"0"))
+
+
+@pytest.mark.asyncio
+async def test_an_assign_that_resumes_after_the_delete_took_the_hash_leaves_the_count_at_zero():
+    """#21984: assign HSETs category_id, delete takes the hash, assign resumes: refused join, no count."""
+    kb = _DeleteKB()
+    await kb.redis().hset("fact:x", mapping={"content": "x", "metadata": json.dumps({})})
+    await kb.redis().hset("fact:x", "category_id", "cat1")  # the assign's first step
+
+    assert (await kb.delete_fact("x"))["status"] == "success"
+    await add_to_category(kb.redis(), "x", "cat1")  # the assign resumes
+
+    assert kb.redis().sets.get(MEMBERS, set()) == set()
+    assert _count(kb) == 0
+
+
+@pytest.mark.asyncio
+async def test_a_correction_pass_re_running_the_join_does_not_double_count():
+    kb = await _kb(servable=1, quarantined=0)
+    assert _count(kb) == 1
+
+    await add_to_category(kb.redis(), "s0", "cat1")
+    await add_to_category(kb.redis(), "s0", "cat1")
+
+    assert _count(kb) == 1

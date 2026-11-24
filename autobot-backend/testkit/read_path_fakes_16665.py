@@ -216,11 +216,15 @@ class SetRedis:
 
     def _membership(self, keys, argv) -> int:
         """``_MEMBERSHIP_LUA``: join and index only while the hash still holds *category_id*."""
-        hash_key, facts_key, held_key = keys
+        hash_key, facts_key, held_key, count_key = keys
         category_id, fact_id, held = argv
         if self.hashes.get(hash_key, {}).get(b"category_id") != self._b(category_id):
             return 0
-        self.sets.setdefault(facts_key, set()).add(fact_id)
+        members = self.sets.setdefault(facts_key, set())
+        if fact_id not in members:
+            members.add(fact_id)
+            row = self.hashes.setdefault(count_key, {})
+            row[b"fact_count"] = self._b(int(row.get(b"fact_count", b"0")) + 1)
         held_set = self.sets.setdefault(held_key, set())
         held_set.add(fact_id) if held == "1" else held_set.discard(fact_id)
         return 1
