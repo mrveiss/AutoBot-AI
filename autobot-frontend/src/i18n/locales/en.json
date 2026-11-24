@@ -4613,6 +4613,15 @@
       "loadingDocument": "Loading document…",
       "copy": "Copy",
       "copied": "Copied"
+    },
+    "abandonedUploads": {
+      "title": "Abandoned uploads",
+      "description": "Uploads that expired unfinished still take up disk space until an admin frees them.",
+      "none": "No abandoned uploads.",
+      "loadFailed": "The abandoned uploads could not be listed.",
+      "progress": "{received} of {total} received",
+      "free": "Free upload",
+      "freeFailed": "The upload could not be freed."
     }
   },
   "workflow": {
