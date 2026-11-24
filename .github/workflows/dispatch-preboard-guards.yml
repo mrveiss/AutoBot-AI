@@ -30,8 +30,9 @@
 #           testpaths except the product trees), with the suite's own interpreter setup, env,
 #           marker selection and shard plugin, and the reach-floor staleness
 #           audit exactly where PR CI enables it (pipeline-scripts/reach_audit_scope.py, the one rule
-#           ci.yml calls too: a `train-*` ref, a merge group, main; a plain member head only warns). The roots, the floor and the
-#           verdict come from pipeline-scripts/preboard_guard_lane.py; this file names none.
+#           ci.yml calls too: a `train-*` ref, a merge group, main; a plain member head only warns).
+#           The roots, the floor and the verdict come from pipeline-scripts/preboard_guard_lane.py;
+#           this file names none.
 #           Split in the matrix below by the suite's stable module sharding, balanced over the
 #           lane's own recorded durations. Not fail-fast, no stop-on-first-failure option: one
 #           complete list per run.

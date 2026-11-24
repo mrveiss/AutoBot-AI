@@ -117,6 +117,12 @@ def test_the_entry_writes_the_variable_only_where_it_applies(tmp_path: Path) -> 
         assert target.read_text(encoding="utf-8") == expected
 
 
+def test_an_audit_with_nowhere_to_write_fails_and_a_warn_only_one_does_not() -> None:
+    """Without ``GITHUB_ENV`` the audit cannot be enabled: that fails, never a silent warn-only (#22147)."""
+    assert _scope().main({"GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/main"}) == 1
+    assert _scope().main({"GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/release"}) == 0
+
+
 def test_both_workflows_call_the_one_entry_and_nothing_else_sets_the_audit() -> None:
     for name in ("ci.yml", "dispatch-preboard-guards.yml"):
         assert _entry_steps(_workflow(name)), f"{name} does not call the shared entry"
