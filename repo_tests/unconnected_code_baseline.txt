@@ -90,7 +90,6 @@ module:autobot-backend/skills/builtin/document_analysis.py	#10603
 module:autobot-backend/skills/builtin/note_taking.py	#10603
 module:autobot-backend/skills/builtin/skill_researcher.py	#10603
 module:autobot-backend/skills/builtin/voice_transcription.py	#10603
-module:autobot-backend/tools/delegate_tool.py	#10603
 module:autobot-backend/utils/adaptive_memory_manager.py	#10603
 module:autobot-backend/utils/async_database_pool.py	#10603
 module:autobot-backend/utils/chat_exceptions.py	#10603

@@ -10,7 +10,6 @@ Tests verify:
 2. HierarchicalAgent delegation functionality
 3. Max depth enforcement
 4. Parallel delegation
-5. DelegateTool integration
 """
 
 import asyncio
@@ -19,7 +18,6 @@ import pytest
 
 from agents.hierarchical_agent import HierarchicalAgent
 from chat_workflow.models import AgentContext
-from tools.delegate_tool import DelegateTool
 from utils.errors import RepairableException
 
 
@@ -241,77 +239,6 @@ class TestHierarchicalAgent:
         assert d["context"]["agent_id"] == "test"
         assert d["context"]["level"] == 1
         assert d["subordinate_ids"] == []
-
-
-class TestDelegateTool:
-    """Test DelegateTool functionality."""
-
-    def test_tool_definition(self):
-        """get_tool_definition() should return proper structure."""
-        tool = DelegateTool()
-        definition = tool.get_tool_definition()
-
-        assert definition["name"] == "delegate"
-        assert "parameters" in definition
-        assert "task" in definition["parameters"]
-        assert "reason" in definition["parameters"]
-
-    def test_format_for_prompt(self):
-        """format_for_prompt() should include syntax example."""
-        tool = DelegateTool()
-        prompt = tool.format_for_prompt()
-
-        assert "TOOL_CALL" in prompt
-        assert "delegate" in prompt
-        assert "task" in prompt
-
-    @pytest.mark.asyncio
-    async def test_execute_without_agent(self):
-        """execute() without hierarchical agent should fail gracefully."""
-        tool = DelegateTool()
-
-        response = await tool.execute(
-            task="Test task",
-            reason="Test reason",
-        )
-
-        assert response.success is False
-        assert "not available" in response.message
-
-    @pytest.mark.asyncio
-    async def test_execute_with_agent(self):
-        """execute() with hierarchical agent should delegate."""
-        ctx = AgentContext(agent_id="test", level=0)
-
-        async def mock_callback(task, agent):
-            return f"Completed: {task}"
-
-        hierarchical_agent = HierarchicalAgent(context=ctx, task_callback=mock_callback)
-        tool = DelegateTool(hierarchical_agent=hierarchical_agent)
-
-        response = await tool.execute(
-            task="Delegated task",
-            reason="Integration test",
-        )
-
-        assert response.success is True
-        assert "Completed: Delegated task" in response.message
-        assert response.subordinate_id is not None
-
-    @pytest.mark.asyncio
-    async def test_execute_at_max_depth(self):
-        """execute() at max depth should return failure."""
-        ctx = AgentContext(agent_id="deep", level=3, max_depth=3)
-        hierarchical_agent = HierarchicalAgent(context=ctx)
-        tool = DelegateTool(hierarchical_agent=hierarchical_agent)
-
-        response = await tool.execute(
-            task="Too deep",
-            reason="Test",
-        )
-
-        assert response.success is False
-        assert "Maximum delegation depth" in response.message or "depth" in response.message.lower()
 
 
 class TestDelegationChain:
