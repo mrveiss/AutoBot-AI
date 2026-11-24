@@ -165,6 +165,32 @@ class ManifestHealth(BaseModel):
     expected_status: int = Field(default=200)
 
 
+class RoleHealthCheck(BaseModel):
+    """How one SLM registry role's health is checked, declared explicitly (#22032).
+
+    ``checked: false`` is the explicit "this role has no health check" and carries no port or path. A role served
+    by a shared manifest (``autobot-database``, the celery roles of ``autobot-backend``) states its own entry:
+    the manifest's one ``health.endpoint`` is not each role's.
+    """
+
+    checked: bool = Field(description="Whether the role is health-checked at all; false is an explicit 'none'")
+    port: int | None = Field(default=None, ge=1, le=65535, description="TCP port the check dials")
+    path: str | None = Field(default=None, description="HTTP path the check requests; starts with '/'")
+
+    @model_validator(mode="after")
+    def port_and_path_match_checked(self) -> "RoleHealthCheck":
+        """A checked role names a port and an absolute path; an unchecked one names neither."""
+        if not self.checked:
+            if self.port is not None or self.path is not None:
+                raise ValueError("a role with checked: false must not declare a port or path")
+            return self
+        if self.port is None or not self.path:
+            raise ValueError("a role with checked: true must declare both port and path")
+        if not self.path.startswith("/"):
+            raise ValueError(f"health path {self.path!r} must start with '/'")
+        return self
+
+
 class ManifestSecrets(BaseModel):
     """Secrets this role owns vs borrows."""
 
@@ -249,6 +275,12 @@ class RoleManifest(BaseModel):
 
     # Health
     health: ManifestHealth | None = None
+    #: #22032: the health check of each SLM registry role this manifest serves, keyed by registry role name (the
+    #: manifest's own role and every ``slm_roles`` tag). ``role_registry`` reads a role's health only from here.
+    role_health: Dict[str, RoleHealthCheck] | None = Field(
+        default=None,
+        description="Absent in a manifest older than the SLM code (#22032); when present it covers every slm_roles tag",
+    )
 
     # Secrets
     secrets: ManifestSecrets = Field(default_factory=ManifestSecrets)
@@ -278,6 +310,17 @@ class RoleManifest(BaseModel):
         description="Ansible role name (defaults to last segment of role, e.g. 'backend')",
     )
     notes: str | None = None
+
+    @model_validator(mode="after")
+    def every_tagged_role_declares_its_health(self) -> "RoleManifest":
+        """A PRESENT ``role_health`` covers every ``slm_roles`` tag (#22032); an absent one is a stale manifest."""
+        if self.role_health is None:
+            return self
+        tagged = {role for svc in self.services for role in svc.slm_roles}
+        missing = sorted(tagged - set(self.role_health))
+        if missing:
+            raise ValueError(f"role_health declares nothing for the slm_roles {missing}; state checked: false if none")
+        return self
 
     @field_validator("role")
     @classmethod

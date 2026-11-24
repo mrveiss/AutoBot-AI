@@ -34,7 +34,7 @@ UNSANITISED_ALLOWLIST: dict[str, tuple[int, str]] = {
         "renderMarkdown escapes & < > before adding its own tags",
     ),
     "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": (
-        2,
+        1,
         "applyHighlight/highlightedContent escape & < > before wrapping <mark>",
     ),
     "autobot-frontend/src/components/canvas/CanvasCell.vue": (

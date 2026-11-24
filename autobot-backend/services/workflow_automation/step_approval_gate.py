@@ -47,7 +47,7 @@ TITLE = "Workflow step waiting for approval"
 async def owner_username(owner_id: str | None) -> str | None:
     """The username an approval is owned by, for a workflow owner id; ``None`` when unknown (fail closed).
 
-    A workflow records ``user_id``, ``sub`` or ``username`` (``workflow_ownership.caller_id``) while an
+    A workflow records ``id``, ``user_id`` or ``sub`` (``workflow_ownership.caller_id``) while an
     approval is scoped by username. A value that is not a user id is already a username.
     """
     if not owner_id:

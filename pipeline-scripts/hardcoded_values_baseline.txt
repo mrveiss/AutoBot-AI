@@ -635,8 +635,6 @@
 2|ssot|autobot-frontend/src/test/vitest-setup.ts|:3000
 2|other|autobot-frontend/src/utils/ApiClient.ts|'user'
 1|other|autobot-frontend/src/utils/urlUtils.ts|https://duckduckgo.com/?q=${encodeURIComponent(input
-1|other|autobot-frontend/src/views/EvolutionView.vue|"/opt/autobot
-1|other|autobot-frontend/src/views/EvolutionView.vue|'/opt/autobot
 2|other|autobot-frontend/src/views/SharedChatView.vue|'user'
 1|other|autobot-frontend/src/views/llc/ProjectBrowserView.vue|https://github.com/${p.code_source.repo}
 3|ssot|autobot-frontend/start-frontend-dev.sh|:5173

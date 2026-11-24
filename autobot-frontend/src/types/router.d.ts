@@ -36,6 +36,13 @@ declare module 'vue-router' {
     requiresAuth?: boolean
 
     /**
+     * Advanced-only area (#18244): its navigation link carries `.adv`, so Minimal mode
+     * hides it, and a section layout shows the "advanced area" notice when it is opened
+     * directly. Child routes inherit it from a matched parent.
+     */
+    adv?: boolean
+
+    /**
      * Hide from navigation menu
      */
     hideInNav?: boolean
