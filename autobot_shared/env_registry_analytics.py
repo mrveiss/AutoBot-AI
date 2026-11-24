@@ -197,7 +197,6 @@ register_env_var(
     )
 )
 
-
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_BUG_PREDICTION_MAX_PATTERN_LENGTH",

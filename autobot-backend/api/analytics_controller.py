@@ -192,7 +192,9 @@ class AnalyticsController:
                 # Issue #483: Parallelize independent Redis operations
                 await asyncio.gather(
                     redis_conn.lpush("analytics:api_calls", call_data),
-                    redis_conn.ltrim("analytics:api_calls", 0, 9999),  # Keep last 10k
+                    redis_conn.ltrim(
+                        "analytics:api_calls", 0, MAX_API_CALL_PATTERNS - 1
+                    ),  # same bound as the in-process ring
                     return_exceptions=True,
                 )
         except Exception as e:

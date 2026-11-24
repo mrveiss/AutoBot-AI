@@ -211,3 +211,20 @@ def test_the_ring_size_comes_from_the_environment():
     from api import analytics_controller as module
 
     assert module.analytics_state["api_call_patterns"].maxlen == module.MAX_API_CALL_PATTERNS
+
+
+async def test_the_persisted_call_history_is_trimmed_to_the_same_bound(monkeypatch):
+    """The Redis copy keeps exactly as many calls as the in-process ring, from one setting (#21684)."""
+    from api import analytics_controller as module
+
+    monkeypatch.setattr(module, "MAX_API_CALL_PATTERNS", 7)
+    redis = AsyncMock()
+    controller = module.AnalyticsController.__new__(module.AnalyticsController)
+    controller.api_frequencies = module.defaultdict(int)
+    controller.response_times = module.defaultdict(list)
+    controller.error_counts = module.defaultdict(int)
+    controller.get_redis_connection = AsyncMock(return_value=redis)
+
+    await controller.track_api_call("GET /api/item/1", 0.01, 200)
+
+    redis.ltrim.assert_awaited_once_with("analytics:api_calls", 0, 6)
