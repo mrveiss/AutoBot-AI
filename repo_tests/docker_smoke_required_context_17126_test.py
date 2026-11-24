@@ -49,7 +49,7 @@ def _workflow_files(root: Path) -> list[Path]:
 REACH = declare(
     "docker-smoke-context-publishers",
     discover=_workflow_files,
-    floor=71,  # mid-window: population 74, window (68, 74)
+    floor=74,  # mid-window: population 77, window (71, 77)
     growth=6,  # ~9%: a new workflow file must not turn an unrelated PR red
     what="workflow files",
     roots=(".github/workflows",),
