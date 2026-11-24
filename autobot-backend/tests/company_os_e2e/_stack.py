@@ -17,7 +17,6 @@ to start against a Redis that holds data or to use a Postgres superuser.
 from __future__ import annotations
 
 import asyncio
-import base64
 import dataclasses
 import os
 import secrets
@@ -35,6 +34,8 @@ import bcrypt
 import httpx
 import redis
 from sqlalchemy.engine import URL
+
+from testkit.root_key import fresh_root_key
 
 ENV_PREFIX = "AUTOBOT_COMPANY_OS_E2E_"
 PG_HOST_ENV = ENV_PREFIX + "PG_HOST"
@@ -196,7 +197,7 @@ def _server_env(ep: Endpoints, database: str, port: int, stub_log: Path, home: P
         AUTOBOT_REDIS_PORT=str(ep.redis_port),
         AUTOBOT_REDIS_URL=f"redis://{ep.redis_host}:{ep.redis_port}",
         REDIS_HOST=ep.redis_host,
-        AUTOBOT_SECRETS_ROOT_KEY=base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
+        AUTOBOT_SECRETS_ROOT_KEY=fresh_root_key(),
         AUTOBOT_JWT_SECRET=secrets.token_urlsafe(48),
         AUTOBOT_COMPANY_OS_E2E_SERVE_HOST="127.0.0.1",
         AUTOBOT_COMPANY_OS_E2E_SERVE_PORT=str(port),
