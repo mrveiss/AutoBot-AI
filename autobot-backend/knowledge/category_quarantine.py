@@ -25,9 +25,10 @@ Atomicity. A membership change and its index entry go in one ``MULTI`` so a cras
 The "is it quarantined" decision reads the fact's metadata, which a concurrent ``update_fact`` may
 change between the read and the write. Rather than a Lua script (the repo's ``eval`` users guard plain
 values; this decision is the Python quarantine predicate over a JSON field, and a Lua copy of it would
-be a second definition), the decision is re-read after the write and corrected once. ``category_id`` is
-written before the first read, and ``update_fact`` writes the metadata before it reads ``category_id``,
-so either the re-read sees the new metadata or ``update_fact`` sees the category and syncs it itself.
+be a second definition), the decision is re-read after the write and rewritten until the two agree, at
+most :data:`CONVERGE_PASSES` times (an ERROR if it does not settle; the rebuild heals the rest).
+``category_id`` is written before the first read, and ``update_fact`` writes the metadata before it reads
+``category_id``, so either the re-read sees the new metadata or ``update_fact`` sees the category and syncs it.
 
 Why a Redis marker and not the visibility backfill's durable row flag (``knowledge_facts``): category
 membership and ``category_id`` live only in Redis, never in the durable row, so there is no row to flag.
