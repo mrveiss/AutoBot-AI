@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Icon from '@/components/ui/Icon.vue'
 import KnowledgeResearchPanel from './KnowledgeResearchPanel.vue'
@@ -59,8 +59,13 @@ const route = useRoute()
 // right tab, rather than landing on Research and making the user click.
 type ResearchTab = 'research' | 'webTools' | 'settings'
 const validResearchTabs: ResearchTab[] = ['research', 'webTools', 'settings']
-const initialTab = validResearchTabs.includes(route.query.tab as ResearchTab)
-  ? (route.query.tab as ResearchTab)
-  : 'research'
-const researchTab = ref<ResearchTab>(initialTab)
+const tabFromQuery = (tab: unknown): ResearchTab =>
+  validResearchTabs.includes(tab as ResearchTab) ? (tab as ResearchTab) : 'research'
+const researchTab = ref<ResearchTab>(tabFromQuery(route.query.tab))
+
+// Research and Web Research share this route and differ only by ?tab=, so the view stays
+// mounted when the sidebar moves between them: follow the query with the same validation.
+watch(() => route.query.tab, (tab) => {
+  researchTab.value = tabFromQuery(tab)
+})
 </script>

@@ -44,6 +44,11 @@ describe('sanitizeHtml allowed formatting survives', () => {
     expect(sanitizeKnowledgeHtml('<a href="https://x.test">l</a>')).toBe('l')
   })
 
+  it('knowledge keeps the search-highlight mark and strips hostile markup', () => {
+    expect(sanitizeKnowledgeHtml('a <mark class="kb-highlight">b</mark>')).toBe('a <mark class="kb-highlight">b</mark>')
+    expect(sanitizeKnowledgeHtml('<mark onclick="x()">b</mark><script>x()</script>')).toBe('<mark>b</mark>')
+  })
+
   it('code keeps highlight spans and drops other tags', () => {
     expect(sanitizeHtml('<span class="hljs-keyword">if</span><b>x</b>', 'code')).toBe(
       '<span class="hljs-keyword">if</span>x',

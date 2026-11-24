@@ -158,14 +158,14 @@ def _reference_pairs(root) -> list[str]:
 VARIABLES = declare(
     "inventory-variable-cycle-variables-21343",
     discover=_variables,
-    floor=700,
+    floor=737,  # mid-window: population 767, window (707, 767)
     growth=60,
     what="Ansible variables in group_vars and role defaults/vars",
 )
 REFERENCES = declare(
     "inventory-variable-cycle-references-21343",
     discover=_reference_pairs,
-    floor=180,
+    floor=204,  # mid-window: population 219, window (189, 219)
     growth=30,
     what="references between Ansible variables",
 )

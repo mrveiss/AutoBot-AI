@@ -83,6 +83,9 @@ EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
     # #22033: the stale code-sync file listing and proposal are an explicit admin trigger per node (owner decision D4);
     # there is no UI for it yet. The removal itself is the backend's approved-action executor calling the SLM.
     "/api/code-sync/stale-files": "an administrator, over HTTP (no UI yet)",
+    # #17219: the audit-chain verification is run by an administrator over HTTP, and by the CLI
+    # (`python -m services.audit.integrity`) through the same function. The admin-view status card is #22006.
+    "/api/audit/integrity": "an administrator, over HTTP (the admin-view status card is #22006)",
     # #20910: SCIM 2.0 inbound provisioning (RFC 7644) is pushed by the identity provider's SCIM client;
     # the SLM mounts it outside /api so the provider reaches it directly. Nothing in this repository calls it.
     "/scim/v2": "an identity provider's SCIM client, over HTTP",

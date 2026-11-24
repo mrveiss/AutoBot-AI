@@ -8,9 +8,8 @@ The SLM's propose call reads for an open proposal and then creates one, so two r
 partial unique index is the only thing that makes the second insert fail; the route reads that failure as
 "already proposed".
 
-Chain: this revision descends from ``20261122_121``, the head of main's chain when it was written. Open
-PR #22105 adds ``20261122_122`` on the same parent, so whichever of the two lands second re-points its
-``down_revision`` at the other's revision (a single head is required).
+Chain: this revision descends from ``20261122_122`` (the audit chain, #17219), which was main's head when this
+landed; a single head is required.
 
 ``NO DATA REWRITE``: this adds one partial index only. No row or column is touched, and it constrains
 nothing except pending rows of its own action (none exist before the feature). If a dev install already
@@ -27,7 +26,7 @@ from alembic import op
 from migrations.guards import has_index, has_table
 
 revision: str = "20261124_123"
-down_revision: Union[str, None] = "20261122_121"
+down_revision: Union[str, None] = "20261122_122"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

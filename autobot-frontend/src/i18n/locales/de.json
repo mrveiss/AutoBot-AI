@@ -2391,6 +2391,7 @@
       "demoDataWarning": "Demo-Daten-Warnung",
       "exportSuccess": "Export erfolgreich",
       "exportFailed": "Export fehlgeschlagen",
+      "loadFailed": "Evolutionsdaten konnten nicht geladen werden",
       "noTrendData": "Keine Trenddaten",
       "stable": "Stabil",
       "sinceStart": "Seit Beginn"

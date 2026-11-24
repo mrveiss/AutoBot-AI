@@ -1,0 +1,160 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Nightly cold-cache canary (#22137). Runs the python suite on main with the venv caches DISABLED
+# (`cold-cache: true` on the setup-python-suite action), so every dependency resolves fresh from
+# the constraints files CI uses. On 2026-11-23 redis 8.2.0 plus fakeredis 2.40.0 broke every
+# FakeRedis test (#22120); it showed only on pull requests that missed the venv cache and
+# reddened four of them. Here the same break reddens one scheduled run on main, overnight.
+#
+# Why this is not a copy of ci.yml's shard job: that job is gated on `changes`/`ready` and has no
+# workflow_call; the shared part, the environment, is the composite action, and the pytest roots
+# are the ones repo_tests/hook_suites_run_in_ci_test.py already requires every carrier to agree on.
+#
+# Failure reporting is the daily scheduled-failure sweep (scheduled-failure-report.yml): it reads
+# every `on.schedule` workflow, keeps ONE issue per failing one with the run link, and closes it
+# when the latest scheduled run passes. Nothing is posted on a pull request.
+#
+# ci.yml's ratchet-base step (AUTOBOT_RATCHET_BASE_SHA) is not mirrored on purpose: it reads the
+# base of a push, merge group or release promotion, and a scheduled run has none, so the
+# down-only ratchets compare against HEAD^1 (fetch-depth 2), as in coverage.yml's nightly.
+# The promtool provisioning IS mirrored, so the cold run collects the same rule tests.
+#
+# No pull-request CI slot: the trigger is `schedule`/`workflow_dispatch`, never `pull_request`,
+# and a scheduled run's ref is `main`, whose runs the PR slot coordinator leaves alone (it skips a fixed set of branch names).
+# 02:47 UTC sits between coverage (02:00) and the failure sweep (07:23).
+
+name: Scheduled Cold-Cache Canary
+
+on:
+  schedule:
+    - cron: '47 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  cold-suite:
+    name: python-suite (cold cache)
+    # main only: a manual dispatch may pick another branch, and this canary is about main.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PYTEST_FAULTHANDLER_TIMEOUT_S: 600
+
+    services:
+      redis:
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2  # down-only ratchets read the base commit (HEAD^1)
+
+      - uses: ./.github/actions/setup-python-suite
+        id: setup-python-suite
+        with:
+          cold-cache: 'true'
+
+      - name: Resolved versions against the cached venv
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip freeze --all | sort > "$RUNNER_TEMP/freeze-cold.txt"
+          cached="$RUNNER_TEMP/freeze-cached.txt"
+          {
+            echo "### Cold-cache resolve (#22137)"
+            echo "Backend venv: $(wc -l < "$RUNNER_TEMP/freeze-cold.txt") packages resolved fresh."
+            if [ -s "$cached" ]; then
+              echo "Packages that differ from the cached venv (\`-\` cached, \`+\` fresh):"
+              echo '```diff'
+              changes=$({ diff "$cached" "$RUNNER_TEMP/freeze-cold.txt" || true; } | grep '^[<>]' | sed -e 's/^</-/' -e 's/^>/+/' || true)
+              echo "${changes:-(none)}" | tee "$RUNNER_TEMP/freeze-diff.txt"
+              echo '```'
+            else
+              echo "No cached venv exists for the current requirements; nothing to diff against." | tee "$RUNNER_TEMP/freeze-diff.txt"
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: cold-cache-freeze
+          path: |
+            ${{ runner.temp }}/freeze-cold.txt
+            ${{ runner.temp }}/freeze-cached.txt
+            ${{ runner.temp }}/freeze-diff.txt
+          if-no-files-found: ignore
+
+      # Same promtool provisioning as ci.yml's python-shard, so the cold run collects the same
+      # rule tests (the require step makes a missing binary an error, not a silent skip).
+      - name: Resolve the Prometheus version from the monitoring role (#18556)
+        id: promver
+        run: |
+          set -euo pipefail
+          V=$(sed -nE 's/^prometheus_version:[[:space:]]*"?([0-9][0-9.]*)"?.*/\1/p' autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml)
+          test -n "$V"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Cache promtool
+        id: promtool-cache
+        uses: actions/cache@v6
+        with:
+          path: /usr/local/bin/promtool
+          key: promtool-${{ runner.os }}-${{ steps.promver.outputs.version }}
+
+      - name: Install promtool (Prometheus rule validation, #13927)
+        if: steps.promtool-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          PROM_VERSION="${{ steps.promver.outputs.version }}"
+          TARBALL="prometheus-${PROM_VERSION}.linux-amd64"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 \
+            -o "/tmp/${TARBALL}.tar.gz" \
+            "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/${TARBALL}.tar.gz"  # noqa: pinned upstream release URL (#14053); the version is PROM_VERSION above
+          tar xzf "/tmp/${TARBALL}.tar.gz" -C /tmp
+          sudo install -m 0755 "/tmp/${TARBALL}/promtool" /usr/local/bin/promtool
+
+      - name: Require promtool in the rule tests (#13927)
+        run: |
+          echo "AUTOBOT_REQUIRE_PROMTOOL=1" >> "$GITHUB_ENV"
+
+      - name: Run unit tests — backend, shared, tts-worker, repo_tests
+        run: |
+          python -m pytest \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks autobot-infrastructure/shared/scripts/monitoring .claude/skills/claims-audit autobot-infrastructure/shared/tests libs plugins/core-plugins \
+            -n auto --dist loadscope \
+            -m "not integration and not slow and not distributed and not performance" \
+            --tb=short \
+            -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
+            -q -rs
+
+      - name: Run unit tests — slm-backend
+        if: ${{ !cancelled() }}
+        env:
+          SLM_PYTHON: ${{ steps.setup-python-suite.outputs.slm-venv }}/bin/python
+        run: |
+          "$SLM_PYTHON" -m pytest \
+            autobot-slm-backend \
+            -n auto --dist loadscope \
+            -m "not integration and not slow and not distributed and not performance" \
+            --tb=short \
+            -o faulthandler_timeout="$PYTEST_FAULTHANDLER_TIMEOUT_S" \
+            -q
