@@ -8,7 +8,9 @@ export const CONTROL_ERROR_KEYS: Record<string, string> = {
   vnc_credential_missing: 'desktop.interface.vncCredentialMissing',
   host_not_found: 'desktop.interface.hostNotFound',
   host_fields_missing: 'desktop.interface.hostFieldsMissing',
-  host_vnc_unavailable: 'desktop.interface.hostVncUnavailable'
+  host_vnc_unavailable: 'desktop.interface.hostVncUnavailable',
+  desktop_vm_unavailable: 'desktop.interface.desktopVmUnavailable',
+  slm_registry_unavailable: 'desktop.interface.registryUnavailable'
 }
 
 /** The translated text for a control failure: by stable code when known, else the response's own message. */

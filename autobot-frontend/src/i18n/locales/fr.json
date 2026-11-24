@@ -6863,7 +6863,8 @@
       },
       "vncCompanionName": "{name} (identifiants VNC)",
       "vncCompanionDescription": "Identifiants VNC pour {host}",
-      "vncCompanionNoHostId": "L'hôte a été enregistré mais son identifiant n'a pas été renvoyé ; les identifiants VNC n'ont donc pas été enregistrés."
+      "vncCompanionNoHostId": "L'hôte a été enregistré mais son identifiant n'a pas été renvoyé ; les identifiants VNC n'ont donc pas été enregistrés.",
+      "vncRetry": "L'hôte a été enregistré, mais pas son mot de passe VNC. Enregistrez à nouveau pour réessayer ; l'hôte ne sera pas créé deux fois."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7763,7 +7764,9 @@
       "vncCredentialMissing": "Aucun mot de passe VNC n'est enregistré pour cet hôte. Ajoutez-le dans Secrets.",
       "hostNotFound": "Cet hôte ne fait pas partie de vos hôtes Secrets.",
       "hostFieldsMissing": "Il manque à cet hôte un nom d'utilisateur ou des capacités. Définissez-les dans Secrets.",
-      "hostVncUnavailable": "Cet hôte n'a ni capacité VNC ni port dans Secrets."
+      "hostVncUnavailable": "Cet hôte n'a ni capacité VNC ni port dans Secrets.",
+      "desktopVmUnavailable": "Aucun bureau VNC n'est enregistré, la VM de bureau n'est donc pas disponible.",
+      "registryUnavailable": "Le registre des bureaux n'a pas pu être lu. Réessayez dans un instant."
     },
     "popoutBrowser": {
       "title": "Research Browser",

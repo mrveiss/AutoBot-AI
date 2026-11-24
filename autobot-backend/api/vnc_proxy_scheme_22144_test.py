@@ -70,5 +70,8 @@ async def test_unknown_vnc_type_closes_the_websocket_before_accept():
     assert ws.close.await_args.kwargs["code"] == 1003
 
 
-def test_the_desktop_vm_is_a_proxied_type():
-    assert set(vnc_proxy.VNC_ENDPOINTS) == {"desktop", "browser"}
+def test_the_desktop_vm_is_a_registry_type_with_no_static_main_machine_entry():
+    assert set(vnc_proxy.VNC_ENDPOINTS) == {"browser"}
+    assert vnc_proxy.REGISTRY_VNC_TYPES == {"desktop"}
+    assert vnc_proxy._known_type("desktop") and vnc_proxy._known_type("browser")
+    assert not vnc_proxy._known_type("fleet-node-7")

@@ -45,6 +45,14 @@ describe('createVncCompanion', () => {
     expect(updateSecret).not.toHaveBeenCalled()
   })
 
+  it('adopts the created host BEFORE the refetch, so a failure leaves an edit of that host (no duplicate)', async () => {
+    const adopt = vi.fn()
+    getSecrets.mockImplementation(async () => { throw new Error('list failed') })
+    await expect(createVncCompanion({ data: { id: 'h1' } }, form, hostData, t, adopt)).rejects.toThrow('list failed')
+    expect(adopt).toHaveBeenCalledWith('h1')
+    expect(createSecret).not.toHaveBeenCalled()
+  })
+
   it('uses a freshly fetched list, so a stale form list cannot cause a duplicate', async () => {
     getSecrets.mockResolvedValue({ secrets: [{ id: 's7', type: 'password', metadata: { vnc_host_id: 'h1' } }] })
     await createVncCompanion({ data: { id: 'h1' } }, form, hostData, t)

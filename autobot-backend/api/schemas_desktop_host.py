@@ -20,4 +20,3 @@ class DesktopVmEndpointResponse(BaseModel):
 
     host: str
     port: int = Field(..., description="noVNC web port")
-    source: str = Field(..., description="'registry' (a registered SLM VNC node) or 'main_machine_fallback'")

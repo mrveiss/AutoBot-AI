@@ -22,9 +22,12 @@
 
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createLogger } from '@/utils/debugUtils'
 import { useHostSelection } from '@/composables/useHostSelection'
 import ApiClient from '@/utils/ApiClient'
 import { desktopVmEntry, type DesktopVmEndpoint } from '@/config/vnc-client'
+
+const logger = createLogger('useHostSelector')
 
 export interface SelectorHost {
   id: string
@@ -59,7 +62,8 @@ export function useHostSelector(options: UseHostSelectorOptions = {}) {
     if (!options.includeDesktopVm) return
     try {
       desktopVm.value = await ApiClient.call('get', '/api/vnc-proxy/desktop/endpoint')
-    } catch {
+    } catch (err) {
+      logger.warn('Desktop VM endpoint unavailable; no entry offered:', err)
       desktopVm.value = null // no endpoint, no entry: never a guessed address
     }
   }

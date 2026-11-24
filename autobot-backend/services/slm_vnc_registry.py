@@ -15,6 +15,7 @@ outage, not an empty fleet.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass
 
@@ -36,7 +37,12 @@ REGISTRY_TTL_SECONDS = env_int("AUTOBOT_VNC_REGISTRY_TTL_SECONDS", TTL_1_MINUTE)
 
 
 class SlmRegistryUnavailable(Exception):
-    """The SLM registry could not be read (link down or request failed)."""
+    """The SLM registry could not be read (the request failed)."""
+
+
+class SlmLinkNotInitialised(SlmRegistryUnavailable):
+    """No SLM control link exists in this process. Decided explicitly: with no SLM there is no registered
+    desktop node, so the desktop VM is absent (not an outage, and not an empty fleet to fall back from)."""
 
 
 @dataclass(frozen=True)
@@ -49,6 +55,7 @@ class DesktopVmEndpoint:
 
 
 _cache: tuple[float, DesktopVmEndpoint | None] | None = None
+_cache_lock = asyncio.Lock()  # one in-flight registry read; concurrent callers share its result
 
 
 def reset_cache() -> None:
@@ -61,7 +68,7 @@ async def _request(method: str, path: str, params: dict | None = None) -> dict:
 
     client = get_slm_client()
     if client is None:
-        raise SlmRegistryUnavailable("SLM control link is not initialised")
+        raise SlmLinkNotInitialised("SLM control link is not initialised")
     session = await client._get_session()
     url = client._rest_url(path)
     await assert_egress_policy(url)
@@ -74,8 +81,14 @@ async def _request(method: str, path: str, params: dict | None = None) -> dict:
 
 
 def _pick_desktop(endpoints: list[dict]) -> dict | None:
+    """The first live desktop endpoint, in a stable (hostname, node_id) order."""
     live = [e for e in endpoints if e.get("vnc_type") == DESKTOP_VNC_TYPE and e.get("is_active", True)]
-    return sorted(live, key=lambda e: str(e.get("hostname", "")))[0] if live else None
+    if not live:
+        return None
+    picked = sorted(live, key=lambda e: (str(e.get("hostname", "")), str(e.get("node_id", ""))))[0]
+    if len(live) > 1:
+        logger.warning("%d VNC desktop nodes are registered; using node %s", len(live), picked.get("node_id"))
+    return picked
 
 
 async def _rfb_port(node_id: str, credential_id: str) -> int | None:
@@ -101,20 +114,20 @@ async def _fetch_endpoint() -> DesktopVmEndpoint | None:
 
 
 async def desktop_vnc_endpoint(*, force_refresh: bool = False) -> DesktopVmEndpoint | None:
-    """The registered VNC desktop node, or None when the registry has none (or no SLM link exists)."""
+    """The registered VNC desktop node, or None when the registry has none or there is no SLM link."""
     global _cache
-    now = time.monotonic()
-    if not force_refresh and _cache is not None and now - _cache[0] < REGISTRY_TTL_SECONDS:
-        return _cache[1]
-    try:
-        endpoint = await _fetch_endpoint()
-    except SlmRegistryUnavailable as exc:
-        if "not initialised" not in str(exc):
-            raise
-        logger.info("No SLM link: treating the registry as having no VNC desktop node")
-        endpoint = None
-    _cache = (now, endpoint)
-    return endpoint
+    async with _cache_lock:
+        if not force_refresh and _cache is not None and time.monotonic() - _cache[0] < REGISTRY_TTL_SECONDS:
+            return _cache[1]
+        try:
+            endpoint = await _fetch_endpoint()
+        except SlmLinkNotInitialised:
+            logger.info("No SLM link: no VNC desktop node is registered")
+            endpoint = None
+        if endpoint is not None:
+            logger.info("Desktop VM is registered node %s", endpoint.node_id)
+        _cache = (time.monotonic(), endpoint)  # stamped after the fetch, so the TTL counts from the answer
+        return endpoint
 
 
 async def desktop_vnc_password(endpoint: DesktopVmEndpoint) -> bytes | None:

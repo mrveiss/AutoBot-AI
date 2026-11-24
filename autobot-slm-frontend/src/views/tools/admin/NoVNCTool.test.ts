@@ -12,7 +12,7 @@ import NoVNCTool from './NoVNCTool.vue'
 import en from '@/locales/en.json'
 import { probeVncWebsocket, vncClientUrlFromWebsocket } from '@/config/vnc-client'
 
-const WS_URL = 'wss://10.0.0.7:6080/websockify'
+const WS_URL = 'wss://203.0.113.7:6080/websockify'
 
 const getVncEndpoints = vi.fn()
 vi.mock('@/composables/useSlmApi', () => ({
@@ -36,7 +36,7 @@ class FakeSocket {
 function endpointsResponse() {
   return {
     endpoints: [
-      { credential_id: 'c1', node_id: 'n1', hostname: 'fleet-a', ip_address: '10.0.0.7', vnc_type: 'desktop', name: null, port: 6080, websocket_url: WS_URL, is_active: true },
+      { credential_id: 'c1', node_id: 'n1', hostname: 'fleet-a', ip_address: '203.0.113.7', vnc_type: 'desktop', name: null, port: 6080, websocket_url: WS_URL, is_active: true },
     ],
     total: 1,
   }
@@ -61,7 +61,7 @@ describe('NoVNCTool (SLM)', () => {
     const wrapper = await mountTool()
     const options = wrapper.findAll('select option')
     expect(options).toHaveLength(1)
-    expect(options[0].text()).toContain('10.0.0.7')
+    expect(options[0].text()).toContain('203.0.113.7')
   })
 
   it('Connect opens the endpoint websocket for real, then reports connected', async () => {
@@ -70,7 +70,7 @@ describe('NoVNCTool (SLM)', () => {
     await flushPromises()
     expect(FakeSocket.instances.map((s) => s.url)).toEqual([WS_URL])
     expect(wrapper.text()).toContain('Connected')
-    expect(wrapper.find('iframe').attributes('src')).toBe('https://10.0.0.7:6080/vnc.html?autoconnect=true&resize=scale')
+    expect(wrapper.find('iframe').attributes('src')).toBe('https://203.0.113.7:6080/vnc.html?autoconnect=true&resize=scale')
   })
 
   it('a failed websocket is an error, never a fake success', async () => {

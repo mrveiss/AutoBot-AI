@@ -37,12 +37,11 @@ export interface VncClientHost {
 export interface DesktopVmEndpoint {
   host: string
   port: number
-  source?: string
 }
 
 /**
  * The picker entry for AutoBot's desktop VM. The address is the backend's resolved endpoint (the SLM's
- * registered VNC desktop node, main machine only when none exists): the same answer the controls use, so
+ * registered VNC desktop node; there is no fallback, so no node means no entry): the same answer the controls use, so
  * there is no separate frontend guess of the host.
  */
 export function desktopVmEntry(endpoint: DesktopVmEndpoint): { id: string; host: string; vnc_port: number; capabilities: string[] } {

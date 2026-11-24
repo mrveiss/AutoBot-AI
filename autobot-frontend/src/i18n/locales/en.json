@@ -7300,7 +7300,8 @@
         "slackDesc": "Slack bot token",
         "serverLabel": "Server Host",
         "serverDesc": "SSH/VNC server access"
-      }
+      },
+      "vncRetry": "The host was saved, but its VNC password was not. Save again to retry; the host will not be created twice."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -8270,7 +8271,9 @@
       "vncCredentialMissing": "No VNC password is stored for this host. Add it in Secrets.",
       "hostNotFound": "This host is not one of your Secrets hosts.",
       "hostFieldsMissing": "This host is missing a username or capabilities. Set them in Secrets.",
-      "hostVncUnavailable": "This host has no VNC capability or port in Secrets."
+      "hostVncUnavailable": "This host has no VNC capability or port in Secrets.",
+      "desktopVmUnavailable": "No VNC desktop is registered, so the desktop VM is not available.",
+      "registryUnavailable": "The desktop registry could not be read. Try again shortly."
     },
     "popoutBrowser": {
       "title": "Research Browser",

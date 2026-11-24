@@ -6863,7 +6863,8 @@
       },
       "vncCompanionName": "{name} (VNC-Zugangsdaten)",
       "vncCompanionDescription": "VNC-Zugangsdaten für {host}",
-      "vncCompanionNoHostId": "Der Host wurde gespeichert, aber seine ID wurde nicht zurückgegeben; die VNC-Zugangsdaten wurden daher nicht gespeichert."
+      "vncCompanionNoHostId": "Der Host wurde gespeichert, aber seine ID wurde nicht zurückgegeben; die VNC-Zugangsdaten wurden daher nicht gespeichert.",
+      "vncRetry": "Der Host wurde gespeichert, sein VNC-Passwort jedoch nicht. Speichern Sie erneut, um es noch einmal zu versuchen; der Host wird nicht doppelt angelegt."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7763,7 +7764,9 @@
       "vncCredentialMissing": "Für diesen Host ist kein VNC-Passwort gespeichert. Fügen Sie es unter Secrets hinzu.",
       "hostNotFound": "Dieser Host gehört nicht zu Ihren Secrets-Hosts.",
       "hostFieldsMissing": "Diesem Host fehlen Benutzername oder Fähigkeiten. Legen Sie sie unter Secrets fest.",
-      "hostVncUnavailable": "Dieser Host hat in Secrets weder VNC-Fähigkeit noch Port."
+      "hostVncUnavailable": "Dieser Host hat in Secrets weder VNC-Fähigkeit noch Port.",
+      "desktopVmUnavailable": "Es ist kein VNC-Desktop registriert, daher ist die Desktop-VM nicht verfügbar.",
+      "registryUnavailable": "Die Desktop-Registry konnte nicht gelesen werden. Versuchen Sie es gleich erneut."
     },
     "popoutBrowser": {
       "title": "Research Browser",

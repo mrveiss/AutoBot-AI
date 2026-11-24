@@ -72,17 +72,22 @@ type SecretLike = { id: string; type?: string; metadata?: Record<string, unknown
  * #22145: a host's VNC password is its own secret, linked by host id, so the chat
  * Desktop can authenticate to that host's VNC endpoint with it. Creates it, or replaces
  * the value of the one already linked (so an EXISTING host can get or change its password).
+ * `adopt` is called with the host id as soon as it is known, before the refetch and the write.
  * `created` is a create response (`{ data: { id } }`) or the same shape built from a known host id.
  */
 export async function createVncCompanion(
   created: unknown,
   form: { type: string; name: string; host: string; capabilities: string[]; vnc_password: string },
   hostData: Record<string, unknown>,
-  t: (key: string, params?: Record<string, unknown>) => string
+  t: (key: string, params?: Record<string, unknown>) => string,
+  adopt?: (hostId: string) => void
 ): Promise<void> {
   if (form.type !== 'infrastructure_host' || !form.capabilities.includes('vnc') || !form.vnc_password) return;
   const hostId = (created as { data?: { id?: string } } | null)?.data?.id;
   if (!hostId) throw new Error(t('security.secretsManager.vncCompanionNoHostId'));
+  // The host now exists: the caller turns its form into an edit of THIS host before anything can fail,
+  // so a retry updates it and never creates a second one.
+  adopt?.(hostId);
   // Refetch first: a stale list could duplicate the secret. A failed refetch surfaces (the caller's write
   // failure path); it never falls back to a list that may be stale.
   const fresh = (await secretsApiClient.getSecrets({})) as { secrets?: SecretLike[] }

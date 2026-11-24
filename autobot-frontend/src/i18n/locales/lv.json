@@ -6863,7 +6863,8 @@
       },
       "vncCompanionName": "{name} (VNC akreditācijas dati)",
       "vncCompanionDescription": "VNC akreditācijas dati resursdatoram {host}",
-      "vncCompanionNoHostId": "Resursdators tika saglabāts, bet tā id netika atgriezts, tāpēc VNC akreditācijas dati netika saglabāti."
+      "vncCompanionNoHostId": "Resursdators tika saglabāts, bet tā id netika atgriezts, tāpēc VNC akreditācijas dati netika saglabāti.",
+      "vncRetry": "Resursdators tika saglabāts, bet tā VNC parole ne. Saglabājiet vēlreiz, lai mēģinātu vēlreiz; resursdators netiks izveidots divreiz."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7763,7 +7764,9 @@
       "vncCredentialMissing": "Šim resursdatoram nav saglabāta VNC parole. Pievienojiet to sadaļā Noslēpumi.",
       "hostNotFound": "Šis resursdators nav viens no jūsu Noslēpumu resursdatoriem.",
       "hostFieldsMissing": "Šim resursdatoram trūkst lietotājvārda vai iespēju. Iestatiet tos sadaļā Noslēpumi.",
-      "hostVncUnavailable": "Šim resursdatoram sadaļā Noslēpumi nav VNC iespējas vai porta."
+      "hostVncUnavailable": "Šim resursdatoram sadaļā Noslēpumi nav VNC iespējas vai porta.",
+      "desktopVmUnavailable": "Nav reģistrēta neviena VNC darbvirsma, tāpēc darbvirsmas VM nav pieejama.",
+      "registryUnavailable": "Darbvirsmu reģistru neizdevās nolasīt. Mēģiniet vēlreiz pēc brīža."
     },
     "popoutBrowser": {
       "title": "Research Browser",

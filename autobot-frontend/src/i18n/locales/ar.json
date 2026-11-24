@@ -6863,7 +6863,8 @@
       },
       "vncCompanionName": "{name} (بيانات اعتماد VNC)",
       "vncCompanionDescription": "بيانات اعتماد VNC لـ {host}",
-      "vncCompanionNoHostId": "تم حفظ المضيف لكن لم يُرجع معرّفه، لذلك لم تُحفظ بيانات اعتماد VNC."
+      "vncCompanionNoHostId": "تم حفظ المضيف لكن لم يُرجع معرّفه، لذلك لم تُحفظ بيانات اعتماد VNC.",
+      "vncRetry": "تم حفظ المضيف لكن لم تُحفظ كلمة مرور VNC الخاصة به. احفظ مرة أخرى لإعادة المحاولة؛ لن يُنشأ المضيف مرتين."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7763,7 +7764,9 @@
       "vncCredentialMissing": "لا توجد كلمة مرور VNC محفوظة لهذا المضيف. أضفها في الأسرار.",
       "hostNotFound": "هذا المضيف ليس من مضيفات الأسرار الخاصة بك.",
       "hostFieldsMissing": "يفتقد هذا المضيف إلى اسم المستخدم أو القدرات. عيّنها في الأسرار.",
-      "hostVncUnavailable": "ليس لدى هذا المضيف قدرة VNC أو منفذ في الأسرار."
+      "hostVncUnavailable": "ليس لدى هذا المضيف قدرة VNC أو منفذ في الأسرار.",
+      "desktopVmUnavailable": "لا يوجد سطح مكتب VNC مسجّل، لذا فإن جهاز سطح المكتب الافتراضي غير متاح.",
+      "registryUnavailable": "تعذّرت قراءة سجل أسطح المكتب. حاول مرة أخرى بعد قليل."
     },
     "popoutBrowser": {
       "title": "Research Browser",

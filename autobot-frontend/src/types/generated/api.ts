@@ -13475,7 +13475,7 @@ export interface paths {
         };
         /**
          * Get Desktop Vm Endpoint
-         * @description Where the desktop VM is, from the SLM registry (main machine only when none is registered).
+         * @description Where the desktop VM is, from the SLM registry; null when no VNC desktop node is registered.
          */
         get: operations["get_desktop_vm_endpoint_api_vnc_proxy_desktop_endpoint_get"];
         put?: never;
@@ -74752,11 +74752,6 @@ export interface components {
              * @description noVNC web port
              */
             port: number;
-            /**
-             * Source
-             * @description 'registry' (a registered SLM VNC node) or 'main_machine_fallback'
-             */
-            source: string;
         } & {
             [key: string]: unknown;
         };
@@ -127504,7 +127499,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DesktopVmEndpointResponse"];
+                    "application/json": components["schemas"]["DesktopVmEndpointResponse"] | null;
                 };
             };
         };

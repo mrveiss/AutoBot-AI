@@ -4564,7 +4564,9 @@
       "vncCredentialMissing": "לא נשמרה סיסמת VNC עבור מארח זה. הוסף אותה ב'סודות'.",
       "hostNotFound": "מארח זה אינו אחד ממארחי 'הסודות' שלך.",
       "hostFieldsMissing": "למארח זה חסרים שם משתמש או יכולות. הגדר אותם ב'סודות'.",
-      "hostVncUnavailable": "למארח זה אין יכולת VNC או יציאה ב'סודות'."
+      "hostVncUnavailable": "למארח זה אין יכולת VNC או יציאה ב'סודות'.",
+      "desktopVmUnavailable": "לא נרשם שולחן עבודה VNC, ולכן המכונה הווירטואלית של שולחן העבודה אינה זמינה.",
+      "registryUnavailable": "לא ניתן היה לקרוא את רישום שולחנות העבודה. נסה שוב בעוד רגע."
     },
     "contextPanel": {
       "pid": "PID {pid}",
@@ -6071,7 +6073,8 @@
       },
       "vncCompanionName": "{name} (אישורי VNC)",
       "vncCompanionDescription": "אישורי VNC עבור {host}",
-      "vncCompanionNoHostId": "המארח נשמר אך המזהה שלו לא הוחזר, ולכן אישורי ה-VNC לא נשמרו."
+      "vncCompanionNoHostId": "המארח נשמר אך המזהה שלו לא הוחזר, ולכן אישורי ה-VNC לא נשמרו.",
+      "vncRetry": "המארח נשמר, אך סיסמת ה-VNC שלו לא. שמור שוב כדי לנסות שוב; המארח לא ייווצר פעמיים."
     },
     "threatDashboard": {
       "checking": "Checking...",

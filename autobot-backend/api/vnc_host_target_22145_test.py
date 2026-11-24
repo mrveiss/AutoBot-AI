@@ -413,21 +413,24 @@ class TestDesktopVmEntry:
         assert target == VncTarget(DESKTOP_VM_HOST_ID, "desk.example.test", 5907, b"node-own-pw")
 
     @pytest.mark.asyncio
-    async def test_no_registered_node_falls_back_to_main_and_logs(self, monkeypatch, empty_registry, secrets_hosts):
-        from autobot_shared.ssot_config import config
-        from constants.network_constants import NetworkConstants
+    async def test_no_registered_node_means_no_fallback_a_stable_code(self, empty_registry, secrets_hosts):
+        """One solid VNC desktop (owner 2026-11-24): no registered node, no main-machine guess."""
+        with pytest.raises(HTTPException) as exc:
+            await resolve_vnc_target(DESKTOP_VM_HOST_ID)
+        assert exc.value.status_code == 404 and exc.value.detail["code"] == "desktop_vm_unavailable"
 
-        async def vault_pw(vnc_type):
-            assert vnc_type == "desktop"
-            return b"vault-pw"
+    @pytest.mark.asyncio
+    async def test_a_control_with_no_desktop_node_is_refused_before_any_connection(self, empty_registry, fake_session):
+        with pytest.raises(HTTPException) as exc:
+            await run_on_host(DESKTOP_VM_HOST_ID, "click", x=1, y=1, button="left")
+        assert exc.value.detail["code"] == "desktop_vm_unavailable"
+        assert fake_session.instances == []
 
-        monkeypatch.setattr("api.vnc_host_target.get_vnc_password", vault_pw)
-        with patch("api.vnc_host_target.logger") as log:
-            target = await resolve_vnc_target(DESKTOP_VM_HOST_ID)
-        assert target == VncTarget(
-            DESKTOP_VM_HOST_ID, NetworkConstants.MAIN_MACHINE_IP, config.port.vnc_server, b"vault-pw"
-        )
-        log.warning.assert_called_once()
+    @pytest.mark.asyncio
+    async def test_the_endpoint_route_returns_none_without_a_node(self, empty_registry):
+        from api import vnc_proxy
+
+        assert await vnc_proxy.get_desktop_vm_endpoint(current_user={}) is None
 
     def test_desktop_vm_and_secrets_host_are_allowed_other_fleet_node_refused(self, secrets_hosts, password):
         assert resolve_host_id(DESKTOP_VM_HOST_ID) == DESKTOP_VM_HOST_ID
@@ -476,7 +479,7 @@ class TestDesktopVmEntry:
         route = await vnc_proxy.get_desktop_vm_endpoint(current_user={})
         upstream = await vnc_proxy._upstream_endpoint("desktop")
         target = await resolve_vnc_target(DESKTOP_VM_HOST_ID)
-        assert route == {"host": "desk.example.test", "port": 6090, "source": "registry"}
+        assert route == {"host": "desk.example.test", "port": 6090}
         assert upstream == f"{vnc_proxy.VNC_UPSTREAM_SCHEME}://desk.example.test:6090"
         assert target.address == route["host"]
 
@@ -485,3 +488,72 @@ class TestDesktopVmEntry:
         from api import vnc_proxy
 
         assert await vnc_proxy._proxy_password("desktop") == b"node-own-pw"
+
+
+class TestWebsocketRefusals:
+    """The desktop VM's refusals close the websocket with 1011 and the stable code, before and after accept."""
+
+    def _ws(self):
+        from unittest.mock import MagicMock
+
+        ws = MagicMock()
+        ws.close = AsyncMock()
+        return ws
+
+    @pytest.mark.asyncio
+    async def test_no_desktop_node_closes_1011_before_accept(self, empty_registry):
+        from api import vnc_proxy
+
+        ws = self._ws()
+        accept = AsyncMock()
+        with (
+            patch("api.vnc_proxy.enforce_ws_origin", new=AsyncMock(return_value=True)),
+            patch("api.vnc_proxy.enforce_ws_desktop_auth", new=AsyncMock(return_value={"username": "a"})),
+            patch("api.vnc_proxy.accept_websocket", new=accept),
+        ):
+            await vnc_proxy.websocket_proxy(ws, "desktop")
+        ws.close.assert_awaited_once_with(code=1011, reason="desktop_vm_unavailable")
+        accept.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_password_refusal_after_accept_closes_1011_with_the_code(self, registry_node, monkeypatch):
+        from api import vnc_proxy
+
+        async def no_password(ep):
+            return None
+
+        monkeypatch.setattr("api.vnc_host_target.desktop_vnc_password", no_password)
+        ws = self._ws()
+
+        class FakeWs:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return None
+
+        class FakeSession:
+            def ws_connect(self, url):
+                return FakeWs()
+
+        class FakeClient:
+            def tracked_session(self):
+                return FakeCtx()
+
+        class FakeCtx:
+            async def __aenter__(self):
+                return FakeSession()
+
+            async def __aexit__(self, *a):
+                return None
+
+        with (
+            patch("api.vnc_proxy.enforce_ws_origin", new=AsyncMock(return_value=True)),
+            patch("api.vnc_proxy.enforce_ws_desktop_auth", new=AsyncMock(return_value={"username": "a"})),
+            patch("api.vnc_proxy.accept_websocket", new=AsyncMock()),
+            patch("api.vnc_proxy.record_observation", new=AsyncMock()),
+            patch("api.vnc_proxy.assert_egress_policy", new=AsyncMock()),
+            patch("api.vnc_proxy.get_http_client", return_value=FakeClient()),
+        ):
+            await vnc_proxy.websocket_proxy(ws, "desktop")
+        ws.close.assert_awaited_once_with(code=1011, reason="vnc_credential_missing")

@@ -285,7 +285,7 @@
       :closeOnOverlay="!saving"
     >
       <form @submit.prevent="saveSecret" class="credential-form">
-        <BaseAlert v-if="writeFailed" variant="error" :message="t('security.secretsManager.writeFailed')" data-testid="secret-save-failed" />
+        <BaseAlert v-if="writeFailed" variant="error" :message="t(showEditModal && secretForm.vnc_password ? 'security.secretsManager.vncRetry' : 'security.secretsManager.writeFailed')" data-testid="secret-save-failed" />
         <!-- Template Selection (only for new) -->
         <div v-if="!showEditModal && !secretForm.type" class="template-selection">
           <h4>{{ $t('security.secretsManager.chooseType') }}</h4>
@@ -1446,7 +1446,7 @@ const saveSecret = async () => {
         secretData.value = secretForm.value;
       }
       const created = await secretsApiClient.createSecret(secretData as unknown as Parameters<typeof secretsApiClient.createSecret>[0]);
-      await createVncCompanion(created, secretForm, secretData, t);
+      await createVncCompanion(created, secretForm, secretData, t, (id) => { showEditModal.value = true; secretForm.id = id; });
     }
   });
   saving.value = false;
