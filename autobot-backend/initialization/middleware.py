@@ -277,9 +277,11 @@ def configure_sunset_legacy_health(app: FastAPI):
 def configure_analytics(app: FastAPI):
     """Mount API call analytics, which honours the telemetry opt-out (#21684, #9035).
 
-    The opt-out is read from ``config.telemetry.enabled`` on every request inside
-    ``AnalyticsMiddleware`` rather than once here, so an admin turning telemetry
-    off through the settings API takes effect at once, not at the next restart.
+    The opt-out is read on every request inside ``AnalyticsMiddleware`` from
+    ``ConfigService.get_telemetry_settings()`` (the value the admin consent POST
+    saves, the SSOT setting being only its default) rather than once here, so an
+    admin turning telemetry off through the settings API takes effect at once,
+    not at the next restart.
     Disabled, the middleware passes straight through: nothing is tracked and no
     analytics header is added.
 

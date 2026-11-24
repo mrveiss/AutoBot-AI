@@ -45,6 +45,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from celery_app import celery_app
+from services import telemetry_settings
 from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
 from tasks.system_tasks import (
@@ -755,13 +756,7 @@ async def get_telemetry_settings():
     Returns telemetry opt-in/opt-out status and whether the first-run
     prompt has been shown.
     """
-    from autobot_shared.ssot_config import config
-
-    return TelemetrySettingsResponse(
-        enabled=config.telemetry.enabled,
-        anonymous_usage_stats=config.telemetry.anonymous_usage_stats,
-        first_run_prompt_shown=config.telemetry.first_run_prompt_shown,
-    )
+    return TelemetrySettingsResponse(**telemetry_settings.get_telemetry_settings())
 
 
 async def _persist_telemetry_patch(
@@ -779,6 +774,9 @@ async def _persist_telemetry_patch(
     from config.loader import deep_merge
 
     before_config: dict = ConfigService.get_full_config()
+    # get_full_config() does not carry the telemetry section: without this a later patch (the prompt dismissal) would
+    # rewrite the file and drop an opt-out saved earlier.
+    before_config.setdefault("telemetry", telemetry_settings.persisted_telemetry())
     merged_config = deep_merge(copy.deepcopy(before_config), {"telemetry": fields})
     ConfigService.save_full_config(merged_config)
     ConfigService.clear_cache()
@@ -866,16 +864,10 @@ async def dismiss_telemetry_prompt(
     previously caused it to re-appear on every refresh. Toggling telemetry
     itself still requires the admin-gated POST /telemetry endpoint.
     """
-    from autobot_shared.ssot_config import config
-
     await _persist_telemetry_patch(
         {"first_run_prompt_shown": True},
         session,
         current_user.get("id", "unknown"),
     )
 
-    return TelemetrySettingsResponse(
-        enabled=config.telemetry.enabled,
-        anonymous_usage_stats=config.telemetry.anonymous_usage_stats,
-        first_run_prompt_shown=True,
-    )
+    return TelemetrySettingsResponse(**{**telemetry_settings.get_telemetry_settings(), "first_run_prompt_shown": True})

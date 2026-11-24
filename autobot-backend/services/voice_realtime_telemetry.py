@@ -29,6 +29,7 @@ from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
+from services.telemetry_settings import get_telemetry_settings
 
 logger = get_logger(__name__)
 
@@ -125,10 +126,6 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
     _redis_database = "analytics"
 
     def __init__(self) -> None:
-        # Import config for telemetry opt-out check (Issue #9035)
-        from autobot_shared.ssot_config import config as autobot_config
-
-        self._config = autobot_config
         self._model = config.misc.voice_realtime_model
         self._max_seconds = config.misc.voice_realtime_max_seconds
         self._max_cost_usd = config.misc.voice_realtime_max_cost_usd
@@ -342,7 +339,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
     async def _save_record(self, record: RealtimeSessionRecord) -> None:
         # Issue #9035: Skip Redis persistence when telemetry is disabled
-        if not self._config.telemetry.enabled:
+        if not get_telemetry_settings()["enabled"]:
             self._in_memory_sessions[record.session_id] = record
             return
 
@@ -354,7 +351,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
     async def _load_record(self, session_id: str) -> RealtimeSessionRecord | None:
         # Issue #9035: Check in-memory first when telemetry is disabled
-        if not self._config.telemetry.enabled:
+        if not get_telemetry_settings()["enabled"]:
             return self._in_memory_sessions.get(session_id)
 
         redis = await self._get_redis()

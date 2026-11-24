@@ -182,3 +182,17 @@ register_env_var(
         range=(3600, 7776000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_API_CALL_PATTERNS_MAX",
+        type=int,
+        default=10000,
+        description=(
+            "Most recent API calls the in-process analytics state keeps (analytics_controller.py). Older calls drop "
+            "off; the persisted copy in Redis is trimmed to the same count (#21684)."
+        ),
+        component="analytics",
+        range=(100, 1000000),
+    )
+)
