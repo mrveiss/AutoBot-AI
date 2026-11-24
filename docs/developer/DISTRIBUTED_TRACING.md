@@ -182,21 +182,19 @@ async def my_operation(data):
             raise
 ```
 
-### Using TracingService
+### Using the tracing module
 
 ```python
-from backend.services.tracing_service import get_tracing_service
+from autobot_shared.tracing import get_trace_context, get_tracer
 
-tracing = get_tracing_service()
+tracer = get_tracer(__name__)
 
-# Context manager for spans
-with tracing.span("my_operation", attributes={"key": "value"}) as span:
-    # Your code here
-    tracing.add_event("checkpoint_reached")
-    tracing.set_attribute("result_count", 42)
+with tracer.start_as_current_span("my_operation") as span:
+    span.set_attribute("key", "value")
+    span.add_event("checkpoint_reached")
 
 # Get trace context for propagation
-headers = tracing.get_trace_context()
+headers = get_trace_context()
 # headers contains: traceparent, tracestate, b3, etc.
 ```
 
@@ -238,18 +236,11 @@ async with TracedHttpClient() as client:
 
 ## Initialization
 
-Tracing is automatically initialized during backend startup in `backend/initialization/background_tasks.py`:
+Tracing is initialized during backend startup in `app_factory.py`:
 
 ```python
-async def _init_distributed_tracing(app: FastAPI, update_status_fn):
-    tracing = get_tracing_service()
-    success = tracing.initialize(
-        service_name="autobot-backend",
-        service_version="2.0.0",
-    )
-    if success:
-        # Instruments FastAPI, Redis, and aiohttp
-        results = tracing.instrument_all(app)
+init_tracing(service_name="autobot-backend")
+instrument_fastapi(app)
 ```
 
 ## Troubleshooting
@@ -297,8 +288,7 @@ opentelemetry-propagator-b3>=1.34.0
 
 ## Related Files
 
-- `backend/services/tracing_service.py` - Core tracing service
-- `backend/middleware/tracing_middleware.py` - Request tracing middleware
+- `autobot_shared/tracing.py` - FastAPI instrumentation options and request-span attributes
 - `backend/initialization/background_tasks.py` - Tracing initialization
 - `src/utils/traced_http_client.py` - HTTP client with trace propagation
 - `autobot-backend/llm_interface_pkg/providers/ollama.py` - LLM tracing spans

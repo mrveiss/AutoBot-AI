@@ -45,7 +45,6 @@ module:autobot-backend/llc/adapters/http_adapter.py	#10603
 module:autobot-backend/llc/adapters/process_adapter.py	#10603
 module:autobot-backend/llc/services/attachment_test_support_19756.py	#10603
 module:autobot-backend/media/manager.py	#10603
-module:autobot-backend/middleware/tracing_middleware.py	#10603
 module:autobot-backend/models/document_version.py	#10603
 module:autobot-backend/models/settings.py	#10603
 module:autobot-backend/operator_dashboard/gmail_service.py	#10603

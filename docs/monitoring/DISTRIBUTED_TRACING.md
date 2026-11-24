@@ -50,31 +50,22 @@ AutoBot uses OpenTelemetry for distributed tracing across its role-based infrast
 
 ## Components
 
-### 1. Tracing Service (`backend/services/tracing_service.py`)
+### 1. Tracing module (`autobot_shared/tracing.py`)
 
-Central OpenTelemetry configuration (365 lines) providing:
-- Singleton pattern for single tracer per process
-- OpenTelemetry TracerProvider initialization
-- OTLP exporter configuration for Jaeger
-- FastAPI auto-instrumentation
-- Span creation and management
-- W3C TraceContext + B3 propagation
+The one OpenTelemetry setup for every AutoBot service (one tracer provider per process):
+- `init_tracing(service_name)` - TracerProvider, sampler, OTLP exporter, optional console exporter,
+  W3C TraceContext + B3 propagation
+- `instrument_fastapi(app)`, `instrument_redis()`, `instrument_aiohttp()` - auto-instrumentation
+- `get_tracer(name)` - tracer for custom spans (a no-op tracer when tracing is off)
+- `get_trace_context()` - headers for cross-service propagation
 
-Key methods:
-- `initialize()` - Configure OpenTelemetry with Jaeger exporter
-- `instrument_fastapi(app)` - Auto-instrument FastAPI application
-- `span(name, attributes)` - Context manager for creating spans
-- `get_trace_context()` - Get headers for cross-service propagation
-- `set_error(exception)` - Record exception in current span
+### 2. FastAPI instrumentation options (`autobot_shared/tracing.py`)
 
-### 2. Tracing Middleware (`backend/middleware/tracing_middleware.py`)
-
-ASGI middleware (267 lines) adding AutoBot-specific tracing:
-- Automatic span creation per request
-- Request/response attribute capture
-- Error tracking and exception recording
-- Performance timing metrics
-- Path exclusions for health/metrics endpoints
+`instrument_fastapi()` applies `FastAPIInstrumentor` with AutoBot's shared options
+(`fastapi_instrumentation_kwargs()`), so there is one span per request and no second tracing middleware:
+- Request/response attributes, exception recording and timing come from the instrumentation
+- `autobot.request_id` and the trusted-proxy-aware `http.client_ip` are added by a `server_request_hook`
+- Health, metrics and static paths are excluded from tracing
 
 ### 3. Traced HTTP Client (`src/utils/traced_http_client.py`)
 
@@ -167,68 +158,40 @@ curl http://<database-ip>:4318  # HTTP
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_JAEGER_ENDPOINT` | `http://<database-ip>:4317` | OTLP gRPC endpoint |
+| `AUTOBOT_OTEL_ENDPOINT` | unset | OTLP collector endpoint (falls back to `AUTOBOT_JAEGER_ENDPOINT`) |
 | `AUTOBOT_TRACE_CONSOLE` | `false` | Enable console span export |
 | `AUTOBOT_ENV` | `development` | Deployment environment tag |
 
 ### Backend Configuration
 
-Tracing is automatically initialized during backend startup via `app_factory_enhanced.py`:
+Tracing is initialized during backend startup in `app_factory.py`:
 
 ```python
-# Tracing initialization (automatic)
-tracing = get_tracing_service()
-tracing.initialize(
-    service_name="autobot-backend",
-    service_version="2.0.0",
-    jaeger_endpoint="http://<database-ip>:4317",
-)
-tracing.instrument_fastapi(app)
+init_tracing(service_name="autobot-backend")
+instrument_fastapi(app)
 ```
 
 ## Usage
 
 ### Automatic Tracing
 
-All HTTP requests to the backend are automatically traced via:
-1. FastAPI instrumentation (request/response spans)
-2. TracingMiddleware (AutoBot-specific attributes)
+All HTTP requests to the backend are automatically traced via FastAPI instrumentation
+(request/response spans), with AutoBot-specific attributes added by its `server_request_hook`.
 
 ### Custom Spans
 
-Add custom spans for specific operations:
+Add custom spans for specific operations. Exceptions raised inside the span are recorded on it automatically:
 
 ```python
-from backend.services.tracing_service import get_tracing_service
+from autobot_shared.tracing import get_tracer
 
-tracing = get_tracing_service()
+tracer = get_tracer(__name__)
 
-# Context manager style (recommended)
-with tracing.span("process_ai_request", attributes={"model": "gpt-4"}):
+with tracer.start_as_current_span("process_ai_request") as span:
+    span.set_attribute("model", "gpt-4")
     result = await process_request()
-    tracing.set_attribute("tokens_used", result.tokens)
-    tracing.add_event("model_response_received")
-
-# Manual span management
-span = tracing.create_span("long_operation")
-try:
-    # ... operation ...
-    span.set_attribute("result_size", len(result))
-finally:
-    span.end()
-```
-
-### Error Recording
-
-Errors are automatically recorded in spans:
-
-```python
-with tracing.span("risky_operation"):
-    try:
-        risky_function()
-    except Exception as e:
-        tracing.set_error(e)  # Records exception in span
-        raise
+    span.set_attribute("tokens_used", result.tokens)
+    span.add_event("model_response_received")
 ```
 
 ### Cross-Service Propagation
@@ -272,13 +235,11 @@ For cases where you can't use `TracedHttpClient`:
 
 ```python
 import httpx
-from backend.services.tracing_service import get_tracing_service
-
-tracing = get_tracing_service()
+from autobot_shared.tracing import get_trace_context
 
 async def call_ai_stack(payload: dict):
     # Get trace context headers manually
-    headers = tracing.get_trace_context()
+    headers = get_trace_context()
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -387,33 +348,23 @@ sudo systemctl restart jaeger
 
 ```python
 # In NPU worker initialization
-from backend.services.tracing_service import get_tracing_service
+from autobot_shared.tracing import init_tracing
 
-tracing = get_tracing_service()
-tracing.initialize(
-    service_name="autobot-npu-worker",
-    jaeger_endpoint="http://<database-ip>:4317",
-)
+init_tracing(service_name="autobot-npu-worker")
 ```
 
 ### AI Stack (<aiml-ip>)
 
 ```python
 # In AI stack initialization
-tracing.initialize(
-    service_name="autobot-ai-stack",
-    jaeger_endpoint="http://<database-ip>:4317",
-)
+init_tracing(service_name="autobot-ai-stack")
 ```
 
 ### Browser Automation (<browser-ip>)
 
 ```python
 # In browser automation service
-tracing.initialize(
-    service_name="autobot-browser",
-    jaeger_endpoint="http://<database-ip>:4317",
-)
+init_tracing(service_name="autobot-browser")
 ```
 
 ## Best Practices
