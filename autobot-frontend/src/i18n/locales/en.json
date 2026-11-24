@@ -6490,7 +6490,9 @@
       "cancel": "Cancel",
       "deleteOldLogs": "Delete Old Logs",
       "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
-      "initError": "Failed to initialize audit data"
+      "initError": "Failed to initialize audit data",
+      "eventLogs": "Event Logs",
+      "commandHistory": "Command History"
     },
     "browserAutomation": {
       "title": "Browser Automation",
@@ -8247,6 +8249,38 @@
       "hideDetails": "Hide Details",
       "showDetails": "Show Details",
       "refresh": "Refresh"
+    },
+    "eventLogs": {
+      "caption": "Compliance events, newest first",
+      "userFilter": "User ID",
+      "userPlaceholder": "Filter by user ID",
+      "typeFilter": "Event type",
+      "allTypes": "All event types",
+      "refresh": "Refresh",
+      "loading": "Loading event logs",
+      "empty": "No compliance events",
+      "emptyHint": "No events match the current filters.",
+      "error": "Event logs could not be loaded.",
+      "retry": "Try again",
+      "time": "Time",
+      "user": "User",
+      "event": "Event",
+      "outcome": "Outcome"
+    },
+    "commandHistory": {
+      "caption": "Command execution history, newest first",
+      "userFilter": "User",
+      "userPlaceholder": "Filter by user",
+      "refresh": "Refresh",
+      "loading": "Loading command history",
+      "empty": "No commands recorded",
+      "emptyHint": "No command executions match the current filter.",
+      "error": "Command history could not be loaded.",
+      "retry": "Try again",
+      "time": "Time",
+      "user": "User",
+      "action": "Action",
+      "outcome": "Outcome"
     }
   },
   "slm": {

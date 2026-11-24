@@ -874,7 +874,6 @@ route:autobot-backend/api/a2a.py:GET /tasks	#20970
 route:autobot-backend/api/a2a.py:POST /tasks	#20970
 route:autobot-backend/api/adapters.py:DELETE /agent/{agent_id}/override	#20970
 route:autobot-backend/api/adapters.py:POST /agent/{agent_id}/override	#20970
-route:autobot-backend/api/admin_event_logs.py:GET /event-logs	#20971
 route:autobot-backend/api/admin_oauth_bundle_strip.py:GET /oauth-bundle-strip	#20971
 route:autobot-backend/api/admin_ownerless_chat_sessions.py:GET /ownerless-chat-sessions	#20971
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-policies	#20971
@@ -1245,7 +1244,6 @@ route:autobot-backend/api/search.py:POST /benchmark	#20975
 route:autobot-backend/api/search.py:POST /optimize	#20975
 route:autobot-backend/api/search.py:POST /semantic	#20975
 route:autobot-backend/api/security.py:GET /audit-log	#20971
-route:autobot-backend/api/security.py:GET /command-history	#20971
 route:autobot-backend/api/security.py:GET /pending-approvals	#20971
 route:autobot-backend/api/security.py:POST /approve-command	#20971
 route:autobot-backend/api/security_assessment.py:GET /phases	#20971

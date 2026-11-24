@@ -36,6 +36,41 @@ import {
   resolveAuditStatistics,
 } from '@/types/audit'
 import { getApiBase } from '@/config/ssot-config'
+import type { operations } from '@/types/generated/api'
+
+/** Query of `GET /admin/event-logs` and `GET /security/command-history` (source of truth: generated api.ts). */
+export type EventLogQuery = NonNullable<operations['list_event_logs_api_admin_event_logs_get']['parameters']['query']>
+export type CommandHistoryQuery = NonNullable<
+  operations['get_command_history_api_security_command_history_get']['parameters']['query']
+>
+
+/** One compliance event as `GET /admin/event-logs` returns it (the audit store's event dict, untyped in the contract). */
+export interface ComplianceEvent {
+  id: string
+  action: string
+  actor_id: string
+  occurred_at: number
+  outcome: string
+  resource_type?: string | null
+}
+
+/** The page `GET /admin/event-logs` returns (an untyped dict in the contract). */
+export interface EventLogsPage {
+  events: ComplianceEvent[]
+  count: number
+  limit: number
+  offset: number
+  available_event_types: string[]
+}
+
+/** One command-execution record in `command_history` of `GET /security/command-history` (a dict in the contract). */
+export interface CommandHistoryEntry {
+  timestamp: string
+  user: string | null
+  action: string
+  outcome: string
+  details: Record<string, unknown>
+}
 
 const logger = createLogger('useAuditApi')
 
@@ -62,6 +97,27 @@ export function useAuditApi() {
         logger.error('Failed to load audit logs', error)
         showSubtleErrorNotification('Error', 'Failed to load audit logs', 'error')
         return { success: false, total_returned: 0, has_more: false, entries: [], query: {} }
+      }
+    },
+
+    /** Compliance events, newest first; admin only (the backend is the gate). `null` when the call fails. */
+    async queryEventLogs(params: EventLogQuery = {}): Promise<EventLogsPage | null> {
+      try {
+        return (await api.call('get', '/api/admin/event-logs', { query: params })) as unknown as EventLogsPage
+      } catch (error: unknown) {
+        logger.error('Failed to load event logs', error)
+        return null
+      }
+    },
+
+    /** Command execution history from the audit trail; admin only. `null` when the call fails. */
+    async getCommandHistory(params: CommandHistoryQuery = {}): Promise<CommandHistoryEntry[] | null> {
+      try {
+        const reply = await api.call('get', '/api/security/command-history', { query: params })
+        return reply.command_history as unknown as CommandHistoryEntry[]
+      } catch (error: unknown) {
+        logger.error('Failed to load command history', error)
+        return null
       }
     },
 

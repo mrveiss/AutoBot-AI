@@ -44,6 +44,23 @@
           <Icon name="exclamation-triangle" />
           {{ $t('views.auditLogs.failedOperations') }}
         </button>
+        <!-- Admin-only routes: shown to admins, the backend stays the gate (#22214) -->
+        <button
+          v-if="userStore.isAdmin"
+          :class="['tab-btn', { active: activeTab === 'eventLogs' }]"
+          @click="activeTab = 'eventLogs'"
+        >
+          <Icon name="clipboard-list" />
+          {{ $t('views.auditLogs.eventLogs') }}
+        </button>
+        <button
+          v-if="userStore.isAdmin"
+          :class="['tab-btn', { active: activeTab === 'commandHistory' }]"
+          @click="activeTab = 'commandHistory'"
+        >
+          <Icon name="terminal" />
+          {{ $t('views.auditLogs.commandHistory') }}
+        </button>
       </div>
 
       <!-- Error Banner -->
@@ -127,6 +144,14 @@
         />
       </div>
 
+      <div v-if="userStore.isAdmin && activeTab === 'eventLogs'" class="tab-content">
+        <AuditEventLogsPanel />
+      </div>
+
+      <div v-if="userStore.isAdmin && activeTab === 'commandHistory'" class="tab-content">
+        <AuditCommandHistoryPanel />
+      </div>
+
       <!-- Session/User Timeline Drawer -->
       <div v-if="showTimeline" class="timeline-drawer">
         <div class="drawer-backdrop" @click="closeTimeline"></div>
@@ -202,12 +227,16 @@ import { BaseModal, BaseButton } from '@autobot/ui'
 import AuditFilters from '@/components/audit/AuditFilters.vue'
 import AuditLogTable from '@/components/audit/AuditLogTable.vue'
 import AuditTimeline from '@/components/audit/AuditTimeline.vue'
+import AuditEventLogsPanel from '@/components/audit/AuditEventLogsPanel.vue'
+import AuditCommandHistoryPanel from '@/components/audit/AuditCommandHistoryPanel.vue'
+import { useUserStore } from '@/stores/useUserStore'
 import Icon from '@/components/ui/Icon.vue'
 import type { AuditFilter, AuditEntry } from '@/types/audit'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
 const logger = createLogger('AuditLogsView')
+const userStore = useUserStore()
 
 // Use the audit state composable
 const {
@@ -243,7 +272,7 @@ const {
 } = useAuditState()
 
 // Local UI state
-const activeTab = ref<'dashboard' | 'logs' | 'failures'>('dashboard')
+const activeTab = ref<'dashboard' | 'logs' | 'failures' | 'eventLogs' | 'commandHistory'>('dashboard')
 const showTimeline = ref(false)
 const timelineType = ref<'session' | 'user'>('session')
 const timelineEntityId = ref('')
