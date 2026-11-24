@@ -167,26 +167,10 @@ async def test_a_crash_before_the_transaction_leaves_neither_set_changed():
     assert INDEX not in kb.redis().sets
 
 
-class _SyncClient:
-    """The sync client ``update_fact`` writes with, over the same in-memory store."""
-
-    def __init__(self, store):
-        self.store = store
-
-    def hget(self, key, field):
-        return self.store.hashes.get(key, {}).get(field.encode("utf-8"))
-
-    def sadd(self, key, *values):
-        self.store.sets.setdefault(key, set()).update(values)
-
-    def srem(self, key, *values):
-        self.store.sets.get(key, set()).difference_update(values)
-
-
 async def _store_metadata(kb: CategoryKB, fact_id: str, metadata: dict) -> None:
     """What ``update_fact`` does: write the hash, then sync the index from the new metadata."""
     await kb.redis().hset(f"fact:{fact_id}", "metadata", json.dumps(metadata))
-    await sync_fact_quarantine(_SyncClient(kb.redis()), fact_id)
+    await sync_fact_quarantine(kb.redis(), fact_id)
 
 
 @pytest.mark.asyncio
@@ -206,7 +190,7 @@ async def test_update_fact_on_an_uncategorised_fact_touches_no_index():
     await kb.add_fact("loose", category_id=None)
 
     await kb.redis().hset("fact:loose", "metadata", json.dumps(HELD))
-    await sync_fact_quarantine(_SyncClient(kb.redis()), "loose")
+    await sync_fact_quarantine(kb.redis(), "loose")
 
     assert kb.redis().sets == {}
 
@@ -292,7 +276,7 @@ async def _write_metadata_only(kb: CategoryKB, fact_id: str, metadata: dict) -> 
 async def test_two_out_of_order_updates_leave_the_index_matching_the_final_metadata():
     """#21990: A writes, B writes, B syncs, A syncs last -- A's in-memory view is stale, the stored one is B's."""
     kb = await _kb(servable=1, quarantined=0)
-    client = _SyncClient(kb.redis())
+    client = kb.redis()
     await _write_metadata_only(kb, "s0", dict(HELD))  # update A
     await _write_metadata_only(kb, "s0", {"collection": "general"})  # update B: the final metadata
 
@@ -325,7 +309,6 @@ class _DeleteKB(FactsMixin, CategoryKB):
 
     def __init__(self):
         CategoryKB.__init__(self)
-        self.redis_client = _SyncClient(self.redis())
         self.session_facts: list = []
         self.cleanup_calls: list = []  # what ran after the durable delete
 
@@ -448,26 +431,29 @@ async def test_the_category_count_never_goes_below_zero():
     assert kb.redis().hashes["category:cat1"][b"fact_count"] == b"0"
 
 
-class _InterleavedClient(_SyncClient):
-    """Runs a writer between this sync's write and its re-read (first sadd), and before its first srem lands."""
+class _InterleavedRedis:
+    """The in-memory Redis, running a writer between this sync's write and its re-read (first sadd), and
+    before its first srem lands."""
 
-    def __init__(self, kb):
-        super().__init__(kb.redis())
-        self.kb = kb
+    def __init__(self, inner):
+        self.inner = inner
         self.after_first_sadd = None
         self.before_first_srem = None
 
-    def sadd(self, key, *values):
-        super().sadd(key, *values)
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    async def sadd(self, key, *values):
+        await self.inner.sadd(key, *values)
         hook, self.after_first_sadd = self.after_first_sadd, None
         if hook:
             hook()
 
-    def srem(self, key, *values):
+    async def srem(self, key, *values):
         hook, self.before_first_srem = self.before_first_srem, None
         if hook:
             hook()
-        super().srem(key, *values)
+        await self.inner.srem(key, *values)
 
 
 @pytest.mark.asyncio
@@ -476,14 +462,14 @@ async def test_three_interleaved_writes_converge_on_the_final_stored_metadata():
     kb = await _kb(servable=1, quarantined=0)
     hashes = kb.redis().hashes["fact:s0"]
     hashes[b"metadata"] = json.dumps(HELD).encode("utf-8")  # M1: held
-    client = _InterleavedClient(kb)
+    client = _InterleavedRedis(kb.redis())
 
     def writer_b():  # stores servable metadata, no sync yet
         hashes[b"metadata"] = json.dumps({"collection": "general"}).encode("utf-8")
 
     def writer_c():  # stores held metadata and syncs: its sadd lands before S1's srem
         hashes[b"metadata"] = json.dumps(HELD).encode("utf-8")
-        _SyncClient.sadd(client, INDEX, "s0")
+        kb.redis().sets.setdefault(INDEX, set()).add("s0")
 
     client.after_first_sadd = writer_b
     client.before_first_srem = writer_c

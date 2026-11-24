@@ -36,7 +36,6 @@ The rebuild sets each fact's entry from its metadata (adds and removes index ent
 or category sets), so it also heals a wrong index.
 """
 
-import asyncio
 from typing import Any, Iterable
 
 from autobot_shared.env_utils import env_int_clamped
@@ -87,7 +86,7 @@ async def _write_membership(redis: Any, fact_id: str, category_id: str, held: bo
         await pipe.execute()
 
 
-async def _converge(read: Any, write: Any, count: int, what: str) -> None:
+async def _settle_index(read: Any, write: Any, count: int, what: str) -> None:
     """Write the index decisions, re-read the stored ones, and write again until they agree (#21990).
 
     *read* returns the current ``held`` decision of each of the *count* facts; *write* applies a list of
@@ -115,12 +114,12 @@ async def add_to_category(redis: Any, fact_id: str, category_id: str) -> None:
     """
 
     async def read() -> list:
-        return [_is_held(await redis.hget(f"fact:{fact_id}", "metadata"))]
+        return [await _stored_held(redis, fact_id)]
 
     async def write(items: list) -> None:
         await _write_membership(redis, fact_id, category_id, items[0][1])
 
-    await _converge(read, write, 1, f"fact {fact_id}")
+    await _settle_index(read, write, 1, f"fact {fact_id}")
 
 
 async def remove_from_category(redis: Any, fact_id: str, category_id: str) -> None:
@@ -131,14 +130,14 @@ async def remove_from_category(redis: Any, fact_id: str, category_id: str) -> No
         await pipe.execute()
 
 
-async def _stored_held_sync(redis_client: Any, fact_id: str) -> bool:
-    """Whether the fact's *stored* metadata marks it quarantined (sync client, read off the event loop)."""
-    return _is_held(await asyncio.to_thread(redis_client.hget, f"fact:{fact_id}", "metadata"))
+async def _stored_held(redis: Any, fact_id: str) -> bool:
+    """Whether the fact's *stored* metadata marks it quarantined."""
+    return _is_held(await redis.hget(f"fact:{fact_id}", "metadata"))
 
 
-async def category_of(redis_client: Any, fact_id: str) -> Any:
-    """The fact's ``category_id`` as text (``None`` if uncategorised), read with the sync client."""
-    raw = await asyncio.to_thread(redis_client.hget, f"fact:{fact_id}", "category_id")
+async def fact_category_id(redis: Any, fact_id: str) -> str | None:
+    """The fact's ``category_id`` as text (``None`` if uncategorised); the one reader (#21984)."""
+    raw = await redis.hget(f"fact:{fact_id}", "category_id")
     return _text(raw) if raw else None
 
 
@@ -164,25 +163,25 @@ async def unindex_deleted_fact(redis: Any, fact_id: str, category_id: Any) -> No
         )
 
 
-async def sync_fact_quarantine(redis_client: Any, fact_id: str) -> None:
+async def sync_fact_quarantine(redis: Any, fact_id: str) -> None:
     """``update_fact``'s step: bring the index in line with the fact's stored metadata (#21990).
 
     Decides from the metadata as stored, never from the caller's in-memory copy, so two ``update_fact``
     calls landing out of order both end on the final stored value; writes and re-reads until they agree
-    (:func:`_converge`). Takes the sync client ``update_fact`` writes the hash with.
+    (:func:`_settle_index`). Takes the async client.
     """
-    category_id = await category_of(redis_client, fact_id)
+    category_id = await fact_category_id(redis, fact_id)
     if not category_id:
         return
     key = QUARANTINED_KEY.format(category_id)
 
     async def read() -> list:
-        return [await _stored_held_sync(redis_client, fact_id)]
+        return [await _stored_held(redis, fact_id)]
 
     async def write(items: list) -> None:
-        await asyncio.to_thread(redis_client.sadd if items[0][1] else redis_client.srem, key, fact_id)
+        await (redis.sadd if items[0][1] else redis.srem)(key, fact_id)
 
-    await _converge(read, write, 1, f"fact {fact_id}")
+    await _settle_index(read, write, 1, f"fact {fact_id}")
 
 
 async def _read_held(redis: Any, fact_ids: list) -> list:
@@ -211,7 +210,7 @@ async def _reconcile_batch(redis: Any, category_id: str, fact_ids: list) -> None
                 (pipe.sadd if is_held else pipe.srem)(key, fact_ids[i])
             await pipe.execute()
 
-    await _converge(read, write, len(fact_ids), f"category {category_id}")
+    await _settle_index(read, write, len(fact_ids), f"category {category_id}")
 
 
 async def _reconcile_category(redis: Any, key: Any) -> int:

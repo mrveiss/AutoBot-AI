@@ -26,6 +26,7 @@ from knowledge.category_keys import FACTS_KEY, QUARANTINED_KEY
 from knowledge.category_quarantine import (
     add_to_category,
     decrement_category_count,
+    fact_category_id,
     remove_from_category,
     servable_fact_ids,
 )
@@ -947,10 +948,7 @@ class CategoriesMixin:
 
     async def _get_fact_category_id(self, fact_id: str) -> str | None:
         """Get the category ID a fact is assigned to."""
-        category_id = await self.redis().hget(f"fact:{fact_id}", "category_id")
-        if category_id and isinstance(category_id, bytes):
-            category_id = category_id.decode("utf-8")
-        return category_id if category_id else None
+        return await fact_category_id(self.redis(), fact_id)
 
     async def _decrement_category_count(self, category_id: str) -> None:
         """Decrement fact count for a category."""
