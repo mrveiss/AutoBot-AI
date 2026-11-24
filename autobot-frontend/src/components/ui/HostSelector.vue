@@ -89,7 +89,7 @@
           </div>
         </button>
 
-        <p v-if="desktopVmHint" class="desktop-vm-hint" data-testid="desktop-vm-hint">{{ desktopVmHint }}</p>
+        <p v-if="desktopVmHint" class="empty-state" data-testid="desktop-vm-hint">{{ desktopVmHint }}</p>
         <!-- Empty state -->
         <div v-if="filteredHosts.length === 0" class="empty-state">
           <Icon name="server" size="lg" />
@@ -520,13 +520,6 @@ defineExpose({
 .capability-badge.vnc {
   background: var(--color-success-bg);
   color: var(--color-success);
-}
-
-.desktop-vm-hint {
-  margin: 0;
-  padding: var(--spacing-2) var(--spacing-4);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
 }
 
 .empty-state,

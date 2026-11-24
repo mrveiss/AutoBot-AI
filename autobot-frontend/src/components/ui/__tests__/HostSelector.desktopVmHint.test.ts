@@ -35,7 +35,7 @@ describe('HostSelector desktop VM hint', () => {
     const line = wrapper.find('[data-testid="desktop-vm-hint"]')
     expect(line.exists()).toBe(true)
     expect(line.text()).toBe('ui.hostSelection.noDesktopVm')
-    expect(line.classes()).toContain('desktop-vm-hint')
+    expect(line.classes()).toContain('empty-state') // the existing token-styled muted block: no new CSS
   })
 
   it('renders nothing when there is no hint', async () => {
