@@ -129,6 +129,7 @@ import ImageCell from '@/components/artifact-cells/ImageCell.vue'
 import VideoCell from '@/components/artifact-cells/VideoCell.vue'
 import { createEntityAnchorClickHandler } from '@/composables/chat/useEntityAnchors'
 import { formatMessageContent } from '@/composables/chat/useChatMessageFormat'
+import { sanitizeChatHtml } from '@/utils/sanitize'
 import { getContentClass } from '@/composables/chat/useChatMessageView'
 import { messageCitations, proofIsPartial, unprovenValues } from '@/utils/messageCitations'
 import { shownModel } from '@/utils/internalMessage'
@@ -149,7 +150,8 @@ const router = useRouter()
 // #9479: entity anchors rendered by the shared formatter navigate in-app.
 const handleContentClick = createEntityAnchorClickHandler(router)
 
-const html = computed(() => formatMessageContent(props.message.content, props.message.id))
+// Sanitised at the sink: all three v-html bindings read this value (#19118, #21771).
+const html = computed(() => sanitizeChatHtml(formatMessageContent(props.message.content, props.message.id)))
 const contentClass = computed(() => getContentClass(props.message))
 const model = computed(() => shownModel(props.message.metadata))
 const citations = computed(() => messageCitations(props.message))

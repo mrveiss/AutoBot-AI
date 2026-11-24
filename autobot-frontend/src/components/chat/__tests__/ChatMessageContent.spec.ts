@@ -11,7 +11,8 @@ import en from '@/i18n/locales/en.json'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/utils/chatMessageFormat', () => ({ formatChatMessageHtml: (c: string) => '<p>' + c + '</p>' }))
-vi.mock('@/utils/sanitize', () => ({ sanitizeChatHtml: (h: string) => h }))
+// Marks what passed the sanitiser, so a spec can prove the v-html sink sanitises (#19118).
+vi.mock('@/utils/sanitize', () => ({ sanitizeChatHtml: (h: string) => '<span data-sanitised>' + h + '</span>' }))
 
 import ChatMessageContent from '../ChatMessageContent.vue'
 import type { ChatMessage } from '@/stores/useChatStore'
@@ -44,6 +45,10 @@ describe('ChatMessageContent', () => {
     const w = render(msg({ type: 'overseer_plan' }))
     expect(w.find('.plan').exists()).toBe(false)
     expect(w.find('.message-text').html()).toContain('<p>hello</p>')
+  })
+
+  it('sanitises the formatted HTML at the v-html sink', () => {
+    expect(render(msg()).find('.message-text [data-sanitised]').html()).toContain('<p>hello</p>')
   })
 
   it('renders the summary branch inside a details element', () => {
