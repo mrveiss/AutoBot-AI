@@ -75,12 +75,23 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Collect the re-pinned path:line cells
+        id: pins
+        if: steps.repin.outputs.changed == 'true'
+        run: |
+          set -uo pipefail
+          # The script prints "... in <path>:<line>" for every floor it rewrote; no lookup here. An empty
+          # list still yields a true, non-empty cell, and nothing in this step can fail the job.
+          lines="$(grep '^PIN' repin.log | sed -n 's/^.* in \([^ |]*:[0-9][0-9]*\)$/\1/p' | paste -sd ';' - | sed 's/;/; /g')" || true
+          echo "lines=${lines:-see repin.log (no PIN line)}" >> "$GITHUB_OUTPUT"
+
       - name: Open or update the re-pin PR
         if: steps.repin.outputs.changed == 'true'
         env:
           # A PAT, deliberately not GITHUB_TOKEN: a PR opened with GITHUB_TOKEN triggers no
           # workflow run, so its required checks would never report and it could never merge.
           GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
+          PIN_LINES: ${{ steps.pins.outputs.lines }}
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN}" ]; then
@@ -88,13 +99,6 @@ jobs:
             exit 1
           fi
           SHORT_SHA="$(git rev-parse --short=10 HEAD)"
-          # path:line of every floor= line the script re-pinned, for the proof table below.
-          PIN_LINES=""
-          while IFS= read -r pin; do
-            path="${pin##* in }"; value="${pin#*floor -> }"; value="${value%% *}"
-            row="$(grep -n "floor=${value}\b" "$path" | head -1 | cut -d: -f1)"
-            PIN_LINES="${PIN_LINES:+${PIN_LINES}; }${path}:${row}"
-          done < <(grep '^PIN' repin.log)
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

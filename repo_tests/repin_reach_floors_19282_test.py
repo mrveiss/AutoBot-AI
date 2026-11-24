@@ -200,3 +200,24 @@ def test_a_floor_only_change_doesnt_make_a_guard_the_branchs_19673() -> None:
     assert not only_floor_lines(_diff("-    floor=10,", "+    floor=12,", "+    growth=9,")), "a real change counts"
     assert not only_floor_lines(_diff("+def discover(): ...")), "a real change counts"
     assert not only_floor_lines(""), "no change isn't a floor-only change"
+
+
+# ---------------------------------------- #22110: the PIN line names the line it rewrote
+
+
+def test_the_pin_line_carries_the_line_of_the_floor_it_rewrote(monkeypatch, tmp_path) -> None:
+    """A declaration spanning several lines, and the new value written earlier in the file too."""
+    from repo_tests._reach import Reach
+
+    guard = tmp_path / "repo_tests" / "g_test.py"
+    guard.parent.mkdir()
+    guard.write_text(
+        "OTHER = 130\nX = declare(\n    'multi',\n    discover=_d,\n    what='x',\n    floor=100,\n    growth=40,\n)\n",
+        encoding="utf-8",
+    )
+    reach = Reach(name="multi", discover=lambda _r: list(range(150)), pinned_floor=100, what="x", growth=40)
+    monkeypatch.setattr(repin, "_ROOT", tmp_path)
+    monkeypatch.setattr(repin, "_source_file", lambda _r: guard)
+    line = repin._repin(reach)
+    assert line == "PIN   multi: floor -> 130 (population 150) in repo_tests/g_test.py:6", line
+    assert guard.read_text(encoding="utf-8").splitlines()[5].startswith("    floor=130,")

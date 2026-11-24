@@ -187,3 +187,35 @@ def test_the_no_longer_needed_comment_fires_only_when_nothing_is_stale(
     """A floor still stale means the open re-pin PR may still be needed: no comment then."""
     expr = str(_step("no longer needed")["if"])
     assert _evaluate(expr, out_changed=changed, out_stale_left=stale_left) is comments
+
+
+def _pin_cell(tmp_path: Path, log: str) -> tuple[subprocess.CompletedProcess, str]:
+    (tmp_path / "repin.log").write_text(log, encoding="utf-8")
+    out = tmp_path / "out"
+    out.write_text("", encoding="utf-8")
+    env = {**os.environ, "GITHUB_OUTPUT": str(out)}
+    step = _step("Collect the re-pinned")
+    done = subprocess.run(["bash", "-c", step["run"]], cwd=tmp_path, env=env, capture_output=True, text=True)
+    return done, out.read_text(encoding="utf-8").strip()
+
+
+def test_the_proof_cell_is_built_from_the_pin_lines(tmp_path: Path) -> None:
+    log = "PIN   a: floor -> 459 (population 479) in repo_tests/a_test.py:37\nSKIP  b: reason\n"
+    done, cell = _pin_cell(tmp_path, log)
+    assert done.returncode == 0 and cell == "lines=repo_tests/a_test.py:37" and "|" not in cell
+
+
+def test_a_value_repeated_in_one_file_still_gives_two_distinct_lines(tmp_path: Path) -> None:
+    log = (
+        "PIN   a: floor -> 204 (population 219) in repo_tests/v_test.py:161\n"
+        "PIN   b: floor -> 204 (population 219) in repo_tests/v_test.py:168\n"
+    )
+    _, cell = _pin_cell(tmp_path, log)
+    assert cell == "lines=repo_tests/v_test.py:161; repo_tests/v_test.py:168"
+
+
+def test_no_pin_line_falls_back_to_a_true_cell_and_the_step_does_not_fail(tmp_path: Path) -> None:
+    done, cell = _pin_cell(tmp_path, "SKIP  b: reason\n")
+    assert done.returncode == 0
+    assert cell == "lines=see repin.log (no PIN line)"
+    assert "|" not in cell
