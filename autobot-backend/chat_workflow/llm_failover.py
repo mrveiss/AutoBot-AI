@@ -56,7 +56,6 @@ from llm_shared.types import LLMType
 from .attachment_context import send_point_notices
 from .llm_provider import configured_provider
 from .models import LLMIterationContext
-from .prompt_window import warn_if_hop_over_window
 
 logger = get_logger(__name__)
 
@@ -139,7 +138,8 @@ async def _recovered_items(call: IterationCall, response: LLMResponse) -> AsyncI
     """The recovered answer as the chunk + ``(text, tool_calls)`` the streaming path would have produced."""
     manager, ctx = call.manager, call.ctx
     meta = response.provider_metadata or {}
-    warn_if_hop_over_window(response.model, ctx.system_prompt, call.prompt)  # #22016: the hop sends no num_ctx
+    for notice in await send_point_notices(call, response.model, hop=True):  # #22016: the hop sends no num_ctx
+        yield notice
     message = manager._init_streaming_message(
         "response", response.model or ctx.selected_model, ctx.terminal_session_id, ctx.used_knowledge, ctx.rag_citations
     )

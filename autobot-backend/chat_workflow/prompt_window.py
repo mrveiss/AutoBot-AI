@@ -33,9 +33,9 @@ def request_window_tokens(cwm: Any, model_name: str | None, *, hop: bool = False
     return int(cwm.get_adaptive_context_length(model_name)) if hop else sent_num_ctx()
 
 
-def output_reserve_tokens(cwm: Any, model_name: str | None) -> int:
+def output_reserve_tokens(cwm: Any, model_name: str | None, *, hop: bool = False) -> int:
     """Tokens the prompt budget keeps free for the reply (2,048 at 8,192), also sent as ``num_predict``."""
-    window = request_window_tokens(cwm, model_name)
+    window = request_window_tokens(cwm, model_name, hop=hop)
     declared = int(cwm.get_model_info(model_name).get("max_output_tokens", 0) or 0)
     share = int(window * limits.OUTPUT_RESERVE_SHARE)
     return min(declared, share) if declared > 0 else share
@@ -58,11 +58,11 @@ def _declared_system_reserve(cwm: Any, model_name: str | None) -> int:
     return int((info.get("message_budget") or {}).get("system_prompt", 0) or 0)
 
 
-def prompt_budget_tokens(cwm: Any, model_name: str | None = None) -> int:
+def prompt_budget_tokens(cwm: Any, model_name: str | None = None, *, hop: bool = False) -> int:
     """Tokens the prompt may use: window x safety margin, less the reply reserve and the declared system reserve."""
-    window = request_window_tokens(cwm, model_name)
+    window = request_window_tokens(cwm, model_name, hop=hop)
     margin = float(cwm.config["token_estimation"].get("safety_margin", 1.0) or 1.0)
-    reserved = output_reserve_tokens(cwm, model_name) + _declared_system_reserve(cwm, model_name)
+    reserved = output_reserve_tokens(cwm, model_name, hop=hop) + _declared_system_reserve(cwm, model_name)
     # Never reserve the window away entirely: a pathological config must still leave a usable budget.
     return max(window // 4, int(window * min(margin, 1.0)) - reserved)
 
@@ -74,9 +74,13 @@ def system_overshoot_tokens(cwm: Any, model_name: str | None, system_prompt: str
     return max(0, cwm.estimate_tokens(system_prompt) - _declared_system_reserve(cwm, model_name))
 
 
-def measured_prompt_budget(cwm: Any, model_name: str | None, system_prompt: str | None) -> int:
-    """``get_prompt_budget`` with the system prompt measured, not assumed (#22016); never below zero."""
-    return max(0, cwm.get_prompt_budget(model_name) - system_overshoot_tokens(cwm, model_name, system_prompt))
+def measured_prompt_budget(cwm: Any, model_name: str | None, system_prompt: str | None, *, hop: bool = False) -> int:
+    """``get_prompt_budget`` with the system prompt measured, not assumed (#22016); never below zero.
+
+    For a failover *hop* the budget (window, reserve) is the hop model's own, not the sent window's.
+    """
+    budget = prompt_budget_tokens(cwm, model_name, hop=True) if hop else cwm.get_prompt_budget(model_name)
+    return max(0, budget - system_overshoot_tokens(cwm, model_name, system_prompt))
 
 
 def estimate_send_tokens(cwm: Any, system_prompt: str | None, prompt: str | None) -> int:
@@ -97,22 +101,10 @@ def send_overflow(
     cwm = get_context_window_manager()
     window = request_window_tokens(cwm, model_name, hop=hop)
     estimated = estimate_send_tokens(cwm, system_prompt, prompt)
-    fits = estimated + output_reserve_tokens(cwm, model_name) <= window
-    if fits and measured_prompt_budget(cwm, model_name, system_prompt) > 0:
+    fits = estimated + output_reserve_tokens(cwm, model_name, hop=hop) <= window
+    if fits and measured_prompt_budget(cwm, model_name, system_prompt, hop=hop) > 0:
         return None
     return {"estimated": estimated, "window": window}
-
-
-def warn_if_hop_over_window(model_name: str | None, system_prompt: str | None, prompt: str | None) -> bool:
-    """Log when a failover hop's model cannot hold what was sent to it (the hop carries no ``num_ctx``)."""
-    try:
-        over = send_overflow(model_name, system_prompt, prompt, hop=True)
-    except Exception as exc:  # noqa: BLE001 -- a check must never cost the user their turn
-        logger.warning("[#22016] Hop window check unavailable: %s", type(exc).__name__)
-        return False
-    if over is not None:
-        logger.warning("[#22016] Failover hop: ~%(estimated)d tokens into a %(window)d-token window", over)
-    return over is not None
 
 
 def note_prompt_eval(chunk: Dict[str, Any], model_name: str | None) -> bool:

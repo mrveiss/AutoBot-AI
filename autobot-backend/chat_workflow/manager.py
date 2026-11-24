@@ -53,7 +53,7 @@ from services.tool_output_filter import cap_unmatched_output, get_tool_output_fi
 from slash_command_handler import get_slash_command_handler
 
 from .answer_sources import answer_target, attach_answer_proof, kb_source, proof_message
-from .attachment_context import apply_attachments, take_notices
+from .attachment_context import NOTICE_TYPE, apply_attachments, take_notices
 from .budget_refusal import budget_refusal_message
 from .conversation import ConversationHandlerMixin
 from .kb_sources import _kb_sources_from_citations
@@ -2935,8 +2935,9 @@ before summarizing.
         """
         batch = []
         for wf_msg in workflow_messages:
-            # Skip segment_complete markers: internal stream control, empty content (Issue #1141).
-            if wf_msg.type == "segment_complete":
+            # Skip segment_complete markers: internal stream control, empty content (Issue #1141). Skip notices
+            # too: ``persist_notices`` stored them once as system entries; this copy is the live display only (#22016).
+            if wf_msg.type in ("segment_complete", NOTICE_TYPE):
                 continue
 
             sender = "system" if wf_msg.type == "terminal_output" else "assistant"

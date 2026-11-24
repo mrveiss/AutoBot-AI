@@ -82,22 +82,30 @@ def test_over_window_notice_only_when_the_prompt_cannot_fit(chat_model):
     assert attachment_context._window_notice({"model": MODEL, "prompt": "hi", "system_prompt": "sys"}, None) == []
 
 
-def _call(prompt, context=None, system=SYSTEM):
-    ctx = SimpleNamespace(
-        selected_model=MODEL, system_prompt=system, session_id="s", context={} if context is None else context
-    )
-    return SimpleNamespace(ctx=ctx, prompt=prompt)
+class _Manager:
+    """Hands every caller the same session, as the real manager does within a turn."""
+
+    def __init__(self):
+        self.session = SimpleNamespace(session_id="s", metadata={})
+
+    async def get_or_create_session(self, session_id):
+        return self.session
+
+
+def _call(prompt, context=None, system=SYSTEM, manager=None):
+    ctx = SimpleNamespace(selected_model=MODEL, system_prompt=system, session_id="s", context=context)
+    return SimpleNamespace(ctx=ctx, prompt=prompt, manager=manager or _Manager())
 
 
 @pytest.mark.asyncio
 async def test_send_point_notices_once_per_turn_when_the_prompt_is_over_the_window(chat_model, caplog, monkeypatch):
     monkeypatch.setattr(attachment_context, "persist_notices", AsyncMock())
-    call = _call("x" * 40_000)
+    call = _call("x" * 40_000, context={})
     with caplog.at_level(logging.WARNING):
         (notice,) = await attachment_context.send_point_notices(call)
     assert "input will be cut" in caplog.text and notice.metadata["code"] == "over_window"
     assert await attachment_context.send_point_notices(call) == []  # the next iteration of the turn stays quiet
-    assert await attachment_context.send_point_notices(_call("hi", system="sys")) == []
+    assert await attachment_context.send_point_notices(_call("hi", system="sys")) == []  # fits: no notice
 
 
 @pytest.mark.asyncio
@@ -144,21 +152,29 @@ def test_a_failover_hop_gets_the_hop_models_declared_window_not_the_sent_one():
     assert prompt_window.request_window_tokens(cwm, "hop-model", hop=True) == declared
 
 
-def test_a_hop_over_its_window_is_logged(caplog, monkeypatch):
+@pytest.mark.asyncio
+async def test_a_hop_into_a_smaller_window_notifies_with_the_hop_windows_reserve_and_budget(chat_model, monkeypatch):
     cwm = get_context_window_manager()
-    monkeypatch.setattr(cwm, "get_adaptive_context_length", lambda m=None: 1000)
-    with caplog.at_level(logging.WARNING):
-        assert prompt_window.warn_if_hop_over_window("hop-model", "s", "x" * 40_000) is True
-    assert "Failover hop" in caplog.text
+    monkeypatch.setattr(attachment_context, "persist_notices", AsyncMock())
+    real = cwm.get_adaptive_context_length
+    monkeypatch.setattr(cwm, "get_adaptive_context_length", lambda m=None: 4096 if m == "hop-model" else real(m))
+    prompt = "x" * 14_000  # about 3,500 tokens: fits 8,192 with its reserve, not the hop's 4,096
+    call = _call(prompt, system="sys")
+    assert await attachment_context.send_point_notices(call) == []  # the sent window holds it
+    (notice,) = await attachment_context.send_point_notices(call, "hop-model", hop=True)
+    assert notice.metadata["code"] == "over_window" and notice.metadata["window"] == 4096
+    assert prompt_window.output_reserve_tokens(cwm, "hop-model", hop=True) == 1024  # 25% of the HOP window
+    assert prompt_window.measured_prompt_budget(cwm, "hop-model", "sys", hop=True) <= int(4096 * 0.9) - 1024
+    assert await attachment_context.send_point_notices(call, "hop-model", hop=True) == []  # once per turn
 
 
 @pytest.mark.asyncio
 async def test_a_long_chat_without_attachments_still_gets_the_over_window_notice(chat_model):
     params = {"model": MODEL, "prompt": "x" * 40_000, "system_prompt": SYSTEM}
-    context = {}
-    await attachment_context.apply_attachments(SimpleNamespace(session_id="s"), context, params)
+    session = SimpleNamespace(session_id="s", metadata={})
+    await attachment_context.apply_attachments(session, {}, params)
     (notice,) = params["attachment_notices"]
-    assert notice["metadata"]["code"] == "over_window" and context[attachment_context.OVER_WINDOW_KEY] is True
+    assert notice["metadata"]["code"] == "over_window" and session.metadata[attachment_context.OVER_WINDOW_KEY] is True
     quiet = {"model": MODEL, "prompt": "hi", "system_prompt": "sys"}
     await attachment_context.apply_attachments(SimpleNamespace(session_id="s"), {}, quiet)
     assert "attachment_notices" not in quiet
@@ -183,3 +199,76 @@ def test_the_reply_share_is_clamped_to_its_documented_range(monkeypatch):
         assert importlib.reload(limits).OUTPUT_RESERVE_SHARE == want
     monkeypatch.delenv("AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE")
     importlib.reload(limits)
+
+
+@pytest.mark.asyncio
+async def test_the_over_window_notice_is_stored_exactly_once(chat_model, monkeypatch):
+    """The send-point notice is stored by persist_notices; the live copy must not be stored again with the turn."""
+    from chat_workflow.manager import ChatWorkflowManager
+
+    stored = []
+
+    class _Chat:
+        def _build_message_dict(self, sender, content, msg_type, metadata, *_a, **_k):
+            return {"sender": sender, "type": msg_type, "metadata": metadata}
+
+        async def add_messages_batch(self, session_id, batch):
+            stored.extend(batch)
+            return True
+
+    import chat_history
+
+    monkeypatch.setattr(chat_history, "ChatHistoryManager", _Chat)
+    (live,) = await attachment_context.send_point_notices(_call("x" * 40_000))
+    manager = object.__new__(ChatWorkflowManager)
+    stored.extend(manager._build_workflow_message_batch(_Chat(), [live]))  # what _persist_workflow_messages adds
+    assert [e["type"] for e in stored] == [attachment_context.NOTICE_TYPE] and stored[0]["sender"] == "system"
+
+
+@pytest.mark.asyncio
+async def test_a_none_context_gives_exactly_one_notice(chat_model, monkeypatch):
+    monkeypatch.setattr(attachment_context, "persist_notices", AsyncMock())
+    manager = _Manager()
+    params = {"model": MODEL, "prompt": "x" * 40_000, "system_prompt": SYSTEM}
+    await attachment_context.apply_attachments(manager.session, None, params)
+    assert len(params["attachment_notices"]) == 1
+    call = _call("x" * 40_000, context=None, manager=manager)  # ctx.context None must not raise a TypeError
+    assert await attachment_context.send_point_notices(call) == []
+
+
+@pytest.mark.asyncio
+async def test_a_multi_iteration_turn_with_a_rebuilt_context_notifies_once(chat_model, monkeypatch):
+    monkeypatch.setattr(attachment_context, "persist_notices", AsyncMock())
+    manager = _Manager()
+    seen = []
+    for iteration in range(3):  # each iteration gets a fresh (or None) context, as the graph path may build
+        call = _call("x" * 40_000, context=None if iteration == 1 else {}, manager=manager)
+        seen += await attachment_context.send_point_notices(call)
+    assert len(seen) == 1
+    manager.session.metadata.clear()  # the next turn starts: said again
+    await attachment_context.apply_attachments(
+        manager.session, {}, {"model": MODEL, "prompt": "hi", "system_prompt": "s"}
+    )
+    assert len(await attachment_context.send_point_notices(_call("x" * 40_000, manager=manager))) == 1
+
+
+@pytest.mark.parametrize(
+    "api_kwargs",
+    [
+        {"thinking": {"type": "enabled", "budget_tokens": 5000}, "temperature": 1},
+        {"thinking": {"type": "adaptive"}, "output_config": {"effort": "high"}},
+        {"reasoning_effort": "high"},
+    ],
+)
+def test_api_kwargs_never_touch_the_ollama_options_and_the_primary_is_ollama_only(api_kwargs, monkeypatch):
+    """The primary request is always the Ollama generate payload, whatever ``configured_provider()`` says."""
+    from chat_workflow import llm_provider
+    from chat_workflow.manager import ChatWorkflowManager
+    from llm_shared.types import ProviderType
+
+    monkeypatch.setattr(llm_provider, "configured_provider", lambda: ProviderType.OPENAI)
+    manager = object.__new__(ChatWorkflowManager)
+    payload = manager._get_llm_request_payload("any-model:7b", "p", "s", api_kwargs=api_kwargs)
+    assert payload["options"]["num_predict"] == 2048 and payload["options"]["num_ctx"] == 8192
+    assert payload["stream"] is True and payload["prompt"] == "p" and payload["system"] == "s"
+    assert not set(api_kwargs) & {"options", "num_predict", "num_ctx", "prompt", "model", "stream"}

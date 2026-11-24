@@ -272,11 +272,19 @@ def _window_char_budget(llm_params: Dict[str, Any], file_count: int) -> int | No
         return None
 
 
-#: Set in the turn's request context once an ``over_window`` notice was issued, so the turn says it once.
+#: Turn-scoped flags kept in ``session.metadata`` (they survive a rebuilt request context and a ``None`` one); set once
+#: an ``over_window`` notice was issued for the primary request / a failover hop, cleared when the next turn starts.
 OVER_WINDOW_KEY = "_over_window_noticed"
+OVER_WINDOW_HOP_KEY = "_over_window_hop_noticed"
 
 
-def _window_notice(llm_params: Dict[str, Any], context: Dict[str, Any] | None) -> List[Dict[str, Any]]:
+def _turn_flags(session) -> Dict[str, Any] | None:
+    """The session's metadata dict (the turn-scoped store), else ``None`` when there is no session to hold it."""
+    meta = getattr(session, "metadata", None)
+    return meta if isinstance(meta, dict) else None
+
+
+def _window_notice(llm_params: Dict[str, Any], session) -> List[Dict[str, Any]]:
     """An ``over_window`` notice when the request cannot fit its window, with or without attachments (#22016)."""
     from chat_workflow.prompt_window import send_overflow
 
@@ -288,27 +296,34 @@ def _window_notice(llm_params: Dict[str, Any], context: Dict[str, Any] | None) -
     if over is None:
         return []
     logger.warning("[#22016] Prompt over the window: ~%(estimated)d of %(window)d tokens", over)
-    if isinstance(context, dict):
-        context[OVER_WINDOW_KEY] = True
+    if (flags := _turn_flags(session)) is not None:
+        flags[OVER_WINDOW_KEY] = True
     return [_notice("over_window", **over)]
 
 
-async def send_point_notices(call) -> list:
+async def send_point_notices(call, model: str | None = None, *, hop: bool = False) -> list:
     """The send-point check (#22016): once per turn, an ``over_window`` notice if the prompt outgrew the window.
 
     The turn-start check (``_window_notice``) covers the first prompt; continuation iterations grow it, so this
-    catches the later overflow. Everything is read inside the try: a check must never cost the user their turn.
+    catches the later overflow. With *hop* the request went to *model* through the registry, which sends no
+    ``num_ctx``: the hop model's own window decides. The once-per-turn flags live in the session's metadata, not
+    the request context, which is rebuilt (or ``None``). The notice is stored here once (``persist_notices``); the
+    yielded copy is live display only and ``_build_workflow_message_batch`` does not store it a second time.
+    Everything is read inside the try: a check must never cost the user their turn.
     """
     from chat_workflow.prompt_window import send_overflow
 
     try:
         ctx = call.ctx
-        if (ctx.context or {}).get(OVER_WINDOW_KEY):
+        key = OVER_WINDOW_HOP_KEY if hop else OVER_WINDOW_KEY
+        session = await call.manager.get_or_create_session(ctx.session_id)
+        flags = _turn_flags(session)
+        if flags is None or flags.get(key):
             return []
-        over = send_overflow(ctx.selected_model, ctx.system_prompt, call.prompt)
+        over = send_overflow(model or ctx.selected_model, ctx.system_prompt, call.prompt, hop=hop)
         if over is None:
             return []
-        ctx.context[OVER_WINDOW_KEY] = True
+        flags[key] = True
         logger.warning("[#22016] Sending ~%(estimated)d tokens into a %(window)d-token window: input will be cut", over)
         notices = attachment_notice_messages({"attachment_notices": [_notice("over_window", **over)]})
         await persist_notices(ctx.session_id, notices)
@@ -337,12 +352,13 @@ async def apply_attachments(session, context: Dict[str, Any] | None, llm_params:
     file_ids, invalid = requested_ids(context)
     if isinstance(context, dict):
         context.pop(ATTACHMENT_TURN_KEY, None)
-        context.pop(OVER_WINDOW_KEY, None)
         if file_ids or invalid:
             context[ATTACHMENT_TURN_KEY] = True
+    for key in (OVER_WINDOW_KEY, OVER_WINDOW_HOP_KEY):
+        (_turn_flags(session) or {}).pop(key, None)  # a new turn says it again
     if file_ids or invalid:
         await _attach_files(session, context, llm_params)
-    notices = [*llm_params.get("attachment_notices", []), *_window_notice(llm_params, context)]
+    notices = [*llm_params.get("attachment_notices", []), *_window_notice(llm_params, session)]
     if notices:
         llm_params["attachment_notices"] = notices
 
