@@ -11,6 +11,8 @@ Registered in feature_routers.py as:
     ("api.workflow_export", "/workflow-export", ["workflow-export"], "workflow_export")
 """
 
+from types import SimpleNamespace
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_workflows import (
@@ -30,6 +32,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.principal import require_principal_id, resolve_principal_id
 from services.workflow_automation.command_step import require_command_permission
 from services.workflow_automation.routes import get_workflow_manager
+from services.workflow_automation.workflow_ownership import find_workflow, require_owner_or_admin
 from services.workflow_serializer import WorkflowSerializer
 from services.workflow_sharing_service import WorkflowSharingService
 
@@ -71,6 +74,8 @@ async def export_workflow(
     Returns the full WorkflowExportFormat payload that can be saved to disk
     or passed to the import endpoint on another instance.
     """
+    require_principal_id(current_user)  # before the try: its 401 must not become a 500
+    find_workflow(get_workflow_manager(), workflow_id, current_user)  # 404 unknown, 403 unless owner or admin (#22181)
     try:
         doc = await serializer.export_workflow(workflow_id)
         if doc is None:
@@ -206,8 +211,13 @@ async def unshare_workflow(
     current_user: dict = Depends(get_current_user),
     sharing: WorkflowSharingService = Depends(_get_sharing_service),
 ):
-    """Revoke a workflow share."""
+    """Revoke a workflow share: only the share's stored owner, or an admin (#22181)."""
+    require_principal_id(current_user)  # before the try: its 401 must not become a 500
     try:
+        stored_owner = await sharing.get_share_owner(share_id)
+        if stored_owner is None:
+            raise HTTPException(status_code=404, detail=f"Share '{share_id}' not found.")
+        require_owner_or_admin(SimpleNamespace(owner_id=stored_owner, workflow_id=share_id), current_user)
         deleted = await sharing.unshare_workflow(share_id)
         if not deleted:
             raise HTTPException(status_code=404, detail=f"Share '{share_id}' not found.")
