@@ -192,6 +192,12 @@ def test_template_mention_of_the_deferral_marker_is_not_a_deferral() -> None:
     assert _filed_files([], [templ], [_finding("x/foo.py", 5)]) == ["x/foo.py"]
 
 
+def test_a_longer_heading_that_starts_with_the_marker_is_not_a_deferral() -> None:
+    """Only the exact heading counts: ``## Wire-in deferred-not`` is a different heading (#22199)."""
+    other = _issue(2, "foo", 5, "x/foo.py", stateReason="COMPLETED", comments=[{"body": "## Wire-in deferred-not"}])
+    assert _filed_files([], [other], [_finding("x/foo.py", 5)]) == ["x/foo.py"]
+
+
 def test_completed_closed_issue_that_is_still_unwired_is_refiled() -> None:
     """Regression: closed COMPLETED without a deferral note, yet the module is still unwired."""
     closed = [_issue(2, "foo", 5, "x/foo.py", stateReason="COMPLETED", comments=[{"body": "done"}])]
