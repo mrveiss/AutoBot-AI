@@ -52,3 +52,28 @@ def test_older_version_than_lockfile_fails(tmp_path):
     result = _run(_workspace(tmp_path, {"a": "1.0.0"}))
     assert result.returncode == 1
     assert "a: installed 1.0.0, lockfile 2.0.0" in result.stdout
+
+
+def test_transitive_only_bump_fails(tmp_path):
+    """A lockfile entry package.json never names (an overrides bump) still makes the tree stale."""
+    ws = _workspace(tmp_path, {"a": "2.0.0"})
+    lock_path = ws / "package-lock.json"
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    lock["packages"]["node_modules/a/node_modules/transitive"] = {"version": "3.0.0"}
+    lock_path.write_text(json.dumps(lock), encoding="utf-8")
+    nested = ws / "node_modules" / "a" / "node_modules" / "transitive"
+    nested.mkdir(parents=True)
+    (nested / "package.json").write_text(json.dumps({"version": "2.9.0"}), encoding="utf-8")
+    result = _run(ws)
+    assert result.returncode == 1
+    assert "a/node_modules/transitive: installed 2.9.0, lockfile 3.0.0" in result.stdout
+    assert result.stdout.index("npm --prefix") < result.stdout.index("transitive")
+
+
+def test_absent_optional_package_is_not_drift(tmp_path):
+    ws = _workspace(tmp_path, {"a": "2.0.0"})
+    lock_path = ws / "package-lock.json"
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    lock["packages"]["node_modules/fsevents"] = {"version": "2.3.3", "optional": True}
+    lock_path.write_text(json.dumps(lock), encoding="utf-8")
+    assert _run(ws).returncode == 0

@@ -11,8 +11,8 @@
 # `node_modules/.package-lock.json`) misses a tree installed before a dependency
 # was added whenever the lockfile's mtime moved for another reason, and it is not
 # consulted at all by a bare `npx vitest`. This compares CONTENT: every package
-# declared in package.json must be present under node_modules at the version the
-# lockfile records. reka-ui was absent from a long-lived install this way.
+# the lockfile records, transitive ones included, must be present under
+# node_modules at that version. reka-ui was absent from a long-lived install this way.
 #
 # Usage: scripts/check-frontend-deps-current.sh [workspace-dir]   (default: autobot-frontend)
 # Exit 0 current; 1 stale (offenders listed, with the one command that fixes it); 2 cannot run.
@@ -26,24 +26,25 @@ command -v node >/dev/null || { echo "error: node not found" >&2; exit 2; }
 node -e '
 const fs = require("fs"), path = require("path");
 const ws = process.argv[1];
-const pkg = JSON.parse(fs.readFileSync(path.join(ws, "package.json"), "utf-8"));
 const lock = JSON.parse(fs.readFileSync(path.join(ws, "package-lock.json"), "utf-8")).packages || {};
-const declared = { ...pkg.dependencies, ...pkg.devDependencies };
-// Local workspace links are not registry installs and carry no lockfile version.
-const names = Object.keys(declared).filter((n) => !/^(file|link|workspace):/.test(declared[n]));
-if (names.length === 0) { console.error("error: " + ws + " declares no dependencies"); process.exit(2); }
+// EVERY locked package, not just the declared ones: a bump that moves only a transitive
+// package (an `overrides` entry, a re-resolved subtree) changes the lockfile and nothing in package.json.
+// Links and entries with no version are not registry installs; an absent OPTIONAL package is a
+// platform skip, not drift (a present one at the wrong version still is).
+const entries = Object.entries(lock).filter(([k, v]) => k.startsWith("node_modules/") && v.version && !v.link);
+if (entries.length === 0) { console.error("error: " + ws + " lockfile has no installable packages"); process.exit(2); }
 const bad = [];
-for (const n of names) {
-  const want = (lock["node_modules/" + n] || {}).version;
+for (const [key, meta] of entries) {
   let have = null;
-  try { have = JSON.parse(fs.readFileSync(path.join(ws, "node_modules", n, "package.json"), "utf-8")).version; } catch (e) { /* absent */ }
-  if (have !== want) bad.push("  " + n + ": installed " + (have || "(absent)") + ", lockfile " + (want || "(unlocked)"));
+  try { have = JSON.parse(fs.readFileSync(path.join(ws, key, "package.json"), "utf-8")).version; } catch (e) { /* absent */ }
+  if (have === null && meta.optional) continue;
+  if (have !== meta.version) bad.push("  " + key.slice("node_modules/".length) + ": installed " + (have || "(absent)") + ", lockfile " + meta.version);
 }
 if (bad.length) {
-  console.log("STALE -- " + ws + "/node_modules does not match its lockfile (" + bad.length + " of " + names.length + "):");
+  console.log("STALE -- " + ws + "/node_modules does not match its lockfile (" + bad.length + " of " + entries.length + " locked packages):");
   console.log("reconcile it: npm --prefix " + ws + " ci");
   console.log(bad.join("\n"));
   process.exit(1);
 }
-console.log(ws + "/node_modules matches the lockfile (" + names.length + " declared packages)");
+console.log(ws + "/node_modules matches the lockfile (" + entries.length + " locked packages)");
 ' "$WS"
