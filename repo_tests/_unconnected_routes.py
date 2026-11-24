@@ -88,6 +88,9 @@ EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
     "/scim/v2": "an identity provider's SCIM client, over HTTP",
     # #20910: the OAuth2 redirect URI (api/sso_auth.py GET /callback). The identity provider sends the user's browser
     # here after sign-in; nothing in this repository requests it.
+    # #13710: the Outlook mail routes are called by an administrator over HTTP (no UI yet); the umbrella #13707
+    # tracks the company-mailbox surface that will call them. The access token comes from the secrets store.
+    "/api/integrations/microsoft365": "an administrator, over HTTP (no UI yet; umbrella #13707)",
     "/api/auth/sso/callback": "the identity provider's browser redirect after sign-in",
 }
 
