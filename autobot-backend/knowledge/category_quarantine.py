@@ -21,12 +21,15 @@ that change either side of it:
   through :func:`remove_from_category` (#21984);
 * :func:`rebuild_category_quarantine_index` -- repairs every set from the facts' own metadata.
 
-Atomicity. A membership change and its index entry go in one ``MULTI`` so a crash cannot split them.
-The "is it quarantined" decision reads the fact's metadata, which a concurrent ``update_fact`` may
-change between the read and the write. Rather than a Lua script (the repo's ``eval`` users guard plain
-values; this decision is the Python quarantine predicate over a JSON field, and a Lua copy of it would
-be a second definition), the decision is re-read after the write and rewritten until the two agree, at
-most :data:`CONVERGE_PASSES` times (an ERROR if it does not settle; the rebuild heals the rest).
+Atomicity. A membership change and its index entry go in one Lua script, gated on the fact hash: the
+script writes only while ``fact:{id}`` still holds the ``category_id`` being written. That one check
+refuses a write for a fact that was deleted (its hash is gone) or moved to another category, so a late
+correction pass can never re-add an id ``delete_fact`` already removed. The script knows nothing of the
+quarantine predicate -- that stays the Python predicate over a JSON field, and a Lua copy of it would be a
+second definition -- so the "is it quarantined" decision is read in Python, which a concurrent
+``update_fact`` may change between the read and the write; it is re-read after the write and rewritten
+until the two agree, at most :data:`CONVERGE_PASSES` times (an ERROR if it does not settle, and then the
+rebuild does not record its marker, so the next start retries).
 ``category_id`` is written before the first read, and ``update_fact`` writes the metadata before it reads
 ``category_id``, so either the re-read sees the new metadata or ``update_fact`` sees the category and syncs it.
 
@@ -37,6 +40,7 @@ The rebuild sets each fact's entry from its metadata (adds and removes index ent
 or category sets), so it also heals a wrong index.
 """
 
+import asyncio
 from typing import Any, Iterable
 
 from autobot_shared.env_utils import env_int_clamped
@@ -52,6 +56,19 @@ INDEX_VERSION = "1"
 REBUILD_BATCH = env_int_clamped("AUTOBOT_KB_CATEGORY_INDEX_REBUILD_BATCH", 500, 1, 5000)
 #: Most write-then-re-read passes one index decision may take to converge on the stored metadata (#21990).
 CONVERGE_PASSES = env_int_clamped("AUTOBOT_KB_CATEGORY_INDEX_CONVERGE_PASSES", 5, 1, 50)
+#: Join a category set and set the quarantine index entry, only while the fact hash still holds that
+#: ``category_id`` (so not for a deleted or moved fact); ``ARGV = category_id, fact_id, held ("1"/"0")`` (#21984).
+_MEMBERSHIP_LUA = """
+if redis.call('HGET', KEYS[1], 'category_id') ~= ARGV[1] then return 0 end
+redis.call('SADD', KEYS[2], ARGV[2])
+if ARGV[3] == '1' then redis.call('SADD', KEYS[3], ARGV[2]) else redis.call('SREM', KEYS[3], ARGV[2]) end
+return 1
+"""
+#: Delete a fact hash and return the ``category_id`` it held at that moment, atomically (#21984).
+_TAKE_HASH_LUA = """
+local category = redis.call('HGET', KEYS[1], 'category_id')
+return {redis.call('DEL', KEYS[1]), category}
+"""
 #: Floor-at-zero ``HINCRBY -1`` on one hash field, atomic (#21984).
 _FLOOR_DECR_LUA = """
 local c = tonumber(redis.call('HGET', KEYS[1], ARGV[1]))
@@ -80,20 +97,26 @@ async def servable_fact_ids(redis: Any, category_ids: Iterable[str]) -> set:
 
 
 async def _write_membership(redis: Any, fact_id: str, category_id: str, held: bool) -> None:
-    """Join the set and set the index entry for *held* in one ``MULTI``."""
-    async with redis.pipeline(transaction=True) as pipe:
-        pipe.sadd(FACTS_KEY.format(category_id), fact_id)
-        (pipe.sadd if held else pipe.srem)(QUARANTINED_KEY.format(category_id), fact_id)
-        await pipe.execute()
+    """Join the set and set the index entry for *held* in one script, refused if the fact left the category."""
+    await redis.eval(
+        _MEMBERSHIP_LUA,
+        3,
+        f"fact:{fact_id}",
+        FACTS_KEY.format(category_id),
+        QUARANTINED_KEY.format(category_id),
+        category_id,
+        fact_id,
+        "1" if held else "0",
+    )
 
 
-async def _settle_index(read: Any, write: Any, count: int, what: str) -> None:
+async def _settle_index(read: Any, write: Any, count: int, what: str) -> bool:
     """Write the index decisions, re-read the stored ones, and write again until they agree (#21990).
 
     *read* returns the current ``held`` decision of each of the *count* facts; *write* applies a list of
     ``(position, held)``. A concurrent writer's sync can land between a write and its re-read, so one
     correction is not enough; this repeats for the positions that still disagree, at most
-    :data:`CONVERGE_PASSES` times, and logs an ERROR if it did not settle.
+    :data:`CONVERGE_PASSES` times, and logs an ERROR if it did not settle. Returns whether it settled.
     """
     written = list(await read())
     pending = list(range(count))
@@ -104,8 +127,9 @@ async def _settle_index(read: Any, write: Any, count: int, what: str) -> None:
         for i in pending:
             written[i] = now[i]
         if not pending:
-            return
+            return True
     logger.error("Category quarantine index for %s did not converge in %d passes", what, CONVERGE_PASSES)
+    return False
 
 
 async def add_to_category(redis: Any, fact_id: str, category_id: str) -> None:
@@ -140,6 +164,15 @@ async def fact_category_id(redis: Any, fact_id: str) -> str | None:
     """The fact's ``category_id`` as text (``None`` if uncategorised); the one reader (#21984)."""
     raw = await redis.hget(f"fact:{fact_id}", "category_id")
     return _text(raw) if raw else None
+
+
+async def take_fact_hash(redis_client: Any, fact_id: str) -> tuple[int, str | None]:
+    """Delete ``fact:{id}`` (sync client) and return ``(keys removed, the category_id it held at that moment)``.
+
+    One script, so no assign can move the fact between the category read and the delete (#21984).
+    """
+    removed, category = await asyncio.to_thread(redis_client.eval, _TAKE_HASH_LUA, 1, f"fact:{fact_id}")
+    return int(removed), (_text(category) if category else None)
 
 
 async def decrement_category_count(redis: Any, category_id: str) -> None:
@@ -193,12 +226,12 @@ async def _read_held(redis: Any, fact_ids: list) -> list:
         return [_is_held(raw) for raw in await pipe.execute()]
 
 
-async def _reconcile_batch(redis: Any, category_id: str, fact_ids: list) -> None:
+async def _reconcile_batch(redis: Any, category_id: str, fact_ids: list) -> bool:
     """Set the index entry of each fact from its metadata, converging on the stored value (#21990).
 
     An ``update_fact`` or assign landing between the read and the write has already synced its own entry;
     the write would overwrite it with the stale decision, so the facts whose stored metadata changed are
-    written again, until they agree.
+    written again, until they agree. Returns whether every fact settled.
     """
     key = QUARANTINED_KEY.format(category_id)
 
@@ -211,30 +244,36 @@ async def _reconcile_batch(redis: Any, category_id: str, fact_ids: list) -> None
                 (pipe.sadd if is_held else pipe.srem)(key, fact_ids[i])
             await pipe.execute()
 
-    await _settle_index(read, write, len(fact_ids), f"category {category_id}")
+    return await _settle_index(read, write, len(fact_ids), f"category {category_id}")
 
 
-async def _reconcile_category(redis: Any, key: Any) -> int:
-    """Reconcile one category set in batches of :data:`REBUILD_BATCH`; returns the facts visited."""
+async def _reconcile_category(redis: Any, key: Any) -> tuple[int, bool]:
+    """Reconcile one category set in batches of :data:`REBUILD_BATCH`; returns (facts visited, all settled)."""
     category_id = _text(key).split(":", 2)[2]
     members = [_text(m) for m in await redis.smembers(_text(key))]
+    settled = True
     for start in range(0, len(members), REBUILD_BATCH):
-        await _reconcile_batch(redis, category_id, members[start : start + REBUILD_BATCH])
+        settled &= await _reconcile_batch(redis, category_id, members[start : start + REBUILD_BATCH])
         done = min(start + REBUILD_BATCH, len(members))
         logger.info("Category %s quarantine index: %d/%d facts", category_id, done, len(members))
-    return len(members)
+    return len(members), settled
 
 
 async def rebuild_category_quarantine_index(redis: Any) -> int:
     """Reconcile every category set's index entries with the facts' metadata; returns the facts visited.
 
     Runs once per :data:`INDEX_VERSION` (and again after a wipe); idempotent, never deletes a fact or a set.
+    The marker is written only when every batch settled; otherwise the next start retries.
     """
     if _text(await redis.get(REBUILT_MARKER)) == INDEX_VERSION:
         return 0
-    visited = 0
+    visited, settled = 0, True
     async for key in redis.scan_iter(match=FACTS_KEY.format("*"), count=200):
-        visited += await _reconcile_category(redis, key)
+        count, ok = await _reconcile_category(redis, key)
+        visited, settled = visited + count, settled and ok
+    if not settled:
+        logger.error("Category quarantine index rebuild did not settle; the marker is not written, it retries")
+        return visited
     await redis.set(REBUILT_MARKER, INDEX_VERSION)
     logger.info("Category quarantine index rebuilt over %d categorised facts", visited)
     return visited

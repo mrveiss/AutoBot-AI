@@ -23,6 +23,7 @@ from knowledge.category_quarantine import (
     add_to_category,
     rebuild_category_quarantine_index,
     sync_fact_quarantine,
+    take_fact_hash,
 )
 from knowledge.facts import FactsMixin
 from services.kb_wipe_redis import KB_KEY_PREFIXES
@@ -144,27 +145,57 @@ async def test_deleting_a_category_removes_its_quarantine_index():
 
 
 @pytest.mark.asyncio
-async def test_joining_a_category_and_its_index_entry_are_one_transaction():
+async def test_joining_a_category_and_its_index_entry_are_one_script():
     kb = CategoryKB()
     await kb.add_fact("q", category_id=None, **HELD)
-    before = len(kb.redis().executed_batches())
+    await kb.redis().hset("fact:q", "category_id", "cat1")  # what the assign path writes first
+    before = len(kb.redis().pipelines)
 
     await add_to_category(kb.redis(), "q", "cat1")
 
-    assert kb.redis().executed_batches()[before:] == [[("sadd", MEMBERS, "q"), ("sadd", INDEX, "q")]]
+    assert (kb.redis().sets[MEMBERS], kb.redis().sets[INDEX]) == ({"q"}, {"q"})
+    assert len(kb.redis().pipelines) == before  # one eval, not a multi-step write
 
 
 @pytest.mark.asyncio
-async def test_a_crash_before_the_transaction_leaves_neither_set_changed():
+async def test_a_crash_before_the_script_leaves_neither_set_changed(monkeypatch):
     kb = CategoryKB()
     await kb.add_fact("q", category_id=None, **HELD)
-    kb.redis().next_pipeline_errors = [ConnectionError("connection lost before EXEC")]
+    await kb.redis().hset("fact:q", "category_id", "cat1")
 
+    async def lost(*args):
+        raise ConnectionError("connection lost before EVAL")
+
+    monkeypatch.setattr(kb.redis(), "eval", lost)
     with pytest.raises(ConnectionError):
         await add_to_category(kb.redis(), "q", "cat1")
 
     assert MEMBERS not in kb.redis().sets
     assert INDEX not in kb.redis().sets
+
+
+@pytest.mark.asyncio
+async def test_a_membership_write_after_the_fact_was_deleted_does_not_re_add_it():
+    """#21984: a correction pass running after delete_fact removed the hash must not re-add the id."""
+    kb = await _kb(servable=1, quarantined=0)
+    kb.redis().hashes.pop("fact:s0")
+    kb.redis().sets[MEMBERS].discard("s0")
+
+    await add_to_category(kb.redis(), "s0", "cat1")
+
+    assert "s0" not in kb.redis().sets.get(MEMBERS, set())
+
+
+@pytest.mark.asyncio
+async def test_a_membership_write_after_the_fact_moved_does_not_write_the_old_category():
+    kb = await _kb(servable=1, quarantined=0)
+    await kb._remove_from_old_category("s0", "cat2")
+    await kb._assign_fact_to_category("s0", "cat2")
+
+    await add_to_category(kb.redis(), "s0", "cat1")  # a late pass for the category it left
+
+    assert "s0" not in kb.redis().sets.get(MEMBERS, set())
+    assert kb.redis().sets[FACTS_KEY.format("cat2")] == {"s0"}
 
 
 async def _store_metadata(kb: CategoryKB, fact_id: str, metadata: dict) -> None:
@@ -302,6 +333,18 @@ async def test_an_update_landing_during_a_rebuild_batch_is_not_overwritten():
     assert await _total(kb) == 0
 
 
+class _TakeClient:
+    """The sync client's ``eval`` for the hash-take script, over the in-memory store."""
+
+    def __init__(self, store):
+        self.store = store
+
+    def eval(self, script, numkeys, key):
+        assert script == category_quarantine._TAKE_HASH_LUA
+        row = self.store.hashes.pop(key, None)
+        return [0 if row is None else 1, None if row is None else row.get(b"category_id")]
+
+
 class _DeleteKB(FactsMixin, CategoryKB):
     """The real ``FactsMixin.delete_fact`` / ``delete_facts_by_session`` over the in-memory Redis."""
 
@@ -320,8 +363,8 @@ class _DeleteKB(FactsMixin, CategoryKB):
         return ({"content": f"fact {fact_id}"}, {}) if exists else None
 
     async def _durable_delete(self, fact_id):
-        self.redis().hashes.pop(f"fact:{fact_id}", None)
-        return True
+        removed, category_id = await take_fact_hash(_TakeClient(self.redis()), fact_id)
+        return bool(removed), category_id
 
     async def _cleanup_fact_mappings(self, fact_id, content, metadata):
         return None
@@ -477,3 +520,37 @@ async def test_three_interleaved_writes_converge_on_the_final_stored_metadata():
 
     assert kb.redis().sets[INDEX] == {"s0"}  # metadata says held, and the index agrees
     assert await _total(kb) == 0
+
+
+@pytest.mark.asyncio
+async def test_a_reassignment_between_the_read_and_the_delete_is_unindexed_from_the_new_category():
+    """#21984: the category unindexed is the one the hash held when it was removed, not the one read earlier."""
+    kb = await _delete_kb()
+    read = kb._read_fact_for_write
+
+    async def read_then_reassign(fact_id):
+        result = await read(fact_id)
+        await kb._remove_from_old_category("s0", "cat2")
+        await kb._assign_fact_to_category("s0", "cat2")
+        return result
+
+    kb._read_fact_for_write = read_then_reassign
+    await kb.delete_fact("s0")
+
+    assert "s0" not in kb.redis().sets.get(FACTS_KEY.format("cat2"), set())
+    assert "s0" not in kb.redis().sets[MEMBERS]
+
+
+@pytest.mark.asyncio
+async def test_a_rebuild_batch_that_does_not_settle_does_not_write_the_marker(monkeypatch):
+    """#21990: with one pass allowed, the update landing mid-batch is detected but not corrected; retry later."""
+    monkeypatch.setattr(category_quarantine, "CONVERGE_PASSES", 1)
+    kb = await _kb(servable=1, quarantined=0)
+
+    async def quarantine():
+        await _store_metadata(kb, "s0", dict(HELD))
+
+    kb.redis().after_metadata_read = quarantine
+    assert await rebuild_category_quarantine_index(kb.redis()) == 1
+
+    assert REBUILT_MARKER not in kb.redis().strings

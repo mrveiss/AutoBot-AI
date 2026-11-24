@@ -200,16 +200,30 @@ class SetRedis:
         return value
 
     async def eval(self, script, numkeys, *args):
-        """Only the floor-at-zero decrement script the category code uses (#21984), applied atomically."""
-        from knowledge.category_quarantine import _FLOOR_DECR_LUA
+        """The two scripts the category code runs (#21984), each applied atomically (no await inside)."""
+        from knowledge.category_quarantine import _FLOOR_DECR_LUA, _MEMBERSHIP_LUA
 
-        assert script == _FLOOR_DECR_LUA, "the fake models only the category decrement script"
-        key, field = args[:numkeys], args[numkeys]
-        row = self.hashes.get(key[0], {})
+        keys, argv = args[:numkeys], args[numkeys:]
+        if script == _MEMBERSHIP_LUA:
+            return self._membership(keys, argv)
+        assert script == _FLOOR_DECR_LUA, "the fake models only the category scripts"
+        field = argv[0]
+        row = self.hashes.get(keys[0], {})
         current = int(row[self._b(field)]) if self._b(field) in row else None
         if current and current > 0:
             row[self._b(field)] = self._b(current - 1)
         return current
+
+    def _membership(self, keys, argv) -> int:
+        """``_MEMBERSHIP_LUA``: join and index only while the hash still holds *category_id*."""
+        hash_key, facts_key, held_key = keys
+        category_id, fact_id, held = argv
+        if self.hashes.get(hash_key, {}).get(b"category_id") != self._b(category_id):
+            return 0
+        self.sets.setdefault(facts_key, set()).add(fact_id)
+        held_set = self.sets.setdefault(held_key, set())
+        held_set.add(fact_id) if held == "1" else held_set.discard(fact_id)
+        return 1
 
 
 class CategoryKB(CategoriesMixin):
