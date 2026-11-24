@@ -194,7 +194,22 @@ class SetRedis:
         return list(self.hashes.get(key, {}).values())
 
     async def hincrby(self, key, field, amount):
-        return amount
+        row = self.hashes.setdefault(key, {})
+        value = int(row.get(self._b(field), b"0")) + amount
+        row[self._b(field)] = self._b(value)
+        return value
+
+    async def eval(self, script, numkeys, *args):
+        """Only the floor-at-zero decrement script the category code uses (#21984), applied atomically."""
+        from knowledge.category_quarantine import _FLOOR_DECR_LUA
+
+        assert script == _FLOOR_DECR_LUA, "the fake models only the category decrement script"
+        key, field = args[:numkeys], args[numkeys]
+        row = self.hashes.get(key[0], {})
+        current = int(row[self._b(field)]) if self._b(field) in row else None
+        if current and current > 0:
+            row[self._b(field)] = self._b(current - 1)
+        return current
 
 
 class CategoryKB(CategoriesMixin):

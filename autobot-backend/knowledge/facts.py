@@ -1213,13 +1213,13 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             if not await self._durable_delete(fact_id):
                 return {"status": "error", "message": "Fact not found"}
             await self._cleanup_fact_mappings(fact_id, content, metadata)
-            await unindex_deleted_fact(self.redis(), fact_id, category_id)  # #21984
             await self._delete_fact_from_vector_store(fact_id)
 
             await asyncio.gather(
                 self._decrement_stat("total_facts"),
                 self._decrement_stat("total_vectors"),
             )
+            await unindex_deleted_fact(self.redis(), fact_id, category_id)  # #21984: last; logs, never fails the delete
 
             if not _skip_bm25_refresh:
                 self._schedule_bm25_refresh()

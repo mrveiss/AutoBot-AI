@@ -50,6 +50,14 @@ logger = get_logger(__name__)
 #: Bump when the index's meaning changes; the marker then differs and the rebuild runs again.
 INDEX_VERSION = "1"
 REBUILD_BATCH = env_int_clamped("AUTOBOT_KB_CATEGORY_INDEX_REBUILD_BATCH", 500, 1, 5000)
+#: Most write-then-re-read passes one index decision may take to converge on the stored metadata (#21990).
+CONVERGE_PASSES = env_int_clamped("AUTOBOT_KB_CATEGORY_INDEX_CONVERGE_PASSES", 5, 1, 50)
+#: Floor-at-zero ``HINCRBY -1`` on one hash field, atomic (#21984).
+_FLOOR_DECR_LUA = """
+local c = tonumber(redis.call('HGET', KEYS[1], ARGV[1]))
+if c and c > 0 then redis.call('HSET', KEYS[1], ARGV[1], c - 1) end
+return c
+"""
 
 
 def _text(value: Any) -> str:
@@ -79,17 +87,40 @@ async def _write_membership(redis: Any, fact_id: str, category_id: str, held: bo
         await pipe.execute()
 
 
+async def _converge(read: Any, write: Any, count: int, what: str) -> None:
+    """Write the index decisions, re-read the stored ones, and write again until they agree (#21990).
+
+    *read* returns the current ``held`` decision of each of the *count* facts; *write* applies a list of
+    ``(position, held)``. A concurrent writer's sync can land between a write and its re-read, so one
+    correction is not enough; this repeats for the positions that still disagree, at most
+    :data:`CONVERGE_PASSES` times, and logs an ERROR if it did not settle.
+    """
+    written = list(await read())
+    pending = list(range(count))
+    for _ in range(CONVERGE_PASSES):
+        await write([(i, written[i]) for i in pending])
+        now = await read()
+        pending = [i for i in pending if now[i] != written[i]]
+        for i in pending:
+            written[i] = now[i]
+        if not pending:
+            return
+    logger.error("Category quarantine index for %s did not converge in %d passes", what, CONVERGE_PASSES)
+
+
 async def add_to_category(redis: Any, fact_id: str, category_id: str) -> None:
-    """Add *fact_id* to the category set and index it by its own marker; re-read and correct once.
+    """Add *fact_id* to the category set and index it by its own marker; re-read until it agrees.
 
     The caller has already written ``category_id`` on the fact hash (see the module docstring).
     """
-    held = _is_held(await redis.hget(f"fact:{fact_id}", "metadata"))
-    await _write_membership(redis, fact_id, category_id, held)
-    now_held = _is_held(await redis.hget(f"fact:{fact_id}", "metadata"))
-    if now_held != held:
-        write = redis.sadd if now_held else redis.srem
-        await write(QUARANTINED_KEY.format(category_id), fact_id)
+
+    async def read() -> list:
+        return [_is_held(await redis.hget(f"fact:{fact_id}", "metadata"))]
+
+    async def write(items: list) -> None:
+        await _write_membership(redis, fact_id, category_id, items[0][1])
+
+    await _converge(read, write, 1, f"fact {fact_id}")
 
 
 async def remove_from_category(redis: Any, fact_id: str, category_id: str) -> None:
@@ -112,37 +143,46 @@ async def category_of(redis_client: Any, fact_id: str) -> Any:
 
 
 async def decrement_category_count(redis: Any, category_id: str) -> None:
-    """Decrement the category hash's ``fact_count`` (never below zero); the one implementation (#21984)."""
-    current = await redis.hget(f"category:{category_id}", "fact_count")
-    if current:
-        count = int(_text(current))
-        if count > 0:
-            await redis.hset(f"category:{category_id}", "fact_count", count - 1)
+    """Decrement the category hash's ``fact_count`` (never below zero, atomic); the one implementation (#21984)."""
+    await redis.eval(_FLOOR_DECR_LUA, 1, f"category:{category_id}", "fact_count")
 
 
 async def unindex_deleted_fact(redis: Any, fact_id: str, category_id: Any) -> None:
-    """A deleted fact leaves its category set, quarantine index and ``fact_count`` (#21984); no-op if uncategorised."""
-    if category_id:
+    """A deleted fact leaves its category set, quarantine index and ``fact_count`` (#21984); no-op if uncategorised.
+
+    The fact is already gone, so a Redis failure here is logged and returns: the stale derived id is left
+    for the stale-id cleanup (#22223), and the delete is not reported as failed.
+    """
+    if not category_id:
+        return
+    try:
         await remove_from_category(redis, fact_id, category_id)
         await decrement_category_count(redis, category_id)
+    except Exception as exc:
+        logger.warning(
+            "Deleted fact %s left a stale entry in category %s: %s", fact_id, category_id, type(exc).__name__
+        )
 
 
 async def sync_fact_quarantine(redis_client: Any, fact_id: str) -> None:
     """``update_fact``'s step: bring the index in line with the fact's stored metadata (#21990).
 
     Decides from the metadata as stored, never from the caller's in-memory copy, so two ``update_fact``
-    calls landing out of order both end on the final stored value. Writes, then re-reads and corrects once
-    (the same shape as :func:`add_to_category`). Takes the sync client ``update_fact`` writes the hash with.
+    calls landing out of order both end on the final stored value; writes and re-reads until they agree
+    (:func:`_converge`). Takes the sync client ``update_fact`` writes the hash with.
     """
     category_id = await category_of(redis_client, fact_id)
     if not category_id:
         return
     key = QUARANTINED_KEY.format(category_id)
-    held = await _stored_held_sync(redis_client, fact_id)
-    await asyncio.to_thread(redis_client.sadd if held else redis_client.srem, key, fact_id)
-    now_held = await _stored_held_sync(redis_client, fact_id)
-    if now_held != held:
-        await asyncio.to_thread(redis_client.sadd if now_held else redis_client.srem, key, fact_id)
+
+    async def read() -> list:
+        return [await _stored_held_sync(redis_client, fact_id)]
+
+    async def write(items: list) -> None:
+        await asyncio.to_thread(redis_client.sadd if items[0][1] else redis_client.srem, key, fact_id)
+
+    await _converge(read, write, 1, f"fact {fact_id}")
 
 
 async def _read_held(redis: Any, fact_ids: list) -> list:
@@ -154,25 +194,24 @@ async def _read_held(redis: Any, fact_ids: list) -> list:
 
 
 async def _reconcile_batch(redis: Any, category_id: str, fact_ids: list) -> None:
-    """Set the index entry of each fact from its metadata: read, write, then re-read and correct (#21990).
+    """Set the index entry of each fact from its metadata, converging on the stored value (#21990).
 
     An ``update_fact`` or assign landing between the read and the write has already synced its own entry;
     the write would overwrite it with the stale decision, so the facts whose stored metadata changed are
-    written again from the re-read.
+    written again, until they agree.
     """
-    held = await _read_held(redis, fact_ids)
     key = QUARANTINED_KEY.format(category_id)
-    async with redis.pipeline(transaction=False) as pipe:
-        for fact_id, is_held in zip(fact_ids, held):
-            (pipe.sadd if is_held else pipe.srem)(key, fact_id)
-        await pipe.execute()
-    now = await _read_held(redis, fact_ids)
-    changed = [(f, h) for f, h, n in zip(fact_ids, held, now) if h != n]
-    if changed:
+
+    async def read() -> list:
+        return await _read_held(redis, fact_ids)
+
+    async def write(items: list) -> None:
         async with redis.pipeline(transaction=False) as pipe:
-            for fact_id, was_held in changed:
-                (pipe.srem if was_held else pipe.sadd)(key, fact_id)
+            for i, is_held in items:
+                (pipe.sadd if is_held else pipe.srem)(key, fact_ids[i])
             await pipe.execute()
+
+    await _converge(read, write, len(fact_ids), f"category {category_id}")
 
 
 async def _reconcile_category(redis: Any, key: Any) -> int:

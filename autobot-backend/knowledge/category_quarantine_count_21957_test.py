@@ -16,6 +16,7 @@ import json
 import pytest
 
 from autobot_shared.ssot_config import config
+from knowledge import category_quarantine
 from knowledge.category_keys import FACTS_KEY, QUARANTINED_KEY, REBUILT_MARKER
 from knowledge.category_quarantine import (
     INDEX_VERSION,
@@ -326,6 +327,7 @@ class _DeleteKB(FactsMixin, CategoryKB):
         CategoryKB.__init__(self)
         self.redis_client = _SyncClient(self.redis())
         self.session_facts: list = []
+        self.cleanup_calls: list = []  # what ran after the durable delete
 
     def ensure_initialized(self):
         return None
@@ -342,10 +344,13 @@ class _DeleteKB(FactsMixin, CategoryKB):
         return None
 
     async def _decrement_stat(self, field, amount=1):
-        return None
+        self.cleanup_calls.append(field)
+
+    async def _delete_fact_from_vector_store(self, fact_id):
+        self.cleanup_calls.append("vector")
 
     def _schedule_bm25_refresh(self):
-        return None
+        self.cleanup_calls.append("bm25")
 
     async def get_facts_by_session(self, session_id):
         return list(self.session_facts)
@@ -369,7 +374,7 @@ async def _delete_kb() -> _DeleteKB:
 async def test_deleting_a_categorised_fact_drops_it_from_the_set_and_keeps_counts_and_pages_exact():
     """#21984: N servable facts, one deleted -> total_count == N-1 and every page full."""
     kb = await _delete_kb()
-    await kb.redis().hset("category:cat1", "fact_count", SERVABLE + 1)  # the fake's hincrby stores nothing
+    assert kb.redis().hashes["category:cat1"][b"fact_count"] == str(SERVABLE + 1).encode()  # via the assign flow
 
     assert (await kb.delete_fact("s0"))["status"] == "success"
 
@@ -411,3 +416,78 @@ async def test_delete_facts_by_session_drops_each_fact_from_set_and_index():
     assert kb.redis().sets[MEMBERS] == {"s2", "s3", "s4"}
     assert kb.redis().sets[INDEX] == set()
     assert await _total(kb) == SERVABLE - 2
+
+
+@pytest.mark.asyncio
+async def test_a_redis_failure_unindexing_a_deleted_fact_neither_fails_the_delete_nor_skips_its_cleanup(
+    monkeypatch, caplog
+):
+    """#21984: the fact is gone; the stale derived id is logged, and the vector, stat and BM25 cleanup still run."""
+    kb = await _delete_kb()
+
+    async def boom(*args):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(category_quarantine, "remove_from_category", boom)
+    with caplog.at_level("WARNING"):
+        result = await kb.delete_fact("s0")
+
+    assert result["status"] == "success"
+    assert sorted(kb.cleanup_calls) == ["bm25", "total_facts", "total_vectors", "vector"]
+    assert any("s0" in r.message and "cat1" in r.message and "ConnectionError" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_the_category_count_never_goes_below_zero():
+    kb = _DeleteKB()
+    await kb.add_fact("a")
+    await kb.redis().hset("category:cat1", "fact_count", 0)
+
+    await category_quarantine.decrement_category_count(kb.redis(), "cat1")
+
+    assert kb.redis().hashes["category:cat1"][b"fact_count"] == b"0"
+
+
+class _InterleavedClient(_SyncClient):
+    """Runs a writer between this sync's write and its re-read (first sadd), and before its first srem lands."""
+
+    def __init__(self, kb):
+        super().__init__(kb.redis())
+        self.kb = kb
+        self.after_first_sadd = None
+        self.before_first_srem = None
+
+    def sadd(self, key, *values):
+        super().sadd(key, *values)
+        hook, self.after_first_sadd = self.after_first_sadd, None
+        if hook:
+            hook()
+
+    def srem(self, key, *values):
+        hook, self.before_first_srem = self.before_first_srem, None
+        if hook:
+            hook()
+        super().srem(key, *values)
+
+
+@pytest.mark.asyncio
+async def test_three_interleaved_writes_converge_on_the_final_stored_metadata():
+    """#21990: S1 reads held, B stores servable, C stores held and syncs, S1's pending srem lands last."""
+    kb = await _kb(servable=1, quarantined=0)
+    hashes = kb.redis().hashes["fact:s0"]
+    hashes[b"metadata"] = json.dumps(HELD).encode("utf-8")  # M1: held
+    client = _InterleavedClient(kb)
+
+    def writer_b():  # stores servable metadata, no sync yet
+        hashes[b"metadata"] = json.dumps({"collection": "general"}).encode("utf-8")
+
+    def writer_c():  # stores held metadata and syncs: its sadd lands before S1's srem
+        hashes[b"metadata"] = json.dumps(HELD).encode("utf-8")
+        _SyncClient.sadd(client, INDEX, "s0")
+
+    client.after_first_sadd = writer_b
+    client.before_first_srem = writer_c
+    await sync_fact_quarantine(client, "s0")
+
+    assert kb.redis().sets[INDEX] == {"s0"}  # metadata says held, and the index agrees
+    assert await _total(kb) == 0
