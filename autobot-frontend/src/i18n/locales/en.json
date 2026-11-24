@@ -4621,7 +4621,8 @@
       "loadFailed": "The abandoned uploads could not be listed.",
       "progress": "{received} of {total} received",
       "free": "Free upload",
-      "freeFailed": "The upload could not be freed."
+      "freeFailed": "The upload could not be freed.",
+      "confirm": "Free this abandoned upload? Its staged data is removed and the decision is recorded."
     }
   },
   "workflow": {

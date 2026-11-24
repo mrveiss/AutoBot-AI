@@ -10,7 +10,11 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 
-const { mockGet, mockDelete } = vi.hoisted(() => ({ mockGet: vi.fn(), mockDelete: vi.fn() }))
+const { mockGet, mockDelete, mockConfirm } = vi.hoisted(() => ({
+  mockGet: vi.fn(),
+  mockDelete: vi.fn(),
+  mockConfirm: vi.fn(),
+}))
 
 vi.mock('@/utils/ApiClient', () => ({ default: { get: mockGet, delete: mockDelete } }))
 vi.mock('@autobot/ui', () => ({
@@ -19,6 +23,7 @@ vi.mock('@autobot/ui', () => ({
   BaseAlert: { props: ['message'], template: '<p class="alert">{{ message }}</p>' },
   formatFileSize: (n: number) => `${n}B`,
 }))
+vi.mock('@/composables/useConfirmDialog', () => ({ useConfirmDialog: () => ({ confirm: mockConfirm }) }))
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
@@ -39,6 +44,7 @@ describe('AbandonedUploadsPanel.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGet.mockResolvedValue({ expired: [upload] })
+    mockConfirm.mockResolvedValue(true)
   })
 
   it('lists abandoned uploads from the expired route', async () => {
@@ -63,5 +69,33 @@ describe('AbandonedUploadsPanel.vue', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="abandoned-u1"]').exists()).toBe(true)
     expect(wrapper.find('.alert').text()).toBe(en.knowledge.abandonedUploads.freeFailed)
+  })
+
+  it('sends no DELETE when the confirmation is cancelled', async () => {
+    mockConfirm.mockResolvedValue(false)
+    const wrapper = await mountPanel()
+    await wrapper.find('[data-testid="abandoned-u1"] button').trigger('click')
+    await flushPromises()
+    expect(mockConfirm).toHaveBeenCalledOnce()
+    expect(mockDelete).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="abandoned-u1"]').exists()).toBe(true)
+  })
+
+  it('reloads the list when the DELETE is refused, so a stale row goes', async () => {
+    mockDelete.mockRejectedValue(Object.assign(new Error('HTTP 404'), { status: 404 }))
+    const wrapper = await mountPanel()
+    mockGet.mockResolvedValue({ expired: [] })
+    await wrapper.find('[data-testid="abandoned-u1"] button').trigger('click')
+    await flushPromises()
+    expect(mockGet).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="abandoned-u1"]').exists()).toBe(false)
+  })
+
+  it('says it is loading, not empty, while the first fetch is in flight', async () => {
+    mockGet.mockReturnValue(new Promise(() => {}))
+    const wrapper = mount(AbandonedUploadsPanel, { global: { plugins: [i18n] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.admin.cleanup.loading)
+    expect(wrapper.text()).not.toContain(en.knowledge.abandonedUploads.none)
   })
 })

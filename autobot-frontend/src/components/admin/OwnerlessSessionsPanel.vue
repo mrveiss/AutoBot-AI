@@ -72,6 +72,7 @@ async function propose(sessionId: string): Promise<void> {
     proposed.add(sessionId)
   } catch (err) {
     error.value = t(errorKey(err))
+    if (isHttpError(err) && err.status === 409) await load() // the report moved on: show what is true now
     logger.error('Could not propose an owner', sessionId, err)
   } finally {
     busy.value = false

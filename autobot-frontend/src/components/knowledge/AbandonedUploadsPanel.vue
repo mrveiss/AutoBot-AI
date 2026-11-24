@@ -12,6 +12,7 @@
     data-testid="abandoned-uploads"
   >
     <BaseAlert v-if="loadFailed" variant="warning" :message="t('knowledge.abandonedUploads.loadFailed')" />
+    <p v-else-if="!loaded">{{ t('admin.cleanup.loading') }}</p>
     <p v-else-if="uploads.length === 0">{{ t('knowledge.abandonedUploads.none') }}</p>
     <ul v-else class="list-none p-0">
       <li class="flex items-center gap-3 py-1" v-for="u in uploads" :key="u.upload_id" :data-testid="`abandoned-${u.upload_id}`">
@@ -31,16 +32,20 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseButton, BaseCard, formatFileSize } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useExpiredUploads } from '@/composables/knowledge/useExpiredUploads'
 
 const { t } = useI18n()
 const logger = createLogger('AbandonedUploadsPanel')
-const { uploads, loadFailed, load, remove } = useExpiredUploads()
+const { uploads, loaded, loadFailed, load, remove } = useExpiredUploads()
+const { confirm } = useConfirmDialog()
 
 const busyId = ref('')
 const error = ref('')
 
 async function free(uploadId: string): Promise<void> {
+  const ok = await confirm({ title: t('common.confirm'), message: t('knowledge.abandonedUploads.confirm') })
+  if (!ok) return
   busyId.value = uploadId
   error.value = ''
   try {

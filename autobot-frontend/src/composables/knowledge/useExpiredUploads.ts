@@ -22,6 +22,7 @@ export interface ExpiredUpload {
 
 export function useExpiredUploads() {
   const uploads = ref<ExpiredUpload[]>([])
+  const loaded = ref(false)
   const loadFailed = ref(false)
 
   async function load(): Promise<void> {
@@ -32,14 +33,22 @@ export function useExpiredUploads() {
     } catch (err) {
       loadFailed.value = true
       logger.error('Could not list abandoned uploads', err)
+    } finally {
+      loaded.value = true
     }
   }
 
-  /** Free one abandoned upload; throws the client's error when the server refuses. */
+  /** Free one abandoned upload; throws the client's error when the server refuses, after reloading the list
+   *  so a row another admin freed (404) or that is no longer removable (409) does not linger. */
   async function remove(uploadId: string): Promise<void> {
-    await apiClient.delete(`/api/knowledge_base/uploads/expired/${encodeURIComponent(uploadId)}`)
+    try {
+      await apiClient.delete(`/api/knowledge_base/uploads/expired/${encodeURIComponent(uploadId)}`)
+    } catch (err) {
+      await load()
+      throw err
+    }
     uploads.value = uploads.value.filter((u) => u.upload_id !== uploadId)
   }
 
-  return { uploads, loadFailed, load, remove }
+  return { uploads, loaded, loadFailed, load, remove }
 }

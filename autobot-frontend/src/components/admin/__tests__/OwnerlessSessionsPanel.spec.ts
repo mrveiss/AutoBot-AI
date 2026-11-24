@@ -80,4 +80,15 @@ describe('OwnerlessSessionsPanel.vue', () => {
     await flushPromises()
     expect(wrapper.find('.alert').text()).toBe(en.admin.ownerless.refusedOwner)
   })
+
+  it('reloads the report when the proposal is refused as a conflict', async () => {
+    mockPost.mockRejectedValue(httpError(409))
+    const wrapper = await mountPanel()
+    mockGet.mockResolvedValue({ count: 0, session_ids: [], unreadable: [] })
+    await wrapper.find('input').setValue('alice')
+    await wrapper.find('[data-testid="ownerless-s1"] button').trigger('click')
+    await flushPromises()
+    expect(mockGet).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="ownerless-s1"]').exists()).toBe(false)
+  })
 })
