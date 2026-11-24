@@ -11168,5 +11168,17 @@
     "requestFailed": "Drift prune request failed",
     "result": "Removed {removed} file(s); {left} left in place",
     "title": "{count} file(s) would be removed from {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "These controls pause or resume every agent, not a single one",
+    "loadFailed": "Failed to load agents",
+    "noLastActivity": "No activity reported",
+    "notReported": "Not reported",
+    "pauseAll": "Pause all agents",
+    "pauseFailed": "Failed to pause agents",
+    "resumeAll": "Resume all agents",
+    "resumeFailed": "Failed to resume agents",
+    "successRate": "Success Rate",
+    "tasksCompleted": "Tasks Completed"
   }
 }

@@ -17,6 +17,7 @@ import types
 from pathlib import Path
 
 import pytest
+from _slm_role_manifest_fixtures import PLACEHOLDERS
 
 from services import manifest_loader as ml
 from services import role_manifest_shape as rms
@@ -25,9 +26,8 @@ from services.role_manifest_errors import MANIFEST_ERRORS, manifest_errors, no_m
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _STALE = "role: autobot-backend\ndescription: x\ndeploy:\n  source: autobot-backend/\n  destination: /x/\n"
-_FRESH = _STALE + '  sync_target: "{base_dir}"\n'
+_FRESH = _STALE + '  sync_target: "{base_dir}"\nrole_health:\n  backend:\n    checked: false\n'
 _STATIC = [{"name": "backend", "systemd_service": "autobot-backend"}]
-_PLACEHOLDERS = {"base_dir": "/b", "agent_dir": "/a"}
 
 
 def _write(infra: Path, text: str) -> Path:
@@ -55,7 +55,7 @@ def _use_loader(monkeypatch, infra: Path) -> None:
 def test_a_role_without_a_usable_manifest_is_left_out_and_reported(monkeypatch, tmp_path, text):
     infra = _write(tmp_path / "infra", text) if text else tmp_path
     _use_loader(monkeypatch, infra)
-    assert rms.default_roles_for(_STATIC, _PLACEHOLDERS, degrade=True) == []
+    assert rms.default_roles_for(_STATIC, PLACEHOLDERS, degrade=True) == []
     assert "autobot-backend" in manifest_errors()["backend"]
     assert not rms._default_roles_cache, "a degraded build must be retried, not cached"
 
@@ -63,13 +63,13 @@ def test_a_role_without_a_usable_manifest_is_left_out_and_reported(monkeypatch, 
 def test_the_strict_mode_still_raises_and_records_nothing(monkeypatch, tmp_path):
     _use_loader(monkeypatch, _write(tmp_path / "infra", _STALE))
     with pytest.raises(rms.RoleManifestMissingError):
-        rms.default_roles_for(_STATIC, _PLACEHOLDERS)
+        rms.default_roles_for(_STATIC, PLACEHOLDERS)
     assert manifest_errors() == {}
 
 
 def test_a_fresh_manifest_leaves_no_error_and_is_cached(monkeypatch, tmp_path):
     _use_loader(monkeypatch, _write(tmp_path / "infra", _FRESH))
-    roles = rms.default_roles_for(_STATIC, _PLACEHOLDERS, degrade=True)
+    roles = rms.default_roles_for(_STATIC, PLACEHOLDERS, degrade=True)
     assert [r["name"] for r in roles] == ["backend"] and manifest_errors() == {}
 
 

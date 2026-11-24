@@ -50,6 +50,13 @@ health:
   retries: 3
   expected_status: 200
 
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  browser-service:
+    checked: true
+    port: 9001
+    path: /health
+
 secrets:
   own:
     - browser_service_key

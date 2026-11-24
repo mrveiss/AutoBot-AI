@@ -59,7 +59,7 @@ def test_the_unrecorded_delete_503_carries_a_fixed_string(url, store) -> None:
     gen = _client(_Coordinator())
     client = next(gen)
     try:
-        with patch("api.secrets_audit.audit_log", AsyncMock(return_value=False)):
+        with patch("services.audit.audit.record_committed", AsyncMock(return_value=False)):
             response = client.delete(url)
     finally:
         gen.close()
