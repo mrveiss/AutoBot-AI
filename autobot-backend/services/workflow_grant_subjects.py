@@ -138,10 +138,10 @@ async def _recheck(session: "AsyncSession", item: dict[str, Any]) -> str | None:
 
 
 async def _apply_one(session: "AsyncSession", item: dict[str, Any]) -> str | None:
-    """Rewrite one re-checked row; None on success, else the reason it was left untouched."""
+    """Rewrite one re-checked row; None on success, ``_APPLIED`` for a replay, else why it was left untouched."""
     try:
         if (why := await _recheck(session, item)) is not None:
-            return None if why == _APPLIED else why
+            return why
         stmt = (
             update(WorkflowPermission)
             .where(WorkflowPermission.id == uuid.UUID(item["permission_id"]), WorkflowPermission.user_id == item["old"])
@@ -156,22 +156,24 @@ async def _apply_one(session: "AsyncSession", item: dict[str, Any]) -> str | Non
         return "the row could not be rewritten"
 
 
-async def apply_remap(session: "AsyncSession", mappings: list[dict[str, Any]]) -> tuple[int, list[str]]:
-    """Apply the approved mappings; (rewritten count, one reason line per row left untouched)."""
-    rewritten, skipped = 0, []
+async def apply_remap(session: "AsyncSession", mappings: list[dict[str, Any]]) -> tuple[int, int, list[str]]:
+    """Apply the approved mappings; (rewritten now, already applied, one reason line per row left untouched)."""
+    rewritten, already, skipped = 0, 0, []
     for item in mappings:
         why = await _apply_one(session, item)
         if why is None:
             rewritten += 1
+        elif why == _APPLIED:
+            already += 1
         else:
             skipped.append(f"{item.get('workflow_id')}:{item.get('old')}: {why}")
-    return rewritten, skipped
+    return rewritten, already, skipped
 
 
 async def execute_grant_remap(approval: "Approval", session: "AsyncSession") -> None:
     """Rewrite the grant subjects an approved gate named, and record what happened."""
     (mappings,) = require_context(approval, "mappings")
-    rewritten, skipped = await apply_remap(session, mappings)
+    rewritten, already, skipped = await apply_remap(session, mappings)
     done = not skipped
     await record_cleanup_outcome(
         approval,
@@ -179,7 +181,7 @@ async def execute_grant_remap(approval: "Approval", session: "AsyncSession") -> 
         operation=AuditAction.WORKFLOW_GRANT_REMAP.value,
         done=done,
         resource=SCOPE,
-        summary=f"Grant subject rewrite ({rewritten} of {len(mappings)} rows)",
+        summary=f"Grant subject rewrite ({rewritten} of {len(mappings)} rows rewritten, {already} already applied)",
         reason="; ".join(skipped) or None,
     )
 

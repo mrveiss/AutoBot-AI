@@ -126,18 +126,19 @@ async def test_plan_remap_maps_known_names_and_reports_the_rest_in_one_name_quer
 
 async def test_a_row_already_at_the_proposed_subject_counts_as_applied() -> None:
     session = _session(_row(user_id="u-1"))
-    assert await subjects._apply_one(session, _ITEM) is None
+    assert await subjects._apply_one(session, _ITEM) == subjects._APPLIED
     session.commit.assert_not_awaited()
 
 
 async def test_replaying_an_applied_proposal_records_it_done() -> None:
     approval = SimpleNamespace(context={"mappings": [_ITEM]})
     with (
-        patch.object(subjects, "_apply_one", AsyncMock(return_value=None)),
+        patch.object(subjects, "_apply_one", AsyncMock(return_value=subjects._APPLIED)),
         patch.object(subjects, "record_cleanup_outcome", AsyncMock()) as record,
     ):
         await subjects.execute_grant_remap(approval, MagicMock())
     assert record.await_args.kwargs["done"] is True
+    assert "0 of 1 rows rewritten, 1 already applied" in record.await_args.kwargs["summary"]
 
 
 def test_the_action_is_registered_server_only_and_admin_only() -> None:

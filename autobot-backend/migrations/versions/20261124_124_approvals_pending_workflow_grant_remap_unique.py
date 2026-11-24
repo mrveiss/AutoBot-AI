@@ -14,8 +14,9 @@ pending rows an index cannot be built over them, and the migration FAILS naming 
 does not delete (no agent cleans data on its own, #17038). The fix is a person's: reject the extra pending
 proposals in the Approvals inbox, then run the upgrade again.
 
-Chain note: open PR #22195 adds ``20261124_123`` on the same parent (``20261122_122``). Whichever lands second
-re-points its ``down_revision`` at the other so the chain keeps a single head.
+Chain note: open PRs #22195 (``20261124_123``) and #22176 (an approvals index revision) also extend the chain.
+Whichever of them is main's head when this lands is this revision's ``down_revision``, so the chain keeps a
+single head.
 """
 
 from typing import Sequence, Union
