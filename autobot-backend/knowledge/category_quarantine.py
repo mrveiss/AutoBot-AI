@@ -16,7 +16,9 @@ that change either side of it:
 * :func:`remove_from_category` and ``CategoriesMixin._delete_category_records`` (one ``DEL`` over both
   keys) -- membership lost;
 * ``FactsMixin.update_fact`` -- the one writer that changes an existing fact's ``collection`` marker
-  (the promotion gate, a re-quarantine), through :func:`sync_fact_quarantine`;
+  (the promotion gate, a re-quarantine), through :func:`sync_fact_quarantine`, which decides from the
+  stored metadata and re-reads after its write (#21990); ``FactsMixin.delete_fact`` -- membership lost,
+  through :func:`remove_from_category` (#21984);
 * :func:`rebuild_category_quarantine_index` -- repairs every set from the facts' own metadata.
 
 Atomicity. A membership change and its index entry go in one ``MULTI`` so a crash cannot split them.
@@ -35,7 +37,7 @@ or category sets), so it also heals a wrong index.
 """
 
 import asyncio
-from typing import Any, Dict, Iterable
+from typing import Any, Iterable
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
@@ -98,29 +100,69 @@ async def remove_from_category(redis: Any, fact_id: str, category_id: str) -> No
         await pipe.execute()
 
 
-async def sync_fact_quarantine(redis_client: Any, fact_id: str, metadata: Dict[str, Any]) -> None:
-    """``update_fact``'s step: bring the index in line with *metadata* for a fact that is categorised.
+async def _stored_held_sync(redis_client: Any, fact_id: str) -> bool:
+    """Whether the fact's *stored* metadata marks it quarantined (sync client, read off the event loop)."""
+    return _is_held(await asyncio.to_thread(redis_client.hget, f"fact:{fact_id}", "metadata"))
 
-    Takes the sync client ``update_fact`` writes the hash with, so it runs on the same connection.
+
+async def category_of(redis_client: Any, fact_id: str) -> Any:
+    """The fact's ``category_id`` as text (``None`` if uncategorised), read with the sync client."""
+    raw = await asyncio.to_thread(redis_client.hget, f"fact:{fact_id}", "category_id")
+    return _text(raw) if raw else None
+
+
+async def unindex_deleted_fact(redis: Any, fact_id: str, category_id: Any) -> None:
+    """A deleted fact leaves its category set and quarantine index (#21984); no-op when it had no category."""
+    if category_id:
+        await remove_from_category(redis, fact_id, category_id)
+
+
+async def sync_fact_quarantine(redis_client: Any, fact_id: str) -> None:
+    """``update_fact``'s step: bring the index in line with the fact's stored metadata (#21990).
+
+    Decides from the metadata as stored, never from the caller's in-memory copy, so two ``update_fact``
+    calls landing out of order both end on the final stored value. Writes, then re-reads and corrects once
+    (the same shape as :func:`add_to_category`). Takes the sync client ``update_fact`` writes the hash with.
     """
-    category_id = await asyncio.to_thread(redis_client.hget, f"fact:{fact_id}", "category_id")
+    category_id = await category_of(redis_client, fact_id)
     if not category_id:
         return
-    key = QUARANTINED_KEY.format(_text(category_id))
-    write = redis_client.sadd if is_quarantined({"metadata": metadata}) else redis_client.srem
-    await asyncio.to_thread(write, key, fact_id)
+    key = QUARANTINED_KEY.format(category_id)
+    held = await _stored_held_sync(redis_client, fact_id)
+    await asyncio.to_thread(redis_client.sadd if held else redis_client.srem, key, fact_id)
+    now_held = await _stored_held_sync(redis_client, fact_id)
+    if now_held != held:
+        await asyncio.to_thread(redis_client.sadd if now_held else redis_client.srem, key, fact_id)
 
 
-async def _reconcile_batch(redis: Any, category_id: str, fact_ids: list) -> None:
-    """Set the index entry of each fact from its metadata: one pipelined read, one pipelined write."""
+async def _read_held(redis: Any, fact_ids: list) -> list:
+    """One pipelined read of each fact's quarantine decision, from its stored metadata."""
     async with redis.pipeline(transaction=False) as pipe:
         for fact_id in fact_ids:
             pipe.hget(f"fact:{fact_id}", "metadata")
-        raws = await pipe.execute()
+        return [_is_held(raw) for raw in await pipe.execute()]
+
+
+async def _reconcile_batch(redis: Any, category_id: str, fact_ids: list) -> None:
+    """Set the index entry of each fact from its metadata: read, write, then re-read and correct (#21990).
+
+    An ``update_fact`` or assign landing between the read and the write has already synced its own entry;
+    the write would overwrite it with the stale decision, so the facts whose stored metadata changed are
+    written again from the re-read.
+    """
+    held = await _read_held(redis, fact_ids)
+    key = QUARANTINED_KEY.format(category_id)
     async with redis.pipeline(transaction=False) as pipe:
-        for fact_id, raw in zip(fact_ids, raws):
-            (pipe.sadd if _is_held(raw) else pipe.srem)(QUARANTINED_KEY.format(category_id), fact_id)
+        for fact_id, is_held in zip(fact_ids, held):
+            (pipe.sadd if is_held else pipe.srem)(key, fact_id)
         await pipe.execute()
+    now = await _read_held(redis, fact_ids)
+    changed = [(f, h) for f, h, n in zip(fact_ids, held, now) if h != n]
+    if changed:
+        async with redis.pipeline(transaction=False) as pipe:
+            for fact_id, was_held in changed:
+                (pipe.srem if was_held else pipe.sadd)(key, fact_id)
+            await pipe.execute()
 
 
 async def _reconcile_category(redis: Any, key: Any) -> int:

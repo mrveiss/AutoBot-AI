@@ -6,6 +6,9 @@
 
 The real ``CategoriesMixin`` runs over the shared in-memory Redis; every fact is categorised through the
 production assign path, so the quarantine index under test is the one production maintains.
+
+Also covers #21984 (a deleted fact leaves its category set and quarantine index) and #21990 (the index is
+synced from the stored metadata, and a rebuild batch never overwrites a concurrent update).
 """
 
 import json
@@ -20,6 +23,7 @@ from knowledge.category_quarantine import (
     rebuild_category_quarantine_index,
     sync_fact_quarantine,
 )
+from knowledge.facts import FactsMixin
 from services.kb_wipe_redis import KB_KEY_PREFIXES
 from testkit.read_path_fakes_16665 import CategoryKB
 
@@ -181,7 +185,7 @@ class _SyncClient:
 async def _store_metadata(kb: CategoryKB, fact_id: str, metadata: dict) -> None:
     """What ``update_fact`` does: write the hash, then sync the index from the new metadata."""
     await kb.redis().hset(f"fact:{fact_id}", "metadata", json.dumps(metadata))
-    await sync_fact_quarantine(_SyncClient(kb.redis()), fact_id, metadata)
+    await sync_fact_quarantine(_SyncClient(kb.redis()), fact_id)
 
 
 @pytest.mark.asyncio
@@ -200,7 +204,8 @@ async def test_update_fact_on_an_uncategorised_fact_touches_no_index():
     kb = CategoryKB()
     await kb.add_fact("loose", category_id=None)
 
-    await sync_fact_quarantine(_SyncClient(kb.redis()), "loose", HELD)
+    await kb.redis().hset("fact:loose", "metadata", json.dumps(HELD))
+    await sync_fact_quarantine(_SyncClient(kb.redis()), "loose")
 
     assert kb.redis().sets == {}
 
@@ -275,3 +280,132 @@ async def test_a_stale_marker_reruns_the_rebuild_and_a_current_one_skips_it():
 
 def test_a_kb_wipe_drops_the_index_and_its_marker():
     assert {QUARANTINED_KEY.format(""), REBUILT_MARKER, FACTS_KEY.format("")} <= set(KB_KEY_PREFIXES)
+
+
+async def _write_metadata_only(kb: CategoryKB, fact_id: str, metadata: dict) -> None:
+    """The hash write of ``update_fact``, before its index sync."""
+    await kb.redis().hset(f"fact:{fact_id}", "metadata", json.dumps(metadata))
+
+
+@pytest.mark.asyncio
+async def test_two_out_of_order_updates_leave_the_index_matching_the_final_metadata():
+    """#21990: A writes, B writes, B syncs, A syncs last -- A's in-memory view is stale, the stored one is B's."""
+    kb = await _kb(servable=1, quarantined=0)
+    client = _SyncClient(kb.redis())
+    await _write_metadata_only(kb, "s0", dict(HELD))  # update A
+    await _write_metadata_only(kb, "s0", {"collection": "general"})  # update B: the final metadata
+
+    await sync_fact_quarantine(client, "s0")  # B's sync
+    await sync_fact_quarantine(client, "s0")  # A's sync, landing last
+
+    assert await _total(kb) == 1
+    assert "s0" not in kb.redis().sets.get(INDEX, set())
+
+
+@pytest.mark.asyncio
+async def test_an_update_landing_during_a_rebuild_batch_is_not_overwritten():
+    """#21990: the rebuild reads s0 as servable; update_fact quarantines it and syncs; the rebuild then writes."""
+    kb = await _kb(servable=1, quarantined=0)
+
+    async def quarantine():
+        await _store_metadata(kb, "s0", dict(HELD))
+
+    kb.redis().after_metadata_read = quarantine
+    await rebuild_category_quarantine_index(kb.redis())
+
+    assert kb.redis().sets[INDEX] == {"s0"}
+    assert await _total(kb) == 0
+
+
+class _DeleteKB(FactsMixin, CategoryKB):
+    """The real ``FactsMixin.delete_fact`` / ``delete_facts_by_session`` over the in-memory Redis."""
+
+    vector_store = None
+
+    def __init__(self):
+        CategoryKB.__init__(self)
+        self.redis_client = _SyncClient(self.redis())
+        self.session_facts: list = []
+
+    def ensure_initialized(self):
+        return None
+
+    async def _read_fact_for_write(self, fact_id):
+        exists = f"fact:{fact_id}" in self.redis().hashes
+        return ({"content": f"fact {fact_id}"}, {}) if exists else None
+
+    async def _durable_delete(self, fact_id):
+        self.redis().hashes.pop(f"fact:{fact_id}", None)
+        return True
+
+    async def _cleanup_fact_mappings(self, fact_id, content, metadata):
+        return None
+
+    async def _decrement_stat(self, field, amount=1):
+        return None
+
+    def _schedule_bm25_refresh(self):
+        return None
+
+    async def get_facts_by_session(self, session_id):
+        return list(self.session_facts)
+
+    async def _batch_check_important_facts(self, fact_ids):
+        return set()
+
+    async def _cleanup_session_tracking(self, session_id, fact_ids):
+        return None
+
+
+async def _delete_kb() -> _DeleteKB:
+    kb = _DeleteKB()
+    for i in range(SERVABLE):
+        await kb.add_fact(f"s{i}")
+    await kb.add_fact("q0", **HELD)
+    return kb
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_categorised_fact_drops_it_from_the_set_and_keeps_counts_and_pages_exact():
+    """#21984: N servable facts, one deleted -> total_count == N-1 and every page full."""
+    kb = await _delete_kb()
+
+    assert (await kb.delete_fact("s0"))["status"] == "success"
+
+    assert "s0" not in kb.redis().sets[MEMBERS]
+    assert await _total(kb) == SERVABLE - 1
+    pages = await _page_through(kb, limit=2)
+    assert [p["returned_count"] for p in pages] == [2, 2]
+    assert {p["total_count"] for p in pages} == {SERVABLE - 1}
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_quarantined_fact_drops_it_from_the_quarantine_index():
+    kb = await _delete_kb()
+
+    await kb.delete_fact("q0")
+
+    assert "q0" not in kb.redis().sets[MEMBERS]
+    assert "q0" not in kb.redis().sets[INDEX]
+
+
+@pytest.mark.asyncio
+async def test_deleting_an_uncategorised_fact_touches_no_category_set():
+    kb = _DeleteKB()
+    await kb.add_fact("loose", category_id=None)
+
+    assert (await kb.delete_fact("loose"))["status"] == "success"
+    assert kb.redis().sets == {}
+
+
+@pytest.mark.asyncio
+async def test_delete_facts_by_session_drops_each_fact_from_set_and_index():
+    kb = await _delete_kb()
+    kb.session_facts = ["s0", "s1", "q0"]
+
+    result = await kb.delete_facts_by_session("sess", preserve_important=False)
+
+    assert result["deleted_count"] == 3
+    assert kb.redis().sets[MEMBERS] == {"s2", "s3", "s4"}
+    assert kb.redis().sets[INDEX] == set()
+    assert await _total(kb) == SERVABLE - 2
