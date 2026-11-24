@@ -1,0 +1,20 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# VNC is up (#22211): the RFB and websockify ports answer. provision-fleet-roles.yml runs this before
+# anything is removed from the node, so a failed VNC never leaves it with no desktop.
+
+- name: vnc | Wait for the RFB port to listen
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host | default(inventory_hostname) }}"
+    port: "{{ vnc_rfb_port | int }}"
+    timeout: "{{ vnc_port_wait_seconds | int }}"
+
+- name: vnc | Wait for the websockify port to listen
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host | default(inventory_hostname) }}"
+    port: "{{ websockify_port | int }}"
+    timeout: "{{ vnc_port_wait_seconds | int }}"
+  when: websockify_enabled | bool

@@ -421,13 +421,35 @@
       when: role_vnc_active | bool
       tags: ['vnc', 'provision']
 
-    - name: "App | Deploy xrdp role (GH#1525 — RDP on port 3389)"
+    # #22211: the VNC ports are opened and verified listening BEFORE anything is removed, so a failed VNC
+    # never leaves the node with no desktop (the run stops here and xrdp is untouched).
+    - name: "App | Open the VNC ports (#22211)"
+      ansible.builtin.include_role:
+        name: vnc
+        tasks_from: firewall
+        apply:
+          tags: ['vnc', 'provision']
+      when: role_vnc_active | bool
+      tags: ['vnc', 'provision']
+
+    - name: "App | Verify VNC is listening (#22211)"
+      ansible.builtin.include_role:
+        name: vnc
+        tasks_from: verify
+        apply:
+          tags: ['vnc', 'provision']
+      when: role_vnc_active | bool
+      tags: ['vnc', 'provision']
+
+    # #22211: xrdp is no longer provisioned. A vnc node gets xrdp REMOVED, after VNC is verified up.
+    # The xrdp role's install tasks stay in the repo (see the RDP-code issue); only removal runs here.
+    - name: "App | Remove xrdp once VNC is verified (#22211)"
       ansible.builtin.include_role:
         name: xrdp
+        tasks_from: remove
         apply:
           tags: ['xrdp', 'rdp', 'provision']
-      # #7051: gate via shared role-active fact (group_vars/all.yml)
-      when: role_xrdp_active | bool
+      when: role_vnc_active | bool
       tags: ['xrdp', 'rdp', 'provision']
 
 # -------------------------------------------------------------------

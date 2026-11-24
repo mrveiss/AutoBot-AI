@@ -119,6 +119,7 @@ from services.drift_checker import (
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.node_events import get_slm_self_node, split_enrollment_failed
+from services.pending_role_provisioning import run_update_all_nodes
 from services.playbook_executor import get_playbook_executor
 from services.schedule_executor import get_schedule_target_nodes
 from services.single_flight_cache import SingleFlightCache
@@ -3460,9 +3461,7 @@ async def _sync_single_node(
         # Use node_id (maps to slm_node_id in Ansible inventory) not hostname (#921)
         # Issue #1091: Include localhost so Play 0 (archive build) runs
         limit = ["localhost", node_state.node_id]
-        result = await executor.execute_playbook(
-            playbook_name="update-all-nodes.yml", limit=limit, **no_restart_args(restart)  # #20743
-        )
+        result = await run_update_all_nodes(executor, node_state.node_id, limit, restart)  # #22211
 
         if result["success"]:
             node_state.status = "success"
