@@ -137,6 +137,7 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS` | chat_workflow | int | `30` | Seconds the chat planner may take to write a plan (#21023); past it the turn runs without a plan. |
 | `AUTOBOT_CHAT_STALL_ANSWER_MAX_CHARS` | chat_workflow | int | `2000` | Longest answer to a chat stall question that is passed to the model; longer text is truncated (#21022). |
 | `AUTOBOT_CHAT_STALL_ESCALATION` | chat_workflow | str | `'stop'` | What the chat graph does when a turn stalls: stop halts the turn, ask escalates to the human (#21022, #20846); any other value fails config load. |
+| `AUTOBOT_CHAT_TOPIC_GUIDANCE` | chat | bool | false | Append topic guidance (installation, architecture, troubleshooting, API) to the chat system prompt when the message matches a topic keyword (chat_workflow/llm_handler.py, #21678). Off by default: it changes the prompt of every matching turn. |
 | `AUTOBOT_CHAT_TRACE_OUTPUT_MAX_CHARS` | backend | int | `2000` | Characters of one tool result kept in a chat session trace (session_trace.py, #19963). Range: 1–100000. |
 | `AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY` | ai | int | `2` | Concurrent trajectory judge calls. Bounded so a burst of turns cannot stampede the LLM. |
 | `AUTOBOT_CHAT_TRAJECTORY_CONTEXT` | ai | bool | true | Search past trajectories before answering. Defaults on because the search is one vector query; capture is gated separately since it spends a judge call. |

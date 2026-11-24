@@ -17,6 +17,7 @@ Avoids heavy ML models for performance.
 Related Issue: #159 - Prevent Premature Conversation Endings
 """
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List
@@ -126,6 +127,11 @@ TOPIC_PROMPT_MAP = {
     "api": "chat.api_documentation",
 }
 GENERAL_TOPIC = "general"
+# Whole-word matching: "rest" must not fire inside "forest", nor "vm" inside "vmware" (#21678).
+_TOPIC_PATTERNS = {
+    topic: re.compile(r"\b(?:" + "|".join(re.escape(kw) for kw in sorted(kws)) + r")\b")
+    for topic, kws in TOPIC_KEYWORDS.items()
+}
 _CONTEXT_BOOST = 0.5
 _CONTEXT_HISTORY_TURNS = 2
 
@@ -541,11 +547,11 @@ def detect_topic(message: str, conversation_history: List[Dict[str, str]] | None
     turns add a small boost. Returns ``general`` when nothing matches.
     """
     message_lower = message.lower().strip()
-    scores = {topic: float(sum(1 for kw in kws if kw in message_lower)) for topic, kws in TOPIC_KEYWORDS.items()}
+    scores = {topic: float(len(set(pattern.findall(message_lower)))) for topic, pattern in _TOPIC_PATTERNS.items()}
     recent = [turn.get("assistant", "") for turn in (conversation_history or [])[-_CONTEXT_HISTORY_TURNS:]]
     context = " ".join(recent).lower()
-    for topic, kws in TOPIC_KEYWORDS.items():
-        if any(kw in context for kw in kws):
+    for topic, pattern in _TOPIC_PATTERNS.items():
+        if pattern.search(context):
             scores[topic] += _CONTEXT_BOOST
     best = max(scores, key=scores.get)
     if scores[best] <= 0:

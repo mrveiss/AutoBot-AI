@@ -208,3 +208,17 @@ register_env_var(
         component="chat",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_TOPIC_GUIDANCE",
+        type=bool,
+        default=False,
+        description=(
+            "Append topic guidance (installation, architecture, troubleshooting, API) to the chat system prompt when "
+            "the message matches a topic keyword (chat_workflow/llm_handler.py, #21678). Off by default: it changes "
+            "the prompt of every matching turn."
+        ),
+        component="chat",
+    )
+)

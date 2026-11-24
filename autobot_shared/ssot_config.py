@@ -291,6 +291,9 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
     # Inline AgentResponseJudge on chat replies (#10599, §3.3).
     # OFF by default (one LLM round-trip per judge call); enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
     chat_inline_judge_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_INLINE_JUDGE")
+    # Topic guidance on the chat system prompt (intent_classifier.detect_topic / select_context_prompt, #21678).
+    # OFF by default: it changes the prompt of every turn whose message matches a topic keyword.
+    chat_topic_guidance_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_TOPIC_GUIDANCE")
     # Minimum judge overall_score to accept a response without one regeneration
     # attempt.  Only used when chat_inline_judge_enabled=True.
     chat_inline_judge_threshold: float = Field(default=0.6, alias="AUTOBOT_CHAT_INLINE_JUDGE_THRESHOLD")
