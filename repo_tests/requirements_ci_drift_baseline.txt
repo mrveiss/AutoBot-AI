@@ -77,10 +77,10 @@ typing-extensions
 # imports them or not. Undeclared meant unconstrained, not absent, so CI took
 # 1.45.0 against production's ==1.44.0 and failed shard 1/12 on eight PRs.
 # They are now declared in requirements-ci/monitoring.txt at the production
-# pin. The three below stay: nothing in CI installs them at all.
+# pin. opentelemetry-instrumentation-fastapi joined them in requirements-ci/storage.txt (#21685), for the real-
+# instrumentor test. The ones below stay: nothing in CI installs them at all.
 opentelemetry-exporter-otlp
 opentelemetry-exporter-otlp-proto-http
-opentelemetry-instrumentation-fastapi
 opentelemetry-instrumentation-redis
 opentelemetry-instrumentation-aiohttp-client
 opentelemetry-propagator-b3
