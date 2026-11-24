@@ -1009,11 +1009,7 @@ async def assign_role_to_node(
 
 
 async def _execute_provision_playbook(
-    db: AsyncSession,
-    node_id: str,
-    node,
-    roles: list,
-    target_roles: list,
+    db: AsyncSession, node_id: str, node, roles: list, target_roles: list, **playbook_kwargs
 ) -> dict:
     """Helper for provision_node_roles. Ref: #1088, #2678, #2959.
 
@@ -1038,6 +1034,7 @@ async def _execute_provision_playbook(
         "all:\n"
         "  hosts:\n"
         "    provision_target:\n"
+        f"      slm_node_id: {node_id}\n"  # the vnc role registers its credential only when this is set (#22211)
         f"      ansible_host: {node.ip_address}\n"
         f"      ansible_user: {ssh_user}\n"
         "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
@@ -1049,6 +1046,7 @@ async def _execute_provision_playbook(
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
             inventory_path=tmp_inv,
+            **playbook_kwargs,
         )
     finally:
         tmp_inv.unlink(missing_ok=True)

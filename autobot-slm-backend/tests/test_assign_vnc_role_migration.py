@@ -46,10 +46,12 @@ def _handle(w: _World, state: dict, sql: str, params=()) -> None:
             w.nodes[params[1]].append(params[0])
     elif q.startswith("update nodes set roles = (coalesce(roles::jsonb, '[]'::jsonb) -"):
         w.nodes[params[1]] = [r for r in w.nodes[params[1]] if r != params[0]]
+    elif q.startswith("select coalesce(roles::jsonb"):
+        state["rows"] = [(params[0] in w.nodes.get(params[1], []),)]
     elif q.startswith("delete from node_roles"):
-        gone = [r for r in w.roles if r[1] == params[0] and r[2] == params[1]]
+        gone = [r for r in w.roles if r[1] == params[0] and r[2] in params[1:]]
         w.roles -= set(gone)
-        state["rows"] = [(r[0],) for r in gone]
+        state["rows"] = [(r[0], r[2]) for r in gone]
     else:
         raise AssertionError(f"unexpected SQL: {q}")
 
@@ -110,10 +112,22 @@ def test_a_credential_for_a_removed_node_is_not_a_candidate(run) -> None:
 
 
 def test_downgrade_removes_only_its_own_rows(run) -> None:
-    w = run(_World(["a", "b"], rdp_creds=["a"], roles=[("b", "vnc", "manual")]))
+    """Run the migration for node a, give b a hand-assigned row, then downgrade: only a's row and declaration go."""
+    w = run(_World(["a", "b"], rdp_creds=["a"]))
+    assert w.roles == {("a", "vnc", "migration")} and w.nodes["a"] == ["vnc"]
+    w.roles.add(("b", "vnc", "manual"))
     w.nodes["b"] = ["vnc"]
     run(w, mig.downgrade)
     assert w.roles == {("b", "vnc", "manual")} and w.nodes["a"] == [] and w.nodes["b"] == ["vnc"]
+
+
+def test_a_declaration_that_predates_the_migration_survives_downgrade(run) -> None:
+    w = _World(["a"], rdp_creds=["a"])
+    w.nodes["a"] = ["vnc"]  # declared on nodes.roles, but no NodeRole row yet
+    run(w)
+    assert w.roles == {("a", "vnc", "migration_declared")} and w.nodes["a"] == ["vnc"]
+    run(w, mig.downgrade)
+    assert w.roles == set() and w.nodes["a"] == ["vnc"], "the row goes, the earlier declaration stays"
 
 
 def test_no_node_is_hardcoded() -> None:

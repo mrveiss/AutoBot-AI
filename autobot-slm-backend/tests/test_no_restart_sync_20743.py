@@ -89,7 +89,7 @@ def test_both_code_sync_paths_use_the_one_helper() -> None:
     source = (_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
     assert "!restart" not in source
     # #22211: both paths run update-all-nodes.yml through run_update_all_nodes, which applies the helper once.
-    assert source.count("run_update_all_nodes(") == 2 and source.count("no_restart_args(") == 0
+    assert source.count("run_update_all_nodes(") == 3 and source.count("no_restart_args(") == 0
     helper = (_ROOT / "services" / "pending_role_provisioning.py").read_text(encoding="utf-8")
     assert helper.count("no_restart_args(") == 1
 

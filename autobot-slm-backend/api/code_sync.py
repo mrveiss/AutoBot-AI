@@ -119,7 +119,7 @@ from services.drift_checker import (
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.node_events import get_slm_self_node, split_enrollment_failed
-from services.pending_role_provisioning import run_update_all_nodes
+from services.pending_role_provisioning import provision_pending_roles, run_update_all_nodes
 from services.playbook_executor import get_playbook_executor
 from services.schedule_executor import get_schedule_target_nodes
 from services.single_flight_cache import SingleFlightCache
@@ -5019,6 +5019,7 @@ async def _sync_fleet_node(
 
     if slm_own_ip and node.ip_address == slm_own_ip:
         _stage_log(stage, f"Node {node_id} is SLM self-node — already handled, skipping")
+        _stage_log(stage, await provision_pending_roles(node_id) or "no pending roles")  # #22211
         job.completed_fleet_nodes += 1
         return True
 
@@ -5046,10 +5047,7 @@ async def _sync_fleet_node(
             f"attempting anyway; ansible decides whether it is reachable (#14297)",
         )
 
-    playbook_result = await executor.execute_playbook(
-        playbook_name="update-all-nodes.yml",
-        limit=["localhost", node_id],
-    )
+    playbook_result = await run_update_all_nodes(executor, node_id, ["localhost", node_id], True)  # #22211
     return await _record_fleet_node_outcome(node, node_id, job, stage, unhealthy, playbook_result)
 
 

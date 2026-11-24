@@ -175,6 +175,32 @@
             _backup_performed: "{{ _existing_dirs | length > 0 }}"
             _backup_path: "{{ backup_path }}"
 
+    # #22211: the canonical "role removed -> cleanup" hook. A role that owns more than its primary unit
+    # (the vnc role's websockify unit and firewall rules) ships tasks/remove.yml; it runs here, BEFORE
+    # the generic stop, so a guarded refusal (a live session) happens before something is stopped. Roles
+    # without one are unchanged.
+    #
+    # CONTRACT for a role's tasks/remove.yml: idempotent (a second run, or a node that never had the role,
+    # passes) and non-destructive (stops units, closes ports, purges packages it installed; never deletes
+    # user data, credentials or SLM rows, and never `file: state=absent` on a path -- the guarded
+    # remove_component_dir.yml primitive owns directory removal). Credential removal is proposed to the
+    # approval queue, never done here (#17038).
+    - name: "Look for a per-role remove.yml hook (#22211)"
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../roles/{{ role_name }}/tasks/remove.yml"
+      register: _role_remove_hook
+      # the role files live in the controller's checkout, not on the managed node
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      when: role_name is regex('^[A-Za-z0-9_-]+$')
+
+    - name: "Run the {{ role_name }} role's remove.yml hook (#22211)"
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+        tasks_from: remove
+      when: _role_remove_hook.stat.exists | default(false)
+
     # =======================================================================
     # STOP AND REMOVE SERVICE
     # =======================================================================
@@ -191,27 +217,6 @@
       when: _service_file.stat.exists
       # Service may already be stopped or in a failed state during removal (#2950)
       failed_when: false
-
-    # #22211: the canonical "role removed -> cleanup" hook. A role that owns more than its primary unit
-    # (the vnc role's websockify unit and firewall rules) ships tasks/remove.yml; it runs here, after
-    # the primary unit is stopped. Roles without one are unchanged.
-    #
-    # CONTRACT for a role's tasks/remove.yml: idempotent (a second run, or a node that never had the role,
-    # passes) and non-destructive (stops units, closes ports, purges packages it installed; never deletes
-    # user data, credentials or SLM rows, and never `file: state=absent` on a path -- the guarded
-    # remove_component_dir.yml primitive owns directory removal). Credential removal is proposed to the
-    # approval queue, never done here (#17038).
-    - name: "Look for a per-role remove.yml hook (#22211)"
-      ansible.builtin.stat:
-        path: "{{ playbook_dir }}/../roles/{{ role_name }}/tasks/remove.yml"
-      register: _role_remove_hook
-      when: role_name is regex('^[A-Za-z0-9_-]+$')
-
-    - name: "Run the {{ role_name }} role's remove.yml hook (#22211)"
-      ansible.builtin.include_role:
-        name: "{{ role_name }}"
-        tasks_from: remove
-      when: _role_remove_hook.stat.exists | default(false)
 
     # Issue #3011: Do not delete service files owned by dpkg packages.
     # Deleting a dpkg conffile means `apt install --reinstall` will NOT

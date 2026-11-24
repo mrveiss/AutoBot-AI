@@ -35,8 +35,12 @@ logger = logging.getLogger(__name__)
 
 #: The role this migration assigns.
 VNC_ROLE = "vnc"
-#: Marks rows this migration created, so downgrade() removes only those.
+#: Marks rows this migration created, so downgrade() removes only those. The declaration on nodes.roles
+#: was added by the migration too.
 MIGRATION_ASSIGNMENT_TYPE = "migration"
+#: Same, for a node whose nodes.roles already declared the role before the migration ran: downgrade()
+#: removes the row but leaves that declaration alone.
+PREDECLARED_ASSIGNMENT_TYPE = "migration_declared"
 #: Recorded by the assign-role endpoint for a role that is assigned but not yet provisioned.
 ASSIGNED_STATUS = "not_installed"
 #: What the xrdp role leaves behind on the node that carried the desktop purpose.
@@ -80,14 +84,24 @@ def _vnc_holders(cursor) -> List[str]:
     return sorted(row[0] for row in cursor.fetchall())
 
 
+def _already_declared(cursor, node_id: str) -> bool:
+    cursor.execute(
+        "SELECT COALESCE(roles::jsonb, '[]'::jsonb) @> to_jsonb(%s::text) FROM nodes WHERE node_id = %s",
+        (VNC_ROLE, node_id),
+    )
+    row = cursor.fetchone()
+    return bool(row and row[0])
+
+
 def _assign(cursor, node_id: str) -> bool:
     """Insert the NodeRole row and declare the role; False when the node already has the row."""
     cursor.execute("SELECT 1 FROM node_roles WHERE node_id = %s AND role_name = %s", (node_id, VNC_ROLE))
     if cursor.fetchone():
         return False
+    marker = PREDECLARED_ASSIGNMENT_TYPE if _already_declared(cursor, node_id) else MIGRATION_ASSIGNMENT_TYPE
     cursor.execute(
         "INSERT INTO node_roles (node_id, role_name, assignment_type, status) VALUES (%s, %s, %s, %s)",
-        (node_id, VNC_ROLE, MIGRATION_ASSIGNMENT_TYPE, ASSIGNED_STATUS),
+        (node_id, VNC_ROLE, marker, ASSIGNED_STATUS),
     )
     cursor.execute(_DECLARE_SQL, (VNC_ROLE, node_id, VNC_ROLE))
     return True
@@ -129,18 +143,20 @@ def migrate(db_url: str) -> None:
 
 
 def downgrade(db_url: str) -> None:
-    """Remove only the vnc rows this migration created, and the declaration it added."""
+    """Remove only the vnc rows this migration created, and the declaration it added (not a pre-existing one)."""
     conn = get_connection(db_url)
     try:
         cursor = conn.cursor()
         if not table_exists(cursor, "node_roles"):
             return
         cursor.execute(
-            "DELETE FROM node_roles WHERE role_name = %s AND assignment_type = %s RETURNING node_id",
-            (VNC_ROLE, MIGRATION_ASSIGNMENT_TYPE),
+            "DELETE FROM node_roles WHERE role_name = %s AND assignment_type IN (%s, %s) "
+            "RETURNING node_id, assignment_type",
+            (VNC_ROLE, MIGRATION_ASSIGNMENT_TYPE, PREDECLARED_ASSIGNMENT_TYPE),
         )
-        for (node_id,) in cursor.fetchall():
-            cursor.execute(_UNDECLARE_SQL, (VNC_ROLE, node_id, VNC_ROLE))
+        for node_id, marker in cursor.fetchall():
+            if marker == MIGRATION_ASSIGNMENT_TYPE:
+                cursor.execute(_UNDECLARE_SQL, (VNC_ROLE, node_id, VNC_ROLE))
         conn.commit()
     finally:
         conn.close()

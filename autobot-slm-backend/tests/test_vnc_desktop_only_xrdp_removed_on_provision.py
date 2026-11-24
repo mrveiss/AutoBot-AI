@@ -67,6 +67,8 @@ def test_xrdp_removal_runs_after_vnc_is_applied_and_verified() -> None:
         assert key in pos, f"provision-fleet-roles.yml does not include {key}"
     order = [pos[k] for k in chain]
     assert order == sorted(order), f"xrdp removal must follow vnc apply, firewall and verify; positions {order}"
+    flush = next(i for i, t in enumerate(tasks) if t.get("ansible.builtin.meta") == "flush_handlers")
+    assert pos[("vnc", "firewall")] < flush < pos[("vnc", "verify")], "queued VNC restarts run before the port wait"
     removal = tasks[pos[("xrdp", "remove")]]
     assert "role_vnc_active" in str(removal["when"]), "the removal must be gated on role_vnc_active"
 
@@ -78,7 +80,7 @@ def test_xrdp_is_no_longer_provisioned() -> None:
 
 def test_vnc_verify_waits_on_both_ports() -> None:
     verify = yaml.safe_load((_ANSIBLE / "roles" / "vnc" / "tasks" / "verify.yml").read_text(encoding="utf-8"))
-    ports = [str(t["ansible.builtin.wait_for"]["port"]) for t in verify]
+    ports = [str(t["ansible.builtin.wait_for"]["port"]) for t in verify if "ansible.builtin.wait_for" in t]
     assert any("vnc_rfb_port" in p for p in ports) and any("websockify_port" in p for p in ports), ports
 
 
@@ -145,7 +147,10 @@ def test_remove_role_runs_the_per_role_remove_hook() -> None:
     hook = [t for t in tasks if (_role_include(t) or ("", ""))[1] == "remove"]
     assert len(hook) == 1, "remove-role.yml must include the role's remove.yml exactly once"
     names = [t.get("name", "") for t in tasks]
-    assert names.index(hook[0]["name"]) > next(i for i, n in enumerate(names) if n.startswith("Stop and disable"))
+    stop = next(i for i, n in enumerate(names) if n.startswith("Stop and disable"))
+    assert names.index(hook[0]["name"]) < stop, "a guarded refusal must come before the generic stop"
+    look = next(t for t in tasks if str(t.get("name", "")).startswith("Look for a per-role remove.yml hook"))
+    assert look["delegate_to"] == "localhost", "the role files are on the controller, not the managed node"
     assert (_ANSIBLE / "roles" / "vnc" / "tasks" / "remove.yml").is_file()
 
 
@@ -242,3 +247,31 @@ def test_websockify_unit_uses_the_role_rfb_port_not_a_literal_base() -> None:
 def test_the_remove_role_hook_documents_its_contract() -> None:
     text = _REMOVE_ROLE.read_text(encoding="utf-8")
     assert "CONTRACT for a role's tasks/remove.yml" in text and "idempotent" in text and "non-destructive" in text
+
+
+def test_the_whole_transition_shares_one_tag_set_and_removal_needs_verified_ports() -> None:
+    """--tags vnc, xrdp and rdp must each run the full sequence; removal is gated on a verify that ran."""
+    tasks = _tasks(_PROVISION)
+    steps = [
+        t
+        for t in tasks
+        if (_role_include(t) in {("vnc", "main"), ("vnc", "firewall"), ("vnc", "verify"), ("xrdp", "remove")})
+    ]
+    assert len(steps) == 4
+    for t in steps:
+        assert {"vnc", "xrdp", "rdp"} <= set(t["tags"]), t["name"]
+    removal = next(t for t in steps if _role_include(t) == ("xrdp", "remove"))
+    assert any("vnc_ports_verified" in str(c) for c in removal["when"])
+    verify = yaml.safe_load((_ANSIBLE / "roles" / "vnc" / "tasks" / "verify.yml").read_text(encoding="utf-8"))
+    assert verify[-1]["ansible.builtin.set_fact"] == {"vnc_ports_verified": True}, "recorded after the waits"
+
+
+def test_the_vnc_server_listens_on_the_port_the_firewall_opens_and_verify_waits_for() -> None:
+    server = (_ANSIBLE / "roles" / "vnc" / "templates" / "vnc-server.service.j2").read_text(encoding="utf-8")
+    assert "-rfbport {{ vnc_rfb_port }}" in server
+
+
+def test_the_vnc_restart_handlers_honour_a_sync_without_restarts() -> None:
+    handlers = yaml.safe_load((_ANSIBLE / "roles" / "vnc" / "handlers" / "main.yml").read_text(encoding="utf-8"))
+    restarts = [h for h in handlers if str(h["name"]).startswith("restart ")]
+    assert len(restarts) == 2 and all("autobot_restart_services" in str(h["when"]) for h in restarts)

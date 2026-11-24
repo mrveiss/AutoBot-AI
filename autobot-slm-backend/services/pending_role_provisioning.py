@@ -99,35 +99,43 @@ async def pending_roles(db, node_id: str) -> list:
     return [r for r in roles if _needs_provisioning(r, creds, now)]
 
 
-async def _run_provisioning(db, node_id: str, node, roles: list, names: list[str]) -> str:
+async def _run_provisioning(db, node_id: str, node, roles: list, **playbook_kwargs: Any) -> str:
     """Provision `roles`; return a warning message ('' on success). A row never stays at installing."""
     from api.nodes import _execute_provision_playbook  # lazy: api.nodes imports services at import time
 
+    names = [r.role_name for r in roles]
     try:
-        await _execute_provision_playbook(db, node_id, node, roles, names)
+        await _execute_provision_playbook(db, node_id, node, roles, names, **playbook_kwargs)
         return ""
     except Exception as exc:  # noqa: BLE001 - the helper marks the rows failed; report, never raise
         logger.error("Provisioning pending roles %s on %s failed: %s", names, node_id, exc)
         return f"WARNING: provisioning of role(s) {', '.join(names)} failed; the code update succeeded"
     finally:
-        await _settle_installing(db, roles)
+        await _settle_installing(node_id, names)
 
 
-async def _settle_installing(db, roles: list) -> None:
-    """A crash or cancellation must not leave a row at installing: it is failed, and the cooldown applies."""
-    stale = [r for r in roles if r.status == _INSTALLING]
-    if not stale:
-        return
+async def _settle_installing(node_id: str, names: list[str]) -> None:
+    """A crash or cancellation must not leave a row at installing: it is failed, and the cooldown applies.
+
+    Runs in a FRESH session: the provisioning session may be in a failed transaction after the exception.
+    """
     try:
-        for role in stale:
-            role.status = _FAILED
-        await db.commit()
+        async with db_service.session() as db:
+            rows = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id, NodeRole.role_name.in_(names)))
+            stuck = [r for r in rows.scalars().all() if r.status == _INSTALLING]
+            for role in stuck:
+                role.status = _FAILED
+            if stuck:
+                await db.commit()
     except Exception as exc:  # noqa: BLE001 - the age rule in _needs_provisioning recovers the row
-        logger.error("Could not reset roles %s from installing: %s", [r.role_name for r in stale], exc)
+        logger.error("Could not reset roles %s on %s from installing: %s", names, node_id, exc)
 
 
-async def provision_pending_roles(node_id: str) -> str:
-    """Provision the node's pending roles; returns a message for the node's output ('' when none ran)."""
+async def provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
+    """Provision the node's pending roles; returns a message for the node's output ('' when none ran).
+
+    ``playbook_kwargs`` (the no-restart arguments of a sync with ``restart=False``) reach the provisioning run.
+    """
     async with db_service.session() as db:
         roles = await pending_roles(db, node_id)
         if not roles:
@@ -135,26 +143,27 @@ async def provision_pending_roles(node_id: str) -> str:
         node = (await db.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
         if node is None:
             return ""
-        names = [r.role_name for r in roles]
         for role in roles:
             role.status = _INSTALLING
         await db.commit()
-        warning = await _run_provisioning(db, node_id, node, roles, names)
-        return warning or f"provisioned newly assigned role(s) {', '.join(names)}"
+        warning = await _run_provisioning(db, node_id, node, roles, **playbook_kwargs)
+        return warning or f"provisioned newly assigned role(s) {', '.join(r.role_name for r in roles)}"
 
 
 async def run_update_all_nodes(executor: Any, node_id: str, limit: list, restart: bool, **playbook_kwargs: Any) -> dict:
     """Run ``update-all-nodes.yml`` for a node, then provision its pending roles (#22211).
 
-    The code deploy is the node's update. Provisioning runs only after it succeeded, and a failure of it is
-    appended to the output as a warning: it never turns a successful update into a failed one.
+    The code deploy is the node's update. Provisioning runs only after it succeeded, with the same restart
+    policy, and a failure of it is appended to the output as a warning: it never turns a successful update
+    into a failed one.
     """
+    restart_args = no_restart_args(restart)  # #20743
     result = await executor.execute_playbook(
-        playbook_name="update-all-nodes.yml", limit=limit, **playbook_kwargs, **no_restart_args(restart)  # #20743
+        playbook_name="update-all-nodes.yml", limit=limit, **playbook_kwargs, **restart_args
     )
     if not result.get("success"):
         return result
-    message = await provision_pending_roles(node_id)
+    message = await provision_pending_roles(node_id, **restart_args)
     if message:
         result = {**result, "output": f"{result.get('output', '')}\n{message}"}
     return result

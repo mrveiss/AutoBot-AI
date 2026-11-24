@@ -18,3 +18,8 @@
     port: "{{ websockify_port | int }}"
     timeout: "{{ vnc_port_wait_seconds | int }}"
   when: websockify_enabled | bool
+
+# Recorded only when both waits above passed; the xrdp removal is gated on it (#22211).
+- name: vnc | Record that VNC is verified
+  ansible.builtin.set_fact:
+    vnc_ports_verified: true

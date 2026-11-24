@@ -26,7 +26,7 @@
       done
       # a session process xrdp-sesman still owns, even when logind has no session for it
       pgrep -x xrdp-sesexec >/dev/null && echo "xrdp-sesexec" || true
-    executable: /bin/bash
+    executable: "{{ xrdp_shell }}"
   register: _xrdp_live_sessions
   changed_when: false
   check_mode: false
@@ -43,7 +43,7 @@
 
 - name: xrdp | Check for the xrdp configuration directory
   ansible.builtin.stat:
-    path: /etc/xrdp
+    path: "{{ xrdp_config_dir }}"
   register: _xrdp_conf
 
 - name: xrdp | Create the backup directory
@@ -53,9 +53,9 @@
     mode: "0750"
   when: _xrdp_conf.stat.exists
 
-- name: xrdp | Back up /etc/xrdp before the purge removes it
+- name: xrdp | Back up the xrdp configuration directory before the purge removes it
   ansible.builtin.archive:
-    path: /etc/xrdp
+    path: "{{ xrdp_config_dir }}"
     dest: "{{ xrdp_backup_dir }}/xrdp-{{ ansible_facts['date_time']['epoch'] }}.tar.gz"
     format: gz
     mode: "0640"

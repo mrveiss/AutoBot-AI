@@ -412,45 +412,57 @@
       when: role_backend_active | bool
       tags: ['access-control', 'enforcement', 'provision']
 
+    # #22211: one transition, one tag set. `--tags vnc`, `--tags xrdp` and `--tags rdp` all run the whole
+    # sequence (apply, ports, flush restarts, verify, remove), so a tag filter can neither remove xrdp
+    # without VNC nor deploy VNC and leave xrdp behind.
     - name: "App | Deploy VNC role"
       ansible.builtin.include_role:
         name: vnc
         apply:
-          tags: ['vnc', 'provision']
+          tags: ['vnc', 'xrdp', 'rdp', 'provision']
       # #7051: gate via shared role-active fact (group_vars/all.yml)
       when: role_vnc_active | bool
-      tags: ['vnc', 'provision']
+      tags: ['vnc', 'xrdp', 'rdp', 'provision']
 
-    # #22211: the VNC ports are opened and verified listening BEFORE anything is removed, so a failed VNC
-    # never leaves the node with no desktop (the run stops here and xrdp is untouched).
+    # The ports are opened and verified listening BEFORE anything is removed, so a failed VNC never leaves
+    # the node with no desktop (the run stops here and xrdp is untouched).
     - name: "App | Open the VNC ports (#22211)"
       ansible.builtin.include_role:
         name: vnc
         tasks_from: firewall
         apply:
-          tags: ['vnc', 'provision']
+          tags: ['vnc', 'xrdp', 'rdp', 'provision']
       when: role_vnc_active | bool
-      tags: ['vnc', 'provision']
+      tags: ['vnc', 'xrdp', 'rdp', 'provision']
+
+    # A display change updates the unit and queues a restart; run it before the port wait, or the wait
+    # looks for a port nothing listens on yet.
+    - name: "App | Apply the VNC restarts before verifying (#22211)"
+      ansible.builtin.meta: flush_handlers
+      tags: ['vnc', 'xrdp', 'rdp', 'provision']
 
     - name: "App | Verify VNC is listening (#22211)"
       ansible.builtin.include_role:
         name: vnc
         tasks_from: verify
         apply:
-          tags: ['vnc', 'provision']
+          tags: ['vnc', 'xrdp', 'rdp', 'provision']
       when: role_vnc_active | bool
-      tags: ['vnc', 'provision']
+      tags: ['vnc', 'xrdp', 'rdp', 'provision']
 
-    # #22211: xrdp is no longer provisioned. A vnc node gets xrdp REMOVED, after VNC is verified up.
-    # The xrdp role's install tasks stay in the repo (see the RDP-code issue); only removal runs here.
+    # xrdp is no longer provisioned. A vnc node gets xrdp REMOVED, and only once the verify task above has
+    # recorded vnc_ports_verified (never on a tag-filtered run that skipped it). The xrdp role's install
+    # tasks stay in the repo (see the RDP-code issue); only removal runs here.
     - name: "App | Remove xrdp once VNC is verified (#22211)"
       ansible.builtin.include_role:
         name: xrdp
         tasks_from: remove
         apply:
-          tags: ['xrdp', 'rdp', 'provision']
-      when: role_vnc_active | bool
-      tags: ['xrdp', 'rdp', 'provision']
+          tags: ['vnc', 'xrdp', 'rdp', 'provision']
+      when:
+        - role_vnc_active | bool
+        - vnc_ports_verified | default(false) | bool
+      tags: ['vnc', 'xrdp', 'rdp', 'provision']
 
 # -------------------------------------------------------------------
 # Phase 4b: Frontend

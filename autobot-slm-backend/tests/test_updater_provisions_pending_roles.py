@@ -41,9 +41,13 @@ def _role(status: str, age: timedelta = timedelta(days=30), name: str = "vnc"):
     return SimpleNamespace(role_name=name, status=status, updated_at=datetime.now(timezone.utc) - age)
 
 
+NO_RESTART = {"skip_tags": ["restart"], "extra_vars": {"autobot_restart_services": "false"}}
+
+
 @pytest.fixture(autouse=True)
 def _isolate(monkeypatch):
-    monkeypatch.setattr(prp, "no_restart_args", lambda restart: {})
+    # the real helper's contract (services/sync_restart.py): nothing when restarting, skip-tag + var when not
+    monkeypatch.setattr(prp, "no_restart_args", lambda restart: {} if restart else dict(NO_RESTART))
     monkeypatch.setattr(prp, "select", lambda *a, **k: MagicMock())
 
 
@@ -107,7 +111,8 @@ def _fake_db(roles: list, creds: list[str] | None = None, node: object = "node")
     creds_res.all.return_value = [(c,) for c in (creds or [])]
     node_res.scalar_one_or_none.return_value = node
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=[roles_res, creds_res, node_res])
+    # select roles, select credentials, select node; the settle query (fresh session) re-reads the roles
+    db.execute = AsyncMock(side_effect=[roles_res, creds_res, node_res] + [roles_res] * 5)
     db.commit = AsyncMock()
     return db
 
@@ -125,7 +130,7 @@ def test_pending_to_installing_to_installed_on_success(monkeypatch) -> None:
     role = _role("not_installed")
     seen: list[str] = []
 
-    async def helper(db, node_id, node, roles, names):
+    async def helper(db, node_id, node, roles, names, **kwargs):
         seen.append(roles[0].status)  # what the row reads while provisioning runs
         roles[0].status = "installed"
 
@@ -138,7 +143,7 @@ def test_pending_to_installing_to_installed_on_success(monkeypatch) -> None:
 def test_failure_leaves_the_row_failed_and_is_a_warning(monkeypatch) -> None:
     role = _role("active")
 
-    async def helper(db, node_id, node, roles, names):
+    async def helper(db, node_id, node, roles, names, **kwargs):
         roles[0].status = "failed"
         raise RuntimeError("provisioning failed")
 
@@ -151,21 +156,45 @@ def test_a_crash_never_leaves_the_row_at_installing(monkeypatch) -> None:
     role = _role("not_installed")
     db = _fake_db([role])
 
-    async def helper(db_, node_id, node, roles, names):
+    async def helper(db_, node_id, node, roles, names, **kwargs):
         raise asyncio.CancelledError()
 
     _use(monkeypatch, db, helper)
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(prp.provision_pending_roles("n1"))
     assert role.status == "failed", "the finally resets it"
-    assert db.commit.await_count == 2, "installing, then the reset"
+    assert db.commit.await_count == 2, "installing, then the reset (in a fresh session)"
+
+
+def test_an_exception_that_never_set_a_status_still_ends_failed_not_installing(monkeypatch) -> None:
+    """The helper can raise before it touches the row (e.g. cleaning up its temporary inventory)."""
+    role = _role("failed", age=COOLDOWN + timedelta(hours=1))
+
+    async def helper(db, node_id, node, roles, names, **kwargs):
+        raise PermissionError("cannot remove the temporary inventory")
+
+    _use(monkeypatch, _fake_db([role], creds=["vnc"]), helper)
+    message = asyncio.run(prp.provision_pending_roles("n1"))
+    assert role.status == "failed" and message.startswith("WARNING")
+
+
+def test_the_restart_policy_reaches_the_provisioning_run(monkeypatch) -> None:
+    got: list[dict] = []
+
+    async def helper(db, node_id, node, roles, names, **kwargs):
+        got.append(kwargs)
+        roles[0].status = "installed"
+
+    _use(monkeypatch, _fake_db([_role("not_installed")]), helper)
+    asyncio.run(prp.provision_pending_roles("n1", **NO_RESTART))
+    assert got == [NO_RESTART]
 
 
 def test_repeated_failure_is_retried_only_after_the_cooldown(monkeypatch) -> None:
     role = _role("active", age=timedelta(days=30))
     calls: list[int] = []
 
-    async def helper(db, node_id, node, roles, names):
+    async def helper(db, node_id, node, roles, names, **kwargs):
         calls.append(1)
         roles[0].status = "failed"
         roles[0].updated_at = datetime.now(timezone.utc)  # what the column's onupdate does
@@ -202,28 +231,40 @@ class _Executor:
         return {"success": self.success, "output": "ran"}
 
 
-def _run(executor, monkeypatch, message, **kwargs):
-    async def fake(node_id):
+def _run(executor, monkeypatch, message, restart=True, **kwargs):
+    seen: list[tuple[str, dict]] = []
+
+    async def fake(node_id, **playbook_kwargs):
+        seen.append((node_id, playbook_kwargs))
         return message
 
     monkeypatch.setattr(prp, "provision_pending_roles", fake)
-    return asyncio.run(prp.run_update_all_nodes(executor, "n1", ["localhost", "n1"], True, **kwargs))
+    result = asyncio.run(prp.run_update_all_nodes(executor, "n1", ["localhost", "n1"], restart, **kwargs))
+    return result, seen
 
 
 def test_pending_roles_are_provisioned_after_a_successful_update(monkeypatch) -> None:
     ex = _Executor()
-    result = _run(ex, monkeypatch, "provisioned newly assigned role(s) vnc", progress_callback="cb")
+    result, seen = _run(ex, monkeypatch, "provisioned newly assigned role(s) vnc", progress_callback="cb")
     assert ex.calls[0]["playbook_name"] == "update-all-nodes.yml" and ex.calls[0]["progress_callback"] == "cb"
+    assert seen == [("n1", {})], "exactly one provisioning call, for the updated node"
     assert result["success"] is True and "provisioned newly assigned role(s) vnc" in result["output"]
 
 
+def test_a_sync_without_restarts_provisions_without_restarts_too(monkeypatch) -> None:
+    ex = _Executor()
+    _, seen = _run(ex, monkeypatch, "", restart=False)
+    assert ex.calls[0]["skip_tags"] == ["restart"] and ex.calls[0]["extra_vars"] == NO_RESTART["extra_vars"]
+    assert seen == [("n1", NO_RESTART)]
+
+
 def test_a_provisioning_failure_does_not_fail_a_successful_code_update(monkeypatch) -> None:
-    result = _run(_Executor(), monkeypatch, "WARNING: provisioning of role(s) vnc failed; the code update succeeded")
+    result, _ = _run(_Executor(), monkeypatch, "WARNING: provisioning of role(s) vnc failed; the code update succeeded")
     assert result["success"] is True and "WARNING" in result["output"]
 
 
 def test_a_failed_update_provisions_nothing(monkeypatch) -> None:
-    async def boom(node_id):
+    async def boom(node_id, **kwargs):
         raise AssertionError("must not provision after a failed update")
 
     monkeypatch.setattr(prp, "provision_pending_roles", boom)
@@ -231,6 +272,9 @@ def test_a_failed_update_provisions_nothing(monkeypatch) -> None:
     assert result["success"] is False
 
 
-def test_both_sync_paths_go_through_the_helper() -> None:
+def test_every_update_path_goes_through_the_helper() -> None:
+    """Fleet sync, single-node sync and the update-all orchestration; the SLM self-node is provisioned too."""
     src = (_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
-    assert src.count("run_update_all_nodes(") == 2
+    assert src.count("run_update_all_nodes(") == 3
+    assert "await provision_pending_roles(node_id)" in src, "the SLM host's own node is skipped by the fleet loop"
+    assert 'playbook_name="update-all-nodes.yml"' not in src, "a path bypasses the helper"
