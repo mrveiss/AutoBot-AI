@@ -909,36 +909,6 @@ class SelfCapabilitiesResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class AgentCapabilityInfo(BaseModel):
-    """Single agent entry in the /agents/available response."""
-
-    name: str
-    description: str
-    capabilities: List[str]
-    status: str
-
-
-class AgentAvailableData(BaseModel):
-    """data payload for GET /agent/agents/available."""
-
-    total_agents: int
-    agents: List[AgentCapabilityInfo]
-    coordination_modes: List[str]
-    multi_agent_support: bool
-
-
-class AgentStatusData(BaseModel):
-    """data payload for GET /agent/agents/status."""
-
-    ai_stack_status: str
-    total_agents: int
-    available_agents: List[str]
-    multi_agent_coordination: bool
-    npu_acceleration: bool
-    research_capabilities: bool
-    development_tools: bool
-
-
 # ---------------------------------------------------------------------------
 # Typed inner result models for AgentTaskData subclasses (Issue #6407)
 # extra='allow' keeps the schema backward-compatible while the external

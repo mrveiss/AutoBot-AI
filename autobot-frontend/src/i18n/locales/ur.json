@@ -10030,6 +10030,18 @@
     "result": "{removed} فائل(یں) ہٹا دی گئیں؛ {left} اپنی جگہ پر چھوڑ دی گئیں",
     "title": "{component} سے {count} فائل(یں) ہٹائی جائیں گی"
   },
+  "slmAgentsTool": {
+    "globalControls": "یہ کنٹرولز تمام ایجنٹس کو روکتے یا دوبارہ شروع کرتے ہیں، کسی ایک کو نہیں",
+    "loadFailed": "ایجنٹس لوڈ کرنے میں ناکامی",
+    "noLastActivity": "کوئی سرگرمی رپورٹ نہیں ہوئی",
+    "notReported": "رپورٹ نہیں کیا گیا",
+    "pauseAll": "تمام ایجنٹس کو روکیں",
+    "pauseFailed": "ایجنٹس کو روکنے میں ناکامی",
+    "resumeAll": "تمام ایجنٹس دوبارہ شروع کریں",
+    "resumeFailed": "ایجنٹس کو دوبارہ شروع کرنے میں ناکامی",
+    "successRate": "کامیابی کی شرح",
+    "tasksCompleted": "مکمل شدہ کام"
+  },
   "slmVoiceBrowserTools": {
     "invalidUrl": "ایک مکمل ویب ایڈریس درج کریں جو http:// یا https:// سے شروع ہو",
     "recognitionUnsupported": "اس براؤزر میں تقریر کی شناخت معاون نہیں ہے",

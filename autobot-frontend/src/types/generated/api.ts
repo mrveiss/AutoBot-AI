@@ -35466,7 +35466,7 @@ export interface paths {
          * Navigate To Url
          * @description Navigate to a URL using Playwright on Browser VM
          *
-         *     Forwards navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          */
         post: operations["navigate_to_url_api_playwright_navigate_post"];
         delete?: never;
@@ -35488,7 +35488,7 @@ export interface paths {
          * Reload Page
          * @description Reload the current page using Playwright on Browser VM
          *
-         *     Forwards reload request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards reload request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          */
         post: operations["reload_page_api_playwright_reload_post"];
         delete?: never;
@@ -35510,7 +35510,7 @@ export interface paths {
          * Go Back
          * @description Navigate back in browser history using Playwright on Browser VM
          *
-         *     Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards back navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
          *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
@@ -35534,7 +35534,7 @@ export interface paths {
          * Go Forward
          * @description Navigate forward in browser history using Playwright on Browser VM
          *
-         *     Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards forward navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
          *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
@@ -56366,6 +56366,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AIStackAgent
+         * @description One agent as listed by ``AIStackClient.list_available_agents``.
+         */
+        AIStackAgent: {
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Status */
+            status?: string | null;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
+             * Parameters
+             * @default
+             */
+            parameters: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AIStackAgentsData
          * @description Data payload for GET /ai-stack/agents.
          */
@@ -58575,7 +58599,7 @@ export interface components {
             /** Total Agents */
             total_agents: number;
             /** Available Agents */
-            available_agents: string[];
+            available_agents: components["schemas"]["AIStackAgent"][];
             /** Multi Agent Coordination */
             multi_agent_coordination: boolean;
             /** Npu Acceleration */
@@ -62549,16 +62573,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** Body_pause_agent_api_api_agent_pause_post */
-        Body_pause_agent_api_api_agent_pause_post: {
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** Body_process_audio_api_multimodal_process_audio_post */
         Body_process_audio_api_multimodal_process_audio_post: {
             /** File */
@@ -62600,16 +62614,6 @@ export interface components {
             path: string;
             /** New Name */
             new_name: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** Body_resume_agent_api_api_agent_resume_post */
-        Body_resume_agent_api_api_agent_resume_post: {
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -67212,11 +67216,6 @@ export interface components {
             task_id: string;
             /** Approved */
             approved: boolean;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -67258,16 +67257,11 @@ export interface components {
         };
         /**
          * CommandExecutePayload
-         * @description Body of POST /execute_command: the command to run and the caller's role.
+         * @description Body of POST /execute_command: the command to run.
          */
         CommandExecutePayload: {
             /** Command */
             command: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -79683,7 +79677,7 @@ export interface components {
          * GoalPayload
          * @description Goal payload — unified from bare and advanced variants (#10666 B1).
          *
-         *     The simple /goal endpoint reads only ``goal``/``use_phi2``/``user_role``.
+         *     The simple /goal endpoint reads only ``goal``/``use_phi2``; the role is the session's (#22143).
          *     The /goal/orchestrated endpoint also reads the remaining optional fields.
          *     All added fields carry defaults, so existing callers that only send
          *     ``goal`` remain fully backward-compatible.
@@ -79699,11 +79693,6 @@ export interface components {
              * @default false
              */
             use_phi2: boolean;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Agents
              * @description Specific agents to use
@@ -131735,11 +131724,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_pause_agent_api_api_agent_pause_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -131748,15 +131733,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMessageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -131768,11 +131744,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_resume_agent_api_api_agent_resume_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -131781,15 +131753,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMessageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

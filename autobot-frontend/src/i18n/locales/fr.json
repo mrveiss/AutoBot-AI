@@ -10030,6 +10030,18 @@
     "result": "{removed} fichier(s) supprimé(s) ; {left} laissé(s) en place",
     "title": "{count} fichier(s) seraient supprimés de {component}"
   },
+  "slmAgentsTool": {
+    "globalControls": "Ces commandes mettent en pause ou reprennent tous les agents, pas un seul",
+    "loadFailed": "Échec du chargement des agents",
+    "noLastActivity": "Aucune activité communiquée",
+    "notReported": "Non communiqué",
+    "pauseAll": "Mettre tous les agents en pause",
+    "pauseFailed": "Échec de la mise en pause des agents",
+    "resumeAll": "Reprendre tous les agents",
+    "resumeFailed": "Échec de la reprise des agents",
+    "successRate": "Taux de réussite",
+    "tasksCompleted": "Tâches terminées"
+  },
   "slmVoiceBrowserTools": {
     "invalidUrl": "Saisissez une adresse web complète commençant par http:// ou https://",
     "recognitionUnsupported": "La reconnaissance vocale n'est pas prise en charge par ce navigateur",

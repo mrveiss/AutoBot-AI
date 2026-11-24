@@ -10030,6 +10030,18 @@
     "result": "Usunięto {removed} plik(ów); {left} pozostawiono na miejscu",
     "title": "Z {component} zostałoby usuniętych {count} plik(ów)"
   },
+  "slmAgentsTool": {
+    "globalControls": "Te kontrolki wstrzymują lub wznawiają wszystkich agentów, a nie pojedynczego",
+    "loadFailed": "Nie udało się załadować agentów",
+    "noLastActivity": "Brak zgłoszonej aktywności",
+    "notReported": "Brak danych",
+    "pauseAll": "Wstrzymaj wszystkich agentów",
+    "pauseFailed": "Nie udało się wstrzymać agentów",
+    "resumeAll": "Wznów wszystkich agentów",
+    "resumeFailed": "Nie udało się wznowić agentów",
+    "successRate": "Wskaźnik powodzenia",
+    "tasksCompleted": "Ukończone zadania"
+  },
   "slmVoiceBrowserTools": {
     "invalidUrl": "Wpisz pełny adres internetowy zaczynający się od http:// lub https://",
     "recognitionUnsupported": "Rozpoznawanie mowy nie jest obsługiwane w tej przeglądarce",
