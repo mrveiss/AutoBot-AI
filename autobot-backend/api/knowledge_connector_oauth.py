@@ -34,7 +34,7 @@ from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config
 from knowledge.connectors import oauth_flow
 from knowledge.connectors.credential_store import get_credential_store
-from services.credential_read import find_connector_secret_id
+from services.credential_read import assert_attachable_secret, find_connector_secret_id
 
 logger = get_logger(__name__)
 
@@ -80,6 +80,22 @@ def _validate_redirect_uri(redirect_uri: str) -> None:
         raise HTTPException(status_code=400, detail="redirect_uri must use HTTPS")
 
 
+async def _resolve_flow_owner(prov, user: dict, http_request: Request) -> str:
+    """The owner a flow's credential is filed under: the caller, or a service provider's declared owner.
+
+    A service-owned provider (#13710) is connected by an admin only and files ONE shared credential under
+    its declared owner; that is the provider's config, not the silent "system" fallback #13628 removed.
+    """
+    if prov.service_owner_id:
+        await check_admin_permission(http_request)
+    # #13628: no silent ``or "system"`` fallback. ``get_current_user`` does NOT guarantee ``user_id``: the
+    # internal-API-key path returns only ``username`` and SLM-minted JWTs carry ``sub`` (api/voice.py:73).
+    owner_id = str(user.get("user_id") or user.get("sub") or user.get("username") or "")
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Authenticated caller has no resolvable identity")
+    return prov.service_owner_id or owner_id
+
+
 @router.post("/knowledge_base/connectors/oauth/{provider}/authorize", response_model=AuthorizeResponse)
 async def start_oauth(
     provider: str,
@@ -98,29 +114,12 @@ async def start_oauth(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     _validate_redirect_uri(request.redirect_uri)
-    if prov.service_owner_id:
-        await check_admin_permission(http_request)  # #13710: a shared credential is connected by an admin only
-
-    # #13628: no silent ``or "system"`` fallback — minting a shared literal owner
-    # made every credential created that way mutually readable by the others.
-    #
-    # Resolve identity the way the rest of the codebase does (api/voice.py:73,
-    # api/agent_terminal.py:614). ``get_current_user`` does NOT guarantee
-    # ``user_id``: the internal-API-key path returns only ``username``, the
-    # dev-header path likewise, and SLM-minted JWTs carry ``sub``. Requiring
-    # ``user_id`` alone would 401 those callers, who authenticate fine everywhere
-    # else. Only a caller with no identity at all is refused.
-    owner_id = str(user.get("user_id") or user.get("sub") or user.get("username") or "")
-    if not owner_id:
-        raise HTTPException(status_code=401, detail="Authenticated caller has no resolvable identity")
-
-    # #13710: a service-owned provider files ONE shared credential under its declared owner and connector id;
-    # that is the provider's declared config, not the silent "system" fallback #13628 removed.
-    owner_id = prov.service_owner_id or owner_id
+    owner_id = await _resolve_flow_owner(prov, user, http_request)
     state = oauth_flow.generate_state()
     verifier, challenge = oauth_flow.generate_pkce()
     connector_id = prov.service_connector_id or str(uuid.uuid4())
-    scopes = tuple(request.scopes) if request.scopes else None
+    # #13710: a service-owned provider's consent is pinned to its declared scopes; client scopes are ignored.
+    scopes = tuple(request.scopes) if request.scopes and not prov.service_owner_id else None
 
     payload = {
         "provider": provider,
@@ -200,9 +199,8 @@ async def _exchange_and_store(payload: dict, code: str) -> str:
     token_response = await oauth_flow.exchange_code(
         prov, client_id, client_secret, code, payload["redirect_uri"], payload["code_verifier"]
     )
-    if prov.service_owner_id:
-        await _revoke_previous_service_credential(payload["connector_id"], prov.service_owner_id)
-    return await get_credential_store().store_oauth(
+    previous = await find_connector_secret_id(payload["connector_id"]) if prov.service_owner_id else None
+    secret_id = await get_credential_store().store_oauth(
         connector_id=payload["connector_id"],
         owner_id=payload["owner_id"],
         provider=payload["provider"],
@@ -210,6 +208,9 @@ async def _exchange_and_store(payload: dict, code: str) -> str:
         token_url=prov.token_url,
         scopes=payload.get("scopes") or list(prov.default_scopes),
     )
+    if previous and previous != secret_id:
+        await _revoke_replaced_credential(previous, prov.service_owner_id)
+    return secret_id
 
 
 def _result_page(
@@ -258,12 +259,27 @@ def _clear_cookie(response: HTMLResponse) -> HTMLResponse:
     return response
 
 
+async def attachable_secret_id(secret_id: str, owner_id: str) -> str:
+    """*secret_id*, once it is one *owner_id* may attach to a connector; never a service-owned one (#13710)."""
+    try:
+        await assert_attachable_secret(secret_id, owner_id)
+    except (LookupError, PermissionError) as exc:
+        logger.warning("Refused to attach a secret to a new connector: %s", type(exc).__name__)
+        raise HTTPException(status_code=400, detail="secret cannot be attached to this connector") from exc
+    return secret_id
+
+
+async def _revoke_replaced_credential(previous_id: str, owner_id: str) -> None:
+    """Revoke the credential a service-owned re-authorization replaced, AFTER the new one is stored (#13710).
+
+    Never the new id, and never before the store: a failed store must leave the old credential intact. A failed
+    revoke is logged, not raised: the new credential is stored and the authorization has succeeded.
+    """
+    try:
+        await get_credential_store().revoke(previous_id, owner_id)
+    except Exception as exc:  # noqa: BLE001 - the new credential is already stored
+        logger.warning("Could not revoke the replaced service credential: %s", type(exc).__name__)
+
+
 # Redis single-use-state helpers now live in autobot_shared.redis_client
 # (client_setex / client_getdel / client_get) — see Issue #11699.
-
-
-async def _revoke_previous_service_credential(connector_id: str, owner_id: str) -> None:
-    """Re-authorizing a service-owned provider replaces its credential, so the one lookup stays unambiguous (#13710)."""
-    previous = await find_connector_secret_id(connector_id)
-    if previous:
-        await get_credential_store().revoke(previous, owner_id)

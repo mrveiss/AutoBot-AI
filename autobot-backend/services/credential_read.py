@@ -109,3 +109,27 @@ async def find_connector_secret_id(connector_id: str) -> str | None:
         get_secrets_service().get_secret, name=connector_secret_name(connector_id), scope="user"
     )
     return secret["id"] if secret else None
+
+
+async def assert_attachable_secret(secret_id: str, owner_id: str) -> None:
+    """Refuse to attach *secret_id* to a connector *owner_id* may not own (#13710).
+
+    Raises ``LookupError`` when the secret does not exist, ``PermissionError`` when its recorded owner is not
+    *owner_id*, or when it (or *owner_id*) belongs to a service-owned OAuth provider -- the company mailbox,
+    whose sync, update or delete would otherwise use, rotate or revoke that shared credential.
+    """
+    import asyncio
+
+    from knowledge.connectors.oauth_flow import OAUTH_PROVIDERS
+    from services.credential_write import connector_secret_name
+    from services.secrets_service import get_secrets_service
+
+    secret = await asyncio.to_thread(get_secrets_service().get_secret, secret_id=secret_id, include_value=False)
+    if secret is None:
+        raise LookupError("secret not found")
+    service = [p for p in OAUTH_PROVIDERS.values() if p.service_owner_id]
+    owners = {p.service_owner_id for p in service}
+    names = {connector_secret_name(p.service_connector_id) for p in service}
+    created_by = secret.get("created_by") or ""
+    if created_by != owner_id or owner_id in owners or created_by in owners or secret.get("name") in names:
+        raise PermissionError("secret cannot be attached by this owner")

@@ -221,15 +221,123 @@ def test_per_user_provider_flow_is_unchanged(oauth_client):
     assert _stored_payload(setex)["owner_id"] == "alice"
 
 
-@pytest.mark.asyncio
-async def test_reauthorizing_replaces_the_previous_credential():
+def test_failed_send_is_a_fixed_502(admin, integration):
+    integration.execute_action.return_value = {"success": False}
+    resp = admin.post(f"{PREFIX}/messages", json={"to": ["a@example.invalid"], "subject": "s", "body": "b"})
+    assert resp.status_code == 502 and resp.json()["detail"] == "Microsoft 365 did not accept the request"
+
+
+def test_client_scopes_are_ignored_for_the_mailbox_provider(oauth_client):
+    client, oauth_api, setex = oauth_client
+    with patch.object(oauth_api, "check_admin_permission", new=AsyncMock(return_value=True)):
+        client.post(
+            "/knowledge_base/connectors/oauth/microsoft-mail/authorize",
+            json={"redirect_uri": "x", "scopes": ["Mail.ReadWrite", "Files.Read.All"]},
+        )
+    assert _stored_payload(setex)["scopes"] == []
+
+
+def test_client_scopes_still_apply_to_a_per_user_provider(oauth_client):
+    client, oauth_api, setex = oauth_client
+    client.post(
+        "/knowledge_base/connectors/oauth/microsoft/authorize", json={"redirect_uri": "x", "scopes": ["Files.Read"]}
+    )
+    assert _stored_payload(setex)["scopes"] == ["Files.Read"]
+
+
+@pytest.mark.parametrize(
+    "user,expected", [({"username": "root", "role": "admin"}, 200), ({"username": "bob", "role": "user"}, 403)]
+)
+def test_mailbox_start_uses_the_real_admin_check(oauth_client, real_auth_middleware, user, expected):
+    client, oauth_api, setex = oauth_client
+    with (
+        patch.object(oauth_api, "check_admin_permission", real_auth_middleware.check_admin_permission),
+        patch.object(real_auth_middleware, "resolve_human_user", AsyncMock(return_value=user)),
+        patch("auth_rbac.audit_role_denied"),
+    ):
+        resp = client.post("/knowledge_base/connectors/oauth/microsoft-mail/authorize", json={"redirect_uri": "x"})
+    assert resp.status_code == expected
+    assert setex.await_count == (1 if expected == 200 else 0)
+
+
+# --- re-authorization stores first, revokes the replaced credential after (#13710) ---
+
+
+@pytest.fixture
+def exchange(monkeypatch):
     from api import knowledge_connector_oauth as oauth_api
 
+    monkeypatch.setattr(oauth_api.oauth_flow, "resolve_client_credentials", lambda prov: ("cid", "csec"))
+    monkeypatch.setattr(oauth_api.oauth_flow, "exchange_code", AsyncMock(return_value={"access_token": "at"}))
     store = MagicMock()
+    store.store_oauth = AsyncMock(return_value="new")
     store.revoke = AsyncMock()
-    with (
-        patch.object(oauth_api, "find_connector_secret_id", new=AsyncMock(return_value="old")),
-        patch.object(oauth_api, "get_credential_store", return_value=store),
-    ):
-        await oauth_api._revoke_previous_service_credential("microsoft365", "system")
+    monkeypatch.setattr(oauth_api, "get_credential_store", lambda: store)
+    monkeypatch.setattr(oauth_api, "find_connector_secret_id", AsyncMock(return_value="old"))
+    payload = {
+        "provider": "microsoft-mail",
+        "owner_id": "system",
+        "connector_id": "microsoft365",
+        "redirect_uri": "x",
+        "code_verifier": "v",
+    }
+    return oauth_api, store, payload
+
+
+@pytest.mark.asyncio
+async def test_store_failure_leaves_the_old_credential_intact(exchange):
+    oauth_api, store, payload = exchange
+    store.store_oauth.side_effect = RuntimeError("store down")
+    with pytest.raises(RuntimeError):
+        await oauth_api._exchange_and_store(payload, "code")
+    store.revoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_old_credential_is_revoked_after_the_new_one_is_stored(exchange):
+    oauth_api, store, payload = exchange
+    assert await oauth_api._exchange_and_store(payload, "code") == "new"
     store.revoke.assert_awaited_once_with("old", "system")
+
+
+@pytest.mark.asyncio
+async def test_revoke_failure_does_not_fail_the_authorization(exchange):
+    oauth_api, store, payload = exchange
+    store.revoke.side_effect = RuntimeError("boom")
+    assert await oauth_api._exchange_and_store(payload, "code") == "new"
+
+
+# --- a connector can never attach the company mailbox credential (#13710) ---
+
+
+def _secret(created_by, name="connector:other:auth"):
+    return {"id": "s1", "name": name, "created_by": created_by}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "secret,owner,ok",
+    [
+        (_secret("alice"), "alice", True),
+        (_secret("bob"), "alice", False),
+        (_secret(""), "alice", False),
+        (_secret("system", "connector:microsoft365:auth"), "system", False),
+        (_secret("system"), "alice", False),
+        (_secret("alice", "connector:microsoft365:auth"), "alice", False),
+        (None, "alice", False),
+    ],
+)
+async def test_attachable_secret_id(secret, owner, ok):
+    from fastapi import HTTPException
+
+    from api import knowledge_connector_oauth as oauth_api
+
+    svc = MagicMock()
+    svc.get_secret.return_value = secret
+    with patch("services.secrets_service.get_secrets_service", return_value=svc):
+        if ok:
+            assert await oauth_api.attachable_secret_id("s1", owner) == "s1"
+        else:
+            with pytest.raises(HTTPException) as raised:
+                await oauth_api.attachable_secret_id("s1", owner)
+            assert raised.value.status_code == 400

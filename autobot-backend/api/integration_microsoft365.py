@@ -189,4 +189,7 @@ async def _run_action(action: str, params: Dict[str, Any]) -> Dict[str, Any]:
     if "error" in result:
         logger.warning("Microsoft 365 action %s returned an error", action)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed")
+    if result.get("success") is False:  # a send Graph did not accept: fixed refusal, no Graph text
+        logger.warning("Microsoft 365 action %s was not accepted", action)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Microsoft 365 did not accept the request")
     return result
