@@ -306,6 +306,30 @@ def _compute_similarity(block1: CodeBlock, block2: CodeBlock) -> float:
     return intersection / union if union > 0 else 0.0
 
 
+def _is_new_semantic_pair(block1: CodeBlock, block2: CodeBlock, seen_pairs: Set[Tuple[str, str]]) -> bool:
+    """True for a cross-file, non-identical pair not seen before; records it in ``seen_pairs``."""
+    if block1.file_path == block2.file_path:
+        return False
+    # Identical blocks are already clusters (#22157)
+    if block1.content_hash == block2.content_hash:
+        return False
+    pair_key = tuple(sorted([f"{block1.file_path}:{block1.start_line}", f"{block2.file_path}:{block2.start_line}"]))
+    if pair_key in seen_pairs:
+        return False
+    seen_pairs.add(pair_key)
+    return True
+
+
+def _cluster_totals(clusters: List[DuplicateCluster]) -> Tuple[int, int, int, int]:
+    """``(clusters, locations, exact clusters, structural clusters)`` of ``clusters``."""
+    return (
+        len(clusters),
+        sum(len(d.locations) for d in clusters),
+        sum(1 for d in clusters if d.kind == KIND_EXACT),
+        sum(1 for d in clusters if d.kind == KIND_STRUCTURAL),
+    )
+
+
 # =============================================================================
 # Main Detector Class
 # =============================================================================
@@ -730,56 +754,18 @@ class DuplicateCodeDetector(_BaseClass):
         all_blocks: List[CodeBlock],
         seen_pairs: Set[Tuple[str, str]],
     ) -> List[DuplicatePair]:
-        """
-        Find semantically similar code blocks using LLM embeddings.
-
-        Issue #554: Uses ChromaDB vector storage and cosine similarity.
-        Issue #620: Refactored to use extracted helper methods.
-
-        Args:
-            all_blocks: List of code blocks to analyze
-            seen_pairs: Set of already-detected pairs to skip
-
-        Returns:
-            List of semantically similar duplicate pairs
-        """
+        """Find semantically similar blocks using LLM embeddings (#554, #620); extends ``seen_pairs``."""
         if not self.use_semantic_analysis:
             return []
 
-        duplicates: List[DuplicatePair] = []
-        blocks_to_compare = self._sample_blocks_for_analysis(all_blocks, "semantic")
-
-        # Generate embeddings and compute similarities
-        codes = [block.normalized_content for block in blocks_to_compare]
-        embeddings = await self._get_embeddings_batch(codes)
+        blocks = self._sample_blocks_for_analysis(all_blocks, "semantic")
+        embeddings = await self._get_embeddings_batch([block.normalized_content for block in blocks])
         similarity_pairs = self._compute_batch_similarities(embeddings, min_similarity=self.min_similarity)
-
-        for i, j, similarity in similarity_pairs:
-            block1, block2 = blocks_to_compare[i], blocks_to_compare[j]
-
-            # Skip same file
-            if block1.file_path == block2.file_path:
-                continue
-
-            # Identical blocks are already clusters (#22157)
-            if block1.content_hash == block2.content_hash:
-                continue
-
-            # Skip if already found by other methods
-            pair_key = tuple(
-                sorted(
-                    [
-                        f"{block1.file_path}:{block1.start_line}",
-                        f"{block2.file_path}:{block2.start_line}",
-                    ]
-                )
-            )
-            if pair_key in seen_pairs:
-                continue
-            seen_pairs.add(pair_key)
-
-            duplicates.append(self._create_duplicate_pair(block1, block2, similarity))
-
+        duplicates = [
+            self._create_duplicate_pair(blocks[i], blocks[j], similarity)
+            for i, j, similarity in similarity_pairs
+            if _is_new_semantic_pair(blocks[i], blocks[j], seen_pairs)
+        ]
         logger.info("Semantic analysis found %d additional duplicates", len(duplicates))
         return duplicates
 
@@ -807,34 +793,16 @@ class DuplicateCodeDetector(_BaseClass):
 
         return self._to_clusters(all_blocks, pairs)
 
-    def _build_duplicate_analysis(
-        self,
-        duplicates: List[DuplicateCluster],
-        files_count: int,
-    ) -> DuplicateAnalysis:
+    def _build_duplicate_analysis(self, duplicates: List[DuplicateCluster], files_count: int) -> DuplicateAnalysis:
+        """Build DuplicateAnalysis from duplicate clusters (#665).
+
+        Statistics describe EVERY cluster found; only the returned list is cut (#18067).
         """
-        Build DuplicateAnalysis from duplicate clusters.
-
-        Issue #665: Extracted from run_analysis_async to reduce function length.
-
-        Args:
-            duplicates: List of detected duplicate clusters
-            files_count: Number of files analyzed
-
-        Returns:
-            DuplicateAnalysis with statistics
-        """
-        # Statistics describe EVERY cluster found; only the returned list is cut
-        # (#18067), so a capped result still reports the true size of the problem.
         high_count, medium_count, low_count, total_lines = self._calculate_statistics(duplicates)
-        total = len(duplicates)
-        total_locations = sum(len(d.locations) for d in duplicates)
-        exact = sum(1 for d in duplicates if d.kind == KIND_EXACT)
-        structural = sum(1 for d in duplicates if d.kind == KIND_STRUCTURAL)
+        total, total_locations, exact, structural = _cluster_totals(duplicates)
         duplicates.sort(key=lambda x: (x.similarity, x.line_count), reverse=True)
         if MAX_DUPLICATES_RETURNED > 0:
             duplicates = duplicates[:MAX_DUPLICATES_RETURNED]
-
         return DuplicateAnalysis(
             total_duplicates=total,
             high_similarity_count=high_count,
