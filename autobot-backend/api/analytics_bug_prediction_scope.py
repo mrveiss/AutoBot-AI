@@ -12,7 +12,6 @@ source.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -20,10 +19,11 @@ from fastapi import HTTPException, Query
 
 from api.codebase_analytics.endpoints.shared import resolve_scan_root
 from api.source_scope import require_source_id
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.security.path_http import require_contained_relative_path
 
 _WHAT = "bug-prediction scan"
-_MAX_PATTERN_LENGTH = int(os.getenv("AUTOBOT_BUG_PREDICTION_MAX_PATTERN_LENGTH", "128"))
+_MAX_PATTERN_LENGTH = env_int_clamped("AUTOBOT_BUG_PREDICTION_MAX_PATTERN_LENGTH", 128, 1, 1024)
 
 
 def check_include_pattern(pattern: str) -> str:

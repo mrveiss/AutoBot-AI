@@ -20,6 +20,7 @@ from api.analytics_bug_prediction_cache import cache_key_for
 from api.analytics_bug_prediction_scope import scan_root, scoped_key
 from api.codebase_analytics.endpoints import shared
 from api.source_scope import source_scoped_prefix
+from autobot_shared.status_enums import Severity
 
 #: Routes that are not about one source: a task id, the static factor list, the stuck-task reset.
 _NOT_SOURCE_SCOPED = {
@@ -184,7 +185,9 @@ async def test_source_a_history_is_invisible_to_source_b(redis):
 
 @pytest.mark.asyncio
 async def test_a_recorded_bug_lands_under_its_own_source_key(redis):
-    await mod.record_bug(source_id="A", admin_check=True, file_path="a.py", description="d", severity="low")
+    await mod.record_bug(
+        source_id="A", admin_check=True, file_path="a.py", description="d", severity=Severity.LOW.value
+    )
     assert list(redis.lists) == [scoped_key("bug_prediction:recorded_bugs", "A")]
     assert scoped_key("bug_prediction:recorded_bugs", "B") not in redis.lists
 
