@@ -202,11 +202,9 @@ class TestBudgetAtTheSentWindow:
         from autobot_shared import chat_model_context
         from autobot_shared.ssot_constants import ModelConfig
         from chat_workflow import prompt_window
-        from llm_shared.types import ProviderType
 
         model = "l0-l1-chat-model"
         monkeypatch.setattr(chat_model_context, "_last_turn_model", model)
-        monkeypatch.setattr(prompt_window, "configured_provider", lambda: ProviderType.OLLAMA)
         cwm = get_context_window_manager()
         assert prompt_window.request_window_tokens(cwm, model) == ModelConfig.CHAT_NUM_CTX
         l0_target, l1_target = await _targets()

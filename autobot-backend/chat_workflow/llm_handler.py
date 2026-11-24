@@ -14,7 +14,7 @@ import json
 from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
-from autobot_shared.chat_model_context import interpretation_llm_options
+from autobot_shared.chat_model_context import interpretation_llm_options, note_chat_turn_model
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_generate_url
@@ -723,6 +723,10 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             from chat_workflow.prompt_window import measured_prompt_budget
 
             budget = max(0, measured_prompt_budget(cwm, model_name, system_prompt) - message_tokens)
+            if budget == 0:  # surfaced to the user as ``over_window`` by attachment_context._window_notice
+                logger.warning(
+                    "[#22016] No prompt budget left for context sections: the system prompt and message fill it"
+                )
             result = cwm.allocate_sections(sections, budget_tokens=budget)
         except Exception as exc:
             logger.warning("[#13640] Prompt allocation failed, using untrimmed sections: %s", exc, exc_info=True)
@@ -814,6 +818,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         )
         # Issue #1214: Try SLM service discovery first (fleet-managed endpoint),
         # then fall back to local config-based resolution (#1070 model routing).
+        note_chat_turn_model(selected_model)  # #22016: before any budgeting; side calls match this model's context
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
             ollama_endpoint = ollama_generate_url(slm_base)

@@ -272,8 +272,12 @@ def _window_char_budget(llm_params: Dict[str, Any], file_count: int) -> int | No
         return None
 
 
-def _window_notice(llm_params: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """An ``over_window`` notice when system + prompt still exceed what the request's window holds (#22016)."""
+#: Set in the turn's request context once an ``over_window`` notice was issued, so the turn says it once.
+OVER_WINDOW_KEY = "_over_window_noticed"
+
+
+def _window_notice(llm_params: Dict[str, Any], context: Dict[str, Any] | None) -> List[Dict[str, Any]]:
+    """An ``over_window`` notice when the request cannot fit its window, with or without attachments (#22016)."""
     from chat_workflow.prompt_window import send_overflow
 
     try:
@@ -284,7 +288,34 @@ def _window_notice(llm_params: Dict[str, Any]) -> List[Dict[str, Any]]:
     if over is None:
         return []
     logger.warning("[#22016] Prompt over the window: ~%(estimated)d of %(window)d tokens", over)
+    if isinstance(context, dict):
+        context[OVER_WINDOW_KEY] = True
     return [_notice("over_window", **over)]
+
+
+async def send_point_notices(call) -> list:
+    """The send-point check (#22016): once per turn, an ``over_window`` notice if the prompt outgrew the window.
+
+    The turn-start check (``_window_notice``) covers the first prompt; continuation iterations grow it, so this
+    catches the later overflow. Everything is read inside the try: a check must never cost the user their turn.
+    """
+    from chat_workflow.prompt_window import send_overflow
+
+    try:
+        ctx = call.ctx
+        if (ctx.context or {}).get(OVER_WINDOW_KEY):
+            return []
+        over = send_overflow(ctx.selected_model, ctx.system_prompt, call.prompt)
+        if over is None:
+            return []
+        ctx.context[OVER_WINDOW_KEY] = True
+        logger.warning("[#22016] Sending ~%(estimated)d tokens into a %(window)d-token window: input will be cut", over)
+        notices = attachment_notice_messages({"attachment_notices": [_notice("over_window", **over)]})
+        await persist_notices(ctx.session_id, notices)
+        return notices
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[#22016] Send-window check unavailable: %s", type(exc).__name__)
+        return []
 
 
 async def _resolve_turn(session, context: Dict[str, Any] | None, llm_params: Dict[str, Any]) -> AttachmentResult:
@@ -306,16 +337,24 @@ async def apply_attachments(session, context: Dict[str, Any] | None, llm_params:
     file_ids, invalid = requested_ids(context)
     if isinstance(context, dict):
         context.pop(ATTACHMENT_TURN_KEY, None)
+        context.pop(OVER_WINDOW_KEY, None)
         if file_ids or invalid:
             context[ATTACHMENT_TURN_KEY] = True
-    if not file_ids and not invalid:
-        return
+    if file_ids or invalid:
+        await _attach_files(session, context, llm_params)
+    notices = [*llm_params.get("attachment_notices", []), *_window_notice(llm_params, context)]
+    if notices:
+        llm_params["attachment_notices"] = notices
+
+
+async def _attach_files(session, context: Dict[str, Any] | None, llm_params: Dict[str, Any]) -> None:
+    """Resolve the turn's attached files into the prompt and park their notices (#20195)."""
     await attachment_floor.mark_chat(session.session_id)  # #20195: later turns of this chat keep asking
     result = await _resolve_turn(session, context, llm_params)
     if result.block:
         llm_params["prompt"] = result.block + llm_params["prompt"]
         llm_params["attachment_block"] = result.block
-    llm_params["attachment_notices"] = [*result.notices, *_window_notice(llm_params)]
+    llm_params["attachment_notices"] = list(result.notices)
 
 
 def without_block(llm_params: Dict[str, Any]) -> str:

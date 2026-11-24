@@ -53,9 +53,10 @@ from llm_shared.provider_error_category import (
 )
 from llm_shared.types import LLMType
 
+from .attachment_context import send_point_notices
 from .llm_provider import configured_provider
 from .models import LLMIterationContext
-from .prompt_window import warn_if_over_window
+from .prompt_window import warn_if_hop_over_window
 
 logger = get_logger(__name__)
 
@@ -138,6 +139,7 @@ async def _recovered_items(call: IterationCall, response: LLMResponse) -> AsyncI
     """The recovered answer as the chunk + ``(text, tool_calls)`` the streaming path would have produced."""
     manager, ctx = call.manager, call.ctx
     meta = response.provider_metadata or {}
+    warn_if_hop_over_window(response.model, ctx.system_prompt, call.prompt)  # #22016: the hop sends no num_ctx
     message = manager._init_streaming_message(
         "response", response.model or ctx.selected_model, ctx.terminal_session_id, ctx.used_knowledge, ctx.rag_citations
     )
@@ -185,7 +187,8 @@ async def stream_with_failover(call: IterationCall, open_stream: Callable[[], As
     *open_stream* is not called at all while the primary is held out. A failure after text was yielded,
     or on a turn that already ran a tool, is surfaced as before: the service-error message, or the re-raise.
     """
-    warn_if_over_window(call.ctx.selected_model, call.ctx.system_prompt, call.prompt)  # #22016: the send point
+    for notice in await send_point_notices(call):  # #22016: the send point, once per turn
+        yield notice
     held_items = await _held_primary_items(call)
     if held_items is not None:
         for item in held_items:
