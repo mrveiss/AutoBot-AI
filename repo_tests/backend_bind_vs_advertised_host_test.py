@@ -3,6 +3,7 @@
 """#18810 / #22146: bind vs advertised host, and the one noVNC path home."""
 
 import re
+import sys
 
 import pytest
 import yaml
@@ -16,6 +17,34 @@ from autobot_shared.ssot_role_mirrors import NOVNC_PATH_DEFAULT
 from tools.lint._comment_syntax import code_text
 
 ROOT = repo_root()
+
+
+_BACKEND_TOP_LEVEL = ("config", "services", "user_management", "startup_validation")
+
+
+@pytest.fixture()
+def backend_on_path(monkeypatch):
+    """Put ``autobot-backend`` on ``sys.path`` and undo what importing from it binds.
+
+    The names ``autobot-backend`` binds are also bound by the SLM backend's conftest, so they are
+    cleared first and the original modules put back afterwards.
+
+    ``syspath_prepend`` restores only ``sys.path``; importing ``startup_validation`` or
+    ``services.config_service`` binds top-level ``config``, ``services`` and ``user_management`` in
+    ``sys.modules`` for every later test. Snapshot and restore, as the SLM deployment fixture does.
+    """
+    before = dict(sys.modules)
+    for name in _BACKEND_TOP_LEVEL:  # another suite's conftest may already hold these names
+        sys.modules.pop(name, None)
+    monkeypatch.syspath_prepend(str(ROOT / "autobot-backend"))
+    try:
+        yield
+    finally:
+        for key in set(sys.modules) - set(before):
+            del sys.modules[key]
+        sys.modules.update(before)
+
+
 ANSIBLE = ROOT / "autobot-slm-backend" / "ansible"
 ENV_TEMPLATE = ANSIBLE / "roles" / "backend" / "templates" / "backend.env.j2"
 ALL_VARS = ANSIBLE / "inventory" / "group_vars" / "all.yml"
@@ -71,8 +100,7 @@ def test_empty_host_settings_take_the_default_without_logging(monkeypatch, caplo
     assert not is_unspecified_host("") and not is_unspecified_host("backend.example")
 
 
-def test_startup_validation_fails_naming_the_variable(monkeypatch) -> None:
-    monkeypatch.syspath_prepend(str(ROOT / "autobot-backend"))
+def test_startup_validation_fails_naming_the_variable(monkeypatch, backend_on_path) -> None:
     import startup_validation
 
     ssot = startup_validation.config.vm  # the canonical reader; empty or unset already means the default
@@ -275,8 +303,7 @@ def test_no_vnc_role_file_spells_the_systemd_unit_dir_and_the_variable_has_one_h
     assert definitions == [ALL_VARS.relative_to(ANSIBLE)]
 
 
-def test_a_config_save_keeps_the_persisted_bind_host(monkeypatch, tmp_path) -> None:
-    monkeypatch.syspath_prepend(str(ROOT / "autobot-backend"))
+def test_a_config_save_keeps_the_persisted_bind_host(monkeypatch, tmp_path, backend_on_path) -> None:
     from services.config_service import ConfigService, config_manager
 
     cfg_file = tmp_path / "config.yaml"
