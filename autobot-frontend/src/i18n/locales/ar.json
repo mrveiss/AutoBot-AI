@@ -10041,5 +10041,15 @@
     "resumeFailed": "فشل استئناف الوكلاء",
     "successRate": "معدل النجاح",
     "tasksCompleted": "المهام المكتملة"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "أدخل عنوان ويب كاملاً يبدأ بـ http:// أو https://",
+    "recognitionUnsupported": "التعرف على الكلام غير مدعوم في هذا المتصفح",
+    "recognitionError": "خطأ في التعرف على الكلام: {error}",
+    "speakFailed": "تعذّر نطق النص",
+    "playbackFailed": "فشل تشغيل الصوت",
+    "spoken": "تم نطقه:",
+    "speakToInteractWith": "تحدّث واستمع إلى القراءة بصوت عالٍ",
+    "voiceId": "معرّف الصوت"
   }
 }

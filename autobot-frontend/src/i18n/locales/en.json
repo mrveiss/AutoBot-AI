@@ -11180,5 +11180,15 @@
     "resumeFailed": "Failed to resume agents",
     "successRate": "Success Rate",
     "tasksCompleted": "Tasks Completed"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Enter a full web address that starts with http:// or https://",
+    "recognitionUnsupported": "Speech recognition is not supported in this browser",
+    "recognitionError": "Speech recognition error: {error}",
+    "speakFailed": "Failed to speak the text",
+    "playbackFailed": "Audio playback failed",
+    "spoken": "Spoken:",
+    "speakToInteractWith": "Speak, and hear it read back",
+    "voiceId": "Voice ID"
   }
 }
