@@ -102,7 +102,6 @@ module:autobot-backend/utils/pipeline_profiler.py	#10603
 module:autobot-backend/utils/security_patterns.py	#10603
 module:autobot-backend/utils/token_budget_chunking.py	#10603
 module:autobot-backend/utils/traced_http_client.py	#10603
-module:autobot-backend/utils/websocket_heartbeat.py	#10603
 module:autobot-slm-backend/_slm_stub_lifetime.py	#10603
 module:autobot-slm-backend/monitoring/benchmark_types.py	#10603
 module:autobot-slm-backend/monitoring/metrics/api_requests.py	#10603
