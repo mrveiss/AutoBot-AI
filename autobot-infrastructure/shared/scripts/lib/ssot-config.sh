@@ -125,7 +125,7 @@ fi
 : "${AUTOBOT_OLLAMA_PORT:=11434}"
 : "${AUTOBOT_VNC_PORT:=6080}"
 # #19321: the port ChromaDB listens on (PortConfig.chromadb). Pinned to the SSOT
-# default by repo_tests/chromadb_port_one_home_test.py.
+# default by repo_tests/chromadb_port_one_home_19321_test.py.
 : "${AUTOBOT_CHROMADB_PORT:=8100}"
 
 # RedisConfig

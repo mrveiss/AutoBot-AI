@@ -24,7 +24,6 @@ can squat the key with a bare (non-package) ``ModuleType`` stub — that squat
 broke every later ``autobot_shared.*`` import in the directory sweep.
 """
 
-import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -87,16 +86,11 @@ with contextlib.suppress(ImportError):
     import aiohttp  # noqa: F401
 
 
-# Shared setup of the role_manifest_*_test.py files, loaded by path under a unique name (the same pattern as the
-# root conftest's `_slm_module_stub`), after the real `services` / `models` packages above are in place, since it
-# imports `services.manifest_loader`. A conftest in a test's own directory is imported before that directory's
-# test modules are collected, also under --import-mode=importlib, so `import _slm_role_manifest_fixtures` resolves.
-_rmf_spec = importlib.util.spec_from_file_location(
-    "_slm_role_manifest_fixtures", Path(__file__).parent / "_role_manifest_fixtures.py"
-)
-_rmf_mod = importlib.util.module_from_spec(_rmf_spec)
-sys.modules["_slm_role_manifest_fixtures"] = _rmf_mod
-_rmf_spec.loader.exec_module(_rmf_mod)
+# Shared setup of the role_manifest_*_test.py files, loaded by path under a unique name through StubSet
+# (#13596), after the real `services` / `models` packages above are in place, since it imports
+# `services.manifest_loader`. A conftest in a test's own directory is imported before that directory's test
+# modules are collected, also under --import-mode=importlib, so `import _slm_role_manifest_fixtures` resolves.
+_stubs.real_load("_slm_role_manifest_fixtures", Path(__file__).parent / "_role_manifest_fixtures.py")
 
 
 def pytest_unconfigure(config) -> None:  # noqa: ARG001

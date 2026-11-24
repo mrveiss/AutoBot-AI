@@ -178,7 +178,7 @@ def test_a_synthetic_manifest_missing_an_entry_is_flagged_and_a_complete_one_pas
             role_health=role_health,
         )
 
-    assert _undeclared({"autobot-x": build({})}, {"a"}) == ["a"]
+    # build({}) is not constructible: the validator rejects an empty role_health (see the rejection test above)
     assert _undeclared({"autobot-x": build(None)}, {"a"}) == ["a"]
     assert _undeclared({"autobot-x": build({"a": RoleHealthCheck(checked=False)})}, {"a"}) == []
 
