@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Tests for Issue #10778 additions to business_intelligence_dashboard.py.
+Tests for the operations count and network utilisation of business_intelligence_dashboard.py (#10778).
 
 Covers:
 - _get_monthly_operations now sums LLM + KB + API request counts.
@@ -14,183 +14,22 @@ Covers:
 - _get_current_utilization network field uses real value, not hardcoded 30.0.
 """
 
-import importlib.util
 import logging
-import sys
-import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Stub heavy deps BEFORE importing the module under test.
-# Mirrors the approach in test_bi_dashboard.py.
-# ---------------------------------------------------------------------------
+# The heavy-dependency stubs and the load of the module under test live in the
+# shared loader (registered by tests/conftest.py).
+from _slm_bi_dashboard_loader import load_business_intelligence_dashboard  # noqa: E402
 
-
-# #11794: every sys.modules key this bootstrap writes.  Snapshotted here and
-# restored right after the module under test is loaded — the bare ModuleType
-# stand-ins (autobot_shared.redis_client has no get_async_redis_client, …)
-# otherwise leak into every later-collected test file in a sweep
-# (tests/test_rbac_*.py, tests/test_port_scanner_address.py).  Runtime tests
-# only use patch.object(_bid_mod, ...), never sys.modules lookups.
-_TOUCHED_KEYS = (
-    "matplotlib",
-    "matplotlib.pyplot",
-    "aiofiles",
-    "jinja2",
-    "performance_monitor",
-    "autobot_shared",
-    "autobot_shared.network_constants",
-    "autobot_shared.monitoring",
-    "autobot_shared.monitoring.prometheus_query",
-    "autobot_shared.redis_client",
-    "autobot_shared.http_client",
-    "autobot_shared.logging_manager",
-    "autobot_shared.ssot_config",
-    "business_intelligence_dashboard",
-)
-_PRE_BOOTSTRAP = {_k: sys.modules.get(_k) for _k in _TOUCHED_KEYS}
-
-_matplotlib = types.ModuleType("matplotlib")
-_matplotlib.use = lambda *a, **kw: None
-sys.modules.setdefault("matplotlib", _matplotlib)
-_matplotlib_pyplot = types.ModuleType("matplotlib.pyplot")
-sys.modules.setdefault("matplotlib.pyplot", _matplotlib_pyplot)
-
-import numpy as _real_numpy  # noqa: E402
-
-sys.modules.setdefault("numpy", _real_numpy)
-
-_aiofiles = types.ModuleType("aiofiles")
-sys.modules.setdefault("aiofiles", _aiofiles)
-
-_jinja2 = types.ModuleType("jinja2")
-
-
-class _FakeTemplate:
-    def __init__(self, src):
-        self._src = src
-
-    def render(self, **kwargs):
-        return self._src
-
-
-_jinja2.Template = _FakeTemplate
-sys.modules.setdefault("jinja2", _jinja2)
-
-_pm = types.ModuleType("performance_monitor")
-_pm.ALERT_THRESHOLDS = {"cpu_percent": 80.0, "memory_percent": 85.0}
-sys.modules["performance_monitor"] = _pm
-
-# psutil stub — net_io_counters used in _sample_net_bytes_per_sec
-_psutil = types.ModuleType("psutil")
-
-
-class _FakeNetIO:
-    def __init__(self, bytes_sent=0, bytes_recv=0):
-        self.bytes_sent = bytes_sent
-        self.bytes_recv = bytes_recv
-
-
-_psutil.net_io_counters = lambda: _FakeNetIO(bytes_sent=5_000_000, bytes_recv=3_000_000)
-sys.modules.setdefault("psutil", _psutil)
-
-# autobot_shared stubs
-_shared = types.ModuleType("autobot_shared")
-sys.modules.setdefault("autobot_shared", _shared)
-
-_nc = types.ModuleType("autobot_shared.network_constants")
-
-
-class _NC:
-    REDIS_VM_IP = "127.0.0.1"
-
-
-_nc.NetworkConstants = _NC
-sys.modules["autobot_shared.network_constants"] = _nc
-
-_pq = types.ModuleType("autobot_shared.monitoring.prometheus_query")
-_pq.query_instant = AsyncMock(return_value=None)
-_monitoring_pkg = types.ModuleType("autobot_shared.monitoring")
-# Keep it a *package*. Without __path__ this plain module shadows the real
-# `autobot_shared.monitoring` for the whole process, and any later import of a
-# submodule it does not stub fails with "is not a package" — even though the
-# submodule exists on disk. It is installed at import scope with no teardown, so
-# the damage is not confined to this file: it broke collection of
-# test_rbac_middleware_cache.py and test_rbac_permission_denied_audit.py in
-# seven of twelve shards the moment something imported
-# `autobot_shared.monitoring.metrics.audit` (#14750, same class as #14741).
-# Pointing __path__ at the real directory keeps the stubbed `prometheus_query`
-# in place while letting every other submodule resolve from disk.
-_monitoring_pkg.__path__ = [str(Path(__file__).resolve().parents[2] / "autobot_shared" / "monitoring")]
-sys.modules["autobot_shared.monitoring"] = _monitoring_pkg
-sys.modules["autobot_shared.monitoring.prometheus_query"] = _pq
-
-_rc = types.ModuleType("autobot_shared.redis_client")
-sys.modules["autobot_shared.redis_client"] = _rc
-
-_http = types.ModuleType("autobot_shared.http_client")
-sys.modules["autobot_shared.http_client"] = _http
-
-_lm = types.ModuleType("autobot_shared.logging_manager")
-_lm.get_logger = logging.getLogger
-sys.modules["autobot_shared.logging_manager"] = _lm
-
-# ---------------------------------------------------------------------------
-# Stub CostModelConfig with both old and new (#10778) fields.
-# ---------------------------------------------------------------------------
-
-
-class _StubCostModel:
-    cpu_monthly_usd = 55.0
-    gpu_monthly_usd = 85.0
-    npu_monthly_usd = 35.0
-    memory_monthly_usd = 22.0
-    storage_monthly_usd = 28.0
-    network_monthly_usd = 90.0
-    cpu_baseline_efficiency = 70.0
-    gpu_baseline_efficiency = 60.0
-    npu_baseline_efficiency = 50.0
-    memory_baseline_efficiency = 80.0
-    storage_baseline_efficiency = 60.0
-    network_baseline_efficiency = 40.0
-    # Issue #10778: link capacity for real utilisation %
-    network_link_capacity_mbps = 0.0  # default = unknown
-
-
-class _StubConfig:
-    cost_model = _StubCostModel()
-
-
-_ssot = types.ModuleType("autobot_shared.ssot_config")
-_ssot.get_config = lambda: _StubConfig()
-sys.modules["autobot_shared.ssot_config"] = _ssot
-
-# ---------------------------------------------------------------------------
-# Load the module under test
-# ---------------------------------------------------------------------------
-
-_slm_root = Path(__file__).parent.parent
-_dashboard_path = _slm_root / "monitoring" / "business_intelligence_dashboard.py"
-_spec = importlib.util.spec_from_file_location("business_intelligence_dashboard", _dashboard_path)
-_bid_mod = importlib.util.module_from_spec(_spec)
-sys.modules["business_intelligence_dashboard"] = _bid_mod
-_spec.loader.exec_module(_bid_mod)
+_bid_mod = load_business_intelligence_dashboard(stub_psutil=True)
 
 BusinessIntelligenceDashboard = _bid_mod.BusinessIntelligenceDashboard
 _sum_prometheus_increase = _bid_mod._sum_prometheus_increase
 _get_network_utilization_percent = _bid_mod._get_network_utilization_percent
 _sample_net_bytes_per_sec = _bid_mod._sample_net_bytes_per_sec
-
-# #11794: restore the pre-bootstrap state of every touched key (see above).
-for _k, _v in _PRE_BOOTSTRAP.items():
-    if _v is None:
-        sys.modules.pop(_k, None)
-    else:
-        sys.modules[_k] = _v
-del _PRE_BOOTSTRAP
 
 
 # ---------------------------------------------------------------------------

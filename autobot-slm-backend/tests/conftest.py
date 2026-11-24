@@ -5,6 +5,7 @@
 
 """Pytest fixtures for SLM testing."""
 
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -17,6 +18,14 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from models.database import Base as SLMBase  # noqa: E402
+
+# #22157: the dashboard tests' stub bootstrap, loaded by path (`tests/` is not a package root).
+_bi_spec = importlib.util.spec_from_file_location(
+    "_slm_bi_dashboard_loader", Path(__file__).parent / "_bi_dashboard_loader.py"
+)
+_bi_mod = importlib.util.module_from_spec(_bi_spec)
+_bi_spec.loader.exec_module(_bi_mod)
+sys.modules["_slm_bi_dashboard_loader"] = _bi_mod
 
 
 @pytest.fixture(scope="function")
