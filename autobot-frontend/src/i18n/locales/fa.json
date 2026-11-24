@@ -10029,5 +10029,15 @@
     "requestFailed": "درخواست پاکسازی ناهمخوانی ناموفق بود",
     "result": "{removed} فایل حذف شد؛ {left} در جای خود باقی ماند",
     "title": "{count} فایل از {component} حذف می‌شود"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "یک آدرس وب کامل وارد کنید که با http:// یا https:// شروع شود",
+    "recognitionUnsupported": "تشخیص گفتار در این مرورگر پشتیبانی نمی‌شود",
+    "recognitionError": "خطای تشخیص گفتار: {error}",
+    "speakFailed": "خواندن متن ممکن نشد",
+    "playbackFailed": "پخش صدا ناموفق بود",
+    "spoken": "خوانده‌شده:",
+    "speakToInteractWith": "صحبت کنید و خوانش آن را بشنوید",
+    "voiceId": "شناسه صدا"
   }
 }

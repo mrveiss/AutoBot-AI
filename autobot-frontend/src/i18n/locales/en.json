@@ -11168,5 +11168,15 @@
     "requestFailed": "Drift prune request failed",
     "result": "Removed {removed} file(s); {left} left in place",
     "title": "{count} file(s) would be removed from {component}"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Enter a full web address that starts with http:// or https://",
+    "recognitionUnsupported": "Speech recognition is not supported in this browser",
+    "recognitionError": "Speech recognition error: {error}",
+    "speakFailed": "Failed to speak the text",
+    "playbackFailed": "Audio playback failed",
+    "spoken": "Spoken:",
+    "speakToInteractWith": "Speak, and hear it read back",
+    "voiceId": "Voice ID"
   }
 }

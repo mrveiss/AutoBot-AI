@@ -10029,5 +10029,15 @@
     "requestFailed": "Échec de la requête de nettoyage des écarts",
     "result": "{removed} fichier(s) supprimé(s) ; {left} laissé(s) en place",
     "title": "{count} fichier(s) seraient supprimés de {component}"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Saisissez une adresse web complète commençant par http:// ou https://",
+    "recognitionUnsupported": "La reconnaissance vocale n'est pas prise en charge par ce navigateur",
+    "recognitionError": "Erreur de reconnaissance vocale : {error}",
+    "speakFailed": "Impossible de prononcer le texte",
+    "playbackFailed": "Échec de la lecture audio",
+    "spoken": "Prononcé :",
+    "speakToInteractWith": "Parlez et écoutez la lecture à voix haute",
+    "voiceId": "ID de voix"
   }
 }

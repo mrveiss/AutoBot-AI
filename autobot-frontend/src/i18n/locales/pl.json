@@ -10029,5 +10029,15 @@
     "requestFailed": "Żądanie czyszczenia rozbieżności nie powiodło się",
     "result": "Usunięto {removed} plik(ów); {left} pozostawiono na miejscu",
     "title": "Z {component} zostałoby usuniętych {count} plik(ów)"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Wpisz pełny adres internetowy zaczynający się od http:// lub https://",
+    "recognitionUnsupported": "Rozpoznawanie mowy nie jest obsługiwane w tej przeglądarce",
+    "recognitionError": "Błąd rozpoznawania mowy: {error}",
+    "speakFailed": "Nie udało się odczytać tekstu",
+    "playbackFailed": "Odtwarzanie dźwięku nie powiodło się",
+    "spoken": "Odczytano:",
+    "speakToInteractWith": "Mów i posłuchaj odczytu na głos",
+    "voiceId": "ID głosu"
   }
 }

@@ -10029,5 +10029,15 @@
     "requestFailed": "Anfrage zur Bereinigung der Abweichungen fehlgeschlagen",
     "result": "{removed} Datei(en) entfernt; {left} unverändert belassen",
     "title": "{count} Datei(en) würden aus {component} entfernt"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Geben Sie eine vollständige Webadresse ein, die mit http:// oder https:// beginnt",
+    "recognitionUnsupported": "Spracherkennung wird in diesem Browser nicht unterstützt",
+    "recognitionError": "Spracherkennungsfehler: {error}",
+    "speakFailed": "Der Text konnte nicht gesprochen werden",
+    "playbackFailed": "Audiowiedergabe fehlgeschlagen",
+    "spoken": "Gesprochen:",
+    "speakToInteractWith": "Sprechen Sie und hören Sie es vorgelesen",
+    "voiceId": "Stimmen-ID"
   }
 }
