@@ -151,7 +151,7 @@ class TestBackendVoiceSynthesize:
     def test_synthesize_proxy_returns_wav(self):
         resp = requests.post(
             f"{BACKEND_URL}/api/voice/synthesize",
-            data={"text": "AutoBot speaking.", "user_role": "user"},
+            data={"text": "AutoBot speaking."},
             timeout=LATENCY_BUDGET_SEC * 2,  # nosec B113
         )
         assert resp.status_code == 200
@@ -165,7 +165,7 @@ class TestBackendVoiceSynthesize:
         start = time.monotonic()
         resp = requests.post(
             f"{BACKEND_URL}/api/voice/synthesize",
-            data={"text": "Full pipeline latency test.", "user_role": "user"},
+            data={"text": "Full pipeline latency test."},
             timeout=LATENCY_BUDGET_SEC * 2,  # nosec B113
         )
         elapsed = time.monotonic() - start
@@ -178,7 +178,7 @@ class TestBackendVoiceSynthesize:
         silent_wav = _make_silent_wav()
         resp = requests.post(
             f"{BACKEND_URL}/api/voice/clone-voice",
-            data={"text": "Clone proxy test.", "user_role": "user"},
+            data={"text": "Clone proxy test."},
             files={"reference_audio": ("ref.wav", silent_wav, "audio/wav")},
             timeout=LATENCY_BUDGET_SEC * 2,  # nosec B113
         )
