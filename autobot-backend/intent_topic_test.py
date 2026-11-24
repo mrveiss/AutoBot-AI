@@ -101,3 +101,16 @@ def test_exit_word_naming_a_concept_continues():
 @pytest.mark.parametrize("message", ["goodbye", "bye", "exit", "quit", "i'm done"])
 def test_plain_exit_still_ends(message):
     assert IntentClassifier().classify(message).intent == ConversationIntent.END
+
+
+@pytest.mark.parametrize("message", ["explain how to exit", "tell me about quit", "Tell me about the exit code"])
+def test_asking_about_exiting_continues_without_the_dropped_phrases(message):
+    """The retired copy listed "explain how" / "tell me about" as non-exit phrases. The canonical continuation words
+    ("explain", "tell", "about", "how") already turn these into CONTINUE, so the phrases were not carried over."""
+    assert IntentClassifier().classify(message).intent == ConversationIntent.CONTINUE
+
+
+@pytest.mark.parametrize("message", ["", "   ", "\n\t"])
+def test_empty_or_blank_messages_never_end_the_conversation(message):
+    assert IntentClassifier().classify(message).intent != ConversationIntent.END
+    assert detect_topic(message) == GENERAL_TOPIC
