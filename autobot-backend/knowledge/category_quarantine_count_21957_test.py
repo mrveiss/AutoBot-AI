@@ -561,16 +561,22 @@ def _count(kb, category_id="cat1") -> int:
 
 
 @pytest.mark.asyncio
-async def test_an_assign_that_resumes_after_the_delete_took_the_hash_leaves_the_count_at_zero():
-    """#21984: assign HSETs category_id, delete takes the hash, assign resumes: refused join, no count."""
+async def test_an_assign_that_resumes_after_the_delete_took_the_hash_leaves_the_count_at_zero(monkeypatch):
+    """#21984: the real assign HSETs category_id, the delete takes the hash, the assign resumes: no join, no count."""
     kb = _DeleteKB()
     await kb.redis().hset("fact:x", mapping={"content": "x", "metadata": json.dumps({})})
-    await kb.redis().hset("fact:x", "category_id", "cat1")  # the assign's first step
+    redis, write, hooks = kb.redis(), kb.redis().hset, []
 
-    assert (await kb.delete_fact("x"))["status"] == "success"
-    await add_to_category(kb.redis(), "x", "cat1")  # the assign resumes
+    async def hset_then_delete(key, field=None, value=None, mapping=None):
+        await write(key, field, value, mapping)
+        if field == "category_id" and not hooks:  # right after the assign's first step
+            hooks.append(await kb.delete_fact("x"))
 
-    assert kb.redis().sets.get(MEMBERS, set()) == set()
+    monkeypatch.setattr(redis, "hset", hset_then_delete)
+    await kb._assign_fact_to_category("x", "cat1")
+
+    assert hooks[0]["status"] == "success"
+    assert redis.sets.get(MEMBERS, set()) == set()
     assert _count(kb) == 0
 
 
