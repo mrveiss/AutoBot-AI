@@ -16,11 +16,12 @@ import pytest
 
 import api.agent as agent_api
 from services.ai_stack_client import AIStackError
+from type_defs.ai_stack_agents import agent_dicts
 
 
 def _stub_ai_client(agents: list[str]) -> AsyncMock:
     client = AsyncMock()
-    client.list_available_agents = AsyncMock(return_value={"agents": agents})
+    client.list_available_agents = AsyncMock(return_value={"agents": agent_dicts(agents)})
     return client
 
 
