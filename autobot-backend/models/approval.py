@@ -278,6 +278,19 @@ Index(
 ).ddl_if(dialect="postgresql")
 
 
+#: One PENDING workflow-grant subject remap proposal per scope, enforced by the database (#22180). The proposal
+#: covers the whole grant table, so two concurrent admin requests can both pass the application-level "already
+#: proposed" read; only a unique index makes the second insert fail. PostgreSQL only, like the indexes above.
+PENDING_GRANT_REMAP_INDEX = "uq_approvals_pending_workflow_grant_remap"
+PENDING_GRANT_REMAP_WHERE = "status = 'pending' AND context ->> 'action' = 'workflow_grant_subject_remap'"
+Index(
+    PENDING_GRANT_REMAP_INDEX,
+    Approval.context["scope"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_GRANT_REMAP_WHERE),
+).ddl_if(dialect="postgresql")
+
+
 #: One PENDING owner proposal per chat session, enforced by the database (#20030). Two admins' requests
 #: can both pass the application-level "already pending" read; only a unique index makes the second
 #: insert fail, and the route answers it 409. Partial, so it constrains nothing but pending rows of

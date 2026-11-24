@@ -58,23 +58,44 @@ async def known_user_ids(session: "AsyncSession", candidates: set[str]) -> set[s
     return {c for c, u in parsed.items() if str(u) in existing}
 
 
+def _usable_user():
+    """The filter a grant target must pass: an active, not-deleted account."""
+    return (User.is_active.is_(True), User.deleted_at.is_(None))
+
+
+async def usernames_to_ids(session: "AsyncSession", usernames: set[str]) -> dict[str, str]:
+    """One query: name -> id for active, not-deleted users. A name held by several rows is left out (ambiguous)."""
+    if not usernames:
+        return {}
+    query = select(User.username, User.id).where(User.username.in_(usernames), *_usable_user())
+    seen: dict[str, list[str]] = {}
+    for name, found in (await session.execute(query)).all():
+        seen.setdefault(name, []).append(str(found))
+    return {name: ids[0] for name, ids in seen.items() if len(ids) == 1}
+
+
 async def username_to_id(session: "AsyncSession", username: str) -> str | None:
-    """The id of the active, not-deleted user named *username*, or None."""
-    query = select(User.id).where(User.username == username, User.is_active.is_(True), User.deleted_at.is_(None))
-    found = (await session.execute(query)).scalars().first()
-    return str(found) if found else None
+    """The id of the one active, not-deleted user named *username*, or None."""
+    return (await usernames_to_ids(session, {username})).get(username)
+
+
+async def usable_grant_target_id(session: "AsyncSession", candidate: uuid.UUID) -> str | None:
+    """*candidate* as a string when it is the id of an active, not-deleted user, else None."""
+    query = select(User.id).where(User.id == candidate, *_usable_user())
+    return str(candidate) if (await session.execute(query)).scalars().first() is not None else None
 
 
 async def resolve_user_ref(session: "AsyncSession", ref: str) -> str | None:
-    """Resolve a grant target given as a user id or a username to the id, or None for an unknown user.
+    """Resolve a grant target given as a user id or a username to the id, or None.
 
-    An id-shaped value is looked up as an id only, so a username can never shadow another user's id.
+    Both paths accept only an active, not-deleted account. An id-shaped value is looked up as an id only, so a
+    username can never shadow another user's id.
     """
     ref = (ref or "").strip()
     if not ref:
         return None
-    if _as_uuid(ref) is not None:
-        return str(_as_uuid(ref)) if await known_user_ids(session, {ref}) else None
+    if (as_id := _as_uuid(ref)) is not None:
+        return await usable_grant_target_id(session, as_id)
     return await username_to_id(session, ref)
 
 
@@ -82,21 +103,28 @@ async def plan_remap(session: "AsyncSession") -> tuple[list[dict[str, str]], lis
     """(mappings, unmapped) for every grant row whose subject is not a known user id. Read only."""
     rows = (await session.execute(select(WorkflowPermission))).scalars().all()
     known = await known_user_ids(session, {r.user_id for r in rows})
+    stale = sorted((r for r in rows if r.user_id not in known), key=lambda r: (r.workflow_id, r.user_id))
+    ids = await usernames_to_ids(session, {r.user_id for r in stale})
     mappings: list[dict[str, str]] = []
     unmapped: list[dict[str, str]] = []
-    for row in sorted((r for r in rows if r.user_id not in known), key=lambda r: (r.workflow_id, r.user_id)):
+    for row in stale:
         entry = {"permission_id": str(row.id), "workflow_id": row.workflow_id, "old": row.user_id}
-        new = await username_to_id(session, row.user_id)
-        if new is None:
+        if (new := ids.get(row.user_id)) is None:
             unmapped.append(entry)
         else:
             mappings.append({**entry, "new": new})
     return mappings, unmapped
 
 
+#: Not a failure: the row already carries the proposed subject (an applied proposal replayed).
+_APPLIED = "already applied"
+
+
 async def _recheck(session: "AsyncSession", item: dict[str, Any]) -> str | None:
-    """Why *item* must not be applied now, or None when it still holds."""
+    """Why *item* must not be applied now (``_APPLIED`` when it already is), or None when it still holds."""
     row = await session.get(WorkflowPermission, uuid.UUID(item["permission_id"]))
+    if row is not None and row.user_id == item["new"] and row.workflow_id == item["workflow_id"]:
+        return _APPLIED
     if row is None or row.user_id != item["old"] or row.workflow_id != item["workflow_id"]:
         return "the row no longer matches the proposal"
     if await username_to_id(session, item["old"]) != item["new"]:
@@ -113,7 +141,7 @@ async def _apply_one(session: "AsyncSession", item: dict[str, Any]) -> str | Non
     """Rewrite one re-checked row; None on success, else the reason it was left untouched."""
     try:
         if (why := await _recheck(session, item)) is not None:
-            return why
+            return None if why == _APPLIED else why
         stmt = (
             update(WorkflowPermission)
             .where(WorkflowPermission.id == uuid.UUID(item["permission_id"]), WorkflowPermission.user_id == item["old"])
