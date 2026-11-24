@@ -162,9 +162,10 @@ def _advertised_with(backend_host: str) -> str:
     )
 
 
-@pytest.mark.parametrize(
-    "spelling", ["0.0.0.0", "::", "0:0:0:0:0:0:0:0", "[::]", "[0:0:0:0:0:0:0:0]", ""]
-)  # nosec B104
+_BIND_ALL_SPELLINGS = ["0.0.0.0", "::", "0:0:0:0:0:0:0:0", "[::]", "[0:0:0:0:0:0:0:0]", ""]  # nosec B104
+
+
+@pytest.mark.parametrize("spelling", _BIND_ALL_SPELLINGS)
 def test_every_bind_all_spelling_falls_back_to_the_inventory_host(spelling) -> None:
     assert _advertised_with(spelling) == "10.1.2.3"
     assert is_unspecified_host(spelling) or spelling == ""  # agrees with validate_advertised_host
