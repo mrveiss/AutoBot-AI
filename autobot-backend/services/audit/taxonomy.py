@@ -165,6 +165,10 @@ class AuditAction(str, Enum):
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
     CODE_SOURCE_RUN_RECORD_CLEANUP = "code_source.run_record_cleanup"  # #21417: approved run-record removal
+    WORKFLOW_GRANT_REMAP_PROPOSED = (
+        "workflow.grant_remap_proposed"  # #22180: username-keyed grants proposed for a rewrite
+    )
+    WORKFLOW_GRANT_REMAP = "workflow.grant_remap"  # #22180: approved rewrite of grant subjects to user ids
     SECRET_DUPLICATE_CLEANUP = (
         "secret.duplicate_cleanup"  # nosec B105  # pragma: allowlist secret -- an action name (#17850)
     )

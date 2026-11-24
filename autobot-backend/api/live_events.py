@@ -44,6 +44,7 @@ from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, is_client_disconnect, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_principal_id
 from chat_history.company_scope import ActiveCompany
 from events.bus import get_event_bus
 from events.channel_commands import CommandRefused, dispatch_command
@@ -206,7 +207,9 @@ async def _authorize_resource_channel(channel: str, user_payload: dict) -> bool:
     """
     if _is_admin(user_payload):
         return True
-    user_id = str(user_payload.get("user_id") or user_payload.get("username") or "")
+    user_id = (
+        resolve_principal_id(user_payload) or ""
+    )  # the workflow ACL subject is the principal id, never a username (#22180)
     if not user_id:
         return False
     prefix, _, ident = channel.partition(":")
