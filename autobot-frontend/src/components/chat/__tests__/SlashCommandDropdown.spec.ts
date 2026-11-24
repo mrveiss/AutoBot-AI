@@ -35,6 +35,9 @@ describe('SlashCommandDropdown', () => {
     const options = [...list.querySelectorAll('[role="option"]')]
     expect(options.map((o) => o.getAttribute('aria-selected'))).toEqual(['false', 'true'])
     expect(options[0].textContent).toContain('/summarize')
+    // only options live inside the listbox: the heading and the key hint sit outside it
+    expect([...list.children].every((c) => c.getAttribute('role') === 'option')).toBe(true)
+    expect(document.body.textContent).toContain(en.chat.input.slashHint)
     w.unmount()
   })
 

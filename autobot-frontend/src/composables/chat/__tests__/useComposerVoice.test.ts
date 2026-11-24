@@ -8,7 +8,7 @@
  * asks for the microphone before saying so.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { ref } from 'vue'
+import { effectScope, ref } from 'vue'
 
 const showToast = vi.hoisted(() => vi.fn())
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
@@ -27,6 +27,7 @@ class FakeRecognition {
   onerror: ((e: { error: string }) => void) | null = null
   start = vi.fn(() => this.onstart?.())
   stop = vi.fn()
+  abort = vi.fn()
   constructor() { FakeRecognition.last = this }
 }
 
@@ -88,6 +89,41 @@ describe('useComposerVoice', () => {
     toggleVoiceInput()
     FakeRecognition.last!.onerror!({ error: 'no-speech' })
     expect(showToast).not.toHaveBeenCalled()
+  })
+
+  it('a toggle before onstart stops the pending recogniser instead of starting a second', () => {
+    win.SpeechRecognition = class extends FakeRecognition { start = vi.fn() } // never reaches onstart
+    const { toggleVoiceInput } = useComposerVoice(ref(''))
+    toggleVoiceInput()
+    const first = FakeRecognition.last!
+    toggleVoiceInput()
+    expect(FakeRecognition.last).toBe(first)
+    expect(first.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores callbacks of an older recogniser', () => {
+    const text = ref('')
+    const { isVoiceRecording, toggleVoiceInput } = useComposerVoice(text)
+    toggleVoiceInput()
+    const old = FakeRecognition.last!
+    old.onend!()
+    toggleVoiceInput()
+    expect(FakeRecognition.last).not.toBe(old)
+    old.onend!()
+    old.onresult!({ results: [[{ transcript: 'stale' }]] })
+    expect(isVoiceRecording.value).toBe(true)
+    expect(text.value).toBe('')
+  })
+
+  it('aborts capture and drops late results when the composer scope ends', () => {
+    const scope = effectScope()
+    const text = ref('')
+    scope.run(() => useComposerVoice(text).toggleVoiceInput())
+    const rec = FakeRecognition.last!
+    scope.stop()
+    expect(rec.abort).toHaveBeenCalledTimes(1)
+    rec.onresult!({ results: [[{ transcript: 'late' }]] })
+    expect(text.value).toBe('')
   })
 
   it('without the Web Speech API it still asks for the microphone, then says it is unsupported', async () => {

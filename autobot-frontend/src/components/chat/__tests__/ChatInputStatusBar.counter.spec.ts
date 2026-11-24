@@ -41,6 +41,14 @@ describe('ChatInputStatusBar', () => {
     expect(count.classes()).toContain('text-[var(--aui-color-warning)]')
   })
 
+  it('names the hidden options that are active, in the Minimal-only note, and nothing when none is', () => {
+    expect(render().find('[data-testid="hidden-active"]').exists()).toBe(false)
+    const w = render({ hiddenActive: ['Overseer', 'Thinking'] })
+    const note = w.get('[data-testid="hidden-active"]')
+    expect(note.text()).toBe('Active: Overseer, Thinking')
+    expect(note.classes()).toContain('only-min')
+  })
+
   it('shows the typing and recording hints from their props', () => {
     const w = render({ typingVisible: true, voiceRecording: true })
     expect(w.text()).toContain(en.chat.input.typing)

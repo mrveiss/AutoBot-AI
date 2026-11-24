@@ -13,12 +13,13 @@ import { mount } from '@vue/test-utils'
 
 const m = vi.hoisted(() => ({
   addMessage: vi.fn(),
+  deleteMessage: vi.fn(),
   sendMessage: vi.fn(),
   unlockAudio: vi.fn(),
   reasoning: { value: 'auto' } as { value: string },
 }))
 
-vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => ({ addMessage: m.addMessage }) }))
+vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => ({ addMessage: m.addMessage, deleteMessage: m.deleteMessage }) }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => ({ sendMessage: m.sendMessage }) }))
 vi.mock('@/composables/usePreferences', () => ({ usePreferences: () => ({ reasoningEffort: m.reasoning }) }))
 vi.mock('@/composables/useVoiceOutput', () => ({ useVoiceOutput: () => ({ unlockAudio: m.unlockAudio }) }))
@@ -27,13 +28,14 @@ vi.mock('@/utils/conversationFileUpload', () => ({
 }))
 
 import { useComposerSend } from '../useComposerSend'
-import { useChatKnowledge } from '../useChatKnowledge'
+import { resetChatKnowledgeState, useChatKnowledge } from '../useChatKnowledge'
 
 interface Harness {
   text: Ref<string>
   files: Ref<File[]>
   recording: Ref<boolean>
   thinkingEnabled: Ref<boolean>
+  pending: Ref<boolean>
   api: ReturnType<typeof useComposerSend>
   reset: ReturnType<typeof vi.fn>
 }
@@ -43,13 +45,14 @@ function setup(overseer: boolean, submit: (q: string) => Promise<boolean> = asyn
   const files = ref<File[]>([])
   const recording = ref(false)
   const thinkingEnabled = ref(false)
+  const pending = ref(false)
   const reset = vi.fn()
   let api!: ReturnType<typeof useComposerSend>
   const Child = defineComponent({
     setup() {
       api = useComposerSend({
         messageText: text, attachedFiles: files, serverFileIds: (fs) => fs.map((f) => `id-${f.name}`),
-        isVoiceRecording: recording, resetTextareaHeight: reset,
+        isVoiceRecording: recording, hasPendingUploads: pending, resetTextareaHeight: reset,
         thinking: { enabled: thinkingEnabled, budgetTokens: ref(5000) },
         overrideFields: { value: { model: 'm1' } },
       })
@@ -63,14 +66,14 @@ function setup(overseer: boolean, submit: (q: string) => Promise<boolean> = asyn
       return () => h(Child)
     },
   }))
-  return { text, files, recording, thinkingEnabled, api, reset }
+  return { text, files, recording, thinkingEnabled, pending, api, reset }
 }
 
 beforeEach(() => {
   Object.values(m).forEach((f) => typeof f === 'function' && 'mockReset' in f && f.mockReset())
   m.sendMessage.mockResolvedValue('id')
   m.reasoning.value = 'auto'
-  useChatKnowledge().enabled.value = true
+  resetChatKnowledgeState()
 })
 
 describe('canSend', () => {
@@ -82,6 +85,16 @@ describe('canSend', () => {
     h1.text.value = 'x'
     h1.recording.value = true
     expect(h1.api.canSend.value).toBe(false)
+  })
+})
+
+describe('canSend while files upload', () => {
+  it('is false until the uploads settle', () => {
+    const h1 = setup(false)
+    h1.pending.value = true
+    expect(h1.api.canSend.value).toBe(false)
+    h1.pending.value = false
+    expect(h1.api.canSend.value).toBe(true)
   })
 })
 
@@ -124,6 +137,20 @@ describe('sendMessage, normal route', () => {
     expect(m.unlockAudio).not.toHaveBeenCalled()
   })
 
+  it('keeps a file that finished uploading during a failed send', async () => {
+    let fail!: (e: Error) => void
+    m.sendMessage.mockReturnValue(new Promise((_, reject) => { fail = reject }))
+    const h1 = setup(false)
+    const early = new File(['a'], 'a.txt')
+    const late = new File(['b'], 'b.txt')
+    h1.files.value = [early]
+    const sending = h1.api.sendMessage()
+    h1.files.value.push(late) // an upload that completed while the send was pending
+    fail(new Error('offline'))
+    await sending
+    expect(h1.files.value).toEqual([early, late])
+  })
+
   it('restores the draft and files when the send throws', async () => {
     m.sendMessage.mockRejectedValue(new Error('offline'))
     const h1 = setup(false)
@@ -146,9 +173,11 @@ describe('sendMessage, Overseer route (#690)', () => {
     expect(m.sendMessage).not.toHaveBeenCalled()
   })
 
-  it('falls back to the normal flow when the overseer refuses', async () => {
+  it('falls back to the normal flow when the overseer refuses, with exactly one user turn', async () => {
+    m.addMessage.mockReturnValue('shown-1')
     const h1 = setup(true, async () => false)
     await h1.api.sendMessage()
+    expect(m.deleteMessage).toHaveBeenCalledWith('shown-1') // the controller adds its own user message
     expect(m.sendMessage).toHaveBeenCalledWith('hello', expect.objectContaining({ use_knowledge: true }))
   })
 })

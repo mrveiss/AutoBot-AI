@@ -11,7 +11,9 @@ import en from '@/i18n/locales/en.json'
 import ChatHeader from '../ChatHeader.vue'
 import ChatHeaderActions from '../ChatHeaderActions.vue'
 import { useUiMode } from '@/composables/useUiMode'
-import { useChatKnowledge } from '@/composables/chat/useChatKnowledge'
+import { createPinia, setActivePinia } from 'pinia'
+import { useChatStore } from '@/stores/useChatStore'
+import { resetChatKnowledgeState, useChatKnowledge } from '@/composables/chat/useChatKnowledge'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const base = {
@@ -22,7 +24,8 @@ const render = (props: Record<string, unknown> = {}) =>
 
 beforeEach(() => {
   useUiMode().setMode('full')
-  useChatKnowledge().enabled.value = true
+  setActivePinia(createPinia())
+  resetChatKnowledgeState()
 })
 
 describe('ChatHeader', () => {
@@ -30,6 +33,21 @@ describe('ChatHeader', () => {
     const w = render()
     expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOn)
     useChatKnowledge().enabled.value = false
+    await flushPromises()
+    expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOff)
+    w.unmount()
+  })
+
+  it('shows the Knowledge state of the current session when the chat is switched', async () => {
+    const store = useChatStore()
+    const a = store.createNewSession('A', 'session-a')
+    useChatKnowledge().enabled.value = false
+    const w = render()
+    expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOff)
+    store.createNewSession('B', 'session-b')
+    await flushPromises()
+    expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOn)
+    store.switchToSession(a)
     await flushPromises()
     expect(w.get('[data-testid="header-knowledge"]').text()).toBe(en.chat.header.knowledgeOff)
     w.unmount()

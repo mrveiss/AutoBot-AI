@@ -54,11 +54,11 @@ describe('useComposerImageGen', () => {
     expect(m.addMessage.mock.calls[1][0]).toMatchObject({ content: 'chat.input.imageGenerationFailed' })
   })
 
-  it('posts nothing when generation yields no result', async () => {
+  it('says so in the chat when the request is rejected and yields no result', async () => {
     m.generateImage.mockResolvedValue(null)
     const g = useComposerImageGen()
     g.imagePrompt.value = 'x'
     await g.submitImageGeneration()
-    expect(m.addMessage).not.toHaveBeenCalled()
+    expect(m.addMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'chat.input.imageGenerationFailed', metadata: {} }))
   })
 })

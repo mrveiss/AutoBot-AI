@@ -34,6 +34,9 @@
       </BaseAlert>
 
       <div v-else-if="!selectedPrompt" class="flex flex-col gap-3">
+        <BaseAlert v-if="failedBridges.length" variant="warning" :message="$t('chat.mcpPrompts.bridgesFailed', { bridges: failedBridges.map((b) => $t(`chat.mcpPrompts.bridges.${b}`)).join(', ') })">
+          <template #actions><BaseButton size="sm" variant="outline" @click="loadPrompts">{{ $t('common.retry') }}</BaseButton></template>
+        </BaseAlert>
         <label class="flex items-center gap-2 text-sm text-[var(--aui-color-text-muted)]">
           <span>{{ $t('chat.mcpPrompts.source') }}</span>
           <select v-model="activeBridge" class="h-8 rounded-[var(--aui-radius-md)] border border-[var(--aui-input-border)] bg-[var(--aui-input-bg)] px-2 text-sm text-[var(--aui-color-text)]">
@@ -105,7 +108,7 @@ const emit = defineEmits<{ (e: 'insert', text: string): void }>()
 const showModal = ref(false)
 const {
   activeBridge, loading, error, selectedPrompt, formValues, formError, insertLoading, currentPrompts,
-  promptsByBridge, loadPrompts, selectPrompt, renderSelected, reset,
+  promptsByBridge, failedBridges, loadPrompts, selectPrompt, renderSelected, reset,
 } = useMcpPrompts()
 
 // Load on first open (and again while the first bridge is still empty), as before.
@@ -113,14 +116,18 @@ watch(showModal, (show: boolean) => {
   if (show && promptsByBridge.value.git.length === 0) void loadPrompts()
 })
 
+let session = 0 // closing the dialog ends the session; an insert still in flight is then discarded
+
 function closeModal(): void {
+  session++
   showModal.value = false
   reset()
 }
 
 async function insertPrompt(): Promise<void> {
+  const mine = session
   const text = await renderSelected()
-  if (text === null) return
+  if (text === null || mine !== session) return
   emit('insert', text)
   closeModal()
 }

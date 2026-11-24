@@ -75,6 +75,6 @@ const emit = defineEmits<{
 }>()
 
 const menuItems = computed<MenuItem[]>(() =>
-  props.quickActions.map((action) => ({ key: action.id, label: action.label, disabled: props.disabled })),
+  props.quickActions.map((action) => ({ key: action.id, label: action.label, description: action.description, disabled: props.disabled })),
 )
 </script>

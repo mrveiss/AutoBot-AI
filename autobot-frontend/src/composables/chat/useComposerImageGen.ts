@@ -28,13 +28,14 @@ export function useComposerImageGen() {
     showImageGenModal.value = false
     const result = await generateImage({ prompt, provider: imageProvider.value })
     imagePrompt.value = ''
-    if (!result) return
+    // A rejected request resolves to null: say so in the chat rather than closing the dialog in silence.
+    const ok = result?.success === true
     store.addMessage({
-      content: result.success ? '' : (result.error ?? t('chat.input.imageGenerationFailed')),
+      content: ok ? '' : (result?.error ?? t('chat.input.imageGenerationFailed')),
       sender: 'assistant',
       status: 'sent',
       type: 'image',
-      metadata: result.success
+      metadata: result && ok
         ? {
             display_type: 'image',
             image_payload: {

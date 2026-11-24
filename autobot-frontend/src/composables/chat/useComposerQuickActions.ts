@@ -11,6 +11,7 @@ import { computed, nextTick, ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
 import type { IconName } from '@/components/ui/Icon.vue'
+import { MAX_CHARACTERS } from './useComposerInput'
 
 export interface QuickAction {
   id: string
@@ -63,15 +64,18 @@ export function useComposerQuickActions(messageText: Ref<string>, messageInput: 
     if (!textarea) return
     const start = textarea.selectionStart
     const end = textarea.selectionEnd
-    messageText.value = messageText.value.slice(0, start) + insert + messageText.value.slice(end)
+    // the same character limit the textarea enforces on typing
+    const next = (messageText.value.slice(0, start) + insert + messageText.value.slice(end)).slice(0, MAX_CHARACTERS)
+    messageText.value = next
+    const caret = Math.min(start + insert.length, next.length)
     nextTick(() => {
-      textarea.setSelectionRange(start + insert.length, start + insert.length)
+      textarea.setSelectionRange(caret, caret)
       textarea.focus()
     })
   }
 
   function handlePromptInsert(text: string): void {
-    messageText.value = text
+    messageText.value = text.slice(0, MAX_CHARACTERS)
     nextTick(() => messageInput.value?.focus())
   }
 

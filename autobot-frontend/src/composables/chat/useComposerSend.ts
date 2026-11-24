@@ -25,6 +25,8 @@ export interface ComposerSendDeps {
   attachedFiles: Ref<File[]>
   serverFileIds: (files: File[]) => string[]
   isVoiceRecording: Ref<boolean>
+  /** Files are still uploading: a send now would leave them out. */
+  hasPendingUploads: Ref<boolean>
   resetTextareaHeight: () => void
   thinking: { enabled: Ref<boolean>; budgetTokens: Ref<number> }
   /** The per-request model/provider override (empty when "auto"). */
@@ -43,7 +45,7 @@ export function useComposerSend(deps: ComposerSendDeps) {
 
   const isSending = ref(false)
   const canSend = computed(
-    () => deps.messageText.value.trim().length > 0 && !isSending.value && !deps.isVoiceRecording.value,
+    () => deps.messageText.value.trim().length > 0 && !isSending.value && !deps.isVoiceRecording.value && !deps.hasPendingUploads.value,
   )
 
   function sendOptionsFor(attachmentIds: string[]): Record<string, unknown> {
@@ -65,9 +67,11 @@ export function useComposerSend(deps: ComposerSendDeps) {
     }
     logger.info('[ChatInput] Sending via Overseer Agent:', message.substring(0, LOG_PREVIEW_CHARS))
     // The user's message appears immediately; the overseer answers over the WebSocket.
-    store.addMessage({ content: message, sender: 'user', status: 'sent', type: 'message' })
+    const shownId = store.addMessage({ content: message, sender: 'user', status: 'sent', type: 'message' })
     if (await submitOverseerQuery(message)) return
     logger.warn('[ChatInput] Overseer submission failed, falling back to normal flow')
+    // the controller adds the user turn itself: drop ours so the fall-back yields exactly one
+    if (shownId) store.deleteMessage(shownId)
     await controller.sendMessage(message, options)
   }
 
@@ -86,7 +90,7 @@ export function useComposerSend(deps: ComposerSendDeps) {
     } catch (error) {
       logger.error('Failed to send message:', error)
       deps.messageText.value = message
-      deps.attachedFiles.value = files
+      deps.attachedFiles.value = [...files, ...deps.attachedFiles.value] // keep a file that finished uploading meanwhile
     } finally {
       isSending.value = false
     }

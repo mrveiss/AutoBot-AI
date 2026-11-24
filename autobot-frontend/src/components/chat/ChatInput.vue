@@ -81,6 +81,7 @@
       :max-characters="MAX_CHARACTERS"
       :near-limit="isNearLimit"
       :voice-recording="isVoiceRecording"
+      :hidden-active="hiddenActive"
     />
 
     <div v-if="showEmojiPicker" ref="emojiPicker">
@@ -167,14 +168,14 @@ const showPresetsModal = ref(false)
 const messageQueueLength = ref(0) // no producer yet: nothing queues chat messages
 
 const { enabled: useKnowledge } = useChatKnowledge()
-const { attachedFiles, uploadProgress, isCancellable, cancelUpload, serverFileIds, handleFileSelect, retryUpload, removeFile, clearAllFiles } =
+const { attachedFiles, uploadProgress, hasPendingUploads, isCancellable, cancelUpload, serverFileIds, handleFileSelect, retryUpload, removeFile, clearAllFiles } =
   useComposerUploads()
 const { isVoiceRecording, toggleVoiceInput } = useComposerVoice(messageText)
 const thinking = useThinkingMode(() => store.currentSessionId)
 const { enabled: thinkingEnabled, budgetTokens: thinkingBudget, toggle: toggleThinking, setBudget: setThinkingBudget } = thinking
 const { selectedModel, pickerModels, overrideFields, fetchModels } = useChatModelSelection()
 const { isSending, canSend, sendMessage } = useComposerSend({
-  messageText, attachedFiles, serverFileIds, isVoiceRecording, thinking, overrideFields,
+  messageText, attachedFiles, serverFileIds, isVoiceRecording, hasPendingUploads, thinking, overrideFields,
   resetTextareaHeight: () => resetTextareaHeight(messageInput),
 })
 const {
@@ -184,6 +185,13 @@ const {
 const { imageGenerating, showImageGenModal, imagePrompt, imageProvider, submitImageGeneration } = useComposerImageGen()
 const { quickActions, showTranslatePanel, runQuickAction, insertAtCaret, handlePromptInsert, handleTranslationResult } =
   useComposerQuickActions(messageText, messageInput)
+
+// Options that stay on while Minimal mode hides their controls (Overseer, Thinking, a model override)
+const hiddenActive = computed<string[]>(() => [
+  ...(overseerEnabled.value ? [t('chat.input.overseerLabel')] : []),
+  ...(thinkingEnabled.value ? [t('chat.composer.thinkingLabel')] : []),
+  ...(selectedModel.value ? [t('chat.modelPicker.label')] : []),
+])
 
 const isDisabled = computed(() => isSending.value || isVoiceRecording.value)
 

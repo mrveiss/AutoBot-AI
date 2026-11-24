@@ -11,14 +11,12 @@
   <Teleport to="body">
     <div
       v-if="show"
-      ref="dropdownEl"
       class="flex max-h-60 flex-col overflow-y-auto rounded-[var(--aui-radius-lg)] border border-[var(--aui-color-border)] bg-[var(--aui-color-surface)] p-1 shadow-[var(--aui-shadow-lg)]"
       :style="positionStyle"
-      role="listbox"
-      :aria-label="$t('chat.input.slashSuggestions')"
       @mousedown.prevent
     >
       <span class="px-3 py-1 text-xs text-[var(--aui-color-text-muted)]">{{ $t('chat.input.slashPresets') }}</span>
+      <div ref="dropdownEl" role="listbox" :aria-label="$t('chat.input.slashSuggestions')">
       <div
         v-for="(preset, idx) in suggestions"
         :key="preset.id"
@@ -33,6 +31,7 @@
         <span class="font-mono text-sm font-semibold text-[var(--aui-color-text)]">/{{ preset.name }}</span>
         <span class="min-w-0 flex-1 truncate text-xs text-[var(--aui-color-text-muted)]">{{ preset.description }}</span>
         <kbd v-if="idx === selectedIndex" class="rounded-[var(--aui-radius-sm)] border border-[var(--aui-color-border-strong)] px-1 font-mono text-xs text-[var(--aui-color-text-muted)]" aria-hidden="true">↵</kbd>
+      </div>
       </div>
       <span class="px-3 py-1 text-xs text-[var(--aui-color-text-muted)]">{{ $t('chat.input.slashHint') }}</span>
     </div>

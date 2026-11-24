@@ -13,6 +13,7 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => ({ addMessage }) }))
 
 import { useComposerQuickActions } from '../useComposerQuickActions'
+import { MAX_CHARACTERS } from '../useComposerInput'
 
 function setup(text = '') {
   const messageText = ref(text)
@@ -52,6 +53,18 @@ describe('useComposerQuickActions', () => {
     await nextTick()
     expect(messageText.value).toBe('abXef')
     expect(textarea.selectionStart).toBe(3)
+  })
+
+  it('an insert at the limit is cut, as typing is', async () => {
+    const full = 'x'.repeat(MAX_CHARACTERS)
+    const { api, messageText, textarea } = setup(full)
+    textarea.value = full
+    textarea.setSelectionRange(MAX_CHARACTERS, MAX_CHARACTERS)
+    api.insertAtCaret('🔥')
+    await nextTick()
+    expect(messageText.value).toHaveLength(MAX_CHARACTERS)
+    api.handlePromptInsert('y'.repeat(MAX_CHARACTERS + 10))
+    expect(messageText.value).toHaveLength(MAX_CHARACTERS)
   })
 
   it('a prompt template replaces the draft and focuses the box', async () => {

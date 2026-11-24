@@ -452,7 +452,8 @@
       "slashPresets": "Presets",
       "slashHint": "↑ ↓ move · Enter insert · Esc close",
       "keyboardHintAdvanced": "type / for commands and MCP tools",
-      "charactersLeft": "{count} left"
+      "charactersLeft": "{count} left",
+      "hiddenActive": "Active: {options}"
     },
     "translate": {
       "title": "Translate Text",
@@ -938,7 +939,14 @@
       "knowledgeTip": "Ground answers in your knowledge base (RAG)",
       "thinkingLabel": "Thinking",
       "thinkingTip": "Extended reasoning before answering — slower, more thorough",
-      "budgetTokens": "{label} tokens"
+      "budgetTokens": "{label} tokens",
+      "budget": {
+        "b1000": "1k",
+        "b5000": "5k",
+        "b10000": "10k",
+        "b32000": "32k",
+        "b128000": "max"
+      }
     },
     "mcpPrompts": {
       "title": "Prompt templates",
@@ -954,7 +962,8 @@
       },
       "empty": "No templates available from {bridge}",
       "parameters": "Parameters:",
-      "insert": "Insert template"
+      "insert": "Insert template",
+      "bridgesFailed": "Could not load prompts from: {bridges}"
     }
   },
   "settings": {

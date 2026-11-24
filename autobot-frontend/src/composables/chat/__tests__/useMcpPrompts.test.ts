@@ -36,7 +36,7 @@ describe('promptDraftText', () => {
 })
 
 describe('useMcpPrompts', () => {
-  it('loads the prompts of every bridge, and an unreachable bridge is empty rather than fatal', async () => {
+  it('loads the prompts of every bridge, and an unreachable bridge is recorded rather than fatal', async () => {
     api.get.mockImplementation(async (url: string) => {
       if (url.includes('/knowledge/')) throw new Error('down')
       return { prompts: [{ name: url }] }
@@ -46,6 +46,7 @@ describe('useMcpPrompts', () => {
     expect(api.get).toHaveBeenCalledTimes(MCP_BRIDGES.length)
     expect(m.promptsByBridge.value.git).toHaveLength(1)
     expect(m.promptsByBridge.value.knowledge).toEqual([])
+    expect(m.failedBridges.value).toEqual(['knowledge']) // a failure is not the same as an empty bridge
     expect(m.loading.value).toBe(false)
     expect(m.error.value).toBeNull()
   })

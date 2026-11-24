@@ -43,7 +43,7 @@ vi.mock('@/composables/useThinkingMode', async () => {
 })
 
 import ChatInput from '../ChatInput.vue'
-import { useChatKnowledge } from '@/composables/chat/useChatKnowledge'
+import { resetChatKnowledgeState, useChatKnowledge } from '@/composables/chat/useChatKnowledge'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const stub = (name: string) => ({ name, template: `<span data-stub="${name}" />` })
@@ -67,7 +67,8 @@ const textarea = (w: ReturnType<typeof render>) => w.get('#chat-message-input')
 beforeEach(() => {
   m.sendMessage.mockReset().mockResolvedValue('id')
   m.toggleOverseer.mockReset()
-  useChatKnowledge().enabled.value = true
+  setActivePinia(createPinia())
+  resetChatKnowledgeState()
 })
 
 describe('ChatInput', () => {

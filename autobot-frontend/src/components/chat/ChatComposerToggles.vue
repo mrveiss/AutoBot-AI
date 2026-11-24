@@ -38,11 +38,11 @@
         :key="step"
         size="sm"
         :pressed="budget === step"
-        :title="$t('chat.composer.budgetTokens', { label: BUDGET_STEP_LABELS[step] })"
+        :title="$t('chat.composer.budgetTokens', { label: $t(`chat.composer.budget.b${step}`) })"
         data-testid="budget-step"
         @update:pressed="emit('set-budget', step)"
       >
-        {{ BUDGET_STEP_LABELS[step] }}
+        {{ $t(`chat.composer.budget.b${step}`) }}
       </BaseChip>
     </div>
   </div>
@@ -51,7 +51,7 @@
 <script setup lang="ts">
 import { BaseChip } from '@autobot/ui'
 import ChatComposerChip from './ChatComposerChip.vue'
-import { BUDGET_STEPS, BUDGET_STEP_LABELS } from '@/composables/useThinkingMode'
+import { BUDGET_STEPS } from '@/composables/useThinkingMode'
 
 defineProps<{
   knowledge: boolean

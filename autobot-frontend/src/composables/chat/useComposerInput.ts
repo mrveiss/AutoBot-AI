@@ -14,6 +14,7 @@ import type { SlashCommandPreset } from '@/types/api'
 export const MAX_CHARACTERS = 4000
 const NEAR_LIMIT_RATIO = 0.9
 const MAX_INPUT_HEIGHT_PX = 150
+const IME_KEY_CODE = 229 // keydown during composition in browsers that do not set isComposing
 
 export interface ComposerInputDeps {
   messageText: Ref<string>
@@ -71,6 +72,8 @@ export function useComposerInput(deps: ComposerInputDeps) {
   }
 
   function handleKeydown(event: KeyboardEvent): void {
+    // An IME uses Enter (and arrows) to confirm or pick a candidate: never a send or a slash choice.
+    if (event.isComposing || event.keyCode === IME_KEY_CODE) return
     if (handleSlashKey(event)) return
     // Shift+Enter creates a new line, Enter sends
     if (event.key === 'Enter' && deps.canSend.value && !event.shiftKey) {

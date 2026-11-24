@@ -8,7 +8,7 @@
  * recogniser it still asks for the microphone, so the person sees the permission prompt rather
  * than a silent failure. Voice conversation is a separate stack (`useVoiceConversation`).
  */
-import { ref, type Ref } from 'vue'
+import { getCurrentScope, onScopeDispose, ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
@@ -28,6 +28,7 @@ interface Recognition {
   onerror: ((event: SpeechErrorEvent) => void) | null
   start: () => void
   stop: () => void
+  abort: () => void
 }
 type RecognitionCtor = new () => Recognition
 
@@ -58,18 +59,23 @@ export function useComposerVoice(messageText: Ref<string>) {
   const transcriptOf = (event: SpeechResultEvent): string =>
     Array.from(event.results as unknown as SpeechRecognitionResult[]).map((r) => r[0].transcript as string).join('')
 
+  /** Handlers act only for the recogniser that is current: a late callback of an older one is dropped. */
   function bindHandlers(rec: Recognition): void {
+    const current = (): boolean => recognition === rec
     rec.onstart = () => {
+      if (!current()) return
       isVoiceRecording.value = true
       logger.debug('Voice recognition started')
     }
-    rec.onresult = (event) => { messageText.value = transcriptOf(event) }
+    rec.onresult = (event) => { if (current()) messageText.value = transcriptOf(event) }
     rec.onend = () => {
+      if (!current()) return
       isVoiceRecording.value = false
       recognition = null
       logger.debug('Voice recognition ended')
     }
     rec.onerror = (event) => {
+      if (!current()) return
       logger.error('Voice recognition error:', event.error)
       isVoiceRecording.value = false
       recognition = null
@@ -94,9 +100,21 @@ export function useComposerVoice(messageText: Ref<string>) {
     logger.debug('Voice recording stopped')
   }
 
+  // A recogniser exists from start() until its onend, which is wider than `isVoiceRecording`
+  // (false before onstart and after stop()): a toggle in that gap stops, it never starts a second one.
   const toggleVoiceInput = (): void => {
-    if (isVoiceRecording.value) stopVoiceRecording()
+    if (isVoiceRecording.value || recognition) stopVoiceRecording()
     else void startVoiceRecording()
+  }
+
+  // Leaving the composer ends capture; abort() (not stop()) so no final result is delivered afterwards.
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      const rec = recognition
+      recognition = null
+      rec?.abort()
+      isVoiceRecording.value = false
+    })
   }
 
   return { isVoiceRecording, toggleVoiceInput }

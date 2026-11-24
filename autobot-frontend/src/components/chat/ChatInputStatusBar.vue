@@ -11,6 +11,15 @@
 <template>
   <div class="mt-2 flex items-center justify-between gap-3 text-xs text-[var(--aui-color-text-muted)]">
     <div class="flex items-center gap-3">
+      <!-- Minimal mode hides Overseer, Thinking and the model picker: say so when one of them is still active. -->
+      <span
+        v-if="hiddenActive.length > 0"
+        class="only-min items-center gap-1 text-[var(--aui-color-text)]"
+        role="status"
+        data-testid="hidden-active"
+      >
+        {{ $t('chat.input.hiddenActive', { options: hiddenActive.join(', ') }) }}
+      </span>
       <span v-if="typingVisible" class="inline-flex items-center gap-1 text-[var(--aui-color-primary)]">
         <Icon name="keyboard" size="sm" />
         {{ $t('chat.input.typing') }}
@@ -53,13 +62,15 @@ import Icon from '@/components/ui/Icon.vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useStopGeneration } from '@/composables/useStopGeneration'
 
-defineProps<{
+withDefaults(defineProps<{
   typingVisible: boolean
   characterCount: number
   maxCharacters: number
   nearLimit: boolean
   voiceRecording: boolean
-}>()
+  /** Translated names of the options that are on but hidden in Minimal mode. */
+  hiddenActive?: string[]
+}>(), { hiddenActive: () => [] })
 
 const store = useChatStore()
 const { stopping, failed, stop } = useStopGeneration()

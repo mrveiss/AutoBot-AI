@@ -24,7 +24,7 @@
         :placeholder="$t('chat.input.imagePromptPlaceholder')"
         rows="3"
         @input="emit('update:prompt', ($event.target as HTMLTextAreaElement).value)"
-        @keydown.ctrl.enter="emit('submit')"
+        @keydown.ctrl.enter="onCtrlEnter"
       />
       <fieldset class="m-0 flex flex-wrap gap-3 border-0 p-0">
         <legend class="text-sm font-medium text-[var(--aui-color-text-muted)]">{{ $t('chat.input.imageProvider') }}</legend>
@@ -56,4 +56,10 @@ const emit = defineEmits<{
   'update:provider': [value: ImageProvider]
   submit: []
 }>()
+
+/** Ctrl+Enter submits committed text; while an IME composition is open the key confirms it instead. */
+function onCtrlEnter(event: KeyboardEvent): void {
+  if (event.isComposing) return
+  emit('submit')
+}
 </script>

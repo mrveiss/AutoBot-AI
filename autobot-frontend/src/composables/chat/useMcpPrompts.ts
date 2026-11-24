@@ -50,6 +50,8 @@ export function useMcpPrompts() {
   const formValues = ref<Record<string, string>>({})
   const formError = ref<FormError | null>(null)
   const insertLoading = ref(false)
+  /** Bridges whose last request failed: kept apart from a bridge that answered with no prompts. */
+  const failedBridges = ref<McpBridge[]>([])
   const currentPrompts = computed(() => promptsByBridge.value[activeBridge.value])
 
   async function loadBridge(bridge: McpBridge): Promise<void> {
@@ -59,12 +61,14 @@ export function useMcpPrompts() {
     } catch (err) {
       logger.error(`Failed to load ${bridge} prompts:`, err)
       promptsByBridge.value[bridge] = []
+      failedBridges.value.push(bridge)
     }
   }
 
   async function loadPrompts(): Promise<void> {
     loading.value = true
     error.value = null
+    failedBridges.value = []
     try {
       await Promise.all(MCP_BRIDGES.map(loadBridge))
     } catch (err) {
@@ -120,6 +124,6 @@ export function useMcpPrompts() {
 
   return {
     activeBridge, loading, error, selectedPrompt, formValues, formError, insertLoading, currentPrompts,
-    promptsByBridge, loadPrompts, selectPrompt, renderSelected, reset,
+    promptsByBridge, failedBridges, loadPrompts, selectPrompt, renderSelected, reset,
   }
 }

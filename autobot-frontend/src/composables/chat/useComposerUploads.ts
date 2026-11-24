@@ -7,7 +7,7 @@
  * moved unchanged in behaviour out of ChatInput.vue). Transport and bearer are
  * `utils/conversationFileUpload.ts`; only the server ids ever reach a send (#20195).
  */
-import { ref, reactive } from 'vue'
+import { computed, ref, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@autobot/ui'
 import { useChatStore } from '@/stores/useChatStore'
@@ -49,6 +49,8 @@ export function useComposerUploads() {
 
   const attachedFiles = ref<File[]>([])
   const uploadProgress = ref<UploadItem[]>([])
+  const pendingUploads = ref(0) // selections and retries not yet settled
+  const hasPendingUploads = computed(() => pendingUploads.value > 0)
   const uploadedIds = new WeakMap<File, string>() // File -> server file id (#20195)
 
   const dropCancelled = (upload: UploadItem): void => {
@@ -123,11 +125,16 @@ export function useComposerUploads() {
     const target = event.target as HTMLInputElement
     const files = Array.from(target.files || []).filter(acceptFile)
     const uploads = files.map(trackUpload)
-    const results = await Promise.allSettled(uploads.map(async (upload, i) => {
-      await uploadFile(upload, files[i])
-      return files[i]
-    }))
-    settleResults(results, uploads)
+    pendingUploads.value++
+    try {
+      const results = await Promise.allSettled(uploads.map(async (upload, i) => {
+        await uploadFile(upload, files[i])
+        return files[i]
+      }))
+      settleResults(results, uploads)
+    } finally {
+      pendingUploads.value--
+    }
     target.value = ''
   }
 
@@ -139,12 +146,15 @@ export function useComposerUploads() {
     }
     const file = upload.file
     Object.assign(upload, { error: undefined, progress: 0, current: 0, phase: 'retrying' })
+    pendingUploads.value++
     try {
       await uploadFile(upload, file)
-      if (!attachedFiles.value.find((f) => f.name === file.name)) attachedFiles.value.push(file)
+      if (!attachedFiles.value.includes(file)) attachedFiles.value.push(file) // by identity: two files may share a name
     } catch (error) {
       if (isUploadCancelled(error)) return
       Object.assign(upload, { error: describeUploadError(error, t), phase: 'failed' })
+    } finally {
+      pendingUploads.value--
     }
   }
 
@@ -152,7 +162,7 @@ export function useComposerUploads() {
   const clearAllFiles = (): void => { attachedFiles.value = [] }
 
   return {
-    attachedFiles, uploadProgress, isCancellable, cancelUpload,
+    attachedFiles, uploadProgress, hasPendingUploads, isCancellable, cancelUpload,
     serverFileIds, handleFileSelect, retryUpload, removeFile, clearAllFiles,
   }
 }

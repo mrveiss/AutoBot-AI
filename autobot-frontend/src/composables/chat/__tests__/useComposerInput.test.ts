@@ -74,6 +74,25 @@ describe('Enter and Shift+Enter', () => {
   })
 })
 
+describe('IME composition', () => {
+  it('Enter that confirms a composition neither sends nor picks a preset', () => {
+    slash.show = true
+    slash.confirmed = { id: '1', name: 'x' }
+    const { api, sendMessage, messageText } = setup(true)
+    const { event, preventDefault } = key('Enter', { isComposing: true } as Partial<KeyboardEvent>)
+    api.handleKeydown(event)
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(messageText.value).toBe('')
+    expect(preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('treats keyCode 229 as composition too', () => {
+    const { api, sendMessage } = setup(true)
+    api.handleKeydown(key('Enter', { keyCode: 229 } as Partial<KeyboardEvent>).event)
+    expect(sendMessage).not.toHaveBeenCalled()
+  })
+})
+
 describe('slash dropdown keys while it is open', () => {
   beforeEach(() => { slash.show = true })
 

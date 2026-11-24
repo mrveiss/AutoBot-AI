@@ -87,6 +87,29 @@ describe('useComposerUploads', () => {
     expect(u.attachedFiles.value).toEqual([file])
   })
 
+  it('blocks a send while a selection uploads, and releases it when it settles', async () => {
+    let finish!: (v: unknown) => void
+    m.post.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const u = useComposerUploads()
+    const selecting = u.handleFileSelect(pick(new File(['a'], 'a.txt')))
+    await Promise.resolve()
+    expect(u.hasPendingUploads.value).toBe(true)
+    finish({ file_info: { file_id: 'f' } })
+    await selecting
+    expect(u.hasPendingUploads.value).toBe(false)
+  })
+
+  it('a retry attaches a different file that shares a name with an attached one', async () => {
+    m.post.mockResolvedValueOnce({ file_info: { file_id: 'one' } }).mockRejectedValueOnce(new Error('boom')).mockResolvedValue({ file_info: { file_id: 'two' } })
+    const u = useComposerUploads()
+    const first = new File(['a'], 'report.txt')
+    const second = new File(['b'], 'report.txt')
+    await u.handleFileSelect(pick(first))
+    await u.handleFileSelect(pick(second))
+    await u.retryUpload(u.uploadProgress.value.find((r) => r.phase === 'failed')!.id)
+    expect(u.attachedFiles.value).toEqual([first, second])
+  })
+
   it('removes one attached file and clears them all', async () => {
     m.post.mockResolvedValue({ file_info: { file_id: 'f' } })
     const u = useComposerUploads()
