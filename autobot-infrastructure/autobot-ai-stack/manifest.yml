@@ -38,6 +38,13 @@ health:
   retries: 3
   expected_status: 200
 
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  ai-stack:
+    checked: true
+    port: 8080
+    path: /health
+
 secrets:
   own:
     - ai_stack_service_key

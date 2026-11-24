@@ -12,9 +12,8 @@ it ran ``automation_control`` (pause, resume, cancel, approve_step, skip_step) o
 - The caller is authenticated before the socket is accepted (``open_authenticated_ws``).
 - The session slot is claimed for that user. Another user's live slot is refused,
   and a disconnect frees only the caller's own socket.
-- ``automation_control`` runs only for an admin or the workflow's recorded owner.
-  No workflow creator records ``owner_id`` today, so in practice this is admin-only
-  until the owner model lands (#17014).
+- ``automation_control`` runs only for an admin or the workflow's recorded owner, the principal
+  ``resolve_principal_id`` gave its creator (#17014, #21655); a username never matches.
 """
 
 import json
@@ -22,22 +21,18 @@ import json
 from fastapi import WebSocket
 
 from api.ws_security import open_authenticated_ws
-from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
 
 from .models import WorkflowControlRequest
+from .workflow_ownership import is_owner_or_admin
 
 logger = get_logger(__name__)
 
 
 def may_control(manager, workflow_id: str, user: dict) -> bool:
     """Whether *user* may steer *workflow_id*: an admin, or the owner the workflow records."""
-    if is_admin_role(user.get("role")):
-        return True
-    workflow = manager.active_workflows.get(workflow_id)
-    owner = getattr(workflow, "owner_id", None)
-    return bool(owner) and owner in (user.get("user_id"), user.get("username"))
+    return is_owner_or_admin(manager.active_workflows.get(workflow_id), user)
 
 
 async def serve_workflow_socket(websocket: WebSocket, session_id: str, manager) -> None:

@@ -19,11 +19,10 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from api.analytics_shared import require_source_git_root
 from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
-
-from .shared import resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -341,7 +340,7 @@ async def get_ownership_analysis(
 ):
     """Analyze code ownership (Issue #248). Issue #665: Refactored with helpers."""
     # Resolve the source first: a source without a checkout is a 404 even when a result is cached.
-    scan_root = str(await resolve_scan_root(source_id))
+    scan_root = str(await require_source_git_root(source_id))
     cached = await _check_ownership_cache(refresh, source_id=source_id)
     if cached:
         return cached
@@ -415,6 +414,8 @@ async def get_expertise_scores(
     - Recency of contributions
     - Number of files/directories owned
     """
+    # Resolve first, as /analysis does: a rejected checkout is a 400 even when a result is cached (#20513)
+    scan_root = str(await require_source_git_root(source_id))
     # Check cache first - Issue #3685: Scoped by source_id
     async with _ownership_analysis_cache_lock:
         cached = _ownership_analysis_cache.get(require_source_id(source_id, "ownership cache key"))
@@ -423,10 +424,6 @@ async def get_expertise_scores(
             return JSONResponse({**_build_expertise_response(scores, len(scores), "cache"), "source_id": source_id})
 
     # Run fresh analysis if no cache
-    # #13602: these accepted `source_id` "for API consistency" and ignored it,
-    # so every source's panel analysed AutoBot's own tree — cross-project
-    # leakage rather than the 400 that /analysis returned.
-    scan_root = str(await resolve_scan_root(source_id))
     if not path:
         path = scan_root
 
@@ -476,6 +473,8 @@ async def get_knowledge_gaps(
     - Inactive maintainers
     - High ownership concentration
     """
+    # Resolve first, as /analysis does: a rejected checkout is a 400 even when a result is cached (#20513)
+    scan_root = str(await require_source_git_root(source_id))
     # Check cache first - Issue #3685: Scoped by source_id
     async with _ownership_analysis_cache_lock:
         cached = _ownership_analysis_cache.get(require_source_id(source_id, "ownership cache key"))
@@ -486,10 +485,6 @@ async def get_knowledge_gaps(
             return JSONResponse({**_build_knowledge_gaps_response(gaps, len(gaps), "cache"), "source_id": source_id})
 
     # Run fresh analysis if no cache
-    # #13602: these accepted `source_id` "for API consistency" and ignored it,
-    # so every source's panel analysed AutoBot's own tree — cross-project
-    # leakage rather than the 400 that /analysis returned.
-    scan_root = str(await resolve_scan_root(source_id))
     if not path:
         path = scan_root
 

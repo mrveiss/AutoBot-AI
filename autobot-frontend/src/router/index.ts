@@ -206,10 +206,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'system-docs',
         name: 'knowledge-system-docs',
         component: () => import('@/components/knowledge/KnowledgeSystemDocs.vue'),
-        meta: {
-          title: 'System Docs',
-          parent: 'knowledge'
-        }
+        meta: { title: 'System Docs', parent: 'knowledge', adv: true }
       },
       {
         path: 'upload',
@@ -229,20 +226,14 @@ export const routes: RouteRecordRaw[] = [
         path: 'research',
         name: 'knowledge-research',
         component: () => import('@/components/knowledge/KnowledgeResearchTabs.vue'),
-        meta: {
-          title: 'Research',
-          parent: 'knowledge'
-        }
+        meta: { title: 'Research', parent: 'knowledge', adv: true }
       },
       {
         // MVA-2167: MCP Resource Browser
         path: 'mcp-resources',
         name: 'knowledge-mcp-resources',
         component: () => import('@/components/knowledge/McpResourceBrowser.vue'),
-        meta: {
-          title: 'MCP Resources',
-          parent: 'knowledge'
-        }
+        meta: { title: 'MCP Resources', parent: 'knowledge', adv: true }
       },
       {
         // #8999: ChromaDB / vector-store explorer — browse collections,
@@ -254,7 +245,8 @@ export const routes: RouteRecordRaw[] = [
           title: 'Vector Store',
           parent: 'knowledge',
           // #16666: raw collection access bypasses fact visibility, so the backend is admin-only
-          admin: true
+          admin: true,
+          adv: true
         }
       },
       {
@@ -308,10 +300,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'graph',
         name: 'knowledge-graph',
         component: () => import('@/components/knowledge/KnowledgeGraphView.vue'),
-        meta: {
-          title: 'Knowledge Graph',
-          parent: 'knowledge'
-        },
+        meta: { title: 'Knowledge Graph', parent: 'knowledge', adv: true },
         children: [
           {
             // Issue #759: Knowledge Graph Pipeline
@@ -357,19 +346,13 @@ export const routes: RouteRecordRaw[] = [
         path: 'entities',
         name: 'knowledge-entities',
         component: () => import('@/components/knowledge/EntityGraphManager.vue'),
-        meta: {
-          title: 'Entity Graph Manager',
-          parent: 'knowledge'
-        }
+        meta: { title: 'Entity Graph Manager', parent: 'knowledge', adv: true }
       },
       {
         path: 'health',
         name: 'knowledge-health',
         component: () => import('@/components/knowledge/KnowledgeHealth.vue'),
-        meta: {
-          title: 'Knowledge Health',
-          parent: 'knowledge'
-        }
+        meta: { title: 'Knowledge Health', parent: 'knowledge', adv: true }
       },
       {
         // Watch Folders moved under Manage as a tab (owner request, 2026-09-14):
