@@ -136,20 +136,28 @@ def test_an_import_failure_is_never_a_clean_result(monkeypatch, capsys) -> None:
 
 
 def test_ci_enforces_staleness_on_merge_trains() -> None:
-    """The one place staleness fails must stay wired: the reach-running job sets the audit on train-*."""
+    """The one place staleness fails must stay wired: the reach-running job calls the shared scope entry.
+
+    #22147 moved the train-*/merge-group/main rule out of the step's ``if:`` into
+    ``pipeline-scripts/reach_audit_scope.py`` (shared with the pre-board lane); the step must run it
+    unconditionally, and the entry must still turn the audit on for a train-* head.
+    """
     import yaml
     from repo_tests._reach import REACH_AUDIT_ENV
 
     steps = yaml.safe_load((repo_root() / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"][
         "python-shard"
     ]["steps"]
-    wired = [
-        s
-        for s in steps
-        if "startsWith(github.head_ref, 'train-')" in str(s.get("if", ""))
-        and f"{REACH_AUDIT_ENV}=1" in str(s.get("run", ""))
-    ]
-    assert wired, f"ci.yml's python-shard job no longer sets {REACH_AUDIT_ENV}=1 on train-* heads"
+    wired = [s for s in steps if "pipeline-scripts/reach_audit_scope.py" in str(s.get("run", ""))]
+    assert wired, "ci.yml's python-shard job no longer runs pipeline-scripts/reach_audit_scope.py (#22147)"
+    assert not any("if" in s for s in wired), "the scope rule lives in the script; the step must not re-gate it"
+    spec = importlib.util.spec_from_file_location(
+        "reach_audit_scope", repo_root() / "pipeline-scripts" / "reach_audit_scope.py"
+    )
+    scope = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(scope)
+    assert scope.REACH_AUDIT_ENV == REACH_AUDIT_ENV
+    assert scope.audit_applies("pull_request", "train-100", ""), "train-* heads no longer get the audit"
 
 
 # ---------------------------------------- #20050: a floor stale on the base, a branch that did not cause it
