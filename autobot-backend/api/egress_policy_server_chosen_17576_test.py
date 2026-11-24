@@ -34,6 +34,15 @@ from autobot_shared import egress_allowlist as al
 from autobot_shared.http_client_manager import HTTPClientManager
 from autobot_shared.http_egress_guard import EgressBlockedError
 
+
+@pytest.fixture(autouse=True)
+def _own_desktop_proxy_enabled(monkeypatch):
+    """These tests exercise the agent-desktop proxy, which is off by default (#22145)."""
+    from api import vnc_proxy as _vp
+
+    monkeypatch.setattr(_vp, "VNC_PROXY_OWN_DESKTOP_ENABLED", True)
+
+
 INTERNAL = "http://127.0.0.1:8001"
 PUBLIC = "https://api.example.test:8001"
 PRIVATE = "http://10.1.2.3:8001"

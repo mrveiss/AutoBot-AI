@@ -53,6 +53,7 @@ from api.schemas_system import (
 )
 from api.vnc_blocking_probes import is_vnc_running, probe_connection_quality
 from api.vnc_host_actions import run_on_host
+from api.vnc_host_target import resolve_host_id
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -341,6 +342,12 @@ def _caller_username(current_user: object) -> str | None:
     return None
 
 
+async def _muted_for_host(host_id: str, current_user: object) -> bool:
+    """True when another human holds this host's control lock; refuses a non-/secrets host first (#22145)."""
+    resolve_host_id(host_id)
+    return await is_actuation_muted(host_id, _caller_username(current_user))
+
+
 @router.post("/click", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CLICK")
 async def vnc_mouse_click(
@@ -360,7 +367,7 @@ async def vnc_mouse_click(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_actuation_muted(request.host_id, _caller_username(current_user)):
+    if await _muted_for_host(request.host_id, current_user):
         return _muted_result()
 
     return await run_on_host(request.host_id, "click", x=request.x, y=request.y, button=request.button)
@@ -385,7 +392,7 @@ async def vnc_keyboard_type(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_actuation_muted(request.host_id, _caller_username(current_user)):
+    if await _muted_for_host(request.host_id, current_user):
         return _muted_result()
 
     return await run_on_host(request.host_id, "type", text=request.text)
@@ -410,7 +417,7 @@ async def vnc_special_key(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_actuation_muted(request.host_id, _caller_username(current_user)):
+    if await _muted_for_host(request.host_id, current_user):
         return _muted_result()
 
     return await run_on_host(request.host_id, "key", key=request.key)
@@ -435,7 +442,7 @@ async def vnc_mouse_scroll(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_actuation_muted(request.host_id, _caller_username(current_user)):
+    if await _muted_for_host(request.host_id, current_user):
         return _muted_result()
 
     return await run_on_host(request.host_id, "scroll", direction=request.direction, amount=request.amount)
@@ -460,7 +467,7 @@ async def vnc_mouse_drag(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_actuation_muted(request.host_id, _caller_username(current_user)):
+    if await _muted_for_host(request.host_id, current_user):
         return _muted_result()
 
     return await run_on_host(request.host_id, "drag", x1=request.x1, y1=request.y1, x2=request.x2, y2=request.y2)
@@ -486,8 +493,11 @@ async def vnc_screenshot(
 async def vnc_clipboard_sync(
     request: ClipboardSyncRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
-    """Send clipboard text to the selected /secrets host's desktop (#22145)."""
+    current_user: dict = Depends(get_current_user),
+) -> Dict[str, object]:
+    """Send clipboard text to the selected /secrets host's desktop (#22145); muted like the other controls."""
+    if await _muted_for_host(request.host_id, current_user):
+        return _muted_result()
     return await run_on_host(request.host_id, "clipboard", content=request.content)
 
 

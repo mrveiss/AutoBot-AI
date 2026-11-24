@@ -4559,7 +4559,12 @@
       "errorVncConnection": "VNC connection failed: {error}",
       "cancel": "Cancel",
       "connecting": "Connecting to desktop...",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "برای استفاده از دسکتاپ، میزبانی با VNC انتخاب کنید.",
+      "vncCredentialMissing": "برای این میزبان گذرواژه VNC ذخیره نشده است. آن را در اسرار اضافه کنید.",
+      "hostNotFound": "این میزبان یکی از میزبان‌های اسرار شما نیست.",
+      "hostFieldsMissing": "نام کاربری یا قابلیت‌ها برای این میزبان تنظیم نشده است. آن‌ها را در اسرار تنظیم کنید.",
+      "hostVncUnavailable": "این میزبان در اسرار قابلیت VNC یا درگاه ندارد."
     },
     "contextPanel": {
       "pid": "PID {pid}",
@@ -4956,7 +4961,8 @@
       "close": "Close",
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
-      "commandToExecute": "Command to Execute"
+      "commandToExecute": "Command to Execute",
+      "usernameMissing": "نام کاربری وجود ندارد: آن را در اسرار تنظیم کنید"
     },
     "systemStatus": {
       "lastCheck": "Last Check:",
@@ -6060,7 +6066,10 @@
         "slackDesc": "توکن ربات Slack",
         "serverLabel": "میزبان سرور",
         "serverDesc": "دسترسی به سرور SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (اعتبارنامه VNC)",
+      "vncCompanionDescription": "اعتبارنامه VNC برای {host}",
+      "vncCompanionNoHostId": "میزبان ذخیره شد اما شناسه آن بازگردانده نشد، بنابراین اعتبارنامه VNC ذخیره نشد."
     },
     "threatDashboard": {
       "checking": "Checking...",

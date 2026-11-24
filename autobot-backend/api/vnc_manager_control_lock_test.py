@@ -39,6 +39,13 @@ BOB = {"username": "bob"}
 HOST = "host-1"
 
 
+@pytest.fixture(autouse=True)
+def _host_resolves():
+    """The mute gate resolves the host first (#22191); these tests are about the gate, so it resolves."""
+    with patch("api.vnc_manager.resolve_host_id", return_value="host"):
+        yield
+
+
 def _muted(active: bool):
     """Patch api.vnc_manager.is_actuation_muted for the module under test."""
     return patch("api.vnc_manager.is_actuation_muted", new=AsyncMock(return_value=active))
@@ -245,3 +252,31 @@ class TestCallerUsernameExtraction:
         assert result["status"] == "muted"
         mock_run.assert_not_called()
         mock_muted.assert_called_once_with(HOST, None)
+
+
+class TestClipboardAndHostFirst:
+    @pytest.mark.asyncio
+    async def test_clipboard_is_muted_like_the_other_controls(self):
+        from api.schemas_system import ClipboardSyncRequest
+        from api.vnc_manager import vnc_clipboard_sync
+
+        with _muted(True), patch("api.vnc_manager.run_on_host", new=AsyncMock()) as run:
+            result = await vnc_clipboard_sync(
+                ClipboardSyncRequest(host_id=HOST, content="x"), admin_check=True, current_user=BOB
+            )
+        assert result["status"] == "muted"
+        run.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_non_secrets_host_is_refused_before_the_mute_check(self):
+        from fastapi import HTTPException
+
+        with (
+            patch("api.vnc_manager.resolve_host_id", side_effect=HTTPException(status_code=404)),
+            patch("api.vnc_manager.is_actuation_muted", new=AsyncMock(return_value=False)) as muted,
+        ):
+            with pytest.raises(HTTPException):
+                await vnc_mouse_click(
+                    MouseClickRequest(host_id="fleet-1", x=1, y=1), admin_check=True, current_user=ALICE
+                )
+        muted.assert_not_called()

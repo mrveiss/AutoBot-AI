@@ -1195,8 +1195,8 @@ class SessionScreenshotSaveResponse(BaseModel):
 
 
 class MouseClickRequest(DesktopHostRequest):
-    x: int = Field(..., ge=0, description="X coordinate")
-    y: int = Field(..., ge=0, description="Y coordinate")
+    x: int = Field(..., ge=0, le=65535, description="X coordinate")
+    y: int = Field(..., ge=0, le=65535, description="Y coordinate")
     button: str = Field(default="left", description="Mouse button: left, middle, right")
 
 
@@ -1214,10 +1214,10 @@ class MouseScrollRequest(DesktopHostRequest):
 
 
 class MouseDragRequest(DesktopHostRequest):
-    x1: int = Field(..., ge=0, description="Start X coordinate")
-    y1: int = Field(..., ge=0, description="Start Y coordinate")
-    x2: int = Field(..., ge=0, description="End X coordinate")
-    y2: int = Field(..., ge=0, description="End Y coordinate")
+    x1: int = Field(..., ge=0, le=65535, description="Start X coordinate")
+    y1: int = Field(..., ge=0, le=65535, description="Start Y coordinate")
+    x2: int = Field(..., ge=0, le=65535, description="End X coordinate")
+    y2: int = Field(..., ge=0, le=65535, description="End Y coordinate")
 
 
 class ClipboardSyncRequest(DesktopHostRequest):

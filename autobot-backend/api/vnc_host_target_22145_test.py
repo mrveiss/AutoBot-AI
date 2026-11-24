@@ -44,19 +44,24 @@ def secrets_hosts(monkeypatch):
 
 @pytest.fixture
 def password(monkeypatch):
-    monkeypatch.setattr("api.vnc_host_target._vnc_password_for", lambda host_id: b"pw-" + host_id.encode())
+    async def _pw(host_id):
+        return b"pw-" + host_id.encode()
+
+    monkeypatch.setattr("api.vnc_host_target._vnc_password_for", _pw)
 
 
 class TestResolveOnlyFromSecrets:
-    def test_secrets_host_resolves_to_its_own_endpoint_and_credentials(self, secrets_hosts, password):
-        target = resolve_vnc_target("h-secret")
+    @pytest.mark.asyncio
+    async def test_secrets_host_resolves_to_its_own_endpoint_and_credentials(self, secrets_hosts, password):
+        target = await resolve_vnc_target("h-secret")
         assert target == VncTarget("h-secret", "vnc.example.test", 5905, b"pw-h-secret")
 
     @pytest.mark.parametrize("bad_id", [FLEET_NODE_ID, "", "localhost", "default"])
-    def test_fleet_or_unknown_id_is_refused(self, secrets_hosts, password, bad_id):
+    @pytest.mark.asyncio
+    async def test_fleet_or_unknown_id_is_refused(self, secrets_hosts, password, bad_id):
         with pytest.raises(HTTPException) as exc:
-            resolve_vnc_target(bad_id)
-        assert exc.value.status_code == 404
+            await resolve_vnc_target(bad_id)
+        assert exc.value.status_code == 404 and exc.value.detail["code"] == "host_not_found"
 
     def test_host_without_vnc_capability_is_refused(self, monkeypatch, password):
         host = {**SECRETS_HOST, "capabilities": ["ssh"]}
@@ -71,7 +76,7 @@ class TestResolveOnlyFromSecrets:
         with pytest.raises(HTTPException) as exc:
             resolve_host_id("h-secret")
         assert exc.value.status_code == 422
-        assert "username" in exc.value.detail
+        assert exc.value.detail["code"] == "host_fields_missing" and "username" in exc.value.detail["message"]
 
 
 class _FakeSession:
@@ -234,7 +239,7 @@ class TestE7NoDefaultUserOrCapabilities:
         with pytest.raises(HTTPException) as exc:
             refuse_incomplete_host("infrastructure_host", {"host": "h"})
         assert exc.value.status_code == 422
-        assert "username" in exc.value.detail and "capabilities" in exc.value.detail
+        assert exc.value.detail["fields"] == ["username", "capabilities"]
 
     def test_complete_host_and_other_secret_types_pass(self):
         refuse_incomplete_host("infrastructure_host", {"username": "u", "capabilities": ["ssh"]})
@@ -249,3 +254,122 @@ class TestTerminalSshSharesTheResolver:
 
         assert await resolve_ssh_host_id("h-secret") is True
         assert await resolve_ssh_host_id(FLEET_NODE_ID) is False
+
+
+class TestVncPasswordLookup:
+    @pytest.mark.asyncio
+    async def test_only_a_password_secret_linked_to_the_host_counts(self, monkeypatch):
+        import api.secrets as secrets_module
+        from api.vnc_host_target import VNC_COMPANION_HOST_KEY, _vnc_password_for
+
+        entries = [
+            {"id": "a", "type": "api_key", "metadata": {VNC_COMPANION_HOST_KEY: "h1"}},
+            {"id": "b", "type": "password", "metadata": {VNC_COMPANION_HOST_KEY: "other"}},
+            {"id": "c", "type": "password", "metadata": {VNC_COMPANION_HOST_KEY: "h1"}},
+        ]
+        mgr = secrets_module.secrets_manager
+        monkeypatch.setattr(mgr, "list_secrets", lambda *a, **k: entries)
+        monkeypatch.setattr(mgr, "get_secret", lambda sid, *a, **k: {"value": f"pw-{sid}"})
+        assert await _vnc_password_for("h1") == b"pw-c"
+
+    @pytest.mark.asyncio
+    async def test_missing_password_is_a_stable_error_code(self, monkeypatch):
+        import api.secrets as secrets_module
+        from api.vnc_host_target import VNC_AUTH_MISSING, _vnc_password_for
+
+        monkeypatch.setattr(secrets_module.secrets_manager, "list_secrets", lambda *a, **k: [])
+        with pytest.raises(HTTPException) as exc:
+            await _vnc_password_for("h1")
+        assert exc.value.status_code == 422 and exc.value.detail["code"] == VNC_AUTH_MISSING
+
+    @pytest.mark.asyncio
+    async def test_the_store_is_read_off_the_event_loop(self, monkeypatch):
+        from api import vnc_host_target
+
+        calls = []
+
+        async def fake_to_thread(fn, *args):
+            calls.append(fn)
+            return b"x"
+
+        monkeypatch.setattr(vnc_host_target.asyncio, "to_thread", fake_to_thread)
+        await vnc_host_target._vnc_password_for("h1")
+        assert calls == [vnc_host_target._read_vnc_password]
+
+
+class TestHostileRfbServer:
+    """A server that lies about sizes must be refused, not obeyed (#22191 review)."""
+
+    def _session(self, payload: bytes, width=4, height=4):
+        session = VncRfbSession("h", 1, b"pw")
+        session.width, session.height = width, height
+        buf = bytearray(payload)
+
+        class Stream:
+            async def read_exactly(self, n):
+                chunk = bytes(buf[:n])
+                del buf[:n]
+                return chunk
+
+            async def write(self, data):
+                return None
+
+        session._stream = Stream()
+        return session
+
+    @pytest.mark.asyncio
+    async def test_rect_outside_the_screen_is_refused(self):
+        from api.vnc_rfb_client import VncProtocolError
+
+        session = self._session(struct.pack("!HHHHi", 3, 0, 2, 1, 0) + bytes(8))
+        with pytest.raises(VncProtocolError, match="outside"):
+            await session._read_rect(bytearray(4 * 4 * 3))
+
+    @pytest.mark.asyncio
+    async def test_total_bytes_per_update_are_capped(self, monkeypatch):
+        from api import vnc_rfb_client
+        from api.vnc_rfb_client import VncProtocolError
+
+        monkeypatch.setattr(vnc_rfb_client, "VNC_MAX_FRAMEBUFFER_BYTES", 16)
+        session = self._session(struct.pack("!HHHHi", 0, 0, 2, 2, 0) + bytes(16))
+        with pytest.raises(VncProtocolError, match="cap"):
+            await session._read_rect(bytearray(4 * 4 * 3), [8])
+
+    @pytest.mark.asyncio
+    async def test_oversize_canvas_is_refused_at_handshake(self, monkeypatch):
+        from api import vnc_rfb_client
+        from api.vnc_rfb_client import VncProtocolError
+
+        monkeypatch.setattr(vnc_rfb_client, "VNC_MAX_FRAMEBUFFER_BYTES", 100)
+        monkeypatch.setattr(vnc_rfb_client, "authenticate_as_client", AsyncMock())
+        init = struct.pack("!HH", 65535, 65535) + bytes(16) + struct.pack("!I", 0)
+        session = self._session(init)
+        with pytest.raises(VncProtocolError, match="screen"):
+            await session._handshake()
+
+    @pytest.mark.asyncio
+    async def test_oversize_desktop_name_is_refused(self, monkeypatch):
+        from api import vnc_rfb_client
+        from api.vnc_rfb_client import VncProtocolError
+
+        monkeypatch.setattr(vnc_rfb_client, "authenticate_as_client", AsyncMock())
+        init = struct.pack("!HH", 2, 2) + bytes(16) + struct.pack("!I", 2**31)
+        session = self._session(init)
+        with pytest.raises(VncProtocolError, match="name"):
+            await session._handshake()
+
+    @pytest.mark.asyncio
+    async def test_oversize_server_cut_text_is_refused(self):
+        from api.vnc_rfb_client import VncProtocolError
+
+        session = self._session(struct.pack("!xxxI", 2**31))
+        with pytest.raises(VncProtocolError, match="cut text"):
+            await session._skip_server_message(3)
+
+
+class TestRequestBounds:
+    def test_coordinates_beyond_the_wire_range_are_a_422_not_a_500(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            MouseClickRequest(host_id="h", x=70000, y=1)

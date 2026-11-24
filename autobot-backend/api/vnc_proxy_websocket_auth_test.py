@@ -25,6 +25,14 @@ import pytest
 from api.vnc_proxy import websocket_proxy
 
 
+@pytest.fixture(autouse=True)
+def _own_desktop_proxy_enabled(monkeypatch):
+    """These tests exercise the agent-desktop proxy, which is off by default (#22145)."""
+    from api import vnc_proxy as _vp
+
+    monkeypatch.setattr(_vp, "VNC_PROXY_OWN_DESKTOP_ENABLED", True)
+
+
 @contextmanager
 def _no_ws_credentials():
     """Patch every credential source _resolve_ws_user tries (#14959) to deny.

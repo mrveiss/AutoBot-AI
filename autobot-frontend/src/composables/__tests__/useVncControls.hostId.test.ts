@@ -7,6 +7,7 @@
  * endpoints are built from the injected canonical API base (#22144).
  */
 import { describe, it, expect, vi } from 'vitest'
+import { ref } from 'vue'
 import { useVncControls } from '@autobot/vnc'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -36,5 +37,19 @@ describe('useVncControls host targeting', () => {
     const { api, request } = controls()
     await api.captureScreenshot()
     expect(request).toHaveBeenCalledWith('GET', `${getApiBase()}/vnc/screenshot?host_id=host%201`)
+  })
+
+  it('retargets when the host changes after setup (#22191)', async () => {
+    const host = ref('host-a')
+    const request = vi.fn(async () => ({ status: 'success', message: 'ok' }))
+    const api = useVncControls({ baseUrl: getApiBase(), hostId: () => host.value, request: request as never })
+    await api.mouseClick({ x: 1, y: 1 })
+    host.value = 'host-b'
+    await api.mouseClick({ x: 1, y: 1 })
+    await api.captureScreenshot()
+    const calls = request.mock.calls as unknown as unknown[][]
+    expect((calls[0][2] as Record<string, unknown>).host_id).toBe('host-a')
+    expect((calls[1][2] as Record<string, unknown>).host_id).toBe('host-b')
+    expect(calls[2][1]).toContain('host_id=host-b')
   })
 })

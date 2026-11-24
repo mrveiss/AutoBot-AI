@@ -5812,7 +5812,8 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Benutzername fehlt: unter Secrets festlegen"
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6857,7 +6858,10 @@
         "slackDesc": "Slack-Bot-Token",
         "serverLabel": "Server-Host",
         "serverDesc": "SSH/VNC-Serverzugriff"
-      }
+      },
+      "vncCompanionName": "{name} (VNC-Zugangsdaten)",
+      "vncCompanionDescription": "VNC-Zugangsdaten für {host}",
+      "vncCompanionNoHostId": "Der Host wurde gespeichert, aber seine ID wurde nicht zurückgegeben; die VNC-Zugangsdaten wurden daher nicht gespeichert."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7752,7 +7756,12 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Wählen Sie einen Host mit VNC, um den Desktop zu verwenden.",
+      "vncCredentialMissing": "Für diesen Host ist kein VNC-Passwort gespeichert. Fügen Sie es unter Secrets hinzu.",
+      "hostNotFound": "Dieser Host gehört nicht zu Ihren Secrets-Hosts.",
+      "hostFieldsMissing": "Diesem Host fehlen Benutzername oder Fähigkeiten. Legen Sie sie unter Secrets fest.",
+      "hostVncUnavailable": "Dieser Host hat in Secrets weder VNC-Fähigkeit noch Port."
     },
     "popoutBrowser": {
       "title": "Research Browser",

@@ -3,7 +3,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
-import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
 import { visibleMessages } from '@/utils/internalMessage'
 import type { ChatMessage } from '@/types/api'
@@ -739,51 +738,6 @@ export const useChatStore = defineStore('chat', () => {
     return desktopSessionId
   }
 
-  // DORMANT: getDesktopUrl generates VNC URLs; VNC path replaced by screenshot panel (#1130). Preserved for #5136.
-  function getDesktopUrl(sessionId: string): string {
-    let session = sessions.value.find(s => s.id === sessionId)
-    if (!session?.desktopSession) {
-      // Create desktop session if it doesn't exist
-      createDesktopSession(sessionId)
-      // Re-fetch session after creation
-      session = sessions.value.find(s => s.id === sessionId)
-    }
-
-    // Guard: If session still doesn't exist, return default URL
-    if (!session) {
-      const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_DESKTOP_PORT}/vnc.html`
-      return baseUrl
-    }
-
-    // Generate per-chat desktop URL with session context
-    const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_DESKTOP_PORT}/vnc.html`
-    // #16299: no password here -- the backend now authenticates to the real
-    // VNC server itself and offers this browser security-type "None"
-    // (api/vnc_handshake_bridge.py), so the client never needs one.
-    const params = new URLSearchParams({
-      autoconnect: 'true',
-      resize: 'remote',
-      reconnect: 'true',
-      quality: '9',
-      compression: '9',
-      // Add chat session context for future automation
-      chatSession: sessionId,
-      desktopSession: session.desktopSession?.sessionId || '',
-      // Enable automation tracking
-      automationMode: 'true'
-    })
-
-    const desktopUrl = `${baseUrl}?${params.toString()}`
-
-    // Cache the URL in session
-    if (session.desktopSession) {
-      session.desktopSession.vncUrl = desktopUrl
-      session.desktopSession.lastActivity = new Date()
-    }
-
-    return desktopUrl
-  }
-
   function updateDesktopContext(sessionId: string, context: Record<string, unknown>) {
     let session = sessions.value.find(s => s.id === sessionId)
     if (!session?.desktopSession) {
@@ -1098,7 +1052,6 @@ export const useChatStore = defineStore('chat', () => {
     syncSessionsWithBackend,
     // Desktop session management
     createDesktopSession,
-    getDesktopUrl,
     updateDesktopContext,
     getDesktopContext,
     // Issue #608: User-centric session tracking

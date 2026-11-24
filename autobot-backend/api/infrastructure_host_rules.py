@@ -15,6 +15,8 @@ from fastapi import HTTPException
 
 HOST_REQUIRED_FIELDS = ("username", "capabilities")
 
+HOST_FIELDS_CODE = "host_fields_missing"  # stable code; the UI maps it to its own text
+
 HOST_FIELDS_MESSAGE = "Infrastructure host is missing required field(s): {fields}. Set them in Secrets."
 
 
@@ -24,10 +26,19 @@ def missing_host_fields(meta: Dict[str, Any] | None) -> List[str]:
     return [name for name in HOST_REQUIRED_FIELDS if not meta.get(name)]
 
 
+def host_fields_detail(missing: List[str]) -> Dict[str, Any]:
+    """The 422 body for an incomplete host: a stable code, an English message and the field names."""
+    return {
+        "code": HOST_FIELDS_CODE,
+        "message": HOST_FIELDS_MESSAGE.format(fields=", ".join(missing)),
+        "fields": missing,
+    }
+
+
 def refuse_incomplete_host(secret_type: Any, meta: Dict[str, Any] | None) -> None:
     """Raise a 422 naming the missing fields when an infrastructure host is incomplete."""
     if str(getattr(secret_type, "value", secret_type)) != "infrastructure_host":
         return
     missing = missing_host_fields(meta)
     if missing:
-        raise HTTPException(status_code=422, detail=HOST_FIELDS_MESSAGE.format(fields=", ".join(missing)))
+        raise HTTPException(status_code=422, detail=host_fields_detail(missing))

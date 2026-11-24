@@ -100,7 +100,7 @@
                 </div>
                 <div class="host-details">
                   <span class="host-connection">
-                    <Icon name="user" size="xs" /> {{ host.username || 'root' }}@{{ host.host }}:{{ host.ssh_port || 22 }}
+                    <Icon name="user" size="xs" /> <router-link v-if="!host.username" to="/secrets" class="host-username-missing">{{ t('ui.hostSelection.usernameMissing') }}</router-link><template v-else>{{ host.username }}@{{ host.host }}:{{ host.ssh_port || 22 }}</template>
                   </span>
                   <span v-if="host.capabilities?.includes('vnc')" class="host-capability">
                     <Icon name="desktop" size="xs" /> VNC
@@ -314,9 +314,9 @@ const loadHosts = async () => {
         name: s.name,
         host: s.metadata?.host || '',
         ssh_port: s.metadata?.ssh_port || 22,
-        username: s.metadata?.username || 'root',
+        username: s.metadata?.username || '',
         auth_type: s.metadata?.auth_type || 'password',
-        capabilities: s.metadata?.capabilities || ['ssh'],
+        capabilities: s.metadata?.capabilities || [],
         purpose: s.metadata?.purpose || s.description,
         os: s.metadata?.os,
         metadata: s.metadata,
@@ -329,9 +329,9 @@ const loadHosts = async () => {
       name: h.name,
       host: h.host,
       ssh_port: h.ssh_port || 22,
-      username: h.username || 'root',
+      username: h.username || '',
       auth_type: h.auth_type || 'password',
-      capabilities: h.capabilities || ['ssh'],
+      capabilities: h.capabilities || [],
       purpose: h.purpose || h.description,
       os: h.os,
       metadata: h,

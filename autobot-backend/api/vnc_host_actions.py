@@ -6,6 +6,7 @@
 
 import asyncio
 import base64
+import struct
 from typing import Dict, List
 
 from api.vnc_host_target import resolve_vnc_target
@@ -84,11 +85,11 @@ async def _type(session: VncRfbSession, text: str) -> None:
 
 async def run_on_host(host_id: str, action: str, **params) -> Dict[str, object]:
     """Run one control (*action*) on the selected host; returns the endpoint result dict."""
-    target = resolve_vnc_target(host_id)
+    target = await resolve_vnc_target(host_id)
     try:
         async with VncRfbSession(target.address, target.port, target.password) as session:
             return await _dispatch(session, action, params)
-    except (VncAuthError, VncProtocolError, OSError, asyncio.TimeoutError) as exc:
+    except (VncAuthError, VncProtocolError, OSError, asyncio.TimeoutError, struct.error) as exc:
         logger.warning("Desktop %s on host %s failed: %s", action, target.host_id, type(exc).__name__)
         return {"status": "error", "message": f"Could not reach the host's VNC server ({type(exc).__name__})"}
     except ValueError as exc:

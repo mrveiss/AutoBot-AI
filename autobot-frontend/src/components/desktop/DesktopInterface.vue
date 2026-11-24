@@ -237,7 +237,7 @@ const errorCheck = ref<Error | null>(null)
 
 // #22145: every control acts on the host being shown, so the selected /secrets host
 // id is both the control target and the control-lock key. No host, no controls.
-const selectedHostId = props.host?.id ?? ''
+const selectedHostId = computed(() => props.host?.id ?? '')
 
 // VNC controls (Issue #74)
 // #12931: the shared composable from @autobot/vnc, with this app's ApiClient
@@ -246,7 +246,7 @@ const selectedHostId = props.host?.id ?? ''
 // peer dependency), which is why the transport is a parameter.
 const vncControls = useVncControls({
   baseUrl: getApiBase(),
-  hostId: selectedHostId,
+  hostId: () => selectedHostId.value,
   request: <T,>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> =>
     method === 'GET' ? ApiClient.get<T>(path) : ApiClient.post<T>(path, body),
 })
@@ -510,6 +510,16 @@ const handleFullscreenChange = () => {
 }
 
 // Desktop interaction actions (Issue #74)
+/** The backend's stable error codes map to i18n text; anything else shows its own message. */
+const CONTROL_ERROR_KEYS: Record<string, string> = {
+  vnc_credential_missing: 'desktop.interface.vncCredentialMissing',
+  host_not_found: 'desktop.interface.hostNotFound',
+  host_fields_missing: 'desktop.interface.hostFieldsMissing',
+  host_vnc_unavailable: 'desktop.interface.hostVncUnavailable'
+}
+const controlErrorText = (r: { message: string; code?: string }): string =>
+  r.code && CONTROL_ERROR_KEYS[r.code] ? t(CONTROL_ERROR_KEYS[r.code]) : r.message
+
 async function takeScreenshot() {
   const result = await vncControls.captureScreenshot()
   if (result.status === 'success' && result.image_data) {
@@ -517,7 +527,7 @@ async function takeScreenshot() {
     showScreenshotModal.value = true
   } else {
     logger.error('Screenshot failed:', result.message)
-    error.value = result.message
+    error.value = controlErrorText(result)
   }
 }
 
@@ -530,7 +540,7 @@ async function handleTypeText() {
     showTypeDialog.value = false
   } else {
     logger.error('Type text failed:', result.message)
-    error.value = result.message
+    error.value = controlErrorText(result)
   }
 }
 
@@ -538,7 +548,7 @@ async function sendCtrlAltDel() {
   const result = await vncControls.sendCtrlAltDel()
   if (result.status !== 'success') {
     logger.error('Ctrl+Alt+Del failed:', result.message)
-    error.value = result.message
+    error.value = controlErrorText(result)
   }
 }
 
@@ -548,7 +558,7 @@ async function pasteFromClipboard() {
     const result = await vncControls.syncClipboard(text)
     if (result.status !== 'success') {
       logger.error('Clipboard sync failed:', result.message)
-      error.value = result.message
+      error.value = controlErrorText(result)
     }
   } catch (err) {
     logger.error('Clipboard read failed:', err)

@@ -12,7 +12,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { effectScope } from 'vue'
+import { effectScope, nextTick, ref } from 'vue'
+import { flushPromises } from '@vue/test-utils'
 
 const mockGet = vi.fn(async (..._args: unknown[]) => ({}))
 const mockPost = vi.fn(async (..._args: unknown[]) => ({}))
@@ -48,6 +49,31 @@ describe('useDesktopControlLock', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('switching the host retargets the lock and resets the old host state (#22191)', async () => {
+    const host = ref('host-1')
+    mockGet.mockResolvedValue(fakeState({ owner: 'alice', human_active: true }))
+    const scope = effectScope()
+    const lock = scope.run(() => useDesktopControlLock(host))!
+    await lock.refreshStatus()
+    expect(lock.humanActive.value).toBe(true)
+    mockGet.mockResolvedValue(fakeState({ session_id: 'host-2' }))
+    host.value = 'host-2'
+    await nextTick()
+    await flushPromises()
+    expect(lock.humanActive.value).toBe(false)
+    expect(mockGet).toHaveBeenLastCalledWith('/api/vnc-proxy/{vnc_type}/control/status', {
+      path: { vnc_type: 'desktop' },
+      query: { session_id: 'host-2' }
+    })
+    mockPost.mockResolvedValue(fakeState({ owner: 'alice', human_active: true }))
+    await lock.takeControl()
+    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc-proxy/{vnc_type}/control/acquire', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-2' }
+    })
+    scope.stop()
   })
 
   it('makes no request without a selected host id (#22145)', async () => {

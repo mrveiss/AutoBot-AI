@@ -481,7 +481,7 @@
                   max="65535"
                 />
               </div>
-              <div class="form-group" v-if="!showEditModal">
+              <div class="form-group">
                 <label>{{ $t('security.secretsManager.vncPassword') }}</label>
                 <input
                   type="password"
@@ -1433,7 +1433,6 @@ const saveSecret = async () => {
           ? secretForm.ssh_key
           : secretForm.ssh_password;
       }
-      // Auto-generate description if empty
       if (!secretData.description) {
         secretData.description = `${secretForm.username}@${secretForm.host}:${secretForm.ssh_port}`;
       }
@@ -1441,12 +1440,13 @@ const saveSecret = async () => {
 
     if (showEditModal.value) {
       await secretsApiClient.updateSecret(secretForm.id, secretData, { chatId: secretData.chat_id as string | null | undefined });
+      await createVncCompanion({ data: { id: secretForm.id } }, secretForm, secretData, t, secrets.value);
     } else {
       if (secretForm.type !== 'infrastructure_host') {
         secretData.value = secretForm.value;
       }
       const created = await secretsApiClient.createSecret(secretData as unknown as Parameters<typeof secretsApiClient.createSecret>[0]);
-      await createVncCompanion(created, secretForm, secretData, t);
+      await createVncCompanion(created, secretForm, secretData, t, secrets.value);
     }
   });
   saving.value = false;

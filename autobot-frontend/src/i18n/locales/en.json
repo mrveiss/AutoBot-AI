@@ -6153,7 +6153,8 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Username missing: set it in Secrets"
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -8263,7 +8264,11 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "vncCredentialMissing": "No VNC password is stored for this host. Add it in Secrets.",
+      "hostNotFound": "This host is not one of your Secrets hosts.",
+      "hostFieldsMissing": "This host is missing a username or capabilities. Set them in Secrets.",
+      "hostVncUnavailable": "This host has no VNC capability or port in Secrets."
     },
     "popoutBrowser": {
       "title": "Research Browser",

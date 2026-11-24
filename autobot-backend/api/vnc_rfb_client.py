@@ -24,6 +24,7 @@ from security.vnc_rfb_auth import VncAuthError, authenticate_as_client
 VNC_CONNECT_TIMEOUT_S = env_int("AUTOBOT_VNC_CLIENT_CONNECT_TIMEOUT_S", 10)
 VNC_FRAME_TIMEOUT_S = env_int("AUTOBOT_VNC_CLIENT_FRAME_TIMEOUT_S", 15)
 VNC_MAX_FRAMEBUFFER_BYTES = env_int("AUTOBOT_VNC_CLIENT_MAX_FRAMEBUFFER_BYTES", 64 * 1024 * 1024)
+VNC_MAX_TEXT_BYTES = env_int("AUTOBOT_VNC_CLIENT_MAX_TEXT_BYTES", 1024 * 1024)  # desktop name, server cut text
 
 _MSG_SET_PIXEL_FORMAT = 0
 _MSG_SET_ENCODINGS = 2
@@ -99,7 +100,11 @@ class VncRfbSession:
         await s.write(b"\x01")  # ClientInit: shared
         self.width, self.height = struct.unpack("!HH", await s.read_exactly(4))
         await s.read_exactly(16)  # server pixel format, superseded below
+        if self.width * self.height * 3 > VNC_MAX_FRAMEBUFFER_BYTES:
+            raise VncProtocolError("server advertises a screen larger than the configured size cap")
         name_len = struct.unpack("!I", await s.read_exactly(4))[0]
+        if name_len > VNC_MAX_TEXT_BYTES:
+            raise VncProtocolError("server desktop name exceeds the configured size cap")
         await s.read_exactly(name_len)
         await s.write(struct.pack("!Bxxx", _MSG_SET_PIXEL_FORMAT) + _PIXEL_FORMAT)
         await s.write(struct.pack("!BxHi", _MSG_SET_ENCODINGS, 1, _ENCODING_RAW))
@@ -129,6 +134,8 @@ class VncRfbSession:
             await s.read_exactly(6 * count)
         elif kind == 3:  # ServerCutText
             length = struct.unpack("!xxxI", await s.read_exactly(7))[0]
+            if length > VNC_MAX_TEXT_BYTES:
+                raise VncProtocolError("server cut text exceeds the configured size cap")
             await s.read_exactly(length)
         elif kind != 2:  # Bell carries no body
             raise VncProtocolError(f"unexpected server message type {kind}")
@@ -142,16 +149,21 @@ class VncRfbSession:
                 await self._skip_server_message(kind)
                 continue
             count = struct.unpack("!xH", await s.read_exactly(3))[0]
+            budget = [VNC_MAX_FRAMEBUFFER_BYTES]  # bytes one update may still carry
             for _ in range(count):
-                await self._read_rect(canvas)
+                await self._read_rect(canvas, budget)
             return VncFrame(self.width, self.height, bytes(canvas))
 
-    async def _read_rect(self, canvas: bytearray) -> None:
+    async def _read_rect(self, canvas: bytearray, budget: list | None = None) -> None:
         s = self._stream
         x, y, w, h, enc = struct.unpack("!HHHHi", await s.read_exactly(12))
         if enc != _ENCODING_RAW:
             raise VncProtocolError(f"server sent unsupported encoding {enc}")
-        if w * h * 4 > VNC_MAX_FRAMEBUFFER_BYTES:
+        if x + w > self.width or y + h > self.height:
+            raise VncProtocolError("server sent a rectangle outside the screen")
+        left = budget if budget is not None else [VNC_MAX_FRAMEBUFFER_BYTES]
+        left[0] -= w * h * 4
+        if left[0] < 0:
             raise VncProtocolError("framebuffer exceeds the configured size cap")
         raw = await s.read_exactly(w * h * 4)
         for row in range(h):

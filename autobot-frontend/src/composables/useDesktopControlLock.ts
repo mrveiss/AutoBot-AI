@@ -17,7 +17,7 @@
  * than muting the agent forever.
  */
 
-import { computed, getCurrentScope, onScopeDispose, ref } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
@@ -42,8 +42,9 @@ export interface DesktopControlLockState {
 /**
  * @param hostId the selected /secrets host id; it is the lock key (#22145).
  */
-export function useDesktopControlLock(hostId: string, vncType: string = 'desktop') {
-  const sessionId = hostId
+export function useDesktopControlLock(hostId: MaybeRefOrGetter<string | null | undefined>, vncType: string = 'desktop') {
+  // Read on every call: switching the host retargets the lock (the state below is reset on a switch).
+  const currentHostId = () => toValue(hostId) ?? ''
   const userStore = useUserStore()
 
   const owner = ref<string | null>(null)
@@ -86,13 +87,21 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
     onScopeDispose(stopHeartbeat)
   }
 
+  // A different host is a different lock: drop the old host's state and heartbeat, then read the new one.
+  watch(currentHostId, () => {
+    stopHeartbeat()
+    owner.value = null
+    humanActive.value = false
+    void refreshStatus()
+  })
+
   async function refreshStatus(): Promise<DesktopControlLockState | null> {
-    if (!sessionId) return null
+    if (!currentHostId()) return null
     try {
       const result: DesktopControlLockState = await ApiClient.call(
         'get',
         '/api/vnc-proxy/{vnc_type}/control/status',
-        { path, query: { session_id: sessionId } }
+        { path, query: { session_id: currentHostId() } }
       )
       owner.value = result.owner ?? null
       humanActive.value = result.human_active
@@ -115,7 +124,7 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
   async function acquire(options: { silent?: boolean } = {}): Promise<DesktopControlLockState | null> {
     const { silent = false } = options
     error.value = null
-    if (!sessionId) return null
+    if (!currentHostId()) return null
     if (!silent) {
       loading.value = true
     }
@@ -123,7 +132,7 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
       const result: DesktopControlLockState = await ApiClient.call(
         'post',
         '/api/vnc-proxy/{vnc_type}/control/acquire',
-        { path, body: { session_id: sessionId } }
+        { path, body: { session_id: currentHostId() } }
       )
       owner.value = result.owner ?? null
       humanActive.value = result.human_active
@@ -156,14 +165,14 @@ export function useDesktopControlLock(hostId: string, vncType: string = 'desktop
 
   async function releaseControl(): Promise<DesktopControlLockState | null> {
     error.value = null
-    if (!sessionId) return null
+    if (!currentHostId()) return null
     loading.value = true
     stopHeartbeat()
     try {
       const result: DesktopControlLockState = await ApiClient.call(
         'post',
         '/api/vnc-proxy/{vnc_type}/control/release',
-        { path, body: { session_id: sessionId } }
+        { path, body: { session_id: currentHostId() } }
       )
       owner.value = result.owner ?? null
       humanActive.value = result.human_active

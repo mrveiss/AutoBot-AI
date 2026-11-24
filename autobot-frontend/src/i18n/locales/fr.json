@@ -5812,7 +5812,8 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Nom d'utilisateur manquant : définissez-le dans Secrets"
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6857,7 +6858,10 @@
         "slackDesc": "Jeton du bot Slack",
         "serverLabel": "Hôte serveur",
         "serverDesc": "Accès serveur SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (identifiants VNC)",
+      "vncCompanionDescription": "Identifiants VNC pour {host}",
+      "vncCompanionNoHostId": "L'hôte a été enregistré mais son identifiant n'a pas été renvoyé ; les identifiants VNC n'ont donc pas été enregistrés."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7752,7 +7756,12 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Sélectionnez un hôte avec VNC pour utiliser le bureau.",
+      "vncCredentialMissing": "Aucun mot de passe VNC n'est enregistré pour cet hôte. Ajoutez-le dans Secrets.",
+      "hostNotFound": "Cet hôte ne fait pas partie de vos hôtes Secrets.",
+      "hostFieldsMissing": "Il manque à cet hôte un nom d'utilisateur ou des capacités. Définissez-les dans Secrets.",
+      "hostVncUnavailable": "Cet hôte n'a ni capacité VNC ni port dans Secrets."
     },
     "popoutBrowser": {
       "title": "Research Browser",

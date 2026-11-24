@@ -12673,8 +12673,8 @@ export interface paths {
         put?: never;
         /**
          * Vnc Mouse Click
-         * @description Perform mouse click at specified coordinates with human-like behavior.
-         *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         * @description Click at the given coordinates on the selected /secrets host (#22145).
+         *     Issue #74: Desktop interaction controls.
          *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
          *     control-lock -- the lock owner's own toolbar keeps working.
          *
@@ -12702,8 +12702,8 @@ export interface paths {
         put?: never;
         /**
          * Vnc Keyboard Type
-         * @description Type text via keyboard with human-like speed and pauses.
-         *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         * @description Type text on the selected /secrets host (#22145).
+         *     Issue #74: Desktop interaction controls.
          *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
          *     control-lock -- the lock owner's own toolbar keeps working.
          *
@@ -12789,8 +12789,8 @@ export interface paths {
         put?: never;
         /**
          * Vnc Mouse Drag
-         * @description Perform mouse drag operation with curved, human-like movement.
-         *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         * @description Drag along a curved path on the selected /secrets host (#22145).
+         *     Issue #74: Desktop interaction controls.
          *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
          *     control-lock -- the lock owner's own toolbar keeps working.
          *
@@ -12841,7 +12841,7 @@ export interface paths {
         put?: never;
         /**
          * Vnc Clipboard Sync
-         * @description Send clipboard text to the selected /secrets host's desktop (#22145).
+         * @description Send clipboard text to the selected /secrets host's desktop (#22145); muted like the other controls.
          */
         post: operations["vnc_clipboard_sync_api_vnc_clipboard_post"];
         delete?: never;

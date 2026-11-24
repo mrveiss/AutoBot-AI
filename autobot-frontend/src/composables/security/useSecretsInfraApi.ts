@@ -66,19 +66,31 @@ export function infraHostToSecret(host: InfraHost) {
 /** The metadata key linking a host's VNC password secret to the host (read by api/vnc_host_target.py). */
 const VNC_COMPANION_HOST_KEY = 'vnc_host_id';
 
+type SecretLike = { id: string; type?: string; metadata?: Record<string, unknown> };
+
 /**
  * #22145: a host's VNC password is its own secret, linked by host id, so the chat
- * Desktop can authenticate to that host's VNC endpoint with it.
+ * Desktop can authenticate to that host's VNC endpoint with it. Creates it, or replaces
+ * the value of the one already linked (so an EXISTING host can get or change its password).
+ * `created` is a create response (`{ data: { id } }`) or the same shape built from a known host id.
  */
 export async function createVncCompanion(
   created: unknown,
   form: { type: string; name: string; host: string; capabilities: string[]; vnc_password: string },
   hostData: Record<string, unknown>,
-  t: (key: string, params?: Record<string, unknown>) => string
+  t: (key: string, params?: Record<string, unknown>) => string,
+  existing: SecretLike[] = []
 ): Promise<void> {
   if (form.type !== 'infrastructure_host' || !form.capabilities.includes('vnc') || !form.vnc_password) return;
   const hostId = (created as { data?: { id?: string } } | null)?.data?.id;
   if (!hostId) throw new Error(t('security.secretsManager.vncCompanionNoHostId'));
+  const linked = existing.find((s) => s.type === 'password' && s.metadata?.[VNC_COMPANION_HOST_KEY] === hostId);
+  if (linked) {
+    await secretsApiClient.updateSecret(linked.id, { value: form.vnc_password } as never, {
+      chatId: hostData.chat_id as string | null | undefined
+    });
+    return;
+  }
   await secretsApiClient.createSecret({
     name: t('security.secretsManager.vncCompanionName', { name: form.name }),
     type: 'password',

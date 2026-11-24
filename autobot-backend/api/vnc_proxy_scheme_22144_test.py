@@ -41,3 +41,20 @@ async def test_control_lock_refuses_a_non_secrets_host_id(monkeypatch):
             )
     assert exc.value.status_code == 404
     acquire.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_own_desktop_proxy_is_off_by_default_for_page_assets_and_websocket(monkeypatch):
+    """The chat app reaches only /secrets hosts; AutoBot's own desktop is not proxied unless enabled (#22145)."""
+    monkeypatch.setattr(vnc_proxy, "VNC_PROXY_OWN_DESKTOP_ENABLED", False)
+    with pytest.raises(HTTPException) as exc:
+        await vnc_proxy.get_vnc_client("desktop", current_user={})
+    assert exc.value.status_code == 404
+    with pytest.raises(HTTPException):
+        await vnc_proxy.proxy_vnc_assets("desktop", "app.js", current_user={})
+
+
+def test_browser_type_is_not_affected_by_the_own_desktop_switch(monkeypatch):
+    monkeypatch.setattr(vnc_proxy, "VNC_PROXY_OWN_DESKTOP_ENABLED", False)
+    assert vnc_proxy._own_desktop_refused("desktop") is True
+    assert vnc_proxy._own_desktop_refused("browser") is False
