@@ -19,14 +19,13 @@ from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.auth.configured_users import load_hashed_users, verify_configured_user
-from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.status_enums import CommandRisk
 from command_run_policy import CommandRunPolicy
 from config import get_config_manager
 from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
-from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions
+from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions, grant_role
 from services.audit.audit import emit_security, query_filtered
 from services.audit.taxonomy import AuditCategory, AuditFilter
 from utils.command_utils import execute_shell_command
@@ -463,8 +462,7 @@ class SecurityLayer:
             # Unauthenticated requests must be rejected, not assigned permissions.
         }
 
-        # #19125: superadmin holds admin's grants; is_admin_role is the one predicate that says who is admin.
-        return default_role_permissions.get("admin" if is_admin_role(user_role) else user_role, [])
+        return default_role_permissions.get(grant_role(user_role), [])
 
     # =========================================================================
     # Command Execution
