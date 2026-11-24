@@ -92,11 +92,11 @@ export function useComposerSend(deps: ComposerSendDeps) {
       await dispatch(message, sendOptionsFor(attachmentIds), attachmentIds)
     } catch (error) {
       logger.error('Failed to send message:', error)
-      cancelDraftAdoption()
       deps.messageText.value = message
       deps.attachedFiles.value = [...files, ...deps.attachedFiles.value] // keep a file that finished uploading meanwhile
     } finally {
       isSending.value = false
+      if (!store.currentSessionId) cancelDraftAdoption() // no chat was created, failed or not
     }
   }
 

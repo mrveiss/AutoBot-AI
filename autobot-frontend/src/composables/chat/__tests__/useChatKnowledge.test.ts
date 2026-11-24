@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { effectScope, nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { useChatStore } from '@/stores/useChatStore'
-import { KNOWLEDGE_STORAGE_KEY, MAX_REMEMBERED_SESSIONS, expectDraftAdoption, resetChatKnowledgeState, useChatKnowledge } from '../useChatKnowledge'
+import { KNOWLEDGE_STORAGE_KEY, MAX_REMEMBERED_SESSIONS, cancelDraftAdoption, expectDraftAdoption, resetChatKnowledgeState, useChatKnowledge } from '../useChatKnowledge'
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -98,5 +98,33 @@ describe('useChatKnowledge', () => {
     localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify({ [id]: true }))
     window.dispatchEvent(new StorageEvent('storage', { key: KNOWLEDGE_STORAGE_KEY }))
     expect(enabled.value).toBe(false) // no longer synced
+  })
+
+  it('keeps syncing other tabs while one instance is still mounted after another ends', () => {
+    const store = useChatStore()
+    const id = store.createNewSession('A', 'session-a')
+    const header = effectScope()
+    const composer = effectScope()
+    const { enabled } = header.run(() => useChatKnowledge())!
+    composer.run(() => useChatKnowledge())
+    composer.stop() // the composer unmounts; the header stays
+    localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify({ [id]: false }))
+    window.dispatchEvent(new StorageEvent('storage', { key: KNOWLEDGE_STORAGE_KEY }))
+    expect(enabled.value).toBe(false)
+    header.stop()
+  })
+
+  it('a cancelled adoption leaves the draft choice off the next chat opened', async () => {
+    const store = useChatStore()
+    const existing = store.createNewSession('A', 'session-a')
+    store.currentSessionId = null
+    await nextTick()
+    const { enabled } = useChatKnowledge()
+    expectDraftAdoption()
+    cancelDraftAdoption() // the send ended without creating a chat
+    enabled.value = false
+    store.switchToSession(existing)
+    await nextTick()
+    expect(enabled.value).toBe(true)
   })
 })

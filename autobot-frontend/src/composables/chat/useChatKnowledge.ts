@@ -30,13 +30,14 @@ function read(): Record<string, boolean> {
 
 const states = reactive<Record<string, boolean>>(read())
 let adoptionPending = false // the composer's send is about to create the session the draft choice belongs to
+let storageListeners = 0 // scopes using the shared listener; it is removed only when the last one ends
 
 /** Called by the composer when a send starts with no chat open. */
 export function expectDraftAdoption(): void {
   adoptionPending = true
 }
 
-/** The send failed: no session was created for the draft choice. */
+/** The send ended without creating a session: no chat is waiting for the draft choice. */
 export function cancelDraftAdoption(): void {
   adoptionPending = false
 }
@@ -46,6 +47,14 @@ function syncFromStorage(event: StorageEvent): void {
   if (event.key !== null && event.key !== KNOWLEDGE_STORAGE_KEY) return
   Object.keys(states).forEach((k) => delete states[k])
   Object.assign(states, read())
+}
+
+/** One `storage` listener shared by every instance, removed when the last scope using it ends. */
+function listenToOtherTabs(): void {
+  if (storageListeners++ === 0) window.addEventListener('storage', syncFromStorage)
+  onScopeDispose(() => {
+    if (--storageListeners === 0) window.removeEventListener('storage', syncFromStorage)
+  })
 }
 
 function persist(): void {
@@ -60,7 +69,7 @@ function persist(): void {
 
 /** Forget every remembered choice (specs; also what a storage clear amounts to). */
 export function resetChatKnowledgeState(): void {
-  adoptionPending = false
+  adoptionPending = false // the listener count is left alone: it follows live scopes
   Object.keys(states).forEach((k) => delete states[k])
   try {
     localStorage.removeItem(KNOWLEDGE_STORAGE_KEY)
@@ -83,10 +92,7 @@ export function useChatKnowledge(): { enabled: WritableComputedRef<boolean> } {
     delete states[DRAFT]
     persist()
   })
-  if (getCurrentScope()) {
-    window.addEventListener('storage', syncFromStorage)
-    onScopeDispose(() => window.removeEventListener('storage', syncFromStorage))
-  }
+  if (getCurrentScope()) listenToOtherTabs()
 
   const enabled = computed<boolean>({
     get: () => states[key()] ?? true, // on by default, as before
