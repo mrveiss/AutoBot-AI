@@ -4962,7 +4962,9 @@
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
       "commandToExecute": "Command to Execute",
-      "usernameMissing": "نام کاربری وجود ندارد: آن را در اسرار تنظیم کنید"
+      "usernameMissing": "نام کاربری وجود ندارد: آن را در اسرار تنظیم کنید",
+      "desktopVm": "ماشین مجازی دسکتاپ AutoBot",
+      "desktopVmDesc": "دسکتاپ اختصاصی AutoBot"
     },
     "systemStatus": {
       "lastCheck": "Last Check:",

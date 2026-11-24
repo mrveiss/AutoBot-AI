@@ -5813,7 +5813,9 @@
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
       "close": "Close",
-      "usernameMissing": "Brak nazwy użytkownika: ustaw ją w Sekretach"
+      "usernameMissing": "Brak nazwy użytkownika: ustaw ją w Sekretach",
+      "desktopVm": "Maszyna wirtualna pulpitu AutoBot",
+      "desktopVmDesc": "Własny pulpit AutoBot"
     },
     "hostSelector": {
       "selectHost": "Select Host",

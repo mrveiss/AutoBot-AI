@@ -36,7 +36,7 @@ from api.vnc_host_target import resolve_host_id
 from api.ws_security import enforce_ws_desktop_auth, enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
-from autobot_shared.env_utils import env_flag, env_int, env_str
+from autobot_shared.env_utils import env_int, env_str
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY, assert_egress_policy
@@ -55,22 +55,6 @@ VNC_UPSTREAM_SCHEME = env_str("AUTOBOT_VNC_UPSTREAM_SCHEME", "https")
 VNC_WS_SCHEMES = {"https": "wss", "http": "ws"}
 VNC_OBSERVATION_TIMEOUT_S = env_int("AUTOBOT_VNC_OBSERVATION_TIMEOUT_S", 1)
 VNC_STATUS_PROBE_TIMEOUT_S = env_int("AUTOBOT_VNC_STATUS_PROBE_TIMEOUT_S", 5)
-
-
-# AutoBot's own desktop is the agent's display, not a host the user added in /secrets. The chat app reaches
-# only /secrets hosts (owner ruling 2026-11-23), so the page, asset and websocket proxy of the "desktop"
-# type is off unless an operator enables it for agent-desktop observation. /status stays: vnc_mcp probes it.
-VNC_PROXY_OWN_DESKTOP_ENABLED = env_flag("AUTOBOT_VNC_PROXY_OWN_DESKTOP", False)
-_OWN_DESKTOP_TYPE = "desktop"
-
-
-def _own_desktop_refused(vnc_type: str) -> bool:
-    return vnc_type == _OWN_DESKTOP_TYPE and not VNC_PROXY_OWN_DESKTOP_ENABLED
-
-
-def _refuse_own_desktop(vnc_type: str) -> None:
-    if _own_desktop_refused(vnc_type):
-        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
 
 
 def _websockify_url(endpoint: str) -> str:
@@ -359,7 +343,6 @@ async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current
     """
     if vnc_type not in VNC_ENDPOINTS:
         raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
-    _refuse_own_desktop(vnc_type)
 
     endpoint = VNC_ENDPOINTS[vnc_type]
 
@@ -449,7 +432,6 @@ async def proxy_vnc_assets(vnc_type: str, path: str, current_user: dict = Depend
     """
     if vnc_type not in VNC_ENDPOINTS:
         raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
-    _refuse_own_desktop(vnc_type)
 
     endpoint = VNC_ENDPOINTS[vnc_type]
 
@@ -517,7 +499,7 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     if user is None:
         return
 
-    if vnc_type not in VNC_ENDPOINTS or _own_desktop_refused(vnc_type):
+    if vnc_type not in VNC_ENDPOINTS:
         await websocket.close(code=1003, reason=f"Unknown VNC type: {vnc_type}")
         return
 

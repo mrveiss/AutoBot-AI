@@ -88,12 +88,26 @@ export function useDesktopControlLock(hostId: MaybeRefOrGetter<string | null | u
   }
 
   // A different host is a different lock: drop the old host's state and heartbeat, then read the new one.
-  watch(currentHostId, () => {
+  // If the user held the OLD host's lock, hand it back to the agent there (using the old id) first.
+  watch(currentHostId, async (_next, previous) => {
+    const heldOld = !!previous && isMine.value
     stopHeartbeat()
     owner.value = null
     humanActive.value = false
+    if (heldOld) await releaseHost(previous)
     void refreshStatus()
   })
+
+  async function releaseHost(hostId: string): Promise<void> {
+    try {
+      await ApiClient.call('post', '/api/vnc-proxy/{vnc_type}/control/release', {
+        path,
+        body: { session_id: hostId }
+      })
+    } catch (err: unknown) {
+      logger.warn('Could not release the previous host control lock:', err)
+    }
+  }
 
   async function refreshStatus(): Promise<DesktopControlLockState | null> {
     if (!currentHostId()) return null

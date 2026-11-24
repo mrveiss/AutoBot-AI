@@ -109,20 +109,6 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_VNC_PROXY_OWN_DESKTOP",
-        type=bool,
-        default=False,
-        description=(
-            "Serve the noVNC page, assets and websocket proxy for AutoBot's own desktop (vnc type "
-            "'desktop') through api/vnc_proxy.py. Off by default: the chat app reaches only /secrets "
-            "hosts. Enable only for agent-desktop observation; /status is always served."
-        ),
-        component="desktop",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
         name="AUTOBOT_VNC_CLIENT_MAX_TEXT_BYTES",
         type=int,
         default=1048576,

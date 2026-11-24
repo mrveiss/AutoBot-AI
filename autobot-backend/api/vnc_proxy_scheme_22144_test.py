@@ -44,17 +44,31 @@ async def test_control_lock_refuses_a_non_secrets_host_id(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_own_desktop_proxy_is_off_by_default_for_page_assets_and_websocket(monkeypatch):
-    """The chat app reaches only /secrets hosts; AutoBot's own desktop is not proxied unless enabled (#22145)."""
-    monkeypatch.setattr(vnc_proxy, "VNC_PROXY_OWN_DESKTOP_ENABLED", False)
+async def test_unknown_vnc_type_is_refused_for_every_proxy_route():
+    """Only the desktop VM and the browser VM are proxied; any other type is 404 (owner 2026-11-24)."""
     with pytest.raises(HTTPException) as exc:
-        await vnc_proxy.get_vnc_client("desktop", current_user={})
+        await vnc_proxy.get_vnc_client("fleet-node-7", current_user={})
     assert exc.value.status_code == 404
     with pytest.raises(HTTPException):
-        await vnc_proxy.proxy_vnc_assets("desktop", "app.js", current_user={})
+        await vnc_proxy.proxy_vnc_assets("fleet-node-7", "app.js", current_user={})
+    with pytest.raises(HTTPException):
+        await vnc_proxy.get_vnc_status("fleet-node-7", current_user={})
 
 
-def test_browser_type_is_not_affected_by_the_own_desktop_switch(monkeypatch):
-    monkeypatch.setattr(vnc_proxy, "VNC_PROXY_OWN_DESKTOP_ENABLED", False)
-    assert vnc_proxy._own_desktop_refused("desktop") is True
-    assert vnc_proxy._own_desktop_refused("browser") is False
+@pytest.mark.asyncio
+async def test_unknown_vnc_type_closes_the_websocket_before_accept():
+    from unittest.mock import AsyncMock, MagicMock
+
+    ws = MagicMock()
+    ws.close = AsyncMock()
+    with (
+        patch("api.vnc_proxy.enforce_ws_origin", new=AsyncMock(return_value=True)),
+        patch("api.vnc_proxy.enforce_ws_desktop_auth", new=AsyncMock(return_value={"username": "a"})),
+    ):
+        await vnc_proxy.websocket_proxy(ws, "fleet-node-7")
+    ws.close.assert_awaited_once()
+    assert ws.close.await_args.kwargs["code"] == 1003
+
+
+def test_the_desktop_vm_is_a_proxied_type():
+    assert set(vnc_proxy.VNC_ENDPOINTS) == {"desktop", "browser"}

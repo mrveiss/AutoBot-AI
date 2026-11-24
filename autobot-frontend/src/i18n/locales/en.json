@@ -6154,7 +6154,9 @@
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
       "close": "Close",
-      "usernameMissing": "Username missing: set it in Secrets"
+      "usernameMissing": "Username missing: set it in Secrets",
+      "desktopVm": "AutoBot desktop VM",
+      "desktopVmDesc": "AutoBot's own desktop"
     },
     "hostSelector": {
       "selectHost": "Select Host",

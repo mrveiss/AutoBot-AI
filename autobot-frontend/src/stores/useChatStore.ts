@@ -6,6 +6,7 @@ import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
 import { createLogger } from '@/utils/debugUtils'
 import { visibleMessages } from '@/utils/internalMessage'
 import type { ChatMessage } from '@/types/api'
+import { buildVncClientUrl, type VncClientHost } from '@/config/vnc-client'
 import apiClient from '@/utils/ApiClient'
 import type { SecretType } from '@/types/secretKind'
 import { usePendingApproval } from './chatPendingApproval'
@@ -738,6 +739,36 @@ export const useChatStore = defineStore('chat', () => {
     return desktopSessionId
   }
 
+  /**
+   * noVNC URL for the host selected in the chat Desktop picker: AutoBot's desktop VM or one of the
+   * user's /secrets hosts. The address, scheme, port and path come from the one URL builder
+   * (config/vnc-client.ts); this adds the chat-session context. No host, no URL.
+   */
+  function getDesktopUrl(sessionId: string, host: VncClientHost | null | undefined): string {
+    if (!host) return ''
+    let session = sessions.value.find(s => s.id === sessionId)
+    if (!session?.desktopSession) {
+      createDesktopSession(sessionId)
+      session = sessions.value.find(s => s.id === sessionId)
+    }
+    // #16299: no password here -- the backend authenticates to the VNC server itself.
+    const params = new URLSearchParams({
+      resize: 'remote',
+      reconnect: 'true',
+      quality: '9',
+      compression: '9',
+      chatSession: sessionId,
+      desktopSession: session?.desktopSession?.sessionId || '',
+      automationMode: 'true'
+    })
+    const desktopUrl = `${buildVncClientUrl(host)}&${params.toString()}`
+    if (session?.desktopSession) {
+      session.desktopSession.vncUrl = desktopUrl
+      session.desktopSession.lastActivity = new Date()
+    }
+    return desktopUrl
+  }
+
   function updateDesktopContext(sessionId: string, context: Record<string, unknown>) {
     let session = sessions.value.find(s => s.id === sessionId)
     if (!session?.desktopSession) {
@@ -1052,6 +1083,7 @@ export const useChatStore = defineStore('chat', () => {
     syncSessionsWithBackend,
     // Desktop session management
     createDesktopSession,
+    getDesktopUrl,
     updateDesktopContext,
     getDesktopContext,
     // Issue #608: User-centric session tracking

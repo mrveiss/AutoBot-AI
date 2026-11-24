@@ -5813,7 +5813,9 @@
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
       "close": "Close",
-      "usernameMissing": "Benutzername fehlt: unter Secrets festlegen"
+      "usernameMissing": "Benutzername fehlt: unter Secrets festlegen",
+      "desktopVm": "AutoBot-Desktop-VM",
+      "desktopVmDesc": "Der eigene Desktop von AutoBot"
     },
     "hostSelector": {
       "selectHost": "Select Host",

@@ -84,7 +84,10 @@ export async function createVncCompanion(
   if (form.type !== 'infrastructure_host' || !form.capabilities.includes('vnc') || !form.vnc_password) return;
   const hostId = (created as { data?: { id?: string } } | null)?.data?.id;
   if (!hostId) throw new Error(t('security.secretsManager.vncCompanionNoHostId'));
-  const linked = existing.find((s) => s.type === 'password' && s.metadata?.[VNC_COMPANION_HOST_KEY] === hostId);
+  // Refetch first: the list the form holds can be stale, and a second create would duplicate the secret.
+  const fresh = await secretsApiClient.getSecrets({}).catch(() => null) as { secrets?: SecretLike[] } | null
+  const known = [...(fresh?.secrets ?? []), ...existing]
+  const linked = known.find((s) => s.type === 'password' && s.metadata?.[VNC_COMPANION_HOST_KEY] === hostId);
   if (linked) {
     await secretsApiClient.updateSecret(linked.id, { value: form.vnc_password } as never, {
       chatId: hostData.chat_id as string | null | undefined

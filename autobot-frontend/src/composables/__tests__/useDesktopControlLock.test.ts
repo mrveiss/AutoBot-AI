@@ -76,6 +76,27 @@ describe('useDesktopControlLock', () => {
     scope.stop()
   })
 
+  it('releases the OLD host lock, with the old id, when the host switches (#22191)', async () => {
+    const host = ref('host-1')
+    const store = useUserStore()
+    store.currentUser = { username: 'alice' } as never
+    mockGet.mockResolvedValue(fakeState({ owner: 'alice', human_active: true }))
+    const scope = effectScope()
+    const lock = scope.run(() => useDesktopControlLock(host))!
+    await lock.refreshStatus()
+    expect(lock.isMine.value).toBe(true)
+    mockPost.mockResolvedValue(fakeState())
+    mockGet.mockResolvedValue(fakeState({ session_id: 'host-2' }))
+    host.value = 'host-2'
+    await nextTick()
+    await flushPromises()
+    expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/{vnc_type}/control/release', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-1' }
+    })
+    scope.stop()
+  })
+
   it('makes no request without a selected host id (#22145)', async () => {
     const { refreshStatus, takeControl } = useDesktopControlLock('')
     expect(await refreshStatus()).toBeNull()

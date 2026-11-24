@@ -21,7 +21,9 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useHostSelection } from '@/composables/useHostSelection'
+import { getDesktopVmHost } from '@/config/vnc-client'
 
 export interface SelectorHost {
   id: string
@@ -41,9 +43,12 @@ export interface UseHostSelectorOptions {
   requiredCapability?: string
   /** Chat session ID (passed as ?chat_id=). */
   chatId?: string
+  /** List AutoBot's own desktop VM first (chat Desktop picker only). */
+  includeDesktopVm?: boolean
 }
 
 export function useHostSelector(options: UseHostSelectorOptions = {}) {
+  const { t } = useI18n()
   const { hosts: infraHosts, loading, error, loadHosts: loadInfraHosts } = useHostSelection()
 
   // Map InfrastructureHost → SelectorHost; apply client-side capability filter when set
@@ -61,6 +66,9 @@ export function useHostSelector(options: UseHostSelectorOptions = {}) {
     }))
     if (options.requiredCapability) {
       list = list.filter((h: SelectorHost) => h.capabilities?.includes(options.requiredCapability!))
+    }
+    if (options.includeDesktopVm) {
+      list = [{ ...getDesktopVmHost(), name: t('ui.hostSelection.desktopVm'), description: t('ui.hostSelection.desktopVmDesc') }, ...list]
     }
     return list
   })

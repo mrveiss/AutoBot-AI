@@ -136,6 +136,8 @@ const { t } = useI18n();
 const props = defineProps<{
   chatId?: string;
   requiredCapability?: 'ssh' | 'vnc';
+  /** Also offer AutoBot's own desktop VM (chat Desktop picker). */
+  includeDesktopVm?: boolean;
   modelValue?: InfrastructureHost | null;
 }>();
 
@@ -150,6 +152,7 @@ const emit = defineEmits<{
 const { hosts, loading, loadHosts } = useHostSelector({
   requiredCapability: props.requiredCapability,
   chatId: props.chatId,
+  includeDesktopVm: props.includeDesktopVm,
 });
 
 // State

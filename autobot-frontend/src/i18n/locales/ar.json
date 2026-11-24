@@ -5813,7 +5813,9 @@
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
       "close": "إغلاق",
-      "usernameMissing": "اسم المستخدم مفقود: عيّنه في الأسرار"
+      "usernameMissing": "اسم المستخدم مفقود: عيّنه في الأسرار",
+      "desktopVm": "جهاز AutoBot الافتراضي لسطح المكتب",
+      "desktopVmDesc": "سطح مكتب AutoBot الخاص"
     },
     "hostSelector": {
       "selectHost": "Select Host",

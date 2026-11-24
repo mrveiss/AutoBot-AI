@@ -4962,7 +4962,9 @@
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
       "commandToExecute": "Command to Execute",
-      "usernameMissing": "صارف نام موجود نہیں: اسے رازوں میں مقرر کریں"
+      "usernameMissing": "صارف نام موجود نہیں: اسے رازوں میں مقرر کریں",
+      "desktopVm": "AutoBot ڈیسک ٹاپ VM",
+      "desktopVmDesc": "AutoBot کا اپنا ڈیسک ٹاپ"
     },
     "systemStatus": {
       "lastCheck": "Last Check:",

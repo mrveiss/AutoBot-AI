@@ -10,7 +10,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const createSecret = vi.fn(async (..._a: unknown[]) => ({}))
 const updateSecret = vi.fn(async (..._a: unknown[]) => ({}))
-vi.mock('@/utils/SecretsApiClient', () => ({ secretsApiClient: { createSecret: (...a: unknown[]) => createSecret(...a), updateSecret: (...a: unknown[]) => updateSecret(...a) } }))
+const getSecrets = vi.fn(async (..._a: unknown[]) => ({ secrets: [] as unknown[] }))
+vi.mock('@/utils/SecretsApiClient', () => ({ secretsApiClient: { createSecret: (...a: unknown[]) => createSecret(...a), updateSecret: (...a: unknown[]) => updateSecret(...a), getSecrets: (...a: unknown[]) => getSecrets(...a) } }))
 vi.mock('@/utils/ApiClient', () => ({ default: {} }))
 
 import { createVncCompanion } from '../useSecretsInfraApi'
@@ -20,7 +21,7 @@ const form = { type: 'infrastructure_host', name: 'box', host: 'h', capabilities
 const hostData = { scope: 'general', chat_id: null }
 
 describe('createVncCompanion', () => {
-  beforeEach(() => { createSecret.mockClear(); updateSecret.mockClear() })
+  beforeEach(() => { createSecret.mockClear(); updateSecret.mockClear(); getSecrets.mockReset(); getSecrets.mockResolvedValue({ secrets: [] }) })
 
   it('creates a linked password secret when the host has none', async () => {
     await createVncCompanion({ data: { id: 'h1' } }, form, hostData, t, [])
@@ -34,6 +35,13 @@ describe('createVncCompanion', () => {
     const existing = [{ id: 's9', type: 'password', metadata: { vnc_host_id: 'h1' } }, { id: 's8', type: 'password', metadata: { vnc_host_id: 'other' } }]
     await createVncCompanion({ data: { id: 'h1' } }, form, hostData, t, existing)
     expect(updateSecret).toHaveBeenCalledWith('s9', { value: 'pw' }, { chatId: null })
+    expect(createSecret).not.toHaveBeenCalled()
+  })
+
+  it('uses a freshly fetched list, so a stale form list cannot cause a duplicate', async () => {
+    getSecrets.mockResolvedValue({ secrets: [{ id: 's7', type: 'password', metadata: { vnc_host_id: 'h1' } }] })
+    await createVncCompanion({ data: { id: 'h1' } }, form, hostData, t, [])
+    expect(updateSecret).toHaveBeenCalledWith('s7', { value: 'pw' }, { chatId: null })
     expect(createSecret).not.toHaveBeenCalled()
   })
 

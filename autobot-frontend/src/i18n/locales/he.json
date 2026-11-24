@@ -4962,7 +4962,9 @@
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
       "commandToExecute": "Command to Execute",
-      "usernameMissing": "שם משתמש חסר: הגדר אותו ב'סודות'"
+      "usernameMissing": "שם משתמש חסר: הגדר אותו ב'סודות'",
+      "desktopVm": "מכונה וירטואלית של שולחן העבודה של AutoBot",
+      "desktopVmDesc": "שולחן העבודה של AutoBot עצמו"
     },
     "systemStatus": {
       "lastCheck": "Last Check:",

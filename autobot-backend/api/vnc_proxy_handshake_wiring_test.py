@@ -22,14 +22,6 @@ from api.vnc_proxy import websocket_proxy
 from security.vnc_rfb_auth import VncAuthError
 
 
-@pytest.fixture(autouse=True)
-def _own_desktop_proxy_enabled(monkeypatch):
-    """These tests exercise the agent-desktop proxy, which is off by default (#22145)."""
-    from api import vnc_proxy as _vp
-
-    monkeypatch.setattr(_vp, "VNC_PROXY_OWN_DESKTOP_ENABLED", True)
-
-
 def _fake_websocket() -> MagicMock:
     ws = MagicMock()
     ws.headers = {}

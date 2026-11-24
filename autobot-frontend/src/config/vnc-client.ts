@@ -13,6 +13,9 @@
 import { getEnvPositiveInt } from '@autobot/ui'
 import { getConfig } from '@/config/ssot-config'
 
+/** Picker id of AutoBot's own desktop VM; distinct from any /secrets host id. Mirrors api/vnc_host_target.py. */
+export const DESKTOP_VM_HOST_ID = 'autobot-desktop-vm'
+
 /** Path of the noVNC client page on a websockify host. */
 export const VNC_CLIENT_PATH: string = import.meta.env.VITE_VNC_CLIENT_PATH || '/vnc.html'
 
@@ -28,6 +31,11 @@ export const VNC_PROBE_TIMEOUT_MS: number = getEnvPositiveInt(import.meta.env, '
 export interface VncClientHost {
   host: string
   vnc_port?: number | null
+}
+
+/** The picker entry for AutoBot's desktop VM, from the SSOT desktop VNC host; never an address literal. */
+export function getDesktopVmHost(): { id: string; host: string; vnc_port?: undefined; capabilities: string[] } {
+  return { id: DESKTOP_VM_HOST_ID, host: getConfig().vnc.desktop.host, capabilities: ['vnc'] }
 }
 
 /** noVNC web port for a host: its own port when set, else the SSOT desktop port. */

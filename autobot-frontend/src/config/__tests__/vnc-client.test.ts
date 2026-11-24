@@ -15,6 +15,8 @@ import {
   getVncClientPort,
   VNC_CLIENT_PATH,
   VNC_CLIENT_SCHEME,
+  DESKTOP_VM_HOST_ID,
+  getDesktopVmHost,
 } from '../vnc-client'
 
 describe('vnc-client URL derivation', () => {
@@ -31,5 +33,12 @@ describe('vnc-client URL derivation', () => {
   it('builds the full client URL from base, configured path and query', () => {
     const url = buildVncClientUrl({ host: 'box.example.test', vnc_port: 6081 })
     expect(url).toBe(`https://box.example.test:6081${VNC_CLIENT_PATH}?autoconnect=true`)
+  })
+
+  it("offers AutoBot's desktop VM from the SSOT desktop VNC host, under a stable id", () => {
+    const vm = getDesktopVmHost()
+    expect(vm.id).toBe(DESKTOP_VM_HOST_ID)
+    expect(vm.host).toBe(getConfig().vnc.desktop.host)
+    expect(vm.capabilities).toContain('vnc')
   })
 })

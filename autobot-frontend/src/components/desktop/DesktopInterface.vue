@@ -216,6 +216,8 @@ import ApiClient from '@/utils/ApiClient'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useDesktopControlLock } from '@/composables/useDesktopControlLock'
 import { createLogger } from '@/utils/debugUtils'
+import { useChatStore } from '@/stores/useChatStore'
+import { controlErrorText } from '@/components/desktop/controlErrors'
 import type { SelectorHost } from '@/composables/useHostSelector'
 
 /** Optional host prop — when provided, drives the VNC URL directly from the
@@ -312,7 +314,9 @@ const openInNewWindow = (): void => {
 const vncUrl = ref('') // Will be loaded on mount
 
 /** Build VNC URL from a SelectorHost record (Issue #4977). */
-const buildHostVncUrl = (h: SelectorHost): string => buildVncClientUrl(h)
+const chatStore = useChatStore()
+const buildHostVncUrl = (h: SelectorHost): string =>
+  chatStore.currentSessionId ? chatStore.getDesktopUrl(chatStore.currentSessionId, h) : buildVncClientUrl(h)
 
 // Load dynamic VNC URL on component mount
 const loadVncUrlFn = async () => {
@@ -510,16 +514,6 @@ const handleFullscreenChange = () => {
 }
 
 // Desktop interaction actions (Issue #74)
-/** The backend's stable error codes map to i18n text; anything else shows its own message. */
-const CONTROL_ERROR_KEYS: Record<string, string> = {
-  vnc_credential_missing: 'desktop.interface.vncCredentialMissing',
-  host_not_found: 'desktop.interface.hostNotFound',
-  host_fields_missing: 'desktop.interface.hostFieldsMissing',
-  host_vnc_unavailable: 'desktop.interface.hostVncUnavailable'
-}
-const controlErrorText = (r: { message: string; code?: string }): string =>
-  r.code && CONTROL_ERROR_KEYS[r.code] ? t(CONTROL_ERROR_KEYS[r.code]) : r.message
-
 async function takeScreenshot() {
   const result = await vncControls.captureScreenshot()
   if (result.status === 'success' && result.image_data) {
@@ -527,7 +521,7 @@ async function takeScreenshot() {
     showScreenshotModal.value = true
   } else {
     logger.error('Screenshot failed:', result.message)
-    error.value = controlErrorText(result)
+    error.value = controlErrorText(result, t)
   }
 }
 
@@ -540,7 +534,7 @@ async function handleTypeText() {
     showTypeDialog.value = false
   } else {
     logger.error('Type text failed:', result.message)
-    error.value = controlErrorText(result)
+    error.value = controlErrorText(result, t)
   }
 }
 
@@ -548,7 +542,7 @@ async function sendCtrlAltDel() {
   const result = await vncControls.sendCtrlAltDel()
   if (result.status !== 'success') {
     logger.error('Ctrl+Alt+Del failed:', result.message)
-    error.value = controlErrorText(result)
+    error.value = controlErrorText(result, t)
   }
 }
 
@@ -558,7 +552,7 @@ async function pasteFromClipboard() {
     const result = await vncControls.syncClipboard(text)
     if (result.status !== 'success') {
       logger.error('Clipboard sync failed:', result.message)
-      error.value = controlErrorText(result)
+      error.value = controlErrorText(result, t)
     }
   } catch (err) {
     logger.error('Clipboard read failed:', err)

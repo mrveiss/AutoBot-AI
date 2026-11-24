@@ -20,7 +20,7 @@ from api import infrastructure as infra
 from api.infrastructure_host_rules import missing_host_fields, refuse_incomplete_host
 from api.schemas_system import MouseClickRequest
 from api.vnc_host_actions import keysym_for, run_on_host
-from api.vnc_host_target import VncTarget, resolve_host_id, resolve_vnc_target
+from api.vnc_host_target import DESKTOP_VM_HOST_ID, VncTarget, resolve_host_id, resolve_vnc_target
 from api.vnc_manager import vnc_mouse_click, vnc_screenshot
 from api.vnc_rfb_client import VncFrame, VncRfbSession, frame_to_png
 
@@ -373,3 +373,51 @@ class TestRequestBounds:
 
         with pytest.raises(ValidationError):
             MouseClickRequest(host_id="h", x=70000, y=1)
+
+
+class TestDesktopVmEntry:
+    """Owner 2026-11-24: the picker lists AutoBot's desktop VM next to the user's /secrets hosts."""
+
+    @pytest.mark.asyncio
+    async def test_desktop_vm_resolves_to_the_ssot_endpoint_and_vault_password(self, monkeypatch, secrets_hosts):
+        from autobot_shared.ssot_config import config
+        from constants.network_constants import NetworkConstants
+
+        async def vault_pw(vnc_type):
+            assert vnc_type == "desktop"
+            return b"vault-pw"
+
+        monkeypatch.setattr("api.vnc_host_target.get_vnc_password", vault_pw)
+        target = await resolve_vnc_target(DESKTOP_VM_HOST_ID)
+        assert target == VncTarget(
+            DESKTOP_VM_HOST_ID, NetworkConstants.MAIN_MACHINE_IP, config.port.vnc_server, b"vault-pw"
+        )
+
+    def test_desktop_vm_and_secrets_host_are_allowed_other_fleet_node_refused(self, secrets_hosts, password):
+        assert resolve_host_id(DESKTOP_VM_HOST_ID) == DESKTOP_VM_HOST_ID
+        assert resolve_host_id("h-secret") == "h-secret"
+        with pytest.raises(HTTPException) as exc:
+            resolve_host_id(FLEET_NODE_ID)
+        assert exc.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_missing_vault_password_is_the_stable_code(self, monkeypatch, secrets_hosts):
+        from api.vnc_rfb_client import VncAuthError
+
+        async def boom(vnc_type):
+            raise VncAuthError("none")
+
+        monkeypatch.setattr("api.vnc_host_target.get_vnc_password", boom)
+        with pytest.raises(HTTPException) as exc:
+            await resolve_vnc_target(DESKTOP_VM_HOST_ID)
+        assert exc.value.status_code == 422 and exc.value.detail["code"] == "vnc_credential_missing"
+
+    @pytest.mark.asyncio
+    async def test_a_control_on_the_desktop_vm_connects_there(self, monkeypatch, fake_session):
+        async def vault_pw(vnc_type):
+            return b"vault-pw"
+
+        monkeypatch.setattr("api.vnc_host_target.get_vnc_password", vault_pw)
+        result = await run_on_host(DESKTOP_VM_HOST_ID, "click", x=1, y=1, button="left")
+        assert result["status"] == "success"
+        assert fake_session.instances[0].args[2] == b"vault-pw"

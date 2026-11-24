@@ -5813,7 +5813,9 @@
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
       "close": "Close",
-      "usernameMissing": "Trūkst lietotājvārda: iestatiet to sadaļā Noslēpumi"
+      "usernameMissing": "Trūkst lietotājvārda: iestatiet to sadaļā Noslēpumi",
+      "desktopVm": "AutoBot darbvirsmas VM",
+      "desktopVmDesc": "AutoBot paša darbvirsma"
     },
     "hostSelector": {
       "selectHost": "Select Host",

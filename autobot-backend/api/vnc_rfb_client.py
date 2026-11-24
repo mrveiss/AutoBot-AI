@@ -26,6 +26,11 @@ VNC_FRAME_TIMEOUT_S = env_int("AUTOBOT_VNC_CLIENT_FRAME_TIMEOUT_S", 15)
 VNC_MAX_FRAMEBUFFER_BYTES = env_int("AUTOBOT_VNC_CLIENT_MAX_FRAMEBUFFER_BYTES", 64 * 1024 * 1024)
 VNC_MAX_TEXT_BYTES = env_int("AUTOBOT_VNC_CLIENT_MAX_TEXT_BYTES", 1024 * 1024)  # desktop name, server cut text
 
+# VNC_MAX_FRAMEBUFFER_BYTES caps each buffer in that buffer's OWN unit: the RGB canvas we keep
+# (3 bytes per pixel) and the raw bytes one update carries on the wire (4 bytes per pixel, 32bpp).
+_RGB_BYTES_PER_PIXEL = 3
+_WIRE_BYTES_PER_PIXEL = 4
+
 _MSG_SET_PIXEL_FORMAT = 0
 _MSG_SET_ENCODINGS = 2
 _MSG_FRAMEBUFFER_REQUEST = 3
@@ -100,7 +105,7 @@ class VncRfbSession:
         await s.write(b"\x01")  # ClientInit: shared
         self.width, self.height = struct.unpack("!HH", await s.read_exactly(4))
         await s.read_exactly(16)  # server pixel format, superseded below
-        if self.width * self.height * 3 > VNC_MAX_FRAMEBUFFER_BYTES:
+        if self.width * self.height * _RGB_BYTES_PER_PIXEL > VNC_MAX_FRAMEBUFFER_BYTES:
             raise VncProtocolError("server advertises a screen larger than the configured size cap")
         name_len = struct.unpack("!I", await s.read_exactly(4))[0]
         if name_len > VNC_MAX_TEXT_BYTES:
@@ -142,7 +147,7 @@ class VncRfbSession:
 
     async def _read_update(self) -> VncFrame:
         s = self._stream
-        canvas = bytearray(self.width * self.height * 3)
+        canvas = bytearray(self.width * self.height * _RGB_BYTES_PER_PIXEL)
         while True:
             kind = (await s.read_exactly(1))[0]
             if kind != 0:
@@ -162,7 +167,7 @@ class VncRfbSession:
         if x + w > self.width or y + h > self.height:
             raise VncProtocolError("server sent a rectangle outside the screen")
         left = budget if budget is not None else [VNC_MAX_FRAMEBUFFER_BYTES]
-        left[0] -= w * h * 4
+        left[0] -= w * h * _WIRE_BYTES_PER_PIXEL
         if left[0] < 0:
             raise VncProtocolError("framebuffer exceeds the configured size cap")
         raw = await s.read_exactly(w * h * 4)
