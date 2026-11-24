@@ -35466,7 +35466,7 @@ export interface paths {
          * Navigate To Url
          * @description Navigate to a URL using Playwright on Browser VM
          *
-         *     Forwards navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          */
         post: operations["navigate_to_url_api_playwright_navigate_post"];
         delete?: never;
@@ -35488,7 +35488,7 @@ export interface paths {
          * Reload Page
          * @description Reload the current page using Playwright on Browser VM
          *
-         *     Forwards reload request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards reload request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          */
         post: operations["reload_page_api_playwright_reload_post"];
         delete?: never;
@@ -35510,7 +35510,7 @@ export interface paths {
          * Go Back
          * @description Navigate back in browser history using Playwright on Browser VM
          *
-         *     Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards back navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
          *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
@@ -35534,7 +35534,7 @@ export interface paths {
          * Go Forward
          * @description Navigate forward in browser history using Playwright on Browser VM
          *
-         *     Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards forward navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
          *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
@@ -62717,11 +62717,6 @@ export interface components {
             text: string;
             /** Reference Audio */
             reference_audio: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -62731,16 +62726,6 @@ export interface components {
             name: string;
             /** Audio */
             audio: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** Body_voice_listen_api_api_voice_listen_post */
-        Body_voice_listen_api_api_voice_listen_post: {
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -62758,11 +62743,6 @@ export interface components {
              * @default
              */
             language: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Stream
              * @default false
@@ -62790,11 +62770,6 @@ export interface components {
              * @default
              */
             language: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Stream
              * @default false
@@ -124989,11 +124964,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_voice_listen_api_api_voice_listen_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -125002,15 +124973,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VoiceListenResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
