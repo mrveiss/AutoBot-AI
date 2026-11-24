@@ -10029,5 +10029,17 @@
     "requestFailed": "Falló la solicitud de limpieza de desviaciones",
     "result": "Se eliminaron {removed} archivo(s); {left} se dejaron en su lugar",
     "title": "Se eliminarían {count} archivo(s) de {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Estos controles pausan o reanudan todos los agentes, no uno solo",
+    "loadFailed": "No se pudieron cargar los agentes",
+    "noLastActivity": "Sin actividad informada",
+    "notReported": "No informado",
+    "pauseAll": "Pausar todos los agentes",
+    "pauseFailed": "No se pudieron pausar los agentes",
+    "resumeAll": "Reanudar todos los agentes",
+    "resumeFailed": "No se pudieron reanudar los agentes",
+    "successRate": "Tasa de éxito",
+    "tasksCompleted": "Tareas completadas"
   }
 }
