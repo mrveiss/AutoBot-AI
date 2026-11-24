@@ -117,7 +117,7 @@
  */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { BaseBadge } from '@autobot/ui'
+import { BaseBadge, saveUrl } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
 import ChatMessageApproval from '@/components/chat/ChatMessageApproval.vue'
@@ -178,14 +178,9 @@ const isModelOnlyClaim = computed(() => {
   return props.message.sender === 'assistant' && grounding != null && grounding.grounded === false
 })
 
-/** Download through the browser from the attachment's own URL (no extra request from this code). */
+/** Download through the browser from the attachment's own URL, via the kit's one file-save helper (#20770). */
 function downloadAttachment(attachment: { url?: string; name?: string }) {
-  if (!attachment.url) return
-  const link = document.createElement('a')
-  link.href = attachment.url
-  link.download = attachment.name ?? ''
-  link.rel = 'noopener'
-  link.click()
+  if (attachment.url) saveUrl(attachment.url, attachment.name ?? '')
 }
 
 function viewAttachment(attachment: { url?: string }) {
