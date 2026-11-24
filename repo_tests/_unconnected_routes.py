@@ -95,13 +95,14 @@ EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
     # it is declared here. The prefix also covers `/system` (list, create) and `/system/{id}/rewrap`: the same
     # client calls both. It matches no route outside the system vault.
     "/api/v2/secrets/system": "the SLM backend's vault client (user_management/services/vault_client.py), over HTTP",
-    # #22212: token introspection; a service presents X-Internal-API-Key (api/auth.py POST /validate).
-    "/api/auth/validate": "internal services introspecting a token with X-Internal-API-Key",
-    # #22212: the SLM pushes a revoked RS256 token's id to the denylist its JWKS verifiers read (api/auth.py).
-    "/api/auth/revoke-rs256-token": "the SLM's JWKS denylist, over HTTP",
     # #22212: the documented self-registration API (docs/developer/AUTHENTICATION_RBAC.md); no screen uses it.
     "/api/auth/signup": "self-registering clients of the documented signup API, over HTTP",
 }
+
+
+def covered_by(path: str, prefixes: tuple[str, ...]) -> bool:
+    """*path* equals a declared prefix or continues it at a ``/``; ``/system`` does not cover ``/systemX``."""
+    return any(path == p or path.startswith(p.rstrip("/") + "/") for p in prefixes)
 
 
 #: The mount of a router neither the registry nor the app's include graph reaches: judged at its own
@@ -144,9 +145,12 @@ class Audit:
         self.root = root
         self.mod = load_script(scripts_root or root, "audit_api_wiring")
         self.dead = load_script(scripts_root or root, "dead_surface")
-        self.external = tuple(self.dead._AGENT_FACING_PREFIXES + self.dead._MACHINE_FACING_PREFIXES) + tuple(
-            EXTERNAL_CALLER_PREFIXES
-        )
+        self.external = tuple(self.dead._AGENT_FACING_PREFIXES + self.dead._MACHINE_FACING_PREFIXES)
+        self.declared = tuple(EXTERNAL_CALLER_PREFIXES)
+
+    def is_external(self, path: str) -> bool:
+        """True under a script-declared prefix (bare ``startswith``) or a declared one (whole segments only)."""
+        return path.startswith(self.external) or covered_by(path, self.declared)
 
     def frontend_calls(self, src: str) -> dict[str, set[str]]:
         """The script's own ``frontend_calls``, pointed at *src* under this root."""
@@ -316,7 +320,7 @@ def unconnected(tree: Tree, audit: Audit, sites: list | None = None) -> list[str
     helpers = helper_calls(tree, FRONTENDS, audit.mod.norm_path, audit.mod.FE_EXCLUDE_PATTERNS)
     out: set[str] = set()
     for rel, method, raw, cands in route_sites(tree, audit) if sites is None else sites:
-        if any(c.startswith(audit.external) or ("/api" + c).startswith(audit.external) for c in cands):
+        if any(audit.is_external(c) or audit.is_external("/api" + c) for c in cands):
             continue
         if not _reached(audit.mod, rel, cands, index) and not _reached_by_helper(rel, method, cands, helpers):
             out.add(f"{rel}:{method} {raw}")

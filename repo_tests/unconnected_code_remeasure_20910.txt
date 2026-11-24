@@ -134,6 +134,8 @@ route:autobot-backend/api/auth.py:GET /all-permissions
 route:autobot-backend/api/auth.py:GET /permissions/{operation}
 route:autobot-backend/api/auth.py:GET /roles
 route:autobot-backend/api/auth.py:GET /roles/{role}/permissions
+route:autobot-backend/api/auth.py:POST /revoke-rs256-token
+route:autobot-backend/api/auth.py:POST /validate
 route:autobot-backend/api/cache_management.py:GET /advanced-stats
 route:autobot-backend/api/cache_management.py:POST /clear-all
 route:autobot-backend/api/cache_management.py:POST /warm

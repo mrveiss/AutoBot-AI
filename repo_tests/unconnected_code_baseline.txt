@@ -1000,6 +1000,8 @@ route:autobot-backend/api/auth.py:GET /all-permissions	#20971
 route:autobot-backend/api/auth.py:GET /permissions/{operation}	#20971
 route:autobot-backend/api/auth.py:GET /roles	#20971
 route:autobot-backend/api/auth.py:GET /roles/{role}/permissions	#20971
+route:autobot-backend/api/auth.py:POST /revoke-rs256-token	#20971
+route:autobot-backend/api/auth.py:POST /validate	#20971
 route:autobot-backend/api/cache_management.py:GET /advanced-stats	#20974
 route:autobot-backend/api/cache_management.py:POST /clear-all	#20974
 route:autobot-backend/api/cache_management.py:POST /warm	#20974

@@ -422,23 +422,25 @@ def test_a_declared_external_prefix_counts_and_an_undeclared_sibling_does_not_22
     assert _fired(tmp_path, files) == {"route:autobot-backend/api/planted_route.py:GET /other/{i}"}
 
 
-@pytest.mark.parametrize(
-    "served",
-    ["/api/auth/validate", "/api/auth/revoke-rs256-token", "/api/auth/signup", "/api/v2/secrets/system/{id}"],
-)
+@pytest.mark.parametrize("served", ["/api/auth/signup", "/api/v2/secrets/system/{id}"])
 def test_the_declared_identity_routes_are_external_and_their_siblings_are_not_22212(served: str) -> None:
     declared = tuple(routes.EXTERNAL_CALLER_PREFIXES)
-    assert served.startswith(declared)
+    assert set(declared) >= {"/api/v2/secrets/system", "/api/auth/signup"}
+    assert routes.covered_by(served, declared)
     for sibling in (
         "/api/v2/secrets/{id}",
         "/api/v2/secrets/{id}/access",
+        "/api/v2/secrets/systemX",
+        "/api/auth/signupX",
         "/api/auth/login",
         "/api/auth/logout",
         "/api/auth/refresh",
         "/api/auth/check",
         "/api/auth/jwks",
+        "/api/auth/validate",
+        "/api/auth/revoke-rs256-token",
     ):
-        assert not sibling.startswith(declared), sibling
+        assert not routes.covered_by(sibling, declared), sibling
 
 
 def test_the_module_detector_finds_a_real_module_once_its_importers_are_removed() -> None:
