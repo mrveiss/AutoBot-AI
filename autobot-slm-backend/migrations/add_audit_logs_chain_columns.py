@@ -28,14 +28,13 @@ TARGET_DB routes this to the user_management database (#14300), the only one tha
 Run: python3 -m migrations.add_audit_logs_chain_columns
 """
 
-import logging
 import sys
 
+from autobot_shared.logging_manager import get_logger
 from migrations.runner import TARGET_DB_USER_MANAGEMENT
 from migrations.utils import add_column_if_not_exists, get_connection, table_exists
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 TARGET_DB = TARGET_DB_USER_MANAGEMENT
 

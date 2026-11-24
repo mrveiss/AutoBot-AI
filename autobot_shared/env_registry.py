@@ -55,25 +55,26 @@ def env(name: str, default: Any = None) -> Any:
 
 
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
-from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
-from autobot_shared import env_registry_backend  # noqa: E402,F401
-from autobot_shared import env_registry_backend_services  # noqa: E402,F401
-from autobot_shared import env_registry_knowledge  # noqa: E402,F401
-from autobot_shared import env_registry_llc  # noqa: E402,F401
-from autobot_shared import env_registry_logging  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
     env_registry_admin_files,
+    env_registry_agent_runtime,
     env_registry_agent_tools,
     env_registry_ai,
     env_registry_analytics,
     env_registry_approvals,
+    env_registry_audit_chain,
+    env_registry_backend,
+    env_registry_backend_services,
     env_registry_batch,
     env_registry_chat_attachments,
     env_registry_chat_history,
     env_registry_chat_lease,
     env_registry_gateway,
     env_registry_kb_graph,
+    env_registry_knowledge,
     env_registry_ledger,
+    env_registry_llc,
+    env_registry_logging,
     env_registry_memory,
     env_registry_mesh_reembed,
     env_registry_npu,
@@ -280,8 +281,6 @@ register_env_var(
         range=(1, 300),
     )
 )
-
-# --- logging: registered in env_registry_logging.py (#15774) -----------------
 
 # --- otel -------------------------------------------------------------------
 

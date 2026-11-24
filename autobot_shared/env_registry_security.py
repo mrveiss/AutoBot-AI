@@ -18,7 +18,6 @@ Registration contract (import side effect, ordering): see ``env_registry`` (#164
 
 from __future__ import annotations
 
-from autobot_shared import env_registry_audit_chain  # noqa: F401  (audit-chain registrations, #17219)
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(

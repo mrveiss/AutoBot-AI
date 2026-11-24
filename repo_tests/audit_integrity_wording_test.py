@@ -20,6 +20,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CLAIMS = re.compile(r"tamper[- ]?(?:resistant|proof)|immutable|append[- ]only", re.IGNORECASE)
@@ -41,8 +43,7 @@ _AUDIT_PATH = re.compile(r"(?:^|/)(?:services/audit/|[^/]*audit[^/]*\.py$)")
 
 
 def _is_audit_module(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    if name.endswith("_test.py") or name.startswith("test_") or "/tests/" in rel or "/migrations/" in rel:
+    if is_test_filename(rel) or "/tests/" in rel or "/migrations/" in rel:
         return False
     return rel.endswith(".py") and bool(_AUDIT_PATH.search(rel))
 
@@ -72,13 +73,12 @@ def _comments(source: str) -> list[str]:
 
     Consecutive full-line comments are one text, so a sentence wrapped over lines stays whole.
     """
-    lines = source.splitlines()
     blocks: list[tuple[int, str]] = []
     for tok in tokenize.generate_tokens(io.StringIO(source).readline):
         if tok.type != tokenize.COMMENT:
             continue
         row, text = tok.start[0], tok.string.lstrip("#")
-        if lines[row - 1].lstrip().startswith("#") and blocks and blocks[-1][0] == row - 1:
+        if not tok.line[: tok.start[1]].strip() and blocks and blocks[-1][0] == row - 1:
             blocks[-1] = (row, blocks[-1][1] + "\n" + text)
         else:
             blocks.append((row, text))
@@ -101,7 +101,7 @@ def _is_dishonest(sentence: str) -> bool:
 def dishonest_claims(source: str) -> list[str]:
     """Sentences of *source*'s docstrings and comments that claim an integrity property and name no mechanism."""
     scopes = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
-    texts = [ast.get_docstring(n) or "" for n in ast.walk(ast.parse(source)) if isinstance(n, scopes)]
+    texts = [ast.get_docstring(n) or "" for n in ast.walk(parse_cache.parse(source)) if isinstance(n, scopes)]
     texts += _comments(source)
     return [s.strip() for t in texts for s in _sentences(t) if _CLAIMS.search(s) and _is_dishonest(s)]
 
