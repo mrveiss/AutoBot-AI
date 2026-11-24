@@ -29,6 +29,8 @@ env:
   # The bot PR carries #22110's milestone and phase label, read from here and nowhere else.
   PR_MILESTONE: "M5 - Engineering platform: CI/CD security, debugging and dependency tooling"
   PR_PHASE_LABEL: phase:M5.7
+  # The one bot branch every run force-pushes and the one PR lookup reads; declared once.
+  BRANCH: automation/reach-floors
 
 concurrency:
   # One bot branch, one PR: two runs must not race on it.
@@ -79,7 +81,6 @@ jobs:
           # A PAT, deliberately not GITHUB_TOKEN: a PR opened with GITHUB_TOKEN triggers no
           # workflow run, so its required checks would never report and it could never merge.
           GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
-          BRANCH: automation/reach-floors
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN}" ]; then
@@ -87,6 +88,13 @@ jobs:
             exit 1
           fi
           SHORT_SHA="$(git rev-parse --short=10 HEAD)"
+          # path:line of every floor= line the script re-pinned, for the proof table below.
+          PIN_LINES=""
+          while IFS= read -r pin; do
+            path="${pin##* in }"; value="${pin#*floor -> }"; value="${value%% *}"
+            row="$(grep -n "floor=${value}\b" "$path" | head -1 | cut -d: -f1)"
+            PIN_LINES="${PIN_LINES:+${PIN_LINES}; }${path}:${row}"
+          done < <(grep '^PIN' repin.log)
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -124,7 +132,7 @@ jobs:
             echo
             echo "| AC | Precondition | Postcondition | Establishing lines | Argument | Reviewer |"
             echo "|---|---|---|---|---|---|"
-            echo "| Re-pin the reach floors main outgrew | the floors listed under What Changed are stale or in their band on main | each is pinned mid-window | the \`floor=\` lines listed under What Changed, one per guard file | the script writes \`population - skips - growth//2\`, inside the window and outside the bottom band | pending |"
+            echo "| Re-pin the reach floors main outgrew | the floors listed under What Changed are stale or in their band on main | each is pinned mid-window | ${PIN_LINES} | the script writes \`population - skips - growth//2\`, inside the window and outside the bottom band | pending |"
             echo
             echo "## Model Used"
             echo
@@ -142,10 +150,9 @@ jobs:
 
       - name: Say a still-open re-pin PR is no longer needed
         # Never closed here: no PR is closed without a merge. A comment, once, so a person decides.
-        if: steps.repin.outputs.changed == 'false'
+        if: steps.repin.outputs.changed == 'false' && steps.repin.outputs.stale_left != 'true'
         env:
           GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
-          BRANCH: automation/reach-floors
           MARKER: "<!-- repin-reach-floors: no longer needed -->"
         run: |
           set -euo pipefail

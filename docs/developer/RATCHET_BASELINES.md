@@ -609,6 +609,11 @@ folder cannot read as a clean 0.
   `.github/workflows/repin-reach-floors.yml` runs the re-pin script on main and opens one PR (or updates the open
   one). A population floor must be a `declare()` to be covered: `reach_floor_migration_test.GRANDFATHERED` lists
   the bare ones not yet migrated.
+  - The slack and floor-window checks fail only under `AUTOBOT_REACH_AUDIT` (trains, a push to main, a merge group); on an
+    ordinary PR they only warn. A real loss below the floor fails everywhere.
+  - Once a floor drifts into its band, later merge-group and train runs stay red until the re-pin PR lands.
+  - An equality pin (`growth=0`) cannot be re-pinned mid-window by the script. The re-pin workflow's failing last step,
+    with an `::error::` line naming the floor, is the signal that it needs a hand re-pin.
 - **Re-pinning the floor:** `python scripts/repin_reach_floors.py` after the tree grows or shrinks
   past the window.
 - **A floor computed from the base (#19676):** a `declare()` without `floor=` gets

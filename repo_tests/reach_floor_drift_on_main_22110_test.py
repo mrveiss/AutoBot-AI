@@ -17,6 +17,7 @@ The detector is proved by contrast: a floor in the band is refused, one just abo
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -70,14 +71,21 @@ def _audit_step() -> dict:
     return found[0]
 
 
-def _audit_applies(**context: str) -> bool:
-    """Evaluate ci.yml's real ``if:`` expression over one event context (no substring matching)."""
-    expr = str(_audit_step()["if"])
+def _evaluate(expr: str, **context: str) -> bool:
+    """Evaluate a workflow ``if:`` expression over one context (no substring matching)."""
     for name in ("head_ref", "event_name", "ref"):
         expr = expr.replace(f"github.{name}", name)
+    expr = re.sub(r"steps\.repin\.outputs\.(\w+)", r"out_\1", expr)
     expr = expr.replace("&&", " and ").replace("||", " or ")
-    values = {"head_ref": "", "event_name": "", "ref": "", "startsWith": lambda text, prefix: text.startswith(prefix)}
-    return bool(eval(expr, {"__builtins__": {}}, {**values, **context}))  # noqa: S307 - this repo's own workflow text
+    values = {"head_ref": "", "event_name": "", "ref": "", "out_changed": "", "out_stale_left": ""}
+    functions = {"startsWith": lambda text, prefix: text.startswith(prefix), "always": lambda: True}
+    return bool(
+        eval(expr, {"__builtins__": {}}, {**values, **functions, **context})
+    )  # noqa: S307 - this repo's own workflow text
+
+
+def _audit_applies(**context: str) -> bool:
+    return _evaluate(str(_audit_step()["if"]), **context)
 
 
 @pytest.mark.parametrize(
@@ -117,7 +125,9 @@ def test_the_repin_workflow_pushes_only_the_bot_branch_and_looks_up_open_prs() -
     for line in pushes:
         assert line.split()[-1] == '"$BRANCH"', f"a push whose refspec is not the bot branch: {line}"
         assert "main" not in line.split(), line
-    assert _step("Open or update")["env"]["BRANCH"] not in ("main", "release")
+    assert _repin()["env"]["BRANCH"] not in ("main", "release")
+    for step in _repin()["jobs"]["repin"]["steps"]:
+        assert "BRANCH" not in step.get("env", {}), "BRANCH is declared once, at the workflow level"
     assert 'gh pr list --head "$BRANCH" --state open' in text, "gh pr view matches closed PRs too (#20057)"
     assert "gh pr view" not in _step("Open or update")["run"]
     assert "gh pr close" not in text, "no PR is closed without a merge"
@@ -153,6 +163,7 @@ def test_a_floor_left_stale_fails_the_job_and_names_it(tmp_path: Path) -> None:
     assert "stale_left=true" in (tmp_path / "out").read_text(encoding="utf-8")
     last = _step("Fail while a floor stays stale")
     assert "steps.repin.outputs.stale_left == 'true'" in last["if"]
+    assert "always()" in last["if"], "a failed earlier step must not skip the signal"
     failed = subprocess.run(["bash", "-c", last["run"]], cwd=tmp_path, capture_output=True, text=True)
     assert failed.returncode == 1
     assert "::error::reach floor needs a hand re-pin: floor-x: reason" in failed.stdout
@@ -164,3 +175,15 @@ def test_a_clean_run_sets_no_stale_flag_and_an_unmeasured_guard_fails(tmp_path: 
     assert "stale_left" not in (tmp_path / "out").read_text(encoding="utf-8")
     broken = _run_step(_step("Re-pin every stale floor"), tmp_path, exit_code=2)
     assert broken.returncode == 2, "an import failure is never read as clean"
+
+
+@pytest.mark.parametrize(
+    ("changed", "stale_left", "comments"),
+    [("true", "", False), ("true", "true", False), ("false", "", True), ("false", "true", False)],
+)
+def test_the_no_longer_needed_comment_fires_only_when_nothing_is_stale(
+    changed: str, stale_left: str, comments: bool
+) -> None:
+    """A floor still stale means the open re-pin PR may still be needed: no comment then."""
+    expr = str(_step("no longer needed")["if"])
+    assert _evaluate(expr, out_changed=changed, out_stale_left=stale_left) is comments
