@@ -59,8 +59,11 @@ jobs:
         run: |
           set -uo pipefail
           # Exit 2 means a guard failed to import, so its floor was NOT measured: never read as clean.
+          # The runner default shell is errexit: suspend it so a non-zero exit reaches the capture.
+          set +e
           python scripts/repin_reach_floors.py | tee repin.log
           code="${PIPESTATUS[0]}"
+          set -e
           if [ "$code" = "2" ]; then
             echo "::error::a guard failed to import, so some floors were not measured"
             exit 2

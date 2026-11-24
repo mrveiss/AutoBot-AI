@@ -144,6 +144,10 @@ def test_the_bot_pr_carries_the_milestone_label_and_a_proof_table() -> None:
     assert "| pending |" in run
 
 
+# The default `run:` shell on the runner when no `shell:` key is set: errexit is on there, so it is on here.
+_RUNNER_SHELL = ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c"]
+
+
 def _run_step(step: dict, tmp_path: Path, exit_code: int) -> subprocess.CompletedProcess:
     """Run a workflow step's shell with a stub ``python`` that exits *exit_code* after a SKIP line."""
     make_repo(tmp_path, default_branch="main")
@@ -154,7 +158,7 @@ def _run_step(step: dict, tmp_path: Path, exit_code: int) -> subprocess.Complete
     out = tmp_path / "out"
     out.touch()
     env = {**os.environ, "PATH": f"{stub}:{os.environ['PATH']}", "GITHUB_OUTPUT": str(out)}
-    return subprocess.run(["bash", "-c", step["run"]], cwd=tmp_path, env=env, capture_output=True, text=True)
+    return subprocess.run([*_RUNNER_SHELL, step["run"]], cwd=tmp_path, env=env, capture_output=True, text=True)
 
 
 def test_a_floor_left_stale_fails_the_job_and_names_it(tmp_path: Path) -> None:
@@ -164,7 +168,7 @@ def test_a_floor_left_stale_fails_the_job_and_names_it(tmp_path: Path) -> None:
     last = _step("Fail while a floor stays stale")
     assert "steps.repin.outputs.stale_left == 'true'" in last["if"]
     assert "always()" in last["if"], "a failed earlier step must not skip the signal"
-    failed = subprocess.run(["bash", "-c", last["run"]], cwd=tmp_path, capture_output=True, text=True)
+    failed = subprocess.run([*_RUNNER_SHELL, last["run"]], cwd=tmp_path, capture_output=True, text=True)
     assert failed.returncode == 1
     assert "::error::reach floor needs a hand re-pin: floor-x: reason" in failed.stdout
 
@@ -195,7 +199,7 @@ def _pin_cell(tmp_path: Path, log: str) -> tuple[subprocess.CompletedProcess, st
     out.write_text("", encoding="utf-8")
     env = {**os.environ, "GITHUB_OUTPUT": str(out)}
     step = _step("Collect the re-pinned")
-    done = subprocess.run(["bash", "-c", step["run"]], cwd=tmp_path, env=env, capture_output=True, text=True)
+    done = subprocess.run([*_RUNNER_SHELL, step["run"]], cwd=tmp_path, env=env, capture_output=True, text=True)
     return done, out.read_text(encoding="utf-8").strip()
 
 
