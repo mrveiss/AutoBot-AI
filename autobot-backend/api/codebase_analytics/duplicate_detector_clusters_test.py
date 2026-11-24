@@ -204,3 +204,26 @@ def test_a_block_listed_by_an_exact_and_a_structural_cluster_counts_once(tmp_pat
     assert analysis.exact_cluster_count == 1 and analysis.structural_cluster_count == 1
     assert analysis.total_locations == 3, "the exact pair was counted again inside the structural cluster"
     assert analysis.total_duplicate_lines == exact.line_count * 2
+
+
+def _js_function(name: str) -> str:
+    consts = "\n".join(f"  const step{k} = values[{k}] + offset * {k};" for k in range(4))
+    return f"function {name}(values, offset) {{\n{consts}\n  return step0;\n}}\n"
+
+
+def test_exact_rows_merge_only_when_contiguous_never_across_a_gap(tmp_path):
+    contiguous = _js_function("collectOne") + _js_function("collectTwo")
+    gapped = _js_function("collectOne") + "\n" + _js_function("collectTwo")
+    _plant(tmp_path / "touching", {"a/m.js": contiguous, "b/m.js": contiguous})
+    _plant(tmp_path / "gapped", {"a/m.js": gapped, "b/m.js": gapped})
+    touching = [d for d in _scan(tmp_path / "touching").duplicates if d.kind == KIND_EXACT]
+    apart = [d for d in _scan(tmp_path / "gapped").duplicates if d.kind == KIND_EXACT]
+    assert len(touching) == 1 and touching[0].similarity == 1.0, "contiguous exact blocks must merge at 100%"
+    assert len(apart) == 2, "an unchecked line between two exact blocks was merged into one 100% row"
+
+
+def test_the_js_family_is_the_scanners_extension_sets_so_mjs_comments_are_comments():
+    code = "const total = values.reduce((sum, v) => sum + v, 0)\nconst scaled = total * factor + offset - baseline\n"
+    noted = code.replace("0)\n", "0) // trailing note\n", 1)
+    assert make_block("a.mjs", 1, 2, noted, 2).exact_hash == make_block("a.mjs", 1, 2, code, 2).exact_hash
+    assert make_block("a.py", 1, 2, noted, 2).exact_hash != make_block("a.py", 1, 2, code, 2).exact_hash

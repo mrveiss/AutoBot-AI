@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Set
 
 from autobot_shared.content_digest import content_digest
+from utils.file_categorization import JS_EXTENSIONS, TS_EXTENSIONS, VUE_EXTENSIONS
 
 # Minimum lines for a code block to be considered for duplicate detection
 # Issue #609: Reduced from 5 to 4 to catch more smaller duplicates
@@ -26,7 +27,7 @@ MIN_DUPLICATE_LINES = 4
 MIN_DUPLICATE_CHARS = 80
 
 # Files whose comments are ``//`` and ``/* */``; every other scanned file is Python (``#``).
-JS_FAMILY_SUFFIXES = (".js", ".ts", ".vue", ".jsx", ".tsx")
+JS_FAMILY_SUFFIXES = tuple(sorted(JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS))
 
 # A quoted string is matched first, in the same pass as the comment, so a comment marker inside
 # one is not a comment. Python also has triple-quoted strings; JS also has template literals.

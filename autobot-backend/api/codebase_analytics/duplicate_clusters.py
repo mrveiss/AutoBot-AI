@@ -184,10 +184,13 @@ def cluster_similar_pairs(pairs: Iterable[Any]) -> List[DuplicateCluster]:
 
 
 def _follows(prev: DuplicateCluster, cur: DuplicateCluster) -> bool:
-    """``cur`` begins after ``prev`` does and no later than one blank line past its end (overlap merges)."""
-    return all(
-        a.start_line < b.start_line <= a.end_line + ADJACENT_LINE_GAP for a, b in zip(prev.locations, cur.locations)
-    )
+    """``cur`` begins after ``prev`` does and within the allowed gap of its end (overlap merges).
+
+    An exact cluster never merges across a gap: the lines between were not compared, so a
+    merged 100% row would claim equality for text nobody checked.
+    """
+    gap = 1 if prev.kind == KIND_EXACT else ADJACENT_LINE_GAP
+    return all(a.start_line < b.start_line <= a.end_line + gap for a, b in zip(prev.locations, cur.locations))
 
 
 def _join(prev: DuplicateCluster, cur: DuplicateCluster) -> DuplicateCluster:
