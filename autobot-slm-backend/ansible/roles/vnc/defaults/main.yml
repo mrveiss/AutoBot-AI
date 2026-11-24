@@ -85,6 +85,8 @@ websockify_enabled: "{{ lookup('env', 'WEBSOCKIFY_ENABLED') | default('true', tr
 novnc_version: "1.7.0"
 # Overridable for an air-gapped mirror (#22146); the upstream tag archive is the default.
 novnc_release_base_url: "{{ lookup('env', 'AUTOBOT_NOVNC_RELEASE_BASE_URL') | default('https://github.com/novnc/noVNC/archive/refs/tags', true) }}"
+# Scratch download: one definition for the download and unarchive tasks; set novnc_archive_dir to relocate it (#22146).
+novnc_archive_path: "{{ novnc_archive_dir | default('/tmp') }}/noVNC-{{ novnc_version }}.tar.gz"
 novnc_archive_url: "{{ novnc_release_base_url }}/v{{ novnc_version }}.tar.gz"
 novnc_archive_sha256: b1003a11b6e6e8d8f7f5e5586daae7f8ca651d8aee0aa155ff9ac841c48f52c6
 

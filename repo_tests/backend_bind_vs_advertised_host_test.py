@@ -205,8 +205,8 @@ def test_vnc_convergence_runs_before_the_backend_restart_and_with_tags() -> None
     restart = names.index("[PLAY 2] Backend | Restart service")
     assert vnc < restart  # VNCServerManager reads novnc_available once, at init
     task = tasks[vnc]
-    assert task["ansible.builtin.include_role"]["apply"]["tags"] == ["vnc", "deploy"]
-    assert task["tags"] == ["vnc", "deploy"]
+    assert task["ansible.builtin.include_role"]["apply"]["tags"] == ["backend", "vnc", "deploy"]
+    assert task["tags"] == ["backend", "vnc", "deploy"]  # --tags backend must include the convergence too
 
 
 def test_unpack_destination_follows_the_install_root() -> None:
@@ -227,3 +227,28 @@ def test_compose_bind_host_has_one_variable_for_command_and_env() -> None:
 )
 def test_a_specific_or_loopback_host_is_never_taken_for_bind_all(specific) -> None:
     assert _advertised_with(specific) == specific
+
+
+def test_websockify_restart_handler_honours_the_no_restart_sync() -> None:
+    handlers = yaml.safe_load((ANSIBLE / "roles" / "vnc" / "handlers" / "main.yml").read_text(encoding="utf-8"))
+    handler = next(h for h in handlers if h["name"] == "restart websockify")
+    assert "autobot_restart_services" in handler["when"]
+
+
+def test_the_novnc_archive_has_one_path_variable() -> None:
+    tasks = (ANSIBLE / "roles" / "vnc" / "tasks" / "novnc.yml").read_text(encoding="utf-8")
+    assert tasks.count("{{ novnc_archive_path }}") == 2 and "/tmp/noVNC" not in tasks
+
+
+def test_a_config_save_keeps_the_persisted_bind_host(monkeypatch) -> None:
+    monkeypatch.syspath_prepend(str(ROOT / "autobot-backend"))
+    from services.config_service import ConfigService, config_manager
+
+    monkeypatch.setattr(config_manager, "get_nested", lambda key, default=None: "0.0.0.0")  # nosec B104
+    saved = {"backend": {"server_host": "10.1.2.3", "server_port": 8001}}
+    ConfigService._keep_persisted_bind_host(saved)
+    assert saved["backend"] == {"server_port": 8001, "server_host": "0.0.0.0"}  # nosec B104
+    monkeypatch.setattr(config_manager, "get_nested", lambda key, default=None: None)
+    fresh = {"backend": {"server_host": "10.1.2.3"}}
+    ConfigService._keep_persisted_bind_host(fresh)
+    assert fresh["backend"] == {}  # nothing stored: the reported dial host is never persisted as the bind

@@ -1432,11 +1432,11 @@
         tasks_from: novnc
         apply:
           become: true
-          tags: [vnc, deploy]
+          tags: [backend, vnc, deploy]
       vars:
         novnc_require_vnc_account: true  # never provisioned here: fail naming the account (#14319)
       when: "role_vnc_active | default(false) | bool"
-      tags: [vnc, deploy]
+      tags: [backend, vnc, deploy]
 
     - name: "[PLAY 2] Backend | Restart service"
       ansible.builtin.include_tasks:

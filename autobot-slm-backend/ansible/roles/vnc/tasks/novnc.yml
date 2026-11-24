@@ -45,14 +45,14 @@
 - name: Download noVNC {{ novnc_version }} tarball (#13069)
   ansible.builtin.get_url:
     url: "{{ novnc_archive_url }}"
-    dest: "/tmp/noVNC-{{ novnc_version }}.tar.gz"
+    dest: "{{ novnc_archive_path }}"
     checksum: "sha256:{{ novnc_archive_sha256 }}"
     mode: "0644"
   become: true
 
 - name: Unpack noVNC {{ novnc_version }} to versioned root (#13069)
   ansible.builtin.unarchive:
-    src: "/tmp/noVNC-{{ novnc_version }}.tar.gz"
+    src: "{{ novnc_archive_path }}"
     dest: "{{ novnc_install_root | dirname }}"
     remote_src: true
     owner: root

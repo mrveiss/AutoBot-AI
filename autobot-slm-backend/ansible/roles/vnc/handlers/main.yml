@@ -16,7 +16,7 @@
     restart_unit_name: "{{ vnc_service_name }}"
 
 - name: restart websockify
-  when: websockify_enabled | bool
+  when: websockify_enabled | bool and autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
   vars:
     restart_unit_name: "{{ websockify_service_name }}"

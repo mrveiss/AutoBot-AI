@@ -465,6 +465,20 @@ class ConfigService:
             raise
 
     @staticmethod
+    def _keep_persisted_bind_host(config_data: Metadata) -> None:
+        """A saved config must not turn the reported dial host into the persisted bind setting (#18810).
+
+        ``backend.server_host`` is the bind setting but the config report shows the dial address, so a
+        read/save round trip carries the wrong value: the stored bind value is restored (or the key dropped).
+        """
+        backend = config_data.get("backend")
+        if not isinstance(backend, dict) or "server_host" not in backend:
+            return
+        stored = config_manager.get_nested("backend.server_host")
+        backend = {k: v for k, v in backend.items() if k != "server_host"}
+        config_data["backend"] = {**backend, "server_host": stored} if stored is not None else backend
+
+    @staticmethod
     @locked_config_write
     def save_full_config(config_data: Metadata) -> Dict[str, str]:
         """Save complete application configuration to config.yaml and reload"""
@@ -477,6 +491,8 @@ class ConfigService:
             if "prompts" in filtered_config:
                 logger.info("Removing prompts section from config - " "prompts are managed in prompts/ directory")
                 del filtered_config["prompts"]
+
+            ConfigService._keep_persisted_bind_host(filtered_config)
 
             # Issue #594: Normalize logging field names from frontend to config format
             if "logging" in filtered_config:
