@@ -5815,7 +5815,8 @@
       "close": "إغلاق",
       "usernameMissing": "اسم المستخدم مفقود: عيّنه في الأسرار",
       "desktopVm": "جهاز AutoBot الافتراضي لسطح المكتب",
-      "desktopVmDesc": "سطح مكتب AutoBot الخاص"
+      "desktopVmDesc": "سطح مكتب AutoBot الخاص",
+      "noDesktopVm": "لا يوجد جهاز افتراضي لسطح المكتب مسجّل، لذا تُعرض مضيفات الأسرار الخاصة بك فقط."
     },
     "hostSelector": {
       "selectHost": "Select Host",

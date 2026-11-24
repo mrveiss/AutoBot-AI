@@ -5815,7 +5815,8 @@
       "close": "Close",
       "usernameMissing": "Benutzername fehlt: unter Secrets festlegen",
       "desktopVm": "AutoBot-Desktop-VM",
-      "desktopVmDesc": "Der eigene Desktop von AutoBot"
+      "desktopVmDesc": "Der eigene Desktop von AutoBot",
+      "noDesktopVm": "Es ist keine Desktop-VM registriert; daher werden nur Ihre Secrets-Hosts aufgeführt."
     },
     "hostSelector": {
       "selectHost": "Select Host",

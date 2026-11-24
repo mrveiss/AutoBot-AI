@@ -4966,7 +4966,8 @@
       "commandToExecute": "Command to Execute",
       "usernameMissing": "نام کاربری وجود ندارد: آن را در اسرار تنظیم کنید",
       "desktopVm": "ماشین مجازی دسکتاپ AutoBot",
-      "desktopVmDesc": "دسکتاپ اختصاصی AutoBot"
+      "desktopVmDesc": "دسکتاپ اختصاصی AutoBot",
+      "noDesktopVm": "هیچ ماشین مجازی دسکتاپی ثبت نشده است، بنابراین فقط میزبان‌های اسرار شما فهرست می‌شوند."
     },
     "systemStatus": {
       "lastCheck": "Last Check:",

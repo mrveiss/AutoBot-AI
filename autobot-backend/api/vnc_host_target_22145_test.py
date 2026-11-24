@@ -500,20 +500,51 @@ class TestWebsocketRefusals:
         ws.close = AsyncMock()
         return ws
 
-    @pytest.mark.asyncio
-    async def test_no_desktop_node_closes_1011_before_accept(self, empty_registry):
+    def _client_app(self):
+        """A real ASGI app serving the proxy's websocket route, driven by Starlette's TestClient."""
+        from fastapi import FastAPI
+
         from api import vnc_proxy
 
-        ws = self._ws()
-        accept = AsyncMock()
+        app = FastAPI()
+        app.include_router(vnc_proxy.router, prefix="/vnc-proxy")
+        return app
+
+    def test_no_desktop_node_the_client_receives_1011_and_the_code(self, empty_registry):
+        """A real client sees the close code and the stable reason, not a bare handshake rejection."""
+        from starlette.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+
         with (
             patch("api.vnc_proxy.enforce_ws_origin", new=AsyncMock(return_value=True)),
             patch("api.vnc_proxy.enforce_ws_desktop_auth", new=AsyncMock(return_value={"username": "a"})),
-            patch("api.vnc_proxy.accept_websocket", new=accept),
         ):
-            await vnc_proxy.websocket_proxy(ws, "desktop")
-        ws.close.assert_awaited_once_with(code=1011, reason="desktop_vm_unavailable")
-        accept.assert_not_called()
+            with TestClient(self._client_app()) as client:
+                with client.websocket_connect("/vnc-proxy/desktop/websockify") as ws:
+                    with pytest.raises(WebSocketDisconnect) as closed:
+                        ws.receive_bytes()
+        assert closed.value.code == 1011
+        assert closed.value.reason == "desktop_vm_unavailable"
+
+    def test_unreadable_registry_the_client_receives_1011_and_the_code(self, monkeypatch):
+        from starlette.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+
+        from services.slm_vnc_registry import SlmRegistryUnavailable
+
+        async def down(**_):
+            raise SlmRegistryUnavailable("down")
+
+        monkeypatch.setattr("api.vnc_host_target.desktop_vnc_endpoint", down)
+        with (
+            patch("api.vnc_proxy.enforce_ws_origin", new=AsyncMock(return_value=True)),
+            patch("api.vnc_proxy.enforce_ws_desktop_auth", new=AsyncMock(return_value={"username": "a"})),
+        ):
+            with TestClient(self._client_app()) as client:
+                with client.websocket_connect("/vnc-proxy/desktop/websockify") as ws:
+                    with pytest.raises(WebSocketDisconnect) as closed:
+                        ws.receive_bytes()
+        assert closed.value.code == 1011 and closed.value.reason == "slm_registry_unavailable"
 
     @pytest.mark.asyncio
     async def test_a_password_refusal_after_accept_closes_1011_with_the_code(self, registry_node, monkeypatch):

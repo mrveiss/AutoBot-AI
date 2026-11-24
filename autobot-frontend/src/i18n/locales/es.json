@@ -5815,7 +5815,8 @@
       "close": "Close",
       "usernameMissing": "Falta el nombre de usuario: defínalo en Secretos",
       "desktopVm": "VM de escritorio de AutoBot",
-      "desktopVmDesc": "El escritorio propio de AutoBot"
+      "desktopVmDesc": "El escritorio propio de AutoBot",
+      "noDesktopVm": "No hay ninguna VM de escritorio registrada, por lo que solo se muestran sus hosts de Secretos."
     },
     "hostSelector": {
       "selectHost": "Select Host",

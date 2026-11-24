@@ -206,7 +206,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { HttpError, RequestTimeoutError, saveUrl } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { getApiBase } from '@/config/ssot-config'
-import { buildVncBaseUrl, buildVncClientUrl, VNC_CLIENT_PATH, VNC_PROBE_TIMEOUT_MS } from '@/config/vnc-client'
+import { buildVncBaseUrl, buildVncClientUrl, DESKTOP_VM_HOST_ID, VNC_CLIENT_PATH, VNC_PROBE_TIMEOUT_MS } from '@/config/vnc-client'
 import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
@@ -218,6 +218,7 @@ import { useDesktopControlLock } from '@/composables/useDesktopControlLock'
 import { createLogger } from '@/utils/debugUtils'
 import { useChatStore } from '@/stores/useChatStore'
 import { controlErrorText } from '@/components/desktop/controlErrors'
+import { desktopVmBlockedKey } from '@/composables/useDesktopVm'
 import type { SelectorHost } from '@/composables/useHostSelector'
 
 /** Optional host prop — when provided, drives the VNC URL directly from the
@@ -322,6 +323,8 @@ const buildHostVncUrl = (h: SelectorHost): string =>
 const loadVncUrlFn = async () => {
   // Issue #4977: when a host prop is supplied, derive URL directly — no AppConfig call needed
   if (!props.host) throw new Error(t('desktop.interface.noHostSelected'))
+  const blocked = props.host.id === DESKTOP_VM_HOST_ID ? await desktopVmBlockedKey() : null
+  if (blocked) { error.value = t(blocked); loading.value = false; connectionStatus.value = 'Configuration Error'; return }
   vncUrl.value = buildHostVncUrl(props.host)
   // Clear any previous errors and update status
   error.value = null;

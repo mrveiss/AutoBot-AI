@@ -20,13 +20,14 @@ vi.mock('@/composables/useHostSelection', () => ({
 }))
 
 import { useHostSelector } from '../useHostSelector'
+import { desktopVmBlockedKey } from '../useDesktopVm'
 import { DESKTOP_VM_HOST_ID } from '@/config/vnc-client'
 
 describe('chat Desktop picker', () => {
   beforeEach(() => { call.mockReset(); warn.mockReset() })
 
   it('lists the desktop VM first, from the backend endpoint, plus the /secrets hosts', async () => {
-    call.mockResolvedValue({ host: 'desk.example.test', port: 6090, source: 'registry' })
+    call.mockResolvedValue({ host: 'desk.example.test', port: 6090 })
     const sel = useHostSelector({ requiredCapability: 'vnc', includeDesktopVm: true })
     await sel.loadHosts()
     expect(call).toHaveBeenCalledWith('get', '/api/vnc-proxy/desktop/endpoint')
@@ -56,5 +57,27 @@ describe('chat Desktop picker', () => {
     await sel.loadHosts()
     expect(sel.hosts.value.map((h) => h.id)).toEqual(['s1'])
     expect(warn).toHaveBeenCalled()
+  })
+
+  it('says so in one localised line when it is asked for the desktop VM and none is registered', async () => {
+    call.mockResolvedValue(null)
+    const sel = useHostSelector({ requiredCapability: 'vnc', includeDesktopVm: true })
+    expect(sel.desktopVmHint.value).toBe('')
+    await sel.loadHosts()
+    expect(sel.desktopVmHint.value).toBe('ui.hostSelection.noDesktopVm')
+  })
+
+  it('has no hint when a node is registered', async () => {
+    call.mockResolvedValue({ host: 'desk.example.test', port: 6090 })
+    const sel = useHostSelector({ requiredCapability: 'vnc', includeDesktopVm: true })
+    await sel.loadHosts()
+    expect(sel.desktopVmHint.value).toBe('')
+  })
+
+  it('the viewer names the registry state when the registry cannot be read', async () => {
+    call.mockImplementation(async () => {
+      throw new Error('503')
+    })
+    expect(await desktopVmBlockedKey()).toBe('desktop.interface.registryUnavailable')
   })
 })

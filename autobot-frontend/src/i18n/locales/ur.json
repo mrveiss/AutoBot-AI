@@ -4966,7 +4966,8 @@
       "commandToExecute": "Command to Execute",
       "usernameMissing": "صارف نام موجود نہیں: اسے رازوں میں مقرر کریں",
       "desktopVm": "AutoBot ڈیسک ٹاپ VM",
-      "desktopVmDesc": "AutoBot کا اپنا ڈیسک ٹاپ"
+      "desktopVmDesc": "AutoBot کا اپنا ڈیسک ٹاپ",
+      "noDesktopVm": "کوئی ڈیسک ٹاپ VM رجسٹر نہیں ہے، اس لیے صرف آپ کے رازوں کے میزبان درج ہیں۔"
     },
     "systemStatus": {
       "lastCheck": "Last Check:",

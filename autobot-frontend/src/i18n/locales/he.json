@@ -4966,7 +4966,8 @@
       "commandToExecute": "Command to Execute",
       "usernameMissing": "שם משתמש חסר: הגדר אותו ב'סודות'",
       "desktopVm": "מכונה וירטואלית של שולחן העבודה של AutoBot",
-      "desktopVmDesc": "שולחן העבודה של AutoBot עצמו"
+      "desktopVmDesc": "שולחן העבודה של AutoBot עצמו",
+      "noDesktopVm": "לא נרשמה מכונה וירטואלית של שולחן עבודה, ולכן מוצגים רק מארחי 'הסודות' שלך."
     },
     "systemStatus": {
       "lastCheck": "Last Check:",

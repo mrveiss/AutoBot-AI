@@ -5815,7 +5815,8 @@
       "close": "Close",
       "usernameMissing": "Nom d'utilisateur manquant : définissez-le dans Secrets",
       "desktopVm": "VM de bureau AutoBot",
-      "desktopVmDesc": "Le bureau propre d'AutoBot"
+      "desktopVmDesc": "Le bureau propre d'AutoBot",
+      "noDesktopVm": "Aucune VM de bureau n'est enregistrée ; seuls vos hôtes Secrets sont listés."
     },
     "hostSelector": {
       "selectHost": "Select Host",

@@ -6156,7 +6156,8 @@
       "close": "Close",
       "usernameMissing": "Username missing: set it in Secrets",
       "desktopVm": "AutoBot desktop VM",
-      "desktopVmDesc": "AutoBot's own desktop"
+      "desktopVmDesc": "AutoBot's own desktop",
+      "noDesktopVm": "No desktop VM is registered, so only your Secrets hosts are listed."
     },
     "hostSelector": {
       "selectHost": "Select Host",

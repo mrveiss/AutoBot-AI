@@ -5815,7 +5815,8 @@
       "close": "Close",
       "usernameMissing": "Brak nazwy użytkownika: ustaw ją w Sekretach",
       "desktopVm": "Maszyna wirtualna pulpitu AutoBot",
-      "desktopVmDesc": "Własny pulpit AutoBot"
+      "desktopVmDesc": "Własny pulpit AutoBot",
+      "noDesktopVm": "Nie zarejestrowano maszyny wirtualnej pulpitu, więc wyświetlane są tylko Twoje hosty z Sekretów."
     },
     "hostSelector": {
       "selectHost": "Select Host",

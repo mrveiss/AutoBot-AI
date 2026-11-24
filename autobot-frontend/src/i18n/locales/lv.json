@@ -5815,7 +5815,8 @@
       "close": "Close",
       "usernameMissing": "Trūkst lietotājvārda: iestatiet to sadaļā Noslēpumi",
       "desktopVm": "AutoBot darbvirsmas VM",
-      "desktopVmDesc": "AutoBot paša darbvirsma"
+      "desktopVmDesc": "AutoBot paša darbvirsma",
+      "noDesktopVm": "Nav reģistrēta darbvirsmas VM, tāpēc tiek rādīti tikai jūsu Noslēpumu resursdatori."
     },
     "hostSelector": {
       "selectHost": "Select Host",

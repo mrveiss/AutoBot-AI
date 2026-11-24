@@ -544,14 +544,15 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         await websocket.close(code=1003, reason=f"Unknown VNC type: {vnc_type}")
         return
 
+    # Accept first: a close before accept is a 403 handshake rejection on ASGI, so the client would never
+    # see the close code or the reason (the stable code for "no desktop VM registered").
+    await accept_websocket(websocket)
     try:
         endpoint = await _upstream_endpoint(vnc_type)
     except HTTPException as exc:  # no desktop VM registered, or the registry is unreadable
         await websocket.close(code=1011, reason=_close_reason(exc))
         return
     ws_url = _websockify_url(endpoint)
-
-    await accept_websocket(websocket)
     logger.info(
         "VNC WebSocket proxy connected: %s → %s (user=%s)",
         vnc_type,

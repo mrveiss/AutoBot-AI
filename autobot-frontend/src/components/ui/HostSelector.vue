@@ -89,6 +89,7 @@
           </div>
         </button>
 
+        <p v-if="desktopVmHint" class="desktop-vm-hint" data-testid="desktop-vm-hint">{{ desktopVmHint }}</p>
         <!-- Empty state -->
         <div v-if="filteredHosts.length === 0" class="empty-state">
           <Icon name="server" size="lg" />
@@ -149,7 +150,7 @@ const emit = defineEmits<{
 }>();
 
 // Composable
-const { hosts, loading, loadHosts } = useHostSelector({
+const { hosts, loading, loadHosts, desktopVmHint } = useHostSelector({
   requiredCapability: props.requiredCapability,
   chatId: props.chatId,
   includeDesktopVm: props.includeDesktopVm,
