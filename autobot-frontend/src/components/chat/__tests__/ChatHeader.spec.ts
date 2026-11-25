@@ -92,6 +92,13 @@ describe('ChatHeader', () => {
     w.unmount()
   })
 
+  it('shows the session id for every session, also when the start time is set (#22248)', () => {
+    const w = render({ startedAt: new Date(2026, 10, 21, 10, 42), currentSessionId: 'abc-123' })
+    expect(w.find('[data-testid="header-session-id"]').text()).toBe('Session abc-123')
+    expect(w.text()).toContain('10:42')
+    w.unmount()
+  })
+
   it('shows Overseer off, and falls back to the session info without a start time', () => {
     const w = render({ overseerEnabled: false })
     expect(w.text()).toContain('Overseer off')

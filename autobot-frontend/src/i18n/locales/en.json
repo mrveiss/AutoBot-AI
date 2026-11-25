@@ -936,6 +936,7 @@
       "overseerOff": "Overseer off",
       "overseerTip": "Overseer plans multi-step tasks and asks before risky commands",
       "startedAt": "started {time}",
+      "sessionId": "Session {id}",
       "connectedTip": "Connected to the backend — replies stream live",
       "knowledgeOn": "Knowledge on",
       "knowledgeOff": "Knowledge off",
