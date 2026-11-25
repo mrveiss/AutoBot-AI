@@ -27,6 +27,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
+from chat_workflow.generation_timing import log_generation_timing
 from chat_workflow.persisted_metadata import persisted_metadata
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
 from chat_workflow.reply_persistence import (
@@ -468,10 +469,12 @@ class ChatWorkflowManager(
             return None
 
         try:
-            return json.loads(line_str)
+            chunk = json.loads(line_str)
         except json.JSONDecodeError as e:
             logger.error("Failed to parse stream chunk: %s", e)
             return None
+        log_generation_timing(chunk, chunk.get("model", ""))  # #22254: the final chunk carries the timings
+        return chunk
 
     def _handle_type_transition(
         self,
