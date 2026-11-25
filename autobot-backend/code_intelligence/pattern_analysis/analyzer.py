@@ -10,6 +10,7 @@ analysis tools to provide comprehensive code pattern detection.
 """
 
 import asyncio
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Set
@@ -19,6 +20,7 @@ from autobot_shared.logging_manager import get_logger
 from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files, discover_files
 from utils.io_executor import get_analytics_executor
 
+from .cancellation import CancellableAnalysis
 from .complexity_analyzer import ComplexityAnalyzer
 from .refactoring_generator import RefactoringSuggestionGenerator
 from .regex_detector import RegexPatternDetector
@@ -67,7 +69,7 @@ except ImportError:
 PATTERN_INDEX = "code_patterns"
 
 
-class CodePatternAnalyzer:
+class CodePatternAnalyzer(CancellableAnalysis):
     """Main orchestrator for code pattern detection and optimization.
 
     This analyzer combines:
@@ -141,6 +143,7 @@ class CodePatternAnalyzer:
         cc_threshold: int = 10,
         mi_threshold: float = 50,
         source_id: str | None = None,
+        cancel_token: threading.Event | None = None,
     ):
         """Initialize the code pattern analyzer. Issue #620.
 
@@ -151,6 +154,7 @@ class CodePatternAnalyzer:
                 project -- without it, patterns from different sources
                 sharing the global collection could cross-match. Mirrors the
                 #12356/#12374 cross-language-patterns fix.
+            cancel_token: Set by the caller when it stops waiting (#22094); checked before each file and phase.
         """
         self._init_feature_flags(
             enable_clone_detection,
@@ -162,6 +166,7 @@ class CodePatternAnalyzer:
             exclude_dirs,
         )
         self._init_sub_analyzers(cc_threshold, mi_threshold)
+        self.cancel_token = cancel_token
         self.source_id = self._source_tag = None if source_id is None else require_source_id(source_id, "analysis")
         # Issue #12407: single reused EmbeddingCache instance (mirrors
         # SemanticAnalysisMixin / CrossLanguagePatternDetector) so repeated
@@ -206,13 +211,10 @@ class CodePatternAnalyzer:
         """Run regex detection on a batch of files."""
         if not self._regex_detector:
             return []
-        executor = get_analytics_executor()
         results = []
         for fp in file_paths:
             try:
-                opps = await asyncio.get_running_loop().run_in_executor(
-                    executor, self._regex_detector.detect_in_file, fp
-                )
+                opps = await self._run_file(self._regex_detector.detect_in_file, fp)
                 results.extend(opps)
             except Exception as e:
                 logger.debug("Regex detection failed for %s: %s", fp, e)
@@ -222,13 +224,10 @@ class CodePatternAnalyzer:
         """Run complexity analysis on a batch of files."""
         if not self._complexity_analyzer:
             return []
-        executor = get_analytics_executor()
         modules = []
         for fp in file_paths:
             try:
-                module = await asyncio.get_running_loop().run_in_executor(
-                    executor, self._complexity_analyzer.analyze_file, fp
-                )
+                module = await self._run_file(self._complexity_analyzer.analyze_file, fp)
                 modules.append(module)
             except Exception as e:
                 logger.debug("Complexity analysis failed for %s: %s", fp, e)
@@ -238,16 +237,11 @@ class CodePatternAnalyzer:
         """Run anti-pattern detection on a batch of files."""
         if not self._anti_pattern_detector:
             return {"modularization": [], "other_patterns": []}
-        executor = get_analytics_executor()
         modularization: List = []
         other_patterns: List = []
         for fp in file_paths:
             try:
-                file_result = await asyncio.get_running_loop().run_in_executor(
-                    executor,
-                    self._anti_pattern_detector.analyze_file,
-                    fp,
-                )
+                file_result = await self._run_file(self._anti_pattern_detector.analyze_file, fp)
                 for pattern in file_result.get("anti_patterns", []):
                     if self._is_modularization_candidate(pattern):
                         mod = self._to_modularization_suggestion(pattern)
@@ -326,6 +320,7 @@ class CodePatternAnalyzer:
         )
 
         # Phase 3: Clone detection (75% → 85%) — full directory, with timeout
+        self._check_cancelled()
         if self.enable_clone_detection:
             await _report("Running clone detection...", 75.0)
             try:
@@ -416,6 +411,7 @@ class CodePatternAnalyzer:
         all_complexity_modules: List = []
 
         for idx in range(start_batch, total_batches):
+            self._check_cancelled()
             batch = batches[idx]
             batch_pct = 5.0 + (batch_progress_range * (idx / total_batches))
             await progress_fn(

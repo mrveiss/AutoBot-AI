@@ -27,6 +27,7 @@ def load_real_pattern_analysis_package(base: Path, pkg_name: str) -> ModuleType:
         sys.modules[pkg_name] = pkg
         for sub in (
             "types",
+            "cancellation",
             "complexity_analyzer",
             "refactoring_generator",
             "regex_detector",

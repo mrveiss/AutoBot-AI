@@ -31,7 +31,7 @@ from code_intelligence.cross_language_patterns import CrossLanguageAnalysis, Cro
 # Issue #208: Code Pattern Detection & Optimization
 from code_intelligence.pattern_analysis import CodePatternAnalyzer, PatternAnalysisReport
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
-from utils.cancel_tokens import new_cancel_token, run_cancellable
+from utils.cancel_tokens import new_cancel_token, register_cancel_token, run_cancellable, signal_cancel_token
 from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
@@ -1577,10 +1577,8 @@ async def _get_pattern_analysis(
     #20513: the analysis scans the selected source's root and nothing else. The earlier #2655
     shortcut (scan AutoBot's own backend directory when the root was the install's) is gone.
 
-    Bounds, as they are: only the clone-detection phase has a deadline of its own (``ANALYZER_TIMEOUT``).
-    The request is bounded at about 180 s by the outer ``wait_for`` below, which stops this coroutine from
-    waiting but not the executor threads, which keep walking the tree. A cooperative cancel token, like
-    ``_get_api_endpoint_analysis`` has, is #22094.
+    Bounds: the outer ``wait_for`` ends the wait after about 180 s and a cancel token (#22094, as in
+    ``_get_api_endpoint_analysis``) stops the analyzer before its next file or phase.
 
     Issue #12372: When a distinct source is resolved, scan that source's root
     instead of always defaulting to AutoBot's own backend directory --
@@ -1594,28 +1592,24 @@ async def _get_pattern_analysis(
     Returns:
         PatternAnalysisReport or None if analysis fails
     """
+    cancel_token = new_cancel_token()
+    register_cancel_token("pattern_analysis", cancel_token)  # bounded() signals it on a route deadline
     try:
         scan_target = str(project_root)
 
         analyzer = CodePatternAnalyzer(
+            cancel_token=cancel_token,
             enable_clone_detection=True,
             enable_anti_pattern_detection=True,
             enable_regex_detection=True,
             enable_complexity_analysis=True,
             similarity_threshold=0.8,
-            # #12372: the report consumes the returned PatternAnalysisReport
-            # directly and never reads the ChromaDB cache, so disable embedding
-            # storage. Otherwise Phase 4 would persist THIS source's code into the
-            # global, source-unscoped `code_patterns` collection — re-introducing
-            # a cross-source write on the very path this PR scopes. The read-side
-            # source_id filter for that store is tracked separately in #12384.
+            # #12372: no embedding storage: Phase 4 would persist THIS source's code into the global,
+            # source-unscoped `code_patterns` collection (a cross-source write; read side: #12384).
             enable_embedding_storage=False,
         )
 
-        report = await asyncio.wait_for(
-            analyzer.analyze_directory(scan_target),
-            timeout=180.0,  # 3 minute timeout for comprehensive analysis
-        )
+        report = await asyncio.wait_for(analyzer.analyze_directory(scan_target), timeout=180.0)  # 3 minutes
 
         logger.info(
             "Pattern analysis: %d patterns, %d duplicates, %d complexity hotspots",
@@ -1625,8 +1619,12 @@ async def _get_pattern_analysis(
         )
         return report
     except asyncio.TimeoutError:
+        signal_cancel_token("pattern_analysis", cancel_token, "pattern analysis deadline")
         logger.warning("Pattern analysis timed out")
         return None
+    except asyncio.CancelledError:
+        signal_cancel_token("pattern_analysis", cancel_token, "pattern analysis cancelled")
+        raise
     except Exception as e:
         logger.error("Pattern analysis failed: %s", e, exc_info=True)
         return None
