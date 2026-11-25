@@ -62,7 +62,7 @@ FAILURE_TAIL_CHARS = 600
 NO_FAILURE_DETAIL = "Command failed with no error detail"
 
 
-def failure_detail(result: Dict[str, Any]) -> str:
+def command_failure_error(result: Dict[str, Any]) -> str:
     """Why a command failed: its own error, else ``exit N: <last output lines>`` (#22250).
 
     The PTY combines the streams, so ``stderr`` is empty and the cause sits in stdout. The placeholder is only

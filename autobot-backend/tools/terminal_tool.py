@@ -19,7 +19,7 @@ import threading
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
-from chat_workflow.step_outcome import exit_code_field, failure_detail
+from chat_workflow.step_outcome import command_failure_error, exit_code_field
 from services.agent_terminal.errors import (
     POST_EXECUTION_FAILED_CODE,
     POST_EXECUTION_FAILED_STATUS,
@@ -234,7 +234,7 @@ class TerminalTool:
         """
         return {
             "status": "error",
-            "error": failure_detail(result),  # return code + output tail (#22250)
+            "error": command_failure_error(result),  # return code + output tail (#22250)
             "command": command,
             "stdout": result.get("stdout", ""),
             "stderr": result.get("stderr", ""),
