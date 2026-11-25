@@ -51,7 +51,6 @@ from chat_workflow.graph_tool_dispatch import (
     split_refused,
 )
 from chat_workflow.reflection_gate import (
-    NO_ANSWER_FALLBACK,
     evaluate_with_one_retry,
     reflection_update,
     wants_another_pass,
@@ -61,7 +60,6 @@ from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
 from chat_workflow.state_messages import workflow_message_from_state
 from chat_workflow.tool_call_loop import (
     _LOOP_ABORT_THRESHOLD,
-    FINAL_ANSWER_INSTRUCTION,
     _append_loop_abort_message,
     _inline_loop_update,
     are_already_executed,
@@ -1209,36 +1207,10 @@ def route_after_reflection(state: ChatState) -> str:
 
 
 async def force_final_answer(state: ChatState, config: RunnableConfig) -> dict:
-    """At the iteration cap: one last LLM pass that dispatches nothing, to answer from the results (#19715)."""
-    manager = config["configurable"]["manager"]
-    stream_cb = config["configurable"].get("stream_callback")
-    messages = list(state.get("workflow_messages", []))
-    iteration = state.get("iteration_count", 0) + 1
-    ctx = _build_llm_iteration_context(state)
-    _carry_tool_results_into_prompt(manager, ctx, state)
-    ctx.initial_prompt = _inject_mid_conversation_warning(FINAL_ANSWER_INSTRUCTION, ctx.initial_prompt)
-    try:
-        messages, llm_response, _unused_calls, _stop = await _run_llm_iteration_plan(
-            manager, ctx, iteration, messages, stream_cb
-        )
-    except aiohttp.ClientError as exc:
-        logger.error("Final answer call failed: %s", exc)
-        llm_response = None
-    if not llm_response:
-        fallback = {
-            "type": "response",
-            "content": NO_ANSWER_FALLBACK,
-            "metadata": {"iteration": iteration},
-        }
-        messages.append(fallback)
-        if stream_cb:
-            stream_cb(fallback)
-    return {
-        "workflow_messages": messages,
-        "all_llm_responses": [*state.get("all_llm_responses", []), llm_response or ""],
-        "iteration_count": iteration,
-        "should_continue": False,
-    }
+    """At the iteration cap: one last LLM pass that dispatches nothing, to answer from the results (#19715, #20720)."""
+    from chat_workflow.final_pass import run_final_pass
+
+    return await run_final_pass(state, config)
 
 
 def route_after_execution(state: ChatState) -> str:
