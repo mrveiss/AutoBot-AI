@@ -528,7 +528,7 @@ def test_the_pending_list_only_shrinks() -> None:
         ("the marker as a plain string", 'MARKER = "#"\nx = 1\n', False),
         ("a regex stripping a line comment", 'import re\nx = re.sub(r"//[^\\n]*", "", s)\n', True),
         ("a regex stripping a block comment", 'import re\nx = re.sub(r"/\\*.*?\\*/", "", s)\n', True),
-        ("a regex stripping an HTML comment", 'import re\nx = re.sub(r"<!--.*?-->", "", s)\n', True),
+        ("a regex stripping an HTML comment", 'import re\nx = re.sub(r"<!--" r".*?-->", "", s)\n', True),
         ("a regex skipping a hash line", 'import re\nx = re.compile(r"^\\s*#")\n', True),
         ("a regex stripping a trailing hash comment", 'import re\nx = re.sub(r"#.*", "", s)\n', True),
         ("an escaped-slash line comment", 'import re\nx = re.sub(r"\\/\\/.*", "", s)\n', True),
