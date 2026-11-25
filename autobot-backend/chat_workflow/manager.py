@@ -35,6 +35,7 @@ from chat_workflow.reply_persistence import (
     later_respond_entries,
     stamp_model,
 )
+from chat_workflow.step_guidance import latest_step_guidance, return_code_line
 from chat_workflow.step_outcome import executed_count, not_run_note
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
 from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
@@ -1757,7 +1758,10 @@ class ChatWorkflowManager(
 
         output_text = _filter_step_output(cmd, output_text, is_shell=bool(result.get("command")))
 
-        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:{framed_tool_output(output_text)}"
+        return (
+            f"**Step {step_num}:** `{cmd}`\n- Status: {status}{return_code_line(result)}"  # #22252
+            f"\n- Output:{framed_tool_output(output_text)}"
+        )
 
     def _build_tools_reminder(self, consecutive_invalid_tool_calls: int) -> str:
         """Build an optional tool-name correction block for continuation prompts. Issue #2735.
@@ -1847,6 +1851,9 @@ before summarizing.
         instructions = self._get_continuation_instructions(
             original_message, steps_completed, consecutive_invalid_tool_calls
         )
+
+        guidance = latest_step_guidance(execution_history)  # #22252, #22253
+        history_text += f"\n\n{guidance}" if guidance else ""
 
         return f"""## MULTI-STEP TASK CONTINUATION (Step {steps_completed + 1})
 

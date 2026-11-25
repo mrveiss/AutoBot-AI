@@ -112,7 +112,9 @@ class TestTheFilterDoesNotEatToolContent:
             {
                 "tool": "web_search",
                 "status": "success",
-                "output": f"Stack Overflow: git says '{phrase}' but the commits are missing because of a shallow clone.",
+                "output": (
+                    f"Stack Overflow: git says '{phrase}' but the commits are missing because of a shallow clone."
+                ),
             }
         )
 
@@ -203,3 +205,50 @@ class TestEmptyStillReadsAsEmpty:
         text = _format({"tool": "some_tool", "status": "success"})
 
         assert "(no output)" in text
+
+
+PING_USAGE = {
+    "command": "ping -c 1 10.0.0.{1..254} | sort -u",
+    "status": "error",
+    "return_code": 2,
+    "stdout": "Usage: ping [options] <destination>\n",
+    "stderr": "",
+}
+
+
+class TestReturnCodeAndUsageGuidance:
+    """#22252 / #22253: the step shows its return code; a usage text or a failure brings the manual."""
+
+    def test_the_step_shows_its_return_code(self):
+        assert "- Return code: 2" in _format(PING_USAGE)
+        assert "Return code" not in _format({"tool": "web_search", "status": "success", "output": "x"})
+
+    def _prompt(self, history, manual):
+        from unittest.mock import patch
+
+        manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
+        with patch("chat_workflow.step_guidance._manual_manager") as mm:
+            mm.return_value.get_manual.return_value = manual
+            return manager._build_continuation_prompt("find hosts", history)
+
+    def test_a_usage_text_says_the_arguments_were_wrong_and_brings_the_synopsis(self):
+        from types import SimpleNamespace
+
+        manual = SimpleNamespace(syntax="ping [-c count] destination", description="", common_options=["-c count"])
+        prompt = self._prompt([PING_USAGE], manual)
+
+        assert "the arguments were wrong" in prompt and "read the usage line" in prompt
+        assert "ping [-c count] destination" in prompt
+
+    def test_a_failure_with_no_manual_says_so(self):
+        failed = {"command": "arp -a", "status": "error", "return_code": 127, "stdout": "arp: not found"}
+
+        prompt = self._prompt([failed], None)
+
+        assert "`arp`: no manual entry is available" in prompt
+        assert "the arguments were wrong" not in prompt
+
+    def test_a_clean_step_adds_no_guidance(self):
+        ok = {"command": "ls", "status": "success", "return_code": 0, "stdout": "a"}
+
+        assert "Manual for the command" not in self._prompt([ok], None)
