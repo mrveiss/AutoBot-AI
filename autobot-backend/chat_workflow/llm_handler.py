@@ -26,7 +26,7 @@ from middleware.hooks import HookPoint
 from middleware.manager import get_extension_manager
 from prompt_manager import get_language_instruction, get_prompt, resolve_language
 
-from .interpretation_guard import interpretation_never_fails_the_tool
+from .interpretation_guard import INTERPRETATION_TIMEOUT_SECONDS, interpretation_never_fails_the_tool
 from .models import WorkflowSession
 from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
 from .tool_timing import mark_tool_started, take_tool_elapsed, tool_outcome_fields
@@ -939,6 +939,8 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         session_id: str = "",
     ):
         """Handle non-streaming interpretation request (Issue #332)."""
+        import aiohttp
+
         # Issue #4259: Wire BEFORE_LLM_CALL hook
         llm_params = {"model": selected_model, "endpoint": ollama_endpoint}
         should_proceed = await _emit_before_llm_call(interpretation_prompt, llm_params, session_id)
@@ -955,6 +957,9 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 "stream": False,
                 "options": llm_options,
             },
+            # #21750: the session default reads a socket for 10 s and a model answers in minutes, so every
+            # interpretation timed out into "length: 0"; the guard's own deadline is the only one.
+            timeout=aiohttp.ClientTimeout(total=INTERPRETATION_TIMEOUT_SECONDS),
         )
         interpretation = response_data.get("response", "")
 
@@ -998,7 +1003,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                     "stream": True,
                     "options": llm_options,
                 },
-                timeout=aiohttp.ClientTimeout(total=60.0),
+                timeout=aiohttp.ClientTimeout(total=INTERPRETATION_TIMEOUT_SECONDS),
             ) as interp_response:
                 async for line in interp_response.content:
                     line_str = line.decode("utf-8").strip()
