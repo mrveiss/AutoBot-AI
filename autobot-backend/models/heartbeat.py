@@ -74,6 +74,10 @@ def new_control_id() -> uuid.UUID:
     return uuid.uuid4()
 
 
+DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 300
+DEFAULT_MAX_RUN_DURATION_SECONDS = 600
+
+
 class AgentRuntimeState(Base):
     """Persistent runtime state per agent, survives restarts (#1407)."""
 
@@ -81,14 +85,15 @@ class AgentRuntimeState(Base):
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(String(255), nullable=False, unique=True, index=True)
-    heartbeat_interval_seconds = Column(Integer, nullable=False, default=300)
-    max_run_duration_seconds = Column(Integer, nullable=False, default=600)
+    heartbeat_interval_seconds = Column(Integer, nullable=False, default=DEFAULT_HEARTBEAT_INTERVAL_SECONDS)
+    max_run_duration_seconds = Column(Integer, nullable=False, default=DEFAULT_MAX_RUN_DURATION_SECONDS)
     current_task_id = Column(String(255), nullable=True, index=True)
     session_params = Column(JSONB, nullable=True)
     last_heartbeat_at = Column(DateTime, nullable=True)
     extra = Column(JSONB, nullable=True)
-    # Explicit status replaces the old heartbeat_enabled boolean (GH#6476)
-    status = Column(String(32), nullable=False, default=HeartbeatStatus.ACTIVE.value, index=True)
+    # Explicit status replaces the old heartbeat_enabled boolean (GH#6476).
+    # A new row starts OFF: the heartbeat is opt-in, enabled only by a deliberate write (#21992, #15907).
+    status = Column(String(32), nullable=False, default=HeartbeatStatus.DISABLED.value, index=True)
     paused_reason = Column(Text, nullable=True)
     paused_at = Column(DateTime, nullable=True)
     paused_by = Column(String(255), nullable=True)

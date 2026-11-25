@@ -20,11 +20,11 @@ and the assumption survived because "needs npm" was true of its neighbour.
 conditional -- on a **check**, never an install, mirroring what this script
 already does for Python with `setup-ci-parity-env.sh --check` at the top.
 
-The freshness test is `node_modules/.package-lock.json` against
-`package-lock.json`: npm writes the former on every install, so a lockfile
-newer than it means the tree was installed from a different one. No npm
-invocation, because asking npm whether npm needs to run is slow enough that
-people stop running the preflight.
+The freshness test is CONTENT, not mtime (#22135): `scripts/check-frontend-deps-current.sh`
+compares every package the lockfile records with what `node_modules` holds. The
+old `.package-lock.json` mtime comparison missed a tree installed before a
+dependency was added. Still no npm invocation, because asking npm whether npm
+needs to run is slow enough that people stop running the preflight.
 
 These tests **extract and execute the shipped predicate** rather than
 restating it. A restatement agrees with itself and proves nothing -- the same
@@ -37,10 +37,10 @@ import re
 import subprocess
 
 import pytest
-
 from repo_tests._paths import repo_root
 
 _SCRIPT = repo_root() / "scripts" / "pr-preflight.sh"
+_CHECKER = repo_root() / "scripts" / "check-frontend-deps-current.sh"
 
 #: The shipped function, lifted whole. Fails loudly if it is renamed or moved,
 #: rather than silently testing nothing.
@@ -60,13 +60,20 @@ def _predicate_source() -> str:
 
 
 def _run(ws_setup: str) -> bool:
-    """True when the shipped predicate reports the workspace usable."""
+    """True when the shipped predicate reports the workspace usable.
+
+    The predicate runs from a scratch repo root whose `scripts/` holds the real
+    checker, exactly as preflight runs it from the repo root.
+    """
     script = f"""
 set -u
 REPO_ROOT="$1"
 {_predicate_source()}
-mkdir -p "$REPO_ROOT/autobot-frontend"
+mkdir -p "$REPO_ROOT/autobot-frontend" "$REPO_ROOT/scripts"
+ln -s "{_CHECKER}" "$REPO_ROOT/scripts/check-frontend-deps-current.sh"
+cd "$REPO_ROOT"
 {ws_setup}
+cd "$REPO_ROOT"
 frontend_deps_current && echo CURRENT || echo STALE
 """
     # `bash -c CMD a b` sets $0=a and $1=b, not $1=a. An earlier version passed
@@ -82,34 +89,34 @@ frontend_deps_current && echo CURRENT || echo STALE
     return "CURRENT" in completed.stdout
 
 
+_LOCKED = (
+    "cd autobot-frontend; "
+    'echo \'{"dependencies":{"reka-ui":"2.11.0"}}\' > package.json; '
+    'echo \'{"packages":{"node_modules/reka-ui":{"version":"2.11.0"}}}\' > package-lock.json; '
+)
+
+
+def _installed(version: str) -> str:
+    return "mkdir -p node_modules/reka-ui; " f'echo \'{{"version":"{version}"}}\' > node_modules/reka-ui/package.json; '
+
+
 def test_a_missing_node_modules_is_stale() -> None:
-    assert not _run('touch "$REPO_ROOT/autobot-frontend/package-lock.json"')
+    assert not _run(_LOCKED)
 
 
-def test_node_modules_without_its_lock_marker_is_stale() -> None:
-    """npm writes `.package-lock.json` on install; without it nothing was installed."""
-    assert not _run(
-        'mkdir -p "$REPO_ROOT/autobot-frontend/node_modules"; '
-        'touch "$REPO_ROOT/autobot-frontend/package-lock.json"'
-    )
+def test_node_modules_without_a_locked_package_is_stale() -> None:
+    """The reka-ui case: the tree exists but predates a dependency."""
+    assert not _run(_LOCKED + "mkdir -p node_modules; ")
 
 
-def test_a_lockfile_newer_than_the_install_is_stale() -> None:
+def test_an_install_older_than_the_lockfile_is_stale() -> None:
     """The case the gate exists for: someone pulled a lockfile change."""
-    assert not _run(
-        'mkdir -p "$REPO_ROOT/autobot-frontend/node_modules"; '
-        'touch -t 202001010000 "$REPO_ROOT/autobot-frontend/node_modules/.package-lock.json"; '
-        'touch "$REPO_ROOT/autobot-frontend/package-lock.json"'
-    )
+    assert not _run(_LOCKED + _installed("2.10.0"))
 
 
-def test_an_install_at_or_after_the_lockfile_is_current() -> None:
+def test_an_install_matching_the_lockfile_is_current() -> None:
     """The positive control. Without it, a predicate that always said STALE would pass every test above."""
-    assert _run(
-        'mkdir -p "$REPO_ROOT/autobot-frontend/node_modules"; '
-        'touch -t 202001010000 "$REPO_ROOT/autobot-frontend/package-lock.json"; '
-        'touch "$REPO_ROOT/autobot-frontend/node_modules/.package-lock.json"'
-    )
+    assert _run(_LOCKED + _installed("2.11.0"))
 
 
 @pytest.mark.parametrize(

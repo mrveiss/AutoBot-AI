@@ -7,6 +7,7 @@ const express = require('express');
 // Default frontend for the /test-frontend* routes; one place, env-overridable.
 const FRONTEND_URL = process.env.AUTOBOT_FRONTEND_URL || 'http://localhost:5173';
 const { SessionStore } = require('./session-store');
+const { ensureActivePage, peekActivePage } = require('./session-page');
 const { collectIndexedElements, resolveElementByIndex, pageExcerpt } = require('./element-index');
 const { extractSnippet } = require('./search-snippet');
 const app = express();
@@ -54,24 +55,17 @@ async function getSessionEntry(sessionId) {
   const entry = await sessionStore.getOrCreate(sessionId, async () => {
     const context = await b.newContext();
     logger.info('Created new browser context for session %s', sessionId);
-    return { context, navPage: null, mcpPage: null };
+    return { context, page: null };
   });
   return entry;
 }
 
 async function closeSessionEntry(entry, sessionId) {
-  if (entry.navPage && !entry.navPage.isClosed()) {
+  if (entry.page && !entry.page.isClosed()) {
     try {
-      await entry.navPage.close();
+      await entry.page.close();
     } catch (e) {
-      logger.warn('Session cleanup: navPage close failed for %s: %s', sessionId, e.message);
-    }
-  }
-  if (entry.mcpPage && !entry.mcpPage.isClosed()) {
-    try {
-      await entry.mcpPage.close();
-    } catch (e) {
-      logger.warn('Session cleanup: mcpPage close failed for %s: %s', sessionId, e.message);
+      logger.warn('Session cleanup: page close failed for %s: %s', sessionId, e.message);
     }
   }
   await entry.context.close();
@@ -169,15 +163,14 @@ app.get('/health', (req, res) => {
 
 async function ensureNavPage(sessionId) {
   const entry = await getSessionEntry(sessionId);
-  if (!entry.navPage || entry.navPage.isClosed()) {
-    entry.navPage = await entry.context.newPage();
-    await entry.navPage.setExtraHTTPHeaders({
+  const page = await ensureActivePage(entry, async (created) => {
+    await created.setExtraHTTPHeaders({
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     });
-    logger.info('Created new navPage for session %s', sessionId);
-  }
+    logger.info('Created the active page for session %s', sessionId);
+  });
   sessionStore.touch(sessionId);
-  return entry.navPage;
+  return page;
 }
 
 async function captureNavScreenshot(page) {
@@ -213,9 +206,9 @@ app.get('/status', async (req, res) => {
     const sessionId = sessionIdFromRequest(req);
     const connected = browser && browser.isConnected();
     const entry = sessionStore.peek(sessionId);
-    const navPage = entry ? entry.navPage : null;
-    const pageOpen = navPage && !navPage.isClosed();
-    const currentUrl = pageOpen ? navPage.url() : null;
+    const activePage = peekActivePage(entry);
+    const pageOpen = activePage !== null;
+    const currentUrl = pageOpen ? activePage.url() : null;
     res.json({
       status: connected ? 'connected' : 'disconnected',
       browser_connected: connected,
@@ -952,15 +945,8 @@ app.post('/test-frontend', async (req, res) => {
 // every conversation).
 // =============================================================================
 
-async function ensureMcpPage(sessionId) {
-  const entry = await getSessionEntry(sessionId);
-  if (!entry.mcpPage || entry.mcpPage.isClosed()) {
-    entry.mcpPage = await entry.context.newPage();
-    logger.info('MCP automation page created for session %s', sessionId);
-  }
-  sessionStore.touch(sessionId);
-  return entry.mcpPage;
-}
+// The MCP automation routes act on the same active page as /navigate, /back, /forward and /reload (#22142).
+const ensureMcpPage = ensureNavPage;
 
 // --- Indexed interactive-element state (#11537) ---
 //

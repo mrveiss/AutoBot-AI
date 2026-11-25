@@ -42,6 +42,10 @@ async def _refused(coro):
     return info.value
 
 
+_VOICE_USER = {
+    "username": "tester",
+    "role": "admin",
+}  # passes the voice permission check; the gate under test runs after it
 _PERSON = "00000000-0000-4000-8000-000000000001"  # the session user the work-item routes record (#20521)
 BAD = ["payload.exe", "a/b.txt", "..\\x.txt", "noextension", "tool.msi", ""]
 BAD_AUDIO = BAD + ["notes.txt", "evil.sh"]
@@ -84,11 +88,11 @@ async def test_multimodal_combine_refuses_a_bad_image_and_a_bad_audio_name():
 @pytest.mark.parametrize("name", BAD_AUDIO)
 async def test_voice_routes_refuse_a_bad_name(name):
     req = _security_request()
-    await _refused(_unwrap(voice.voice_clone_api)(req, "hello", FakeUpload(name), "user"))
+    await _refused(_unwrap(voice.voice_clone_api)(req, "hello", FakeUpload(name), current_user=_VOICE_USER))
     await _refused(_unwrap(voice.voice_create_api)("v", FakeUpload(name)))
     if name in ("noextension", ""):  # transcribe is MIME-driven: an unnamed Blob is legitimate there (tested below)
         return
-    await _refused(_unwrap(voice.voice_transcribe_api)(req, FakeUpload(name), ""))
+    await _refused(_unwrap(voice.voice_transcribe_api)(req, FakeUpload(name), "", current_user=_VOICE_USER))
 
 
 @pytest.mark.asyncio
@@ -212,7 +216,9 @@ async def test_a_real_wav_clears_the_voice_gate_and_reaches_the_audio_read(monke
 
     monkeypatch.setattr(limits, "read_capped_audio", stop)
     with pytest.raises(Reached):
-        await _unwrap(voice.voice_transcribe_api)(_security_request(), FakeUpload("speech.wav"), "")
+        await _unwrap(voice.voice_transcribe_api)(
+            _security_request(), FakeUpload("speech.wav"), "", current_user=_VOICE_USER
+        )
 
 
 # What the frontend producers really name their audio (#19088 follow-up):

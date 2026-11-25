@@ -14,7 +14,7 @@ from api import heartbeat
 from api.heartbeat_scope import AgentScope
 from api.schemas_heartbeat import AgentPauseRequest, AgentResumeRequest, AgentTerminateRequest
 from models.heartbeat import HeartbeatStatus
-from services.audit import outcome
+from services.audit import audit as audit_store
 from services.audit.taxonomy import AuditAction, action_name
 
 CALLER = {"id": "principal-7", "username": "alice", "role": "admin"}
@@ -40,7 +40,7 @@ def harness(monkeypatch):
         audits.append({"user_id": event.actor_id, "action": event.action, "resource_id": event.resource_id})
         return True
 
-    monkeypatch.setattr(outcome, "record_committed", _record)
+    monkeypatch.setattr(audit_store, "record_committed", _record)
     monkeypatch.setattr(heartbeat, "_state_to_response", lambda state, *a: state)
     session = MagicMock(commit=AsyncMock(), refresh=AsyncMock())
     monkeypatch.setattr(heartbeat, "_paused_by_name", AsyncMock(return_value=None))
@@ -102,7 +102,7 @@ async def test_event_is_written_before_the_commit(harness):
 @pytest.mark.parametrize("route", ["pause", "resume", "terminate"])
 async def test_failed_audit_write_is_503_and_changes_nothing(harness, monkeypatch, route):
     audits, session, scheduler, install = harness
-    monkeypatch.setattr(outcome, "record_committed", AsyncMock(return_value=False))
+    monkeypatch.setattr(audit_store, "record_committed", AsyncMock(return_value=False))
     paused = HeartbeatStatus.PAUSED if route == "resume" else HeartbeatStatus.ACTIVE
     state = _state(paused, paused_by="principal-1")
     before = dict(vars(state))

@@ -23,7 +23,7 @@ from type_defs.common import Metadata
 class GoalPayload(BaseModel):
     """Goal payload — unified from bare and advanced variants (#10666 B1).
 
-    The simple /goal endpoint reads only ``goal``/``use_phi2``/``user_role``.
+    The simple /goal endpoint reads only ``goal``/``use_phi2``; the role is the session's (#22143).
     The /goal/orchestrated endpoint also reads the remaining optional fields.
     All added fields carry defaults, so existing callers that only send
     ``goal`` remain fully backward-compatible.
@@ -31,7 +31,6 @@ class GoalPayload(BaseModel):
 
     goal: str = Field(..., min_length=1, max_length=10000, description="Goal description")
     use_phi2: bool = False
-    user_role: str = "user"
     # Fields from the former GoalPayload — all optional so /goal callers unaffected
     agents: List[str] | None = Field(None, description="Specific agents to use")
     coordination_mode: str = Field("intelligent", description="Coordination mode (parallel, sequential, intelligent)")
@@ -45,7 +44,6 @@ class GoalPayload(BaseModel):
 class CommandApprovalPayload(BaseModel):
     task_id: str
     approved: bool
-    user_role: str = "user"
 
 
 # #15527: the route used to declare ``command_data: dict`` beside
@@ -57,10 +55,9 @@ class CommandApprovalPayload(BaseModel):
 # The docstring below is deliberately one line -- it is the schema description
 # the generated OpenAPI contract carries.
 class CommandExecutePayload(BaseModel):
-    """Body of POST /execute_command: the command to run and the caller's role."""
+    """Body of POST /execute_command: the command to run."""
 
     command: str
-    user_role: str = "user"
 
 
 class MultiAgentTaskPayload(BaseModel):
