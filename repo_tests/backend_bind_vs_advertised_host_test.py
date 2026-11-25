@@ -341,7 +341,9 @@ def test_no_vnc_role_file_spells_the_systemd_unit_dir_and_the_variable_has_one_d
         for n in _literal_unit_dir_lines(f.read_text(encoding="utf-8"))
     ]
     assert literal == []
-    playbook_files = [f for f in ANSIBLE.rglob("*.yml") if "tests" not in f.relative_to(ANSIBLE).parts]
+    playbook_files = [
+        f for f in ROOT.glob("autobot-slm-backend/ansible/**/*.yml") if "tests" not in f.relative_to(ANSIBLE).parts
+    ]
     assert len(playbook_files) >= 300  # floor: the whole ansible tree was scanned for a second definition
     texts = {f.relative_to(ANSIBLE).as_posix(): f.read_text(encoding="utf-8") for f in playbook_files}
     assert _defines_unit_dir(texts[ALL_VARS.relative_to(ANSIBLE).as_posix()])  # the canonical default
