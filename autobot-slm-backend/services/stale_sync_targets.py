@@ -102,17 +102,27 @@ def moved_role_sources(roles: Iterable[Mapping], moved: Mapping[str, int] = MOVE
     return sources
 
 
+_REGULAR_MODES = ("100644", "100755")
+
+
+def _is_content_record(fields: list[str]) -> bool:
+    """Whether a raw record (``:old new oldblob newblob status``) introduces file content at its path."""
+    status = fields[4][0]
+    return status in "AMRC" or (status == "T" and fields[1] in _REGULAR_MODES)
+
+
 def parse_raw_log(output: str, pathspec: str) -> dict[str, set[str]]:
     """``git log --raw --no-abbrev`` -> {path relative to *pathspec*: every blob id git tracked at it}.
 
-    A deletion (all-zero blob) adds nothing; a rename adds the NEW blob at the new path. A path git quotes
-    (a double quote, a control character) is skipped: it can never be offered.
+    A deletion (all-zero blob) adds nothing; a rename adds the NEW blob at the new path; a type change (``T``)
+    adds its blob only when the new mode is a regular file (symlink -> file), never a symlink or gitlink.
+    A path git quotes (a double quote, a control character) is skipped: it can never be offered.
     """
     blobs: dict[str, set[str]] = {}
     for line in output.splitlines():
         head, _, tail = line.partition("\t")
         fields = head.split()
-        if not line.startswith(":") or len(fields) < 5 or fields[4][0] not in "AMRC":
+        if not line.startswith(":") or len(fields) < 5 or not _is_content_record(fields):
             continue
         path, blob = tail.split("\t")[-1], fields[3]
         if blob != _NO_BLOB and not path.startswith('"'):
@@ -171,9 +181,10 @@ def candidates(
 ) -> tuple[list[str], list[KeptFile]]:
     """The relative paths to look for on the node for *source*, and the paths refused up front."""
     wanted, kept = [], []
+    protected_dirs = frozenset(protected)  # a one-shot iterable would be spent by the first rel
     for rel in sorted(history):
         reason = kept_reason_for(source, rel) or (
-            KEPT_CLAIMED if is_claimed(source.old_target, rel, protected) else None
+            KEPT_CLAIMED if is_claimed(source.old_target, rel, protected_dirs) else None
         )
         if reason:
             kept.append(KeptFile(source.old_target, rel, reason))

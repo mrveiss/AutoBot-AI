@@ -144,6 +144,26 @@ async def test_a_side_branch_version_the_merge_discarded_is_still_tracked(tmp_pa
     assert blobs["a.py"] == {_blob(b"base\n"), _blob(b"side\n")}  # git tracked both exact byte sequences
 
 
+async def test_a_symlink_that_became_a_regular_file_tracks_the_file_blob(tmp_path, monkeypatch) -> None:
+    async def full(_repo):
+        return t.ShallowCheck.FULL
+
+    monkeypatch.setattr(t, "is_shallow_repository", full)
+    (tmp_path / "autobot-backend").mkdir()
+    isolated_git.make_repo(tmp_path)
+    (tmp_path / "autobot-backend" / "link.py").symlink_to("target.py")
+    isolated_git.git(tmp_path, "add", "-A")
+    isolated_git.git(tmp_path, "commit", "-qm", "a symlink")
+    (tmp_path / "autobot-backend" / "link.py").unlink()
+    _commit_all(tmp_path, {"autobot-backend/link.py": b"real\n"}, "now a regular file (a T record)")
+    assert isolated_git.git(tmp_path, "log", "--raw", "-1", "--format=").stdout.split()[4] == "T"
+    blobs = await t.historical_blobs(str(tmp_path), "autobot-backend")
+    assert _blob(b"real\n") in blobs["link.py"]  # the T record's regular-file blob is tracked
+    # contrast: a type change to a symlink introduces no file content
+    record = f":100644 120000 {'a' * 40} {'b' * 40} T\tautobot-backend/x.py"
+    assert t.parse_raw_log(record, "autobot-backend") == {}
+
+
 async def test_a_version_only_a_merge_resolution_introduced_is_tracked(tmp_path, monkeypatch) -> None:
     async def full(_repo):
         return t.ShallowCheck.FULL
@@ -196,6 +216,12 @@ def test_a_path_inside_a_directory_the_corrected_sync_owns_is_claimed_not_stale(
     history = {"autobot-backend/main.py": {_BLOB_A}, "main.py": {_BLOB_A}}
     wanted, kept = t.candidates(_source(), history, protected)
     assert wanted == ["main.py"] and [(k.path, k.reason) for k in kept] == [("autobot-backend/main.py", t.KEPT_CLAIMED)]
+
+
+def test_a_one_shot_protected_iterable_protects_every_path_not_just_the_first() -> None:
+    history = {"autobot-backend/a.py": {_BLOB_A}, "autobot-backend/b.py": {_BLOB_A}, "main.py": {_BLOB_A}}
+    wanted, kept = t.candidates(_source(), history, (p for p in [f"{_ROOT}/autobot-backend"]))
+    assert wanted == ["main.py"] and [k.path for k in kept] == ["autobot-backend/a.py", "autobot-backend/b.py"]
 
 
 def test_the_agent_file_in_the_agent_dir_is_a_candidate_but_its_new_home_is_not() -> None:
