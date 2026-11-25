@@ -6,9 +6,9 @@
         :label="$t('audit.commandHistory.userFilter')"
         :placeholder="$t('audit.commandHistory.userPlaceholder')"
         size="sm"
-        @keyup.enter="load"
+        @keyup.enter="applyFilters"
       />
-      <BaseButton size="sm" :disabled="loading" @click="load">
+      <BaseButton size="sm" :disabled="loading" @click="applyFilters">
         {{ $t('audit.commandHistory.refresh') }}
       </BaseButton>
     </div>
@@ -52,6 +52,8 @@ const logger = createLogger('AuditCommandHistoryPanel')
 const { getCommandHistory } = useAuditApi()
 
 const user = ref('')
+// What the loaded rows were fetched with. Refresh, retry and Auto-refresh read this, never the editable box.
+const appliedUser = ref('')
 const latest = useLatestRequest()
 const loading = ref(false)
 const failed = ref(false)
@@ -76,7 +78,7 @@ async function load() {
   const token = latest.begin()
   loading.value = true
   failed.value = false
-  const query: CommandHistoryQuery = { user: user.value.trim() || undefined, limit: HISTORY_LIMIT }
+  const query: CommandHistoryQuery = { user: appliedUser.value || undefined, limit: HISTORY_LIMIT }
   const result = await getCommandHistory(query)
   if (!latest.isCurrent(token)) return // a newer load owns the rows and the loading flag
   loading.value = false
@@ -86,6 +88,11 @@ async function load() {
     return
   }
   entries.value = result
+}
+
+function applyFilters() {
+  appliedUser.value = user.value.trim()
+  load()
 }
 
 watch(() => props.refreshTick, load)

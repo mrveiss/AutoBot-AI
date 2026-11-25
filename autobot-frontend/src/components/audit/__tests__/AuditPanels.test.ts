@@ -202,4 +202,19 @@ describe('AuditCommandHistoryPanel', () => {
 
     expect(getCommandHistory).toHaveBeenCalledTimes(2)
   })
+
+  it('reloads with the applied user, not an edit that was never applied (#22212)', async () => {
+    getCommandHistory.mockResolvedValue(HISTORY)
+    const w = mount(AuditCommandHistoryPanel, { props: { refreshTick: 0 }, global: { plugins: [i18n] } })
+    await flushPromises()
+    await w.find('input').setValue('carol')
+    await w.findAll('button').find((b) => b.text() === en.audit.commandHistory.refresh)!.trigger('click')
+    await flushPromises()
+
+    await w.find('input').setValue('mallory') // typed, never applied
+    await w.setProps({ refreshTick: 1 })
+    await flushPromises()
+
+    expect(getCommandHistory).toHaveBeenLastCalledWith({ user: 'carol', limit: 50 })
+  })
 })
