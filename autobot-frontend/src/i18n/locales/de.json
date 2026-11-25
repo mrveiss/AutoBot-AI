@@ -2393,6 +2393,7 @@
       "demoDataWarning": "Demo-Daten-Warnung",
       "exportSuccess": "Export erfolgreich",
       "exportFailed": "Export fehlgeschlagen",
+      "loadFailed": "Evolutionsdaten konnten nicht geladen werden",
       "noTrendData": "Keine Trenddaten",
       "stable": "Stabil",
       "sinceStart": "Seit Beginn"
@@ -10015,5 +10016,40 @@
     "invalid_generic": "Dieser Zeitplan ist ungültig.",
     "conflicting_fields": "Ein Zeitplan wird entweder als Cron oder als Kalenderregel bzw. einmalige Ausführung gespeichert, nie beides.",
     "gatedNote": "Letzter Tag, Wochentag im Monat, die Tage 29 bis 31 und einmalige Ausführungen stehen zur Verfügung, sobald der Scheduler aktualisiert ist."
+  },
+  "driftPrune": {
+    "batch": "Stapel von {count} von {total} Datei(en); bestätigen Sie, um diesen Stapel zu entfernen, danach wird der nächste angezeigt",
+    "cancel": "Abbrechen",
+    "confirm": "Entfernung von {count} Datei(en) bestätigen",
+    "intro": "Git belegt, dass diese Dateien aus dem Quellcode gelöscht wurden und noch bereitgestellt sind. Nur diese Dateien werden entfernt. Host-Zustand, Build-Bundles und geänderte Dateien werden nie angetastet.",
+    "nothingToRemove": "Nichts zu entfernen: keine bereitgestellte Datei ist mehr als aus dem Quellcode gelöscht bestätigt. Führen Sie die Abweichungsprüfung erneut aus.",
+    "previewAction": "Entfernung in der Vorschau anzeigen",
+    "previewing": "Vorschau wird geladen…",
+    "removing": "Wird entfernt…",
+    "requestFailed": "Anfrage zur Bereinigung der Abweichungen fehlgeschlagen",
+    "result": "{removed} Datei(en) entfernt; {left} unverändert belassen",
+    "title": "{count} Datei(en) würden aus {component} entfernt"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Diese Schaltflächen pausieren oder setzen alle Agenten fort, nicht nur einen einzelnen",
+    "loadFailed": "Agenten konnten nicht geladen werden",
+    "noLastActivity": "Keine Aktivität gemeldet",
+    "notReported": "Nicht gemeldet",
+    "pauseAll": "Alle Agenten pausieren",
+    "pauseFailed": "Agenten konnten nicht pausiert werden",
+    "resumeAll": "Alle Agenten fortsetzen",
+    "resumeFailed": "Agenten konnten nicht fortgesetzt werden",
+    "successRate": "Erfolgsquote",
+    "tasksCompleted": "Abgeschlossene Aufgaben"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Geben Sie eine vollständige Webadresse ein, die mit http:// oder https:// beginnt",
+    "recognitionUnsupported": "Spracherkennung wird in diesem Browser nicht unterstützt",
+    "recognitionError": "Spracherkennungsfehler: {error}",
+    "speakFailed": "Der Text konnte nicht gesprochen werden",
+    "playbackFailed": "Audiowiedergabe fehlgeschlagen",
+    "spoken": "Gesprochen:",
+    "speakToInteractWith": "Sprechen Sie und hören Sie es vorgelesen",
+    "voiceId": "Stimmen-ID"
   }
 }

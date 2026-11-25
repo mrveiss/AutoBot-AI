@@ -150,10 +150,15 @@ def test_a_queued_job_whose_caller_left_never_takes_a_slot(node):
     queued = run_job(node, "true")
     assert wait_for(lambda: len(refs(node) - held_refs) == 1), "the queued job's ref never appeared"
     queued_ref = next(iter(refs(node) - held_refs))
-    found = subprocess.run(
-        ["pgrep", "-P", str(queued.pid), "-f", "fake-ssh"], capture_output=True, text=True, check=False
-    ).stdout.split()
-    assert found, "the queued job's stand-in ssh session was not found"
+    found: list = []
+
+    def _session_pids() -> bool:  # the ref can appear before the fake-ssh child exists: poll, never sample once
+        found[:] = subprocess.run(
+            ["pgrep", "-P", str(queued.pid), "-f", "fake-ssh"], capture_output=True, text=True, check=False
+        ).stdout.split()
+        return bool(found)
+
+    assert wait_for(_session_pids), "the queued job's stand-in ssh session was not found"
     os.kill(int(found[0]), signal.SIGKILL)
     assert wait_for(lambda: queued_ref not in refs(node), 30), "the queued job's ref survived its caller"
     assert sorted(os.listdir(runs)) == held_dirs, "a dir appeared for the queued job: it took a slot"

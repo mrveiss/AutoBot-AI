@@ -220,6 +220,10 @@ class AuditLogger:
         )
         return entry.sanitize()
 
+    def event(self, operation: str, result: AuditResult = "success", **fields: Any) -> AuditEvent:
+        """The event :meth:`log` would write, unwritten: for the attempt/outcome rows of ``services.audit.outcome``."""
+        return self._entry(operation, result, **fields).to_event()
+
     async def log(
         self,
         operation: str,
@@ -242,7 +246,7 @@ class AuditLogger:
         fields = dict(user_id=user_id, session_id=session_id, ip_address=ip_address, resource=resource)
         fields.update(resource_type=resource_type, user_role=user_role, details=details, performance_ms=performance_ms)
         try:
-            event = self._entry(operation, result, **fields).to_event()
+            event = self.event(operation, result, **fields)
             if durable:
                 written = await canonical.record_committed(event)
                 self._total_logged += int(written)

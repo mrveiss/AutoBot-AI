@@ -45,6 +45,7 @@ from api._connector_keys import is_config_key as _is_config_key
 from api._connector_sync_claim import claim_or_refuse, run_claimed_sync
 from api._connector_sync_result import record_last_sync
 from api.admin_connector_credentials import router as _credentials_router
+from api.knowledge_connector_oauth import attachable_secret_id
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_refusal import fixed_refusal
@@ -473,10 +474,9 @@ async def create_connector(
         raise HTTPException(status_code=401, detail="Authenticated caller has no resolvable identity")
     safe_config = request.config
     secret_id: str | None = None
-    # OAuth flow already stored the token bundle (store_oauth) and handed back a
-    # secret_id; attach it by reference and mark it OAuth-managed — never re-store.
+    # The OAuth flow stored the token bundle and returned a secret_id: attach by reference, never re-store.
     if request.secret_id:
-        secret_id = request.secret_id
+        secret_id = await attachable_secret_id(request.secret_id, owner_id)
         auth_type = _OAUTH_AUTH_TYPE
     elif auth_cls is not None and hasattr(auth_cls, "__sensitive_fields__"):
         credential_store = get_credential_store()

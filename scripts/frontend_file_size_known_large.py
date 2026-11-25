@@ -50,7 +50,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
     "autobot-frontend/src/components/chat/ChatInput.vue": 1619,  # #20133: 1672 -> 1631; #20195: 1628; 1620; 1619
     "autobot-frontend/src/components/chat/ChatInterface.vue": 1457,
-    "autobot-frontend/src/components/chat/ChatMessages.vue": 2097,  # #20195: 2118 -> 2097 (approval routing moved out)
     "autobot-frontend/src/components/chat/DocumentationSearchSidebar.vue": 766,
     "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 693,
     "autobot-frontend/src/components/chat/VisualBrowserPanel.vue": 632,
@@ -67,8 +66,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/EntityGraphManager.vue": 692,
     "autobot-frontend/src/components/knowledge/GraphConnectionPath.vue": 701,
     "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": 713,
-    "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": 625,
-    "autobot-frontend/src/components/knowledge/KnowledgeBrowser.vue": 1772,  # #17563: 1785 -> 1772 (kit Breadcrumb)
     "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1358,  # #19118: 1359 -> 1358
     "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": 2068,
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,

@@ -604,6 +604,16 @@ folder cannot read as a clean 0.
   detector's, so its count is as good as the regex. The fixtures in the test file are its positive
   and negative controls.
 - **A branch doesn't repin (#19673):** the pre-push gate asks only when the branch changed a guard beyond its `floor=` lines. Merge trains still enforce every floor (`AUTOBOT_REACH_AUDIT=1`, train heads only) and repin the rest on their merged tree, so a branch hand-lowering a `floor=` is judged there, not locally.
+- **Floors on main (#22110):** `ci.yml` also sets `AUTOBOT_REACH_AUDIT=1` for a push to main and a merge group, so the
+  merge that drives a floor into its bottom band is the one that goes red; unrelated PRs only warn.
+  `.github/workflows/repin-reach-floors.yml` runs the re-pin script on main and opens one PR (or updates the open
+  one). A population floor must be a `declare()` to be covered: `reach_floor_migration_test.GRANDFATHERED` lists
+  the bare ones not yet migrated.
+  - The slack and floor-window checks fail only under `AUTOBOT_REACH_AUDIT` (trains, a push to main, a merge group); on an
+    ordinary PR they only warn. A real loss below the floor fails everywhere.
+  - Once a floor drifts into its band, later merge-group and train runs stay red until the re-pin PR lands.
+  - An equality pin (`growth=0`) cannot be re-pinned mid-window by the script. The re-pin workflow's failing last step,
+    with an `::error::` line naming the floor, is the signal that it needs a hand re-pin.
 - **Re-pinning the floor:** `python scripts/repin_reach_floors.py` after the tree grows or shrinks
   past the window.
 - **A floor computed from the base (#19676):** a `declare()` without `floor=` gets

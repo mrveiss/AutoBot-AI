@@ -6,7 +6,8 @@
 
 Measured at the commit that added this ratchet, by
 `repo_tests._raw_palette_detect.scan`: **594 occurrences of 175 distinct classes in
-the user frontend, 6214 of 211 in the SLM control plane** (keys behind `slm:`).
+the user frontend**; the SLM control plane then held 6214 occurrences of 211 distinct
+classes (keys behind `slm:`), a historical figure: it is now zero (see below).
 #14580 and #17566 counted 689 in 66 files and 6,213 in 104 files with a looser
 pattern that also read `<style>` blocks; this detector reads markup only, because
 `<style>` is `color-no-hex`'s job. A differing figure is a finding, not a rebase.
@@ -15,6 +16,10 @@ Keyed by the class literal, so driving one entry to zero is a complete piece of
 work: that colour is tokenised everywhere. Shrink-only: the sweep that drains it
 is #17566 for the control plane and the per-section redesign work for the user
 frontend.
+
+The SLM control plane has no entries: it reached zero in #17566 and `slm:` keys are
+not allowed here again; `raw_palette_class_ratchet_14580_test.py` enforces zero for its
+`.vue`, `.ts` and `.css` sources (#17567).
 """
 
 from __future__ import annotations
@@ -122,13 +127,12 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-amber-950": 1,
     "text-blue-200": 3,
     "text-blue-300": 1,
-    "text-blue-400": 15,  # #16253 SystemStatusNotification severities onto theme tokens (16 -> 15)
+    "text-blue-400": 14,  # #22179 chat stream restyled onto tokens (15 -> 14)
     "text-blue-500": 3,
-    "text-blue-600": 8,  # #16253 SystemStatusNotification severities onto theme tokens (9 -> 8)
-    "text-blue-700": 6,  # #16253 SystemStatusNotification severities onto theme tokens (7 -> 6)
+    "text-blue-600": 4,  # #22179 chat stream restyled onto tokens (8 -> 4)
+    "text-blue-700": 4,  # #22179 chat stream restyled onto tokens (6 -> 4)
     "text-blue-800": 3,
     "text-cyan-200": 1,
-    "text-cyan-400": 1,
     "text-cyan-800": 1,
     "text-emerald-400": 1,
     "text-emerald-600": 1,
@@ -142,9 +146,9 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-gray-900": 2,
     "text-green-200": 2,
     "text-green-300": 2,
-    "text-green-400": 12,  # #16253 SystemStatusNotification severities onto theme tokens (15 -> 14)
+    "text-green-400": 11,  # #22179 chat stream restyled onto tokens (12 -> 11)
     "text-green-500": 13,
-    "text-green-600": 16,  # #16253 SystemStatusNotification severities onto theme tokens (20 -> 18)
+    "text-green-600": 14,  # #22179 chat stream restyled onto tokens (16 -> 14)
     "text-green-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "text-green-800": 4,
     "text-green-900": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
@@ -155,189 +159,25 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-orange-500": 4,
     "text-orange-600": 2,
     "text-purple-200": 1,
-    "text-purple-400": 5,
+    "text-purple-400": 4,  # #22179 chat stream restyled onto tokens (5 -> 4)
     "text-purple-500": 7,
     "text-purple-600": 4,
     "text-purple-700": 3,
     "text-purple-800": 1,
     "text-red-200": 2,
     "text-red-300": 3,
-    "text-red-400": 16,  # #16253 SystemStatusNotification severities onto theme tokens (19 -> 18)
+    "text-red-400": 15,  # #22179 chat stream restyled onto tokens (16 -> 15)
     "text-red-500": 7,  # #18819: 9 -> 8, hand-rolled notices moved to the kit BaseAlert
-    "text-red-600": 21,  # #16253 SystemStatusNotification severities onto theme tokens (27 -> 23)
+    "text-red-600": 19,  # #22179 chat stream restyled onto tokens (21 -> 19)
     "text-red-700": 5,  # #16253 SystemStatusNotification severities onto theme tokens (6 -> 5)
     "text-red-800": 5,
     "text-yellow-200": 2,
     "text-yellow-300": 1,
     "text-yellow-400": 6,  # #16253 SystemStatusNotification severities onto theme tokens (7 -> 6)
-    "text-yellow-600": 8,  # #16253 SystemStatusNotification severities onto theme tokens (11 -> 9)
+    "text-yellow-600": 6,  # #22179 chat stream restyled onto tokens (8 -> 6)
     "text-yellow-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "text-yellow-800": 4,
     # The SLM control plane (#17566).
-    "slm:bg-amber-100": 4,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-amber-200": 3,  # #20644 SLM Vision/Batch views retired: 4 -> 3
-    "slm:bg-amber-300": 1,
-    "slm:bg-amber-500": 1,
-    "slm:bg-amber-500/10": 1,
-    "slm:bg-amber-500/15": 1,
-    "slm:bg-amber-500/20": 2,
-    "slm:bg-amber-900/30": 1,
-    "slm:bg-blue-100": 28,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-blue-200": 4,
-    "slm:bg-blue-50": 7,  # #18863 SLM notices onto BaseAlert
-    "slm:bg-blue-500": 4,  # #14777 batch 2; #20644 SLM Vision/Batch views retired
-    "slm:bg-blue-600": 23,
-    "slm:bg-blue-700": 14,
-    "slm:bg-blue-900/30": 1,
-    "slm:bg-cyan-100": 1,
-    "slm:bg-cyan-50": 1,
-    "slm:bg-cyan-500": 2,
-    "slm:bg-cyan-500/20": 1,  # #17562: 2 -> 1
-    "slm:bg-emerald-400": 1,
-    "slm:bg-emerald-500/20": 2,
-    "slm:bg-emerald-600": 3,
-    "slm:bg-emerald-700": 1,
-    "slm:bg-gray-100": 88,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-gray-200": 25,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-gray-300": 1,
-    "slm:bg-gray-400": 17,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-gray-50": 80,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-gray-500": 2,
-    "slm:bg-gray-500/20": 2,  # #17562: 4 -> 2
-    "slm:bg-gray-600": 5,  # #14777 batch 2
-    "slm:bg-gray-700": 6,  # #14777 batch 2
-    "slm:bg-gray-800": 22,  # #14777: 26 -> 22, SLM dialogs moved onto the kit BaseModal
-    "slm:bg-gray-900": 21,  # #14777 batch 2
-    "slm:bg-gray-950": 1,
-    "slm:bg-green-100": 28,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-green-200": 1,
-    "slm:bg-green-50": 9,  # #18863 SLM notices onto BaseAlert
-    "slm:bg-green-500": 11,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-green-600": 3,
-    "slm:bg-green-700": 3,
-    "slm:bg-indigo-100": 2,
-    "slm:bg-indigo-200": 1,
-    "slm:bg-indigo-50": 1,
-    "slm:bg-indigo-600": 1,
-    "slm:bg-indigo-700": 1,
-    "slm:bg-orange-100": 13,  # #14777, SLM dialogs moved onto the kit BaseModal
-    "slm:bg-orange-200": 2,
-    "slm:bg-orange-50": 1,
-    "slm:bg-orange-500": 2,
-    "slm:bg-orange-600": 4,
-    "slm:bg-orange-700": 4,
-    "slm:bg-purple-100": 5,
-    "slm:bg-purple-200": 3,
-    "slm:bg-purple-50": 1,
-    "slm:bg-purple-500": 3,
-    "slm:bg-purple-600": 2,
-    "slm:bg-purple-700": 2,
-    "slm:bg-purple-900/30": 1,
-    "slm:bg-red-100": 33,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-red-200": 5,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-red-400": 1,
-    "slm:bg-red-50": 8,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-red-500": 8,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-red-500/20": 2,
-    "slm:bg-red-600": 3,
-    "slm:bg-red-700": 4,
-    "slm:bg-red-800": 1,
-    "slm:bg-red-900/30": 1,
-    "slm:bg-slate-900": 2,
-    "slm:bg-yellow-100": 21,  # #20644 SLM Vision/Batch views retired
-    "slm:bg-yellow-400": 1,
-    "slm:bg-yellow-50": 2,  # #18863 SLM notices onto BaseAlert
-    "slm:bg-yellow-500": 4,  # #18863 SLM notices onto BaseAlert
-    "slm:border-amber-500/30": 5,
-    "slm:border-blue-100": 1,
-    "slm:border-blue-200": 2,  # #18863 SLM notices onto BaseAlert
-    "slm:border-blue-300": 1,
-    "slm:border-blue-400": 1,
-    "slm:border-blue-500": 15,
-    "slm:border-blue-500/30": 1,  # #17562: 2 -> 1
-    "slm:border-blue-600": 1,
-    "slm:border-cyan-500/30": 1,  # #17562: 2 -> 1
-    "slm:border-emerald-500/30": 2,
-    "slm:border-gray-100": 12,  # #17562
-    "slm:border-gray-200": 73,  # #20644 SLM Vision/Batch views retired
-    "slm:border-gray-300": 104,  # #14780 BaseSwitch; #20644 SLM Vision/Batch views retired
-    "slm:border-gray-50": 4,
-    "slm:border-gray-500": 1,
-    "slm:border-gray-500/30": 2,  # #17562: 4 -> 2
-    "slm:border-gray-600": 14,
-    "slm:border-gray-700": 23,  # #14777 batch 2: 27 -> 26  # #17562: 26 -> 23
-    "slm:border-gray-700/50": 1,
-    "slm:border-gray-800": 3,  # #17562: 5 -> 3
-    "slm:border-green-200": 1,  # #18863 SLM notices onto BaseAlert
-    "slm:border-green-300": 6,
-    "slm:border-orange-200": 1,
-    "slm:border-purple-500/30": 1,  # #17562: 2 -> 1
-    "slm:border-red-200": 1,  # #18819, hand-rolled notices moved to the kit BaseAlert
-    "slm:border-red-300": 6,
-    "slm:border-red-500/30": 3,
-    "slm:border-yellow-200": 1,  # #18863 SLM notices onto BaseAlert
-    "slm:border-yellow-300": 3,  # #18819: 4 -> 3, hand-rolled notices moved to the kit BaseAlert
-    "slm:divide-gray-100": 2,
-    "slm:divide-gray-200": 25,
-    "slm:placeholder-gray-500": 1,
-    "slm:ring-blue-500": 2,
-    "slm:text-amber-200": 1,
-    "slm:text-amber-300": 4,
-    "slm:text-amber-400": 2,
-    "slm:text-amber-600": 6,  # #18863 SLM notices onto BaseAlert
-    "slm:text-amber-700": 7,  # #20644 SLM Vision/Batch views retired
-    "slm:text-amber-800": 3,  # #18863 SLM notices onto BaseAlert
-    "slm:text-blue-300": 1,  # #17562: 2 -> 1
-    "slm:text-blue-400": 3,
-    "slm:text-blue-600": 24,  # #20644 SLM Vision/Batch views retired
-    "slm:text-blue-700": 19,  # #18863 SLM notices onto BaseAlert
-    "slm:text-blue-800": 11,  # #20644 SLM Vision/Batch views retired
-    "slm:text-blue-900": 1,  # #18863 SLM notices onto BaseAlert (2 -> 1)
-    "slm:text-cyan-300": 1,  # #17562: 2 -> 1
-    "slm:text-cyan-400": 4,
-    "slm:text-cyan-600": 1,
-    "slm:text-cyan-800": 2,
-    "slm:text-cyan-900": 1,
-    "slm:text-emerald-300": 2,
-    "slm:text-emerald-400": 2,
-    "slm:text-gray-100": 11,  # #14777, SLM dialogs moved onto the kit BaseModal
-    "slm:text-gray-200": 5,  # #17562: 6 -> 5
-    "slm:text-gray-300": 39,  # #14777 batch 2  # #17562
-    "slm:text-gray-400": 104,  # #20644 SLM Vision/Batch views retired
-    "slm:text-gray-500": 402,  # #20644 SLM Vision/Batch views retired
-    "slm:text-gray-600": 100,  # #20644 SLM Vision/Batch views retired
-    "slm:text-gray-700": 164,  # #18734; #20644 SLM Vision/Batch views retired
-    "slm:text-gray-800": 24,  # #20644 SLM Vision/Batch views retired
-    "slm:text-gray-900": 146,  # #20644 SLM Vision/Batch views retired
-    "slm:text-green-300": 3,
-    "slm:text-green-400": 2,
-    "slm:text-green-500": 1,  # #18863 SLM notices onto BaseAlert
-    "slm:text-green-600": 30,  # #20644 SLM Vision/Batch views retired
-    "slm:text-green-700": 21,  # #18863 SLM notices onto BaseAlert
-    "slm:text-green-800": 17,  # #20644 SLM Vision/Batch views retired
-    "slm:text-green-900": 1,  # #18863 SLM notices onto BaseAlert (2 -> 1)
-    "slm:text-indigo-700": 3,
-    "slm:text-orange-600": 13,  # #14777, SLM dialogs moved onto the kit BaseModal
-    "slm:text-orange-700": 6,
-    "slm:text-orange-800": 5,
-    "slm:text-purple-300": 1,  # #17562: 2 -> 1
-    "slm:text-purple-400": 1,
-    "slm:text-purple-600": 2,
-    "slm:text-purple-700": 4,
-    "slm:text-purple-800": 2,
-    "slm:text-purple-900": 1,
-    "slm:text-red-300": 3,
-    "slm:text-red-400": 3,
-    "slm:text-red-500": 5,  # #18819, hand-rolled notices moved to the kit BaseAlert
-    "slm:text-red-600": 35,  # #20644 SLM Vision/Batch views retired
-    "slm:text-red-700": 33,  # #20644 SLM Vision/Batch views retired
-    "slm:text-red-800": 13,  # #20644 SLM Vision/Batch views retired
-    "slm:text-slate-400": 1,
-    "slm:text-yellow-300": 1,
-    "slm:text-yellow-400": 2,
-    "slm:text-yellow-600": 18,  # #18863 SLM notices onto BaseAlert
-    "slm:text-yellow-700": 11,  # #18863 SLM notices onto BaseAlert
-    "slm:text-yellow-800": 13,  # #20644 SLM Vision/Batch views retired
 }
 
 # No hand-maintained total (#19283): a raised entry is caught by comparing each entry with this

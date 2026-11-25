@@ -36,12 +36,12 @@
 
       <!-- Overall progress bar -->
       <div class="overall-progress">
-        <div class="progress-bar">
-          <div
-            class="progress-fill"
-            :style="{ width: `${overallProgress}%` }"
-          ></div>
-        </div>
+        <BaseProgress
+          class="overall-bar"
+          :value="overallProgress"
+          :variant="hasFailedDocuments ? 'error' : 'primary'"
+          :label="$t('knowledge.vectorization.overallProgress')"
+        />
         <span class="progress-text">{{ Math.round(overallProgress) }}%</span>
       </div>
     </div>
@@ -63,14 +63,7 @@
         <!-- Document info -->
         <div class="document-info">
           <div class="status-icon">
-            <i
-              :class="{
-                'check-circle': doc.status === 'vectorized',
-                'fas fa-spinner fa-spin': doc.status === 'pending',
-                'times-circle': doc.status === 'failed',
-                'question-circle': doc.status === 'unknown'
-              }"
-            ></i>
+            <Icon :name="STATUS_ICON[doc.status]" aria-hidden="true" />
           </div>
           <div class="document-details">
             <span class="document-name">{{ doc.name || doc.documentId }}</span>
@@ -80,12 +73,12 @@
 
         <!-- Progress bar for pending documents -->
         <div v-if="doc.status === 'pending' && doc.progress !== undefined" class="document-progress">
-          <div class="mini-progress-bar">
-            <div
-              class="mini-progress-fill"
-              :style="{ width: `${doc.progress}%` }"
-            ></div>
-          </div>
+          <BaseProgress
+            class="mini-bar"
+            size="sm"
+            :value="doc.progress"
+            :label="$t('knowledge.vectorization.documentProgress', { name: doc.name || doc.documentId })"
+          />
           <span class="progress-percentage">{{ Math.round(doc.progress) }}%</span>
         </div>
 
@@ -96,30 +89,18 @@
 
     <!-- Actions -->
     <template #actions>
-      <button
-        v-if="hasFailedDocuments"
-        class="action-btn retry-btn"
-        @click="$emit('retry-failed')"
-      >
-        <Icon name="redo" />
+      <BaseButton v-if="hasFailedDocuments" variant="outline" size="sm" @click="$emit('retry-failed')">
+        <Icon name="redo" aria-hidden="true" />
         {{ $t('knowledge.vectorization.retryFailed') }}
-      </button>
-      <button
-        v-if="allCompleted"
-        class="action-btn close-btn-action"
-        @click="$emit('close')"
-      >
-        <Icon name="check" />
+      </BaseButton>
+      <BaseButton v-if="allCompleted" variant="primary" size="sm" @click="$emit('close')">
+        <Icon name="check" aria-hidden="true" />
         {{ $t('knowledge.vectorization.done') }}
-      </button>
-      <button
-        v-else
-        class="action-btn cancel-btn"
-        @click="$emit('cancel')"
-      >
-        <Icon name="stop" />
+      </BaseButton>
+      <BaseButton v-else variant="outline" size="sm" @click="$emit('cancel')">
+        <Icon name="stop" aria-hidden="true" />
         {{ $t('knowledge.vectorization.cancelButton') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -129,9 +110,17 @@ import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseButton, BaseModal, BaseProgress } from '@autobot/ui'
+import type { IconName } from '@/components/ui/Icon.vue'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
+
+const STATUS_ICON: Record<string, IconName> = {
+  vectorized: 'check-circle',
+  pending: 'spinner',
+  failed: 'times-circle',
+  unknown: 'question-circle',
+}
 
 interface DocumentState {
   documentId: string
@@ -198,11 +187,6 @@ const allCompleted = computed(() => {
   gap: var(--spacing-3);
 }
 
-.header-content i {
-  font-size: var(--text-2xl);
-  color: var(--color-primary);
-}
-
 /* Progress Summary */
 .progress-summary {
   margin: calc(-1 * var(--spacing-6)) calc(-1 * var(--spacing-6)) var(--spacing-6);
@@ -254,25 +238,15 @@ const allCompleted = computed(() => {
 }
 
 /* Overall progress bar */
+.overall-bar,
+.mini-bar {
+  flex: 1;
+}
+
 .overall-progress {
   display: flex;
   align-items: center;
   gap: var(--spacing-4);
-}
-
-.progress-bar {
-  flex: 1;
-  height: 1.5rem;
-  background: var(--border-default);
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--color-primary);
-  transition: width var(--duration-300) var(--ease-out);
-  border-radius: var(--radius-xl);
 }
 
 .progress-text {
@@ -344,10 +318,6 @@ const allCompleted = computed(() => {
   color: var(--text-muted);
 }
 
-.status-icon i {
-  font-size: var(--text-base);
-}
-
 .document-details {
   flex: 1;
   min-width: 0;
@@ -381,72 +351,11 @@ const allCompleted = computed(() => {
   margin-right: var(--spacing-3);
 }
 
-.mini-progress-bar {
-  width: 80px;
-  height: 0.5rem;
-  background: var(--border-default);
-  border-radius: var(--radius-default);
-  overflow: hidden;
-}
-
-.mini-progress-fill {
-  height: 100%;
-  background: var(--color-primary);
-  transition: width var(--duration-300) var(--ease-out);
-  border-radius: var(--radius-default);
-}
-
 .progress-percentage {
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-tertiary);
   min-width: 3rem;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2-5) var(--spacing-5);
-  border-radius: var(--radius-lg);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--duration-200);
-  border: none;
-  font-size: var(--text-sm);
-}
-
-.retry-btn {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.retry-btn:hover {
-  background: var(--color-primary-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-primary);
-}
-
-.close-btn-action {
-  background: var(--color-success);
-  color: var(--text-on-primary);
-}
-
-.close-btn-action:hover {
-  background: var(--color-success-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-success);
-}
-
-.cancel-btn {
-  background: var(--bg-tertiary);
-  color: var(--text-tertiary);
-  border: 1px solid var(--border-light);
-}
-
-.cancel-btn:hover {
-  background: var(--border-default);
-  color: var(--text-secondary);
 }
 
 /* Scrollbar styling */

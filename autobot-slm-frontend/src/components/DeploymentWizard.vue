@@ -257,11 +257,11 @@ function getCategoryIcon(category: string): string {
           :key="s"
           :class="[
             'flex-1 h-2 rounded-full transition-colors',
-            s <= step ? 'bg-primary-600' : 'bg-gray-200',
+            s <= step ? 'bg-primary-600' : 'bg-autobot-bg-active',
           ]"
         />
       </div>
-      <div class="flex justify-between mt-2 text-xs text-gray-500">
+      <div class="flex justify-between mt-2 text-xs text-autobot-text-tertiary">
         <span>{{ $t('deploymentWizard.selectNode') }}</span>
         <span>{{ $t('deploymentWizard.chooseRoles') }}</span>
         <span>{{ $t('deploymentWizard.reviewDeploy') }}</span>
@@ -272,7 +272,7 @@ function getCategoryIcon(category: string): string {
     <div class="pt-4">
       <!-- Step 1: Select Node -->
       <div v-if="step === 1">
-        <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.selectTargetNode') }}</h4>
+        <h4 class="text-base font-medium text-autobot-text-primary mb-4">{{ $t('deploymentWizard.selectTargetNode') }}</h4>
 
         <!-- Manual mode toggle -->
         <div v-if="nodes.length > 0" class="mb-4">
@@ -280,9 +280,9 @@ function getCategoryIcon(category: string): string {
             <input
               v-model="manualMode"
               type="checkbox"
-              class="rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500"
+              class="rounded-sm border-autobot-border-strong text-primary-600 focus:ring-primary-500"
             />
-            <span class="text-gray-700">{{ $t('deploymentWizard.enterIPAddressManually') }}</span>
+            <span class="text-autobot-text-secondary">{{ $t('deploymentWizard.enterIPAddressManually') }}</span>
           </label>
         </div>
 
@@ -306,14 +306,14 @@ function getCategoryIcon(category: string): string {
               :placeholder="$t('deploymentWizard.egIPAddress')"
             />
           </div>
-          <p class="text-sm text-gray-500">
+          <p class="text-sm text-autobot-text-tertiary">
             {{ $t('deploymentWizard.theNodeWillBe') }}
           </p>
         </div>
 
         <!-- Node selection -->
         <div v-else class="space-y-2">
-          <div v-if="nodes.length === 0" class="text-center py-8 text-gray-500">
+          <div v-if="nodes.length === 0" class="text-center py-8 text-autobot-text-tertiary">
             <p>{{ $t('deploymentWizard.noNodesRegisteredYet') }}</p>
             <p class="text-sm mt-2">{{ $t('deploymentWizard.switchToManualMode') }}</p>
           </div>
@@ -325,23 +325,23 @@ function getCategoryIcon(category: string): string {
               'p-4 border rounded-lg cursor-pointer transition-all',
               selectedNodeId === node.node_id
                 ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
-                : 'border-gray-200 hover:border-gray-300',
+                : 'border-autobot-border hover:border-autobot-border-strong',
             ]"
           >
             <div class="flex items-center justify-between">
               <div>
-                <div class="font-medium text-gray-900">{{ node.hostname }}</div>
-                <div class="text-sm text-gray-500">{{ node.ip_address }}</div>
+                <div class="font-medium text-autobot-text-primary">{{ node.hostname }}</div>
+                <div class="text-sm text-autobot-text-tertiary">{{ node.ip_address }}</div>
               </div>
               <div class="flex items-center gap-2">
                 <span
                   :class="[
                     'px-2 py-1 text-xs font-medium rounded-full',
                     node.status === 'online'
-                      ? 'bg-green-100 text-green-800'
+                      ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
                       : node.status === 'offline'
-                        ? 'bg-gray-100 text-gray-800'
-                        : 'bg-yellow-100 text-yellow-800',
+                        ? 'bg-autobot-bg-tertiary text-autobot-text-primary'
+                        : 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg',
                   ]"
                 >
                   {{ node.status }}
@@ -352,7 +352,7 @@ function getCategoryIcon(category: string): string {
               <span
                 v-for="role in node.roles"
                 :key="role"
-                class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
+                class="px-2 py-0.5 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm"
               >
                 {{ role }}
               </span>
@@ -363,7 +363,7 @@ function getCategoryIcon(category: string): string {
 
       <!-- Step 2: Select Roles -->
       <div v-else-if="step === 2">
-        <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.selectRolesToDeploy') }}</h4>
+        <h4 class="text-base font-medium text-autobot-text-primary mb-4">{{ $t('deploymentWizard.selectRolesToDeploy') }}</h4>
 
         <div v-if="isLoadingRoles" class="flex items-center justify-center py-8">
           <div class="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full" />
@@ -372,10 +372,10 @@ function getCategoryIcon(category: string): string {
         <div v-else class="space-y-6">
           <div v-for="(categoryRoles, category) in rolesByCategory" :key="category">
             <div class="flex items-center gap-2 mb-3">
-              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getCategoryIcon(category)" />
               </svg>
-              <h5 class="text-sm font-medium text-gray-700 uppercase tracking-wide">{{ category }}</h5>
+              <h5 class="text-sm font-medium text-autobot-text-secondary uppercase tracking-wide">{{ category }}</h5>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div
@@ -386,7 +386,7 @@ function getCategoryIcon(category: string): string {
                   'p-3 border rounded-lg cursor-pointer transition-all',
                   isRoleSelected(role.name)
                     ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
-                    : 'border-gray-200 hover:border-gray-300',
+                    : 'border-autobot-border hover:border-autobot-border-strong',
                 ]"
               >
                 <div class="flex items-start gap-3">
@@ -395,7 +395,7 @@ function getCategoryIcon(category: string): string {
                       'w-5 h-5 mt-0.5 rounded-sm border-2 flex items-center justify-center transition-colors',
                       isRoleSelected(role.name)
                         ? 'border-primary-500 bg-primary-500'
-                        : 'border-gray-300',
+                        : 'border-autobot-border-strong',
                     ]"
                   >
                     <svg
@@ -412,9 +412,9 @@ function getCategoryIcon(category: string): string {
                     </svg>
                   </div>
                   <div class="flex-1">
-                    <div class="font-medium text-gray-900">{{ role.name }}</div>
-                    <div class="text-sm text-gray-500">{{ role.description }}</div>
-                    <div v-if="role.dependencies.length > 0" class="mt-1 text-xs text-gray-400">{{ $t('deploymentWizard.requiresValue0', { value0: role.dependencies.join(', ') }) }}</div>
+                    <div class="font-medium text-autobot-text-primary">{{ role.name }}</div>
+                    <div class="text-sm text-autobot-text-tertiary">{{ role.description }}</div>
+                    <div v-if="role.dependencies.length > 0" class="mt-1 text-xs text-autobot-text-tertiary">{{ $t('deploymentWizard.requiresValue0', { value0: role.dependencies.join(', ') }) }}</div>
                   </div>
                 </div>
               </div>
@@ -425,25 +425,25 @@ function getCategoryIcon(category: string): string {
 
       <!-- Step 3: Review -->
       <div v-else-if="step === 3">
-        <h4 class="text-base font-medium text-gray-900 mb-4">{{ $t('deploymentWizard.reviewDeployment') }}</h4>
+        <h4 class="text-base font-medium text-autobot-text-primary mb-4">{{ $t('deploymentWizard.reviewDeployment') }}</h4>
 
         <!-- Error Message -->
         <BaseAlert v-if="deployError" variant="error" class="mb-4" :message="deployError" />
 
         <div class="space-y-4">
-          <div class="p-4 bg-gray-50 rounded-lg">
-            <div class="text-sm text-gray-500 mb-1">{{ $t('deploymentWizard.targetNode') }}</div>
-            <div v-if="manualMode" class="font-medium text-gray-900">
+          <div class="p-4 bg-autobot-bg-secondary rounded-lg">
+            <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('deploymentWizard.targetNode') }}</div>
+            <div v-if="manualMode" class="font-medium text-autobot-text-primary">
               {{ manualHostname }} ({{ manualIp }})
-              <span class="text-xs text-gray-500 ml-2">{{ $t('deploymentWizard.willBeRegistered') }}</span>
+              <span class="text-xs text-autobot-text-tertiary ml-2">{{ $t('deploymentWizard.willBeRegistered') }}</span>
             </div>
-            <div v-else-if="selectedNode" class="font-medium text-gray-900">
+            <div v-else-if="selectedNode" class="font-medium text-autobot-text-primary">
               {{ selectedNode.hostname }} ({{ selectedNode.ip_address }})
             </div>
           </div>
 
-          <div class="p-4 bg-gray-50 rounded-lg">
-            <div class="text-sm text-gray-500 mb-2">{{ $t('deploymentWizard.rolesToDeploy') }}</div>
+          <div class="p-4 bg-autobot-bg-secondary rounded-lg">
+            <div class="text-sm text-autobot-text-tertiary mb-2">{{ $t('deploymentWizard.rolesToDeploy') }}</div>
             <div class="flex flex-wrap gap-2">
               <span
                 v-for="role in selectedRoles"

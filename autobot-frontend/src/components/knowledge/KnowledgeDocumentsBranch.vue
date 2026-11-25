@@ -4,17 +4,22 @@
 <template>
   <details class="docs-branch" open>
     <summary class="branch-summary">
-      <span>{{ $t('knowledge.documents') }}</span>
-      <BaseButton
-        variant="ghost"
-        size="xs"
-        class="refresh-btn"
-        :disabled="composable.isLoading.value"
-        :title="$t('documents.refreshList')"
-        @click.stop="composable.fetchDocuments(PAGE_SIZE, currentOffset)"
-      >
-        <Icon name="sync-alt" aria-hidden="true" />
-      </BaseButton>
+      <span class="branch-title">{{ $t('knowledge.documents') }}</span>
+      <BaseTooltip :text="$t('documents.refreshList')" placement="left">
+        <template #default="{ describedby }">
+          <BaseButton
+            variant="ghost"
+            size="xs"
+            class="refresh-btn"
+            :disabled="composable.isLoading.value"
+            :aria-label="$t('documents.refreshList')"
+            :aria-describedby="describedby"
+            @click.stop.prevent="composable.fetchDocuments(PAGE_SIZE, currentOffset)"
+          >
+            <Icon name="sync-alt" aria-hidden="true" />
+          </BaseButton>
+        </template>
+      </BaseTooltip>
     </summary>
 
     <!-- Loading state -->
@@ -47,18 +52,29 @@
         @click="emit('select', doc.id)"
         @keyup.enter="emit('select', doc.id)"
       >
-        <span class="doc-title">{{ doc.title }}</span>
-        <span class="doc-meta">{{ formatDate(doc.updated_at) }}</span>
-        <BaseButton
-          variant="ghost"
-          size="xs"
-          class="delete-btn"
-          :title="$t('documents.deleteDocument')"
-          :aria-label="$t('documents.deleteAria', { title: doc.title })"
-          @click.stop="confirmDelete(doc.id, doc.title)"
-        >
-          <Icon name="trash" aria-hidden="true" />
-        </BaseButton>
+        <Icon name="file-alt" class="doc-icon" aria-hidden="true" />
+        <BaseTooltip :text="doc.title" placement="top" class="doc-text">
+          <template #default="{ describedby }">
+            <span class="doc-title-wrap" :aria-describedby="describedby">
+              <b class="doc-title">{{ doc.title }}</b>
+              <span class="doc-meta">{{ formatDate(doc.updated_at) }}</span>
+            </span>
+          </template>
+        </BaseTooltip>
+        <BaseTooltip :text="$t('documents.deleteDocument')" placement="left">
+          <template #default="{ describedby }">
+            <BaseButton
+              variant="ghost"
+              size="xs"
+              class="delete-btn"
+              :aria-label="$t('documents.deleteAria', { title: doc.title })"
+              :aria-describedby="describedby"
+              @click.stop="confirmDelete(doc.id, doc.title)"
+            >
+              <Icon name="trash" aria-hidden="true" />
+            </BaseButton>
+          </template>
+        </BaseTooltip>
       </li>
     </ul>
 
@@ -99,7 +115,7 @@
           :to="{ name: 'transcriber-project-detail', params: { projectId: p.id } }"
           class="mini-card"
         >
-          🎙 {{ p.name }}
+          <Icon name="microphone" aria-hidden="true" /> {{ p.name }}
         </RouterLink>
         <RouterLink :to="{ name: 'transcriber-projects' }" class="btn-link">
           {{ $t('documents.viewAll') }}
@@ -144,10 +160,12 @@ import { useAIDocument } from '@/composables/useAIDocument'
 import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
 import type { Project } from '@/composables/transcriber/useTranscriberApi'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseModal, BaseButton } from '@autobot/ui'
+import { BaseModal, BaseButton, BaseTooltip } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import { createDateFormatter } from '@/utils/formatHelpers'
 
 const PAGE_SIZE = 50
+const { t } = useI18n()
 
 const logger = createLogger('KnowledgeDocumentsBranch')
 
@@ -208,7 +226,7 @@ async function loadPage() {
   try {
     await composable.fetchDocuments(PAGE_SIZE, currentOffset.value)
   } catch {
-    emit('error', composable.error.value ?? 'Failed to load documents')
+    emit('error', composable.error.value ?? t('documents.loadFailed'))
   }
 }
 
@@ -240,7 +258,7 @@ async function executeDelete() {
     emit('deleted', id)
   } catch {
     deleteTarget.value = null
-    emit('error', composable.error.value ?? 'Delete failed')
+    emit('error', composable.error.value ?? t('documents.deleteFailed'))
   }
 }
 
@@ -253,195 +271,157 @@ const formatDate = createDateFormatter({ kind: 'date', intl: { year: 'numeric', 
 
 <style scoped>
 .docs-branch {
-  display: flex;
-  flex-direction: column;
+  border-block-start: var(--bw) solid var(--line);
+  padding-block-start: var(--spacing-2);
 }
 
 .branch-summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-2) var(--spacing-3);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  gap: var(--spacing-2);
+  padding: var(--spacing-1) var(--spacing-2);
   cursor: pointer;
   list-style: none;
-  user-select: none;
 }
 
 .branch-summary::-webkit-details-marker {
   display: none;
 }
 
-.refresh-btn {
-  flex-shrink: 0;
+.branch-title {
+  flex: 1;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
 }
 
-/* States */
 .loading-state,
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: var(--spacing-2);
-  padding: var(--spacing-6);
+  padding: var(--spacing-4);
+  font-size: var(--text-sm);
+  color: var(--muted);
   text-align: center;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  flex: 1;
 }
 
-.empty-icon {
-  font-size: 2rem;
-  margin-bottom: var(--spacing-2);
-  color: var(--text-muted);
-}
-
-.empty-hint {
-  font-size: 0.8rem;
-  color: var(--text-muted);
+.empty-state p {
+  margin: 0;
 }
 
 .chat-link {
-  color: var(--color-primary);
-  text-decoration: none;
-}
-
-.chat-link:hover {
+  color: var(--link);
   text-decoration: underline;
 }
 
-/* Document list */
 .document-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: var(--spacing-2);
   list-style: none;
-  margin: var(--spacing-0);
-  padding: var(--spacing-0);
-  overflow-y: auto;
-  flex: 1;
 }
 
 .document-item {
   display: flex;
-  flex-direction: column;
-  padding: var(--spacing-2-5) var(--spacing-4);
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-md);
+  border-inline-start: 3px solid transparent;
   cursor: pointer;
-  border-bottom: 1px solid var(--border-default);
-  gap: var(--spacing-0-5);
-  position: relative;
-  transition: background 0.12s;
 }
 
-.document-item:hover {
-  background: var(--bg-hover);
+.document-item:hover,
+.document-item.active {
+  background: var(--surface2);
 }
 
 .document-item.active {
-  background: var(--color-primary-bg);
-  border-left: 3px solid var(--color-primary);
+  border-inline-start-color: var(--primary);
+}
+
+.document-item:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.doc-icon {
+  flex: none;
+  color: var(--stroke);
+}
+
+.doc-text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.doc-title-wrap {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
 }
 
 .doc-title {
-  font-size: 0.9rem;
-  font-weight: 500;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-right: var(--spacing-7);
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
 }
 
 .doc-meta {
-  font-size: 0.72rem;
-  color: var(--text-muted);
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 
-.delete-btn {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-
-.document-item:hover .delete-btn,
-.document-item:focus .delete-btn {
-  opacity: 1;
-}
-
-/* Pagination */
 .pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-2) var(--spacing-3);
-  border-top: 1px solid var(--border-default);
-  font-size: 0.8rem;
-  flex-shrink: 0;
+  padding: var(--spacing-2);
 }
 
 .page-info {
-  color: var(--text-muted);
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 
-/* Transcriber nested branch */
 .transcriber-branch {
-  border-top: 1px solid var(--border-default);
+  padding: var(--spacing-2);
   font-size: var(--text-sm);
-}
-
-.transcriber-branch > summary {
-  padding: var(--spacing-2) var(--spacing-3);
-  cursor: pointer;
-  font-weight: 500;
-  color: var(--text-muted);
-  list-style: none;
-  user-select: none;
-}
-
-.transcriber-branch > summary::-webkit-details-marker {
-  display: none;
 }
 
 .projects-mini-grid {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1);
-  padding: var(--spacing-2) var(--spacing-3);
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+  padding-block-start: var(--spacing-2);
 }
 
-.mini-card {
-  display: block;
-  padding: var(--spacing-1-5) var(--spacing-2);
-  border-radius: var(--radius-sm, 4px);
-  font-size: 0.8rem;
-  color: var(--text-primary);
-  text-decoration: none;
-  transition: background 0.12s;
-}
-
-.mini-card:hover {
-  background: var(--bg-hover);
-}
-
+.mini-card,
 .btn-link {
-  font-size: var(--text-xs);
-  color: var(--color-primary);
-  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
   padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-md);
+  border: var(--bw) solid var(--border);
+  color: var(--text);
+  text-decoration: none;
 }
 
+.mini-card:hover,
 .btn-link:hover {
-  text-decoration: underline;
+  background: var(--surface2);
 }
 
-/* Modal */
-/* #10882: overlay/header/footer chrome + focus-trap/scroll-lock now provided
-   by @autobot/ui BaseModal; only the confirmation copy styling remains. */
 .modal-body {
-  margin: var(--spacing-0);
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  line-height: 1.5;
+  margin: 0;
+  color: var(--text);
 }
 </style>

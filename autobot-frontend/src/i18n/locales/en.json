@@ -173,6 +173,7 @@
       "edit": "Edit message",
       "copy": "Copy message",
       "delete": "Delete message",
+      "saveAsDocument": "Save as document",
       "tokens": "{count} tokens",
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
@@ -426,11 +427,14 @@
       "error": "Translation failed. Please try again."
     },
     "messages": {
+      "newMessageAnnouncement": "New message from {sender}: {preview}",
+      "saveAsDocumentFailed": "Could not save the message as a document.",
       "conversation": "Conversation messages",
       "aiAssistant": "AI Assistant",
       "editMessage": "Edit Message",
       "enterMessage": "Enter your message...",
       "ctrlEnterToSave": "Press Ctrl+Enter (Cmd+Enter on Mac) to save",
+      "downloadAttachment": "Download {name}",
       "tokens": "{count} tokens",
       "attachments": "{count} attachment | {count} attachments",
       "thinking": "Thinking...",
@@ -456,6 +460,7 @@
       "statusSent": "Sent",
       "statusFailed": "Failed to send",
       "confirmDelete": "Delete this message? This action cannot be undone.",
+      "copyFailed": "Could not copy the message to the clipboard",
       "thinkingUsed": "Thinking used"
     },
     "stallQuestion": {
@@ -637,6 +642,8 @@
     },
     "overseer": {
       "executionPlan": "Execution Plan",
+      "stepOf": "Step {current} of {total}",
+      "exitCode": "Exit: {code}",
       "stepsProgress": "{completed} of {total} steps",
       "copyCommand": "Copy command",
       "whatCommandDoes": "What this command does",
@@ -829,7 +836,7 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "lightweightModeTooltip": "About 90% cheaper than standard mode",
     "streamPreview": {
       "thought": "Thinking: {text}",
       "planning": "Planning: {text}"
@@ -2624,6 +2631,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "Failed to load evolution data",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -3273,11 +3281,19 @@
     "batchToolbar": {
       "documentsSelected": "{count} document(s) selected",
       "vectorizeSelected": "Vectorize Selected",
-      "clearSelection": "Clear Selection"
+      "clearSelection": "Clear Selection",
+      "label": "Selected documents",
+      "vectorizeTip": "Create embeddings so these documents become searchable"
     },
     "browserHeader": {
-      "searchPlaceholder": "Search files and folders...",
-      "clearSearch": "Clear search"
+      "searchPlaceholder": "Search the knowledge base…",
+      "clearSearch": "Clear search",
+      "title": "Knowledge Browser",
+      "subtitle": "Everything your agents can retrieve, by category",
+      "breadcrumb": "Knowledge Base / Browse",
+      "searchLabel": "Search knowledge",
+      "options": "Search options",
+      "optionsLabel": "Search options"
     },
     "browser": {
       "populate": "Populate",
@@ -3304,13 +3320,45 @@
       "documentsSelected": "{count} document(s) selected",
       "backToRoot": "Back to root",
       "filters": "Filters",
-      "editCategory": "Edit category"
+      "editCategory": "Edit category",
+      "categoriesLabel": "Categories",
+      "showCategory": "Show {name} in the tree",
+      "factsTip": "Fact: one stored, retrievable unit of knowledge (a chunk with metadata)",
+      "populateTip": "Auto-fill this category from its configured sources",
+      "importTip": "Upload files or a JSON export into this category. Audio and video (mp3, m4a, wav, mp4, mov, mkv) are transcribed first, then the transcript is added as text.",
+      "treeLabel": "Documents",
+      "filesLabel": "Files",
+      "folderLoadFailed": "Could not load this folder's documents. Open it again to retry.",
+      "loadMoreFailed": "Could not load more documents. Try again.",
+      "factFallback": "Fact {n}",
+      "entryFallback": "Entry {n}",
+      "documentFallback": "Document {n}",
+      "uncategorized": "Uncategorized",
+      "statusRefreshFailed": "Could not refresh the vectorization status. Try again.",
+      "contentUnavailable": "The full text of this document could not be loaded.",
+      "vectorizeFailed": "Vectorization failed. Check the document status and retry.",
+      "populateFailed": "Populate failed. Try again.",
+      "fallbackCategories": {
+        "autobotDocumentation": {
+          "name": "AutoBot Documentation",
+          "description": "AutoBot's initial knowledge - documentation and guides"
+        },
+        "systemKnowledge": {
+          "name": "System Knowledge",
+          "description": "AutoBot's initial knowledge - system info, man pages, OS knowledge"
+        },
+        "userKnowledge": {
+          "name": "User Knowledge",
+          "description": "What AutoBot is used for - user-provided domain knowledge"
+        }
+      }
     },
     "contentViewer": {
       "noFileSelected": "No file selected",
       "selectFileHint": "Select a file from the tree to view its contents",
       "loadingContent": "Loading content...",
-      "closeFileViewer": "Close file viewer"
+      "closeFileViewer": "Close file viewer",
+      "label": "Document"
     },
     "entries": {
       "uploadTab": "Upload",
@@ -4133,7 +4181,9 @@
       "tooltipFailed": "Vectorization failed for this document",
       "tooltipPending": "Document is pending vectorization",
       "tooltipUnknown": "Vectorization status unknown",
-      "tooltipVectorized": "Document has been vectorized and is searchable via RAG"
+      "tooltipVectorized": "Document has been vectorized and is searchable via RAG",
+      "overallProgress": "Overall vectorization progress",
+      "documentProgress": "Vectorization progress for {name}"
     },
     "batchSelection": {
       "selected": "{count} selected",
@@ -4325,12 +4375,13 @@
       "errorLoadDocs": "Failed to load documents"
     },
     "treeNode": {
-      "itemsCount": "Items count",
-      "retryTitle": "Retry title",
-      "unvectorized": "Unvectorized",
-      "vectorizeFolderTitle": "Vectorize folder title",
-      "vectorizeTitle": "Vectorize title",
-      "zeroSize": "0B"
+      "itemsCount": "{count} documents in folder",
+      "retryTitle": "Retry vectorization",
+      "unvectorized": "{count} to vectorize",
+      "vectorizeFolderTitle": "Vectorize the {count} documents in this folder that are not searchable yet",
+      "vectorizeTitle": "Vectorize this document",
+      "zeroSize": "0B",
+      "selectDocument": "Select {name}"
     },
     "verification": {
       "approve": "Approve",
@@ -4534,6 +4585,51 @@
       "7": "miscellaneous",
       "8": "system administration",
       "9": "kernel routines"
+    },
+    "browserFilter": {
+      "removeFilter": "Remove filter",
+      "removeFilterNamed": "Remove filter: {category}"
+    },
+    "healthSummary": {
+      "label": "Knowledge base health",
+      "totalFacts": "Total Facts",
+      "totalVectors": "Total Vectors",
+      "vectorsTip": "Embeddings stored for semantic search; a fact can have several",
+      "databaseSize": "Database Size",
+      "ragAvailable": "RAG Available",
+      "ragUnavailable": "RAG Unavailable",
+      "ragTipOn": "Retrieval-augmented generation is on: chat answers can cite this knowledge",
+      "ragTipOff": "Retrieval-augmented generation is off: chat answers cannot cite this knowledge yet"
+    },
+    "searchPanel": {
+      "label": "Search results",
+      "searching": "Searching…",
+      "resultsFor": "{count} result(s) for",
+      "noResultsFor": "No results for",
+      "close": "Close search results",
+      "rankedLabel": "Ranked search results",
+      "relevance": "Relevance: {score}%",
+      "rerank": "Re-rank score: {score}%",
+      "general": "general",
+      "text": "text",
+      "untitled": "Untitled",
+      "viewerLabel": "Document viewer",
+      "selectResult": "Select a result to view the document",
+      "keyboardHint": "Use arrow keys to navigate, Enter to open",
+      "match": "{score}% match",
+      "loadingDocument": "Loading document…",
+      "copy": "Copy",
+      "copied": "Copied"
+    },
+    "abandonedUploads": {
+      "title": "Abandoned uploads",
+      "description": "Uploads that expired unfinished still take up disk space until an admin frees them.",
+      "none": "No abandoned uploads.",
+      "loadFailed": "The abandoned uploads could not be listed.",
+      "progress": "{received} of {total} received",
+      "free": "Free upload",
+      "freeFailed": "The upload could not be freed.",
+      "confirm": "Free this abandoned upload? Its staged data is removed and the decision is recorded."
     }
   },
   "workflow": {
@@ -6281,6 +6377,11 @@
     },
     "minimalNote": "Showing essentials · technical widgets hidden",
     "minimalNoteAction": "Show all features",
+    "advancedArea": {
+      "title": "This is an advanced area",
+      "body": "It's hidden from navigation while Minimal interface is on.",
+      "goHome": "Go to Home"
+    },
     "themePresets": {
       "title": "Theme Presets",
       "description": "Choose a pre-configured theme or customize your own color scheme",
@@ -6406,7 +6507,10 @@
       "cancel": "Cancel",
       "deleteOldLogs": "Delete Old Logs",
       "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
-      "initError": "Failed to initialize audit data"
+      "initError": "Failed to initialize audit data",
+      "eventLogs": "Event Logs",
+      "commandHistory": "Command History",
+      "tabsLabel": "Audit sections"
     },
     "browserAutomation": {
       "title": "Browser Automation",
@@ -6948,6 +7052,8 @@
       "openVnc": "Open VNC Desktop",
       "solved": "I've Solved It",
       "skipSource": "Skip Source",
+      "restoreFailed": "Pending CAPTCHAs could not be checked.",
+      "retry": "Try again",
       "types": {
         "recaptcha": "reCAPTCHA",
         "hcaptcha": "hCaptcha",
@@ -8163,6 +8269,38 @@
       "hideDetails": "Hide Details",
       "showDetails": "Show Details",
       "refresh": "Refresh"
+    },
+    "eventLogs": {
+      "caption": "Compliance events, newest first",
+      "userFilter": "User ID",
+      "userPlaceholder": "Filter by user ID",
+      "typeFilter": "Event type",
+      "allTypes": "All event types",
+      "refresh": "Refresh",
+      "loading": "Loading event logs",
+      "empty": "No compliance events",
+      "emptyHint": "No events match the current filters.",
+      "error": "Event logs could not be loaded.",
+      "retry": "Try again",
+      "time": "Time",
+      "user": "User",
+      "event": "Event",
+      "outcome": "Outcome"
+    },
+    "commandHistory": {
+      "caption": "Command execution history, newest first",
+      "userFilter": "User",
+      "userPlaceholder": "Filter by user",
+      "refresh": "Refresh",
+      "loading": "Loading command history",
+      "empty": "No commands recorded",
+      "emptyHint": "No command executions match the current filter.",
+      "error": "Command history could not be loaded.",
+      "retry": "Try again",
+      "time": "Time",
+      "user": "User",
+      "action": "Action",
+      "outcome": "Outcome"
     }
   },
   "slm": {
@@ -10020,7 +10158,29 @@
     "transcriberProjects": "Transcriber Projects",
     "viewAll": "View all",
     "saveHintPrefix": "Save an AI response from the",
-    "saveHintSuffix": "to create a document."
+    "saveHintSuffix": "to create a document.",
+    "loadFailed": "Failed to load documents",
+    "deleteFailed": "Delete failed",
+    "editor": {
+      "loadFailed": "Failed to load document",
+      "untitled": "Untitled Document",
+      "saveFailed": "Save failed",
+      "refineFailed": "Refinement failed",
+      "titleLabel": "Document title",
+      "editTitleTip": "Click to edit title",
+      "saving": "Saving…",
+      "refine": "Refine",
+      "refineTip": "Ask the AI to revise this document",
+      "refineHeading": "Refine with AI",
+      "refinePlaceholder": "Describe how to refine this document…",
+      "refining": "Refining…",
+      "applyRefinement": "Apply Refinement",
+      "contentPlaceholder": "Document content (markdown supported)…",
+      "contentLabel": "Document content",
+      "updated": "Updated {when}",
+      "sourceFacts": "{count} source facts",
+      "sourceFactsTip": "Knowledge-base facts the AI cited when writing this document"
+    }
   },
   "llcBrowser": {
     "retry": "Retry",
@@ -10342,6 +10502,18 @@
       "noMessagesBody": "This conversation has no messages on this page.",
       "unknownSender": "Unknown sender",
       "transcriptPages": "Transcript pages"
+    },
+    "ownerless": {
+      "title": "Ownerless chat sessions",
+      "description": "These sessions record no owner. A proposal waits in the approvals inbox; nothing is assigned until a person approves it.",
+      "none": "Every chat session has an owner.",
+      "loadFailed": "The ownerless session report could not be loaded.",
+      "ownerLabel": "Proposed owner (username)",
+      "ownerPlaceholder": "Username of an active user",
+      "propose": "Propose owner",
+      "proposed": "Proposal pending approval",
+      "refusedConflict": "That session is no longer ownerless or already has a pending proposal.",
+      "refusedOwner": "That owner is not an active user."
     }
   },
   "components": {
@@ -11049,5 +11221,40 @@
       "analysis": "The image could not be analysed.",
       "analysisUnsuccessful": "The analysis did not succeed: {detail}"
     }
+  },
+  "driftPrune": {
+    "batch": "Batch of {count} of {total} file(s); confirm to remove this batch, the next one is shown afterwards",
+    "cancel": "Cancel",
+    "confirm": "Confirm removal of {count} file(s)",
+    "intro": "Git proves these files were deleted from source and they are still deployed. Only these files are removed. Host state, build bundles and modified files are never touched.",
+    "nothingToRemove": "Nothing to remove: no deployed file is confirmed as deleted from source any more. Re-run the drift check.",
+    "previewAction": "Preview removal",
+    "previewing": "Loading preview…",
+    "removing": "Removing…",
+    "requestFailed": "Drift prune request failed",
+    "result": "Removed {removed} file(s); {left} left in place",
+    "title": "{count} file(s) would be removed from {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "These controls pause or resume every agent, not a single one",
+    "loadFailed": "Failed to load agents",
+    "noLastActivity": "No activity reported",
+    "notReported": "Not reported",
+    "pauseAll": "Pause all agents",
+    "pauseFailed": "Failed to pause agents",
+    "resumeAll": "Resume all agents",
+    "resumeFailed": "Failed to resume agents",
+    "successRate": "Success Rate",
+    "tasksCompleted": "Tasks Completed"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Enter a full web address that starts with http:// or https://",
+    "recognitionUnsupported": "Speech recognition is not supported in this browser",
+    "recognitionError": "Speech recognition error: {error}",
+    "speakFailed": "Failed to speak the text",
+    "playbackFailed": "Audio playback failed",
+    "spoken": "Spoken:",
+    "speakToInteractWith": "Speak, and hear it read back",
+    "voiceId": "Voice ID"
   }
 }

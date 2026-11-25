@@ -479,7 +479,7 @@ REACH_CLASS_FORM_FILES = declare(
     "primary-fill-class-label-files",
     discover=_class_form_scanned_files,
     roots=(_FRONTEND.as_posix(), _SLM_FRONTEND.as_posix()),
-    floor=1538,  # mid-window: population 1568, growth 60 (2026-11-23); pins until it lands (#19676)
+    floor=1563,  # mid-window: population 1593, window (1533, 1593); pins until it lands (#19676)
     growth=60,
     skips=0,
     what="frontend .vue, .ts, .js and .css files scanned for a white text utility on bg-autobot-primary, both apps",

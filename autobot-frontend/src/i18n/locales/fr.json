@@ -2393,6 +2393,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "Échec du chargement des données d'évolution",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -10015,5 +10016,40 @@
     "invalid_generic": "Cette planification n'est pas valide.",
     "conflicting_fields": "Une planification est enregistrée soit en cron, soit en règle de calendrier ou exécution unique, jamais les deux.",
     "gatedNote": "Le dernier jour, le jour de la semaine du mois, les jours 29 à 31 et les exécutions uniques seront disponibles une fois le planificateur mis à jour."
+  },
+  "driftPrune": {
+    "batch": "Lot de {count} sur {total} fichier(s) ; confirmez pour supprimer ce lot, le suivant s'affichera ensuite",
+    "cancel": "Annuler",
+    "confirm": "Confirmer la suppression de {count} fichier(s)",
+    "intro": "Git prouve que ces fichiers ont été supprimés de la source et qu'ils sont toujours déployés. Seuls ces fichiers sont supprimés. L'état de l'hôte, les bundles de build et les fichiers modifiés ne sont jamais touchés.",
+    "nothingToRemove": "Rien à supprimer : aucun fichier déployé n'est plus confirmé comme supprimé de la source. Relancez la vérification des écarts.",
+    "previewAction": "Prévisualiser la suppression",
+    "previewing": "Chargement de l'aperçu…",
+    "removing": "Suppression…",
+    "requestFailed": "Échec de la requête de nettoyage des écarts",
+    "result": "{removed} fichier(s) supprimé(s) ; {left} laissé(s) en place",
+    "title": "{count} fichier(s) seraient supprimés de {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Ces commandes mettent en pause ou reprennent tous les agents, pas un seul",
+    "loadFailed": "Échec du chargement des agents",
+    "noLastActivity": "Aucune activité communiquée",
+    "notReported": "Non communiqué",
+    "pauseAll": "Mettre tous les agents en pause",
+    "pauseFailed": "Échec de la mise en pause des agents",
+    "resumeAll": "Reprendre tous les agents",
+    "resumeFailed": "Échec de la reprise des agents",
+    "successRate": "Taux de réussite",
+    "tasksCompleted": "Tâches terminées"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Saisissez une adresse web complète commençant par http:// ou https://",
+    "recognitionUnsupported": "La reconnaissance vocale n'est pas prise en charge par ce navigateur",
+    "recognitionError": "Erreur de reconnaissance vocale : {error}",
+    "speakFailed": "Impossible de prononcer le texte",
+    "playbackFailed": "Échec de la lecture audio",
+    "spoken": "Prononcé :",
+    "speakToInteractWith": "Parlez et écoutez la lecture à voix haute",
+    "voiceId": "ID de voix"
   }
 }

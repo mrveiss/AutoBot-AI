@@ -44,6 +44,33 @@ def test_the_named_declarations_literal_floor_is_rewritten_mid_window() -> None:
     assert new.count("floor=") == 2
 
 
+def _with_comment(comment: str) -> str:
+    return _SOURCE.replace("# mid-window: population 110, window (90, 110)", comment)
+
+
+def test_a_note_after_the_measurement_survives_the_refresh() -> None:
+    """#22197: notes follow the measurement after "; " -- only the measurement is refreshed."""
+    source = _with_comment("# mid-window: population 110, growth 20 (2026-11-23); pins until it lands (#19676)")
+    new, status = repin.repin_source(source, "the-scan", mid=140, count=150, low=130, high=150)
+    assert status == "re-pinned"
+    expected = "floor=140,  # mid-window: population 150, window (130, 150); pins until it lands (#19676)\n"
+    assert expected in new
+
+
+def test_a_mid_window_marker_inside_the_note_is_left_untouched() -> None:
+    """#22197: only the first measurement is refreshed; a later ``# mid-window:`` in the note stays as written."""
+    note = "; see the old # mid-window: population 99, window (1, 2) (#19676)"
+    source = _with_comment("# mid-window: population 110, growth 20 (2026-11-23)" + note)
+    new, status = repin.repin_source(source, "the-scan", mid=140, count=150, low=130, high=150)
+    assert status == "re-pinned"
+    assert "floor=140,  # mid-window: population 150, window (130, 150)" + note + "\n" in new
+
+
+def test_a_comment_without_a_note_gains_none() -> None:
+    new, _ = repin.repin_source(_SOURCE, "the-scan", mid=140, count=150, low=130, high=150)
+    assert "floor=140,  # mid-window: population 150, window (130, 150)\n" in new and ";" not in new
+
+
 def test_an_expression_floor_is_left_for_a_human() -> None:
     source = 'R = declare(\n    "x",\n    discover=_d,\n    floor=_FLOOR,\n    growth=4,\n)\n'
     new, status = repin.repin_source(source, "x", mid=5, count=9, low=1, high=9)
@@ -118,20 +145,28 @@ def test_an_import_failure_is_never_a_clean_result(monkeypatch, capsys) -> None:
 
 
 def test_ci_enforces_staleness_on_merge_trains() -> None:
-    """The one place staleness fails must stay wired: the reach-running job sets the audit on train-*."""
+    """The one place staleness fails must stay wired: the reach-running job calls the shared scope entry.
+
+    #22147 moved the train-*/merge-group/main rule out of the step's ``if:`` into
+    ``pipeline-scripts/reach_audit_scope.py`` (shared with the pre-board lane); the step must run it
+    unconditionally, and the entry must still turn the audit on for a train-* head.
+    """
     import yaml
     from repo_tests._reach import REACH_AUDIT_ENV
 
     steps = yaml.safe_load((repo_root() / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"][
         "python-shard"
     ]["steps"]
-    wired = [
-        s
-        for s in steps
-        if "startsWith(github.head_ref, 'train-')" in str(s.get("if", ""))
-        and f"{REACH_AUDIT_ENV}=1" in str(s.get("run", ""))
-    ]
-    assert wired, f"ci.yml's python-shard job no longer sets {REACH_AUDIT_ENV}=1 on train-* heads"
+    wired = [s for s in steps if "pipeline-scripts/reach_audit_scope.py" in str(s.get("run", ""))]
+    assert wired, "ci.yml's python-shard job no longer runs pipeline-scripts/reach_audit_scope.py (#22147)"
+    assert not any("if" in s for s in wired), "the scope rule lives in the script; the step must not re-gate it"
+    spec = importlib.util.spec_from_file_location(
+        "reach_audit_scope", repo_root() / "pipeline-scripts" / "reach_audit_scope.py"
+    )
+    scope = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(scope)
+    assert scope.REACH_AUDIT_ENV == REACH_AUDIT_ENV
+    assert scope.audit_applies("pull_request", "train-100", ""), "train-* heads no longer get the audit"
 
 
 # ---------------------------------------- #20050: a floor stale on the base, a branch that did not cause it
@@ -200,3 +235,24 @@ def test_a_floor_only_change_doesnt_make_a_guard_the_branchs_19673() -> None:
     assert not only_floor_lines(_diff("-    floor=10,", "+    floor=12,", "+    growth=9,")), "a real change counts"
     assert not only_floor_lines(_diff("+def discover(): ...")), "a real change counts"
     assert not only_floor_lines(""), "no change isn't a floor-only change"
+
+
+# ---------------------------------------- #22110: the PIN line names the line it rewrote
+
+
+def test_the_pin_line_carries_the_line_of_the_floor_it_rewrote(monkeypatch, tmp_path) -> None:
+    """A declaration spanning several lines, and the new value written earlier in the file too."""
+    from repo_tests._reach import Reach
+
+    guard = tmp_path / "repo_tests" / "g_test.py"
+    guard.parent.mkdir()
+    guard.write_text(
+        "OTHER = 130\nX = declare(\n    'multi',\n    discover=_d,\n    what='x',\n    floor=100,\n    growth=40,\n)\n",
+        encoding="utf-8",
+    )
+    reach = Reach(name="multi", discover=lambda _r: list(range(150)), pinned_floor=100, what="x", growth=40)
+    monkeypatch.setattr(repin, "_ROOT", tmp_path)
+    monkeypatch.setattr(repin, "_source_file", lambda _r: guard)
+    line = repin._repin(reach)
+    assert line == "PIN   multi: floor -> 130 (population 150) in repo_tests/g_test.py:6", line
+    assert guard.read_text(encoding="utf-8").splitlines()[5].startswith("    floor=130,")

@@ -4235,6 +4235,129 @@
         "title": "DevLoopIssuesResponse",
         "type": "object"
       },
+      "DriftPruneFile": {
+        "description": "One file a prune would remove, and the commit that removed it from source.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "DriftPruneFile",
+        "type": "object"
+      },
+      "DriftPrunePreview": {
+        "description": "Exactly what a prune of *component* would remove.",
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/DriftPruneFile"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "component",
+          "files"
+        ],
+        "title": "DriftPrunePreview",
+        "type": "object"
+      },
+      "DriftPrunePreviewRequest": {
+        "description": "Which component to preview.",
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          }
+        },
+        "required": [
+          "component"
+        ],
+        "title": "DriftPrunePreviewRequest",
+        "type": "object"
+      },
+      "DriftPruneRequest": {
+        "description": "The exact paths the operator confirmed from the preview.",
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "component",
+          "paths"
+        ],
+        "title": "DriftPruneRequest",
+        "type": "object"
+      },
+      "DriftPruneResponse": {
+        "description": "Per-path outcome of a confirmed prune.",
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Failed",
+            "type": "object"
+          },
+          "refused": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Refused",
+            "type": "object"
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "component",
+          "removed",
+          "refused",
+          "failed"
+        ],
+        "title": "DriftPruneResponse",
+        "type": "object"
+      },
       "DriftResolveJobResponse": {
         "description": "Accepted async component-resolve job (#11303).",
         "properties": {
@@ -19861,6 +19984,136 @@
           }
         ],
         "summary": "Get Full Tree Drift",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/drift/prune": {
+      "post": {
+        "description": "Remove the confirmed paths that are still ``removed_from_source`` (#22082).\n\nAnything else in *paths* -- a host_state, artifact or modified file, or one\nthat stopped being eligible since the preview -- is refused and left alone.",
+        "operationId": "confirm_drift_prune_api_code_sync_drift_prune_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriftPruneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftPruneResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm Drift Prune",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/drift/prune/preview": {
+      "post": {
+        "description": "List exactly the deployed files git proves were deleted from source (#22082).",
+        "operationId": "preview_drift_prune_api_code_sync_drift_prune_preview_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriftPrunePreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftPrunePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Drift Prune",
         "tags": [
           "code-sync"
         ]
