@@ -10041,5 +10041,15 @@
     "resumeFailed": "Neizdevās atsākt aģentus",
     "successRate": "Veiksmes rādītājs",
     "tasksCompleted": "Pabeigtie uzdevumi"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Ievadiet pilnu tīmekļa adresi, kas sākas ar http:// vai https://",
+    "recognitionUnsupported": "Šī pārlūkprogramma neatbalsta runas atpazīšanu",
+    "recognitionError": "Runas atpazīšanas kļūda: {error}",
+    "speakFailed": "Neizdevās izrunāt tekstu",
+    "playbackFailed": "Audio atskaņošana neizdevās",
+    "spoken": "Izrunāts:",
+    "speakToInteractWith": "Runājiet un klausieties priekšlasījumu",
+    "voiceId": "Balss ID"
   }
 }
