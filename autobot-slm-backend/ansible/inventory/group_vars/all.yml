@@ -522,14 +522,18 @@ systemd_unit_dir: /etc/systemd/system
 
 # #18810: the address clients dial, written as AUTOBOT_BACKEND_HOST. One home (inventory-wide, evaluated
 # where backend.env.j2 renders, role or playbook). Never an unspecified
-# bind address: that case falls back to the inventory backend host, else loopback.
+# bind address: that case falls back to the inventory backend host, else loopback; the fallback
+# gets the same unspecified test, so a wildcard inventory host also lands on loopback.
 # "Unspecified" matches autobot_shared/ssot_reachable_host.py::is_unspecified_host (ipaddress.is_unspecified):
 # empty, 0.0.0.0, and every IPv6 spelling made only of zeros and colons (::, ::0, 0::0, 0:0::0, the full
 # eight groups, ::0.0.0.0), bracketed or not. No ipaddr filter: ansible.utils is not a repo dependency.
 backend_advertised_host: >-
+  {%- set _unspec = '^(0[.]0[.]0[.]0|[0:]*:[0:]*|[0:]*:0[.]0[.]0[.]0)$' -%}
   {%- set _bind = backend_host | string | trim | lower | replace('[', '') | replace(']', '') -%}
-  {{ backend_host if (_bind != '' and (_bind | regex_search('^(0[.]0[.]0[.]0|[0:]*:[0:]*|[0:]*:0[.]0[.]0[.]0)$')) is none)
-     else (infrastructure.hosts.backend if infrastructure is defined else slm_loopback_ipv4) }}
+  {%- set _inv = (infrastructure.hosts.backend if infrastructure is defined else slm_loopback_ipv4) | string | trim -%}
+  {%- set _invn = _inv | lower | replace('[', '') | replace(']', '') -%}
+  {{ backend_host if (_bind != '' and (_bind | regex_search(_unspec)) is none)
+     else (_inv if (_invn != '' and (_invn | regex_search(_unspec)) is none) else slm_loopback_ipv4) }}
 
 role_vnc_active: >-
   {{ ('vnc' in (node_roles | default([]))) or

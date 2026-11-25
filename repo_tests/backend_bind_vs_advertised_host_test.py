@@ -179,14 +179,16 @@ def test_updater_renders_the_env_before_it_restarts_the_backend() -> None:
     assert env < restart
 
 
-def _advertised_with(backend_host: str) -> str:
+def _advertised_with(backend_host: str, inventory_host: str = "10.1.2.3") -> str:
     expr = yaml.safe_load(ALL_VARS.read_text(encoding="utf-8"))["backend_advertised_host"]
     env = Environment()
     env.filters["regex_search"] = lambda v, p: (lambda m: m.group(0) if m else None)(re.search(p, v))  # Ansible filter
     return (
         env.from_string(expr)
         .render(
-            backend_host=backend_host, slm_loopback_ipv4="127.0.0.1", infrastructure={"hosts": {"backend": "10.1.2.3"}}
+            backend_host=backend_host,
+            slm_loopback_ipv4="127.0.0.1",
+            infrastructure={"hosts": {"backend": inventory_host}},
         )
         .strip()
     )
@@ -214,6 +216,13 @@ _BIND_ALL_SPELLINGS = [  # nosec B104
 def test_every_bind_all_spelling_falls_back_to_the_inventory_host(spelling) -> None:
     assert _advertised_with(spelling) == "10.1.2.3"
     assert is_unspecified_host(spelling.strip()) or spelling == ""  # agrees with validate_advertised_host
+
+
+@pytest.mark.parametrize("inventory_host", ["0.0.0.0", "::", "[::]", " ", ""])  # nosec B104
+def test_an_unspecified_inventory_host_falls_back_to_loopback(inventory_host) -> None:
+    """The inventory fallback gets the same unspecified test as ``backend_host``."""
+    assert _advertised_with("0.0.0.0", inventory_host) == "127.0.0.1"  # nosec B104
+    assert _advertised_with("10.9.9.9", inventory_host) == "10.9.9.9"  # a specific host never consults it
 
 
 def test_a_specific_backend_host_is_advertised_as_is() -> None:
@@ -283,24 +292,60 @@ def test_websockify_unit_destination_routes_through_the_systemd_unit_dir_var() -
     assert group_vars["systemd_unit_dir"] == "/etc/systemd/system"
 
 
-def test_no_vnc_role_file_spells_the_systemd_unit_dir_and_the_variable_has_one_home() -> None:
+_SYSTEMD_UNIT_DIR = "/etc/systemd/system"
+
+
+def _literal_unit_dir_lines(text: str) -> list[int]:
+    """Line numbers (1-based) that spell the systemd unit directory instead of using the variable."""
+    return [n for n, line in enumerate(text.splitlines(), 1) if _SYSTEMD_UNIT_DIR in line]
+
+
+def _defines_unit_dir(text: str) -> bool:
+    """True when the file assigns ``systemd_unit_dir`` at the top level of a vars file."""
+    return re.search(r"^systemd_unit_dir:", text, re.MULTILINE) is not None
+
+
+def _unit_dir_definitions_outside_inventory(files: dict[str, str]) -> list[str]:
+    """Files under roles/playbooks that define the variable: a second default.
+
+    Inventory group_vars/host_vars may override it per group or host (the contract in
+    ``group_vars/all.yml``); anything else is a duplicate default.
+    """
+    return [name for name, text in files.items() if _defines_unit_dir(text) and not name.startswith("inventory/")]
+
+
+def test_the_unit_dir_scanners_trip_on_a_violation_and_pass_a_clean_file() -> None:
+    """Contrast pair: the live-tree scan below proves nothing if a predicate always answers 'clean'."""
+    assert _literal_unit_dir_lines(f"a: 1\ndest: {_SYSTEMD_UNIT_DIR}/x.service\n") == [2]
+    assert _literal_unit_dir_lines("dest: '{{ systemd_unit_dir }}/x.service'\n") == []
+    assert _defines_unit_dir(f"systemd_unit_dir: {_SYSTEMD_UNIT_DIR}\n")
+    assert not _defines_unit_dir("x:\n  systemd_unit_dir: /y\n# systemd_unit_dir: /z\nother: systemd_unit_dir\n")
+    definer = f"systemd_unit_dir: {_SYSTEMD_UNIT_DIR}\n"
+    files = {
+        "roles/vnc/defaults/main.yml": definer,  # a duplicate default
+        "playbooks/p.yml": definer,  # a duplicate default
+        "inventory/group_vars/vnc_nodes.yml": definer,  # a supported override
+        "inventory/host_vars/h.yml": definer,  # a supported override
+        "roles/vnc/tasks/main.yml": "x: 1\n",
+    }
+    assert _unit_dir_definitions_outside_inventory(files) == ["roles/vnc/defaults/main.yml", "playbooks/p.yml"]
+    assert _unit_dir_definitions_outside_inventory({"inventory/group_vars/a.yml": definer}) == []
+
+
+def test_no_vnc_role_file_spells_the_systemd_unit_dir_and_the_variable_has_one_default() -> None:
     role_files = [f for f in (ANSIBLE / "roles" / "vnc").rglob("*") if f.is_file()]
     assert len(role_files) >= 8  # floor: the role's tasks, templates and defaults were all read
     literal = [
         f"{f.relative_to(ANSIBLE)}:{n}"
         for f in role_files
-        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1)
-        if "/etc/systemd/system" in line
+        for n in _literal_unit_dir_lines(f.read_text(encoding="utf-8"))
     ]
     assert literal == []
     playbook_files = [f for f in ANSIBLE.rglob("*.yml") if "tests" not in f.relative_to(ANSIBLE).parts]
     assert len(playbook_files) >= 300  # floor: the whole ansible tree was scanned for a second definition
-    definitions = [
-        f.relative_to(ANSIBLE)
-        for f in playbook_files
-        if re.search(r"^systemd_unit_dir:", f.read_text(encoding="utf-8"), re.MULTILINE)
-    ]
-    assert definitions == [ALL_VARS.relative_to(ANSIBLE)]
+    texts = {f.relative_to(ANSIBLE).as_posix(): f.read_text(encoding="utf-8") for f in playbook_files}
+    assert _defines_unit_dir(texts[ALL_VARS.relative_to(ANSIBLE).as_posix()])  # the canonical default
+    assert _unit_dir_definitions_outside_inventory(texts) == []
 
 
 def test_a_config_save_keeps_the_persisted_bind_host(monkeypatch, tmp_path, backend_on_path) -> None:
