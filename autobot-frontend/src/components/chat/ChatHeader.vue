@@ -30,7 +30,7 @@
           <span tabindex="0" :aria-describedby="describedby" data-testid="header-knowledge">{{ knowledgeEnabled ? $t('chat.header.knowledgeOn') : $t('chat.header.knowledgeOff') }}</span>
         </template>
       </BaseTooltip>
-      <template v-if="currentSessionId"> · <span class="font-mono" data-testid="header-session-id">{{ $t('chat.header.sessionId', { id: currentSessionId }) }}</span></template>
+      <template v-if="currentSessionId && startedAt"> · <span class="font-mono" data-testid="header-session-id">{{ $t('chat.header.sessionId', { id: currentSessionId }) }}</span></template>
       <template v-if="startedAt"> · <i18n-t keypath="chat.header.startedAt" tag="span"><template #time><span class="font-mono">{{ startedTime }}</span></template></i18n-t></template>
       <template v-else> · {{ sessionInfo }}</template>
     </template>
