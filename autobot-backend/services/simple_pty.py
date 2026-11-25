@@ -116,18 +116,18 @@ class SimplePTY:
         self.session_id = session_id
         self.use_login_shell = use_login_shell
         self.custom_ps1 = custom_ps1
-        self.master_fd = None
-        self.process = None
-        self.output_queue = queue.Queue()
-        self.input_queue = queue.Queue()
+        self.master_fd: int | None = None
+        self.process: subprocess.Popen[bytes] | None = None
+        self.output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
+        self.input_queue: queue.Queue[str | None] = queue.Queue()
         # #17074: a bounded copy of the output, addressed by absolute offset.
         self._transcript: collections.deque[str] = collections.deque()
         self._transcript_len = 0  # characters currently held
         self._transcript_base = 0  # absolute offset of the first held character
         self._transcript_lock = threading.Lock()
         self.running = False
-        self.reader_thread = None
-        self.writer_thread = None
+        self.reader_thread: threading.Thread | None = None
+        self.writer_thread: threading.Thread | None = None
 
     @staticmethod
     def configure_terminal_echo(fd: int, enable: bool = True) -> bool:
@@ -179,7 +179,7 @@ class SimplePTY:
             logger.warning("Failed to configure terminal echo: %s", e)
             return False
 
-    def _spawn_bash_process(self, slave_fd, env: dict, initial_cwd: str) -> None:
+    def _spawn_bash_process(self, slave_fd, env: dict, initial_cwd: str | None) -> None:
         """Helper for start. Ref: #1088. Spawns the bash subprocess and sets fd state."""
         bash_cmd = ["/bin/bash"]
         if self.use_login_shell:
@@ -198,10 +198,11 @@ class SimplePTY:
             )
         )
         os.close(slave_fd)
-        os.set_blocking(self.master_fd, False)
+        if self.master_fd is not None:
+            os.set_blocking(self.master_fd, False)
         self.running = True
 
-    def start(self, initial_cwd: str = None):
+    def start(self, initial_cwd: str | None = None):
         """Start the PTY. Ref: #1088."""
         try:
             self.master_fd, slave_fd = pty.openpty()
@@ -222,12 +223,14 @@ class SimplePTY:
 
             self._spawn_bash_process(slave_fd, env, initial_cwd)
 
-            self.reader_thread = threading.Thread(target=self._read_loop, daemon=True)
-            self.writer_thread = threading.Thread(target=self._write_loop, daemon=True)
-            self.reader_thread.start()
-            self.writer_thread.start()
+            reader = threading.Thread(target=self._read_loop, daemon=True)
+            writer = threading.Thread(target=self._write_loop, daemon=True)
+            self.reader_thread, self.writer_thread = reader, writer
+            reader.start()
+            writer.start()
 
-            logger.info(f"PTY started successfully for session {self.session_id}, PID: {self.process.pid}")
+            pid = self.process.pid if self.process else None
+            logger.info(f"PTY started successfully for session {self.session_id}, PID: {pid}")
             return True
 
         except Exception as e:
@@ -474,7 +477,7 @@ class SimplePTY:
 
     def is_alive(self) -> bool:
         """Check if PTY is alive"""
-        return self.running and self.process and self.process.poll() is None and self.master_fd is not None
+        return bool(self.running and self.process and self.process.poll() is None and self.master_fd is not None)
 
     def cleanup(self) -> None:
         """Clean up PTY"""
@@ -532,10 +535,10 @@ class SimplePTYManager:
 
     def __init__(self) -> None:
         """Initialize PTY manager with empty sessions dict and thread lock."""
-        self.sessions = {}
+        self.sessions: dict[str, SimplePTY] = {}
         self._lock = threading.Lock()  # CRITICAL: Protect concurrent session access
 
-    def create_session(self, session_id: str, initial_cwd: str = None) -> SimplePTY:
+    def create_session(self, session_id: str, initial_cwd: str | None = None) -> SimplePTY | None:
         """Create PTY session"""
         # CRITICAL: Atomic check-and-create with lock
         with self._lock:

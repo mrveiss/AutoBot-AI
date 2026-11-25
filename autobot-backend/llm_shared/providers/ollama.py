@@ -134,7 +134,7 @@ class OllamaRequestExecutor:
             },
         }
         if tools_will_be_sent:
-            data["tools"] = openai_function_tool_schemas(request.tools)
+            data["tools"] = openai_function_tool_schemas(request.tools or [])
             if request.tool_choice:
                 data["tool_choice"] = request.tool_choice
         return data

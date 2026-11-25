@@ -419,11 +419,12 @@ class TerminalTool:
             if error:
                 return error
 
+            history = history_data or {}
             return {
                 "status": "success",
                 "session_id": user_session_id,
-                "history": history_data.get("history", []),
-                "total_commands": history_data.get("total_commands", 0),
+                "history": history.get("history", []),
+                "total_commands": history.get("total_commands", 0),
             }
 
         except Exception as e:
