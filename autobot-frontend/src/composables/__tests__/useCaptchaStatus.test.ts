@@ -63,10 +63,17 @@ import apiClient from '@/utils/ApiClient'
  *  an `onUnmounted` hook and would warn outside one. */
 function withCaptchaStatus<T>(fn: (api: ReturnType<typeof useCaptchaStatus>) => T): T {
   const scope = effectScope()
+  let pending = false
   try {
-    return scope.run(() => fn(useCaptchaStatus()))!
+    const result = scope.run(() => fn(useCaptchaStatus()))!
+    // An async body must finish before the scope is disposed: a disposed composable ignores late replies.
+    if (result instanceof Promise) {
+      pending = true
+      return result.finally(() => scope.stop()) as T
+    }
+    return result
   } finally {
-    scope.stop()
+    if (!pending) scope.stop()
   }
 }
 
@@ -250,5 +257,37 @@ describe('loadPendingCaptchas (#22215)', () => {
     })
 
     expect(shown).toBeNull()
+  })
+
+  it('starts no countdown when the reply arrives after the scope is disposed', async () => {
+    vi.useFakeTimers()
+    try {
+      let reply!: (v: unknown) => void
+      get.mockImplementation(() => new Promise((r) => (reply = r)))
+      const scope = effectScope()
+      const api = scope.run(() => useCaptchaStatus())!
+      const loading = api.loadPendingCaptchas()
+      scope.stop()
+      reply({ success: true, count: 1, timestamp: 't0', pending_captchas: { late: { status: 'pending' } } })
+      await loading
+
+      expect(api.activeCaptcha.value).toBeNull()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('records no failure when the request rejects after the scope is disposed', async () => {
+    let fail!: (e: unknown) => void
+    get.mockImplementation(() => new Promise((_, r) => (fail = r)))
+    const scope = effectScope()
+    const api = scope.run(() => useCaptchaStatus())!
+    const loading = api.loadPendingCaptchas()
+    scope.stop()
+    fail(new Error('late'))
+    await loading
+
+    expect(api.pendingLoadFailed.value).toBe(false)
   })
 })

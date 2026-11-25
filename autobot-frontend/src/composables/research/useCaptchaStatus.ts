@@ -7,7 +7,7 @@
  * countdown timer, and API mutations (resolve/skip) for CaptchaNotification.
  */
 
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onScopeDispose } from 'vue'
 // GH#9062: migrated from useGlobalWebSocket — captcha events flow through the
 // LiveEventManager (global channel), so useEventBus is the correct subscriber.
 import { useEventBus } from '@/composables/useEventBus'
@@ -75,6 +75,8 @@ export function useCaptchaStatus() {
   // restored. Lives and dies with the composable (one id per CAPTCHA, a handful per session).
   const endedCaptchaIds = new Set<string>()
   let timerInterval: ReturnType<typeof setInterval> | null = null
+  // Set when the owning scope (the component) is gone: a reply arriving later must start no countdown.
+  let disposed = false
 
   // --------------------------------------------------------------------------
   // Timer
@@ -211,6 +213,7 @@ export function useCaptchaStatus() {
       const reply = (await apiClient.call('get', '/api/captcha/pending')) as unknown as
         | CaptchaPendingData
         | { data?: CaptchaPendingData | null }
+      if (disposed) return
       const data = ('data' in reply && reply.data ? reply.data : reply) as CaptchaPendingData
       const pending = (data?.pending_captchas ?? {}) as Record<string, { status?: string }>
       const id = Object.keys(pending).find((key) => pending[key]?.status === 'pending' && !endedCaptchaIds.has(key))
@@ -224,6 +227,7 @@ export function useCaptchaStatus() {
         message: '',
       })
     } catch (error) {
+      if (disposed) return
       pendingLoadFailed.value = true
       logger.error('Failed to load pending CAPTCHAs:', error)
     }
@@ -273,7 +277,9 @@ export function useCaptchaStatus() {
     }
   })
 
-  onUnmounted(() => {
+  // onScopeDispose, not onUnmounted: a component's setup runs in its scope, so it fires on unmount too.
+  onScopeDispose(() => {
+    disposed = true
     stopTimer()
   })
 
