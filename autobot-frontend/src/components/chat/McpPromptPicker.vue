@@ -66,7 +66,7 @@
 
       <form v-else class="flex flex-col gap-3" @submit.prevent="insertPrompt">
         <div class="flex items-center gap-3">
-          <BaseButton variant="ghost" size="sm" @click="reset">
+          <BaseButton variant="ghost" size="sm" @click="backToList">
             <template #icon-left><Icon name="arrow-left" /></template>
             {{ $t('common.back') }}
           </BaseButton>
@@ -101,6 +101,7 @@ import { BaseAlert, BaseBadge, BaseButton, BaseInput, BaseModal, BaseSpinner, Em
 import Icon from '@/components/ui/Icon.vue'
 import ChatHeaderIconButton from './ChatHeaderIconButton.vue'
 import { MCP_BRIDGES, useMcpPrompts } from '@/composables/chat/useMcpPrompts'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 defineProps<{ disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'insert', text: string): void }>()
@@ -116,18 +117,24 @@ watch(showModal, (show: boolean) => {
   if (show && promptsByBridge.value.git.length === 0) void loadPrompts()
 })
 
-let session = 0 // closing the dialog ends the session; an insert still in flight is then discarded
+// Closing the dialog or going Back ends the form an insert was started from: its in-flight render is then discarded.
+const insertRequest = useLatestRequest()
+
+function backToList(): void {
+  insertRequest.invalidate()
+  reset()
+}
 
 function closeModal(): void {
-  session++
+  insertRequest.invalidate()
   showModal.value = false
   reset()
 }
 
 async function insertPrompt(): Promise<void> {
-  const mine = session
+  const mine = insertRequest.begin()
   const text = await renderSelected()
-  if (text === null || mine !== session) return
+  if (text === null || !insertRequest.isCurrent(mine)) return
   emit('insert', text)
   closeModal()
 }

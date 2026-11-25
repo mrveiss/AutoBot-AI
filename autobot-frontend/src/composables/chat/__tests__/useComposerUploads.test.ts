@@ -8,8 +8,12 @@
  * ids reach a send (#20195).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { nextTick } from 'vue'
 
-const m = vi.hoisted(() => ({ showToast: vi.fn(), post: vi.fn(), ensure: vi.fn() }))
+const m = vi.hoisted(() => ({
+  showToast: vi.fn(), post: vi.fn(), ensure: vi.fn(), cancel: vi.fn(),
+  store: null as unknown as { currentSessionId: string | null }, // a reactive store, built by the mock below
+}))
 
 vi.mock('vue-i18n', async (importOriginal) => ({
   ...(await importOriginal<typeof import('vue-i18n')>()),
@@ -19,7 +23,11 @@ vi.mock('@autobot/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@autobot/ui')>()),
   useToast: () => ({ showToast: m.showToast }),
 }))
-vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => ({}) }))
+vi.mock('@/stores/useChatStore', async () => {
+  const { reactive } = await import('vue')
+  m.store = reactive({ currentSessionId: 'session-1' as string | null })
+  return { useChatStore: () => m.store }
+})
 vi.mock('@/models/controllers', () => ({ useChatController: () => ({}) }))
 vi.mock('@/utils/formatHelpers', () => ({ formatFileSize: (n: number) => `${n}B` }))
 vi.mock('@/utils/conversationFileUpload', () => ({
@@ -30,8 +38,16 @@ vi.mock('@/utils/conversationFileUpload', () => ({
   ConversationUploadError: class extends Error {},
 }))
 vi.mock('@/composables/useUploadCancel', () => ({
-  isUploadCancelled: () => false,
-  useUploadCancel: () => ({ begin: () => new AbortController().signal, settle: () => false, isCancellable: () => true, cancel: vi.fn() }),
+  isUploadCancelled: (e: { cancelled?: boolean } | undefined) => e?.cancelled === true,
+  useUploadCancel: () => {
+    const aborts = new Map<string, AbortController>()
+    return {
+      begin: (u: { id: string }) => { const c = new AbortController(); aborts.set(u.id, c); return c.signal },
+      settle: (u: { id: string }) => { aborts.delete(u.id); return false },
+      isCancellable: (u: { id: string }) => aborts.has(u.id),
+      cancel: (id: string) => { m.cancel(id); aborts.get(id)?.abort() },
+    }
+  },
 }))
 
 import { MAX_FILE_SIZE, useComposerUploads } from '../useComposerUploads'
@@ -39,8 +55,9 @@ import { MAX_FILE_SIZE, useComposerUploads } from '../useComposerUploads'
 const pick = (...files: File[]) => ({ target: { files, value: 'x' } }) as unknown as Event
 
 beforeEach(() => {
-  Object.values(m).forEach((f) => f.mockReset())
+  Object.values(m).forEach((f) => { if (typeof f === 'function') f.mockReset() })
   m.ensure.mockResolvedValue('session-1')
+  m.store.currentSessionId = 'session-1'
   vi.useRealTimers()
 })
 
@@ -67,12 +84,53 @@ describe('useComposerUploads', () => {
     expect(u.uploadProgress.value[0].phase).toBe('complete')
   })
 
-  it('uploads every file, in parallel, through one session', async () => {
-    m.post.mockResolvedValue({ file_info: { file_id: 'f' } })
+  it('uploads every file in parallel, through one session: both requests start before either finishes', async () => {
+    const finish: Array<(v: unknown) => void> = []
+    m.post.mockImplementation(() => new Promise((resolve) => { finish.push(resolve) }))
     const u = useComposerUploads()
-    await u.handleFileSelect(pick(new File(['a'], 'a.txt'), new File(['b'], 'b.txt')))
-    expect(m.post).toHaveBeenCalledTimes(2)
+    const selecting = u.handleFileSelect(pick(new File(['a'], 'a.txt'), new File(['b'], 'b.txt')))
+    await vi.waitFor(() => expect(m.post).toHaveBeenCalledTimes(2)) // a sequential upload would have started one
+    finish.forEach((resolve) => resolve({ file_info: { file_id: 'f' } }))
+    await selecting
     expect(u.attachedFiles.value).toHaveLength(2)
+  })
+
+  it('leaving the chat aborts a running upload and attaches nothing from it', async () => {
+    m.post.mockImplementation((_s: string, _f: File, _p: unknown, signal: AbortSignal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(Object.assign(new Error('cancelled'), { cancelled: true })))
+    }))
+    const u = useComposerUploads()
+    const selecting = u.handleFileSelect(pick(new File(['a'], 'a.txt')))
+    await vi.waitFor(() => expect(m.post).toHaveBeenCalled())
+    m.store.currentSessionId = 'session-2'
+    await selecting
+    expect(m.cancel).toHaveBeenCalled()
+    expect(u.attachedFiles.value).toEqual([])
+  })
+
+  it('drops attached files and never sends their ids from another chat', async () => {
+    m.post.mockResolvedValue({ file_info: { file_id: 'srv-1' } })
+    const u = useComposerUploads()
+    const file = new File(['a'], 'a.txt')
+    await u.handleFileSelect(pick(file))
+    m.store.currentSessionId = 'session-2'
+    await nextTick()
+    expect(u.attachedFiles.value).toEqual([])
+    expect(u.serverFileIds([file])).toEqual([]) // uploaded to session-1, so not carried by a send in session-2
+    m.store.currentSessionId = 'session-1'
+    expect(u.serverFileIds([file])).toEqual(['srv-1'])
+  })
+
+  it('a chat created by the upload itself keeps the file', async () => {
+    m.store.currentSessionId = null
+    m.ensure.mockImplementation(async () => { m.store.currentSessionId = 'created'; return 'created' })
+    m.post.mockResolvedValue({ file_info: { file_id: 'srv-1' } })
+    const u = useComposerUploads()
+    const file = new File(['a'], 'a.txt')
+    await u.handleFileSelect(pick(file))
+    await nextTick()
+    expect(u.attachedFiles.value).toEqual([file])
+    expect(u.serverFileIds([file])).toEqual(['srv-1'])
   })
 
   it('keeps a failed upload as an error row, with the described reason, and attaches nothing', async () => {

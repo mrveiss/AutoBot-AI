@@ -5,9 +5,11 @@
 /**
  * The composer's attachments: pick, validate, upload in parallel, retry, cancel, remove (#18243,
  * moved unchanged in behaviour out of ChatInput.vue). Transport and bearer are
- * `utils/conversationFileUpload.ts`; only the server ids ever reach a send (#20195).
+ * `utils/conversationFileUpload.ts`; only the server ids ever reach a send (#20195). An upload belongs to the
+ * chat it was sent to: leaving that chat aborts what is still uploading and drops what was attached, and a send
+ * carries only the ids uploaded to the chat it goes to.
  */
-import { computed, ref, reactive } from 'vue'
+import { computed, ref, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@autobot/ui'
 import { useChatStore } from '@/stores/useChatStore'
@@ -39,6 +41,7 @@ export interface UploadItem {
   file?: File
   fileId?: string
   uploadId?: string
+  sessionId?: string // the chat this upload was sent to
 }
 
 export function useComposerUploads() {
@@ -51,7 +54,7 @@ export function useComposerUploads() {
   const uploadProgress = ref<UploadItem[]>([])
   const pendingUploads = ref(0) // selections and retries not yet settled
   const hasPendingUploads = computed(() => pendingUploads.value > 0)
-  const uploadedIds = new WeakMap<File, string>() // File -> server file id (#20195)
+  const uploadedIds = new WeakMap<File, { fileId?: string; sessionId: string }>() // File -> server id + its chat (#20195)
 
   const dropCancelled = (upload: UploadItem): void => {
     uploadProgress.value = uploadProgress.value.filter((u) => u.id !== upload.id)
@@ -60,7 +63,24 @@ export function useComposerUploads() {
   const { begin, settle, isCancellable, cancel: cancelUpload } = useUploadCancel<UploadItem>(dropCancelled)
 
   /** The server ids of the attached files: what a send carries, never the File objects. */
-  const serverFileIds = (files: File[]): string[] => files.flatMap((f) => uploadedIds.get(f) ?? [])
+  const serverFileIds = (files: File[]): string[] =>
+    files.flatMap((f) => {
+      const stored = uploadedIds.get(f)
+      return stored?.fileId && stored.sessionId === store.currentSessionId ? stored.fileId : []
+    })
+
+  /** Attach a finished upload only while its chat is the open one. */
+  function attach(file: File): void {
+    if (uploadedIds.get(file)?.sessionId !== store.currentSessionId) return
+    if (!attachedFiles.value.includes(file)) attachedFiles.value.push(file) // by identity: two files may share a name
+  }
+
+  // Opening another chat ends this chat's attachments: abort the uploads still running, drop the attached files.
+  watch(() => store.currentSessionId, (id, previous) => {
+    if (!previous || id === previous) return // null -> id is the chat this upload just created
+    uploadProgress.value.filter((u) => u.sessionId === previous && isCancellable(u)).forEach((u) => cancelUpload(u.id))
+    attachedFiles.value = []
+  })
 
   const reportProgress = (upload: UploadItem, startTime: number) => (loaded: number, total: number): void => {
     upload.current = loaded
@@ -70,11 +90,11 @@ export function useComposerUploads() {
     upload.phase = 'uploading'
   }
 
-  function markComplete(upload: UploadItem, file: File, response: ConversationUploadResponse): void {
+  function markComplete(upload: UploadItem, file: File, sessionId: string, response: ConversationUploadResponse): void {
     settle(upload)
     Object.assign(upload, { phase: 'complete', progress: 100 })
     upload.fileId = response.file_info?.file_id
-    if (upload.fileId) uploadedIds.set(file, upload.fileId)
+    uploadedIds.set(file, { fileId: upload.fileId, sessionId })
     upload.uploadId = response.upload_id
     setTimeout(() => {
       const index = uploadProgress.value.findIndex((u) => u.id === upload.id)
@@ -87,7 +107,8 @@ export function useComposerUploads() {
     const signal = begin(upload)
     try {
       const sessionId = await ensureUploadSession(store, controller)
-      markComplete(upload, file, await postConversationUpload(sessionId, file, reportProgress(upload, Date.now()), signal))
+      upload.sessionId = sessionId
+      markComplete(upload, file, sessionId, await postConversationUpload(sessionId, file, reportProgress(upload, Date.now()), signal))
     } catch (error) {
       if (!settle(upload, error)) {
         Object.assign(upload, { error: describeUploadError(error, t), phase: 'failed', progress: 0 })
@@ -113,7 +134,7 @@ export function useComposerUploads() {
 
   function settleResults(results: PromiseSettledResult<File>[], uploads: UploadItem[]): void {
     results.forEach((result, index) => {
-      if (result.status === 'fulfilled') attachedFiles.value.push(result.value)
+      if (result.status === 'fulfilled') attach(result.value)
       else if (!isUploadCancelled(result.reason)) {
         Object.assign(uploads[index], { error: describeUploadError(result.reason, t), phase: 'failed' })
       }
@@ -149,7 +170,7 @@ export function useComposerUploads() {
     pendingUploads.value++
     try {
       await uploadFile(upload, file)
-      if (!attachedFiles.value.includes(file)) attachedFiles.value.push(file) // by identity: two files may share a name
+      attach(file)
     } catch (error) {
       if (isUploadCancelled(error)) return
       Object.assign(upload, { error: describeUploadError(error, t), phase: 'failed' })

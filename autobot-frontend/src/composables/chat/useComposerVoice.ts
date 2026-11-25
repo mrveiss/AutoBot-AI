@@ -103,8 +103,8 @@ export function useComposerVoice(messageText: Ref<string>) {
   }
 
   function stopVoiceRecording(): void {
+    // The flag stays up until onend: stop() can still deliver a final transcript, so a send in the gap would race it.
     recognition?.stop()
-    isVoiceRecording.value = false
     logger.debug('Voice recording stopped')
   }
 

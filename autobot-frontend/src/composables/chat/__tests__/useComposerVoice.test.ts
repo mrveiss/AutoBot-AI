@@ -72,7 +72,19 @@ describe('useComposerVoice', () => {
     toggleVoiceInput()
     toggleVoiceInput()
     expect(FakeRecognition.last!.stop).toHaveBeenCalledTimes(1)
+    expect(isVoiceRecording.value).toBe(true) // sending stays blocked until the recogniser ends
+    FakeRecognition.last!.onend!()
     expect(isVoiceRecording.value).toBe(false)
+  })
+
+  it('still takes the final transcript that arrives after Stop, before onend', () => {
+    const text = ref('')
+    const { isVoiceRecording, toggleVoiceInput } = useComposerVoice(text)
+    toggleVoiceInput()
+    toggleVoiceInput()
+    FakeRecognition.last!.onresult!({ results: [[{ transcript: 'final words' }]] })
+    expect(text.value).toBe('final words')
+    expect(isVoiceRecording.value).toBe(true)
   })
 
   it('clears the recording state when recognition ends', () => {

@@ -4,11 +4,15 @@
 // Author: mrveiss
 /**
  * The composer's "Generate image" dialog state and submit (GH#9015), moved out of ChatInput.vue
- * (#18243). The result lands in the chat as an assistant image message, or its error text.
+ * (#18243). The result lands as an assistant image message, or its error text, in the chat the request was
+ * submitted from -- never whichever chat is open when it completes. With no chat open the request first creates one
+ * (`ensureUploadSession`, the canonical "the chat a request belongs to"), so the result always has a home.
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
+import { useChatController } from '@/models/controllers'
+import { ensureUploadSession } from '@/utils/conversationFileUpload'
 import { useImageGeneration } from '@/composables/useImageGeneration'
 
 export type ImageProvider = 'dalle' | 'flux' | 'stable_diffusion'
@@ -17,18 +21,15 @@ export const IMAGE_PROVIDERS: readonly ImageProvider[] = ['dalle', 'flux', 'stab
 export function useComposerImageGen() {
   const { t } = useI18n()
   const store = useChatStore()
+  const controller = useChatController()
   const { generating: imageGenerating, generateImage } = useImageGeneration()
   const showImageGenModal = ref(false)
   const imagePrompt = ref('')
   const imageProvider = ref<ImageProvider>('dalle')
+  const inFlight = ref(false) // covers the session creation too, which `imageGenerating` does not
 
-  async function submitImageGeneration(): Promise<void> {
-    const prompt = imagePrompt.value.trim()
-    if (!prompt) return
-    showImageGenModal.value = false
-    const result = await generateImage({ prompt, provider: imageProvider.value })
-    imagePrompt.value = ''
-    // A rejected request resolves to null: say so in the chat rather than closing the dialog in silence.
+  /** Post the outcome into `sessionId`: an image message, or the failure text (a rejected request is null). */
+  function postResult(result: Awaited<ReturnType<typeof generateImage>>, sessionId: string): void {
     const ok = result?.success === true
     store.addMessage({
       content: ok ? '' : (result?.error ?? t('chat.input.imageGenerationFailed')),
@@ -43,7 +44,22 @@ export function useComposerImageGen() {
             },
           }
         : {},
-    })
+    }, sessionId)
+  }
+
+  async function submitImageGeneration(): Promise<void> {
+    const prompt = imagePrompt.value.trim()
+    if (!prompt || inFlight.value || imageGenerating.value) return // one request at a time, from any entry point
+    inFlight.value = true
+    showImageGenModal.value = false
+    try {
+      const sessionId = await ensureUploadSession(store, controller) // read now: the open chat may change while it runs
+      const result = await generateImage({ prompt, provider: imageProvider.value })
+      imagePrompt.value = ''
+      postResult(result, sessionId)
+    } finally {
+      inFlight.value = false
+    }
   }
 
   return { imageGenerating, showImageGenModal, imagePrompt, imageProvider, submitImageGeneration }

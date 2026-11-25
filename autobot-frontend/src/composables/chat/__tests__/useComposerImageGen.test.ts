@@ -8,14 +8,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 
-const m = vi.hoisted(() => ({ addMessage: vi.fn(), generateImage: vi.fn() }))
+const m = vi.hoisted(() => ({
+  addMessage: vi.fn(), generateImage: vi.fn(), ensure: vi.fn(), store: { currentSessionId: 'session-a' as string | null },
+}))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
-vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => ({ addMessage: m.addMessage }) }))
+vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => Object.assign(m.store, { addMessage: m.addMessage }) }))
+vi.mock('@/models/controllers', () => ({ useChatController: () => ({}) }))
+vi.mock('@/utils/conversationFileUpload', () => ({ ensureUploadSession: m.ensure }))
 vi.mock('@/composables/useImageGeneration', () => ({ useImageGeneration: () => ({ generating: ref(false), generateImage: m.generateImage }) }))
 
 import { useComposerImageGen } from '../useComposerImageGen'
 
-beforeEach(() => Object.values(m).forEach((f) => f.mockReset()))
+beforeEach(() => {
+  ;[m.addMessage, m.generateImage, m.ensure].forEach((f) => f.mockReset())
+  m.store.currentSessionId = 'session-a'
+  m.ensure.mockImplementation(async (store: { currentSessionId: string | null }) => store.currentSessionId ?? 'created')
+})
 
 describe('useComposerImageGen', () => {
   it('ignores a blank prompt', async () => {
@@ -40,7 +48,7 @@ describe('useComposerImageGen', () => {
     expect(m.addMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: 'image', sender: 'assistant', content: '',
       metadata: { display_type: 'image', image_payload: { images: ['u'], provider: 'flux', model: 'f1', prompt: 'a city', size: '1024' } },
-    }))
+    }), 'session-a')
   })
 
   it('posts the error text for a failed generation, and a translated fallback when it has none', async () => {
@@ -60,5 +68,41 @@ describe('useComposerImageGen', () => {
     g.imagePrompt.value = 'x'
     await g.submitImageGeneration()
     expect(m.addMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'chat.input.imageGenerationFailed', metadata: {} }))
+  })
+
+  it('posts the result into the chat that submitted it, not the one open when it completes', async () => {
+    let finish!: (v: unknown) => void
+    m.generateImage.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const g = useComposerImageGen()
+    g.imagePrompt.value = 'x'
+    const submitting = g.submitImageGeneration()
+    await vi.waitFor(() => expect(m.generateImage).toHaveBeenCalled())
+    m.store.currentSessionId = 'session-b' // the user opens another chat meanwhile
+    finish({ success: true, images: ['u'] })
+    await submitting
+    expect(m.addMessage).toHaveBeenCalledWith(expect.anything(), 'session-a')
+  })
+
+  it('with no chat open it creates one first and posts the result there', async () => {
+    m.store.currentSessionId = null
+    m.generateImage.mockResolvedValue({ success: true, images: ['u'] })
+    const g = useComposerImageGen()
+    g.imagePrompt.value = 'x'
+    await g.submitImageGeneration()
+    expect(m.ensure).toHaveBeenCalled()
+    expect(m.addMessage).toHaveBeenCalledWith(expect.anything(), 'created')
+  })
+
+  it('ignores a second submit while the first is in flight, so one request is billed', async () => {
+    let finish!: (v: unknown) => void
+    m.generateImage.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const g = useComposerImageGen()
+    g.imagePrompt.value = 'x'
+    const first = g.submitImageGeneration()
+    await g.submitImageGeneration()
+    expect(m.generateImage).toHaveBeenCalledTimes(1)
+    finish({ success: true, images: [] })
+    await first
+    expect(m.addMessage).toHaveBeenCalledTimes(1)
   })
 })

@@ -127,4 +127,51 @@ describe('useChatKnowledge', () => {
     await nextTick()
     expect(enabled.value).toBe(true)
   })
+
+  it('picks up what another tab stored while no scope was listening, when the first scope attaches', () => {
+    const store = useChatStore()
+    const id = store.createNewSession('A', 'session-a')
+    const first = effectScope()
+    first.run(() => useChatKnowledge())
+    first.stop() // the last consumer unmounts: storage events are no longer heard
+    localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify({ [id]: false }))
+    const again = effectScope()
+    const { enabled } = again.run(() => useChatKnowledge())!
+    expect(enabled.value).toBe(false)
+    again.stop()
+  })
+
+  it('a write keeps the choice another tab stored meanwhile', () => {
+    const store = useChatStore()
+    store.createNewSession('B', 'session-b')
+    const { enabled } = useChatKnowledge()
+    localStorage.setItem(KNOWLEDGE_STORAGE_KEY, JSON.stringify({ 'session-a': false })) // before this tab heard of it
+    enabled.value = false
+    expect(JSON.parse(localStorage.getItem(KNOWLEDGE_STORAGE_KEY)!)).toEqual({ 'session-a': false, 'session-b': false })
+  })
+
+  it('keeps an unsent draft choice in this tab: nothing is stored for it', () => {
+    useChatStore().currentSessionId = null
+    const { enabled } = useChatKnowledge()
+    enabled.value = false
+    expect(enabled.value).toBe(false)
+    expect(localStorage.getItem(KNOWLEDGE_STORAGE_KEY)).toBeNull()
+  })
+
+  it('opening an existing chat while the send is still creating its own does not consume the adoption', async () => {
+    const store = useChatStore()
+    const existing = store.createNewSession('Old', 'session-old')
+    store.currentSessionId = null
+    await nextTick()
+    const { enabled } = useChatKnowledge()
+    enabled.value = false
+    expectDraftAdoption()
+    store.switchToSession(existing) // the user opens another chat before the send's session exists
+    await nextTick()
+    expect(enabled.value).toBe(true)
+    store.createNewSession('Sent', 'session-sent')
+    await nextTick()
+    expect(enabled.value).toBe(false) // the session the send created took the draft choice
+    expect(JSON.parse(localStorage.getItem(KNOWLEDGE_STORAGE_KEY)!)).toEqual({ 'session-sent': false })
+  })
 })
