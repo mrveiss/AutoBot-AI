@@ -22,7 +22,7 @@ this module obtains are persisted via SecretsService by the caller, never here.
 import base64
 import hashlib
 import secrets
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Tuple
 
 import aiohttp
@@ -71,6 +71,11 @@ class OAuthProvider:
     device_authorization_url: str = ""
     # RFC 7009 revocation endpoint; empty means revoke is local-only (#19241).
     revocation_url: str = ""
+    # A service-owned provider stores ONE shared credential rather than one per user (#13710): the owner
+    # and the fixed connector id the credential is filed under. Empty (the default) means per-user, with
+    # a fresh connector id per authorization, exactly as before. Starting the flow is admin-only.
+    service_owner_id: str = ""
+    service_connector_id: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +111,16 @@ OAUTH_PROVIDERS: dict = {
         default_scopes=("read_api", "read_repository"),
     ),
 }
+
+# #13710: the shared company mailbox. Same Azure app and endpoints as ``microsoft``, but its own entry so the
+# Drive connectors' consent stays untouched. Mail.ReadWrite is not requested: folder creation is not exposed.
+OAUTH_PROVIDERS["microsoft-mail"] = replace(
+    OAUTH_PROVIDERS["microsoft"],
+    name="microsoft-mail",
+    default_scopes=("offline_access", "Mail.Read", "Mail.Send"),
+    service_owner_id="system",
+    service_connector_id="microsoft365",
+)
 
 
 def find_provider(name: str | None) -> OAuthProvider | None:

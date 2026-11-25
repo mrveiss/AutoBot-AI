@@ -36,7 +36,7 @@
 - name: xrdp | Deploy xrdp.ini config
   ansible.builtin.template:
     src: xrdp.ini.j2
-    dest: /etc/xrdp/xrdp.ini
+    dest: "{{ xrdp_config_dir }}/xrdp.ini"
     mode: "0644"
     owner: root
     group: root

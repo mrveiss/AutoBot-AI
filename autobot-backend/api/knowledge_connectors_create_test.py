@@ -18,6 +18,8 @@ import pytest
 # #13702: create_connector derives the credential owner from the authenticated
 # caller; a direct call must supply one or it 401s, same as a real request.
 _TEST_USER = {"user_id": "admin-1"}
+# The records the secrets store holds for the two OAuth-attach tests: filed by the caller, as ``store()`` does.
+_HELD = {"sec-oauth-123": "admin-1", "sec-oauth-456": "admin-1"}
 from fastapi import BackgroundTasks, HTTPException
 
 import knowledge.connectors.gdrive  # noqa: F401 — register gdrive
@@ -25,6 +27,19 @@ import knowledge.connectors.onedrive  # noqa: F401 — register onedrive
 from api import knowledge_connectors as mod
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.schemas.connectors import CreateConnectorRequest
+
+
+def _secrets_service_holding(records: dict):
+    """A secrets service whose store holds *records* (secret_id -> created_by), as ``store()`` files them (#13710).
+
+    Create now verifies the attached secret exists and was filed by the caller, so a test must hold a real record.
+    """
+
+    def _get_secret(secret_id=None, **_):
+        owner = records.get(secret_id)
+        return None if owner is None else {"id": secret_id, "name": f"connector:{secret_id}:auth", "created_by": owner}
+
+    return MagicMock(get_secret=MagicMock(side_effect=_get_secret))
 
 
 def test_gdrive_registered_and_supported():
@@ -71,6 +86,7 @@ async def test_create_gdrive_with_oauth_secret_attaches_by_reference():
         saved["cfg"] = cfg
 
     with (
+        patch("services.secrets_service.get_secrets_service", return_value=_secrets_service_holding(_HELD)),
         patch.object(mod, "get_credential_store", return_value=store),
         patch.object(mod, "_load_or_create_instance", AsyncMock(return_value=healthy_instance)),
         patch.object(mod, "_save_connector", _fake_save),
@@ -116,6 +132,7 @@ async def test_create_onedrive_with_oauth_secret_attaches_by_reference():
         saved["cfg"] = cfg
 
     with (
+        patch("services.secrets_service.get_secrets_service", return_value=_secrets_service_holding(_HELD)),
         patch.object(mod, "get_credential_store", return_value=store),
         patch.object(mod, "_load_or_create_instance", AsyncMock(return_value=healthy_instance)),
         patch.object(mod, "_save_connector", _fake_save),
@@ -191,6 +208,7 @@ async def test_connector_owner_is_the_authenticated_caller(user_dict, expected_o
     "system", two distinct admins passed each other's ownership check — the
     guard worked exactly as designed and was handed the wrong identity.
     """
+    held = {"sec-oauth-123": expected_owner}
     store = MagicMock()
     store.store = AsyncMock()
     store.get_access_token = AsyncMock(return_value="live-access-token")
@@ -198,6 +216,7 @@ async def test_connector_owner_is_the_authenticated_caller(user_dict, expected_o
     healthy.test_connection = AsyncMock(return_value=True)
 
     with (
+        patch("services.secrets_service.get_secrets_service", return_value=_secrets_service_holding(held)),
         patch.object(mod, "get_credential_store", return_value=store),
         patch.object(mod, "_load_or_create_instance", AsyncMock(return_value=healthy)),
         patch.object(mod, "_save_connector", AsyncMock()),
@@ -282,3 +301,18 @@ async def test_a_failed_sync_leaves_a_history_entry(failing: str, stage: str):
     entry = patches["_append_history"].await_args.args[1]
     assert entry["status"] == "failed" and stage in entry["errors"][0]
     assert "secret detail" not in str(entry)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("held", [{}, {"sec-oauth-123": "someone-else"}, {"sec-oauth-123": ""}])
+async def test_create_refuses_a_secret_the_caller_does_not_own(held):
+    """#13710: a missing, foreign or ownerless secret is a fixed 400 and nothing is saved."""
+    save = AsyncMock()
+    with (
+        patch("services.secrets_service.get_secrets_service", return_value=_secrets_service_holding(held)),
+        patch.object(mod, "_save_connector", save),
+        pytest.raises(HTTPException) as exc,
+    ):
+        await mod.create_connector(_oauth_create_request(), BackgroundTasks(), user=_TEST_USER)
+    assert exc.value.status_code == 400 and exc.value.detail == "secret cannot be attached to this connector"
+    save.assert_not_awaited()

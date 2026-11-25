@@ -101,7 +101,8 @@ backend/
 **Environment Variables**:
 ```bash
 # Core Configuration
-BACKEND_HOST=0.0.0.0
+AUTOBOT_BACKEND_BIND_HOST=0.0.0.0   # listen address
+AUTOBOT_BACKEND_HOST=<backend-ip>   # address clients dial; never 0.0.0.0
 BACKEND_PORT=8001
 REDIS_HOST=<database-ip>
 OLLAMA_HOST=127.0.0.1

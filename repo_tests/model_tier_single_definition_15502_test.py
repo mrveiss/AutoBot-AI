@@ -294,7 +294,6 @@ FRONTEND_LITERAL_ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-frontend/src/components/admin/NpuWorkerPairConfirmDialog.stories.ts",
         "gemma-3-4b",
     ): "Storybook fixture data, not shipped",
-    ("autobot-frontend/src/components/chat/MessageItem.stories.ts", "llama3"): "Storybook fixture data, not shipped",
 }
 _TS_TOKEN = re.compile(r"""//[^\n]*|/\*.*?\*/|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`""", re.S)
 _VUE_TOKEN = re.compile(r"""/\*.*?\*/|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`""", re.S)

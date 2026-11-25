@@ -1,0 +1,100 @@
+<template>
+  <section class="flex flex-col gap-3" data-testid="audit-command-history">
+    <div class="flex items-end gap-3">
+      <BaseInput
+        v-model="user"
+        :label="$t('audit.commandHistory.userFilter')"
+        :placeholder="$t('audit.commandHistory.userPlaceholder')"
+        size="sm"
+        @keyup.enter="applyFilters"
+      />
+      <BaseButton size="sm" :disabled="loading" @click="applyFilters">
+        {{ $t('audit.commandHistory.refresh') }}
+      </BaseButton>
+    </div>
+
+    <BaseAlert v-if="failed" variant="error" :message="$t('audit.commandHistory.error')">
+      <template #actions>
+        <BaseButton size="sm" @click="load">{{ $t('audit.commandHistory.retry') }}</BaseButton>
+      </template>
+    </BaseAlert>
+
+    <BaseTable
+      v-else
+      :columns="columns"
+      :rows="rows"
+      row-key="key"
+      :caption="$t('audit.commandHistory.caption')"
+      :loading="loading"
+      :loading-label="$t('audit.commandHistory.loading')"
+      :empty-title="$t('audit.commandHistory.empty')"
+      :empty-description="$t('audit.commandHistory.emptyHint')"
+    />
+  </section>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, BaseButton, BaseInput, BaseTable } from '@autobot/ui'
+import { useAuditApi, type CommandHistoryEntry, type CommandHistoryQuery } from '@/composables/useAuditApi'
+import { useLatestRequest } from '@/composables/useLatestRequest'
+import { formatDateTime } from '@/utils/formatHelpers'
+import { createLogger } from '@/utils/debugUtils'
+
+const HISTORY_LIMIT = 50
+
+// The header Auto-refresh bumps this while the tab is open; the panel reloads (#22214).
+const props = defineProps<{ refreshTick?: number }>()
+
+const { t } = useI18n()
+const logger = createLogger('AuditCommandHistoryPanel')
+const { getCommandHistory } = useAuditApi()
+
+const user = ref('')
+// What the loaded rows were fetched with. Refresh, retry and Auto-refresh read this, never the editable box.
+const appliedUser = ref('')
+const latest = useLatestRequest()
+const loading = ref(false)
+const failed = ref(false)
+const entries = ref<CommandHistoryEntry[]>([])
+
+const columns = computed(() => [
+  { key: 'timestamp', label: t('audit.commandHistory.time') },
+  { key: 'user', label: t('audit.commandHistory.user') },
+  { key: 'action', label: t('audit.commandHistory.action') },
+  { key: 'outcome', label: t('audit.commandHistory.outcome') },
+])
+// The API sends ISO-8601 text; an unparseable value stays as received rather than reading "Invalid Date".
+function shown(timestamp: string): string {
+  const at = new Date(timestamp)
+  return Number.isNaN(at.getTime()) ? timestamp : formatDateTime(at)
+}
+const rows = computed(() =>
+  entries.value.map((e, i) => ({ ...e, key: `${e.timestamp}-${i}`, timestamp: shown(e.timestamp) })),
+)
+
+async function load() {
+  const token = latest.begin()
+  loading.value = true
+  failed.value = false
+  const query: CommandHistoryQuery = { user: appliedUser.value || undefined, limit: HISTORY_LIMIT }
+  const result = await getCommandHistory(query)
+  if (!latest.isCurrent(token)) return // a newer load owns the rows and the loading flag
+  loading.value = false
+  if (!result) {
+    failed.value = true
+    logger.warn('Command history unavailable')
+    return
+  }
+  entries.value = result
+}
+
+function applyFilters() {
+  appliedUser.value = user.value.trim()
+  load()
+}
+
+watch(() => props.refreshTick, load)
+onMounted(load)
+</script>

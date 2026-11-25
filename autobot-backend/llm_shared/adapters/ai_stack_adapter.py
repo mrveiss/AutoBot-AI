@@ -12,6 +12,7 @@ import time
 from typing import List
 
 from autobot_shared.logging_manager import get_logger
+from type_defs.ai_stack_agents import agent_names
 
 from ..models import LLMRequest, LLMResponse
 from .base import (
@@ -123,7 +124,7 @@ class AIStackAdapter(AdapterBase):
         try:
             client = await self._ensure_client()
             agents = await client.list_available_agents()
-            return agents.get("agents", ["ai_stack_chat"])
+            return agent_names(agents) or ["ai_stack_chat"]
         except Exception:
             return ["ai_stack_chat"]
 

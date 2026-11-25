@@ -16,6 +16,8 @@ from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from autobot_shared.audit_chain_writer import require_chain_key
+from autobot_shared.ssot_config import config as config_ssot
 from config import settings
 from models.auth_revocation import PasswordEpoch, RevokedToken
 from models.database import Base, Setting
@@ -26,7 +28,7 @@ from models.post_sync_action_run import PostSyncActionRun
 _EXTRA_MODELS = (PostSyncActionRun, RevokedToken, PasswordEpoch)  # auth revocation: #18663
 
 # SSOT-derived seed defaults — env vars match PortConfig/VMConfig aliases
-_BACKEND_HOST = os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.1")
+_BACKEND_HOST = config_ssot.vm.main
 _PROMETHEUS_PORT = os.getenv("AUTOBOT_PROMETHEUS_PORT", "9090")
 _GRAFANA_PORT = os.getenv("AUTOBOT_GRAFANA_PORT", "3000")
 _SSOT_PROMETHEUS_URL = f"http://{_BACKEND_HOST}:{_PROMETHEUS_PORT}"
@@ -54,6 +56,8 @@ class DatabaseService:
         if self._initialized:
             return
 
+        # Fail closed (#17219): without the audit-chain MAC key no audit_logs row can be written.
+        require_chain_key()
         database_url = settings.database_url
         logger.info("Connecting to PostgreSQL database")
 

@@ -628,6 +628,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/audit/integrity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Audit Integrity
+         * @description The last chain verification run by this process and the chain's current head (#17219).
+         */
+        get: operations["get_audit_integrity_api_audit_integrity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/audit/integrity/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Audit Integrity
+         * @description Verify the audit hash chain now. A failed verification is reported, never enforced (#17219).
+         */
+        post: operations["verify_audit_integrity_api_audit_integrity_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -24668,7 +24708,7 @@ export interface paths {
         put?: never;
         /**
          * Start Bug Analysis
-         * @description Enqueue bug prediction analysis as a Celery task (GH#6505).
+         * @description Enqueue bug prediction analysis of ONE source as a Celery task (GH#6505, #18030).
          */
         post: operations["start_bug_analysis_api_analytics_bug_prediction_analyze_post"];
         delete?: never;
@@ -24686,7 +24726,7 @@ export interface paths {
         };
         /**
          * Get Cached Bug Prediction
-         * @description Return the latest completed bug prediction result (#1540).
+         * @description Return the latest completed bug prediction result of ONE source (#1540, #18030).
          */
         get: operations["get_cached_bug_prediction_api_analytics_bug_prediction_cached_get"];
         put?: never;
@@ -31782,6 +31822,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/integrations/microsoft365/test-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Microsoft 365 connection
+         * @description Test the connection using the token held in the secrets store.
+         */
+        post: operations["test_connection_api_integrations_microsoft365_test_connection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/microsoft365/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Outlook messages
+         * @description List messages from the inbox or a specific folder.
+         */
+        get: operations["list_messages_api_integrations_microsoft365_messages_get"];
+        put?: never;
+        /**
+         * Send an Outlook message
+         * @description Send a message, after the egress governance gate (#14270).
+         */
+        post: operations["send_email_api_integrations_microsoft365_messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/microsoft365/messages/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Outlook messages
+         * @description Search messages with a Graph ``$search`` query.
+         */
+        get: operations["search_messages_api_integrations_microsoft365_messages_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/microsoft365/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Outlook top-level mail folders
+         * @description List the top-level mail folders (Graph returns root children only; nested folders are out of scope, #13710).
+         */
+        get: operations["list_folders_api_integrations_microsoft365_folders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/whatsapp/webhook": {
         parameters: {
             query?: never;
@@ -35426,7 +35550,7 @@ export interface paths {
          * Navigate To Url
          * @description Navigate to a URL using Playwright on Browser VM
          *
-         *     Forwards navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          */
         post: operations["navigate_to_url_api_playwright_navigate_post"];
         delete?: never;
@@ -35448,7 +35572,7 @@ export interface paths {
          * Reload Page
          * @description Reload the current page using Playwright on Browser VM
          *
-         *     Forwards reload request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards reload request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          */
         post: operations["reload_page_api_playwright_reload_post"];
         delete?: never;
@@ -35470,7 +35594,7 @@ export interface paths {
          * Go Back
          * @description Navigate back in browser history using Playwright on Browser VM
          *
-         *     Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards back navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
          *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
@@ -35494,7 +35618,7 @@ export interface paths {
          * Go Forward
          * @description Navigate forward in browser history using Playwright on Browser VM
          *
-         *     Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards forward navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
          *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
@@ -42971,7 +43095,7 @@ export interface paths {
         put?: never;
         /**
          * Trigger Manual
-         * @description Immediately queue a manual heartbeat run for an agent (#1407).
+         * @description Immediately queue a manual heartbeat run for an agent; refused with 409 unless it is ACTIVE (#1407, #21992).
          */
         post: operations["trigger_manual_api_heartbeat__agent_id__trigger_post"];
         delete?: never;
@@ -56326,6 +56450,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AIStackAgent
+         * @description One agent as listed by ``AIStackClient.list_available_agents``.
+         */
+        AIStackAgent: {
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Status */
+            status?: string | null;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
+             * Parameters
+             * @default
+             */
+            parameters: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AIStackAgentsData
          * @description Data payload for GET /ai-stack/agents.
          */
@@ -58535,7 +58683,7 @@ export interface components {
             /** Total Agents */
             total_agents: number;
             /** Available Agents */
-            available_agents: string[];
+            available_agents: components["schemas"]["AIStackAgent"][];
             /** Multi Agent Coordination */
             multi_agent_coordination: boolean;
             /** Npu Acceleration */
@@ -61373,6 +61521,74 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuditIntegrityFinding
+         * @description One finding of an audit-chain verification, positioned at the ``chain_seq`` where it was found (#17219).
+         */
+        AuditIntegrityFinding: {
+            /** Kind */
+            kind: string;
+            /** Seq */
+            seq: number;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuditIntegrityReport
+         * @description The result of one audit-chain verification (``services/audit/integrity.py``).
+         */
+        AuditIntegrityReport: {
+            /** Ok */
+            ok: boolean;
+            /** Checked At */
+            checked_at: string;
+            /** Rows Checked */
+            rows_checked: number;
+            /** Chain Started */
+            chain_started: boolean;
+            /** Head Seq */
+            head_seq: number;
+            /** Head Hash */
+            head_hash?: string | null;
+            /** Pre Chain Count */
+            pre_chain_count: number;
+            /** Unchained Count */
+            unchained_count: number;
+            /** From Seq */
+            from_seq: number;
+            /** Findings */
+            findings: components["schemas"]["AuditIntegrityFinding"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuditIntegrityRequest
+         * @description Body of the verify route: where to start (default: the genesis).
+         */
+        AuditIntegrityRequest: {
+            /** From Seq */
+            from_seq?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuditIntegrityStatus
+         * @description The last verification run in this process (None before the first) and the chain's current head.
+         */
+        AuditIntegrityStatus: {
+            last_result?: components["schemas"]["AuditIntegrityReport"] | null;
+            /** Head Seq */
+            head_seq: number;
+            /** Head Hash */
+            head_hash?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuditLogData
          * @description Response data for get_audit_log.
          */
@@ -62441,16 +62657,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** Body_pause_agent_api_api_agent_pause_post */
-        Body_pause_agent_api_api_agent_pause_post: {
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** Body_process_audio_api_multimodal_process_audio_post */
         Body_process_audio_api_multimodal_process_audio_post: {
             /** File */
@@ -62492,16 +62698,6 @@ export interface components {
             path: string;
             /** New Name */
             new_name: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** Body_resume_agent_api_api_agent_resume_post */
-        Body_resume_agent_api_api_agent_resume_post: {
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -62605,11 +62801,6 @@ export interface components {
             text: string;
             /** Reference Audio */
             reference_audio: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -62619,16 +62810,6 @@ export interface components {
             name: string;
             /** Audio */
             audio: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** Body_voice_listen_api_api_voice_listen_post */
-        Body_voice_listen_api_api_voice_listen_post: {
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -62646,11 +62827,6 @@ export interface components {
              * @default
              */
             language: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Stream
              * @default false
@@ -62678,11 +62854,6 @@ export interface components {
              * @default
              */
             language: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Stream
              * @default false
@@ -67129,11 +67300,6 @@ export interface components {
             task_id: string;
             /** Approved */
             approved: boolean;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -67175,16 +67341,11 @@ export interface components {
         };
         /**
          * CommandExecutePayload
-         * @description Body of POST /execute_command: the command to run and the caller's role.
+         * @description Body of POST /execute_command: the command to run.
          */
         CommandExecutePayload: {
             /** Command */
             command: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -79600,7 +79761,7 @@ export interface components {
          * GoalPayload
          * @description Goal payload — unified from bare and advanced variants (#10666 B1).
          *
-         *     The simple /goal endpoint reads only ``goal``/``use_phi2``/``user_role``.
+         *     The simple /goal endpoint reads only ``goal``/``use_phi2``; the role is the session's (#22143).
          *     The /goal/orchestrated endpoint also reads the remaining optional fields.
          *     All added fields carry defaults, so existing callers that only send
          *     ``goal`` remain fully backward-compatible.
@@ -79616,11 +79777,6 @@ export interface components {
              * @default false
              */
             use_phi2: boolean;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Agents
              * @description Specific agents to use
@@ -99378,6 +99534,40 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SendEmailRequest
+         * @description Request model for sending an Outlook message.
+         */
+        SendEmailRequest: {
+            /**
+             * To
+             * @description Recipient addresses
+             */
+            to: string[];
+            /**
+             * Subject
+             * @description Message subject
+             */
+            subject: string;
+            /**
+             * Body
+             * @description Message body
+             */
+            body: string;
+            /**
+             * Cc
+             * @description Carbon-copy addresses
+             */
+            cc?: string[] | null;
+            /**
+             * Body Type
+             * @description Body content type
+             * @default HTML
+             */
+            body_type: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SendMessageRequest
          * @description Request model for sending messages.
          */
@@ -110615,6 +110805,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditOperationsData"];
+                };
+            };
+        };
+    };
+    get_audit_integrity_api_audit_integrity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditIntegrityStatus"];
+                };
+            };
+        };
+    };
+    verify_audit_integrity_api_audit_integrity_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AuditIntegrityRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditIntegrityReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -124839,11 +125082,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_voice_listen_api_api_voice_listen_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -124852,15 +125091,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VoiceListenResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -131612,11 +131842,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_pause_agent_api_api_agent_pause_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -131625,15 +131851,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMessageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -131645,11 +131862,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_resume_agent_api_api_agent_resume_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -131658,15 +131871,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMessageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -142154,9 +142358,9 @@ export interface operations {
     };
     predict_bug_risk_for_codebase_api_analytics_bug_prediction_analyze_get: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description File pattern to include */
                 include_pattern?: string;
                 /** @description Maximum files to analyze */
@@ -142192,9 +142396,9 @@ export interface operations {
     };
     start_bug_analysis_api_analytics_bug_prediction_analyze_post: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description File pattern to include */
                 include_pattern?: string;
                 /** @description Maximum files to analyze */
@@ -142228,7 +142432,12 @@ export interface operations {
     };
     get_cached_bug_prediction_api_analytics_bug_prediction_cached_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -142244,11 +142453,23 @@ export interface operations {
                     "application/json": components["schemas"]["BugPredictionCachedResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_bug_prediction_status_api_analytics_bug_prediction_status__task_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description File pattern to include */
+                include_pattern?: string;
+            };
             header?: never;
             path: {
                 task_id: string;
@@ -142282,6 +142503,8 @@ export interface operations {
             query?: {
                 /** @description Force clear ALL running tasks */
                 force?: boolean;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path?: never;
@@ -142311,11 +142534,11 @@ export interface operations {
     };
     get_high_risk_files_api_analytics_bug_prediction_high_risk_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 threshold?: number;
                 limit?: number;
-                /** @description Path to analyze */
-                path?: string;
                 /** @description File pattern to include */
                 include_pattern?: string;
             };
@@ -142347,7 +142570,12 @@ export interface operations {
     };
     get_file_risk_api_analytics_bug_prediction_file__file_path__get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
+            };
             header?: never;
             path: {
                 file_path: string;
@@ -142378,10 +142606,10 @@ export interface operations {
     };
     get_risk_heatmap_api_analytics_bug_prediction_heatmap_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 grouping?: string;
-                /** @description Path to analyze */
-                path?: string;
                 /** @description File pattern to include */
                 include_pattern?: string;
                 limit?: number;
@@ -142414,8 +142642,12 @@ export interface operations {
     };
     get_prediction_trends_api_analytics_bug_prediction_trends_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 period?: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path?: never;
@@ -142445,9 +142677,9 @@ export interface operations {
     };
     get_prediction_summary_api_analytics_bug_prediction_summary_get: {
         parameters: {
-            query?: {
-                /** @description Path to analyze */
-                path?: string;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description File pattern to include */
                 include_pattern?: string;
                 /** @description Maximum files to analyze */
@@ -142481,7 +142713,10 @@ export interface operations {
     };
     get_risk_factors_api_analytics_bug_prediction_factors_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description File pattern to include */
+                include_pattern?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -142497,14 +142732,27 @@ export interface operations {
                     "application/json": components["schemas"]["BugPredictionRiskFactorsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     record_bug_api_analytics_bug_prediction_record_bug_post: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 file_path?: string;
                 description?: string;
                 severity?: string;
+                /** @description File pattern to include */
+                include_pattern?: string;
             };
             header?: never;
             path?: never;
@@ -151332,6 +151580,151 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VCSProviderInfo"][];
+                };
+            };
+        };
+    };
+    test_connection_api_integrations_microsoft365_test_connection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationHealth"];
+                };
+            };
+        };
+    };
+    list_messages_api_integrations_microsoft365_messages_get: {
+        parameters: {
+            query?: {
+                folder_id?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_email_api_integrations_microsoft365_messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_messages_api_integrations_microsoft365_messages_search_get: {
+        parameters: {
+            query: {
+                query: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_folders_api_integrations_microsoft365_folders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

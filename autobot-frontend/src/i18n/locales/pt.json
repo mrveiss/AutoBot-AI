@@ -10031,5 +10031,27 @@
     "requestFailed": "Falha na solicitação de limpeza de divergências",
     "result": "{removed} arquivo(s) removido(s); {left} mantido(s) no lugar",
     "title": "{count} arquivo(s) seriam removidos de {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Estes controles pausam ou retomam todos os agentes, não apenas um",
+    "loadFailed": "Falha ao carregar os agentes",
+    "noLastActivity": "Nenhuma atividade informada",
+    "notReported": "Não informado",
+    "pauseAll": "Pausar todos os agentes",
+    "pauseFailed": "Falha ao pausar os agentes",
+    "resumeAll": "Retomar todos os agentes",
+    "resumeFailed": "Falha ao retomar os agentes",
+    "successRate": "Taxa de sucesso",
+    "tasksCompleted": "Tarefas concluídas"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Introduza um endereço web completo que comece por http:// ou https://",
+    "recognitionUnsupported": "O reconhecimento de voz não é suportado neste navegador",
+    "recognitionError": "Erro de reconhecimento de voz: {error}",
+    "speakFailed": "Não foi possível falar o texto",
+    "playbackFailed": "Falha na reprodução de áudio",
+    "spoken": "Falado:",
+    "speakToInteractWith": "Fale e ouça a leitura em voz alta",
+    "voiceId": "ID da voz"
   }
 }

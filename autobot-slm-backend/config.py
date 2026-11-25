@@ -26,6 +26,7 @@ from autobot_shared import postgres_identity as pg
 from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.service_registry_core import DeploymentMode, resolve_deployment_mode
+from autobot_shared.ssot_config import config as _ssot_config
 from user_management.config import get_autobot_db_config, get_slm_db_config
 
 logger = logging.getLogger(__name__)
@@ -451,11 +452,11 @@ class Settings(RedactedReprMixin, BaseSettings):
     monitoring_host: str | None = None
     grafana_url: str = os.getenv(
         "SLM_GRAFANA_URL",
-        f"http://{os.getenv('AUTOBOT_BACKEND_HOST', '127.0.0.1')}:{os.getenv('AUTOBOT_GRAFANA_PORT', '3000')}",
+        f"http://{_ssot_config.vm.main}:{os.getenv('AUTOBOT_GRAFANA_PORT', '3000')}",
     )
     prometheus_url: str = os.getenv(
         "SLM_PROMETHEUS_URL",
-        f"http://{os.getenv('AUTOBOT_BACKEND_HOST', '127.0.0.1')}:{os.getenv('AUTOBOT_PROMETHEUS_PORT', '9090')}",
+        f"http://{_ssot_config.vm.main}:{os.getenv('AUTOBOT_PROMETHEUS_PORT', '9090')}",
     )
 
     # Health checks
