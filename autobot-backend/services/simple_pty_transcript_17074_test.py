@@ -46,3 +46,22 @@ def test_the_read_loop_feeds_the_transcript_and_still_feeds_the_queue(monkeypatc
     assert pty.get_output() == ("output", "hello"), "the WebSocket's queue still gets every output event"
     pty.read_transcript(0)
     assert pty.get_output() == ("eof", "")
+
+
+def test_the_shell_gets_the_sbin_dirs_and_pipefail_22251_22252(monkeypatch):
+    """The env handed to the spawned shell carries /usr/sbin and /sbin; the shell runs with pipefail."""
+    from unittest.mock import MagicMock
+
+    monkeypatch.setenv("PATH", "/opt/venv/bin:/usr/local/bin:/usr/bin:/bin")
+    popen = MagicMock()
+    monkeypatch.setattr(simple_pty_module.subprocess, "Popen", popen)
+    monkeypatch.setattr(simple_pty_module.os, "close", lambda fd: None)
+    monkeypatch.setattr(simple_pty_module.os, "set_blocking", lambda fd, flag: None)
+    pty = SimplePTY("t-1")
+    pty.master_fd = 0
+    pty._spawn_bash_process(5, simple_pty_module.with_sbin_on_path(dict(simple_pty_module.os.environ)), "/")
+
+    env_dirs = popen.call_args.kwargs["env"]["PATH"].split(":")
+    assert {"/usr/local/sbin", "/usr/sbin", "/sbin"} <= set(env_dirs)
+    assert env_dirs[:4] == ["/opt/venv/bin", "/usr/local/bin", "/usr/bin", "/bin"]  # existing order kept
+    assert popen.call_args.args[0][-2:] == ["-o", "pipefail"]

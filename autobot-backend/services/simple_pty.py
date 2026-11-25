@@ -22,6 +22,18 @@ from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)
 
+#: Standard FHS system-binary directories the shell must always search (#22251): a service unit's PATH often
+#: omits them, and ``arp``/``ip``/``ss`` then read as "not installed" to the agent.
+_SBIN_DIRS = ("/usr/local/sbin", "/usr/sbin", "/sbin")
+
+
+def with_sbin_on_path(env: dict) -> dict:
+    """*env* with the standard sbin directories appended to ``PATH`` when missing (#22251)."""
+    parts = [p for p in env.get("PATH", "").split(os.pathsep) if p]
+    env["PATH"] = os.pathsep.join(parts + [d for d in _SBIN_DIRS if d not in parts])
+    return env
+
+
 # Issue #380: Module-level frozenset for PTY event types
 _PTY_OUTPUT_EVENTS = frozenset({"output", "eof"})
 
@@ -173,6 +185,7 @@ class SimplePTY:
         if self.use_login_shell:
             bash_cmd.append("--login")
             logger.info(f"Starting login shell for session {self.session_id} (loads profile files)")
+        bash_cmd += ["-o", "pipefail"]  # #22252: a failing stage of a pipeline is not masked by the last one's 0
         self.process = (
             subprocess.Popen(  # nosec B603  # bash_cmd is ["/bin/bash"] with optional --login; fixed absolute path
                 bash_cmd,
@@ -201,7 +214,7 @@ class SimplePTY:
                     f"Terminal echo configuration failed for PTY session {self.session_id} (continuing anyway)"
                 )
 
-            env = os.environ.copy()
+            env = with_sbin_on_path(os.environ.copy())
             env["TERM"] = "xterm-256color"
             if self.custom_ps1:
                 env["PS1"] = self.custom_ps1
