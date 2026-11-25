@@ -4,7 +4,7 @@
 # Author: mrveiss
 """AnalyticsMiddleware tracking and the telemetry opt-out (#9035, #21684)."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -221,7 +221,10 @@ async def test_the_persisted_call_history_is_trimmed_to_the_same_bound(monkeypat
     from api import analytics_controller as module
 
     monkeypatch.setattr(module, "MAX_API_CALL_PATTERNS", 7)
-    redis = AsyncMock()
+    redis = MagicMock()
+    pipe = MagicMock()
+    pipe.execute = AsyncMock()
+    redis.pipeline.return_value = pipe
     controller = module.AnalyticsController.__new__(module.AnalyticsController)
     controller.api_frequencies = module.defaultdict(int)
     controller.response_times = module.defaultdict(list)
@@ -230,4 +233,38 @@ async def test_the_persisted_call_history_is_trimmed_to_the_same_bound(monkeypat
 
     await controller.track_api_call("GET /api/item/1", 0.01, 200)
 
-    redis.ltrim.assert_awaited_once_with("analytics:api_calls", 0, 6)
+    # one pipeline, LPUSH queued before LTRIM, so the bound holds even at the limit
+    assert [c[0] for c in pipe.method_calls] == ["lpush", "ltrim", "execute"]
+    pipe.ltrim.assert_called_once_with("analytics:api_calls", 0, 6)
+    pipe.execute.assert_awaited_once()
+
+
+async def test_an_unmatched_path_is_stored_as_unresolved_never_raw(controller, monkeypatch):
+    """A raw path can carry ids, names or tokens; only a matched route template is stored (#21684)."""
+    monkeypatch.setattr(config.telemetry, "enabled", True)
+    app = FastAPI()
+    app.add_middleware(AnalyticsMiddleware, analytics_controller=controller)
+    await _get(app, "/api/customers/jane.doe/token/abc123")
+    await eventually(lambda: controller.track_api_call.await_count == 1)
+    assert controller.track_api_call.await_args.args[0] == "GET unresolved"
+
+
+def test_the_opt_out_is_rechecked_when_the_request_completes(monkeypatch):
+    """A request that entered opted-in but finishes after the opt-out schedules no record."""
+    controller = AsyncMock()
+    middleware = AnalyticsMiddleware(FastAPI(), analytics_controller=controller)
+    monkeypatch.setattr("middleware.analytics_middleware.get_telemetry_settings", lambda: {"enabled": False})
+    request = MagicMock()
+    middleware._track(request, "/api/ping", 0.01, 200)
+    assert not middleware._background_tasks
+
+
+@pytest.mark.parametrize("raw,expected", [("100000000000000000000", 1_000_000), ("5", 100), ("2500", 2500)])
+def test_the_ring_size_setting_is_clamped(monkeypatch, raw, expected):
+    from api import analytics_controller as module
+    from autobot_shared.env_utils import env_int_clamped
+
+    monkeypatch.setenv("AUTOBOT_API_CALL_PATTERNS_MAX", raw)
+    value = env_int_clamped("AUTOBOT_API_CALL_PATTERNS_MAX", 10000, *module.API_CALL_PATTERNS_BOUNDS)
+    assert value == expected
+    assert module.deque(maxlen=value).maxlen == expected  # no OverflowError

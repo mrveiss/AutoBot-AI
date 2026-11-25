@@ -22,6 +22,10 @@ from services.telemetry_settings import get_telemetry_settings
 logger = get_logger(__name__)
 
 
+#: Stored in place of a path no route matched: a raw path can carry ids, names or tokens (#21684).
+UNRESOLVED_ROUTE = "unresolved"
+
+
 class AnalyticsMiddleware(BaseHTTPMiddleware):
     """Middleware to automatically track API calls for analytics"""
 
@@ -60,8 +64,10 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         """Record one call in the background, keyed by the route template when routing resolved one."""
         if not (self.analytics_controller and hasattr(self.analytics_controller, "track_api_call")):
             return
+        if not get_telemetry_settings()["enabled"]:  # re-checked: the opt-out may have landed mid-request
+            return
         route = request.scope.get("route")
-        template = getattr(route, "path", None) or endpoint
+        template = getattr(route, "path", None) or UNRESOLVED_ROUTE
         task = asyncio.create_task(self._track_call_async(template, response_time, status_code, request.method))
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
