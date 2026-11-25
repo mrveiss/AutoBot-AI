@@ -11,12 +11,11 @@ and the one that must be kept.
 from __future__ import annotations
 
 import hashlib
-import subprocess
 from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared import isolated_git
 from services import stale_sync_targets as t
 
 _BLOB_A = "a" * 40
@@ -100,11 +99,6 @@ async def test_a_shallow_or_unknown_clone_is_an_error_never_an_empty_history(mon
     assert await t.historical_blobs("/repo", "autobot-backend") == {"a.py": {_BLOB_A}}
 
 
-def _git(repo: Path, *args: str) -> None:
-    ident = ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"]
-    subprocess.run(["git", *ident, "-C", str(repo), *args], check=True, capture_output=True, env=scrubbed_git_env())
-
-
 def _blob(content: bytes) -> str:
     return hashlib.sha1(b"blob %d\0" % len(content) + content, usedforsecurity=False).hexdigest()
 
@@ -112,31 +106,31 @@ def _blob(content: bytes) -> str:
 def _commit_all(repo: Path, files: dict[str, bytes], message: str) -> None:
     for rel, content in files.items():
         (repo / rel).write_bytes(content)
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-qm", message)
+    isolated_git.git(repo, "add", "-A")
+    isolated_git.git(repo, "commit", "-qm", message)
 
 
 def _repo_with_a_merge_only_version(repo: Path) -> None:
     """a.py is ``base`` on both parents; only the merge commit's resolution makes it ``resolved``."""
     (repo / "autobot-backend").mkdir()
-    _git(repo, "init", "-q")
+    isolated_git.make_repo(repo)
     _commit_all(repo, {"autobot-backend/a.py": b"base\n"}, "base")
-    _git(repo, "checkout", "-qb", "side")
+    isolated_git.git(repo, "checkout", "-qb", "side")
     _commit_all(repo, {"autobot-backend/b.py": b"side\n"}, "side")
-    _git(repo, "checkout", "-q", "-")
-    _git(repo, "merge", "-q", "--no-ff", "--no-commit", "side")
+    isolated_git.git(repo, "checkout", "-q", "-")
+    isolated_git.git(repo, "merge", "-q", "--no-ff", "--no-commit", "side")
     _commit_all(repo, {"autobot-backend/a.py": b"resolved\n"}, "merge")
 
 
 def _repo_whose_merge_discarded_a_side_version(repo: Path) -> None:
     """The side branch changes a.py to ``side``; the merge keeps ``base``, so path simplification would prune it."""
     (repo / "autobot-backend").mkdir()
-    _git(repo, "init", "-q")
+    isolated_git.make_repo(repo)
     _commit_all(repo, {"autobot-backend/a.py": b"base\n"}, "base")
-    _git(repo, "checkout", "-qb", "side")
+    isolated_git.git(repo, "checkout", "-qb", "side")
     _commit_all(repo, {"autobot-backend/a.py": b"side\n"}, "side")
-    _git(repo, "checkout", "-q", "-")
-    _git(repo, "merge", "-q", "--no-ff", "--no-commit", "side")
+    isolated_git.git(repo, "checkout", "-q", "-")
+    isolated_git.git(repo, "merge", "-q", "--no-ff", "--no-commit", "side")
     _commit_all(repo, {"autobot-backend/a.py": b"base\n"}, "merge keeps base")
 
 

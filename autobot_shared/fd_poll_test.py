@@ -22,7 +22,7 @@ import time
 import pytest
 
 from autobot_shared.fd_poll import poll_readable, seconds_to_poll_timeout_ms
-from autobot_shared.fd_testing import FD_SETSIZE, pty_above_fd_setsize
+from autobot_shared.tests._fd_testing import FD_SETSIZE, pty_above_fd_setsize
 
 # First descriptor number we try to relocate a PTY to; comfortably past the ceiling.
 _HIGH_FD_BASE = FD_SETSIZE + 76

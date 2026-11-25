@@ -4,7 +4,9 @@
  * The duplicates markdown export counts clusters and lists every location (#22157),
  * not the first two files of a pair.
  */
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeAll } from 'vitest'
+import i18n from '@/i18n'
+import en from '@/i18n/locales/en.json'
 import { duplicateSummary, readDuplicatePayload } from '../duplicatePayload'
 import { generateSectionMarkdown } from '../sectionMarkdown'
 
@@ -16,6 +18,13 @@ const cluster = {
   file2: 'b.py',
   locations: ['a.py', 'b.py', 'c.py'].map((file, i) => ({ file, start_line: i + 1, end_line: i + 30 })),
 }
+
+// The app's i18n starts with no messages (#12342) and initI18n() loads them before mount; a unit
+// test has no bootstrap, so load the real English bundle into the same global instance.
+beforeAll(() => {
+  i18n.global.setLocaleMessage('en', en as never)
+  i18n.global.locale.value = 'en'
+})
 
 describe('duplicates markdown export (#22157)', () => {
   afterEach(() => { duplicateSummary.value = null })

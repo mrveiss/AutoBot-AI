@@ -7,8 +7,8 @@
 ``select.select()`` cannot address such a descriptor, which is the failure the
 ``fd_poll`` and PTY read-loop tests reproduce. Moved unchanged from the two test
 files that each carried a copy; they differed only in the first descriptor number
-tried, which each caller still passes. Importable from every tree, like
-``env_registry_testing``.
+tried, which each caller still passes. It lives in the ``autobot_shared.tests``
+test-support package: only tests use it, so it ships with no production caller (#20512).
 """
 
 import fcntl

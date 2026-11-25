@@ -147,17 +147,23 @@ function _generateStatisticsMd(stats: SectionDataMap['statistics']): string {
 
 function _generateDuplicatesMd(dups: SectionDataMap['duplicates']): string {
   // #22157: rows are clusters; the totals are the scan's, not the number of rows returned.
-  const t = (key: string, params: Record<string, string | number> = {}) => i18n.global.t(`analytics.duplicates.${key}`, params)
+  const t = (key: string, params: Record<string, string | number> = {}) => i18n.global.t(key, params)
   const summary = duplicateSummary.value
   const total = summary?.totalCount ?? dups.length
   const locations = summary ? summary.totalLocations : new Set(dups.flatMap(rowPlaces)).size
-  const counted = locations === null ? '' : ` (${t('totalLocations', { count: locations })})`
-  let md = `## ${t('export.heading')}\n\n**${t('export.totalFound')}:** ${total}${counted}\n\n`
-  if (summary?.truncated) md += `${t('export.showing', { shown: dups.length, total })}\n\n`
+  const counted = locations === null ? '' : ` (${t('analytics.duplicates.totalLocations', { count: locations })})`
+  let md = `## ${t('analytics.duplicates.export.heading')}\n\n`
+  md += `**${t('analytics.duplicates.export.totalFound')}:** ${total}${counted}\n\n`
+  if (summary?.truncated) md += `${t('analytics.duplicates.export.showing', { shown: dups.length, total })}\n\n`
   if (dups.length > 0) {
-    const cols = ['locations', 'kind', 'similarity', 'lines'].map(c => t(`export.columns.${c}`))
+    const cols = [
+      t('analytics.duplicates.export.columns.locations'),
+      t('analytics.duplicates.export.columns.kind'),
+      t('analytics.duplicates.export.columns.similarity'),
+      t('analytics.duplicates.export.columns.lines'),
+    ]
     md += `| ${cols.join(' | ')} |\n|${cols.map(() => '---').join('|')}|\n`
-    const kind = (k?: string) => (k && i18n.global.te(`analytics.duplicates.kind.${k}`) ? t(`kind.${k}`) : (k ?? '-'))
+    const kind = (k?: string) => (k && i18n.global.te(`analytics.duplicates.kind.${k}`) ? t(`analytics.duplicates.kind.${k}`) : (k ?? '-'))
     dups.forEach(d => { md += `| ${rowPlaces(d).join('<br>')} | ${kind(d.kind)} | ${d.similarity.toFixed(1)}% | ${d.lines} |\n` })
   }
   return md

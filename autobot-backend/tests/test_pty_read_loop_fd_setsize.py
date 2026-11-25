@@ -32,7 +32,7 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.fd_testing import FD_SETSIZE, pty_above_fd_setsize
+from autobot_shared.tests._fd_testing import FD_SETSIZE, pty_above_fd_setsize
 from services.simple_pty import SimplePTY
 
 _HIGH_FD_BASE = FD_SETSIZE + 176
