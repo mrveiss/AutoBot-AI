@@ -106,6 +106,8 @@ class LineVerdict:
             return f"'{key}' ran on line 1 (autonomous) and was reported"
         if self.outcome is Outcome.REFUSE:
             return f"'{key}' is refused: AI never touches this action ({why})"
+        if key.split(":", 1)[0] == TERMINAL_TOOL:
+            return f"This command was not run: it needs your approval first ({why})"
         return f"Action '{key}' requires approval before proceeding: AI drafts, a person sends ({why})"
 
 
