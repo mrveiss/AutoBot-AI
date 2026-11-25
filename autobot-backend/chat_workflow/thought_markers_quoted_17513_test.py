@@ -27,6 +27,7 @@ from chat_workflow.thought_markers import (
     find_last_tag_positions,
     find_new_segment_start,
     mask_code_regions,
+    unwrap_invented_tags,
 )
 
 #: The exact line from the reported session.
@@ -159,3 +160,28 @@ class TestTheMaskItself:
         text = "no code here [THOUGHT] at all"
 
         assert mask_code_regions(text) == text
+
+
+class TestInventedWrapperTags:
+    """A model-invented ``[TAG]x[/TAG]`` is unwrapped, a handled family or a literal is not (#22249)."""
+
+    def test_an_invented_paired_tag_keeps_its_content(self) -> None:
+        assert unwrap_invented_tags("[TAG]Trying pings.[/TAG]") == "Trying pings."
+
+    def test_an_unpaired_literal_stays(self) -> None:
+        assert unwrap_invented_tags("see [1] and [x] and [Note]") == "see [1] and [x] and [Note]"
+
+    def test_handled_families_keep_their_own_handling(self) -> None:
+        text = "[THOUGHT]a[/THOUGHT] [PLANNING]b[/PLANNING] [TOOL_CALL]"
+        assert unwrap_invented_tags(text) == text
+
+    def test_a_quoted_tag_in_code_stays(self) -> None:
+        assert unwrap_invented_tags("write `[TAG]` first") == "write `[TAG]` first"
+
+    def test_the_streamed_message_and_the_stored_reply_agree(self) -> None:
+        from chat_workflow.models import StreamingMessage
+        from chat_workflow.tool_call_args import clean_reply_text
+
+        raw = "[TAG]Trying direct pings.[/TAG]"
+        streamed = StreamingMessage(type="response").stream(raw).to_workflow_message().content
+        assert streamed == clean_reply_text(raw) == "Trying direct pings."

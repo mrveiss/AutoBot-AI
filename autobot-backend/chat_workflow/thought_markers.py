@@ -212,3 +212,27 @@ def split_reasoning_blocks(text: str) -> tuple[list[tuple[str, str]], str]:
         pos = match.end()
     rest.append(text[pos:])
     return blocks, "".join(rest).strip()
+
+
+#: Wrapper tags the model invents (``[TAG]x[/TAG]``, #22249): an upper-case word, optionally closed.
+#: ``[1]``, ``[x]`` and ``[Note]`` are not wrappers.
+#: The families the system handles itself keep their own handling and are never unwrapped.
+_HANDLED_TAG_NAMES: FrozenSet[str] = frozenset(BRACKET_MARKER_FAMILIES | {"TOOL_CALL", "DEBUG", "SOURCES"})
+_INVENTED_TAG_RE = re.compile(r"\[/?([A-Z][A-Z0-9_]{1,31})\]")
+
+
+def unwrap_invented_tags(text: str) -> str:
+    """*text* without the ``[TAG]`` / ``[/TAG]`` markers the model invented; the content between them is kept (#22249).
+
+    The one cleaner for streamed and stored text. Markers in code regions are examples, and are kept (#17513).
+    """
+    if not text or "[" not in text:
+        return text
+    out, pos = [], 0
+    for match in _INVENTED_TAG_RE.finditer(mask_code_regions(text)):
+        if match.group(1) in _HANDLED_TAG_NAMES:
+            continue
+        out.append(text[pos : match.start()])
+        pos = match.end()
+    out.append(text[pos:])
+    return "".join(out)
