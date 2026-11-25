@@ -344,10 +344,15 @@ def test_no_vnc_role_file_spells_the_systemd_unit_dir_and_the_variable_has_one_d
     assert literal == []
     playbook_files = [  # git-tracked only: a nested worktree's copy of the tree is not this tree (#15955)
         ROOT / rel
-        for rel in tracked_paths(ROOT, "autobot-slm-backend/ansible/**/*.yml")
+        for rel in tracked_paths(
+            ROOT, "autobot-slm-backend/ansible/*.yml"
+        )  # plain pathspec: `*` crosses `/`, top level included
         if "tests" not in (ROOT / rel).relative_to(ANSIBLE).parts
     ]
-    assert len(playbook_files) >= 300  # floor: the whole ansible tree was scanned for a second definition
+    # floor: the whole ansible tree was scanned for a second definition. 362 tracked non-test files when
+    # measured; `**/` in a plain git pathspec needs a directory and had dropped the 38 top-level playbooks (324).
+    assert len(playbook_files) >= 350
+    assert ANSIBLE / "apply-secrets.yml" in playbook_files  # a top-level playbook is in the scan set
     texts = {f.relative_to(ANSIBLE).as_posix(): f.read_text(encoding="utf-8") for f in playbook_files}
     assert _defines_unit_dir(texts[ALL_VARS.relative_to(ANSIBLE).as_posix()])  # the canonical default
     assert _unit_dir_definitions_outside_inventory(texts) == []
