@@ -56,6 +56,7 @@ def env(name: str, default: Any = None) -> Any:
 
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
+from autobot_shared import env_registry_ai_stack  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_knowledge  # noqa: E402,F401
@@ -67,6 +68,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_ai,
     env_registry_analytics,
     env_registry_approvals,
+    env_registry_audit_chain,
     env_registry_batch,
     env_registry_chat_attachments,
     env_registry_chat_history,
@@ -140,7 +142,6 @@ register_env_var(
 )
 
 # --- backend: env_registry_backend.py (#22030: folded to make room for the slm_client import) --- chat ---
-
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_CHATS_DIRECTORY",
@@ -280,8 +281,6 @@ register_env_var(
         range=(1, 300),
     )
 )
-
-# --- logging: registered in env_registry_logging.py (#15774) -----------------
 
 # --- otel -------------------------------------------------------------------
 

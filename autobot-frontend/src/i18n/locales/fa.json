@@ -10029,5 +10029,27 @@
     "requestFailed": "درخواست پاکسازی ناهمخوانی ناموفق بود",
     "result": "{removed} فایل حذف شد؛ {left} در جای خود باقی ماند",
     "title": "{count} فایل از {component} حذف می‌شود"
+  },
+  "slmAgentsTool": {
+    "globalControls": "این کنترل‌ها همه عامل‌ها را متوقف یا از سر می‌گیرند، نه فقط یک عامل را",
+    "loadFailed": "بارگذاری عامل‌ها ناموفق بود",
+    "noLastActivity": "فعالیتی گزارش نشده است",
+    "notReported": "گزارش نشده",
+    "pauseAll": "توقف موقت همه عامل‌ها",
+    "pauseFailed": "توقف موقت عامل‌ها ناموفق بود",
+    "resumeAll": "از سرگیری همه عامل‌ها",
+    "resumeFailed": "از سرگیری عامل‌ها ناموفق بود",
+    "successRate": "نرخ موفقیت",
+    "tasksCompleted": "وظایف تکمیل‌شده"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "یک آدرس وب کامل وارد کنید که با http:// یا https:// شروع شود",
+    "recognitionUnsupported": "تشخیص گفتار در این مرورگر پشتیبانی نمی‌شود",
+    "recognitionError": "خطای تشخیص گفتار: {error}",
+    "speakFailed": "خواندن متن ممکن نشد",
+    "playbackFailed": "پخش صدا ناموفق بود",
+    "spoken": "خوانده‌شده:",
+    "speakToInteractWith": "صحبت کنید و خوانش آن را بشنوید",
+    "voiceId": "شناسه صدا"
   }
 }
