@@ -10039,5 +10039,15 @@
     "resumeFailed": "Nie udało się wznowić agentów",
     "successRate": "Wskaźnik powodzenia",
     "tasksCompleted": "Ukończone zadania"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Wpisz pełny adres internetowy zaczynający się od http:// lub https://",
+    "recognitionUnsupported": "Rozpoznawanie mowy nie jest obsługiwane w tej przeglądarce",
+    "recognitionError": "Błąd rozpoznawania mowy: {error}",
+    "speakFailed": "Nie udało się odczytać tekstu",
+    "playbackFailed": "Odtwarzanie dźwięku nie powiodło się",
+    "spoken": "Odczytano:",
+    "speakToInteractWith": "Mów i posłuchaj odczytu na głos",
+    "voiceId": "ID głosu"
   }
 }

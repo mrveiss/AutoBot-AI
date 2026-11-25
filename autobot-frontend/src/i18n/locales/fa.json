@@ -10039,5 +10039,15 @@
     "resumeFailed": "از سرگیری عامل‌ها ناموفق بود",
     "successRate": "نرخ موفقیت",
     "tasksCompleted": "وظایف تکمیل‌شده"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "یک آدرس وب کامل وارد کنید که با http:// یا https:// شروع شود",
+    "recognitionUnsupported": "تشخیص گفتار در این مرورگر پشتیبانی نمی‌شود",
+    "recognitionError": "خطای تشخیص گفتار: {error}",
+    "speakFailed": "خواندن متن ممکن نشد",
+    "playbackFailed": "پخش صدا ناموفق بود",
+    "spoken": "خوانده‌شده:",
+    "speakToInteractWith": "صحبت کنید و خوانش آن را بشنوید",
+    "voiceId": "شناسه صدا"
   }
 }

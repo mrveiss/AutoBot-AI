@@ -10039,5 +10039,15 @@
     "resumeFailed": "חידוש הסוכנים נכשל",
     "successRate": "שיעור הצלחה",
     "tasksCompleted": "משימות שהושלמו"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "הזן כתובת אינטרנט מלאה המתחילה ב-http:// או https://",
+    "recognitionUnsupported": "זיהוי דיבור אינו נתמך בדפדפן זה",
+    "recognitionError": "שגיאת זיהוי דיבור: {error}",
+    "speakFailed": "לא ניתן היה להקריא את הטקסט",
+    "playbackFailed": "ניגון השמע נכשל",
+    "spoken": "הוקרא:",
+    "speakToInteractWith": "דברו ושמעו את ההקראה",
+    "voiceId": "מזהה קול"
   }
 }

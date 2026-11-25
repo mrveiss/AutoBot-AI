@@ -25,7 +25,7 @@ from autobot_shared.status_enums import CommandRisk
 from command_run_policy import CommandRunPolicy
 from config import get_config_manager
 from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
-from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions
+from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions, grant_role
 from services.audit.audit import emit_security, query_filtered
 from services.audit.taxonomy import AuditCategory, AuditFilter
 from utils.command_utils import execute_shell_command
@@ -462,7 +462,7 @@ class SecurityLayer:
             # Unauthenticated requests must be rejected, not assigned permissions.
         }
 
-        return default_role_permissions.get(user_role, [])
+        return default_role_permissions.get(grant_role(user_role), [])
 
     # =========================================================================
     # Command Execution
