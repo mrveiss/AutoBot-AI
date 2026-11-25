@@ -4613,6 +4613,16 @@
       "loadingDocument": "Loading document…",
       "copy": "Copy",
       "copied": "Copied"
+    },
+    "abandonedUploads": {
+      "title": "Abandoned uploads",
+      "description": "Uploads that expired unfinished still take up disk space until an admin frees them.",
+      "none": "No abandoned uploads.",
+      "loadFailed": "The abandoned uploads could not be listed.",
+      "progress": "{received} of {total} received",
+      "free": "Free upload",
+      "freeFailed": "The upload could not be freed.",
+      "confirm": "Free this abandoned upload? Its staged data is removed and the decision is recorded."
     }
   },
   "workflow": {
@@ -10448,6 +10458,18 @@
       "noMessagesBody": "This conversation has no messages on this page.",
       "unknownSender": "Unknown sender",
       "transcriptPages": "Transcript pages"
+    },
+    "ownerless": {
+      "title": "Ownerless chat sessions",
+      "description": "These sessions record no owner. A proposal waits in the approvals inbox; nothing is assigned until a person approves it.",
+      "none": "Every chat session has an owner.",
+      "loadFailed": "The ownerless session report could not be loaded.",
+      "ownerLabel": "Proposed owner (username)",
+      "ownerPlaceholder": "Username of an active user",
+      "propose": "Propose owner",
+      "proposed": "Proposal pending approval",
+      "refusedConflict": "That session is no longer ownerless or already has a pending proposal.",
+      "refusedOwner": "That owner is not an active user."
     }
   },
   "components": {
