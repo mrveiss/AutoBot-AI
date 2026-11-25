@@ -34,20 +34,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseButton, BaseInput, BaseTable } from '@autobot/ui'
 import { useAuditApi, type CommandHistoryEntry, type CommandHistoryQuery } from '@/composables/useAuditApi'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 import { formatDateTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 
 const HISTORY_LIMIT = 50
+
+// The header Auto-refresh bumps this while the tab is open; the panel reloads (#22214).
+const props = defineProps<{ refreshTick?: number }>()
 
 const { t } = useI18n()
 const logger = createLogger('AuditCommandHistoryPanel')
 const { getCommandHistory } = useAuditApi()
 
 const user = ref('')
+const latest = useLatestRequest()
 const loading = ref(false)
 const failed = ref(false)
 const entries = ref<CommandHistoryEntry[]>([])
@@ -68,10 +73,12 @@ const rows = computed(() =>
 )
 
 async function load() {
+  const token = latest.begin()
   loading.value = true
   failed.value = false
   const query: CommandHistoryQuery = { user: user.value.trim() || undefined, limit: HISTORY_LIMIT }
   const result = await getCommandHistory(query)
+  if (!latest.isCurrent(token)) return // a newer load owns the rows and the loading flag
   loading.value = false
   if (!result) {
     failed.value = true
@@ -81,5 +88,6 @@ async function load() {
   entries.value = result
 }
 
+watch(() => props.refreshTick, load)
 onMounted(load)
 </script>

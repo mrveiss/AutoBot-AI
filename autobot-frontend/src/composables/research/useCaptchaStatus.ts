@@ -69,6 +69,11 @@ export function useCaptchaStatus() {
   const activeCaptcha = ref<CaptchaEvent | null>(null)
   const timeRemaining = ref(0)
   const isSubmitting = ref(false)
+  // True when the mount-time restore failed, so "could not check" never reads as "nothing pending" (#22215).
+  const pendingLoadFailed = ref(false)
+  // Ids whose terminal event arrived; a snapshot from `/captcha/pending` may predate it, so they are never
+  // restored. Lives and dies with the composable (one id per CAPTCHA, a handful per session).
+  const endedCaptchaIds = new Set<string>()
   let timerInterval: ReturnType<typeof setInterval> | null = null
 
   // --------------------------------------------------------------------------
@@ -107,6 +112,7 @@ export function useCaptchaStatus() {
 
   function handleCaptchaTimeout(data: { captcha_id: string } | { payload: { captcha_id: string } }) {
     const eventData = 'payload' in data ? data.payload : data
+    endedCaptchaIds.add(eventData.captcha_id)
     if (activeCaptcha.value?.captcha_id === eventData.captcha_id) {
       activeCaptcha.value = null
       stopTimer()
@@ -115,6 +121,7 @@ export function useCaptchaStatus() {
 
   function handleCaptchaResolved(data: { captcha_id: string } | { payload: { captcha_id: string } }) {
     const eventData = 'payload' in data ? data.payload : data
+    endedCaptchaIds.add(eventData.captcha_id)
     if (activeCaptcha.value?.captcha_id === eventData.captcha_id) {
       activeCaptcha.value = null
       stopTimer()
@@ -197,6 +204,7 @@ export function useCaptchaStatus() {
    * put one on screen. The route carries no URL or screenshot, so the card shows what it has.
    */
   async function loadPendingCaptchas() {
+    pendingLoadFailed.value = false
     try {
       // The route returns `CaptchaPendingData` flat (a JSONResponse), while its response_model wraps it in
       // `DataResponse`; read either so a later switch to the wrapped body does not blank the card.
@@ -205,7 +213,7 @@ export function useCaptchaStatus() {
         | { data?: CaptchaPendingData | null }
       const data = ('data' in reply && reply.data ? reply.data : reply) as CaptchaPendingData
       const pending = (data?.pending_captchas ?? {}) as Record<string, { status?: string }>
-      const id = Object.keys(pending).find((key) => pending[key]?.status === 'pending')
+      const id = Object.keys(pending).find((key) => pending[key]?.status === 'pending' && !endedCaptchaIds.has(key))
       if (!id || activeCaptcha.value) return
       handleCaptchaDetected({
         captcha_id: id,
@@ -216,6 +224,7 @@ export function useCaptchaStatus() {
         message: '',
       })
     } catch (error) {
+      pendingLoadFailed.value = true
       logger.error('Failed to load pending CAPTCHAs:', error)
     }
   }
@@ -276,6 +285,7 @@ export function useCaptchaStatus() {
     activeCaptcha,
     timeRemaining,
     isSubmitting,
+    pendingLoadFailed,
     captchaTypeLabelKey,
     truncatedUrl,
     progressPercentage,

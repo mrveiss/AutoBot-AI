@@ -25,9 +25,10 @@ import { resolve } from 'node:path'
 // `createLogger` at MODULE scope -- so the mock factory runs during import and a
 // plain const is still uninitialised ("Cannot access 'mockLoggerError' before
 // initialization"). Hoisting the spies with the mocks is the fix.
-const { mockGetServiceUrl, mockLoggerError } = vi.hoisted(() => ({
+const { mockGetServiceUrl, mockLoggerError, mockSubscribe } = vi.hoisted(() => ({
   mockGetServiceUrl: vi.fn(),
   mockLoggerError: vi.fn(),
+  mockSubscribe: vi.fn(() => vi.fn()),
 }))
 
 vi.mock('@/config/ssot-config', () => ({
@@ -43,7 +44,7 @@ vi.mock('@/composables/useEventBus', () => ({
   // `subscribe` is the whole API this composable uses (line 96); a mock shaped
   // like `on`/`off` destructures to undefined and fails with
   // "subscribe is not a function" before any assertion runs.
-  useEventBus: () => ({ subscribe: vi.fn(() => vi.fn()) }),
+  useEventBus: () => ({ subscribe: mockSubscribe }),
 }))
 
 vi.mock('@/utils/debugUtils', () => ({
@@ -182,8 +183,7 @@ describe('loadPendingCaptchas (#22215)', () => {
       return api.activeCaptcha.value
     })
 
-    expect(get).toHaveBeenCalledOnce()
-    expect(get).toHaveBeenCalledWith('get', '/api/captcha/pending')
+    expect(get).toHaveBeenCalledExactlyOnceWith('get', '/api/captcha/pending')
     expect(shown?.captcha_id).toBe('waiting')
     expect(shown?.timeout_seconds).toBeGreaterThan(0)
   })
@@ -220,5 +220,35 @@ describe('loadPendingCaptchas (#22215)', () => {
 
     expect(shown).toBeNull()
     expect(mockLoggerError).toHaveBeenCalledOnce()
+  })
+
+  it('flags a failed restore apart from an empty one, and clears the flag on retry', async () => {
+    get.mockRejectedValueOnce(new Error('500'))
+    get.mockResolvedValueOnce({ success: true, count: 0, timestamp: 't0', pending_captchas: {} })
+
+    const flags = await withCaptchaStatus(async (api) => {
+      await api.loadPendingCaptchas()
+      const afterFailure = api.pendingLoadFailed.value
+      await api.loadPendingCaptchas()
+      return { afterFailure, afterEmpty: api.pendingLoadFailed.value }
+    })
+
+    expect(flags).toEqual({ afterFailure: true, afterEmpty: false })
+  })
+
+  it('does not restore a CAPTCHA whose terminal event arrived first', async () => {
+    let reply!: (v: unknown) => void
+    get.mockImplementation(() => new Promise((r) => (reply = r)))
+
+    const shown = await withCaptchaStatus(async (api) => {
+      const loading = api.loadPendingCaptchas()
+      const handler = (mockSubscribe.mock.calls.at(-1) as unknown as [string, (e: unknown) => void])[1]
+      handler({ event_type: 'captcha_resolved', payload: { captcha_id: 'gone' } })
+      reply({ success: true, count: 1, timestamp: 't0', pending_captchas: { gone: { status: 'pending' } } })
+      await loading
+      return api.activeCaptcha.value
+    })
+
+    expect(shown).toBeNull()
   })
 })

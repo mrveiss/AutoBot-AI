@@ -1,7 +1,15 @@
 <template>
   <Teleport to="body">
     <Transition name="slide-up">
-      <div v-if="activeCaptcha" class="captcha-notification">
+      <div v-if="!activeCaptcha && pendingLoadFailed" class="captcha-notification" role="alert" data-testid="captcha-restore-failed">
+        <div class="captcha-card">
+          <p class="captcha-message">{{ $t('research.captcha.restoreFailed') }}</p>
+          <div class="captcha-actions">
+            <button class="btn-skip" @click="loadPendingCaptchas">{{ $t('research.captcha.retry') }}</button>
+          </div>
+        </div>
+      </div>
+      <div v-else-if="activeCaptcha" class="captcha-notification">
         <div class="captcha-card">
           <!-- Header -->
           <div class="captcha-header">
@@ -83,6 +91,7 @@ const {
   activeCaptcha,
   timeRemaining,
   isSubmitting,
+  pendingLoadFailed,
   captchaTypeLabelKey,
   truncatedUrl,
   progressPercentage,

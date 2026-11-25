@@ -145,11 +145,11 @@
       </div>
 
       <div v-if="userStore.isAdmin && activeTab === 'eventLogs'" class="tab-content">
-        <AuditEventLogsPanel />
+        <AuditEventLogsPanel :refresh-tick="refreshTick" />
       </div>
 
       <div v-if="userStore.isAdmin && activeTab === 'commandHistory'" class="tab-content">
-        <AuditCommandHistoryPanel />
+        <AuditCommandHistoryPanel :refresh-tick="refreshTick" />
       </div>
 
       <!-- Session/User Timeline Drawer -->
@@ -252,6 +252,7 @@ const {
   filter,
   currentPage,
   isPolling,
+  refreshTick,
   sessionTrail,
   userTrail,
   loadingTrail,

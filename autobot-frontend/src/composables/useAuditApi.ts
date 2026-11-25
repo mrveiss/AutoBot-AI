@@ -208,6 +208,8 @@ export function useAuditState() {
   const currentPage = ref(1)
   const pageSize = ref(100)
   const isPolling = ref(false)
+  // Bumped on every poll so panels that own their own rows (event logs, command history) reload too.
+  const refreshTick = ref(0)
   const pollingIntervalMs = ref(30000)
   const selectedEntry = ref<AuditEntry | null>(null)
   const selectedSessionId = ref<string | null>(null)
@@ -410,6 +412,7 @@ export function useAuditState() {
         logger.debug('Polling for audit log updates...')
         await loadLogs()
         await loadStatistics()
+        refreshTick.value++
       },
       { intervalMs }
     )
@@ -478,7 +481,7 @@ export function useAuditState() {
   return {
     entries, failureEntries, statistics, statisticsFailed, vmInfo, operationCategories, totalOperations,
     loading, loadingStats, error, hasMore, totalReturned,
-    filter, currentPage, pageSize, isPolling, pollingIntervalMs,
+    filter, currentPage, pageSize, isPolling, refreshTick, pollingIntervalMs,
     selectedEntry, selectedSessionId, selectedUserId, sessionTrail, userTrail, loadingTrail,
     successEntries, failedEntries, deniedEntries, successRate, resolvedStatistics, uniqueOperations, uniqueUsers,
     loadLogs, loadStatistics, loadOperationCategories, loadSessionTrail, loadUserTrail,

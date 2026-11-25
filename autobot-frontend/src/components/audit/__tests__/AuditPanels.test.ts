@@ -102,6 +102,45 @@ describe('AuditEventLogsPanel', () => {
     await flushPromises()
     expect(w.text()).toContain('alice')
   })
+
+  it('pages with the applied filters, not edits made since (#22214)', async () => {
+    queryEventLogs.mockResolvedValue({ ...EVENTS, events: eventsOf(51), count: 51 })
+    const w = render(AuditEventLogsPanel)
+    await flushPromises()
+    await w.find('input').setValue('alice')
+    await w.findAll('button').find((b) => b.text() === en.audit.eventLogs.refresh)!.trigger('click')
+    await flushPromises()
+
+    await w.find('input').setValue('bob') // edited, never applied
+    await nextButton(w).trigger('click')
+    await flushPromises()
+
+    expect(queryEventLogs).toHaveBeenLastCalledWith({ user_id: 'alice', event_type: undefined, limit: 51, offset: 50 })
+  })
+
+  it('keeps the newest load when an older one finishes last', async () => {
+    let releaseOld!: (v: unknown) => void
+    queryEventLogs.mockImplementationOnce(() => new Promise((r) => (releaseOld = r)))
+    const w = render(AuditEventLogsPanel) // mount load stays pending
+    queryEventLogs.mockResolvedValueOnce({ ...EVENTS, events: [{ ...EVENTS.events[0], actor_id: 'newer' }] })
+    await w.findAll('button').find((b) => b.text() === en.audit.eventLogs.refresh)!.trigger('click')
+    await flushPromises()
+    releaseOld({ ...EVENTS, events: [{ ...EVENTS.events[0], actor_id: 'older' }] })
+    await flushPromises()
+
+    expect(w.text()).toContain('newer')
+    expect(w.text()).not.toContain('older')
+  })
+
+  it('reloads the applied view when the Auto-refresh tick changes', async () => {
+    queryEventLogs.mockResolvedValue(EVENTS)
+    const w = mount(AuditEventLogsPanel, { props: { refreshTick: 0 }, global: { plugins: [i18n] } })
+    await flushPromises()
+    await w.setProps({ refreshTick: 1 })
+    await flushPromises()
+
+    expect(queryEventLogs).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('AuditCommandHistoryPanel', () => {
@@ -138,5 +177,29 @@ describe('AuditCommandHistoryPanel', () => {
     const failed = render(AuditCommandHistoryPanel)
     await flushPromises()
     expect(failed.text()).toContain(en.audit.commandHistory.error)
+  })
+
+  it('keeps the newest load when an older one finishes last', async () => {
+    let releaseOld!: (v: unknown) => void
+    getCommandHistory.mockImplementationOnce(() => new Promise((r) => (releaseOld = r)))
+    const w = render(AuditCommandHistoryPanel)
+    getCommandHistory.mockResolvedValueOnce([{ ...HISTORY[0], user: 'newer' }])
+    await w.findAll('button').find((b) => b.text() === en.audit.commandHistory.refresh)!.trigger('click')
+    await flushPromises()
+    releaseOld([{ ...HISTORY[0], user: 'older' }])
+    await flushPromises()
+
+    expect(w.text()).toContain('newer')
+    expect(w.text()).not.toContain('older')
+  })
+
+  it('reloads when the Auto-refresh tick changes', async () => {
+    getCommandHistory.mockResolvedValue(HISTORY)
+    const w = mount(AuditCommandHistoryPanel, { props: { refreshTick: 0 }, global: { plugins: [i18n] } })
+    await flushPromises()
+    await w.setProps({ refreshTick: 1 })
+    await flushPromises()
+
+    expect(getCommandHistory).toHaveBeenCalledTimes(2)
   })
 })

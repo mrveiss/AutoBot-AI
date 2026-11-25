@@ -7051,6 +7051,8 @@
       "openVnc": "Open VNC Desktop",
       "solved": "I've Solved It",
       "skipSource": "Skip Source",
+      "restoreFailed": "Pending CAPTCHAs could not be checked.",
+      "retry": "Try again",
       "types": {
         "recaptcha": "reCAPTCHA",
         "hcaptcha": "hCaptcha",

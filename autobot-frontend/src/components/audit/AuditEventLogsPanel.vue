@@ -53,14 +53,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseButton, BaseInput, BasePagination, BaseSelectMenu, BaseTable } from '@autobot/ui'
 import { useAuditApi, type ComplianceEvent, type EventLogQuery } from '@/composables/useAuditApi'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 import { formatDateTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 
 const PAGE_SIZE = 50
+
+// The header Auto-refresh bumps this while the tab is open; the panel reloads its applied view (#22214).
+const props = defineProps<{ refreshTick?: number }>()
 
 const { t } = useI18n()
 const logger = createLogger('AuditEventLogsPanel')
@@ -68,6 +72,10 @@ const { queryEventLogs } = useAuditApi()
 
 const userId = ref('')
 const eventType = ref('')
+// What the loaded rows were fetched with. Paging and retry read these, never the editable fields above.
+const appliedUserId = ref('')
+const appliedEventType = ref('')
+const latest = useLatestRequest()
 const page = ref(1)
 const loading = ref(false)
 const failed = ref(false)
@@ -90,15 +98,17 @@ const typeOptions = computed(() => [
 ])
 
 async function load() {
+  const token = latest.begin()
   loading.value = true
   failed.value = false
   const query: EventLogQuery = {
-    user_id: userId.value.trim() || undefined,
-    event_type: eventType.value || undefined,
+    user_id: appliedUserId.value || undefined,
+    event_type: appliedEventType.value || undefined,
     limit: PAGE_SIZE + 1, // one extra row says whether a next page exists (backend caps limit at 1000)
     offset: (page.value - 1) * PAGE_SIZE,
   }
   const result = await queryEventLogs(query)
+  if (!latest.isCurrent(token)) return // a newer load owns the rows and the loading flag
   loading.value = false
   if (!result) {
     failed.value = true
@@ -116,9 +126,12 @@ function goToPage(next: number) {
 }
 
 function applyFilters() {
+  appliedUserId.value = userId.value.trim()
+  appliedEventType.value = eventType.value
   page.value = 1
   load()
 }
 
+watch(() => props.refreshTick, load)
 onMounted(load)
 </script>
