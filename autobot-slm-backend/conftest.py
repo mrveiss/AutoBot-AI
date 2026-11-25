@@ -382,6 +382,9 @@ for _top in ("status_enums", "service_status"):
     _top_spec.loader.exec_module(sys.modules[_top])
 
 _REAL_SERVICE_MODULES = (
+    # #22211: code_sync's update paths run through it; a MagicMock here cannot be awaited.
+    "pending_role_resume",
+    "pending_role_provisioning",
     "ssh_utils",
     "deploy_artifacts",
     "ansible_extra_vars",  # #19005: inventory_builder imports it, so it loads first

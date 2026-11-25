@@ -271,7 +271,7 @@ def test_a_specific_or_loopback_host_is_never_taken_for_bind_all(specific) -> No
 def test_websockify_restart_handler_honours_the_no_restart_sync() -> None:
     handlers = yaml.safe_load((ANSIBLE / "roles" / "vnc" / "handlers" / "main.yml").read_text(encoding="utf-8"))
     handler = next(h for h in handlers if h["name"] == "restart websockify")
-    assert "autobot_restart_services" in handler["when"]
+    assert "autobot_restart_services" in str(handler["when"])  # a string or a list of conditions
 
 
 def test_distro_novnc_stays_until_websockify_can_restart() -> None:
