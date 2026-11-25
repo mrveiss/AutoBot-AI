@@ -75,6 +75,13 @@ INTEGRATION_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["integrations-github"],
         "integration_github",
     ),
+    # Microsoft 365 (Outlook mail) integrations (#13710)
+    (
+        "api.integration_microsoft365",
+        "/integrations/microsoft365",
+        ["integrations-microsoft365"],
+        "integration_microsoft365",
+    ),
     # Telegram bot integration is registered in core_routers (MVA-2074); do NOT
     # add it here too — duplicate include_router double-mounts /telegram/* routes
     # and OpenAPI operations (GH#9006).

@@ -440,7 +440,8 @@ AutoBot uses a hierarchical configuration system:
 **Key Environment Variables**:
 ```bash
 # Core services
-BACKEND_HOST=0.0.0.0
+AUTOBOT_BACKEND_BIND_HOST=0.0.0.0   # listen address
+AUTOBOT_BACKEND_HOST=<backend-ip>   # address clients dial; never 0.0.0.0
 BACKEND_PORT=8001
 REDIS_HOST=<database-ip>
 REDIS_PORT=6379

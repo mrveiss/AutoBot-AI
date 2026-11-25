@@ -1,0 +1,217 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+// AutoBot - AI-Powered Automation Platform
+// Author: mrveiss
+/**
+ * Behaviour parity for sending the composer's draft, moved out of ChatInput.vue (#18243): the send
+ * options, the Overseer route and its fall-back, the file-turn exception (#20195), and restoring the draft
+ * when a send throws.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { defineComponent, h, provide, ref, type Ref } from 'vue'
+import { mount } from '@vue/test-utils'
+
+const m = vi.hoisted(() => ({
+  addMessage: vi.fn(),
+  deleteMessage: vi.fn(),
+  sendMessage: vi.fn(),
+  unlockAudio: vi.fn(),
+  reasoning: { value: 'auto' } as { value: string },
+  store: { currentSessionId: 'sess-1' as string | null },
+}))
+
+vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => Object.assign(m.store, { addMessage: m.addMessage, deleteMessage: m.deleteMessage }) }))
+vi.mock('@/models/controllers', () => ({ useChatController: () => ({ sendMessage: m.sendMessage }) }))
+vi.mock('@/composables/usePreferences', () => ({ usePreferences: () => ({ reasoningEffort: m.reasoning }) }))
+vi.mock('@/composables/useVoiceOutput', () => ({ useVoiceOutput: () => ({ unlockAudio: m.unlockAudio }) }))
+vi.mock('@/utils/conversationFileUpload', () => ({
+  usesCanonicalRoute: (overseer: boolean, ids: readonly string[]) => !overseer || ids.length > 0,
+}))
+
+import { useComposerSend } from '../useComposerSend'
+import { resetChatKnowledgeState, useChatKnowledge } from '../useChatKnowledge'
+
+interface Harness {
+  text: Ref<string>
+  files: Ref<File[]>
+  byChat: Record<string, File[]>
+  recording: Ref<boolean>
+  thinkingEnabled: Ref<boolean>
+  pending: Ref<boolean>
+  api: ReturnType<typeof useComposerSend>
+  reset: ReturnType<typeof vi.fn>
+}
+
+function setup(overseer: boolean, submit: (q: string) => Promise<boolean> = async () => true): Harness {
+  const text = ref('hello ')
+  const byChat: Record<string, File[]> = {} // the open chat's list, as the uploads composable keeps it per chat
+  const key = (): string => m.store.currentSessionId ?? ''
+  const files = {
+    get value(): File[] { return (byChat[key()] ??= []) },
+    set value(v: File[]) { byChat[key()] = v },
+  } as Ref<File[]>
+  const recording = ref(false)
+  const thinkingEnabled = ref(false)
+  const pending = ref(false)
+  const reset = vi.fn()
+  let api!: ReturnType<typeof useComposerSend>
+  const Child = defineComponent({
+    setup() {
+      api = useComposerSend({
+        messageText: text, attachedFiles: files, serverFileIds: (fs) => fs.map((f) => `id-${f.name}`),
+        chatKey: key, restoreFiles: (chat, fs) => { byChat[chat] = [...fs, ...(byChat[chat] ?? [])] },
+        isVoiceRecording: recording, hasPendingUploads: pending, resetTextareaHeight: reset,
+        thinking: { enabled: thinkingEnabled, budgetTokens: ref(5000) },
+        overrideFields: { value: { model: 'm1' } },
+      })
+      return () => h('div')
+    },
+  })
+  mount(defineComponent({
+    setup() {
+      provide('overseerEnabled', ref(overseer))
+      provide('submitOverseerQuery', submit)
+      return () => h(Child)
+    },
+  }))
+  return { text, files, byChat, recording, thinkingEnabled, pending, api, reset }
+}
+
+beforeEach(() => {
+  Object.values(m).forEach((f) => typeof f === 'function' && 'mockReset' in f && f.mockReset())
+  m.sendMessage.mockResolvedValue('id')
+  m.reasoning.value = 'auto'
+  m.store.currentSessionId = 'sess-1'
+  resetChatKnowledgeState()
+})
+
+describe('canSend', () => {
+  it('needs text, and is false while sending or recording', () => {
+    const h1 = setup(false)
+    expect(h1.api.canSend.value).toBe(true)
+    h1.text.value = '   '
+    expect(h1.api.canSend.value).toBe(false)
+    h1.text.value = 'x'
+    h1.recording.value = true
+    expect(h1.api.canSend.value).toBe(false)
+  })
+})
+
+describe('canSend while files upload', () => {
+  it('is false until the uploads settle', () => {
+    const h1 = setup(false)
+    h1.pending.value = true
+    expect(h1.api.canSend.value).toBe(false)
+    h1.pending.value = false
+    expect(h1.api.canSend.value).toBe(true)
+  })
+})
+
+describe('sendMessage, normal route', () => {
+  it('clears the draft at once and sends the trimmed text with the options', async () => {
+    const h1 = setup(false)
+    await h1.api.sendMessage()
+    expect(m.unlockAudio).toHaveBeenCalled()
+    expect(h1.text.value).toBe('')
+    expect(h1.reset).toHaveBeenCalled()
+    expect(m.sendMessage).toHaveBeenCalledWith('hello', { attachments: [], use_knowledge: true, model: 'm1' })
+    expect(h1.api.isSending.value).toBe(false)
+  })
+
+  it('carries the knowledge switch, extended thinking and a non-auto reasoning effort', async () => {
+    const h1 = setup(false)
+    useChatKnowledge().enabled.value = false
+    h1.thinkingEnabled.value = true
+    m.reasoning.value = 'high'
+    await h1.api.sendMessage()
+    expect(m.sendMessage).toHaveBeenCalledWith('hello', {
+      attachments: [], use_knowledge: false, thinking_enabled: true, thinking_budget_tokens: 5000, reasoning_effort: 'high', model: 'm1',
+    })
+  })
+
+  it('sends the server ids of the attached files, never the File objects', async () => {
+    const h1 = setup(true) // even with Overseer on, a turn with files takes the canonical route (#20195)
+    h1.files.value = [new File(['a'], 'a.txt')]
+    await h1.api.sendMessage()
+    expect(m.sendMessage).toHaveBeenCalledWith('hello', expect.objectContaining({ attachments: ['id-a.txt'] }))
+    expect(m.addMessage).not.toHaveBeenCalled()
+    expect(h1.files.value).toEqual([])
+  })
+
+  it('does nothing when it cannot send', async () => {
+    const h1 = setup(false)
+    h1.text.value = ''
+    await h1.api.sendMessage()
+    expect(m.sendMessage).not.toHaveBeenCalled()
+    expect(m.unlockAudio).not.toHaveBeenCalled()
+  })
+
+  it('keeps a file that finished uploading during a failed send', async () => {
+    let fail!: (e: Error) => void
+    m.sendMessage.mockReturnValue(new Promise((_, reject) => { fail = reject }))
+    const h1 = setup(false)
+    const early = new File(['a'], 'a.txt')
+    const late = new File(['b'], 'b.txt')
+    h1.files.value = [early]
+    const sending = h1.api.sendMessage()
+    h1.files.value.push(late) // an upload that completed while the send was pending
+    fail(new Error('offline'))
+    await sending
+    expect(h1.files.value).toEqual([early, late])
+  })
+
+  it('a failed send returns its files to the chat it was sent from, not the one open by then', async () => {
+    let fail!: (e: Error) => void
+    m.sendMessage.mockReturnValue(new Promise((_, reject) => { fail = reject }))
+    const h1 = setup(false)
+    const file = new File(['a'], 'a.txt')
+    h1.files.value = [file]
+    const sending = h1.api.sendMessage()
+    m.store.currentSessionId = 'sess-2' // the person opens another chat while the send is pending
+    fail(new Error('offline'))
+    await sending
+    expect(h1.byChat['sess-1']).toEqual([file])
+    expect(h1.byChat['sess-2'] ?? []).toEqual([])
+  })
+
+  it('restores the draft and files when the send throws', async () => {
+    m.sendMessage.mockRejectedValue(new Error('offline'))
+    const h1 = setup(false)
+    const file = new File(['a'], 'a.txt')
+    h1.files.value = [file]
+    await h1.api.sendMessage()
+    expect(h1.text.value).toBe('hello')
+    expect(h1.files.value).toEqual([file])
+    expect(h1.api.isSending.value).toBe(false)
+  })
+})
+
+describe('sendMessage, Overseer route (#690)', () => {
+  it('shows the user message at once and submits to the overseer instead of sending', async () => {
+    const submit = vi.fn().mockResolvedValue(true)
+    const h1 = setup(true, submit)
+    await h1.api.sendMessage()
+    expect(m.addMessage).toHaveBeenCalledWith({ content: 'hello', sender: 'user', status: 'sent', type: 'message' }, 'sess-1')
+    expect(submit).toHaveBeenCalledWith('hello')
+    expect(m.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the normal flow when the overseer refuses, with exactly one user turn', async () => {
+    m.addMessage.mockReturnValue('shown-1')
+    const h1 = setup(true, async () => false)
+    await h1.api.sendMessage()
+    expect(m.deleteMessage).toHaveBeenCalledWith('shown-1', 'sess-1') // the controller adds its own user message
+    expect(m.sendMessage).toHaveBeenCalledWith('hello', expect.objectContaining({ use_knowledge: true }))
+  })
+
+  it('removes the duplicate from the chat it was added to when the user switched chats meanwhile', async () => {
+    m.addMessage.mockReturnValue('shown-1')
+    const h1 = setup(true, async () => {
+      m.store.currentSessionId = 'sess-2' // the user opens another chat during the overseer call
+      return false
+    })
+    await h1.api.sendMessage()
+    expect(m.addMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'hello' }), 'sess-1')
+    expect(m.deleteMessage).toHaveBeenCalledWith('shown-1', 'sess-1')
+  })
+})
