@@ -135,6 +135,8 @@ class OllamaRequestExecutor:
         }
         if "num_gpu" in request.metadata:  # the chat model's layer count, same as every chat caller (#22257)
             data["options"]["num_gpu"] = request.metadata["num_gpu"]
+        if "think" in request.metadata:  # Ollama's top-level thinking switch, not an option (#22258)
+            data["think"] = request.metadata["think"]
         if tools_will_be_sent:
             data["tools"] = openai_function_tool_schemas(request.tools or [])
             if request.tool_choice:

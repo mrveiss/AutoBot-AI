@@ -2335,7 +2335,9 @@ before summarizing.
         tool_calls = None
 
         # #8993 thinking mode / #9017 reasoning effort (see reasoning_kwargs).
-        api_kwargs = await build_reasoning_api_kwargs(ctx.context, ctx.selected_model)
+        api_kwargs = await build_reasoning_api_kwargs(
+            ctx.context, ctx.selected_model, ctx.ollama_endpoint, ctx.session_id
+        )
         # Issue #11538: thread the most recent browser/VNC screenshot (last
         # VISION_TOOL_LOOKBACK_MESSAGES tool results) into this iteration's payload.
         latest_screenshot = _extract_latest_tool_screenshot(ctx.execution_history)

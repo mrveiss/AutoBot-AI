@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from autobot_shared.chat_model_context import chat_think_field, note_session_thinking
 from autobot_shared.logging_manager import get_logger
+from chat_workflow.vision_capability import resolve_model_supports_thinking
 from llm_shared.providers.anthropic_request import thinking_request_kwargs
 from llm_shared.providers.reasoning_effort import map_effort_to_provider_params
 
@@ -51,7 +53,28 @@ def _thinking_kwargs(model: str, budget_tokens: int) -> Dict[str, Any]:
     return {**thinking_request_kwargs(model, budget_tokens), "temperature": 1}
 
 
-async def build_reasoning_api_kwargs(context: Dict[str, Any], selected_model: str) -> Dict[str, Any] | None:
+async def ollama_think_kwargs(model: str, endpoint: str, thinking_enabled: bool | None) -> Dict[str, bool]:
+    """``{"think": bool}`` for a thinking-capable local model with a user-set toggle, else ``{}`` (#22258).
+
+    The decision is ``chat_model_context.chat_think_field``; this only reads the model's capability from the runtime.
+    """
+    if thinking_enabled is None or "claude" in model.lower():
+        return {}
+    return chat_think_field(thinking_enabled, await resolve_model_supports_thinking(model, endpoint))
+
+
+async def build_reasoning_api_kwargs(
+    context: Dict[str, Any], selected_model: str, ollama_endpoint: str = "", session_id: str = ""
+) -> Dict[str, Any] | None:
+    """The provider kwargs of :func:`_provider_reasoning_kwargs` plus Ollama's top-level ``think`` (#22258)."""
+    toggle = context.get("thinking_mode_enabled")
+    note_session_thinking(session_id, toggle)  # the interpretation pass of this session carries no context
+    think = await ollama_think_kwargs(selected_model, ollama_endpoint, toggle) if ollama_endpoint else {}
+    kwargs = await _provider_reasoning_kwargs(context, selected_model)
+    return {**(kwargs or {}), **think} or None
+
+
+async def _provider_reasoning_kwargs(context: Dict[str, Any], selected_model: str) -> Dict[str, Any] | None:
     """Thinking-mode (#8993) or reasoning-effort (#9017) kwargs for this iteration, else ``None``.
 
     Effort is applied only when thinking mode is not already set (avoid double-config); a

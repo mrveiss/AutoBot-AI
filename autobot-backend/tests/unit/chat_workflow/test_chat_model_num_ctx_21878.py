@@ -168,3 +168,50 @@ async def test_every_caller_path_sends_the_same_chat_options(monkeypatch, llm_sh
 
     for options in (sent["options"], interpretation, provider):
         assert {k: options[k] for k in expected} == expected
+
+
+# --- think (#22258): Ollama's top-level thinking switch, decided in one place from the toggle + capability ---
+
+
+@pytest.mark.parametrize(
+    "toggle, supported, expected",
+    [(False, True, {"think": False}), (True, True, {"think": True}), (True, False, {}), (None, True, {})],
+)
+def test_think_is_a_top_level_field_only_for_a_thinking_model_with_a_set_toggle(toggle, supported, expected):
+    assert chat_model_context.chat_think_field(toggle, supported) == expected
+    assert "think" not in chat_context_options(CHAT, reuses_chat=True)  # never an option
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "capabilities, toggle, expected",
+    [(["thinking"], False, {"think": False}), (["completion"], False, {}), (None, True, {})],
+)
+async def test_the_capability_comes_from_the_runtime_not_the_model_name(monkeypatch, capabilities, toggle, expected):
+    from chat_workflow import reasoning_kwargs, vision_capability
+
+    async def _caps(model, endpoint):
+        return None if capabilities is None else frozenset(capabilities)
+
+    monkeypatch.setattr(vision_capability, "resolve_model_capabilities", _caps)
+    assert await reasoning_kwargs.ollama_think_kwargs("qwen3.5:9b", "http://o", toggle) == expected
+
+
+@pytest.mark.asyncio
+async def test_the_continuation_payload_interpretation_and_provider_agree_on_think(monkeypatch, llm_shared_real):
+    from chat_workflow import reasoning_kwargs, vision_capability
+
+    async def _caps(model, endpoint):
+        return frozenset({"thinking"})
+
+    monkeypatch.setattr(vision_capability, "resolve_model_capabilities", _caps)
+    kwargs = await reasoning_kwargs.build_reasoning_api_kwargs({"thinking_mode_enabled": False}, CHAT, "http://o", "s1")
+    handler = LLMHandlerMixin.__new__(LLMHandlerMixin)
+    interpretation = await handler._interpretation_think(CHAT, "http://o", "s1")
+    models = importlib.import_module("llm_shared.models")
+    executor = importlib.import_module("llm_shared.providers.ollama").OllamaRequestExecutor
+    streaming = importlib.import_module("llm_shared.streaming").StreamingManager
+    request = models.LLMRequest(messages=[{"role": "user", "content": "hi"}], model_name=CHAT, metadata=kwargs)
+    provider = executor(models.LLMSettings(), streaming()).build_request_data(request, CHAT, False)
+    assert kwargs == interpretation == {"think": False} and provider["think"] is False
+    assert "think" not in provider["options"]

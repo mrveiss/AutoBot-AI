@@ -14,7 +14,7 @@ import json
 from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
-from autobot_shared.chat_model_context import interpretation_llm_options
+from autobot_shared.chat_model_context import interpretation_llm_options, session_thinking
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_generate_url
@@ -29,6 +29,7 @@ from prompt_manager import get_language_instruction, get_prompt, resolve_languag
 from .interpretation_guard import INTERPRETATION_TIMEOUT_SECONDS, interpretation_never_fails_the_tool
 from .models import WorkflowSession
 from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
+from .reasoning_kwargs import ollama_think_kwargs
 from .tool_timing import mark_tool_started, take_tool_elapsed, tool_outcome_fields
 
 logger = get_logger(__name__)
@@ -930,6 +931,10 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         """Get LLM options for command interpretation (#21878: the chat model keeps the chat's context)."""
         return interpretation_llm_options(model)
 
+    async def _interpretation_think(self, model: str, endpoint: str, session_id: str) -> Dict[str, bool]:
+        """The session's thinking toggle as Ollama's ``think`` field, same rule as the chat turn (#22258)."""
+        return await ollama_think_kwargs(model, endpoint, session_thinking(session_id))
+
     async def _interpret_non_streaming(
         self,
         ollama_endpoint: str,
@@ -949,6 +954,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             return
 
         http_client = get_http_client()
+        think = await self._interpretation_think(selected_model, ollama_endpoint, session_id)
         response_data = await http_client.post_json(
             ollama_generate_url(ollama_endpoint),
             json_data={
@@ -956,6 +962,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 "prompt": interpretation_prompt,
                 "stream": False,
                 "options": llm_options,
+                **think,
             },
             # #21750: the session default reads a socket for 10 s and a model answers in minutes, so every
             # interpretation timed out into "length: 0"; the guard's own deadline is the only one.
@@ -993,6 +1000,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             return
 
         http_client = get_http_client()
+        think = await self._interpretation_think(selected_model, ollama_endpoint, session_id)
         full_response = ""
         try:
             async with await http_client.post(
@@ -1002,6 +1010,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                     "prompt": interpretation_prompt,
                     "stream": True,
                     "options": llm_options,
+                    **think,
                 },
                 timeout=aiohttp.ClientTimeout(total=INTERPRETATION_TIMEOUT_SECONDS),
             ) as interp_response:
