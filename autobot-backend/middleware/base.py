@@ -357,7 +357,7 @@ class Extension:
         Use to post-process tool results.
 
         Args:
-            ctx: Hook context with result in data["result"]
+            ctx: Hook context with the result in data["tool_result"]
 
         Returns:
             Modified result or None to keep unchanged
