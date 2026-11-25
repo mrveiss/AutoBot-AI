@@ -173,6 +173,7 @@
       "edit": "Edit message",
       "copy": "Copy message",
       "delete": "Delete message",
+      "saveAsDocument": "Save as document",
       "tokens": "{count} tokens",
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
@@ -426,11 +427,14 @@
       "error": "Translation failed. Please try again."
     },
     "messages": {
+      "newMessageAnnouncement": "New message from {sender}: {preview}",
+      "saveAsDocumentFailed": "Could not save the message as a document.",
       "conversation": "Conversation messages",
       "aiAssistant": "AI Assistant",
       "editMessage": "Edit Message",
       "enterMessage": "Enter your message...",
       "ctrlEnterToSave": "Press Ctrl+Enter (Cmd+Enter on Mac) to save",
+      "downloadAttachment": "Download {name}",
       "tokens": "{count} tokens",
       "attachments": "{count} attachment | {count} attachments",
       "thinking": "Thinking...",
@@ -456,6 +460,7 @@
       "statusSent": "Sent",
       "statusFailed": "Failed to send",
       "confirmDelete": "Delete this message? This action cannot be undone.",
+      "copyFailed": "Could not copy the message to the clipboard",
       "thinkingUsed": "Thinking used"
     },
     "stallQuestion": {
@@ -637,6 +642,8 @@
     },
     "overseer": {
       "executionPlan": "Execution Plan",
+      "stepOf": "Step {current} of {total}",
+      "exitCode": "Exit: {code}",
       "stepsProgress": "{completed} of {total} steps",
       "copyCommand": "Copy command",
       "whatCommandDoes": "What this command does",
@@ -829,7 +836,7 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "lightweightModeTooltip": "About 90% cheaper than standard mode",
     "streamPreview": {
       "thought": "Thinking: {text}",
       "planning": "Planning: {text}"
@@ -4613,6 +4620,16 @@
       "loadingDocument": "Loading document…",
       "copy": "Copy",
       "copied": "Copied"
+    },
+    "abandonedUploads": {
+      "title": "Abandoned uploads",
+      "description": "Uploads that expired unfinished still take up disk space until an admin frees them.",
+      "none": "No abandoned uploads.",
+      "loadFailed": "The abandoned uploads could not be listed.",
+      "progress": "{received} of {total} received",
+      "free": "Free upload",
+      "freeFailed": "The upload could not be freed.",
+      "confirm": "Free this abandoned upload? Its staged data is removed and the decision is recorded."
     }
   },
   "workflow": {
@@ -10448,6 +10465,18 @@
       "noMessagesBody": "This conversation has no messages on this page.",
       "unknownSender": "Unknown sender",
       "transcriptPages": "Transcript pages"
+    },
+    "ownerless": {
+      "title": "Ownerless chat sessions",
+      "description": "These sessions record no owner. A proposal waits in the approvals inbox; nothing is assigned until a person approves it.",
+      "none": "Every chat session has an owner.",
+      "loadFailed": "The ownerless session report could not be loaded.",
+      "ownerLabel": "Proposed owner (username)",
+      "ownerPlaceholder": "Username of an active user",
+      "propose": "Propose owner",
+      "proposed": "Proposal pending approval",
+      "refusedConflict": "That session is no longer ownerless or already has a pending proposal.",
+      "refusedOwner": "That owner is not an active user."
     }
   },
   "components": {

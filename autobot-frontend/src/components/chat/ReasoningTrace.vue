@@ -13,16 +13,12 @@
       @click="expanded = !expanded"
     >
       <span class="reasoning-trace__icon" aria-hidden="true">
-        <Icon name="circle-notch" class="animate-spin reasoning-trace__spin-icon" v-if="isActive" />
+        <Icon name="circle-notch" class="reasoning-trace__spin-icon" v-if="isActive" />
         <Icon name="brain" v-else />
       </span>
       <span class="reasoning-trace__title">{{ $t('reasoningTrace.title') }}</span>
       <span class="reasoning-trace__count">{{ entries.length }}</span>
-      <i
-        class="fas reasoning-trace__chevron"
-        :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"
-        aria-hidden="true"
-      ></i>
+      <Icon class="reasoning-trace__chevron" :name="expanded ? 'chevron-up' : 'chevron-down'" aria-hidden="true" />
     </button>
 
     <!-- Collapsible body -->
@@ -149,7 +145,11 @@ const DURATION_OPTIONS = { style: 'msSeconds1dp' } as const
 }
 
 .reasoning-trace__spin-icon {
-  animation: fa-spin 1.2s linear infinite;
+  animation: trace-spin 1.2s linear infinite;
+}
+
+@keyframes trace-spin {
+  to { transform: rotate(360deg); }
 }
 
 .reasoning-trace__title {
