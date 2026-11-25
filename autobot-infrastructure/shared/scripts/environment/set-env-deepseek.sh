@@ -18,7 +18,9 @@ export AUTOBOT_DEFAULT_LLM="ollama_deepseek-r1:14b"
 export AUTOBOT_TASK_LLM="ollama_deepseek-r1:14b"
 
 # Backend Configuration (use network-config defaults)
-export AUTOBOT_BACKEND_HOST="${BACKEND_HOST:-0.0.0.0}"
+# #18810: the listen address and the address clients dial are separate settings
+export AUTOBOT_BACKEND_BIND_HOST="${BACKEND_BIND_HOST:-0.0.0.0}"
+export AUTOBOT_BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
 export AUTOBOT_BACKEND_PORT="${BACKEND_PORT:-8001}"
 export AUTOBOT_BACKEND_API_ENDPOINT="${BACKEND_URL:-http://localhost:8001}"
 export AUTOBOT_OLLAMA_HOST="${AUTOBOT_OLLAMA_HOST:-http://localhost:11434}"
