@@ -34,6 +34,7 @@ import { resetChatKnowledgeState, useChatKnowledge } from '../useChatKnowledge'
 interface Harness {
   text: Ref<string>
   files: Ref<File[]>
+  byChat: Record<string, File[]>
   recording: Ref<boolean>
   thinkingEnabled: Ref<boolean>
   pending: Ref<boolean>
@@ -43,7 +44,12 @@ interface Harness {
 
 function setup(overseer: boolean, submit: (q: string) => Promise<boolean> = async () => true): Harness {
   const text = ref('hello ')
-  const files = ref<File[]>([])
+  const byChat: Record<string, File[]> = {} // the open chat's list, as the uploads composable keeps it per chat
+  const key = (): string => m.store.currentSessionId ?? ''
+  const files = {
+    get value(): File[] { return (byChat[key()] ??= []) },
+    set value(v: File[]) { byChat[key()] = v },
+  } as Ref<File[]>
   const recording = ref(false)
   const thinkingEnabled = ref(false)
   const pending = ref(false)
@@ -53,6 +59,7 @@ function setup(overseer: boolean, submit: (q: string) => Promise<boolean> = asyn
     setup() {
       api = useComposerSend({
         messageText: text, attachedFiles: files, serverFileIds: (fs) => fs.map((f) => `id-${f.name}`),
+        chatKey: key, restoreFiles: (chat, fs) => { byChat[chat] = [...fs, ...(byChat[chat] ?? [])] },
         isVoiceRecording: recording, hasPendingUploads: pending, resetTextareaHeight: reset,
         thinking: { enabled: thinkingEnabled, budgetTokens: ref(5000) },
         overrideFields: { value: { model: 'm1' } },
@@ -67,7 +74,7 @@ function setup(overseer: boolean, submit: (q: string) => Promise<boolean> = asyn
       return () => h(Child)
     },
   }))
-  return { text, files, recording, thinkingEnabled, pending, api, reset }
+  return { text, files, byChat, recording, thinkingEnabled, pending, api, reset }
 }
 
 beforeEach(() => {
@@ -151,6 +158,20 @@ describe('sendMessage, normal route', () => {
     fail(new Error('offline'))
     await sending
     expect(h1.files.value).toEqual([early, late])
+  })
+
+  it('a failed send returns its files to the chat it was sent from, not the one open by then', async () => {
+    let fail!: (e: Error) => void
+    m.sendMessage.mockReturnValue(new Promise((_, reject) => { fail = reject }))
+    const h1 = setup(false)
+    const file = new File(['a'], 'a.txt')
+    h1.files.value = [file]
+    const sending = h1.api.sendMessage()
+    m.store.currentSessionId = 'sess-2' // the person opens another chat while the send is pending
+    fail(new Error('offline'))
+    await sending
+    expect(h1.byChat['sess-1']).toEqual([file])
+    expect(h1.byChat['sess-2'] ?? []).toEqual([])
   })
 
   it('restores the draft and files when the send throws', async () => {

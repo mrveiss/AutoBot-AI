@@ -168,14 +168,14 @@ const showPresetsModal = ref(false)
 const messageQueueLength = ref(0) // no producer yet: nothing queues chat messages
 
 const { enabled: useKnowledge } = useChatKnowledge()
-const { attachedFiles, uploadProgress, hasPendingUploads, isCancellable, cancelUpload, serverFileIds, handleFileSelect, retryUpload, removeFile, clearAllFiles } =
+const { attachedFiles, uploadProgress, hasPendingUploads, isCancellable, cancelUpload, serverFileIds, handleFileSelect, retryUpload, removeFile, clearAllFiles, chatKey, restoreFiles } =
   useComposerUploads()
 const { isVoiceRecording, toggleVoiceInput } = useComposerVoice(messageText)
 const thinking = useThinkingMode(() => store.currentSessionId)
 const { enabled: thinkingEnabled, budgetTokens: thinkingBudget, toggle: toggleThinking, setBudget: setThinkingBudget } = thinking
 const { selectedModel, pickerModels, overrideFields, fetchModels } = useChatModelSelection()
 const { isSending, canSend, sendMessage } = useComposerSend({
-  messageText, attachedFiles, serverFileIds, isVoiceRecording, hasPendingUploads, thinking, overrideFields,
+  messageText, attachedFiles, serverFileIds, chatKey, restoreFiles, isVoiceRecording, hasPendingUploads, thinking, overrideFields,
   resetTextareaHeight: () => resetTextareaHeight(messageInput),
 })
 const {

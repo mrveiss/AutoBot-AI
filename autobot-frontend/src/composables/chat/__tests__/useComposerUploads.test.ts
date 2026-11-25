@@ -12,7 +12,7 @@ import { nextTick } from 'vue'
 
 const m = vi.hoisted(() => ({
   showToast: vi.fn(), post: vi.fn(), ensure: vi.fn(), cancel: vi.fn(),
-  store: null as unknown as { currentSessionId: string | null }, // a reactive store, built by the mock below
+  store: null as unknown as { currentSessionId: string | null; sessions: Array<{ id: string }> }, // a reactive store, built by the mock below
 }))
 
 vi.mock('vue-i18n', async (importOriginal) => ({
@@ -25,7 +25,7 @@ vi.mock('@autobot/ui', async (importOriginal) => ({
 }))
 vi.mock('@/stores/useChatStore', async () => {
   const { reactive } = await import('vue')
-  m.store = reactive({ currentSessionId: 'session-1' as string | null })
+  m.store = reactive({ currentSessionId: 'session-1' as string | null, sessions: [{ id: 'session-1' }, { id: 'session-2' }, { id: 'created' }] })
   return { useChatStore: () => m.store }
 })
 vi.mock('@/models/controllers', () => ({ useChatController: () => ({}) }))
@@ -192,5 +192,42 @@ describe('useComposerUploads', () => {
     const event = pick(new File(['a'], 'a.txt'))
     await useComposerUploads().handleFileSelect(event)
     expect((event.target as HTMLInputElement).value).toBe('')
+  })
+
+  it('deleting a chat drops its attachments, so nothing keeps its files alive', async () => {
+    m.post.mockResolvedValue({ file_info: { file_id: 'srv-1' } })
+    const u = useComposerUploads()
+    await u.handleFileSelect(pick(new File(['a'], 'a.txt')))
+    expect(u.chatsWithFiles.value).toEqual(['session-1'])
+    m.store.sessions = m.store.sessions.filter((s) => s.id !== 'session-1') // the chat is deleted
+    await nextTick()
+    expect(u.chatsWithFiles.value).toEqual([])
+  })
+
+  it('clearing, removing the last file or restoring nothing leaves no empty entry', async () => {
+    m.post.mockResolvedValue({ file_info: { file_id: 'f' } })
+    const u = useComposerUploads()
+    await u.handleFileSelect(pick(new File(['a'], 'a.txt'), new File(['b'], 'b.txt')))
+    u.removeFile(0)
+    expect(u.chatsWithFiles.value).toEqual(['session-1'])
+    u.removeFile(0)
+    expect(u.chatsWithFiles.value).toEqual([])
+    await u.handleFileSelect(pick(new File(['c'], 'c.txt')))
+    u.clearAllFiles()
+    expect(u.chatsWithFiles.value).toEqual([])
+    u.restoreFiles('session-2', [])
+    expect(u.chatsWithFiles.value).toEqual([])
+  })
+
+  it('restoreFiles returns files to the chat they were taken from, ahead of what it holds now', async () => {
+    m.post.mockResolvedValue({ file_info: { file_id: 'f' } })
+    const u = useComposerUploads()
+    const taken = new File(['a'], 'a.txt')
+    const later = new File(['b'], 'b.txt')
+    await u.handleFileSelect(pick(later))
+    u.restoreFiles('session-1', [taken])
+    expect(u.attachedFiles.value).toEqual([taken, later])
+    m.store.currentSessionId = 'session-2'
+    expect(u.attachedFiles.value).toEqual([])
   })
 })

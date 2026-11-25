@@ -10,7 +10,7 @@
  * attachment list (restored on return, never shown in another chat), and a send carries only the ids uploaded
  * to the chat it goes to.
  */
-import { computed, ref, reactive } from 'vue'
+import { computed, ref, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@autobot/ui'
 import { useChatStore } from '@/stores/useChatStore'
@@ -52,12 +52,26 @@ export function useComposerUploads() {
   const store = useChatStore()
   const controller = useChatController()
 
-  const filesByChat = reactive<Record<string, File[]>>({}) // chat id -> its attached files
+  const filesByChat = reactive<Record<string, File[]>>({}) // chat id -> its attached files; an empty list has no key
   const chatKey = (): string => store.currentSessionId ?? NO_CHAT
+  function setFiles(chat: string, files: File[]): void {
+    if (files.length > 0) filesByChat[chat] = files
+    else delete filesByChat[chat]
+  }
   /** The open chat's attached files; assigning replaces that chat's list only. */
   const attachedFiles = computed<File[]>({
     get: () => filesByChat[chatKey()] ?? [],
-    set: (files) => { filesByChat[chatKey()] = files },
+    set: (files) => setFiles(chatKey(), files),
+  })
+  /** Put files back into the chat they were taken from (a failed send), whichever chat is open now. */
+  const restoreFiles = (chat: string, files: File[]): void => setFiles(chat, [...files, ...(filesByChat[chat] ?? [])])
+
+  /** The chats that hold attachments (an emptied or deleted chat is not among them). */
+  const chatsWithFiles = computed<string[]>(() => Object.keys(filesByChat))
+
+  // A deleted chat takes its attachments with it: nothing keeps its File objects alive.
+  watch(() => store.sessions.map((session) => session.id), (ids) => {
+    Object.keys(filesByChat).filter((chat) => chat !== NO_CHAT && !ids.includes(chat)).forEach((chat) => delete filesByChat[chat])
   })
   const uploadProgress = ref<UploadItem[]>([])
   const pendingUploads = ref(0) // selections and retries not yet settled
@@ -82,7 +96,7 @@ export function useComposerUploads() {
     const chat = uploadedIds.get(file)?.sessionId
     if (chat === undefined) return
     const list = filesByChat[chat] ?? []
-    if (!list.includes(file)) filesByChat[chat] = [...list, file] // by identity: two files may share a name
+    if (!list.includes(file)) setFiles(chat, [...list, file]) // by identity: two files may share a name
   }
 
   const reportProgress = (upload: UploadItem, startTime: number) => (loaded: number, total: number): void => {
@@ -187,6 +201,6 @@ export function useComposerUploads() {
 
   return {
     attachedFiles, uploadProgress, hasPendingUploads, isCancellable, cancelUpload,
-    serverFileIds, handleFileSelect, retryUpload, removeFile, clearAllFiles,
+    serverFileIds, handleFileSelect, retryUpload, removeFile, clearAllFiles, chatKey, restoreFiles, chatsWithFiles,
   }
 }
