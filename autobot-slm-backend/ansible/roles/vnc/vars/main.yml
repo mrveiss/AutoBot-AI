@@ -1,0 +1,12 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# #22211: derived from vnc_display (defaults/main.yml). RFB display N listens on base + N.
+# Duplicates AUTOBOT_VNC_BASE_PORT (config.port.vnc_base, added by PR #22173 / issue #22146). Reconcile with that
+# SSOT once #22173 lands; the two must stay equal until then.
+vnc_rfb_base_port: 5900
+vnc_rfb_port: "{{ vnc_rfb_base_port | int + vnc_display | int }}"
+# Seconds to wait for the RFB and websockify ports after provisioning (#22211).
+vnc_port_wait_seconds: "{{ lookup('env', 'VNC_PORT_WAIT_SECONDS') | default('60', true) }}"

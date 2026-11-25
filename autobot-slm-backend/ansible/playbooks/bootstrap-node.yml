@@ -175,29 +175,13 @@
         proto: tcp
         comment: "SSH access - DO NOT REMOVE"
 
-    - name: "Allow VNC port (5900) from internal subnet"
-      community.general.ufw:
-        rule: allow
-        port: "5900"
-        proto: tcp
-        src: "{{ network_subnet }}"
-        comment: "VNC server - internal only"
-
-    - name: "Allow websockify port (6080) from internal subnet"
-      community.general.ufw:
-        rule: allow
-        port: "6080"
-        proto: tcp
-        src: "{{ network_subnet }}"
-        comment: "noVNC websockify - internal only"
-
-    - name: "Allow RDP port (3389) from internal subnet (GH#1525)"
-      community.general.ufw:
-        rule: allow
-        port: "3389"
-        proto: tcp
-        src: "{{ network_subnet }}"
-        comment: "xrdp RDP server - internal only"
+    # #22211: the VNC ports are the vnc role's (display :1 serves 5901, not 5900), opened only on a
+    # node that carries it. The RDP rule is gone: the desktop server is VNC only.
+    - name: "Allow the VNC ports on a vnc node"
+      ansible.builtin.include_role:
+        name: vnc
+        tasks_from: firewall
+      when: role_vnc_active | default(false) | bool
 
     - name: "Enable UFW with deny-incoming default"
       community.general.ufw:
