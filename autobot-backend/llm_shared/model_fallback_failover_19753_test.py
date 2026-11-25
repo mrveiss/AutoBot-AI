@@ -439,6 +439,7 @@ async def test_a_hop_too_small_for_the_request_is_skipped_and_the_next_is_dispat
     assert not await store.is_degraded("anthropic", "m-small")
     (skip,) = result.provider_metadata["size_skipped"]
     assert skip["model"] == "m-small" and skip["window"] == 100 and skip["estimated_tokens"] > 100
+    assert skip["reason"] == "request_exceeds_window"  # its own reason value in the audit record
 
 
 @pytest.mark.asyncio

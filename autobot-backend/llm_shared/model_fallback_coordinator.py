@@ -104,7 +104,7 @@ class _FallbackTrail:
 
 
 def _window_overflow(request: LLMRequest, model: str) -> dict | None:
-    """``{"model", "estimated_tokens", "window"}`` when *request* cannot fit *model*'s known window, else ``None``.
+    """The overflow record (model, estimated_tokens, window, reason) when *request* cannot fit *model*, else ``None``.
 
     The window is ``known_context_window_tokens`` and the estimate is the token budget's own request
     estimator (input + ``max_tokens``). An unknown window (0) is no evidence of overflow: the hop is offered (#21864).
@@ -114,7 +114,7 @@ def _window_overflow(request: LLMRequest, model: str) -> dict | None:
     window = known_context_window_tokens(model)
     estimated = _estimate_request_tokens(request)
     if window > 0 and estimated > window:
-        return {"model": model, "estimated_tokens": estimated, "window": window}
+        return {"model": model, "estimated_tokens": estimated, "window": window, "reason": REASON_REQUEST_TOO_LARGE}
     return None
 
 
