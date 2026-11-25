@@ -27,7 +27,7 @@ Type=simple
 User={{ vnc_user }}
 Group={{ vnc_group }}
 
-# Calculate VNC port from display number (5900 + display)
+# The RFB port of the display (vnc_rfb_port, roles/vnc/vars/main.yml)
 # #13060: use the dedicated VNC keypair. This unit runs as {{ vnc_user }}, which
 # cannot read the shared node key (/etc/autobot/certs/server-key.pem, root:root
 # 0600) — with that key, --ssl-only websockify failed to start.
@@ -35,7 +35,7 @@ ExecStart=/usr/bin/websockify --web={{ novnc_path }} \
     --cert={{ vnc_tls_cert }} \
     --key={{ vnc_tls_key }} \
     --ssl-only \
-    0.0.0.0:{{ websockify_port }} localhost:{{ 5900 + vnc_display | int }}
+    0.0.0.0:{{ websockify_port }} localhost:{{ vnc_rfb_port }}
 
 Restart=on-failure
 RestartSec=5
