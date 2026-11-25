@@ -143,6 +143,18 @@ mapping from every older spelling to it is `ACTION_ALIASES` in `autobot_shared/a
 because `autobot_shared` must not import backend code; the guard fails when an alias target is not an
 `AuditAction` member. This table is a copy of `ACTION_ALIASES`; the code is the source.
 
+**The three spellings** an event was stored under, one example each (`api_key` creation):
+
+| Vocabulary | Defined in | Spelling | Status |
+|---|---|---|---|
+| `AuditAction` | `autobot-backend/services/audit/taxonomy.py` | `api_key.create` | **Canonical**, what `audit_logs.action` now holds |
+| `IdentityAuditAction` | `autobot_shared/user_management/models/audit.py` | `api_key_created` | Public constant set; `audit_row` canonicalises it on write |
+| `ComplianceEventType` | `autobot-backend/services/audit/taxonomy.py` | `api_key.created` | The public event-log contract; `taxonomy.action_name()` maps it on write |
+
+Rows stored before #18716 keep their old spelling (in `audit_logs` and in the Redis projection
+`audit:unified` / `audit:category:<cat>`) until the approved rewrite (#17038); readers match them through
+`spellings_of()`.
+
 | Older spelling(s) | Canonical |
 |---|---|
 | `login`, `login_success`, `login_successful`, `login_attempt`, `login_attempt_locked_account`, `login_failed`, `sso_login`, `user.login` | `auth.login` |
