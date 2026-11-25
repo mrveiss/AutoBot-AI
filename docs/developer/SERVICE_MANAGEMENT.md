@@ -303,7 +303,7 @@ sudo systemctl edit autobot-backend --full
 **Backend (.env file):**
 ```bash
 # Core
-AUTOBOT_BACKEND_HOST=0.0.0.0
+AUTOBOT_BACKEND_BIND_HOST=0.0.0.0   # listen address; AUTOBOT_BACKEND_HOST is the address clients dial
 AUTOBOT_BACKEND_PORT=8443
 AUTOBOT_BACKEND_TLS_ENABLED=true
 

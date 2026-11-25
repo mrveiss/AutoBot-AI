@@ -51,6 +51,8 @@ _SUPPLIED = frozenset(
         "ansible_facts",
         "slm_backend_port",
         "slm_trusted_proxies",
+        "novnc_path",  # inventory/group_vars/all.yml, the one home (#22146)
+        "backend_advertised_host",  # inventory/group_vars/all.yml (#18810)
     }
 )
 
