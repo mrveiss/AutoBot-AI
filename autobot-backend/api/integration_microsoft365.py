@@ -109,7 +109,7 @@ async def search_messages(
 @router.get(
     "/folders",
     response_model=Dict[str, Any],
-    summary="List Outlook mail folders",
+    summary="List Outlook top-level mail folders",
 )
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -117,7 +117,7 @@ async def search_messages(
     error_code_prefix="INTEGRATION_MICROSOFT365",
 )
 async def list_folders() -> Dict[str, Any]:
-    """List all mail folders."""
+    """List the top-level mail folders (Graph returns root children only; nested folders are out of scope, #13710)."""
     return await _run_action("list_folders", {})
 
 

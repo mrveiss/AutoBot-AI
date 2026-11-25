@@ -456,7 +456,7 @@ class Microsoft365Integration(BaseIntegration):
         return self._body_or_error(await self._make_graph_request("GET", url, params=query_params))
 
     async def _list_folders(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """List all mail folders."""
+        """List top-level mail folders (nested folders are out of scope)."""
         url = f"{self.graph_url}/me/mailFolders"
         return self._body_or_error(await self._make_graph_request("GET", url))
 
