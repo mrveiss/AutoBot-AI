@@ -394,7 +394,7 @@ def test_the_stale_bootstrap_base_port_rule_is_deleted_when_the_rfb_port_differs
 
 
 def test_the_port_wait_seconds_are_registered_env_vars() -> None:
-    registry = (_ANSIBLE.parents[1] / "autobot_shared" / "env_registry_slm_roles.py").read_text(encoding="utf-8")
+    registry = (_ANSIBLE.parents[1] / "autobot_shared" / "env_registry_slm_rollback.py").read_text(encoding="utf-8")
     for name in ("VNC_PORT_WAIT_SECONDS", "XRDP_PORT_CLOSE_WAIT_SECONDS"):
         assert name in registry
 
@@ -413,4 +413,4 @@ def test_the_credential_name_uses_the_node_hostname_with_a_fallback() -> None:
 
 def test_the_provisioning_inventory_carries_the_node_hostname() -> None:
     src = (_ANSIBLE.parent / "api" / "nodes.py").read_text(encoding="utf-8")
-    assert "node_hostname: {json.dumps(node.hostname)}" in src and "slm_node_id: {node_id}" in src
+    assert 'f"      node_hostname: {json.dumps(node.hostname)}' in src and "slm_node_id: {node_id}" in src

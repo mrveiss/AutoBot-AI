@@ -34,7 +34,7 @@
       pgrep -x xrdp-sesexec >/dev/null || rc=$?
       if [ "$rc" -gt 1 ]; then echo "pgrep failed ($rc): cannot check for xrdp session processes" >&2; exit "$rc"; fi
       if [ "$rc" -eq 0 ]; then echo "xrdp-sesexec"; fi
-    executable: "{{ xrdp_shell }}"
+    executable: /bin/bash
   register: _xrdp_live_sessions
   changed_when: false
   check_mode: false

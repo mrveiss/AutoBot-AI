@@ -32,6 +32,5 @@ xrdp_remove_with_live_session: false
 xrdp_backup_dir: "{{ autobot.base_dir }}/backups"
 xrdp_port_close_wait_seconds: "{{ lookup('env', 'XRDP_PORT_CLOSE_WAIT_SECONDS') | default('30', true) }}"
 
-# #22211: named so removal and install name the same directory and shell once.
+# #22211: named so removal and install name the same directory once.
 xrdp_config_dir: /etc/xrdp
-xrdp_shell: /bin/bash

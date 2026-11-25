@@ -26,12 +26,12 @@ rewrites a row. `downgrade()` removes only the row this migration created (assig
 `migration`) and the declaration it added.
 """
 
-import logging
 from typing import List
 
+from autobot_shared.logging_manager import get_logger
 from migrations.utils import get_connection, table_exists
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: The role this migration assigns.
 VNC_ROLE = "vnc"

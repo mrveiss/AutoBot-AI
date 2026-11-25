@@ -93,10 +93,10 @@ def test_only_vnc_is_provisioned_by_the_updater_and_the_credential_must_be_activ
 
 
 def test_the_cooldown_is_registered_and_env_backed() -> None:
-    registry = (_ROOT.parent / "autobot_shared" / "env_registry_slm_roles.py").read_text(encoding="utf-8")
+    registry = (_ROOT.parent / "autobot_shared" / "env_registry_slm_rollback.py").read_text(encoding="utf-8")
     assert "SLM_ROLE_PROVISION_RETRY_COOLDOWN_HOURS" in registry
     assert "SLM_ROLE_PROVISION_RETRY_COOLDOWN_HOURS" in inspect.getsource(prp)
-    assert "env_registry_slm_roles" in (_ROOT.parent / "autobot_shared" / "env_registry_slm.py").read_text(
+    assert "env_registry_slm_rollback" in (_ROOT.parent / "autobot_shared" / "env_registry.py").read_text(
         encoding="utf-8"
     )
 

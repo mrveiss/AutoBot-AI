@@ -21,19 +21,19 @@ provisioning failure is reported as a warning in the node's output and does not 
 crash left at ``installing`` becomes eligible again once it is older than the cooldown.
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
 
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.logging_manager import get_logger
 from models.database import Node, NodeCredential, NodeRole
 from services.database import db_service
 from services.sync_restart import no_restart_args
 from status_enums import RoleStatus
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: Roles the fleet update provisions when they are assigned but not yet provisioned.
 UPDATER_PROVISIONED_ROLES = ("vnc",)
@@ -45,7 +45,7 @@ PENDING_STATUSES = (RoleStatus.NOT_INSTALLED.value, "failed")
 CREDENTIAL_REGISTERED_BY_ROLE = {"vnc": "vnc"}
 _INSTALLING = "installing"
 _FAILED = "failed"
-#: Hours before a role already attempted on a node is provisioned again (registered in env_registry_slm_roles).
+#: Hours before a role already attempted on a node is provisioned again (registered in env_registry_slm_rollback).
 RETRY_COOLDOWN_HOURS = env_int_clamped("SLM_ROLE_PROVISION_RETRY_COOLDOWN_HOURS", 6, min_v=1, max_v=720)
 
 
