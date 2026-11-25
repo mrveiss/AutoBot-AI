@@ -10,7 +10,6 @@ route:autobot-backend/api/adapters.py:DELETE /agent/{agent_id}/override
 route:autobot-backend/api/adapters.py:POST /agent/{agent_id}/override
 route:autobot-backend/api/admin_event_logs.py:GET /event-logs
 route:autobot-backend/api/admin_oauth_bundle_strip.py:GET /oauth-bundle-strip
-route:autobot-backend/api/admin_ownerless_chat_sessions.py:GET /ownerless-chat-sessions
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-policies
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-settings
 route:autobot-backend/api/admin_retention_policies.py:POST /retention-policies

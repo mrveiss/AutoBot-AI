@@ -150,8 +150,6 @@ table:service_dependencies	#10603
 table:ssh_keys	#10603
 table:system_events	#10603
 table:validation_results	#10603
-route:autobot-backend/api/admin_ownerless_chat_sessions.py:POST /ownerless-chat-sessions/requests	#20904
-route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /expired/{upload_id}	#20905
 declared:get_api_key_user=autobot_shared/user_management/models/api_key.py	#10603
 declared:require_key_permission=autobot-slm-backend/services/api_key_routes.py	#10603
 route:autobot-backend/api/a2a.py:DELETE /tasks/{task_id}	#10603
@@ -876,7 +874,6 @@ route:autobot-backend/api/adapters.py:DELETE /agent/{agent_id}/override	#20970
 route:autobot-backend/api/adapters.py:POST /agent/{agent_id}/override	#20970
 route:autobot-backend/api/admin_event_logs.py:GET /event-logs	#20971
 route:autobot-backend/api/admin_oauth_bundle_strip.py:GET /oauth-bundle-strip	#20971
-route:autobot-backend/api/admin_ownerless_chat_sessions.py:GET /ownerless-chat-sessions	#20971
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-policies	#20971
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-settings	#20971
 route:autobot-backend/api/admin_retention_policies.py:POST /retention-policies	#20971
@@ -1109,7 +1106,6 @@ route:autobot-backend/api/knowledge_audit.py:GET /compliance-summary	#20975
 route:autobot-backend/api/knowledge_audit.py:GET /permission-changes	#20975
 route:autobot-backend/api/knowledge_audit.py:GET /user-activity	#20975
 route:autobot-backend/api/knowledge_audit.py:POST /compliance-report	#20975
-route:autobot-backend/api/knowledge_chunked_upload.py:GET /expired	#20975
 route:autobot-backend/api/knowledge_claude_memory.py:POST /import_claude_memory	#20975
 route:autobot-backend/api/knowledge_collections.py:GET /collections	#20975
 route:autobot-backend/api/knowledge_collections.py:POST /collections	#20975

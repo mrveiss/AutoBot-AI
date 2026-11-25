@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { getRiskSeverity } from '@/utils/riskLevel'
+import { getRiskSeverity, riskBadgeVariant } from '@/utils/riskLevel'
 
 describe('getRiskSeverity', () => {
   it('maps every producer-emitted RiskLevel value to its severity bucket', () => {
@@ -43,5 +43,20 @@ describe('getRiskSeverity', () => {
     expect(getRiskSeverity(undefined)).toBeNull()
     expect(getRiskSeverity(null)).toBeNull()
     expect(getRiskSeverity('')).toBeNull()
+  })
+})
+
+describe('riskBadgeVariant (#18243)', () => {
+  it('maps LOW to success, MEDIUM to warning, HIGH and CRITICAL to error', () => {
+    expect(riskBadgeVariant('LOW')).toBe('success')
+    expect(riskBadgeVariant('MEDIUM')).toBe('warning')
+    expect(riskBadgeVariant('HIGH')).toBe('error')
+    expect(riskBadgeVariant('CRITICAL')).toBe('error')
+  })
+
+  it('never reads an unrecognised or missing value as success', () => {
+    for (const value of ['MODERATE', 'DANGEROUS', '', null, undefined]) {
+      expect(riskBadgeVariant(value as string | null | undefined)).toBe('neutral')
+    }
   })
 })

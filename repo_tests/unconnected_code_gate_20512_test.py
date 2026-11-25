@@ -95,7 +95,7 @@ MODULES_REACH = declare(
     "unconnected-code-modules",
     discover=_module_files,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=2992,  # mid-window: population 3142, window (2842, 3142)
+    floor=3116,  # mid-window: population 3266, window (2966, 3266)
     what="non-test python modules of autobot-backend, autobot-slm-backend and autobot_shared that could have a caller",
     roots=modules.BACKEND_ROOTS,
     growth=300,
@@ -119,7 +119,7 @@ FRONTEND_REACH = declare(
     discover=_frontend_files,
     # Measured 1180 candidates (2026-11-15); growth 200 makes the pin mid-window (1180 - 100). A new guard pins
     # `floor=` until it lands on the base (#19676).
-    floor=1080,
+    floor=1167,  # mid-window: population 1267, window (1067, 1267)
     what="production .ts, .js and .vue files of autobot-frontend and autobot-slm-frontend that could have an importer",
     roots=frontend.FRONTEND_ROOTS,
     growth=200,

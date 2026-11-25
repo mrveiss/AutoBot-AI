@@ -23,7 +23,13 @@ if TYPE_CHECKING:
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.category_keys import FACTS_KEY, QUARANTINED_KEY
-from knowledge.category_quarantine import add_to_category, remove_from_category, servable_fact_ids
+from knowledge.category_quarantine import (
+    add_to_category,
+    decrement_category_count,
+    fact_category_id,
+    remove_from_category,
+    servable_fact_ids,
+)
 from knowledge.quarantine import drop_quarantined_hashes
 
 logger = get_logger(__name__)
@@ -930,11 +936,9 @@ class CategoriesMixin:
         # category_id first: add_to_category's race handling relies on this order (#21957)
         await self.redis().hset(f"fact:{fact_id}", "category_id", category_id)
 
-        # Add to category's fact set, with its quarantine index entry (one MULTI)
+        # Join the fact set, its quarantine index entry and the category's fact_count: one script, so the
+        # count moves only when the id actually enters the set (#21984)
         await add_to_category(self.redis(), fact_id, category_id)
-
-        # Increment category count
-        await self.redis().hincrby(f"category:{category_id}", "fact_count", 1)
 
     async def _remove_fact_category(self, fact_id: str) -> None:
         """Remove category assignment from a fact."""
@@ -942,15 +946,8 @@ class CategoriesMixin:
 
     async def _get_fact_category_id(self, fact_id: str) -> str | None:
         """Get the category ID a fact is assigned to."""
-        category_id = await self.redis().hget(f"fact:{fact_id}", "category_id")
-        if category_id and isinstance(category_id, bytes):
-            category_id = category_id.decode("utf-8")
-        return category_id if category_id else None
+        return await fact_category_id(self.redis(), fact_id)
 
     async def _decrement_category_count(self, category_id: str) -> None:
         """Decrement fact count for a category."""
-        current = await self.redis().hget(f"category:{category_id}", "fact_count")
-        if current:
-            count = int(current.decode("utf-8") if isinstance(current, bytes) else current)
-            if count > 0:
-                await self.redis().hset(f"category:{category_id}", "fact_count", count - 1)
+        await decrement_category_count(self.redis(), category_id)

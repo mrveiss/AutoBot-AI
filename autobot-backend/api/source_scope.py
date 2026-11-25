@@ -199,11 +199,13 @@ async def cached_task_result(prefix: str, source_id: str) -> dict:
     if cached and cached.get("result"):
         # #17982: a result older than the source's last sync is served, flagged, not hidden.
         stale = await _predates_last_sync(source_id, cached.get("completed_at"))
+        # The stored payload is spread FIRST: it carries the scan's own ``from_cache: False``, which
+        # must not override what this reply is (#18030).
         return {
+            **cached["result"],
             "status": "success",
             "from_cache": True,
             "completed_at": cached.get("completed_at"),
-            **cached["result"],
             "stale": stale,
         }
     return {"status": "no_data"}

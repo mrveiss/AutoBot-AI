@@ -34,7 +34,9 @@ from autobot_shared.logging_once import first_time
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from config import config_manager
+from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
+from desktop_novnc_urls import NOVNC_URL_SCHEME, novnc_client_host
 from task_execution_tracker import TaskPriority, get_task_tracker
 
 # Type aliases for clarity
@@ -207,20 +209,20 @@ class VNCServerManager:
     def __init__(
         self,
         display_base: int = 10,
-        port_base: int = 5900,
-        novnc_port_base: int = 6080,
+        port_base: int | None = None,
+        novnc_port_base: int | None = None,
     ) -> None:
         """
         Initialize VNC server manager.
 
         Args:
             display_base: Starting X display number (default: 10).
-            port_base: Starting VNC port (default: 5900).
-            novnc_port_base: Starting NoVNC port (default: 6080).
+            port_base: Starting VNC port (default: config.port.vnc_base).
+            novnc_port_base: Starting NoVNC port (default: config.port.vnc).
         """
         self.display_base = display_base
-        self.port_base = port_base
-        self.novnc_port_base = novnc_port_base
+        self.port_base = config.port.vnc_base if port_base is None else port_base
+        self.novnc_port_base = config.port.vnc if novnc_port_base is None else novnc_port_base
         self.active_sessions: dict[str, SessionDict] = {}
 
         # Check for VNC server availability
@@ -413,18 +415,8 @@ class VNCServerManager:
         Returns:
             Path to websockify, or None if not found.
         """
-        websockify_cmd = shutil.which("websockify")
-        if websockify_cmd:
-            return websockify_cmd
-
-        # Check additional paths if not in PATH
-        additional_paths = ["/usr/bin/websockify", "/usr/local/bin/websockify"]
-        for path in additional_paths:
-            expanded = Path(path).expanduser()
-            if expanded.exists():
-                return str(expanded)
-
-        return None
+        # PATH first, then the SSOT search path (AUTOBOT_WEBSOCKIFY_SEARCH_PATH, #22146)
+        return shutil.which("websockify") or shutil.which("websockify", path=config.path.websockify_search_path)
 
     async def _start_novnc(self, vnc_port: int, novnc_port: int) -> ProcessType | None:
         """
@@ -452,8 +444,8 @@ class VNCServerManager:
                 f"--cert={config.tls.remote_cert_dir}/server-cert.pem",
                 f"--key={config.tls.remote_cert_dir}/server-key.pem",
                 "--ssl-only",
-                f"localhost:{novnc_port}",
-                f"localhost:{vnc_port}",
+                f"{config.misc.novnc_bind_host}:{novnc_port}",
+                f"{NetworkConstants.LOCALHOST_NAME}:{vnc_port}",
             ]
 
             novnc_process = await asyncio.create_subprocess_exec(
@@ -589,13 +581,14 @@ class VNCServerManager:
         Returns:
             Dictionary with connection details.
         """
+        web_host = novnc_client_host()
         return {
             "session_id": session_id,
             "vnc_port": vnc_port,
             "novnc_port": novnc_port if self.novnc_available else None,
             "display": f":{display_num}",
-            "vnc_url": f"vnc://localhost:{vnc_port}",
-            "web_url": (f"http://localhost:{novnc_port}" if self.novnc_available else None),
+            "vnc_url": f"vnc://{NetworkConstants.LOCALHOST_NAME}:{vnc_port}",
+            "web_url": (f"{NOVNC_URL_SCHEME}://{web_host}:{novnc_port}" if self.novnc_available else None),
         }
 
     async def terminate_session(self, session_id: str) -> bool:

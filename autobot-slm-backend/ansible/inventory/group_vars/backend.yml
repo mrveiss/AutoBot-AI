@@ -123,7 +123,9 @@ backend:
     # #11671: reference the canonical backend_user_mode var, never a scattered
     # literal, so full user management stays single-sourced (no single_user).
     AUTOBOT_USER_MODE: "{{ backend_user_mode }}"    # User management: single_company/multi_company/provider
-    AUTOBOT_BACKEND_HOST: "0.0.0.0"
+    # #18810: bind and advertised host are separate settings; 0.0.0.0 is only ever the bind.
+    AUTOBOT_BACKEND_BIND_HOST: "{{ backend_host }}"
+    AUTOBOT_BACKEND_HOST: "{{ backend_advertised_host }}"
     AUTOBOT_BACKEND_PORT: 8001
 
 # ==========================================

@@ -216,9 +216,9 @@ async def test_streaming_synthesize_sends_first_audio_after_the_first_chunk():
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
         with patch("api.voice.get_tts_client", return_value=TTSClient()):
-            blocking_ttfb, blocking_body, _ = await _time_to_first_byte(app, {"text": "hi", "user_role": "user"})
+            blocking_ttfb, blocking_body, _ = await _time_to_first_byte(app, {"text": "hi"})
             _, streaming_body, released = await _time_to_first_byte(
-                app, {"text": "hi", "user_role": "user", "stream": "true"}, _stream_progress(http_client)
+                app, {"text": "hi", "stream": "true"}, _stream_progress(http_client)
             )
 
     assert blocking_body == WHOLE_WAV
@@ -242,7 +242,7 @@ async def test_a_route_that_buffers_the_utterance_is_caught():
         with patch("api.voice.get_tts_client", return_value=TTSClient()):
             with patch("api.voice._framed_audio_chunks", _buffered):
                 _, body, released = await _time_to_first_byte(
-                    app, {"text": "hi", "user_role": "user", "stream": "true"}, _stream_progress(http_client)
+                    app, {"text": "hi", "stream": "true"}, _stream_progress(http_client)
                 )
 
     assert body  # the buffering route still answers in full
@@ -257,7 +257,7 @@ async def test_streaming_response_carries_every_chunk_in_order():
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
         with patch("api.voice.get_tts_client", return_value=TTSClient()):
-            _, body, _ = await _time_to_first_byte(app, {"text": "hi", "user_role": "user", "stream": "true"})
+            _, body, _ = await _time_to_first_byte(app, {"text": "hi", "stream": "true"})
 
     decoded, offset = [], 0
     while offset < len(body):
@@ -276,7 +276,7 @@ def test_non_streaming_synthesize_still_returns_a_single_wav():
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
         with patch("api.voice.get_tts_client", return_value=TTSClient()):
-            response = client.post("/api/voice/synthesize", data={"text": "hi", "user_role": "user"})
+            response = client.post("/api/voice/synthesize", data={"text": "hi"})
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/wav"
