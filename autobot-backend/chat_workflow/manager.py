@@ -20,7 +20,7 @@ from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
 
 from async_chat_workflow import WorkflowMessage
-from autobot_shared.chat_model_context import note_chat_turn_model
+from autobot_shared.chat_model_context import chat_context_options, note_chat_turn_model
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
@@ -51,7 +51,6 @@ from chat_workflow.tool_call_grammar import (
 )
 from chat_workflow.tool_call_loop import framed_tool_output
 from constants.api_constants import PATH_OLLAMA_GENERATE
-from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
 from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
@@ -1925,7 +1924,7 @@ before summarizing.
             "options": {
                 "temperature": 0.7,
                 "top_p": 0.9,
-                "num_ctx": ModelConfig.CHAT_NUM_CTX,
+                **chat_context_options(selected_model, reuses_chat=True),  # num_ctx + num_gpu (#22257)
             },
         }
         if system_prompt:

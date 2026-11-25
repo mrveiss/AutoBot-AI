@@ -133,6 +133,8 @@ class OllamaRequestExecutor:
                 "num_ctx": request.metadata.get("num_ctx", self.settings.num_ctx),
             },
         }
+        if "num_gpu" in request.metadata:  # the chat model's layer count, same as every chat caller (#22257)
+            data["options"]["num_gpu"] = request.metadata["num_gpu"]
         if tools_will_be_sent:
             data["tools"] = openai_function_tool_schemas(request.tools or [])
             if request.tool_choice:

@@ -6,14 +6,25 @@
 
 Ollama rebuilds a model's runner when a request asks for a different ``num_ctx`` than the loaded one, so a side
 call (the RLM evaluator, the verifier, an interpretation pass) that reaches the chat model with its own context
-size reloads it at every turn boundary. The chat turn sends ``ModelConfig.CHAT_NUM_CTX``; this is the one rule that
+size reloads it at every turn boundary. The same holds for ``num_gpu`` (#22257): on an 8 GB GPU Ollama leaves the
+output layer on the CPU unless every layer is asked for. The chat turn sends ``ModelConfig.CHAT_NUM_CTX`` and the
+GPU layer count; this is the one rule that
 gives every other caller of the same model the same number. A caller of a different model keeps its own.
 """
 
 from __future__ import annotations
 
+import functools
+import logging
+
+from autobot_shared.env_utils import env_raw
+from autobot_shared.gpu_telemetry import query_nvidia_gpus
 from autobot_shared.ssot_constants import ModelConfig
 from autobot_shared.verifier_model import model_listed
+
+logger = logging.getLogger(__name__)
+
+CHAT_NUM_GPU_ENV = "AUTOBOT_CHAT_NUM_GPU"
 
 #: The model the last chat turn ran with (a user may select another than the configured default). Ollama keeps that
 #: one resident, so it is the one a side call must not reload; this process-wide mark is set where the turn's request
@@ -42,14 +53,46 @@ def num_ctx_for_model(model: str | None, default: int | None = None) -> int | No
     return ModelConfig.CHAT_NUM_CTX if is_chat_model(model) else default
 
 
-def chat_context_options(model: str | None, *, reuses_chat: bool = False) -> dict[str, int]:
-    """``{"num_ctx": CHAT_NUM_CTX}`` for a request to the chat model, else ``{}`` (the one rule for request metadata).
+@functools.lru_cache(maxsize=1)
+def _host_has_nvidia_gpu() -> bool:
+    """Whether nvidia-smi lists a GPU on this host (the signal ``HardwareAccelerationManager`` uses, #620)."""
+    return bool(query_nvidia_gpus(("name",)))
 
+
+def chat_num_gpu() -> int | None:
+    """The chat model's ``num_gpu``: ``AUTOBOT_CHAT_NUM_GPU`` when set, else all layers on a GPU host, else None.
+
+    ``off`` or a negative number leaves the option out; an unparseable value is logged and treated as unset (#22257).
+    """
+    raw = env_raw(CHAT_NUM_GPU_ENV)
+    if raw is None:
+        return ModelConfig.CHAT_NUM_GPU_ALL_LAYERS if _host_has_nvidia_gpu() else None
+    if raw.strip().lower() == "off":
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("%s=%r is not an integer or 'off'; the option is left out", CHAT_NUM_GPU_ENV, raw)
+        return None
+    return value if value >= 0 else None
+
+
+def chat_context_options(model: str | None, *, reuses_chat: bool = False) -> dict[str, int]:
+    """``num_ctx`` (and ``num_gpu`` when configured) for a request to the chat model, else ``{}``.
+
+    The one rule for request options: every caller of the chat model sends the same dict, or Ollama reloads it.
     *reuses_chat* is a caller that has already decided it is asking the resident chat model (the verifier).
     """
-    return {"num_ctx": ModelConfig.CHAT_NUM_CTX} if reuses_chat or is_chat_model(model) else {}
+    if not (reuses_chat or is_chat_model(model)):
+        return {}
+    options = {"num_ctx": ModelConfig.CHAT_NUM_CTX}
+    if (num_gpu := chat_num_gpu()) is not None:
+        options["num_gpu"] = num_gpu
+    return options
 
 
 def interpretation_llm_options(model: str | None) -> dict[str, float | int | None]:
-    """The options of a command-interpretation call; the chat model is asked with the chat's context size (#21878)."""
-    return {"temperature": 0.7, "top_p": 0.9, "num_ctx": num_ctx_for_model(model, ModelConfig.DEFAULT_NUM_CTX)}
+    """The options of a command-interpretation call; the chat model is asked with the chat's options (#21878)."""
+    options: dict[str, float | int | None] = {"temperature": 0.7, "top_p": 0.9}
+    options.update(chat_context_options(model) or {"num_ctx": ModelConfig.DEFAULT_NUM_CTX})
+    return options

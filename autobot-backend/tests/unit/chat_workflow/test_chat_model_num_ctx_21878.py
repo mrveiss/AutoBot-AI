@@ -40,6 +40,8 @@ def chat_model(monkeypatch):
     from autobot_shared.ssot_config import config
 
     monkeypatch.setattr(chat_model_context, "_last_turn_model", None)
+    monkeypatch.delenv(chat_model_context.CHAT_NUM_GPU_ENV, raising=False)
+    monkeypatch.setattr(chat_model_context, "_host_has_nvidia_gpu", lambda: False)  # the host's GPU never leaks in
     monkeypatch.setattr(type(config), "default_llm_model", property(lambda _self: CHAT), raising=False)
 
 
@@ -109,3 +111,60 @@ def test_a_user_selected_chat_model_is_recognised_after_a_turn_ran_with_it():
 def test_the_verifier_uses_the_same_rule():
     assert chat_context_options(OTHER, reuses_chat=True) == {"num_ctx": ModelConfig.CHAT_NUM_CTX}
     assert chat_context_options(OTHER) == {}
+
+
+# --- num_gpu (#22257): the same options builder gives every chat-model caller the same GPU layer count ---
+
+
+@pytest.fixture
+def gpu_host(monkeypatch):
+    monkeypatch.setattr(chat_model_context, "_host_has_nvidia_gpu", lambda: True)
+
+
+def test_num_gpu_is_all_layers_on_a_gpu_host_and_left_out_without_one(monkeypatch, gpu_host):
+    all_layers = ModelConfig.CHAT_NUM_GPU_ALL_LAYERS
+    assert chat_context_options(CHAT) == {"num_ctx": ModelConfig.CHAT_NUM_CTX, "num_gpu": all_layers}
+    monkeypatch.setattr(chat_model_context, "_host_has_nvidia_gpu", lambda: False)
+    assert chat_context_options(CHAT) == {"num_ctx": ModelConfig.CHAT_NUM_CTX}
+
+
+@pytest.mark.parametrize("raw, expected", [("20", 20), ("0", 0), ("off", None), ("-1", None), ("many", None)])
+def test_the_env_value_decides_num_gpu(monkeypatch, gpu_host, raw, expected):
+    monkeypatch.setenv(chat_model_context.CHAT_NUM_GPU_ENV, raw)
+    assert chat_model_context.chat_num_gpu() == expected
+
+
+def test_another_model_gets_no_gpu_option(gpu_host):
+    assert chat_context_options(OTHER) == {}
+
+
+@pytest.mark.asyncio
+async def test_every_caller_path_sends_the_same_chat_options(monkeypatch, llm_shared_real, gpu_host):
+    expected = chat_context_options(CHAT)
+    ollama_helpers = importlib.import_module("llm_shared.ollama_helpers")
+    sent = {}
+
+    class _Client:
+        def __init__(self, *a, **k): ...
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a): ...
+
+        async def post(self, url, json):
+            sent.update(json)
+            return httpx.Response(200, json={"response": "ok"}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(ollama_helpers.httpx, "AsyncClient", _Client)
+    await ollama_helpers.call_ollama_generate("p", CHAT, "http://ollama.invalid")
+
+    interpretation = LLMHandlerMixin.__new__(LLMHandlerMixin)._get_interpretation_llm_options(CHAT)
+    models = importlib.import_module("llm_shared.models")
+    executor = importlib.import_module("llm_shared.providers.ollama").OllamaRequestExecutor
+    streaming = importlib.import_module("llm_shared.streaming").StreamingManager
+    request = models.LLMRequest(messages=[{"role": "user", "content": "hi"}], model_name=CHAT, metadata=expected)
+    provider = executor(models.LLMSettings(), streaming()).build_request_data(request, CHAT, False)["options"]
+
+    for options in (sent["options"], interpretation, provider):
+        assert {k: options[k] for k in expected} == expected
