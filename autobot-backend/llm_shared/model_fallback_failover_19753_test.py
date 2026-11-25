@@ -483,3 +483,14 @@ async def test_every_hop_skipped_for_size_names_the_size_skip_in_the_reason():
     assert result.provider_metadata["fallback_reason"] == "request_exceeds_window"
     assert [s["model"] for s in result.provider_metadata["size_skipped"]] == ["m-s1", "m-s2"]
     assert emitted.await_args.kwargs["reason"] == "request_exceeds_window"
+
+
+@pytest.mark.asyncio
+async def test_a_size_skip_followed_by_a_dispatched_hop_that_fails_does_not_report_the_size_reason():
+    registry = _registry(_error("HTTP 503"))  # every dispatched model fails
+    mgr = _chains("m-a", ["m-small", "m-c"], ["anthropic", "anthropic"])
+    with _env(mgr), _windows({"m-small": 100, "m-c": 100_000}):
+        result = await ModelFallbackCoordinator().execute_with_fallback(_big_request(), registry)
+    assert registry.asked == ["m-a", "m-c"]  # the small one skipped, the large one dispatched and failed
+    assert result.provider_metadata["fallback_reason"] != "request_exceeds_window"
+    assert [s["model"] for s in result.provider_metadata["size_skipped"]] == ["m-small"]  # still in the audit

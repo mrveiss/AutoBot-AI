@@ -82,11 +82,17 @@ class _FallbackTrail:
         self.reasons: list[str] = []
         self.preempted: list[dict] = []
         self.size_skipped: list[dict] = []
+        self.skips_before_dispatch = 0  # len(size_skipped) when the request last moved onto a model
 
     @property
     def reason(self) -> str:
         """The reason of the most recent hop (reactive 429 until a hop says otherwise)."""
         return self.reasons[-1] if self.reasons else REASON_RATE_LIMIT
+
+    @property
+    def ended_on_size_skip(self) -> bool:
+        """True when a hop was size-skipped after the last model the request was moved onto (#21864)."""
+        return len(self.size_skipped) > self.skips_before_dispatch
 
     def note_preempt(self, hop: "_PreemptiveSwitch", from_model: str) -> None:
         logger.info(
@@ -137,6 +143,7 @@ class _FallbackRun:
     def switch_to(self, model: str, provider: Optional[str], operator_configured: bool = False) -> None:
         """Move the request onto the next model of the chain."""
         self.model, self.provider, self.operator_configured = model, provider, operator_configured
+        self.trail.skips_before_dispatch = len(self.trail.size_skipped)
         self.chain_tried.append(model)
         self.request = ModelFallbackCoordinator._clone_with_model(self.request, model, provider)
 
@@ -337,7 +344,7 @@ class ModelFallbackCoordinator:
         hop = await self._next_usable_hop(run)
         if hop is None:
             logger.warning("quota-fallback: no usable fallback for model=%r provider=%r", run.model, run.provider)
-            if run.trail.size_skipped:  # the chain was not empty: its remaining hops could not hold the request
+            if run.trail.ended_on_size_skip:  # the chain ended because its remaining hops could not hold the request
                 run.trail.reasons.append(REASON_REQUEST_TOO_LARGE)
             return False
         self._log_hop(run, failure, attempt, hop)
