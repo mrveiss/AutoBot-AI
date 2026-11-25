@@ -57,6 +57,15 @@ def test_a_note_after_the_measurement_survives_the_refresh() -> None:
     assert expected in new
 
 
+def test_a_mid_window_marker_inside_the_note_is_left_untouched() -> None:
+    """#22197: only the first measurement is refreshed; a later ``# mid-window:`` in the note stays as written."""
+    note = "; see the old # mid-window: population 99, window (1, 2) (#19676)"
+    source = _with_comment("# mid-window: population 110, growth 20 (2026-11-23)" + note)
+    new, status = repin.repin_source(source, "the-scan", mid=140, count=150, low=130, high=150)
+    assert status == "re-pinned"
+    assert "floor=140,  # mid-window: population 150, window (130, 150)" + note + "\n" in new
+
+
 def test_a_comment_without_a_note_gains_none() -> None:
     new, _ = repin.repin_source(_SOURCE, "the-scan", mid=140, count=150, low=130, high=150)
     assert "floor=140,  # mid-window: population 150, window (130, 150)\n" in new and ";" not in new
