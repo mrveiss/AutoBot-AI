@@ -57,8 +57,12 @@ async def _system_prompt(message: str, flag: bool) -> str:
     return params["system_prompt"]
 
 
-def test_the_flag_defaults_to_off():
-    assert ssot.chat_topic_guidance_enabled is False
+def test_the_flag_defaults_to_off(monkeypatch):
+    """The declared default, isolated from the environment and any ``.env`` the developer has."""
+    from autobot_shared.ssot_chat_graph_settings import ChatGraphSettings
+
+    monkeypatch.delenv("AUTOBOT_CHAT_TOPIC_GUIDANCE", raising=False)
+    assert ChatGraphSettings(_env_file=None).chat_topic_guidance_enabled is False
 
 
 @pytest.mark.asyncio

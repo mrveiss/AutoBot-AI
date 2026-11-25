@@ -379,3 +379,45 @@ class TestSessionTTL:
         await t._save_record(rec)
 
         assert captured == [_SESSION_TTL]
+
+
+class TestConsentChangesMidSession:
+    """Active session state survives an opt-out/opt-in flip; consent only governs persistence (#9035)."""
+
+    @staticmethod
+    def _consent(monkeypatch, enabled):
+        monkeypatch.setattr("services.voice_realtime_telemetry.get_telemetry_settings", lambda: {"enabled": enabled})
+
+    @pytest.mark.asyncio
+    async def test_a_session_started_opted_in_is_still_capped_after_an_opt_out(self, monkeypatch):
+        from services.voice_realtime_telemetry import CapBreachError
+
+        t = _bare_telemetry(AsyncMock(), max_seconds=1800)
+        self._consent(monkeypatch, True)
+        record = _make_record(
+            session_id="flip1",
+            started_at=(datetime.now(timezone.utc) - timedelta(seconds=1810)).isoformat(),
+        )
+        await t._save_record(record)
+        self._consent(monkeypatch, False)
+        with pytest.raises(CapBreachError):
+            await t.check_caps("flip1")
+
+    @pytest.mark.asyncio
+    async def test_a_session_started_opted_out_can_still_end_after_an_opt_in(self, monkeypatch):
+        t = _bare_telemetry(AsyncMock())
+        t._prom = MagicMock()
+        self._consent(monkeypatch, False)
+        await t._save_record(_make_record(session_id="flip2"))
+        self._consent(monkeypatch, True)
+        ended = await t.session_end("flip2")
+        assert ended is not None and ended.ended_at
+        assert "flip2" not in t._in_memory_sessions  # persisted to Redis, so memory lets go
+
+    @pytest.mark.asyncio
+    async def test_nothing_reaches_redis_while_opted_out(self, monkeypatch):
+        redis = AsyncMock()
+        t = _bare_telemetry(redis)
+        self._consent(monkeypatch, False)
+        await t._save_record(_make_record(session_id="off1"))
+        redis.set.assert_not_awaited()

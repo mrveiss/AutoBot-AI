@@ -136,7 +136,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         )
 
         self._prom = PrometheusMetricsManager()
-        # In-memory session tracking for cap checks when telemetry is disabled
+        # Active (and, while telemetry is off, finished) sessions; cap checks read here
         self._in_memory_sessions: dict[str, RealtimeSessionRecord] = {}
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -338,9 +338,10 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
     # ── Private helpers ───────────────────────────────────────────────────────
 
     async def _save_record(self, record: RealtimeSessionRecord) -> None:
-        # Issue #9035: Skip Redis persistence when telemetry is disabled
+        # Active state stays in memory whatever the consent: cap checks and session_end need it even after an
+        # opt-out/opt-in flips mid-session. Consent (#9035) only governs persistence to Redis.
+        self._in_memory_sessions[record.session_id] = record
         if not get_telemetry_settings()["enabled"]:
-            self._in_memory_sessions[record.session_id] = record
             return
 
         redis = await self._get_redis()
@@ -348,11 +349,14 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
             return
         key = f"{_KEY_PREFIX}:{record.session_id}"
         await redis.set(key, json.dumps(record.to_dict()), ex=_SESSION_TTL)
+        if record.ended_at:  # persisted and final: Redis is the record now
+            self._in_memory_sessions.pop(record.session_id, None)
 
     async def _load_record(self, session_id: str) -> RealtimeSessionRecord | None:
-        # Issue #9035: Check in-memory first when telemetry is disabled
-        if not get_telemetry_settings()["enabled"]:
-            return self._in_memory_sessions.get(session_id)
+        # In-memory first: active sessions live there whatever the consent (#9035)
+        in_memory = self._in_memory_sessions.get(session_id)
+        if in_memory is not None or not get_telemetry_settings()["enabled"]:
+            return in_memory
 
         redis = await self._get_redis()
         if redis is None:
