@@ -121,7 +121,7 @@ class Microsoft365Integration(BaseIntegration):
         self.client_secret = config.extra.get("client_secret")
 
     async def test_connection(self) -> IntegrationHealth:
-        """Test Microsoft 365 connection by fetching user profile."""
+        """Test the connection by reading one mail folder (Mail.Read covers it; /me needs User.Read)."""
         start_time = time.monotonic()
 
         if not self.token:
@@ -131,21 +131,16 @@ class Microsoft365Integration(BaseIntegration):
                 "Access token not configured",
             )
 
-        url = f"{self.graph_url}/me"
-        result = await self._make_graph_request("GET", url)
+        url = f"{self.graph_url}/me/mailFolders"
+        result = await self._make_graph_request("GET", url, params={"$top": 1})
 
         latency = (time.monotonic() - start_time) * 1000
 
         if result.get("status_code") == 200:
-            user_data = result.get("body", {})
             return self._create_health_response(
                 IntegrationStatus.CONNECTED,
                 latency,
                 "Connected to Microsoft 365",
-                {
-                    "user": user_data.get("userPrincipalName"),
-                    "display_name": user_data.get("displayName"),
-                },
             )
 
         if result.get("status_code") == 401:
@@ -418,8 +413,7 @@ class Microsoft365Integration(BaseIntegration):
             url = f"{self.graph_url}/me/mailFolders/{safe_folder_id}/messages"
 
         query_params = {"$top": min(limit, 1000)}  # Graph API max is 1000
-        result = await self._make_graph_request("GET", url, params=query_params)
-        return result.get("body", {})
+        return self._body_or_error(await self._make_graph_request("GET", url, params=query_params))
 
     async def _send_email(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Send an email message."""
@@ -460,14 +454,12 @@ class Microsoft365Integration(BaseIntegration):
             "$top": min(limit, 1000),
         }
 
-        result = await self._make_graph_request("GET", url, params=query_params)
-        return result.get("body", {})
+        return self._body_or_error(await self._make_graph_request("GET", url, params=query_params))
 
     async def _list_folders(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all mail folders."""
         url = f"{self.graph_url}/me/mailFolders"
-        result = await self._make_graph_request("GET", url)
-        return result.get("body", {})
+        return self._body_or_error(await self._make_graph_request("GET", url))
 
     async def _create_folder(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new mail folder."""
@@ -548,6 +540,14 @@ class Microsoft365Integration(BaseIntegration):
         return result.get("body", {})
 
     # Helper methods
+
+    @staticmethod
+    def _body_or_error(result: Dict[str, Any]) -> Dict[str, Any]:
+        """A read action's body, or an error dict (never an empty body) when the request failed."""
+        status_code = result.get("status_code", 0)
+        if 200 <= status_code < 300:
+            return result.get("body", {})
+        return {"error": result.get("error") or "Graph request failed", "status_code": status_code}
 
     async def _make_graph_request(
         self,

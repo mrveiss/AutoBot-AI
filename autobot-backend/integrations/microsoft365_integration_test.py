@@ -11,6 +11,7 @@ Tests cover Calendar, Outlook, and Teams operations via Microsoft Graph API.
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 
 from integrations.base import IntegrationConfig, IntegrationStatus
@@ -67,21 +68,15 @@ class TestMicrosoft365Integration:
 
     @patch("integrations.microsoft365_integration.get_http_client")
     async def test_test_connection_success(self, mock_get_client):
-        """Returns CONNECTED status on HTTP 200 from /me."""
-        mock_get_client.return_value = _mock_client(
-            200,
-            {
-                "userPrincipalName": "testuser@example.com",
-                "displayName": "Test User",
-                "id": "user-uuid",
-            },
-        )
+        """Returns CONNECTED on HTTP 200, probing a mail endpoint the Mail.* grant covers (not /me)."""
+        mock_get_client.return_value = _mock_client(200, {"value": []})
         integration = Microsoft365Integration(_make_config())
         health = await integration.test_connection()
 
         assert health.status == IntegrationStatus.CONNECTED
-        assert health.details["user"] == "testuser@example.com"
-        assert health.details["display_name"] == "Test User"
+        call = mock_get_client.return_value.tracked_request.call_args
+        assert call.args[1].endswith("/me/mailFolders")
+        assert call.kwargs["params"] == {"$top": 1}
 
     @patch("integrations.microsoft365_integration.get_http_client")
     async def test_test_connection_unauthorized(self, mock_get_client):
@@ -294,3 +289,25 @@ class TestMicrosoft365Integration:
         create_event_action = next(a for a in actions if a.name == "create_calendar_event")
         assert create_event_action.method == "POST"
         assert "subject" in create_event_action.parameters
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "action,params",
+    [("list_messages", {}), ("search_messages", {"query": "x"}), ("list_folders", {})],
+)
+@patch("integrations.microsoft365_integration.get_http_client")
+async def test_read_action_transport_failure_is_an_error_not_an_empty_body(mock_get_client, action, params):
+    """A Graph transport failure (status 0) must not read as an empty mailbox."""
+    mock_get_client.return_value.tracked_request.side_effect = aiohttp.ClientError("unreachable")
+    result = await Microsoft365Integration(_make_config()).execute_action(action, params)
+    assert result["status_code"] == 0 and "unreachable" in result["error"]
+    assert "value" not in result
+
+
+@pytest.mark.asyncio
+@patch("integrations.microsoft365_integration.get_http_client")
+async def test_read_action_http_error_carries_status(mock_get_client):
+    mock_get_client.return_value = _mock_client(503, {"error": {"message": "busy"}})
+    result = await Microsoft365Integration(_make_config()).execute_action("list_folders", {})
+    assert result == {"error": "busy", "status_code": 503}

@@ -119,6 +119,13 @@ def test_integration_error_is_a_fixed_400(admin, integration):
     assert resp.status_code == 400 and "secret detail" not in resp.text
 
 
+@pytest.mark.parametrize("status_code", [0, 503])
+def test_graph_unreachable_is_a_fixed_502(admin, integration, status_code):
+    integration.execute_action.return_value = {"error": "conn refused", "status_code": status_code}
+    resp = admin.get(f"{PREFIX}/folders")
+    assert resp.status_code == 502 and "conn refused" not in resp.text
+
+
 def test_send_email(admin, integration):
     integration.execute_action.return_value = {"success": True}
     body = {"to": ["a@example.invalid"], "subject": "s", "body": "b"}

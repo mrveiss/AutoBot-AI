@@ -188,6 +188,8 @@ async def _run_action(action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         ) from exc
     if "error" in result:
         logger.warning("Microsoft 365 action %s returned an error", action)
+        if result.get("status_code", 400) == 0 or result.get("status_code", 400) >= 500:  # Graph unreachable / failing
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Microsoft 365 is unavailable")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed")
     if result.get("success") is False:  # a send Graph did not accept: fixed refusal, no Graph text
         logger.warning("Microsoft 365 action %s was not accepted", action)
