@@ -34,7 +34,7 @@ class AgentTerminalSession:
 
 ### **2. Command Risk Levels**
 
-Located in: `src/secure_command_executor.py`
+Located in: `autobot-backend/secure_command_executor.py` (risk lists in `autobot-backend/security/command_patterns.py`: `FORBIDDEN_COMMANDS`, `HIGH_RISK_COMMANDS`)
 
 ```python
 class CommandRisk(Enum):
@@ -56,7 +56,7 @@ class CommandRisk(Enum):
 │  (LLM)      │  Example: "I'll check the files: ls -la"
 └──────┬──────┘
        │
-       │ POST /api/agent-terminal/sessions/{id}/execute
+       │ POST /api/agent-terminal/execute
        │ {
        │   "command": "ls -la",
        │   "description": "List all files in current directory",
@@ -65,7 +65,7 @@ class CommandRisk(Enum):
        ▼
 ```
 
-**Endpoint**: `POST /api/agent-terminal/sessions/{session_id}/execute`
+**Endpoint**: `POST /api/agent-terminal/execute`
 
 **Handler**: `agent_terminal.py:execute_agent_command()`
 
@@ -371,6 +371,8 @@ async def approve_pending_command(
 ---
 
 ### **Phase 4b: Direct Execution Path**
+
+A command runs without approval only when the single AI-line decision (`services/ai_line_enforcement.py`, `resolve_action_line`) resolves to line 1. That decision is shared with the chat graph's approval interrupt (`call_needs_approval`), so a command is never held in one path and run in the other. A read-only command rated SAFE is unmanaged and runs; any other command follows its stored line (an unset line counts as line 2) and the approval baseline. The agent role's `auto_approve_safe` / `auto_approve_moderate` can only tighten it. Anything not run here waits in the terminal's approval queue unless a learned rule matches.
 
 ```
 ┌──────────────────┐
@@ -727,7 +729,7 @@ State Permissions:
 
 ### **Risk Thresholds**
 
-Located in: `src/secure_command_executor.py`
+Located in: `autobot-backend/secure_command_executor.py` (risk lists in `autobot-backend/security/command_patterns.py`: `FORBIDDEN_COMMANDS`, `HIGH_RISK_COMMANDS`)
 
 ```python
 # Forbidden patterns (never execute)
@@ -776,8 +778,8 @@ auto_approve_future: bool  # In ApproveCommandRequest
 ### **Test 1: Safe Command (No Approval)**
 
 ```bash
-Command: ls -la
-Expected: Executes immediately
+Command: ls -la (read-only, rated SAFE; the role allows auto-approving SAFE)
+Expected: Executes immediately. `touch f` or an unrecognised command is held, even though SAFE
 Result: ✅ Pass
 ```
 
@@ -833,7 +835,7 @@ Result: ✅ Pass
 ### **Execute Command**
 
 ```
-POST /api/agent-terminal/sessions/{session_id}/execute
+POST /api/agent-terminal/execute
 
 Request Body:
 {

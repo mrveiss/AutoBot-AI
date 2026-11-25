@@ -21,6 +21,7 @@ from autobot_shared.ai_lines import AiLine
 from autobot_shared.status_enums import CommandRisk
 from autobot_shared.tool_catalogue import valid_approval_categories
 from chat_workflow import approval_baseline as baseline
+from secure_command_executor import CommandSecurityPolicy
 from services import ai_line_enforcement as enforcement
 from services.agent_terminal.models import AgentTerminalSession
 from services.agent_terminal.service import AgentTerminalService
@@ -159,3 +160,29 @@ async def test_a_forged_tenant_is_refused_and_is_not_replaced_by_the_owners_pers
     result = await _run(svc, stored=AiLine.AUTONOMOUS, relaxed=ALL_RELAXED)
     assert result["status"] == "error"
     svc._execute_auto_approved_command.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "command", ["ls -la", "touch /tmp/ai-line-probe", "rm -rf /tmp/ai-line-probe", "frobnicate --now"]
+)
+async def test_the_chat_gate_and_the_terminal_hold_the_same_commands(command):
+    """#19950, #13250, #16840: both paths consume one decision, so a command is never run in one and held in the other.
+
+    Real risk classification, same line and baseline: the chat graph's ``call_needs_approval`` and the terminal's
+    ``execute_command`` must agree on whether the command waits for a person.
+    """
+    from types import SimpleNamespace
+
+    from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY
+
+    svc = _service()
+    svc.security_policy = CommandSecurityPolicy()
+    svc._assess_command = AgentTerminalService._assess_command.__get__(svc)
+    ctx = SimpleNamespace(context={VERIFIED_COMPANY_KEY: TENANT}, requires_approval_before=[], approve_every_call=False)
+    a, b, c = _world(None, ALL_RELAXED)
+    with a, b, c:
+        chat_holds = await enforcement.call_needs_approval(
+            {"name": enforcement.TERMINAL_TOOL, "params": {"command": command}}, ctx
+        )
+        result = await svc.execute_command("s", command)
+    assert (result == {"status": "pending_approval"}) is chat_holds
