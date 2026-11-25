@@ -16,7 +16,8 @@ Exit codes:
 
 Only literal integer floors are rewritten. A floor written as an expression is reported, not
 touched, so a human decides what it should derive from. An existing comment on the floor line is
-kept, except a ``# mid-window: ...`` comment, which is refreshed with the new measurement.
+kept, except the measurement of a ``# mid-window: ...`` comment, which is refreshed; a note after its first
+``; `` is kept (#22197).
 
 Usage:
     python scripts/repin_reach_floors.py           # re-pin every stale floor
@@ -88,7 +89,8 @@ def repin_source(source: str, name: str, mid: int, count: int, low: int, high: i
     head = lines[row][: node.col_offset].decode("utf-8")
     new_line = head + str(mid) + lines[row][node.end_col_offset :].decode("utf-8")
     stamp = f"# mid-window: population {count}, window ({low}, {high})"
-    new_line = re.sub(r"#\s*mid-window:[^\n]*", stamp, new_line)
+    # Notes follow the measurement after "; " (#22197): refresh the measurement, keep the note.
+    new_line = re.sub(r"#\s*mid-window:[^;\n]*", stamp, new_line, count=1)
     if "#" not in new_line[len(head) :]:
         new_line = new_line.rstrip("\n") + f"  {stamp}\n"
     lines[row] = new_line.encode("utf-8")

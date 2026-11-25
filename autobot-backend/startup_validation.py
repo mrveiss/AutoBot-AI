@@ -10,6 +10,7 @@ This prevents silent crashes when systemd restarts before .env is written.
 Exit codes:
   0 = All critical env vars present
   1 = Missing required env var (logs error)
+  1 = AUTOBOT_BACKEND_HOST is a bind-all address (#18810)
   2 = .env file not readable
 """
 
@@ -18,6 +19,8 @@ import sys
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
+from autobot_shared.ssot_reachable_host import is_unspecified_host
 
 logger = get_logger(__name__)
 
@@ -67,6 +70,23 @@ def validate_env_vars() -> tuple[bool, list[str]]:
     return len(missing) == 0, missing
 
 
+def validate_advertised_host() -> str | None:
+    """The failure text when AUTOBOT_BACKEND_HOST is a bind-all address, else None (#18810).
+
+    That variable is the address clients dial; a URL on the bind-all address is refused by the egress
+    guard, so every outbound backend call (MCP bridges, VNC status) fails. The listen address
+    belongs in AUTOBOT_BACKEND_BIND_HOST.
+    """
+    host = config.vm.main  # SSOT: empty or unset is already the default (127.0.0.1)
+    if not is_unspecified_host(host):
+        return None
+    return (
+        f"AUTOBOT_BACKEND_HOST={host} is a bind-all address, not a host clients can dial. "
+        "Set it to the backend's reachable address and put the listen address in "
+        "AUTOBOT_BACKEND_BIND_HOST (the builtin update re-renders the env from the backend role)."
+    )
+
+
 def main():
     env_path = os.environ.get("AUTOBOT_ENV_PATH", ".env")
 
@@ -78,6 +98,11 @@ def main():
     valid, missing = validate_env_vars()
     if not valid:
         logger.error("FATAL: Missing required environment variables: %s", ", ".join(missing))
+        sys.exit(1)
+
+    host_error = validate_advertised_host()
+    if host_error:
+        logger.error("FATAL: %s", host_error)
         sys.exit(1)
 
     logger.info("✓ Backend startup validation passed (%d vars)", len(REQUIRED_ENV_VARS))

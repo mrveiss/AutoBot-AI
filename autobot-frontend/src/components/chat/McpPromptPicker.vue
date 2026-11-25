@@ -1,512 +1,141 @@
+<!--
+  Copyright 2025-2026 mrveiss
+  SPDX-License-Identifier: Apache-2.0
+
+  McpPromptPicker -- insert an MCP prompt template into the composer (MVA-2167, #18243). A named icon button
+  opens a kit modal: pick a source bridge, pick a prompt, fill its parameters, insert. The state and the
+  requests are `useMcpPrompts`; this is the view, on the kit and tokens, with every string a locale key.
+-->
 <template>
-  <div class="mcp-prompt-picker">
-    <BaseButton
-      variant="ghost"
-      size="xs"
-      @click="showModal = true"
-      class="action-btn"
+  <div class="inline-flex">
+    <ChatHeaderIconButton
+      placement="top"
+      :label="$t('chat.input.selectPromptTemplate')"
+      icon="list-alt"
       :disabled="disabled"
-      :aria-label="$t('chat.input.selectPromptTemplate', 'Select prompt template')"
-    >
-      <Icon name="list-alt" />
-    </BaseButton>
+      :expanded="showModal"
+      @click="showModal = true"
+    />
 
     <BaseModal
-      :close-label="t('ui.modal.closeDialog')"
-      v-if="showModal"
-      :model-value="showModal"
-      title="Prompt Templates"
-      @update:model-value="showModal = $event"
-      @close="showModal = false"
-      size="lg"
+      v-model="showModal"
+      :title="$t('chat.mcpPrompts.title')"
+      :close-label="$t('ui.modal.closeDialog')"
+      size="md"
+      @close="closeModal"
     >
-      <template #header>
-        <h3>Prompt Templates</h3>
-      </template>
-
-      <div v-if="loading" class="loading-state">
-        <Icon name="spinner" spin />
-        <span>Loading templates...</span>
+      <div v-if="loading" class="flex items-center justify-center gap-3 p-6 text-[var(--aui-color-text-muted)]" role="status">
+        <BaseSpinner size="sm" />
+        <span>{{ $t('chat.mcpPrompts.loading') }}</span>
       </div>
 
-      <div v-else-if="error" class="error-state">
-        <Icon name="exclamation-triangle" />
-        <p>{{ error }}</p>
-        <BaseButton @click="loadPrompts" variant="primary" size="sm">
-          Retry
-        </BaseButton>
-      </div>
+      <BaseAlert v-else-if="error" variant="error" :message="$t(error)">
+        <template #actions><BaseButton size="sm" variant="outline" @click="loadPrompts">{{ $t('common.retry') }}</BaseButton></template>
+      </BaseAlert>
 
-      <div v-else-if="!selectedPrompt" class="prompts-container">
-        <!-- Bridge Selector -->
-        <div class="bridge-selector">
-          <label>Source:</label>
-          <select v-model="activeBridge" class="bridge-select">
-            <option value="git">Git</option>
-            <option value="knowledge">Knowledge</option>
-            <option value="filesystem">Filesystem</option>
+      <div v-else-if="!selectedPrompt" class="flex flex-col gap-3">
+        <BaseAlert v-if="failedBridges.length" variant="warning" :message="$t('chat.mcpPrompts.bridgesFailed', { bridges: failedBridges.map((b) => $t(`chat.mcpPrompts.bridges.${b}`)).join(', ') })">
+          <template #actions><BaseButton size="sm" variant="outline" @click="loadPrompts">{{ $t('common.retry') }}</BaseButton></template>
+        </BaseAlert>
+        <label class="flex items-center gap-2 text-sm text-[var(--aui-color-text-muted)]">
+          <span>{{ $t('chat.mcpPrompts.source') }}</span>
+          <select v-model="activeBridge" class="h-8 rounded-[var(--aui-radius-md)] border border-[var(--aui-input-border)] bg-[var(--aui-input-bg)] px-2 text-sm text-[var(--aui-color-text)]">
+            <option v-for="bridge in MCP_BRIDGES" :key="bridge" :value="bridge">{{ $t(`chat.mcpPrompts.bridges.${bridge}`) }}</option>
           </select>
-        </div>
-
-        <!-- Prompts List -->
-        <div v-if="currentPrompts.length === 0" class="empty-state">
-          <Icon name="file-alt" />
-          <p>No templates available from {{ activeBridge }} bridge</p>
-        </div>
-
-        <div v-else class="prompts-list">
-          <div
-            v-for="prompt in currentPrompts"
-            :key="prompt.name"
-            class="prompt-item"
-            @click="selectPrompt(prompt)"
-          >
-            <div class="prompt-header">
-              <div class="prompt-name">{{ prompt.name }}</div>
-              <Icon name="chevron-right" />
-            </div>
-            <div v-if="prompt.description" class="prompt-description">
-              {{ prompt.description }}
-            </div>
-            <div v-if="prompt.arguments && prompt.arguments.length > 0" class="prompt-args">
-              <span class="args-label">Parameters:</span>
-              <span
-                v-for="arg in prompt.arguments"
-                :key="arg.name"
-                class="arg-badge"
-              >
-                {{ arg.name }}{{ arg.required ? '*' : '' }}
+        </label>
+        <EmptyState v-if="currentPrompts.length === 0" :description="$t('chat.mcpPrompts.empty', { bridge: $t(`chat.mcpPrompts.bridges.${activeBridge}`) })" compact>
+          <template #icon><Icon name="file-alt" size="xl" /></template>
+        </EmptyState>
+        <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
+          <li v-for="prompt in currentPrompts" :key="prompt.name">
+            <button
+              type="button"
+              class="flex w-full cursor-pointer flex-col items-start gap-1 rounded-[var(--aui-radius-md)] border border-[var(--aui-color-border)] bg-[var(--aui-color-surface)] p-3 text-start text-[var(--aui-color-text)] hover:border-[var(--aui-color-border-strong)] hover:bg-[var(--aui-color-surface-raised)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--aui-color-focus-ring)]"
+              @click="selectPrompt(prompt)"
+            >
+              <span class="font-mono text-sm font-medium">{{ prompt.name }}</span>
+              <span v-if="prompt.description" class="text-sm text-[var(--aui-color-text-muted)]">{{ prompt.description }}</span>
+              <span v-if="prompt.arguments?.length" class="flex flex-wrap items-center gap-1 text-xs text-[var(--aui-color-text-muted)]">
+                <span>{{ $t('chat.mcpPrompts.parameters') }}</span>
+                <BaseBadge v-for="arg in prompt.arguments" :key="arg.name" size="xs" monospace>{{ arg.name }}{{ arg.required ? '*' : '' }}</BaseBadge>
               </span>
-            </div>
-          </div>
-        </div>
+            </button>
+          </li>
+        </ul>
       </div>
 
-      <!-- Prompt Parameters Form -->
-      <div v-else class="prompt-form">
-        <div class="form-header">
-          <BaseButton @click="selectedPrompt = null" variant="ghost" size="sm">
-            <Icon name="arrow-left" /> Back
+      <form v-else class="flex flex-col gap-3" @submit.prevent="insertPrompt">
+        <div class="flex items-center gap-3">
+          <BaseButton variant="ghost" size="sm" @click="backToList">
+            <template #icon-left><Icon name="arrow-left" /></template>
+            {{ $t('common.back') }}
           </BaseButton>
-          <h4>{{ selectedPrompt.name }}</h4>
+          <h4 class="m-0 font-mono text-base">{{ selectedPrompt.name }}</h4>
         </div>
+        <p v-if="selectedPrompt.description" class="m-0 text-sm text-[var(--aui-color-text-muted)]">{{ selectedPrompt.description }}</p>
+        <BaseInput
+          v-for="arg in selectedPrompt.arguments"
+          :key="arg.name"
+          v-model="formValues[arg.name]"
+          :label="arg.name"
+          :required="arg.required"
+          :helper-text="arg.description"
+          :placeholder="arg.description || arg.name"
+        />
+        <BaseAlert v-if="formError" variant="error" :message="$t(formError.key, formError.params ?? {})" />
+      </form>
 
-        <p v-if="selectedPrompt.description" class="form-description">
-          {{ selectedPrompt.description }}
-        </p>
-
-        <div class="form-fields">
-          <div
-            v-for="arg in selectedPrompt.arguments"
-            :key="arg.name"
-            class="form-field"
-          >
-            <label :for="`arg-${arg.name}`" class="field-label">
-              {{ arg.name }}
-              <span v-if="arg.required" class="required">*</span>
-            </label>
-            <p v-if="arg.description" class="field-description">
-              {{ arg.description }}
-            </p>
-            <input
-              :id="`arg-${arg.name}`"
-              v-model="formValues[arg.name]"
-              type="text"
-              class="field-input"
-              :required="arg.required"
-              :placeholder="arg.description || arg.name"
-            />
-          </div>
-        </div>
-
-        <div v-if="formError" class="form-error">
-          <Icon name="exclamation-triangle" />
-          <span>{{ formError }}</span>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="modal-footer">
-          <BaseButton @click="closeModal" variant="ghost">
-            Cancel
-          </BaseButton>
-          <BaseButton
-            v-if="selectedPrompt"
-            @click="insertPrompt"
-            variant="primary"
-            :disabled="insertLoading"
-          >
-            <Icon v-if="insertLoading" name="spinner" spin />
-            Insert Template
-          </BaseButton>
-        </div>
+      <template #actions>
+        <BaseButton variant="ghost" @click="closeModal">{{ $t('common.cancel') }}</BaseButton>
+        <BaseButton v-if="selectedPrompt" variant="primary" :loading="insertLoading" @click="insertPrompt">
+          {{ $t('chat.mcpPrompts.insert') }}
+        </BaseButton>
       </template>
     </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { useApiClient } from '@/plugins/api'
-import { BaseModal, BaseButton } from '@autobot/ui'
-import { useI18n } from 'vue-i18n'
+import { ref, watch } from 'vue'
+import { BaseAlert, BaseBadge, BaseButton, BaseInput, BaseModal, BaseSpinner, EmptyState } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
-import { createLogger } from '@/utils/debugUtils'
-const { t } = useI18n()
+import ChatHeaderIconButton from './ChatHeaderIconButton.vue'
+import { MCP_BRIDGES, useMcpPrompts } from '@/composables/chat/useMcpPrompts'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
-const logger = createLogger('McpPromptPicker')
-const api = useApiClient()
-
-interface Props {
-  disabled?: boolean
-}
-
-defineProps<Props>()
-
-interface PromptArgument {
-  name: string
-  description?: string
-  required?: boolean
-}
-
-interface McpPrompt {
-  name: string
-  description?: string
-  arguments?: PromptArgument[]
-}
-
-interface PromptMessage {
-  role: string
-  content: {
-    type: string
-    text?: string
-  }
-}
-
-const emit = defineEmits<{
-  (e: 'insert', text: string): void
-}>()
-
-const bridges = ['git', 'knowledge', 'filesystem'] as const
-type Bridge = typeof bridges[number]
+defineProps<{ disabled?: boolean }>()
+const emit = defineEmits<{ (e: 'insert', text: string): void }>()
 
 const showModal = ref(false)
-const activeBridge = ref<Bridge>('git')
-const loading = ref(false)
-const error = ref<string | null>(null)
-const promptsByBridge = ref<Record<Bridge, McpPrompt[]>>({
-  git: [],
-  knowledge: [],
-  filesystem: []
-})
+const {
+  activeBridge, loading, error, selectedPrompt, formValues, formError, insertLoading, currentPrompts,
+  promptsByBridge, failedBridges, loadPrompts, selectPrompt, renderSelected, reset,
+} = useMcpPrompts()
 
-const selectedPrompt = ref<McpPrompt | null>(null)
-const formValues = ref<Record<string, string>>({})
-const formError = ref<string | null>(null)
-const insertLoading = ref(false)
-
-const currentPrompts = computed(() => promptsByBridge.value[activeBridge.value])
-
+// Load on first open (and again while the first bridge is still empty), as before.
 watch(showModal, (show: boolean) => {
-  if (show && Object.keys(promptsByBridge.value.git).length === 0) {
-    loadPrompts()
-  }
+  if (show && promptsByBridge.value.git.length === 0) void loadPrompts()
 })
 
-async function loadPrompts() {
-  loading.value = true
-  error.value = null
+// Closing the dialog or going Back ends the form an insert was started from: its in-flight render is then discarded.
+const insertRequest = useLatestRequest()
 
-  try {
-    await Promise.all(
-      bridges.map(async (bridge) => {
-        try {
-          const response = await api.get<{ prompts: McpPrompt[] }>(
-            `/api/${bridge}/mcp/prompts`
-          )
-          promptsByBridge.value[bridge] = response.prompts || []
-        } catch (err) {
-          logger.error(`Failed to load ${bridge} prompts:`, err)
-          promptsByBridge.value[bridge] = []
-        }
-      })
-    )
-  } catch (err) {
-    logger.error('Failed to load prompts:', err)
-    error.value = 'Failed to load prompt templates. Please try again.'
-  } finally {
-    loading.value = false
-  }
+function backToList(): void {
+  insertRequest.invalidate()
+  reset()
 }
 
-function selectPrompt(prompt: McpPrompt) {
-  selectedPrompt.value = prompt
-  formValues.value = {}
-  formError.value = null
-
-  if (prompt.arguments) {
-    prompt.arguments.forEach((arg) => {
-      formValues.value[arg.name] = ''
-    })
-  }
-}
-
-async function insertPrompt() {
-  if (!selectedPrompt.value) return
-
-  formError.value = null
-
-  const requiredArgs = selectedPrompt.value.arguments?.filter((a: PromptArgument) => a.required) || []
-  for (const arg of requiredArgs) {
-    if (!formValues.value[arg.name]?.trim()) {
-      formError.value = `Please fill in required parameter: ${arg.name}`
-      return
-    }
-  }
-
-  insertLoading.value = true
-
-  try {
-    const response = await api.post<{
-      description?: string
-      messages: PromptMessage[]
-    }>(
-      `/api/${activeBridge.value}/mcp/prompts/get`,
-      {
-        name: selectedPrompt.value.name,
-        arguments: formValues.value
-      }
-    )
-
-    const promptText = response.messages
-      .map((msg) => {
-        if (typeof msg.content === 'string') {
-          return msg.content
-        }
-        if (msg.content && typeof msg.content === 'object') {
-          if ('text' in msg.content) {
-            return msg.content.text
-          }
-          if (Array.isArray(msg.content)) {
-            return msg.content
-              .map((c: unknown) => (typeof c === 'string' ? c : (c as { text?: string })?.text || ''))
-              .join('\n')
-          }
-        }
-        return ''
-      })
-      .filter((text): text is string => typeof text === 'string' && text.trim() !== '')
-      .join('\n\n')
-
-    emit('insert', promptText)
-    closeModal()
-  } catch (err) {
-    logger.error('Failed to get prompt:', err)
-    formError.value = 'Failed to load prompt template. Please try again.'
-  } finally {
-    insertLoading.value = false
-  }
-}
-
-function closeModal() {
+function closeModal(): void {
+  insertRequest.invalidate()
   showModal.value = false
-  selectedPrompt.value = null
-  formValues.value = {}
-  formError.value = null
+  reset()
+}
+
+async function insertPrompt(): Promise<void> {
+  const mine = insertRequest.begin()
+  const text = await renderSelected()
+  if (text === null || !insertRequest.isCurrent(mine)) return
+  emit('insert', text)
+  closeModal()
 }
 </script>
-
-<style scoped>
-.loading-state,
-.error-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  gap: 1rem;
-}
-
-.bridge-selector {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.bridge-selector label {
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.bridge-select {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-}
-
-.prompts-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.prompt-item {
-  padding: 1rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: 0.5rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.prompt-item:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.prompt-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-.prompt-name {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.prompt-description {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  margin-bottom: 0.75rem;
-}
-
-.prompt-args {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.args-label {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.arg-badge {
-  display: inline-block;
-  padding: 0.125rem 0.5rem;
-  background: var(--bg-tertiary);
-  border-radius: 0.25rem;
-  font-size: var(--text-xs);
-  color: var(--text-primary);
-  font-family: 'Monaco', 'Courier New', monospace;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  gap: 1rem;
-  color: var(--text-secondary);
-}
-
-.prompt-form {
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.form-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.form-header h4 {
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.form-description {
-  padding: 0.75rem;
-  background: var(--bg-secondary);
-  border-radius: 0.375rem;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  margin-bottom: 1.5rem;
-}
-
-.form-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.field-label {
-  font-weight: 500;
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-}
-
-.required {
-  color: var(--color-error);
-}
-
-.field-description {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  margin-top: -0.25rem;
-}
-
-.field-input {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-}
-
-.field-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
-.form-error {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  background: var(--color-error-bg);
-  border: 1px solid var(--color-error);
-  border-radius: 0.375rem;
-  color: var(--color-error);
-  font-size: var(--text-sm);
-  margin-top: 1rem;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-</style>
