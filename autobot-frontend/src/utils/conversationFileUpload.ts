@@ -190,11 +190,13 @@ export function postConversationUpload(
 let sessionBeingCreated: Promise<string> | null = null
 
 /**
- * The conversation a chat attachment uploads into, creating one first when the chat has none.
+ * The conversation a chat request belongs to (an attachment upload, an image generation), creating one first
+ * when the chat has none.
  *
  * A chat with no current session only gets one when its first message is sent, but the upload route
- * answers 404 for a conversation that does not exist (a non-admin names one they own, #20133), so the
- * attachment cannot ride a made-up id such as `default`. Files picked together share one creation.
+ * answers 404 for a conversation that does not exist (a non-admin names one they own, #20133), and a result
+ * needs a chat to land in, so neither can ride a made-up id such as `default`. Requests started together
+ * share one creation.
  */
 export function ensureUploadSession(
   store: { currentSessionId: string | null },

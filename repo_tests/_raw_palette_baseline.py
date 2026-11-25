@@ -167,10 +167,10 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-red-200": 2,
     "text-red-300": 3,
     "text-red-400": 15,  # #22179 chat stream restyled onto tokens (16 -> 15)
-    "text-red-500": 7,  # #18819: 9 -> 8, hand-rolled notices moved to the kit BaseAlert
-    "text-red-600": 19,  # #22179 chat stream restyled onto tokens (21 -> 19)
+    "text-red-500": 6,  # #18243: 7 -> 6; #18819: 9 -> 8, hand-rolled notices moved to the kit BaseAlert
+    "text-red-600": 18,  # #18243: 19 -> 18, composer rewrite; #22179 chat stream restyled onto tokens (21 -> 19)
     "text-red-700": 5,  # #16253 SystemStatusNotification severities onto theme tokens (6 -> 5)
-    "text-red-800": 5,
+    "text-red-800": 4,  # #18243: 5 -> 4, composer rewrite
     "text-yellow-200": 2,
     "text-yellow-300": 1,
     "text-yellow-400": 6,  # #16253 SystemStatusNotification severities onto theme tokens (7 -> 6)

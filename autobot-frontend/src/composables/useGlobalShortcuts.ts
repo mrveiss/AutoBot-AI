@@ -19,6 +19,7 @@ export interface GlobalShortcutsOptions {
  * Shortcuts:
  *   Ctrl/Cmd+K  — open command palette
  *   Ctrl/Cmd+N  — new chat (navigates to /chat)
+ *   Ctrl/Cmd+Shift+O — new chat, also from inside the composer
  *   Ctrl/Cmd+1–9 — switch to nth conversation in the chat store
  *   Escape      — handled per-component; this composable does not capture it globally
  *
@@ -34,18 +35,17 @@ export function useGlobalShortcuts({ commandPaletteRef }: GlobalShortcutsOptions
     commandPaletteRef.value?.open()
   })
 
-  // Ctrl/Cmd+N — new chat
-  useKeyboardShortcut('ctrl+n', () => {
-    logger.debug('Ctrl+N: new chat')
+  // Ctrl/Cmd+N and Ctrl/Cmd+Shift+O — new chat. The second is the one the Chat mockup shows on the
+  // New chat button (#18243); it also works while the composer has focus.
+  const newChat = (): void => {
+    logger.debug('new chat shortcut')
     chatStore.createNewSession()
     router.push('/chat')
-  }, { preventDefault: true })
-
-  useKeyboardShortcut('meta+n', () => {
-    logger.debug('Cmd+N: new chat')
-    chatStore.createNewSession()
-    router.push('/chat')
-  }, { preventDefault: true })
+  }
+  useKeyboardShortcut('ctrl+n', newChat, { preventDefault: true })
+  useKeyboardShortcut('meta+n', newChat, { preventDefault: true })
+  useKeyboardShortcut('ctrl+shift+o', newChat, { preventDefault: true, allowInInput: true })
+  useKeyboardShortcut('meta+shift+o', newChat, { preventDefault: true, allowInInput: true })
 
   // Ctrl/Cmd+1–9 — switch to numbered conversation
   for (let i = 1; i <= 9; i++) {
