@@ -28,6 +28,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import REACH_AUDIT_ENV, Reach, ReachFloorError
 
 from autobot_shared.isolated_git import make_repo
+from tools.lint._comment_syntax import code_text
 
 _ROOT = Path("/nonexistent-root-never-read")
 _WORKFLOWS = repo_root() / ".github" / "workflows"
@@ -127,7 +128,7 @@ def test_both_workflows_call_the_one_entry_and_nothing_else_sets_the_audit() -> 
     for name in ("ci.yml", "dispatch-preboard-guards.yml"):
         assert _entry_steps(_workflow(name)), f"{name} does not call the shared entry"
         text = (_WORKFLOWS / name).read_text(encoding="utf-8")
-        code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+        code = code_text(text, name=name)
         assert REACH_AUDIT_ENV not in code, f"{name} sets {REACH_AUDIT_ENV} on its own"
 
 
