@@ -10,10 +10,11 @@
  * Issue #184: Split oversized Vue components
  */
 
-export { default as ApprovalRequestCard } from './ApprovalRequestCard.vue'
+export { default as ChatMessageApproval } from './ChatMessageApproval.vue'
+export { default as ChatMessageContent } from './ChatMessageContent.vue'
+export { default as ChatMessageRow } from './ChatMessageRow.vue'
 export { default as CitationsDisplay } from './CitationsDisplay.vue'
 export { default as MessageAttachments } from './MessageAttachments.vue'
-export { default as MessageItem } from './MessageItem.vue'
 export { default as TypingIndicator } from './TypingIndicator.vue'
 export { default as ChatMessages } from './ChatMessages.vue'
 export { default as ChatInput } from './ChatInput.vue'

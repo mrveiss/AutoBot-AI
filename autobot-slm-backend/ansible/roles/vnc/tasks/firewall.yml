@@ -1,0 +1,38 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# Open the ports the vnc role really serves (#22211): the RFB port of the configured display
+# (display :1 listens on 5901) and the websockify port. Both from the internal subnet only.
+# One home: bootstrap-node.yml and provision-fleet-roles.yml include this file.
+
+- name: vnc | Allow the RFB port of display {{ vnc_display }} from the internal subnet
+  community.general.ufw:
+    rule: allow
+    port: "{{ vnc_rfb_port | string }}"
+    proto: tcp
+    src: "{{ network_subnet }}"
+    comment: "VNC RFB (display :{{ vnc_display }}) - internal only"
+
+- name: vnc | Allow the websockify port from the internal subnet
+  community.general.ufw:
+    rule: allow
+    port: "{{ websockify_port | string }}"
+    proto: tcp
+    src: "{{ network_subnet }}"
+    comment: "noVNC websockify - internal only"
+
+# bootstrap-node.yml used to open the base port (5900) for every node, though display N serves 5900 + N.
+# Delete that stale rule when this node's RFB port is a different one; deleting an absent rule is a no-op.
+- name: vnc | Delete the stale base-port rule bootstrap used to open
+  community.general.ufw:
+    rule: allow
+    port: "{{ vnc_rfb_base_port | string }}"
+    proto: tcp
+    src: "{{ network_subnet }}"
+    delete: true
+  when:
+    - vnc_rfb_port | int != vnc_rfb_base_port | int
+    # websockify may itself listen on the base port; the delete would remove that allow rule (same port/proto/src)
+    - websockify_port | int != vnc_rfb_base_port | int

@@ -100,6 +100,11 @@ def harness(session_factory, monkeypatch):  # noqa: ANN001
     async def _state_for(_session, agent_id, **_kw):
         return states.setdefault(agent_id, _state(agent_id))
 
+    async def _found(_session, agent_id, **_kw):  # the read route's pure lookup: it never creates a row (#21992)
+        return states.get(agent_id)
+
+    find_state = AsyncMock(side_effect=_found)
+
     async def _session():
         async with session_factory() as session:
             yield session
@@ -113,6 +118,7 @@ def harness(session_factory, monkeypatch):  # noqa: ANN001
     names = AsyncMock(return_value="Alice A")
     monkeypatch.setattr(audit_store, "record_committed", _record)
     monkeypatch.setattr(heartbeat, "_get_or_create_state", get_state)
+    monkeypatch.setattr(heartbeat, "_find_state", find_state)
     monkeypatch.setattr(heartbeat, "_paused_by_name", names)
     scheduler = MagicMock(disable_agent=AsyncMock(), enable_agent=AsyncMock())
     app = FastAPI()
@@ -126,6 +132,7 @@ def harness(session_factory, monkeypatch):  # noqa: ANN001
         audits=audits,
         states=states,
         get_state=get_state,
+        find_state=find_state,
         names=names,
         scheduler=scheduler,
     )
@@ -151,6 +158,7 @@ async def test_cross_company_read_is_404(harness, session_factory):  # noqa: ANN
     response = harness.client.get("/api/heartbeat/agent-b/config")
     assert response.status_code == 404
     harness.get_state.assert_not_awaited()
+    harness.find_state.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -177,6 +185,7 @@ async def test_unknown_and_platform_agents_are_404_for_a_company_admin(harness, 
     assert harness.client.get(f"/api/heartbeat/{agent}/config").status_code == 404
     assert harness.client.post(f"/api/heartbeat/{agent}/terminate", json={}).status_code == 404
     harness.get_state.assert_not_awaited()
+    harness.find_state.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -248,6 +257,7 @@ async def test_members_of_a_soft_deleted_company_get_404(harness, session_factor
             response = harness.client.post("/api/heartbeat/agent-gone/pause", json={"reason": "r"})
         assert response.status_code == 404
     harness.get_state.assert_not_awaited()
+    harness.find_state.assert_not_awaited()
     assert harness.audits == []
 
 
