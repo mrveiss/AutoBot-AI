@@ -70,6 +70,7 @@ from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansib
 )
 from autobot_shared.ssot_ssh import SSHIdentitySettings
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
+from autobot_shared.ssot_tracing_settings import TracingSettings
 
 _Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
 # Determine project root for .env file location.
@@ -295,9 +296,6 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
     # Inline AgentResponseJudge on chat replies (#10599, §3.3).
     # OFF by default (one LLM round-trip per judge call); enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
     chat_inline_judge_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_INLINE_JUDGE")
-    # Topic guidance on the chat system prompt (intent_classifier.detect_topic / select_context_prompt, #21678).
-    # OFF by default: it changes the prompt of every turn whose message matches a topic keyword.
-    chat_topic_guidance_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_TOPIC_GUIDANCE")
     # Minimum judge overall_score to accept a response without one regeneration
     # attempt.  Only used when chat_inline_judge_enabled=True.
     chat_inline_judge_threshold: float = Field(default=0.6, alias="AUTOBOT_CHAT_INLINE_JUDGE_THRESHOLD")
@@ -1358,7 +1356,7 @@ class PathConfig(RedactedSettings, SSHIdentitySettings):
         return Path(self.management_ssh_key_path)
 
 
-class MiscConfig(RedactedSettings, CodebaseIndexSettings):
+class MiscConfig(RedactedSettings, CodebaseIndexSettings, TracingSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
@@ -1785,14 +1783,6 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     tls_cert_path: str = Field(default="", alias="AUTOBOT_TLS_CERT_PATH")
     tls_key_path: str = Field(default="", alias="AUTOBOT_TLS_KEY_PATH")
     trace_console: str = Field(default="", alias="AUTOBOT_TRACE_CONSOLE")
-    # Trace sampling: AUTOBOT_OTEL_SAMPLE_RATE is the one setting. AUTOBOT_TRACE_SAMPLE_RATE is a deprecated alias,
-    # used only when the canonical name is unset (autobot_shared/tracing.py logs the warning). Strings: a bad value
-    # falls back to the default at the read site instead of failing the whole config load (#21685).
-    otel_sample_rate: str = Field(default="0.1", alias="AUTOBOT_OTEL_SAMPLE_RATE")
-    otel_enabled: str = Field(default="false", alias="AUTOBOT_OTEL_ENABLED")
-    otel_endpoint: str = Field(default="", alias="AUTOBOT_OTEL_ENDPOINT")
-    otel_service_version: str = Field(default="1.5.0", alias="AUTOBOT_OTEL_SERVICE_VERSION")
-    trace_sample_rate: str | None = Field(default=None, alias="AUTOBOT_TRACE_SAMPLE_RATE")
     tts_stream_probe_ttl: str = Field(
         default="",
         alias="AUTOBOT_TTS_STREAM_PROBE_TTL",

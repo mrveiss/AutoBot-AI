@@ -23,6 +23,7 @@ from enum import Enum
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config as _ssot_config
 from prompt_manager import get_prompt
 
 logger = get_logger(__name__)
@@ -577,3 +578,14 @@ def select_context_prompt(topic: str, base_prompt: str) -> str:
         f"**Remember**: Follow both the general conversation management rules above AND the "
         f"context-specific guidance for this {topic} conversation."
     )
+
+
+def apply_topic_guidance(system_prompt: str, message: str, session) -> str:
+    """Append the topic guidance for *message* when ``AUTOBOT_CHAT_TOPIC_GUIDANCE`` is on (#21678).
+
+    Off (the default) returns *system_prompt* unchanged.
+    """
+    if not _ssot_config.chat_topic_guidance_enabled:
+        return system_prompt
+    topic = detect_topic(message, getattr(session, "conversation_history", None))
+    return select_context_prompt(topic, system_prompt)

@@ -21,7 +21,7 @@ from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_history.rolling_summary import prompt_summary
 from dependencies import provide_config_manager
-from intent_classifier import detect_topic, select_context_prompt
+from intent_classifier import apply_topic_guidance
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
 from middleware.manager import get_extension_manager
@@ -616,17 +616,6 @@ class LLMHandlerMixin:
 NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
     @staticmethod
-    def _with_topic_guidance(system_prompt: str, message: str, session: WorkflowSession) -> str:
-        """Append the topic guidance for *message* when ``AUTOBOT_CHAT_TOPIC_GUIDANCE`` is on (#21678).
-
-        Off (the default) returns *system_prompt* unchanged.
-        """
-        if not _ssot_config.chat_topic_guidance_enabled:
-            return system_prompt
-        topic = detect_topic(message, getattr(session, "conversation_history", None))
-        return select_context_prompt(topic, system_prompt)
-
-    @staticmethod
     def _get_llc_tool_prompt() -> str:
         """Board/company tool teaching for the CEO-chat path (#11501 T2)."""
         try:
@@ -835,15 +824,13 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
         # Issue #4265: Emit BEFORE_PROMPT_BUILD hook before building prompts
         await _emit_before_prompt_build(
-            session.session_id,
-            {"message": message, "use_knowledge": use_knowledge, "language": language},
+            session.session_id, {"message": message, "use_knowledge": use_knowledge, "language": language}
         )
 
         system_prompt = self._get_system_prompt(
             language=language,
             company_id=(session.metadata.get("company_id") if session and session.metadata else None),
         )
-        system_prompt = self._with_topic_guidance(system_prompt, message, session)
         # Issue #5066: Tiered L0-L4 context wake-up.
         # #13689 turned this ON on 2026-08-08; #13866 reverted it to OFF on
         # 2026-08-10. The A/B's "all five layers render" was measured against
@@ -861,7 +848,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             from chat_workflow import tiered_context_sources as tcs
 
             system_prompt = await tcs.prepend_memory_context(system_prompt, session, message, selected_model)
-        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
+        system_prompt = await _emit_system_prompt_ready(apply_topic_guidance(system_prompt, message, session), session)
         conversation_context = self._build_conversation_context(session, await prompt_summary(session))
 
         # Knowledge retrieval for RAG
