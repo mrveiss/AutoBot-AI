@@ -200,7 +200,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/initialization/router_registry/feature_routers.py": 758,
     "autobot-backend/integrations/cloud_integration.py": 616,
     "autobot-backend/integrations/communication_integration.py": 605,
-    "autobot-backend/integrations/microsoft365_integration.py": 632,
     "autobot-backend/integrations/project_management_integration.py": 743,
     "autobot-backend/integrations/slack_integration.py": 739,
     "autobot-backend/integrations/whatsapp_integration.py": 749,

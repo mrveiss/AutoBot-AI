@@ -179,6 +179,9 @@ python:
   - 'scripts/systemd/**'
   # #20894: ...and the role task files that say where each env template deploys (which EnvironmentFile= loads it).
   - 'autobot-slm-backend/ansible/roles/*/tasks/**'
+  # #18810/#22146: backend_bind_vs_advertised_host_test.py reads every ansible YAML file (a second
+  # `systemd_unit_dir` default, the advertised-host expression in group_vars) and no .py among them changes.
+  - 'autobot-slm-backend/ansible/**/*.yml'
   # #14909/#14891: the same shape again, for the hook guards. Three repo_tests
   # assert on inputs that contain no Python at all — git hook INDEX MODES
   # (git_hooks_executable_test.py), the copy-based installer

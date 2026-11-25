@@ -78,9 +78,9 @@ router = APIRouter(
 # Cache Configuration (Issue #50 - MCP Registry Caching Optimization)
 # ============================================================================
 
-# Load cache configuration from environment
 CACHE_ENABLED = bool(config.mcp_registry_cache_enabled)
 CACHE_TTL_SECONDS = int(config.mcp_registry_cache_ttl or "60")
+_PROBE_TIMEOUT = aiohttp.ClientTimeout(total=config.misc.mcp_bridge_probe_timeout_s)  # env-backed (#18810)
 
 logger.info("MCP Registry Cache: enabled=%s, TTL=%ss", CACHE_ENABLED, CACHE_TTL_SECONDS)
 
@@ -477,7 +477,7 @@ async def _fetch_bridge_tools(
     """Fetch tools from a single bridge. Returns (tools_list, success). (Issue #315 - extracted)"""
     try:
         async with await http_client.get(
-            f"{backend_url}{endpoint}", timeout=aiohttp.ClientTimeout(total=3), guard_egress=EGRESS_POLICY
+            f"{backend_url}{endpoint}", timeout=_PROBE_TIMEOUT, guard_egress=EGRESS_POLICY
         ) as response:
             if response.status != 200:
                 logger.warning("MCP bridge %s returned status %s", bridge_name, response.status)
@@ -571,7 +571,7 @@ async def _fetch_bridges_info() -> Metadata:
         else:
             try:
                 async with await http_client.get(
-                    f"{backend_url}{endpoint}", timeout=aiohttp.ClientTimeout(total=3), guard_egress=EGRESS_POLICY
+                    f"{backend_url}{endpoint}", timeout=_PROBE_TIMEOUT, guard_egress=EGRESS_POLICY
                 ) as response:
                     if response.status == 200:
                         tools = await response.json()
@@ -835,7 +835,7 @@ async def _fetch_tools_from_bridge(backend_url: str, endpoint: str) -> list:
     """
     http_client = get_http_client()
     async with await http_client.get(
-        f"{backend_url}{endpoint}", timeout=aiohttp.ClientTimeout(total=3), guard_egress=EGRESS_POLICY
+        f"{backend_url}{endpoint}", timeout=_PROBE_TIMEOUT, guard_egress=EGRESS_POLICY
     ) as response:
         if response.status != 200:
             raise HTTPException(

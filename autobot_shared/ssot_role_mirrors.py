@@ -47,3 +47,8 @@ SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT = 300
 # Pinned by ``repo_tests/feature_routers_strict_one_home_19319_test.py``.
 FEATURE_ROUTERS_STRICT_DEFAULT = "1"
 FEATURE_ROUTERS_STRICT_PRODUCTION = "0"
+
+# noVNC web root (#13069, #22146): inventory/group_vars/all.yml ``novnc_path`` (the vnc role installs here and its
+# websockify unit serves it) is the one home; the backend role writes the same value as
+# AUTOBOT_NOVNC_PATH. Pinned by ``repo_tests/backend_bind_vs_advertised_host_test.py``.
+NOVNC_PATH_DEFAULT = "/opt/novnc"

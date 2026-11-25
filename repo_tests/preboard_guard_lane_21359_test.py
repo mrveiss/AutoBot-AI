@@ -260,12 +260,16 @@ def test_the_tests_run_on_the_head_merged_with_the_base_before_the_environment_i
     assert conflict["if"] == "steps.base.outputs.merged != 'true'" and "exit 1" in conflict["run"]
 
 
-def test_the_lane_enables_what_the_suite_enables_on_a_merge_train(workflow) -> None:
+def test_the_lane_applies_the_reach_audit_through_the_entry_ci_uses(workflow) -> None:
+    """#22147: no hardcoded env key; a step before the guards calls the one shared rule."""
+    guards = workflow["jobs"]["guards"]["steps"]
     env = _step(workflow, "guards", _GUARDS_STEP)["env"]
-    assert env[REACH_AUDIT_ENV] == "1", "the reach-floor staleness band is the check that failed a train"
+    assert REACH_AUDIT_ENV not in env, "the lane must not force the audit; the shared entry decides"
     assert env[BASE_SHA_ENV] == "${{ steps.base.outputs.base_sha }}"
+    entry = next(i for i, s in enumerate(guards) if "reach_audit_scope.py" in s.get("run", ""))
+    assert entry < next(i for i, s in enumerate(guards) if _GUARDS_STEP in s.get("name", ""))
     suite_steps = _doc(_SUITE_WORKFLOW)["jobs"]["python-shard"]["steps"]
-    assert any(f"{REACH_AUDIT_ENV}=1" in s.get("run", "") for s in suite_steps), "the suite no longer sets it"
+    assert any("reach_audit_scope.py" in s.get("run", "") for s in suite_steps), "the suite no longer calls it"
 
 
 def test_nothing_the_lane_runs_pushes(workflow, lane) -> None:
