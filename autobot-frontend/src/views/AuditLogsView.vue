@@ -29,7 +29,7 @@
         list-only
         @update:model-value="selectTab"
       >
-        <template #icon="{ item }"><Icon :name="TAB_ICONS[item.value]" /></template>
+        <template #icon="{ item }"><Icon :name="TAB_ICONS[item.value as AuditTab]" /></template>
       </BaseTabs>
 
       <!-- Error Banner -->
@@ -199,7 +199,7 @@ import AuditTimeline from '@/components/audit/AuditTimeline.vue'
 import AuditEventLogsPanel from '@/components/audit/AuditEventLogsPanel.vue'
 import AuditCommandHistoryPanel from '@/components/audit/AuditCommandHistoryPanel.vue'
 import { useUserStore } from '@/stores/useUserStore'
-import Icon from '@/components/ui/Icon.vue'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import type { AuditFilter, AuditEntry } from '@/types/audit'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -244,7 +244,7 @@ const {
 // Local UI state
 const activeTab = ref<AuditTab>('dashboard')
 type AuditTab = 'dashboard' | 'logs' | 'failures' | 'eventLogs' | 'commandHistory'
-const TAB_ICONS: Record<string, string> = {
+const TAB_ICONS: Record<AuditTab, IconName> = {
   dashboard: 'chart-pie', logs: 'list-alt', failures: 'exclamation-triangle', eventLogs: 'clipboard-list', commandHistory: 'terminal',
 }
 // Admin-only routes: shown to admins, the backend stays the gate (#22214). `id` / `controls` pair each tab with its panel.
