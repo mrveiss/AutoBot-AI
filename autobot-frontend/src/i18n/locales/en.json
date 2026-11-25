@@ -460,6 +460,7 @@
       "statusSent": "Sent",
       "statusFailed": "Failed to send",
       "confirmDelete": "Delete this message? This action cannot be undone.",
+      "copyFailed": "Could not copy the message to the clipboard",
       "thinkingUsed": "Thinking used"
     },
     "stallQuestion": {

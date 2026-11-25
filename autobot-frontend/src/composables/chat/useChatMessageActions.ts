@@ -8,34 +8,35 @@
  * ChatMessages.vue. Delete and retry go through the same controller calls as before.
  */
 import { useI18n } from 'vue-i18n'
+import { useClipboard } from '@/composables/useClipboard'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { useToast } from '@/composables/useToast'
 import { useChatController } from '@/models/controllers'
 import { useChatStore, type ChatMessage } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useChatMessageActions')
 
-/** Clipboard API first; the legacy `execCommand` path for browsers without it. */
-export async function copyText(text: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch {
-    const area = document.createElement('textarea')
-    area.value = text
-    document.body.appendChild(area)
-    area.select()
-    document.execCommand('copy')
-    document.body.removeChild(area)
-  }
+/**
+ * Copy through the canonical `useClipboard` (Clipboard API, then `execCommand`).
+ * Resolves false when both paths fail, including `execCommand` returning false.
+ */
+export function copyText(text: string): Promise<boolean> {
+  return useClipboard({ copiedDuration: 0 }).copy(text)
 }
 
 export function useChatMessageActions() {
   const { t } = useI18n()
   const { confirm } = useConfirmDialog()
+  const { showToast } = useToast()
   const store = useChatStore()
   const controller = useChatController()
 
-  const copyMessage = (message: ChatMessage) => copyText(message.content)
+  async function copyMessage(message: ChatMessage) {
+    if (!(await copyText(message.content))) {
+      showToast(t('chat.messages.copyFailed'), 'error')
+    }
+  }
 
   async function deleteMessage(message: ChatMessage) {
     if (await confirm({ title: t('common.confirm'), message: t('chat.messages.confirmDelete') })) {

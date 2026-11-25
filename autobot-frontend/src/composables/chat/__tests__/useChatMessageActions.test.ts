@@ -9,11 +9,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const h = vi.hoisted(() => ({
   controller: { deleteMessage: vi.fn(), sendMessage: vi.fn(), editMessage: vi.fn() },
   confirm: vi.fn(),
+  showToast: vi.fn(),
   messages: [{ id: 'm1', sender: 'user', content: 'hello', timestamp: 't' }],
 }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => ({ currentMessages: h.messages }) }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => h.controller }))
 vi.mock('@/composables/useConfirmDialog', () => ({ useConfirmDialog: () => ({ confirm: h.confirm }) }))
+vi.mock('@/composables/useToast', () => ({ useToast: () => ({ showToast: h.showToast }) }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 
 import { copyText, useChatMessageActions } from '../useChatMessageActions'
@@ -21,7 +23,7 @@ import type { ChatMessage } from '@/stores/useChatStore'
 
 const m = h.messages[0] as unknown as ChatMessage
 
-beforeEach(() => { Object.values(h.controller).forEach((f) => f.mockReset()); h.confirm.mockReset() })
+beforeEach(() => { Object.values(h.controller).forEach((f) => f.mockReset()); h.confirm.mockReset(); h.showToast.mockReset() })
 
 describe('useChatMessageActions', () => {
   it('deletes only after the user confirms', async () => {
@@ -55,7 +57,18 @@ describe('useChatMessageActions', () => {
   it('copyText writes to the clipboard', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    await copyText('abc')
+    expect(await copyText('abc')).toBe(true)
     expect(writeText).toHaveBeenCalledWith('abc')
+  })
+
+  it('copyMessage shows an error toast when the execCommand fallback returns false', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+      configurable: true,
+    })
+    document.execCommand = vi.fn().mockReturnValue(false)
+    expect(await copyText('abc')).toBe(false)
+    await useChatMessageActions().copyMessage(m)
+    expect(h.showToast).toHaveBeenCalledWith('chat.messages.copyFailed', 'error')
   })
 })
