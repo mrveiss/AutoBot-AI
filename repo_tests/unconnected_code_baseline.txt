@@ -872,7 +872,6 @@ route:autobot-backend/api/a2a.py:GET /tasks	#20970
 route:autobot-backend/api/a2a.py:POST /tasks	#20970
 route:autobot-backend/api/adapters.py:DELETE /agent/{agent_id}/override	#20970
 route:autobot-backend/api/adapters.py:POST /agent/{agent_id}/override	#20970
-route:autobot-backend/api/admin_event_logs.py:GET /event-logs	#20971
 route:autobot-backend/api/admin_oauth_bundle_strip.py:GET /oauth-bundle-strip	#20971
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-policies	#20971
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-settings	#20971
@@ -999,12 +998,10 @@ route:autobot-backend/api/auth.py:GET /permissions/{operation}	#20971
 route:autobot-backend/api/auth.py:GET /roles	#20971
 route:autobot-backend/api/auth.py:GET /roles/{role}/permissions	#20971
 route:autobot-backend/api/auth.py:POST /revoke-rs256-token	#20971
-route:autobot-backend/api/auth.py:POST /signup	#20971
 route:autobot-backend/api/auth.py:POST /validate	#20971
 route:autobot-backend/api/cache_management.py:GET /advanced-stats	#20974
 route:autobot-backend/api/cache_management.py:POST /clear-all	#20974
 route:autobot-backend/api/cache_management.py:POST /warm	#20974
-route:autobot-backend/api/captcha.py:GET /pending	#20971
 route:autobot-backend/api/chat_knowledge_delete.py:DELETE /context-orphans	#20975
 route:autobot-backend/api/chat_knowledge_delete.py:GET /context-orphans	#20975
 route:autobot-backend/api/code_intelligence.py:GET /evolution/patterns	#20973
@@ -1049,9 +1046,6 @@ route:autobot-backend/api/embeddings.py:POST /switch	#20975
 route:autobot-backend/api/embeddings.py:PUT /settings	#20975
 route:autobot-backend/api/enterprise_features.py:GET /features	#20971
 route:autobot-backend/api/entity_extraction.py:POST /extract-batch	#20975
-route:autobot-backend/api/envelope_secrets.py:DELETE /system/{secret_id}	#20971
-route:autobot-backend/api/envelope_secrets.py:GET /system/{secret_id}	#20971
-route:autobot-backend/api/envelope_secrets.py:PUT /system/{secret_id}	#20971
 route:autobot-backend/api/error_resilience.py:GET /circuit-breakers	#20974
 route:autobot-backend/api/error_resilience.py:GET /error-budgets	#20974
 route:autobot-backend/api/gpu_monitoring.py:GET /capabilities	#20974
@@ -1248,7 +1242,6 @@ route:autobot-backend/api/search.py:POST /benchmark	#20975
 route:autobot-backend/api/search.py:POST /optimize	#20975
 route:autobot-backend/api/search.py:POST /semantic	#20975
 route:autobot-backend/api/security.py:GET /audit-log	#20971
-route:autobot-backend/api/security.py:GET /command-history	#20971
 route:autobot-backend/api/security.py:GET /pending-approvals	#20971
 route:autobot-backend/api/security.py:POST /approve-command	#20971
 route:autobot-backend/api/security_assessment.py:GET /phases	#20971

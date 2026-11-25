@@ -124,7 +124,8 @@ If nothing shows: the backend crashed at startup. Check logs (section 1).
 If it shows `127.0.0.1:8001` but you're connecting from another host: binding to loopback only. Fix in `.env` or Ansible template:
 
 ```
-BACKEND_HOST=0.0.0.0
+AUTOBOT_BACKEND_BIND_HOST=0.0.0.0   # listen address (the Ansible backend_host)
+AUTOBOT_BACKEND_HOST=<backend-ip>   # the address clients dial; never 0.0.0.0
 ```
 
 ### Middleware deadlock check
