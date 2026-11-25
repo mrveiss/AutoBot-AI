@@ -119,6 +119,16 @@ def record_session_prefix(
         logger.warning("[#17277] Prefix drift record failed: %s", type(exc).__name__)
 
 
+def stable_prefix_text(language: Optional[str], company_id: Optional[str]) -> str:
+    """The stable text as the live path records it: the system prompt after the SYSTEM_PROMPT_READY hook (#17277)."""
+    import asyncio
+
+    from chat_workflow.llm_handler import LLMHandlerMixin, _emit_system_prompt_ready
+
+    text = LLMHandlerMixin._get_system_prompt(LLMHandlerMixin(), language, company_id)
+    return asyncio.run(_emit_system_prompt_ready(text, None))
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Print the current prefix record, or its drift against a saved record."""
     import argparse
@@ -128,9 +138,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--company", action="store_true", help="include the company tool teaching")
     ap.add_argument("--against", help="JSON file holding a previously printed record")
     args = ap.parse_args(argv)
-    from chat_workflow.llm_handler import LLMHandlerMixin
-
-    text = LLMHandlerMixin._get_system_prompt(LLMHandlerMixin(), args.language, "c" if args.company else None)
+    text = stable_prefix_text(args.language, "c" if args.company else None)
     current = prefix_record(text)
     if args.against:
         with open(args.against, encoding="utf-8") as fh:

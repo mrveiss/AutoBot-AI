@@ -77,5 +77,5 @@ ATTACHMENT_TEXT_CACHE_SECONDS: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE
 ATTACHMENT_TEXT_CACHE_MAX_ENTRIES: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE_MAX_ENTRIES", default=32)
 
 #: Share of the chat window the prompt budget keeps free for the reply (#22016), clamped to 0.05-0.5 as documented.
-#: The budget reserves it; the chat payload does not send it as ``num_predict`` yet (follows #22012): no cap.
+#: The budget reserves it, and ``chat_request_options`` also sends it as ``num_predict``: it caps the reply length.
 OUTPUT_RESERVE_SHARE: float = min(0.5, max(0.05, env_float("AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE", default=0.25)))

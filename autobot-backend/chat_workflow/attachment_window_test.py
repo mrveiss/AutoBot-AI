@@ -272,3 +272,12 @@ def test_api_kwargs_never_touch_the_ollama_options_and_the_primary_is_ollama_onl
     assert payload["options"]["num_predict"] == 2048 and payload["options"]["num_ctx"] == 8192
     assert payload["stream"] is True and payload["prompt"] == "p" and payload["system"] == "s"
     assert not set(api_kwargs) & {"options", "num_predict", "num_ctx", "prompt", "model", "stream"}
+
+
+@pytest.mark.asyncio
+async def test_a_lost_session_lease_is_not_swallowed_by_the_send_point_check(chat_model, monkeypatch):
+    from chat_history.session_lease import SessionLeaseError
+
+    monkeypatch.setattr(attachment_context, "persist_notices", AsyncMock(side_effect=SessionLeaseError("lost")))
+    with pytest.raises(SessionLeaseError):
+        await attachment_context.send_point_notices(_call("x" * 40_000, context={}))

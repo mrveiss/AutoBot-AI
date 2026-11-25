@@ -311,6 +311,7 @@ async def send_point_notices(call, model: str | None = None, *, hop: bool = Fals
     yielded copy is live display only and ``_build_workflow_message_batch`` does not store it a second time.
     Everything is read inside the try: a check must never cost the user their turn.
     """
+    from chat_history.session_lease import SessionLeaseError
     from chat_workflow.prompt_window import send_overflow
 
     try:
@@ -328,6 +329,8 @@ async def send_point_notices(call, model: str | None = None, *, hop: bool = Fals
         notices = attachment_notice_messages({"attachment_notices": [_notice("over_window", **over)]})
         await persist_notices(ctx.session_id, notices)
         return notices
+    except SessionLeaseError:
+        raise  # #20862: a turn that lost its session lease must stop, not go on to the model request
     except Exception as exc:  # noqa: BLE001
         logger.warning("[#22016] Send-window check unavailable: %s", type(exc).__name__)
         return []

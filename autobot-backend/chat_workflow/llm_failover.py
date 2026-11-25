@@ -53,7 +53,7 @@ from llm_shared.provider_error_category import (
 )
 from llm_shared.types import LLMType
 
-from .attachment_context import send_point_notices
+from .attachment_context import NOTICE_TYPE, send_point_notices
 from .llm_provider import configured_provider
 from .models import LLMIterationContext
 
@@ -77,7 +77,8 @@ def turn_has_acted(ctx: LLMIterationContext, iteration: int) -> bool:
     """The not-acted guard, before this iteration streams anything (see the module docstring)."""
     if iteration > 1 or ctx.execution_history:
         return True
-    return any(getattr(m, "type", "") != "error" for m in ctx.workflow_messages)
+    # Errors and informational notices (attachment / over-window, #22016) are not the model acting.
+    return any(getattr(m, "type", "") not in ("error", NOTICE_TYPE) for m in ctx.workflow_messages)
 
 
 def _service_failure(item: Any) -> Optional[ProviderFailure]:

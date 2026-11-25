@@ -71,3 +71,14 @@ def test_key_separates_company_and_codeexec():
 def test_session_hook_is_non_fatal():
     pd.record_session_prefix(None, "en", None, False, STABLE)
     pd.record_session_prefix(object(), "en", None, False, STABLE)
+
+
+def test_the_cli_diagnostic_hashes_the_text_the_live_hook_leaves(monkeypatch):
+    from chat_workflow import llm_handler
+
+    async def rewrite(text, session):
+        return text + " [extension]"
+
+    monkeypatch.setattr(llm_handler.LLMHandlerMixin, "_get_system_prompt", lambda self, lang, company: "base")
+    monkeypatch.setattr(llm_handler, "_emit_system_prompt_ready", rewrite)
+    assert pd.stable_prefix_text("en", None) == "base [extension]"

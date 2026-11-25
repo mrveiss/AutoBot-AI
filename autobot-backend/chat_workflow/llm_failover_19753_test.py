@@ -403,3 +403,12 @@ async def test_a_callers_rejected_credential_surfaces_on_the_chat_path():
         items = await _run(http, _ctx())
     assert _texts(items) == ["LLM service error: 401"]
     assert registry.asked == [] and world.store.marks == []
+
+
+def test_an_informational_notice_is_not_turn_activity_but_model_output_is():
+    from chat_workflow.attachment_context import NOTICE_TYPE
+    from chat_workflow.llm_failover import turn_has_acted
+
+    notice, text = SimpleNamespace(type=NOTICE_TYPE), SimpleNamespace(type="response")
+    assert not turn_has_acted(SimpleNamespace(execution_history=[], workflow_messages=[notice]), 1)
+    assert turn_has_acted(SimpleNamespace(execution_history=[], workflow_messages=[notice, text]), 1)
