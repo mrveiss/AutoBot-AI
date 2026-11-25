@@ -323,3 +323,28 @@ register_env_var(
         component="chat_workflow",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_CONTINUATION_FULL_STEPS",
+        type=int,
+        default=3,
+        description=(
+            "Newest tool steps a chat continuation prompt renders in full (#16621); older steps are collapsed to a "
+            "digest and an anchor read back with read_spilled_output."
+        ),
+        component="chat_workflow",
+        range=(1, 50),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_COLLAPSED_STEP_END_CHARS",
+        type=int,
+        default=300,
+        description=("Characters of a collapsed continuation step's output kept at each end, head and tail (#16621)."),
+        component="chat_workflow",
+        range=(1, 5000),
+    )
+)

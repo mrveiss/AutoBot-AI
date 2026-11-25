@@ -157,6 +157,40 @@ def _serialise(result: Any) -> str:
         return str(result)
 
 
+def _write_artifact(anchor: str, task_id: str, tool_name: str, payload: str) -> bool:
+    """Write *payload* under *anchor*; False (logged) when it could not be written, so the caller keeps the output.
+
+    Marked, not silently sliced: the excerpt's note quotes the *original* length, so an unmarked truncation makes
+    the artifact contradict it.
+    """
+    truncated = len(payload) > SPILL_MAX_ARTIFACT_CHARS
+    stored = payload[:SPILL_MAX_ARTIFACT_CHARS] + _TRUNCATION_MARKER if truncated else payload
+    try:
+        path = _artifact_path(anchor)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {"anchor": anchor, "task_id": task_id, "tool": tool_name, "output": stored},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        logger.warning("Tool-output spill failed for %s (keeping full output): %s", tool_name, exc)
+        return False
+    return True
+
+
+def spill_for_collapse(task_id: str, tool_name: str, payload: str) -> str | None:
+    """Spill *payload* whatever ``AUTOBOT_TOOL_OUTPUT_SPILL`` says and return its anchor, or None on a failed write.
+
+    A continuation prompt collapses an older step to a digest (#16621); the anchor is how the full output is
+    read back with ``read_spilled_output``, so it is written here even for a step the flag never spilled.
+    """
+    anchor = _anchor(task_id, tool_name, payload)
+    return anchor if _write_artifact(anchor, task_id, tool_name, payload) else None
+
+
 def spill_if_oversized(task_id: str, tool_name: str, result: Any) -> Tuple[Any, bool]:
     """Return ``(context_value, spilled)`` for one tool result.
 
@@ -197,22 +231,7 @@ def spill_if_oversized(task_id: str, tool_name: str, result: Any) -> Tuple[Any, 
         )
         return result, False
 
-    # Marked, not silently sliced: the excerpt's note quotes the *original*
-    # length, so an unmarked truncation makes the artifact contradict it.
-    truncated = len(payload) > SPILL_MAX_ARTIFACT_CHARS
-    stored = payload[:SPILL_MAX_ARTIFACT_CHARS] + _TRUNCATION_MARKER if truncated else payload
-    try:
-        path = _artifact_path(anchor)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(
-                {"anchor": anchor, "task_id": task_id, "tool": tool_name, "output": stored},
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-    except Exception as exc:
-        logger.warning("Tool-output spill failed for %s (keeping full output): %s", tool_name, exc)
+    if not _write_artifact(anchor, task_id, tool_name, payload):
         return result, False
 
     logger.info(

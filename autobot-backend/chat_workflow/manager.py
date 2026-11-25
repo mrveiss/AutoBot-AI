@@ -37,6 +37,7 @@ from chat_workflow.reply_persistence import (
     later_respond_entries,
     stamp_model,
 )
+from chat_workflow.step_collapse import render_history
 from chat_workflow.step_guidance import latest_step_guidance, return_code_line
 from chat_workflow.step_outcome import executed_count, not_run_note
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
@@ -1849,7 +1850,7 @@ before summarizing.
         Issue #3784: system_prompt removed — sent via Ollama system field to avoid
         double-injection on continuation iterations.
         """
-        history_parts = [self._format_execution_step(i, result) for i, result in enumerate(execution_history, 1)]
+        history_parts = render_history(self._format_execution_step, execution_history)  # #16621
         history_text = "\n\n".join(history_parts)
         steps_completed = executed_count(execution_history)  # #21959: a step that did not run is not completed
         instructions = self._get_continuation_instructions(
