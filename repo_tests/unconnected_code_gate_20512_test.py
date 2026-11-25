@@ -119,7 +119,7 @@ FRONTEND_REACH = declare(
     discover=_frontend_files,
     # Measured 1180 candidates (2026-11-15); growth 200 makes the pin mid-window (1180 - 100). A new guard pins
     # `floor=` until it lands on the base (#19676).
-    floor=1080,
+    floor=1167,  # mid-window: population 1267, window (1067, 1267)
     what="production .ts, .js and .vue files of autobot-frontend and autobot-slm-frontend that could have an importer",
     roots=frontend.FRONTEND_ROOTS,
     growth=200,
