@@ -714,6 +714,7 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `SLM_NODE_ID` | slm | str | *(none)* | This node's own SLM agent id, set per host by slm-agent.service (slm/agent/agent.py also accepts --node-id); the agent refuses to start without one, so there is no default. Deprecated as the SLM manager's id (#19322): that is AUTOBOT_SLM_NODE_ID (MiscConfig.slm_node_id); the backend still honours this name when that one is unset. |
 | `SLM_POSTGRES_USER` | postgres | str | `'slm_app'` | The SLM's login role; on compose a non-default role must already exist (#19408). |
 | `SLM_REPO_PATH` | slm | str | `'/opt/autobot/code_source'` | The SLM's code_source git CHECKOUT (the directory holding .git), never the install root that contains it (default: fleet_constants.FLEET_CODE_SOURCE_DIR). Read once, in services/git_tracker.py as DEFAULT_REPO_PATH; drift checks, packaging and the python-provision playbook path all resolve under it. The provision sudoers rule does not follow an override (#19204), so leave it at the default unless that rule is changed too (#15708). |
+| `SLM_ROLE_PROVISION_RETRY_COOLDOWN_HOURS` | slm | int | `6` | Hours the fleet update waits before it provisions a role again after an earlier attempt on the same node (failed, no credential registered, or left stuck at installing). Stops a node whose provisioning keeps failing being re-provisioned on every update (services/pending_role_provisioning.py, #22211). Range: 1–720. |
 | `SLM_ROLLBACK_CANDIDATE_LIMIT` | slm | int | `50` | Newest commits the rollback picker offers (services/rollback_commits.py). Range: 1–500. |
 | `SLM_ROLLBACK_ENABLED` | slm | bool | false | Offer the SLM rollback to an earlier commit (api/code_rollback.py). Off until a host test. |
 | `SLM_ROLLBACK_STATEMENT_TIMEOUT_MS` | slm | int | `10000` | Server-side statement timeout (ms) for the rollback's migration reads (rollback_migrations.py). Range: 1000–300000. |
@@ -724,6 +725,8 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `STABILITY_API_KEY` | image_generation | str | *(none)* | Stability AI API key for the image-generation plugin. Environment fallback only: credentials belong in the secrets service. |
 | `VERIFIER_MAX_TOKENS` | verifier | int | `512` | Token budget of the verifier LLM call (un-prefixed legacy name, kept for existing configs). Range: 1–8192. |
 | `VERIFIER_TIMEOUT_S` | verifier | float | `10.0` | Seconds the verifier LLM call may take (un-prefixed legacy name, kept for existing configs); past it the pass is a 'timeout' degradation (#21844). Range: 0.1–600.0. |
+| `VNC_PORT_WAIT_SECONDS` | slm | int | `60` | Seconds the vnc role's verify step waits for the RFB and websockify ports after provisioning, before xrdp removal is allowed (roles/vnc/vars/main.yml, #22211). Range: 1–3600. |
+| `XRDP_PORT_CLOSE_WAIT_SECONDS` | slm | int | `30` | Seconds the xrdp removal waits for the RDP port to close after the units stop (roles/xrdp/defaults/main.yml, #22211). Range: 1–3600. |
 <!-- END_AUTOGEN_ENV_DOCS -->
 
 ## Remote test node (`AUTOBOT_TEST_NODE_*`, #20935)

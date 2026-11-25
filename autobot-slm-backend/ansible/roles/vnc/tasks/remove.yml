@@ -1,0 +1,32 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# vnc role removal (#22211): the per-role hook remove-role.yml runs after it stops the primary unit.
+# remove-role stops only vnc-server; the websockify unit would keep the noVNC port open.
+#
+# Packages, ~/.vnc and the VNC password file are left in place: the password file is a credential,
+# and removing a role must not delete stored credentials.
+
+- name: vnc | Stop and disable the VNC units
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - "{{ vnc_service_name }}"
+    - "{{ websockify_service_name }}"
+  # a node that never had the units
+  failed_when: false
+
+- name: vnc | Close the VNC firewall rules
+  community.general.ufw:
+    rule: allow
+    port: "{{ item | string }}"
+    proto: tcp
+    src: "{{ network_subnet }}"
+    delete: true
+  loop:
+    - "{{ vnc_rfb_port }}"
+    - "{{ websockify_port }}"

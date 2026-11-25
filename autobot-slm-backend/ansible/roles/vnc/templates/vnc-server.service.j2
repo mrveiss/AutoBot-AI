@@ -31,7 +31,7 @@ ExecStartPre=/bin/sh -c '/usr/bin/vncserver -kill :{{ vnc_display }} 2>/dev/null
 ExecStartPre=/bin/sh -c 'rm -f /tmp/.X{{ vnc_display }}-lock /tmp/.X11-unix/X{{ vnc_display }} 2>/dev/null || true'
 
 # Start VNC server
-ExecStart=/usr/bin/vncserver :{{ vnc_display }} -fg -localhost no
+ExecStart=/usr/bin/vncserver :{{ vnc_display }} -rfbport {{ vnc_rfb_port }} -fg -localhost no
 
 # Stop VNC server
 ExecStop=/usr/bin/vncserver -kill :{{ vnc_display }}

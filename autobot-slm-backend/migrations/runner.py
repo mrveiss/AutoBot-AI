@@ -99,6 +99,8 @@ MIGRATIONS = [
     # Issue #18663: the jti denylist and password epoch move from Redis to PostgreSQL,
     # so the SLM works without the Redis it deploys.
     "add_auth_revocation_tables",
+    # Issue #22211: the one VNC desktop. The node that carries the xrdp desktop purpose gets the vnc role.
+    "assign_vnc_role_to_desktop_node",
 ]
 
 
