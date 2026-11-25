@@ -26,6 +26,13 @@ What the backup request carries: the system prompt, the prompt, and ``temperatur
 option), ``api_kwargs`` (thinking budgets, ``betas`` and effort parameters are provider-specific payload
 fields, not ``LLMRequest`` fields), and the image.
 
+Thinking preferences are deliberately not carried (#20922): they are built by
+``build_reasoning_api_kwargs`` into ``api_kwargs`` only for a ``claude`` model on the primary's own payload,
+and the backup is a different model, often a different provider, whose thinking contract (adaptive versus a
+token budget, ``betas``) is not the primary's; replaying them could be rejected by it or silently
+mis-applied, so a backup answers without thinking. Neither path redacts the prompt (redaction is for
+logs and traces only), so the backup receives exactly the text the primary did.
+
 A hop whose known context window cannot hold the request (input plus the reply cap) is skipped by the
 coordinator before dispatch (#21864); the turn then surfaces the original error as for an empty chain.
 
