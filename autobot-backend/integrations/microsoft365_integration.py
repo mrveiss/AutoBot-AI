@@ -32,6 +32,7 @@ from integrations.base import (
     IntegrationHealth,
     IntegrationStatus,
 )
+from integrations.microsoft365_actions import MICROSOFT365_ACTIONS
 from knowledge.connectors.egress import VENDOR_API_EGRESS
 
 logger = get_logger(__name__)
@@ -121,7 +122,7 @@ class Microsoft365Integration(BaseIntegration):
         self.client_secret = config.extra.get("client_secret")
 
     async def test_connection(self) -> IntegrationHealth:
-        """Test Microsoft 365 connection by fetching user profile."""
+        """Test the connection by reading one mail folder (Mail.Read covers it; /me needs User.Read)."""
         start_time = time.monotonic()
 
         if not self.token:
@@ -131,21 +132,16 @@ class Microsoft365Integration(BaseIntegration):
                 "Access token not configured",
             )
 
-        url = f"{self.graph_url}/me"
-        result = await self._make_graph_request("GET", url)
+        url = f"{self.graph_url}/me/mailFolders"
+        result = await self._make_graph_request("GET", url, params={"$top": 1})
 
         latency = (time.monotonic() - start_time) * 1000
 
         if result.get("status_code") == 200:
-            user_data = result.get("body", {})
             return self._create_health_response(
                 IntegrationStatus.CONNECTED,
                 latency,
                 "Connected to Microsoft 365",
-                {
-                    "user": user_data.get("userPrincipalName"),
-                    "display_name": user_data.get("displayName"),
-                },
             )
 
         if result.get("status_code") == 401:
@@ -155,126 +151,14 @@ class Microsoft365Integration(BaseIntegration):
                 "Token expired or invalid",
             )
 
-        return self._create_health_response(
-            IntegrationStatus.ERROR,
-            latency,
-            f"Connection failed: {result.get('error', 'Unknown error')}",
-        )
+        code = result.get("status_code", 0)
+        self.logger.warning("Microsoft 365 connection test failed: HTTP %s - %s", code, result.get("error"))
+        reason = "Microsoft 365 is unavailable" if code == 0 or code >= 500 else "Connection failed"
+        return self._create_health_response(IntegrationStatus.ERROR, latency, reason)
 
     def get_available_actions(self) -> List[IntegrationAction]:
         """Return list of supported Microsoft 365 actions."""
-        return [
-            # Calendar actions
-            IntegrationAction(
-                name="list_calendar_events",
-                description="List calendar events for a time range",
-                method="GET",
-                parameters={"start": "datetime", "end": "datetime", "calendar_id": "str (optional)"},
-            ),
-            IntegrationAction(
-                name="create_calendar_event",
-                description="Create a new calendar event",
-                method="POST",
-                parameters={
-                    "subject": "str",
-                    "start": "datetime",
-                    "end": "datetime",
-                    "body": "str (optional)",
-                    "attendees": "list[str] (optional)",
-                },
-            ),
-            IntegrationAction(
-                name="update_calendar_event",
-                description="Update an existing calendar event",
-                method="PATCH",
-                parameters={"event_id": "str", "updates": "dict"},
-            ),
-            IntegrationAction(
-                name="delete_calendar_event",
-                description="Delete a calendar event",
-                method="DELETE",
-                parameters={"event_id": "str"},
-            ),
-            IntegrationAction(
-                name="check_availability",
-                description="Check availability for scheduling",
-                method="POST",
-                parameters={"attendees": "list[str]", "start": "datetime", "end": "datetime"},
-            ),
-            # Outlook email actions
-            IntegrationAction(
-                name="list_messages",
-                description="List messages from inbox or folder",
-                method="GET",
-                parameters={"folder_id": "str (optional)", "limit": "int (optional)"},
-            ),
-            IntegrationAction(
-                name="send_email",
-                description="Send an email message",
-                method="POST",
-                parameters={
-                    "to": "list[str]",
-                    "subject": "str",
-                    "body": "str",
-                    "cc": "list[str] (optional)",
-                    "attachments": "list[dict] (optional)",
-                },
-            ),
-            IntegrationAction(
-                name="search_messages",
-                description="Search messages with query",
-                method="GET",
-                parameters={"query": "str", "limit": "int (optional)"},
-            ),
-            IntegrationAction(
-                name="list_folders",
-                description="List all mail folders",
-                method="GET",
-                parameters={},
-            ),
-            IntegrationAction(
-                name="create_folder",
-                description="Create a new mail folder",
-                method="POST",
-                parameters={"name": "str", "parent_folder_id": "str (optional)"},
-            ),
-            # Teams actions
-            IntegrationAction(
-                name="send_teams_message",
-                description="Send message to a Teams channel",
-                method="POST",
-                parameters={"team_id": "str", "channel_id": "str", "content": "str"},
-            ),
-            IntegrationAction(
-                name="list_teams",
-                description="List all teams user belongs to",
-                method="GET",
-                parameters={},
-            ),
-            IntegrationAction(
-                name="list_team_channels",
-                description="List channels in a team",
-                method="GET",
-                parameters={"team_id": "str"},
-            ),
-            IntegrationAction(
-                name="get_channel_messages",
-                description="Get messages from a Teams channel",
-                method="GET",
-                parameters={"team_id": "str", "channel_id": "str", "limit": "int (optional)"},
-            ),
-            IntegrationAction(
-                name="create_teams_meeting",
-                description="Create an online Teams meeting",
-                method="POST",
-                parameters={
-                    "subject": "str",
-                    "start": "datetime",
-                    "end": "datetime",
-                    "attendees": "list[str]",
-                },
-            ),
-        ]
+        return [action.model_copy(deep=True) for action in MICROSOFT365_ACTIONS]
 
     async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a named Microsoft 365 action."""
@@ -418,8 +302,7 @@ class Microsoft365Integration(BaseIntegration):
             url = f"{self.graph_url}/me/mailFolders/{safe_folder_id}/messages"
 
         query_params = {"$top": min(limit, 1000)}  # Graph API max is 1000
-        result = await self._make_graph_request("GET", url, params=query_params)
-        return result.get("body", {})
+        return self._body_or_error(await self._make_graph_request("GET", url, params=query_params))
 
     async def _send_email(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Send an email message."""
@@ -460,14 +343,12 @@ class Microsoft365Integration(BaseIntegration):
             "$top": min(limit, 1000),
         }
 
-        result = await self._make_graph_request("GET", url, params=query_params)
-        return result.get("body", {})
+        return self._body_or_error(await self._make_graph_request("GET", url, params=query_params))
 
     async def _list_folders(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """List all mail folders."""
+        """List top-level mail folders (nested folders are out of scope)."""
         url = f"{self.graph_url}/me/mailFolders"
-        result = await self._make_graph_request("GET", url)
-        return result.get("body", {})
+        return self._body_or_error(await self._make_graph_request("GET", url))
 
     async def _create_folder(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new mail folder."""
@@ -548,6 +429,14 @@ class Microsoft365Integration(BaseIntegration):
         return result.get("body", {})
 
     # Helper methods
+
+    @staticmethod
+    def _body_or_error(result: Dict[str, Any]) -> Dict[str, Any]:
+        """A read action's body, or an error dict (never an empty body) when the request failed."""
+        status_code = result.get("status_code", 0)
+        if 200 <= status_code < 300:
+            return result.get("body", {})
+        return {"error": result.get("error") or "Graph request failed", "status_code": status_code}
 
     async def _make_graph_request(
         self,
