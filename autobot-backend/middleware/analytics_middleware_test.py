@@ -12,6 +12,7 @@ import pytest
 from fastapi import FastAPI
 
 from api.settings_telemetry_test import _make_app as _settings_app
+from autobot_shared.eventually import eventually
 from autobot_shared.ssot_config import config
 from config import config_manager
 from initialization.middleware import configure_analytics
@@ -124,7 +125,7 @@ async def test_a_handler_error_is_still_tracked_as_a_500(controller, monkeypatch
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         await client.get("/api/boom")
-    await asyncio.sleep(0.05)
+    await eventually(lambda: controller.track_api_call.await_count == 1)
     assert controller.track_api_call.await_args.args[0] == "GET /api/boom"
     assert controller.track_api_call.await_args.args[2] == 500
 

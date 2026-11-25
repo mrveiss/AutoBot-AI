@@ -369,6 +369,7 @@ async def test_a_real_instrumentor_traces_api_routes_and_skips_health():
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from opentelemetry.trace import SpanKind
 
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
@@ -391,6 +392,7 @@ async def test_a_real_instrumentor_traces_api_routes_and_skips_health():
     finally:
         FastAPIInstrumentor.uninstrument_app(app)
 
-    server_spans = [s for s in exporter.get_finished_spans() if "/health" in s.name or "/api/x" in s.name]
+    # Newer instrumentor releases also emit internal "<route> http send/receive" child spans; only the SERVER span is a request.
+    server_spans = [s for s in exporter.get_finished_spans() if s.kind == SpanKind.SERVER]
     assert [s.name for s in server_spans] == ["GET /api/x"]
     assert server_spans[0].attributes["autobot.request_id"] == "req-7"
