@@ -36,8 +36,8 @@ const mockClipboard = {
   writeText: mockWriteText
 }
 
-// Mock document.execCommand
-const mockExecCommand = vi.fn()
+const mockExecCommand = vi.fn() // document.execCommand
+const rejectBoth = (m: string) => { mockWriteText.mockRejectedValueOnce(new Error(m)); mockExecCommand.mockReturnValueOnce(false) }
 
 beforeEach(() => {
   // Reset mocks
@@ -120,7 +120,7 @@ describe('useClipboard - Basic Functionality', () => {
     const clipboard = useClipboard()
 
     // First copy fails
-    mockWriteText.mockRejectedValueOnce(new Error('Permission denied'))
+    rejectBoth('Permission denied')
     await clipboard.copy('Test')
     expect(clipboard.error.value).toBeTruthy()
 
@@ -148,7 +148,7 @@ describe('useClipboard - Clipboard API', () => {
   it('should handle Clipboard API errors', async () => {
     const clipboard = useClipboard()
 
-    mockWriteText.mockRejectedValueOnce(new Error('Permission denied'))
+    rejectBoth('Permission denied')
 
     const result = await clipboard.copy('Test')
 
@@ -349,7 +349,7 @@ describe('useClipboard - Callbacks', () => {
   it('should call onError callback on copy failure', async () => {
     const onError = vi.fn()
 
-    mockWriteText.mockRejectedValueOnce(new Error('Copy failed'))
+    rejectBoth('Copy failed')
 
     const clipboard = useClipboard({
       onError
@@ -442,7 +442,7 @@ describe('useClipboardWithMessage Helper', () => {
   })
 
   it('should show error message on copy failure', async () => {
-    mockWriteText.mockRejectedValueOnce(new Error('Permission denied'))
+    rejectBoth('Permission denied')
 
     const clipboard = useClipboardWithMessage(
       'Copy successful!',
@@ -665,7 +665,7 @@ describe('useClipboard - Integration Tests', () => {
     expect(clipboard.copiedText.value).toBe('')
 
     // Copy with error
-    mockWriteText.mockRejectedValueOnce(new Error('Failed'))
+    rejectBoth('Failed')
 
     await clipboard.copy('Error test')
 
