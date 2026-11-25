@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
+import { BaseSelectMenu } from '@autobot/ui'
 import en from '@/i18n/locales/en.json'
 import { formatDateTime } from '@/utils/formatHelpers'
 import AuditEventLogsPanel from '../AuditEventLogsPanel.vue'
@@ -57,6 +58,37 @@ describe('AuditEventLogsPanel', () => {
     await flushPromises()
 
     expect(queryEventLogs).toHaveBeenLastCalledWith({ user_id: 'bob', event_type: undefined, limit: 51, offset: 0 })
+  })
+
+  const applyType = async (w: ReturnType<typeof render>, value: string) => {
+    w.findComponent(BaseSelectMenu).vm.$emit('update:modelValue', value)
+    await flushPromises()
+    await w.findAll('button').find((b) => b.text() === en.audit.eventLogs.refresh)!.trigger('click')
+    await flushPromises()
+  }
+
+  it('sends the chosen event type when the filter is applied', async () => {
+    queryEventLogs.mockResolvedValue(EVENTS)
+    const w = render(AuditEventLogsPanel)
+    await flushPromises()
+
+    await applyType(w, 'user.logout')
+
+    expect(queryEventLogs).toHaveBeenLastCalledWith({ user_id: undefined, event_type: 'user.logout', limit: 51, offset: 0 })
+  })
+
+  it('sends no event type once all types is selected again (never the sentinel or an empty string)', async () => {
+    queryEventLogs.mockResolvedValue(EVENTS)
+    const w = render(AuditEventLogsPanel)
+    await flushPromises()
+    await applyType(w, 'user.logout')
+
+    const allOption = w.findComponent(BaseSelectMenu).props('options').find((o: { label: string }) => o.label === en.audit.eventLogs.allTypes)!
+    await applyType(w, allOption.value)
+
+    const query = queryEventLogs.mock.lastCall![0]
+    expect(query.event_type).toBeUndefined()
+    expect(query).toEqual({ user_id: undefined, event_type: undefined, limit: 51, offset: 0 })
   })
 
   it('shows the empty state when no event matches', async () => {
