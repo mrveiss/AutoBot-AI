@@ -223,3 +223,22 @@ async def test_a_second_concurrent_answer_gets_409_from_the_real_claim_registry(
     await stall_pending.release_answer_lock("s1", first)
     await stall_pending.release_answer_lock("s1", await stall_pending.acquire_answer_lock("s1"))  # free again
     await client.flushall()
+
+
+async def test_a_reload_restores_the_open_approval_card_once(monkeypatch):
+    """#21237: the graph's approval card is not in history; the checkpoint's interrupt puts it back, never twice."""
+    card = {
+        "id": "card-1",
+        "type": "command_approval_request",
+        "content": "run it?",
+        "metadata": {"command": "touch x", "calls": [{"name": "execute_command"}]},
+    }
+    monkeypatch.setattr(
+        stall_pending, "read_pause", AsyncMock(return_value=stall_pending.Pause([card], ("execute_tools",)))
+    )
+    restored = await stall_pending.with_pending_question(_request(MagicMock()), "s1", [{"id": "u1"}])
+    shown = restored[-1]
+    assert shown["type"] == "command_approval_request" and shown["text"] == "run it?"
+    assert shown["metadata"]["requires_approval"] is True and shown["metadata"]["calls"]
+    again = await stall_pending.with_pending_question(_request(MagicMock()), "s1", restored)
+    assert again == restored
