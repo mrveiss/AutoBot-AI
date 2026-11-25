@@ -70,7 +70,11 @@ describe('duplicates markdown export (#22157)', () => {
 })
 
 describe('the location total of a payload without total_locations (#22157)', () => {
-  const legacyRow = { kind: 'exact', similarity: 100, lines: 30, file1: 'a.py', file2: 'b.py' }
+  const legacyRow = {
+    kind: 'exact', similarity: 100, lines: 30, file1: 'a.py', file2: 'b.py',
+    start_line1: 1, end_line1: 30, start_line2: 1, end_line2: 30,
+  }
+  const noPositions = { kind: 'exact', similarity: 100, lines: 30, file1: 'a.py', file2: 'b.py' }
 
   it('counts the distinct places of a complete legacy result, never the cluster count', () => {
     const reading = readDuplicatePayload({ status: 'success', total_count: 1, duplicates: [legacyRow] })
@@ -78,10 +82,16 @@ describe('the location total of a payload without total_locations (#22157)', () 
   })
 
   it('keeps legacy rows at different positions apart and names their ranges', () => {
-    const at = (s1: number, s2: number) => ({ ...legacyRow, start1: s1, start2: s2 })
+    const at = (s1: number, s2: number) => ({ ...legacyRow, start_line1: s1, end_line1: s1 + 29, start_line2: s2, end_line2: s2 + 29 })
     const reading = readDuplicatePayload({ status: 'success', total_count: 2, duplicates: [at(1, 1), at(50, 50)] })
     expect(reading.summary?.totalLocations).toBe(4)
     expect(generateSectionMarkdown('duplicates', [at(1, 50)])).toContain('a.py:1-30<br>b.py:50-79')
+  })
+
+  it('leaves the total unknown when a legacy row carries no positions (ChromaDB fallback)', () => {
+    const reading = readDuplicatePayload({ status: 'success', total_count: 2, duplicates: [legacyRow, noPositions] })
+    expect(reading.summary?.totalLocations).toBeNull()
+    expect(generateSectionMarkdown('duplicates', [noPositions])).toContain('a.py<br>b.py')
   })
 
   it('translates a recognised kind and keeps an unknown one and the dash', () => {

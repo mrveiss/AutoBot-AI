@@ -36,8 +36,11 @@ export interface DuplicateCode {
   lines: number
   file1: string
   file2: string
-  start1?: number
-  start2?: number
+  /** Legacy (no `locations`) wire fields; absent on the ChromaDB fallback, which carries no positions. */
+  start_line1?: number
+  end_line1?: number
+  start_line2?: number
+  end_line2?: number
   /** exact (identical code) | structural (identical once string text is ignored) | similar. */
   kind?: string
   locations?: DuplicateLocation[]

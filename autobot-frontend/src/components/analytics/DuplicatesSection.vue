@@ -92,7 +92,7 @@
                   <span class="item-lines">{{ duplicate.lines }} {{ $t('analytics.duplicates.lines') }}</span>
                 </div>
                 <div class="item-files">
-                  <div v-for="place in locationsOf(duplicate)" :key="place" class="item-file">{{ place }}</div>
+                  <div v-for="place in rowPlaces(duplicate)" :key="place" class="item-file">{{ place }}</div>
                 </div>
               </div>
               <TruncationNotice :shown="shown(similarity, group.length)" :total="group.length" :step="20" @show-more="showMore(similarity)" />
@@ -147,7 +147,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import type { DuplicateScanState } from '@/composables/analytics/duplicatePayload'
 import { useAggregationMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
-import { duplicateSummary as summary } from '@/composables/analytics/duplicatePayload'
+import { duplicateSummary as summary, rowPlaces } from '@/composables/analytics/duplicatePayload'
 import type { DuplicateLocation } from '@/composables/analytics/analyticsTypes'
 
 const { t } = useI18n()
@@ -159,6 +159,10 @@ interface Duplicate {
   file2: string
   kind?: string
   locations?: DuplicateLocation[]
+  start_line1?: number
+  end_line1?: number
+  start_line2?: number
+  end_line2?: number
 }
 
 interface Props {
@@ -173,10 +177,6 @@ const props = defineProps<Props>()
 
 // #22157: the count is the scan's true total; `duplicates.length` is only the rows returned.
 const totalCount = computed(() => summary.value?.totalCount ?? props.duplicates.length)
-
-/** Every location of a cluster, `file:start-end`; rows from an older payload carry only two files. */
-const locationsOf = (d: Duplicate): string[] =>
-  d.locations?.length ? d.locations.map(l => `${l.file}:${l.start_line}-${l.end_line}`) : [d.file1, d.file2]
 
 // #12741: a capped list is expandable; the notice below it is the control.
 const PAGE_SIZE = 20

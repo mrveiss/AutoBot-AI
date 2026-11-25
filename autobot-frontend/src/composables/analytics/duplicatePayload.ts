@@ -34,22 +34,28 @@ export function clearDuplicateResults<T>(rows: Ref<T[]>): void {
   duplicateSummary.value = null
 }
 
-/** `file:start-end` when the legacy row carries the start, else the file name alone. */
-function legacyPlace(file: string, start: number | undefined, lines: number): string {
-  return typeof start === 'number' ? `${file}:${start}-${start + Math.max(lines, 1) - 1}` : file
+/** `file:start-end` when the legacy row carries both ends, else the file name alone. */
+function legacyPlace(file: string, start: number | undefined, end: number | undefined): string {
+  return typeof start === 'number' && typeof end === 'number' ? `${file}:${start}-${end}` : file
 }
 
 /** A row's places, `file:start-end`; a legacy row with no (or an empty) `locations` list names its two ranges. */
 export function rowPlaces(row: DuplicateCode): string[] {
   return row.locations?.length
     ? row.locations.map(l => `${l.file}:${l.start_line}-${l.end_line}`)
-    : [legacyPlace(row.file1, row.start1, row.lines), legacyPlace(row.file2, row.start2, row.lines)]
+    : [legacyPlace(row.file1, row.start_line1, row.end_line1), legacyPlace(row.file2, row.start_line2, row.end_line2)]
 }
 
-/** The payload's location total; else the distinct places of a COMPLETE row list; else unknown (null). */
+/** True when the row cannot name where its blocks are (a legacy row without all four positions). */
+function lacksPositions(row: DuplicateCode): boolean {
+  if (row.locations?.length) return false
+  return [row.start_line1, row.end_line1, row.start_line2, row.end_line2].some(v => typeof v !== 'number')
+}
+
+/** The payload's location total; else the distinct places of a COMPLETE, positioned row list; else unknown (null). */
 function readTotalLocations(payload: Record<string, unknown>, rows: DuplicateCode[], complete: boolean): number | null {
   if (typeof payload.total_locations === 'number') return payload.total_locations
-  if (!complete || payload.truncated === true) return null
+  if (!complete || payload.truncated === true || rows.some(lacksPositions)) return null
   return new Set(rows.flatMap(rowPlaces)).size
 }
 
