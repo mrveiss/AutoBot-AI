@@ -186,6 +186,10 @@ const PYTHON_ONLY_PORTS = [
   // per-session `vnc_port` API-response mock (AdvancedControlApiClient), a
   // dynamic runtime value with no static SSOT default on either side (#14173)
   'vnc_server',
+  // VNC display-to-port base (RFB 5900 + display, #22146): read only by the backend's
+  // desktop_streaming_manager to allocate per-session x11vnc ports; the frontend gets
+  // the session's port from the API response and addresses only the noVNC web port ('vnc')
+  'vnc_base',
   // The Windows NPU worker (#19325): the backend pairs and dials it; the frontend never
   // addresses it, and reads only the Linux worker's port ('npu' above).
   'npu_windows',

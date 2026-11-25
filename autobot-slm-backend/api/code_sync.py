@@ -119,6 +119,8 @@ from services.drift_checker import (
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.node_events import get_slm_self_node, split_enrollment_failed
+from services.pending_role_provisioning import provision_pending_roles, run_update_all_nodes
+from services.pending_role_resume import schedule_marked_provisioning
 from services.playbook_executor import get_playbook_executor
 from services.schedule_executor import get_schedule_target_nodes
 from services.single_flight_cache import SingleFlightCache
@@ -126,7 +128,7 @@ from services.slm_frontend_build import build_slm_frontend as _build_slm_fronten
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable, ssh_remote_path
 from services.sync_orchestrator import get_sync_orchestrator
-from services.sync_restart import no_restart_args, record_backend_start
+from services.sync_restart import record_backend_start
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -3068,11 +3070,8 @@ async def _execute_node_playbook(
     # hostname is user-editable and can drift from inventory host names (#921)
     # Issue #1091: Include localhost so Play 0 (archive build) runs
     limit = ["localhost", node.node_id]
-    playbook_result = await executor.execute_playbook(
-        playbook_name="update-all-nodes.yml",
-        limit=limit,
-        progress_callback=progress_callback,
-        **no_restart_args(request.restart),  # #20743
+    playbook_result = await run_update_all_nodes(
+        executor, node.node_id, limit, request.restart, progress_callback=progress_callback  # #22211
     )
 
     if playbook_result["success"]:
@@ -3222,7 +3221,9 @@ async def _ansible_self_update(node_id: str, on_failure: Optional[Callable[[str]
     executor = get_playbook_executor()
     limit = ["localhost", *await _colocated_node_ids(node_id)]
     try:
-        result = await executor.execute_playbook("update-all-nodes.yml", limit=limit, detach=True, must_run=[node_id])
+        result = await run_update_all_nodes(
+            executor, node_id, limit, True, resume_after_restart=True, detach=True, must_run=[node_id]
+        )
         if restart_cut_the_wait(result, node_id):  # #19139: the restarted process owns the plan now
             return
         failure = None if result["success"] else summarize_playbook_failure(result["output"])
@@ -3460,9 +3461,7 @@ async def _sync_single_node(
         # Use node_id (maps to slm_node_id in Ansible inventory) not hostname (#921)
         # Issue #1091: Include localhost so Play 0 (archive build) runs
         limit = ["localhost", node_state.node_id]
-        result = await executor.execute_playbook(
-            playbook_name="update-all-nodes.yml", limit=limit, **no_restart_args(restart)  # #20743
-        )
+        result = await run_update_all_nodes(executor, node_state.node_id, limit, restart)  # #22211
 
         if result["success"]:
             node_state.status = "success"
@@ -5023,6 +5022,7 @@ async def _sync_fleet_node(
 
     if slm_own_ip and node.ip_address == slm_own_ip:
         _stage_log(stage, f"Node {node_id} is SLM self-node — already handled, skipping")
+        _stage_log(stage, await provision_pending_roles(node_id) or "no pending roles")  # #22211
         job.completed_fleet_nodes += 1
         return True
 
@@ -5050,10 +5050,7 @@ async def _sync_fleet_node(
             f"attempting anyway; ansible decides whether it is reachable (#14297)",
         )
 
-    playbook_result = await executor.execute_playbook(
-        playbook_name="update-all-nodes.yml",
-        limit=["localhost", node_id],
-    )
+    playbook_result = await run_update_all_nodes(executor, node_id, ["localhost", node_id], True)  # #22211
     return await _record_fleet_node_outcome(node, node_id, job, stage, unhealthy, playbook_result)
 
 
@@ -5537,6 +5534,7 @@ async def resume_update_all_orchestration() -> None:
     """
     global _resume_task
 
+    schedule_marked_provisioning()  # #22211: a single-node self-update restart cut its in-process provisioning
     plan = await _read_and_validate_resume_plan()
     if plan is None:
         return
