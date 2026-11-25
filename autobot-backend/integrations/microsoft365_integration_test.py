@@ -311,3 +311,28 @@ async def test_read_action_http_error_carries_status(mock_get_client):
     mock_get_client.return_value = _mock_client(503, {"error": {"message": "busy"}})
     result = await Microsoft365Integration(_make_config()).execute_action("list_folders", {})
     assert result == {"error": "busy", "status_code": 503}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,expected", [(500, "Microsoft 365 is unavailable"), (403, "Connection failed")])
+@patch("integrations.microsoft365_integration.get_http_client")
+async def test_failed_connection_message_is_fixed_with_no_graph_text(mock_get_client, status, expected):
+    mock_get_client.return_value = _mock_client(status, {"error": {"message": "secret graph detail"}})
+    health = await Microsoft365Integration(_make_config()).test_connection()
+    assert health.message == expected and "secret graph detail" not in health.model_dump_json()
+
+
+@pytest.mark.asyncio
+@patch("integrations.microsoft365_integration.get_http_client")
+async def test_transport_exception_message_is_fixed_with_no_exception_text(mock_get_client):
+    mock_get_client.return_value.tracked_request.side_effect = aiohttp.ClientError("host-internal-name")
+    health = await Microsoft365Integration(_make_config()).test_connection()
+    assert health.message == "Microsoft 365 is unavailable" and "host-internal-name" not in health.model_dump_json()
+
+
+@pytest.mark.asyncio
+@patch("integrations.microsoft365_integration.get_http_client")
+async def test_unauthorized_connection_message_is_fixed(mock_get_client):
+    mock_get_client.return_value = _mock_client(401, {"error": {"message": "secret graph detail"}})
+    health = await Microsoft365Integration(_make_config()).test_connection()
+    assert "secret graph detail" not in health.model_dump_json()

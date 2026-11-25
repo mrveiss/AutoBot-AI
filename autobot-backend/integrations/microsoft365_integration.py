@@ -150,11 +150,10 @@ class Microsoft365Integration(BaseIntegration):
                 "Token expired or invalid",
             )
 
-        return self._create_health_response(
-            IntegrationStatus.ERROR,
-            latency,
-            f"Connection failed: {result.get('error', 'Unknown error')}",
-        )
+        code = result.get("status_code", 0)
+        self.logger.warning("Microsoft 365 connection test failed: HTTP %s - %s", code, result.get("error"))
+        reason = "Microsoft 365 is unavailable" if code == 0 or code >= 500 else "Connection failed"
+        return self._create_health_response(IntegrationStatus.ERROR, latency, reason)
 
     def get_available_actions(self) -> List[IntegrationAction]:
         """Return list of supported Microsoft 365 actions."""
