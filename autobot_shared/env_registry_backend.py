@@ -25,7 +25,7 @@ register_env_var(
         name="AUTOBOT_BACKEND_HOST",
         type=str,
         default="127.0.0.1",
-        description="Hostname or IP address of the AutoBot backend service.",
+        description="Address clients dial to reach the backend; never a bind-all address (#18810).",
         component="backend",
     )
 )

@@ -83,13 +83,18 @@ websockify_enabled: "{{ lookup('env', 'WEBSOCKIFY_ENABLED') | default('true', tr
 # the tag archive IS the distribution. It is self-contained — .gitmodules is empty
 # and vendor/pako is fully populated.
 novnc_version: "1.7.0"
+# Overridable for an air-gapped mirror (#22146); the upstream tag archive is the default.
+novnc_release_base_url: "{{ lookup('env', 'AUTOBOT_NOVNC_RELEASE_BASE_URL') | default('https://github.com/novnc/noVNC/archive/refs/tags', true) }}"
+# Scratch download: one definition for the download and unarchive tasks; set novnc_archive_dir to relocate it (#22146).
+novnc_archive_path: "{{ novnc_archive_dir | default('/tmp') }}/noVNC-{{ novnc_version }}.tar.gz"
+novnc_archive_url: "{{ novnc_release_base_url }}/v{{ novnc_version }}.tar.gz"
 novnc_archive_sha256: b1003a11b6e6e8d8f7f5e5586daae7f8ca651d8aee0aa155ff9ac841c48f52c6
 
 # Versioned install root + stable symlink, so a rollback is a symlink flip.
 # novnc_path deliberately does NOT point at /usr/share/novnc: that directory is
 # dpkg-owned by the distro package, and replacing it with a symlink collides.
 novnc_install_root: "/opt/noVNC-{{ novnc_version }}"
-novnc_path: /opt/novnc
+# novnc_path: one home in inventory/group_vars/all.yml (#22146); the backend env reads it too.
 
 # Security - password auto-generated to /etc/autobot/vnc-secrets.env
 #
