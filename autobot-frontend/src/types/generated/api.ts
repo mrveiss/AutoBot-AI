@@ -31822,6 +31822,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/integrations/microsoft365/test-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Microsoft 365 connection
+         * @description Test the connection using the token held in the secrets store.
+         */
+        post: operations["test_connection_api_integrations_microsoft365_test_connection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/microsoft365/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Outlook messages
+         * @description List messages from the inbox or a specific folder.
+         */
+        get: operations["list_messages_api_integrations_microsoft365_messages_get"];
+        put?: never;
+        /**
+         * Send an Outlook message
+         * @description Send a message, after the egress governance gate (#14270).
+         */
+        post: operations["send_email_api_integrations_microsoft365_messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/microsoft365/messages/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Outlook messages
+         * @description Search messages with a Graph ``$search`` query.
+         */
+        get: operations["search_messages_api_integrations_microsoft365_messages_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/microsoft365/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Outlook top-level mail folders
+         * @description List the top-level mail folders (Graph returns root children only; nested folders are out of scope, #13710).
+         */
+        get: operations["list_folders_api_integrations_microsoft365_folders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/whatsapp/webhook": {
         parameters: {
             query?: never;
@@ -99450,6 +99534,40 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SendEmailRequest
+         * @description Request model for sending an Outlook message.
+         */
+        SendEmailRequest: {
+            /**
+             * To
+             * @description Recipient addresses
+             */
+            to: string[];
+            /**
+             * Subject
+             * @description Message subject
+             */
+            subject: string;
+            /**
+             * Body
+             * @description Message body
+             */
+            body: string;
+            /**
+             * Cc
+             * @description Carbon-copy addresses
+             */
+            cc?: string[] | null;
+            /**
+             * Body Type
+             * @description Body content type
+             * @default HTML
+             */
+            body_type: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SendMessageRequest
          * @description Request model for sending messages.
          */
@@ -151462,6 +151580,151 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VCSProviderInfo"][];
+                };
+            };
+        };
+    };
+    test_connection_api_integrations_microsoft365_test_connection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationHealth"];
+                };
+            };
+        };
+    };
+    list_messages_api_integrations_microsoft365_messages_get: {
+        parameters: {
+            query?: {
+                folder_id?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_email_api_integrations_microsoft365_messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_messages_api_integrations_microsoft365_messages_search_get: {
+        parameters: {
+            query: {
+                query: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_folders_api_integrations_microsoft365_folders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

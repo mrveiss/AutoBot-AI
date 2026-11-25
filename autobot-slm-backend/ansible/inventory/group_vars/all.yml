@@ -511,6 +511,30 @@ chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | boo
 # matching role_xrdp_active below.
 # Migration: a backend/main host that relied on implicit activation must now list
 # 'vnc' in node_roles (or join vnc_nodes) to keep its desktop provisioned.
+# #22146: the ONE home of the noVNC web root. The vnc role installs noVNC here and its websockify
+# unit serves it (--web), the backend role writes it as AUTOBOT_NOVNC_PATH, and SSOT's
+# NOVNC_PATH_DEFAULT (autobot_shared/ssot_role_mirrors.py) is pinned to it by test.
+novnc_path: /opt/novnc
+
+# #22146: the ONE home of the directory systemd loads admin-installed units from; the vnc role's
+# websockify unit is written here. Override per host/group to relocate it.
+systemd_unit_dir: /etc/systemd/system
+
+# #18810: the address clients dial, written as AUTOBOT_BACKEND_HOST. One home (inventory-wide, evaluated
+# where backend.env.j2 renders, role or playbook). Never an unspecified
+# bind address: that case falls back to the inventory backend host, else loopback; the fallback
+# gets the same unspecified test, so a wildcard inventory host also lands on loopback.
+# "Unspecified" matches autobot_shared/ssot_reachable_host.py::is_unspecified_host (ipaddress.is_unspecified):
+# empty, 0.0.0.0, and every IPv6 spelling made only of zeros and colons (::, ::0, 0::0, 0:0::0, the full
+# eight groups, ::0.0.0.0), bracketed or not. No ipaddr filter: ansible.utils is not a repo dependency.
+backend_advertised_host: >-
+  {%- set _unspec = '^(0[.]0[.]0[.]0|[0:]*:[0:]*|[0:]*:0[.]0[.]0[.]0)$' -%}
+  {%- set _bind = backend_host | string | trim | lower | replace('[', '') | replace(']', '') -%}
+  {%- set _inv = (infrastructure.hosts.backend if infrastructure is defined else slm_loopback_ipv4) | string | trim -%}
+  {%- set _invn = _inv | lower | replace('[', '') | replace(']', '') -%}
+  {{ backend_host if (_bind != '' and (_bind | regex_search(_unspec)) is none)
+     else (_inv if (_invn != '' and (_invn | regex_search(_unspec)) is none) else slm_loopback_ipv4) }}
+
 role_vnc_active: >-
   {{ ('vnc' in (node_roles | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}
