@@ -156,3 +156,18 @@ register_env_var(
         range=(1, 5000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_CATEGORY_INDEX_CONVERGE_PASSES",
+        type=int,
+        default=5,
+        description=(
+            "Most write-then-re-read passes one category quarantine index decision may take to agree "
+            "with the fact's stored metadata before an ERROR is logged "
+            "(knowledge/category_quarantine.py, #21990)."
+        ),
+        component="knowledge",
+        range=(1, 50),
+    )
+)
