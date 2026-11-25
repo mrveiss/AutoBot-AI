@@ -4,7 +4,6 @@
 # Author: mrveiss
 """AnalyticsMiddleware tracking and the telemetry opt-out (#9035, #21684)."""
 
-import asyncio
 from unittest.mock import AsyncMock
 
 import httpx
@@ -39,7 +38,6 @@ async def _get(app: FastAPI, path: str) -> httpx.Response:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get(path)
-    await asyncio.sleep(0.05)  # let the fire-and-forget tracking task finish
     return response
 
 
@@ -70,6 +68,7 @@ def controller() -> AsyncMock:
 async def test_tracks_api_calls_when_telemetry_enabled(controller, monkeypatch):
     monkeypatch.setattr(config.telemetry, "enabled", True)
     response = await _get(_build_app(controller), "/api/ping")
+    await eventually(lambda: controller.track_api_call.await_count == 1)
     assert response.status_code == 200
     controller.track_api_call.assert_awaited_once()
     endpoint, _elapsed, status = controller.track_api_call.await_args.args
@@ -140,6 +139,7 @@ async def test_the_route_template_is_stored_not_the_raw_path(controller, monkeyp
         return {"id": item_id}
 
     await _get(app, "/api/items/12345")
+    await eventually(lambda: controller.track_api_call.await_count == 1)
     assert controller.track_api_call.await_args.args[0] == "GET /api/items/{item_id}"
 
 
@@ -156,6 +156,7 @@ async def test_an_admin_opt_out_saved_through_the_settings_route_stops_tracking(
         return {"ok": True}
 
     await _get(app, "/api/ping")
+    await eventually(lambda: controller.track_api_call.await_count == 1)
     assert controller.track_api_call.await_count == 1  # tracked before the opt-out
 
     body = {"enabled": False, "anonymous_usage_stats": False, "first_run_prompt_shown": True}
@@ -169,6 +170,7 @@ async def test_an_admin_opt_out_saved_through_the_settings_route_stops_tracking(
     body["enabled"] = True
     assert (await _post(app, "/api/settings/telemetry", body)).status_code == 200
     await _get(app, "/api/ping")
+    await eventually(lambda: controller.track_api_call.await_count == 1)
     assert controller.track_api_call.await_count == 1  # opting back in resumes tracking
 
 

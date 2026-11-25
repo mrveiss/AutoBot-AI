@@ -216,8 +216,8 @@ register_env_var(
         default=False,
         description=(
             "Append topic guidance (installation, architecture, troubleshooting, API) to the chat system prompt when "
-            "the message matches a topic keyword (chat_workflow/llm_handler.py, #21678). Off by default: it changes "
-            "the prompt of every matching turn."
+            "the message matches a topic keyword (intent_classifier.apply_topic_guidance, called from "
+            "chat_workflow/llm_handler.py, #21678). Off by default: it changes the prompt of every matching turn."
         ),
         component="chat",
     )
