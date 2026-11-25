@@ -87,6 +87,18 @@ describe('useComposerVoice', () => {
     expect(isVoiceRecording.value).toBe(true)
   })
 
+  it('a second press after Stop, when onend never comes, aborts the recogniser and frees the composer', () => {
+    const { isVoiceRecording, toggleVoiceInput } = useComposerVoice(ref(''))
+    toggleVoiceInput()
+    toggleVoiceInput() // stop
+    expect(isVoiceRecording.value).toBe(true)
+    toggleVoiceInput() // the recogniser never ended
+    expect(FakeRecognition.last!.abort).toHaveBeenCalledTimes(1)
+    expect(isVoiceRecording.value).toBe(false)
+    toggleVoiceInput() // and the next press records again
+    expect(isVoiceRecording.value).toBe(true)
+  })
+
   it('clears the recording state when recognition ends', () => {
     const { isVoiceRecording, toggleVoiceInput } = useComposerVoice(ref(''))
     toggleVoiceInput()

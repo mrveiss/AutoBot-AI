@@ -95,30 +95,33 @@ describe('useComposerUploads', () => {
     expect(u.attachedFiles.value).toHaveLength(2)
   })
 
-  it('leaving the chat aborts a running upload and attaches nothing from it', async () => {
-    m.post.mockImplementation((_s: string, _f: File, _p: unknown, signal: AbortSignal) => new Promise((_resolve, reject) => {
-      signal.addEventListener('abort', () => reject(Object.assign(new Error('cancelled'), { cancelled: true })))
-    }))
-    const u = useComposerUploads()
-    const selecting = u.handleFileSelect(pick(new File(['a'], 'a.txt')))
-    await vi.waitFor(() => expect(m.post).toHaveBeenCalled())
-    m.store.currentSessionId = 'session-2'
-    await selecting
-    expect(m.cancel).toHaveBeenCalled()
-    expect(u.attachedFiles.value).toEqual([])
-  })
-
-  it('drops attached files and never sends their ids from another chat', async () => {
+  it('keeps each chat its own attachments: A -> B -> A restores the files', async () => {
     m.post.mockResolvedValue({ file_info: { file_id: 'srv-1' } })
     const u = useComposerUploads()
     const file = new File(['a'], 'a.txt')
     await u.handleFileSelect(pick(file))
     m.store.currentSessionId = 'session-2'
-    await nextTick()
-    expect(u.attachedFiles.value).toEqual([])
-    expect(u.serverFileIds([file])).toEqual([]) // uploaded to session-1, so not carried by a send in session-2
+    expect(u.attachedFiles.value).toEqual([]) // B shows none of A's
+    expect(u.serverFileIds([file])).toEqual([]) // and a send in B carries none of A's ids
     m.store.currentSessionId = 'session-1'
+    expect(u.attachedFiles.value).toEqual([file])
     expect(u.serverFileIds([file])).toEqual(['srv-1'])
+  })
+
+  it('an upload that finishes while another chat is open lands in its own chat, not the open one', async () => {
+    let finish!: (v: unknown) => void
+    m.post.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const u = useComposerUploads()
+    const file = new File(['a'], 'a.txt')
+    const selecting = u.handleFileSelect(pick(file))
+    await vi.waitFor(() => expect(m.post).toHaveBeenCalled())
+    m.store.currentSessionId = 'session-2' // the upload keeps going; nothing is aborted
+    finish({ file_info: { file_id: 'srv-1' } })
+    await selecting
+    expect(m.cancel).not.toHaveBeenCalled()
+    expect(u.attachedFiles.value).toEqual([]) // not in B
+    m.store.currentSessionId = 'session-1'
+    expect(u.attachedFiles.value).toEqual([file]) // in A
   })
 
   it('a chat created by the upload itself keeps the file', async () => {

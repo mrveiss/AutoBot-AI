@@ -10,6 +10,7 @@
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from '@autobot/ui'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { ensureUploadSession } from '@/utils/conversationFileUpload'
@@ -20,6 +21,7 @@ export const IMAGE_PROVIDERS: readonly ImageProvider[] = ['dalle', 'flux', 'stab
 
 export function useComposerImageGen() {
   const { t } = useI18n()
+  const { showToast } = useToast()
   const store = useChatStore()
   const controller = useChatController()
   const { generating: imageGenerating, generateImage } = useImageGeneration()
@@ -47,13 +49,25 @@ export function useComposerImageGen() {
     }, sessionId)
   }
 
+  /** The chat the request belongs to, or null (dialog reopened, prompt kept, toast shown) when none could be made. */
+  async function chatForRequest(): Promise<string | null> {
+    try {
+      return await ensureUploadSession(store, controller) // read now: the open chat may change while it runs
+    } catch {
+      showImageGenModal.value = true
+      showToast(t('chat.input.imageGenerationFailed'), 'error')
+      return null
+    }
+  }
+
   async function submitImageGeneration(): Promise<void> {
     const prompt = imagePrompt.value.trim()
     if (!prompt || inFlight.value || imageGenerating.value) return // one request at a time, from any entry point
     inFlight.value = true
     showImageGenModal.value = false
     try {
-      const sessionId = await ensureUploadSession(store, controller) // read now: the open chat may change while it runs
+      const sessionId = await chatForRequest()
+      if (!sessionId) return
       const result = await generateImage({ prompt, provider: imageProvider.value })
       imagePrompt.value = ''
       postResult(result, sessionId)

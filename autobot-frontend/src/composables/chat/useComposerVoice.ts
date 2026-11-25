@@ -44,6 +44,7 @@ export function useComposerVoice(messageText: Ref<string>) {
   const { showToast } = useToast()
   const isVoiceRecording = ref(false)
   let recognition: Recognition | null = null // internal, not reactive
+  let stopping = false // stop() was asked for and onend has not come yet
 
   /** No Web Speech API: still trigger the mic permission prompt, then say it is unsupported. */
   async function explainUnsupported(): Promise<void> {
@@ -72,6 +73,7 @@ export function useComposerVoice(messageText: Ref<string>) {
       if (!current()) return
       isVoiceRecording.value = false
       recognition = null
+      stopping = false
       logger.debug('Voice recognition ended')
     }
     rec.onerror = (event) => {
@@ -79,6 +81,7 @@ export function useComposerVoice(messageText: Ref<string>) {
       logger.error('Voice recognition error:', event.error)
       isVoiceRecording.value = false
       recognition = null
+      stopping = false
       if (event.error === 'not-allowed') showToast(t('chat.input.micDenied'), 'error')
     }
   }
@@ -102,16 +105,27 @@ export function useComposerVoice(messageText: Ref<string>) {
     }
   }
 
+  /** A second press while stopping: abort() ends the recogniser for good (its late callbacks are then dropped). */
+  function abortStopping(): void {
+    const rec = recognition
+    recognition = null
+    stopping = false
+    isVoiceRecording.value = false
+    rec?.abort()
+  }
+
   function stopVoiceRecording(): void {
     // The flag stays up until onend: stop() can still deliver a final transcript, so a send in the gap would race it.
     recognition?.stop()
+    stopping = true
     logger.debug('Voice recording stopped')
   }
 
   // A recogniser exists from start() until its onend, which is wider than `isVoiceRecording`
-  // (false before onstart and after stop()): a toggle in that gap stops, it never starts a second one.
+  // (false before onstart): a toggle in that gap stops, it never starts a second one; a toggle after stop() aborts.
   const toggleVoiceInput = (): void => {
-    if (isVoiceRecording.value || recognition) stopVoiceRecording()
+    if (stopping) abortStopping() // the recogniser did not end after stop(): give the composer back
+    else if (isVoiceRecording.value || recognition) stopVoiceRecording()
     else void startVoiceRecording()
   }
 
@@ -120,6 +134,7 @@ export function useComposerVoice(messageText: Ref<string>) {
     onScopeDispose(() => {
       const rec = recognition
       recognition = null
+      stopping = false
       rec?.abort()
       isVoiceRecording.value = false
     })

@@ -6,10 +6,11 @@
  * The composer's attachments: pick, validate, upload in parallel, retry, cancel, remove (#18243,
  * moved unchanged in behaviour out of ChatInput.vue). Transport and bearer are
  * `utils/conversationFileUpload.ts`; only the server ids ever reach a send (#20195). An upload belongs to the
- * chat it was sent to: leaving that chat aborts what is still uploading and drops what was attached, and a send
- * carries only the ids uploaded to the chat it goes to.
+ * chat it was sent to and keeps uploading when the person opens another: the finished file joins that chat's own
+ * attachment list (restored on return, never shown in another chat), and a send carries only the ids uploaded
+ * to the chat it goes to.
  */
-import { computed, ref, reactive, watch } from 'vue'
+import { computed, ref, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@autobot/ui'
 import { useChatStore } from '@/stores/useChatStore'
@@ -26,6 +27,7 @@ const logger = createLogger('useComposerUploads')
 
 export const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const COMPLETE_ROW_LINGER_MS = 2000
+const NO_CHAT = '' // the attachment list of a composer with no chat open
 
 export type UploadPhase = 'preparing' | 'uploading' | 'complete' | 'failed' | 'retrying'
 
@@ -50,7 +52,13 @@ export function useComposerUploads() {
   const store = useChatStore()
   const controller = useChatController()
 
-  const attachedFiles = ref<File[]>([])
+  const filesByChat = reactive<Record<string, File[]>>({}) // chat id -> its attached files
+  const chatKey = (): string => store.currentSessionId ?? NO_CHAT
+  /** The open chat's attached files; assigning replaces that chat's list only. */
+  const attachedFiles = computed<File[]>({
+    get: () => filesByChat[chatKey()] ?? [],
+    set: (files) => { filesByChat[chatKey()] = files },
+  })
   const uploadProgress = ref<UploadItem[]>([])
   const pendingUploads = ref(0) // selections and retries not yet settled
   const hasPendingUploads = computed(() => pendingUploads.value > 0)
@@ -69,18 +77,13 @@ export function useComposerUploads() {
       return stored?.fileId && stored.sessionId === store.currentSessionId ? stored.fileId : []
     })
 
-  /** Attach a finished upload only while its chat is the open one. */
+  /** A finished upload joins the list of the chat it was sent to, whichever chat is open now. */
   function attach(file: File): void {
-    if (uploadedIds.get(file)?.sessionId !== store.currentSessionId) return
-    if (!attachedFiles.value.includes(file)) attachedFiles.value.push(file) // by identity: two files may share a name
+    const chat = uploadedIds.get(file)?.sessionId
+    if (chat === undefined) return
+    const list = filesByChat[chat] ?? []
+    if (!list.includes(file)) filesByChat[chat] = [...list, file] // by identity: two files may share a name
   }
-
-  // Opening another chat ends this chat's attachments: abort the uploads still running, drop the attached files.
-  watch(() => store.currentSessionId, (id, previous) => {
-    if (!previous || id === previous) return // null -> id is the chat this upload just created
-    uploadProgress.value.filter((u) => u.sessionId === previous && isCancellable(u)).forEach((u) => cancelUpload(u.id))
-    attachedFiles.value = []
-  })
 
   const reportProgress = (upload: UploadItem, startTime: number) => (loaded: number, total: number): void => {
     upload.current = loaded
@@ -179,7 +182,7 @@ export function useComposerUploads() {
     }
   }
 
-  const removeFile = (index: number): void => { attachedFiles.value.splice(index, 1) }
+  const removeFile = (index: number): void => { attachedFiles.value = attachedFiles.value.filter((_, i) => i !== index) }
   const clearAllFiles = (): void => { attachedFiles.value = [] }
 
   return {

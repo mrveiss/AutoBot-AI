@@ -9,10 +9,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 
 const m = vi.hoisted(() => ({
-  addMessage: vi.fn(), generateImage: vi.fn(), ensure: vi.fn(), store: { currentSessionId: 'session-a' as string | null },
+  showToast: vi.fn(), addMessage: vi.fn(), generateImage: vi.fn(), ensure: vi.fn(), store: { currentSessionId: 'session-a' as string | null },
 }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => Object.assign(m.store, { addMessage: m.addMessage }) }))
+vi.mock('@autobot/ui', () => ({ useToast: () => ({ showToast: m.showToast }) }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => ({}) }))
 vi.mock('@/utils/conversationFileUpload', () => ({ ensureUploadSession: m.ensure }))
 vi.mock('@/composables/useImageGeneration', () => ({ useImageGeneration: () => ({ generating: ref(false), generateImage: m.generateImage }) }))
@@ -20,7 +21,7 @@ vi.mock('@/composables/useImageGeneration', () => ({ useImageGeneration: () => (
 import { useComposerImageGen } from '../useComposerImageGen'
 
 beforeEach(() => {
-  ;[m.addMessage, m.generateImage, m.ensure].forEach((f) => f.mockReset())
+  ;[m.addMessage, m.generateImage, m.ensure, m.showToast].forEach((f) => f.mockReset())
   m.store.currentSessionId = 'session-a'
   m.ensure.mockImplementation(async (store: { currentSessionId: string | null }) => store.currentSessionId ?? 'created')
 })
@@ -104,5 +105,22 @@ describe('useComposerImageGen', () => {
     finish({ success: true, images: [] })
     await first
     expect(m.addMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('when no chat can be created it reopens the dialog with the prompt kept and says so, with no unhandled rejection', async () => {
+    m.store.currentSessionId = null
+    m.ensure.mockRejectedValue(new Error('create failed'))
+    const g = useComposerImageGen()
+    g.showImageGenModal.value = true
+    g.imagePrompt.value = 'a city'
+    await expect(g.submitImageGeneration()).resolves.toBeUndefined()
+    expect(g.showImageGenModal.value).toBe(true)
+    expect(g.imagePrompt.value).toBe('a city')
+    expect(m.showToast).toHaveBeenCalledWith('chat.input.imageGenerationFailed', 'error')
+    expect(m.generateImage).not.toHaveBeenCalled()
+    m.ensure.mockImplementation(async () => 'created') // and the request is not stuck in flight
+    m.generateImage.mockResolvedValue({ success: true, images: [] })
+    await g.submitImageGeneration()
+    expect(m.generateImage).toHaveBeenCalledTimes(1)
   })
 })
