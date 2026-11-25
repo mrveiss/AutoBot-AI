@@ -66,8 +66,10 @@ describe('useChatMessageActions', () => {
       value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
       configurable: true,
     })
-    document.execCommand = vi.fn().mockReturnValue(false)
+    const execCommand = vi.fn().mockReturnValue(false)
+    document.execCommand = execCommand
     expect(await copyText('abc')).toBe(false)
+    expect(execCommand).toHaveBeenCalledWith('copy')
     await useChatMessageActions().copyMessage(m)
     expect(h.showToast).toHaveBeenCalledWith('chat.messages.copyFailed', 'error')
   })

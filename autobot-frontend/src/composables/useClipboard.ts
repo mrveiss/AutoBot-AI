@@ -250,15 +250,19 @@ export function useClipboard(options: ClipboardOptions = {}): UseClipboardReturn
     copied.value = false
 
     try {
-      // Try modern Clipboard API first
+      // Try modern Clipboard API first; a rejection (denied permission,
+      // unfocused document, iframe policy) falls back to execCommand.
+      let writeError: unknown = null
       if (isSupported.value) {
-        await navigator.clipboard.writeText(text)
-      } else {
-        // Fallback for older browsers
-        const success = copyFallback(text)
-
-        if (!success) {
-          throw new Error('Clipboard copy failed')
+        try {
+          await navigator.clipboard.writeText(text)
+        } catch (apiErr) {
+          writeError = apiErr
+        }
+      }
+      if (!isSupported.value || writeError) {
+        if (!copyFallback(text)) {
+          throw writeError ?? new Error('Clipboard copy failed')
         }
       }
 
