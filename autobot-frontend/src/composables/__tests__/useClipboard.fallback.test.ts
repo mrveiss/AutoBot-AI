@@ -36,6 +36,15 @@ describe('useClipboard - fallback after a rejected writeText', () => {
     expect((clipboard.error.value as Error).message).toBe('Permission denied')
   })
 
+  it('falls back and fails when writeText rejects with undefined and execCommand returns false', async () => {
+    writeText.mockRejectedValue(undefined)
+    execCommand.mockReturnValue(false)
+    const clipboard = useClipboard()
+    expect(await clipboard.copy('Test')).toBe(false)
+    expect(execCommand).toHaveBeenCalledWith('copy')
+    expect(clipboard.copied.value).toBe(false)
+  })
+
   it('returns false when execCommand throws', async () => {
     execCommand.mockImplementation(() => { throw new Error('boom') })
     expect(await useClipboard().copy('Test')).toBe(false)
