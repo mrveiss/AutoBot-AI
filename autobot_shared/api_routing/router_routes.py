@@ -10,9 +10,9 @@ holds an opaque wrapper — its ``path`` is ``None``, it has no ``methods``, and
 the real routes live on ``wrapper.original_router.routes``. Below 0.139 the same
 call flattens eagerly and ``routes`` holds the real objects directly.
 
-Both shapes exist in this project at once: ``requirements-ci/framework.txt`` pins
-``fastapi==0.141.1`` (deferred) while a development checkout may resolve lower
-(#15091). Code written for either one alone is wrong on the other, and wrong in
+Both shapes can exist in this project at once: CI resolves the ``fastapi`` floor
+declared in ``constraints/shared.txt`` (deferred shape) while a development checkout
+may resolve lower (#15091, #22135). Code written for either one alone is wrong on the other, and wrong in
 the worst possible direction: an ``hasattr``-guarded walk over the deferred shape
 does not raise, it silently finds **nothing**, and a test asserting over nothing
 passes.

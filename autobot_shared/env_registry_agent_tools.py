@@ -269,3 +269,43 @@ register_env_var(
         component="chat_workflow",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_VM_REQUEST_TIMEOUT_S",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds the browser automation MCP bridge waits for one Browser VM action before it answers with a "
+            "timeout (#18056). Must be a positive finite number; anything else falls back to the default."
+        ),
+        component="agent_tools",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_VM_HEALTH_TIMEOUT_S",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds the browser MCP status route waits for the Browser VM health probe before it reports the VM "
+            "unavailable. Must be a positive finite number; anything else falls back to the default."
+        ),
+        component="agent_tools",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_BROWSER_RATE_WINDOW_S",
+        type=int,
+        default=60,
+        range=(1, 86400),
+        description=(
+            "Length in seconds of the sliding window that AUTOBOT_MCP_BROWSER_RATE_LIMIT counts requests over "
+            "(#18087). Out-of-range values fall back to the default."
+        ),
+        component="agent_tools",
+    )
+)
