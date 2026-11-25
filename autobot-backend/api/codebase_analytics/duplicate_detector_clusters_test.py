@@ -23,7 +23,14 @@ from api.codebase_analytics.duplicate_blocks import (
     normalize_exact,
     normalize_structural,
 )
-from api.codebase_analytics.duplicate_clusters import KIND_EXACT, KIND_SIMILAR, KIND_STRUCTURAL
+from api.codebase_analytics.duplicate_clusters import (
+    KIND_EXACT,
+    KIND_SIMILAR,
+    KIND_STRUCTURAL,
+    DuplicateCluster,
+    DuplicateLocation,
+    count_distinct_locations,
+)
 from utils.file_categorization import SKIP_DIRS
 
 
@@ -270,3 +277,34 @@ def test_the_js_family_is_the_scanners_extension_sets_so_mjs_comments_are_commen
     noted = code.replace("0)\n", "0) // trailing note\n", 1)
     assert make_block("a.mjs", 1, 2, noted, 2).exact_hash == make_block("a.mjs", 1, 2, code, 2).exact_hash
     assert make_block("a.py", 1, 2, noted, 2).exact_hash != make_block("a.py", 1, 2, code, 2).exact_hash
+
+
+def test_a_nested_template_literal_is_one_string_and_code_after_it_is_kept():
+    code = "const a = `x ${`in  ner ${1}`} y`; // gone\nreturn a  +  b"
+    assert normalize_exact(code, js_family=True) == "const a = `x ${`in  ner ${1}`} y`; return a + b"
+    # contrast: a plain template keeps its inner spacing and a real comment is still stripped
+    assert normalize_exact("`a  b` /* c */ x", js_family=True) == "`a  b` x"
+
+
+def test_a_regex_literal_is_code_not_a_line_comment():
+    code = "const r = /\\/\\//g; const s = 1  +  2"
+    assert normalize_exact(code, js_family=True) == "const r = /\\/\\//g; const s = 1 + 2"
+    assert normalize_exact("x = a / b // real\ny", js_family=True) == "x = a / b y"  # division, then a comment
+    assert normalize_exact("x = [/a  b/]; // c", js_family=True) == "x = [/a  b/];"  # spaces inside a regex are kept
+    assert normalize_exact("return /[/]/.test(s) // c", js_family=True) == "return /[/]/.test(s)"
+
+
+def test_two_exact_subgroups_bridged_by_a_structural_cluster_count_one_original():
+    def loc(f):
+        return DuplicateLocation(f, 1, 10)
+
+    def cluster(kind, *files):
+        return DuplicateCluster(kind, 1.0, 10, [loc(f) for f in files], "")
+
+    exact_a, exact_b = cluster(KIND_EXACT, "a", "b"), cluster(KIND_EXACT, "c", "d")
+    structural = cluster(KIND_STRUCTURAL, "a", "b", "c", "d")
+    # four blocks that all match structurally hold three redundant copies of 10 lines
+    assert count_distinct_locations([exact_a, exact_b, structural]) == (4, 30)
+    # contrast: without the structural bridge the two pairs are separate (one redundant copy each)
+    assert count_distinct_locations([exact_a, exact_b]) == (4, 20)
+    assert count_distinct_locations([structural]) == (4, 30)

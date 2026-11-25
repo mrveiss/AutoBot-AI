@@ -17,6 +17,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional, Set
 
+from api.codebase_analytics.duplicate_js_scan import CODE, COMMENT, STRING, map_js
 from autobot_shared.content_digest import content_digest
 from utils.file_categorization import JS_EXTENSIONS, TS_EXTENSIONS, VUE_EXTENSIONS
 
@@ -30,16 +31,14 @@ MIN_DUPLICATE_CHARS = 80
 JS_FAMILY_SUFFIXES = tuple(sorted(JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS))
 
 # A quoted string is matched first, in the same pass as the comment, so a comment marker inside
-# one is not a comment. Python also has triple-quoted strings; JS also has template literals.
+# one is not a comment. Python also has triple-quoted strings. The JS family is lexed by
+# ``duplicate_js_scan`` (nested templates, regex literals).
 _DQ = r'"(?:\\.|[^"\\\n])*"'
 _SQ = r"'(?:\\.|[^'\\\n])*'"
 _PY_STRING = r'(?P<string>""".*?"""' + r"|'''.*?'''" + "|" + _DQ + "|" + _SQ + ")"
-_JS_STRING = "(?P<string>" + _DQ + "|" + _SQ + r"|`(?:\\.|[^`\\])*`)"
 _PY_COMMENT_RE = re.compile(_PY_STRING + r"|\#[^\n]*", re.DOTALL)
-_JS_COMMENT_RE = re.compile(_JS_STRING + r"|//[^\n]*|/\*.*?\*/", re.DOTALL)
 # The same strings, then a whitespace run: collapsing whitespace must not reach inside a literal.
 _PY_SPACE_RE = re.compile(_PY_STRING + r"|\s+", re.DOTALL)
-_JS_SPACE_RE = re.compile(_JS_STRING + r"|\s+", re.DOTALL)
 
 
 @dataclass
@@ -63,7 +62,11 @@ class CodeBlock:
 
 def _strip_comments(content: str, js_family: bool, string_as: Optional[str] = None) -> str:
     """*content* without comments, by the file's own syntax; strings kept verbatim, or replaced by *string_as*."""
-    pattern = _JS_COMMENT_RE if js_family else _PY_COMMENT_RE
+    if js_family:
+        return map_js(
+            content, lambda kind, piece: "" if kind == COMMENT else (string_as or piece) if kind == STRING else piece
+        )
+    pattern = _PY_COMMENT_RE
     return pattern.sub(lambda m: (string_as or m.group("string")) if m.group("string") else "", content)
 
 
@@ -84,9 +87,10 @@ def normalize_exact(content: str, js_family: bool = False) -> str:
     type's markers are code (``a // b`` is Python floor division). Whitespace is collapsed
     outside string literals only: ``"first  name"`` and ``"first name"`` are different values.
     """
-    string_re = _JS_SPACE_RE if js_family else _PY_SPACE_RE
     content = _strip_comments(content, js_family)
-    return string_re.sub(lambda m: m.group("string") or " ", content).strip()
+    if js_family:
+        return map_js(content, lambda kind, piece: re.sub(r"\s+", " ", piece) if kind == CODE else piece).strip()
+    return _PY_SPACE_RE.sub(lambda m: m.group("string") or " ", content).strip()
 
 
 def make_block(file_path: str, start_line: int, end_line: int, content: str, line_count: int) -> Optional[CodeBlock]:

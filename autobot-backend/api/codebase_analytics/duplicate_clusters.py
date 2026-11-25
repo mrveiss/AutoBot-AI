@@ -214,16 +214,30 @@ def count_distinct_locations(clusters: Iterable[DuplicateCluster]) -> Tuple[int,
     """``(distinct locations, redundant lines)`` over ``clusters``, each place counted once.
 
     A structural cluster lists the blocks of its exact subgroups as well. Strongest kinds
-    count first; a cluster contributes a redundant copy for each place not yet counted,
-    less the one original when none of its places was.
+    count first. Places that share a cluster form one group holding one original; a cluster
+    adds a redundant copy for each place not yet counted, plus one for every extra group it
+    joins (two exact subgroups bridged by a structural cluster are one group, so one of the
+    two originals becomes a redundant copy), and starts a group of its own, less its original,
+    when none of its places was counted.
     """
-    seen: set = set()
+    group_of: Dict = {}
     redundant = 0
     for cluster in sorted(clusters, key=lambda c: _KIND_RANK.get(c.kind, len(_KIND_RANK))):
-        fresh = [loc for loc in cluster.locations if loc not in seen]
-        seen.update(cluster.locations)
-        redundant += cluster.line_count * (len(fresh) - (1 if len(fresh) == len(cluster.locations) else 0))
-    return len(seen), redundant
+        fresh = [loc for loc in cluster.locations if loc not in group_of]
+        joined = {group_of[loc] for loc in cluster.locations if loc in group_of}
+        redundant += cluster.line_count * (len(fresh) + (len(joined) - 1 if joined else -1))
+        target = min(joined) if joined else _next_group(group_of)
+        for loc in fresh:
+            group_of[loc] = target
+        for loc, grp in group_of.items():
+            if grp in joined:
+                group_of[loc] = target
+    return len(group_of), redundant
+
+
+def _next_group(group_of: Dict) -> int:
+    """A group id no counted place uses."""
+    return max(group_of.values(), default=-1) + 1
 
 
 def merge_adjacent_clusters(clusters: Iterable[DuplicateCluster]) -> List[DuplicateCluster]:
