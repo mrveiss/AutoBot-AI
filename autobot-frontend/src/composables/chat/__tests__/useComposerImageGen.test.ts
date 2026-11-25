@@ -68,7 +68,7 @@ describe('useComposerImageGen', () => {
     const g = useComposerImageGen()
     g.imagePrompt.value = 'x'
     await g.submitImageGeneration()
-    expect(m.addMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'chat.input.imageGenerationFailed', metadata: {} }))
+    expect(m.addMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'chat.input.imageGenerationFailed', metadata: {} }), 'session-a')
   })
 
   it('posts the result into the chat that submitted it, not the one open when it completes', async () => {
@@ -101,6 +101,8 @@ describe('useComposerImageGen', () => {
     g.imagePrompt.value = 'x'
     const first = g.submitImageGeneration()
     await g.submitImageGeneration()
+    await vi.waitFor(() => expect(m.generateImage).toHaveBeenCalledTimes(1)) // the first is still creating/resolving its chat
+    await Promise.resolve()
     expect(m.generateImage).toHaveBeenCalledTimes(1)
     finish({ success: true, images: [] })
     await first

@@ -79,7 +79,7 @@ describe('useChatKnowledge', () => {
     store.switchToSession(existing)
     await nextTick()
     expect(enabled.value).toBe(true) // the default, not the draft
-    expect(JSON.parse(localStorage.getItem(KNOWLEDGE_STORAGE_KEY)!)).toEqual({})
+    expect(JSON.parse(localStorage.getItem(KNOWLEDGE_STORAGE_KEY) ?? '{}')).toEqual({}) // nothing was ever stored
   })
 
   it('re-reads the map another tab stored, and stops listening when its scope ends', async () => {
