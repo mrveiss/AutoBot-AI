@@ -11,8 +11,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { effectScope, ref } from 'vue'
 
 const showToast = vi.hoisted(() => vi.fn())
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
-vi.mock('@autobot/ui', () => ({ useToast: () => ({ showToast }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('vue-i18n')>()),
+  useI18n: () => ({ t: (k: string) => k }),
+}))
+vi.mock('@autobot/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@autobot/ui')>()),
+  useToast: () => ({ showToast }),
+}))
 
 import { useComposerVoice } from '../useComposerVoice'
 

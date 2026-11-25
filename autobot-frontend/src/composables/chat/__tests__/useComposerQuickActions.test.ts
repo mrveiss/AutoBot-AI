@@ -9,7 +9,10 @@ import { describe, it, expect, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
 
 const addMessage = vi.hoisted(() => vi.fn())
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('vue-i18n')>()),
+  useI18n: () => ({ t: (k: string) => k }),
+}))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => ({ addMessage }) }))
 
 import { useComposerQuickActions } from '../useComposerQuickActions'

@@ -11,8 +11,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const m = vi.hoisted(() => ({ showToast: vi.fn(), post: vi.fn(), ensure: vi.fn() }))
 
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string, p?: Record<string, unknown>) => (p ? `${k}:${JSON.stringify(p)}` : k) }) }))
-vi.mock('@autobot/ui', () => ({ useToast: () => ({ showToast: m.showToast }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('vue-i18n')>()),
+  useI18n: () => ({ t: (k: string, p?: Record<string, unknown>) => (p ? `${k}:${JSON.stringify(p)}` : k) }),
+}))
+vi.mock('@autobot/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@autobot/ui')>()),
+  useToast: () => ({ showToast: m.showToast }),
+}))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => ({}) }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => ({}) }))
 vi.mock('@/utils/formatHelpers', () => ({ formatFileSize: (n: number) => `${n}B` }))

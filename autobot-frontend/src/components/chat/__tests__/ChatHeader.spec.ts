@@ -87,7 +87,8 @@ describe('ChatHeader', () => {
     expect(html.indexOf('Overseer on')).toBeLessThan(html.indexOf('Fleet check'))
     expect(w.text()).toContain('started')
     expect(w.text()).toContain('10:42')
-    expect(w.text()).not.toContain('Knowledge')
+    // The sub-line also carries the Knowledge state (#22200), above the title with Overseer.
+    expect(html.indexOf('data-testid="header-knowledge"')).toBeLessThan(html.indexOf('Fleet check'))
     w.unmount()
   })
 
