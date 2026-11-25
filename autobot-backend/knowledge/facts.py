@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from autobot_shared.content_digest import fact_dedup_key
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
-from knowledge.category_quarantine import sync_fact_quarantine
+from knowledge.category_quarantine import sync_fact_quarantine, unindex_deleted_fact
 from knowledge.embedding_space_binding import current_space
 from knowledge.fact_projection import FactProjectionMixin
 from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable here
@@ -1131,7 +1131,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                     "timestamp": decoded.get("timestamp", ""),
                 },
             )
-            await sync_fact_quarantine(self.redis_client, fact_id, current_metadata)  # #21957
+            await sync_fact_quarantine(self.redis(), fact_id)  # #21957, #21990: from the stored metadata
             if ownership_changed(previous, current_metadata) and getattr(self, "ownership_manager", None):
                 await reindex_ownership(self.ownership_manager, fact_id, previous, current_metadata)
 
@@ -1208,10 +1208,9 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
 
             decoded, metadata = current
             content = decoded.get("content", "")
-
-            # #15663: the row is the fact, so removing it is what makes the
-            # delete real; the projections are cleaned up after.
-            if not await self._durable_delete(fact_id):
+            # #15663: the row is the fact, so removing it is what makes the delete real; projections after.
+            removed, category_id = await self._durable_delete(fact_id)  # #21984: the category held at the DEL
+            if not removed:
                 return {"status": "error", "message": "Fact not found"}
             await self._cleanup_fact_mappings(fact_id, content, metadata)
             await self._delete_fact_from_vector_store(fact_id)
@@ -1220,6 +1219,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                 self._decrement_stat("total_facts"),
                 self._decrement_stat("total_vectors"),
             )
+            await unindex_deleted_fact(self.redis(), fact_id, category_id)  # #21984: last; logs, never fails the delete
 
             if not _skip_bm25_refresh:
                 self._schedule_bm25_refresh()

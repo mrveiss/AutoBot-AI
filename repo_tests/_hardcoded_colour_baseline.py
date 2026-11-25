@@ -64,7 +64,7 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#313244": 1,
     "#3498db": 1,
     "#3760bf": 1,
-    "#3b82f6": 4,
+    "#3b82f6": 3,  # #18243: -1, merged with main (4)
     "#6366f1": 2,
     "#667eea": 1,
     "#6b7280": 3,

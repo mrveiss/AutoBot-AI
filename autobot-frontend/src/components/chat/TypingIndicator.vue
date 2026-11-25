@@ -1,9 +1,9 @@
 <template>
-  <div class="message-wrapper assistant-message typing-message">
+  <div class="typing-message">
     <div class="message-header">
-      <div class="flex items-center gap-1.5">
+      <div class="message-ident">
         <div class="message-avatar assistant">
-          <LoadingSpinner variant="pulse" size="sm" color="var(--color-primary)" />
+          <BaseSpinner size="sm" />
         </div>
         <div class="message-info">
           <span class="sender-name">{{ t('chat.typing.aiAssistant') }}</span>
@@ -49,7 +49,7 @@
 
 import { computed, ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
+import { BaseSpinner } from '@autobot/ui'
 
 const { t } = useI18n()
 
@@ -132,105 +132,69 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-@reference "../../assets/tailwind.css";
-/* Issue #704: Migrated to CSS design tokens */
 .typing-message {
-  @apply animate-pulse mr-auto ml-0 rounded-lg shadow-sm border;
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-  border-color: var(--border-default);
-  border-radius: 18px 18px 18px 4px;
-  max-width: 85%;
-  padding: var(--spacing-1-5) var(--spacing-2-5);
+  max-inline-size: 85%;
+  margin-inline-end: auto;
+  padding: var(--aui-space-2) var(--aui-space-3);
+  border: 1px solid var(--aui-color-border);
+  border-radius: var(--aui-radius-lg);
+  background: var(--aui-color-surface-raised);
+  color: var(--aui-color-text);
 }
 
-.message-header {
-  @apply flex items-start justify-between mb-1;
-}
-
+.message-header { display: flex; align-items: flex-start; justify-content: space-between; margin-block-end: var(--aui-space-1); }
+.message-ident { display: flex; align-items: center; gap: var(--aui-space-2); }
 .message-avatar {
-  @apply w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--aui-space-6);
+  block-size: var(--aui-space-6);
+  border-radius: var(--aui-radius-full);
+  background: var(--aui-color-surface-sunken);
 }
+.message-info { display: flex; flex-direction: column; }
+.sender-name { font-size: var(--aui-text-xs); font-weight: var(--aui-font-weight-semibold); }
+.message-time { font-size: var(--aui-text-xs); color: var(--aui-color-text-muted); }
+.message-content { font-size: var(--aui-text-sm); }
 
-.message-avatar.assistant {
-  background-color: var(--bg-tertiary);
-}
-
-.message-info {
-  @apply flex flex-col ml-1.5;
-}
-
-.sender-name {
-  @apply font-semibold text-xs;
-  color: var(--text-primary);
-}
-
-.message-time {
-  @apply text-xs leading-tight;
-  color: var(--text-secondary);
-}
-
-.message-content {
-  @apply leading-snug text-sm;
-  color: var(--text-primary);
-}
-
-.enhanced-typing-indicator {
-  @apply flex flex-col gap-2 p-3;
-}
-
-.typing-animation {
-  @apply relative;
-}
-
-.typing-dots-enhanced {
-  @apply flex gap-1.5;
-}
-
+.enhanced-typing-indicator { display: flex; flex-direction: column; gap: var(--aui-space-2); padding: var(--aui-space-3); }
+.typing-animation { position: relative; }
+.typing-dots-enhanced { display: flex; gap: var(--aui-space-2); }
 .typing-dots-enhanced span {
-  @apply w-2.5 h-2.5 rounded-full;
-  background-color: var(--color-primary);
-  animation: typingBounce 1.4s ease-in-out infinite both;
+  inline-size: var(--aui-space-2);
+  block-size: var(--aui-space-2);
+  border-radius: var(--aui-radius-full);
+  background: var(--aui-color-primary);
+  animation: typing-bounce 1.4s ease-in-out infinite both;
 }
-
 .typing-dots-enhanced span:nth-child(1) { animation-delay: -0.32s; }
 .typing-dots-enhanced span:nth-child(2) { animation-delay: -0.16s; }
 .typing-dots-enhanced span:nth-child(3) { animation-delay: 0s; }
 .typing-dots-enhanced span:nth-child(4) { animation-delay: 0.16s; }
 
-@keyframes typingBounce {
-  0%, 80%, 100% {
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1.2);
-    opacity: 1;
-  }
-}
-
 .typing-wave {
-  @apply absolute top-0 left-0 right-0 h-1 rounded-full;
-  background: var(--color-primary-hover);
+  position: absolute;
+  inset: 0 0 auto;
+  block-size: var(--aui-space-1);
+  border-radius: var(--aui-radius-full);
+  background: var(--aui-color-primary-hover);
   opacity: 0.6;
-  animation: typingWave 2s ease-in-out infinite;
+  animation: typing-wave 2s ease-in-out infinite;
 }
+.typing-status { display: flex; align-items: center; justify-content: space-between; font-size: var(--aui-text-xs); }
+.typing-text { color: var(--aui-color-text-muted); }
+.typing-eta { color: var(--aui-color-primary); font-weight: var(--aui-font-weight-medium); }
 
-@keyframes typingWave {
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+  40% { transform: scale(1.2); opacity: 1; }
+}
+@keyframes typing-wave {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
-
-.typing-status {
-  @apply flex justify-between items-center text-xs;
-}
-
-.typing-text {
-  color: var(--text-secondary);
-}
-
-.typing-eta {
-  @apply font-medium;
-  color: var(--color-primary);
+@media (prefers-reduced-motion: reduce) {
+  .typing-dots-enhanced span, .typing-wave { animation: none; }
 }
 </style>

@@ -31,7 +31,7 @@ REGISTRY_GLOB = "env_registry*.py"
 #: AUTOBOT_* aliases the census extracts from ssot*.py (447, re-measured on the merged tree); pinned with no margin.
 MIN_ALIASES_EXTRACTED = 447
 #: Source files read (50 when measured); the floor is pinned to it, with no margin, by the reach-floor gate.
-MIN_FILES_READ = 50
+MIN_FILES_READ = 51
 
 
 def _sources(root: Path, pattern: str) -> list[Path]:
