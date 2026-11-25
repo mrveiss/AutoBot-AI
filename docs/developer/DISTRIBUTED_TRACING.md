@@ -59,8 +59,10 @@ AUTOBOT_TRACE_CONSOLE=false
 
 ### Sampling Strategy
 
-The sampling strategy uses `ParentBasedTraceIdRatio`:
-- **Respects parent decisions** - If a parent span is sampled, all children are too
+The sampling strategy depends on `AUTOBOT_OTEL_SAMPLE_RATE` (`_sampler_for` in `autobot_shared/tracing.py`):
+- **Rate 0 or less** - Nothing is sampled, even when an inbound `traceparent` is sampled
+- **Rate 1.0 or more** - Everything is sampled, even when an inbound parent is not sampled
+- **Rate between 0 and 1** - `ParentBasedTraceIdRatio`: a sampled parent keeps its children sampled
 - **Probabilistic sampling** - Samples based on trace ID hash for consistent decisions
 - **Configurable rate** - Set via `AUTOBOT_OTEL_SAMPLE_RATE`
 

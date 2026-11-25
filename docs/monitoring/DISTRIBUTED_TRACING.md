@@ -158,7 +158,9 @@ curl http://<database-ip>:4318  # HTTP
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `AUTOBOT_OTEL_ENABLED` | `false` | Master switch. Tracing and all instrumentation stay off unless `true` |
 | `AUTOBOT_OTEL_ENDPOINT` | unset | OTLP collector endpoint (falls back to `AUTOBOT_JAEGER_ENDPOINT`) |
+| `AUTOBOT_OTEL_SAMPLE_RATE` | `0.1` | Sampling rate (0.0-1.0). `AUTOBOT_TRACE_SAMPLE_RATE` is a deprecated alias |
 | `AUTOBOT_TRACE_CONSOLE` | `false` | Enable console span export |
 | `AUTOBOT_ENV` | `development` | Deployment environment tag |
 
