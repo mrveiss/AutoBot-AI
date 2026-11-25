@@ -194,7 +194,40 @@ class SetRedis:
         return list(self.hashes.get(key, {}).values())
 
     async def hincrby(self, key, field, amount):
-        return amount
+        row = self.hashes.setdefault(key, {})
+        value = int(row.get(self._b(field), b"0")) + amount
+        row[self._b(field)] = self._b(value)
+        return value
+
+    async def eval(self, script, numkeys, *args):
+        """The two scripts the category code runs (#21984), each applied atomically (no await inside)."""
+        from knowledge.category_quarantine import _FLOOR_DECR_LUA, _MEMBERSHIP_LUA
+
+        keys, argv = args[:numkeys], args[numkeys:]
+        if script == _MEMBERSHIP_LUA:
+            return self._membership(keys, argv)
+        assert script == _FLOOR_DECR_LUA, "the fake models only the category scripts"
+        field = argv[0]
+        row = self.hashes.get(keys[0], {})
+        current = int(row[self._b(field)]) if self._b(field) in row else None
+        if current and current > 0:
+            row[self._b(field)] = self._b(current - 1)
+        return current
+
+    def _membership(self, keys, argv) -> int:
+        """``_MEMBERSHIP_LUA``: join and index only while the hash still holds *category_id*."""
+        hash_key, facts_key, held_key, count_key = keys
+        category_id, fact_id, held = argv
+        if self.hashes.get(hash_key, {}).get(b"category_id") != self._b(category_id):
+            return 0
+        members = self.sets.setdefault(facts_key, set())
+        if fact_id not in members:
+            members.add(fact_id)
+            row = self.hashes.setdefault(count_key, {})
+            row[b"fact_count"] = self._b(int(row.get(b"fact_count", b"0")) + 1)
+        held_set = self.sets.setdefault(held_key, set())
+        held_set.add(fact_id) if held == "1" else held_set.discard(fact_id)
+        return 1
 
 
 class CategoryKB(CategoriesMixin):
