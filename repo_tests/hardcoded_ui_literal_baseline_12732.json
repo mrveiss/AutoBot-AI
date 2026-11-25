@@ -326,9 +326,6 @@
   "0486524d",
   "bc15f868"
  ],
- "autobot-frontend/src/components/chat/ChatMessages.vue": [
-  "a80dd66e"
- ],
  "autobot-frontend/src/components/chat/DeleteConversationDialog.vue": [
   "040192b7",
   "0a99a953"
@@ -356,14 +353,6 @@
   "9fadfece",
   "b4218162",
   "bf0d6d8c"
- ],
- "autobot-frontend/src/components/chat/MessageItem.vue": [
-  "3c9d733f",
-  "3c9d733f"
- ],
- "autobot-frontend/src/components/chat/OverseerStepMessage.vue": [
-  "94d5d8b7",
-  "e73288fc"
  ],
  "autobot-frontend/src/components/chat/SlashCommandDropdown.vue": [
   "508a851f"
