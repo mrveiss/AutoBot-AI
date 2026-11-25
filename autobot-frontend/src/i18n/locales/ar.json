@@ -10027,5 +10027,27 @@
     "requestFailed": "فشل طلب تنظيف الانحراف",
     "result": "تمت إزالة {removed} ملف(ات)؛ وتُرك {left} في مكانه",
     "title": "سيتم إزالة {count} ملف(ات) من {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "تؤدي عناصر التحكم هذه إلى إيقاف جميع الوكلاء مؤقتًا أو استئنافهم، وليس وكيلًا واحدًا",
+    "loadFailed": "فشل تحميل الوكلاء",
+    "noLastActivity": "لا يوجد نشاط مُبلَّغ عنه",
+    "notReported": "غير مُبلَّغ",
+    "pauseAll": "إيقاف جميع الوكلاء مؤقتًا",
+    "pauseFailed": "فشل إيقاف الوكلاء مؤقتًا",
+    "resumeAll": "استئناف جميع الوكلاء",
+    "resumeFailed": "فشل استئناف الوكلاء",
+    "successRate": "معدل النجاح",
+    "tasksCompleted": "المهام المكتملة"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "أدخل عنوان ويب كاملاً يبدأ بـ http:// أو https://",
+    "recognitionUnsupported": "التعرف على الكلام غير مدعوم في هذا المتصفح",
+    "recognitionError": "خطأ في التعرف على الكلام: {error}",
+    "speakFailed": "تعذّر نطق النص",
+    "playbackFailed": "فشل تشغيل الصوت",
+    "spoken": "تم نطقه:",
+    "speakToInteractWith": "تحدّث واستمع إلى القراءة بصوت عالٍ",
+    "voiceId": "معرّف الصوت"
   }
 }

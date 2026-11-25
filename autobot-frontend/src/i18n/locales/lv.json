@@ -10027,5 +10027,27 @@
     "requestFailed": "Neatbilstību tīrīšanas pieprasījums neizdevās",
     "result": "Noņemti {removed} failu(-u); {left} atstāti vietā",
     "title": "No {component} tiktu noņemti {count} failu(-u)"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Šīs vadīklas aptur vai atsāk visus aģentus, nevis vienu",
+    "loadFailed": "Neizdevās ielādēt aģentus",
+    "noLastActivity": "Aktivitāte nav ziņota",
+    "notReported": "Nav ziņots",
+    "pauseAll": "Apturēt visus aģentus",
+    "pauseFailed": "Neizdevās apturēt aģentus",
+    "resumeAll": "Atsākt visus aģentus",
+    "resumeFailed": "Neizdevās atsākt aģentus",
+    "successRate": "Veiksmes rādītājs",
+    "tasksCompleted": "Pabeigtie uzdevumi"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Ievadiet pilnu tīmekļa adresi, kas sākas ar http:// vai https://",
+    "recognitionUnsupported": "Šī pārlūkprogramma neatbalsta runas atpazīšanu",
+    "recognitionError": "Runas atpazīšanas kļūda: {error}",
+    "speakFailed": "Neizdevās izrunāt tekstu",
+    "playbackFailed": "Audio atskaņošana neizdevās",
+    "spoken": "Izrunāts:",
+    "speakToInteractWith": "Runājiet un klausieties priekšlasījumu",
+    "voiceId": "Balss ID"
   }
 }

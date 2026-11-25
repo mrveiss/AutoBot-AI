@@ -180,7 +180,7 @@ class TestTheRouterAddressesEventsToTheCaller:
         with patch("api.agent.publish_event_safe", new=AsyncMock()) as publish:
             await execute_command(
                 request=self._request(),
-                payload=CommandExecutePayload(command="", user_role="admin"),
+                payload=CommandExecutePayload(command=""),
                 admin_check=True,
                 current_user=self._USER,
             )
@@ -210,7 +210,7 @@ class TestTheRouterAddressesEventsToTheCaller:
         ):
             await receive_goal(
                 request=request,
-                payload=GoalPayload(goal="deploy the staging node", user_role="admin"),
+                payload=GoalPayload(goal="deploy the staging node"),
                 current_user=self._USER,
             )
 

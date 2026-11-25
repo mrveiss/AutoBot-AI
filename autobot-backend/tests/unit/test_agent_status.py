@@ -251,14 +251,20 @@ class TestShouldSkipHeartbeat:
         assert await sched._should_skip_heartbeat("agent-1") is False
 
     @pytest.mark.asyncio
-    async def test_terminated_does_not_skip_via_should_skip(self):
-        """Terminated agents are cancelled at task level, not via skip guard."""
+    async def test_terminated_skips(self):
         sched = self._make_scheduler()
         self._make_cm(sched, HeartbeatStatus.TERMINATED.value)
-        assert await sched._should_skip_heartbeat("agent-1") is False
+        assert await sched._should_skip_heartbeat("agent-1") is True
 
     @pytest.mark.asyncio
-    async def test_disabled_does_not_skip(self):
+    async def test_disabled_skips(self):
+        """A disabled agent stays asleep: events do not wake it either (#21992)."""
         sched = self._make_scheduler()
         self._make_cm(sched, HeartbeatStatus.DISABLED.value)
-        assert await sched._should_skip_heartbeat("agent-1") is False
+        assert await sched._should_skip_heartbeat("agent-1") is True
+
+    @pytest.mark.asyncio
+    async def test_no_row_skips(self):
+        sched = self._make_scheduler()
+        self._make_cm(sched, None)
+        assert await sched._should_skip_heartbeat("agent-1") is True
