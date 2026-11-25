@@ -309,3 +309,17 @@ register_env_var(
         component="agent_tools",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_INVALID_TOOL_ABORT_LIMIT",
+        type=int,
+        default=4,
+        description=(
+            "Consecutive unknown-tool calls after which a chat turn stops with an honest failure and an audit "
+            "entry instead of repeating the tools reminder (#20848). Must exceed AUTOBOT_CHAT_INVALID_CALL_LIMIT, "
+            "where the reminder starts."
+        ),
+        component="chat_workflow",
+    )
+)

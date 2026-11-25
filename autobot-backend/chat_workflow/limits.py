@@ -38,6 +38,10 @@ _DEPRECATED_PARSE_RETRY_BUDGET: int = env_int("AUTOBOT_CHAT_PARSE_RETRY_BUDGET",
 #: unknown-tool counter (#20848) is to read the same constant. Past it the user gets ``NO_ANSWER_FALLBACK``.
 INVALID_CALL_LIMIT: int = env_int("AUTOBOT_CHAT_INVALID_CALL_LIMIT", default=_DEPRECATED_PARSE_RETRY_BUDGET)
 
+#: Consecutive unknown-tool calls after which the turn stops with an honest failure instead of looping on a reminder
+#: (#20848). The reminder starts at ``INVALID_CALL_LIMIT``; this is the point it has demonstrably not helped.
+INVALID_TOOL_ABORT_LIMIT: int = env_int("AUTOBOT_CHAT_INVALID_TOOL_ABORT_LIMIT", default=4)
+
 #: Seconds the chat planner may take to write a plan (#21023). Past it the turn runs with no plan, never blocked.
 PLANNER_TIMEOUT_SECONDS: int = env_int("AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS", default=30)
 

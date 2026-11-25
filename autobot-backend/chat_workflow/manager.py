@@ -28,6 +28,7 @@ from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
 from chat_workflow.generation_timing import log_generation_timing
+from chat_workflow.invalid_call_abort import abort_message, should_abort
 from chat_workflow.persisted_metadata import persisted_metadata
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
 from chat_workflow.reply_persistence import (
@@ -2879,6 +2880,10 @@ before summarizing.
 
             if not should_continue:
                 self._log_task_complete(iteration, len(execution_history))
+                break
+
+            if should_abort(ctx.consecutive_invalid_tool_calls):  # #20848: a reminder did not help; stop honestly
+                yield await abort_message(ctx, iteration)
                 break
 
             current_prompt = plan.with_block(self._build_and_log_continuation_prompt(ctx, execution_history))
