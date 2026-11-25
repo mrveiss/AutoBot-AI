@@ -21,47 +21,16 @@
         </div>
       </div>
 
-      <!-- Tab Navigation -->
-      <div class="tab-nav">
-        <button
-          :class="['tab-btn', { active: activeTab === 'dashboard' }]"
-          @click="activeTab = 'dashboard'"
-        >
-          <Icon name="chart-pie" />
-          {{ $t('views.auditLogs.dashboard') }}
-        </button>
-        <button
-          :class="['tab-btn', { active: activeTab === 'logs' }]"
-          @click="activeTab = 'logs'"
-        >
-          <Icon name="list-alt" />
-          {{ $t('views.auditLogs.auditLogs') }}
-        </button>
-        <button
-          :class="['tab-btn', { active: activeTab === 'failures' }]"
-          @click="loadFailuresTab"
-        >
-          <Icon name="exclamation-triangle" />
-          {{ $t('views.auditLogs.failedOperations') }}
-        </button>
-        <!-- Admin-only routes: shown to admins, the backend stays the gate (#22214) -->
-        <button
-          v-if="userStore.isAdmin"
-          :class="['tab-btn', { active: activeTab === 'eventLogs' }]"
-          @click="activeTab = 'eventLogs'"
-        >
-          <Icon name="clipboard-list" />
-          {{ $t('views.auditLogs.eventLogs') }}
-        </button>
-        <button
-          v-if="userStore.isAdmin"
-          :class="['tab-btn', { active: activeTab === 'commandHistory' }]"
-          @click="activeTab = 'commandHistory'"
-        >
-          <Icon name="terminal" />
-          {{ $t('views.auditLogs.commandHistory') }}
-        </button>
-      </div>
+      <!-- Tab Navigation: roles, aria-selected and aria-controls come from the kit tabs; the panels below are routed content the view owns -->
+      <BaseTabs
+        :model-value="activeTab"
+        :items="tabItems"
+        :label="$t('views.auditLogs.tabsLabel')"
+        list-only
+        @update:model-value="selectTab"
+      >
+        <template #icon="{ item }"><Icon :name="TAB_ICONS[item.value]" /></template>
+      </BaseTabs>
 
       <!-- Error Banner -->
       <div v-if="initError" class="error-banner">
@@ -78,7 +47,7 @@
       </div>
 
       <!-- Dashboard Tab -->
-      <div v-if="activeTab === 'dashboard'" class="tab-content">
+      <div v-if="activeTab === 'dashboard'" :id="`audit-panel-dashboard`" role="tabpanel" :aria-labelledby="`audit-tab-dashboard`" class="tab-content">
         <AuditStatistics
           :statistics="resolvedStatistics"
           :vm-info="vmInfo"
@@ -88,7 +57,7 @@
       </div>
 
       <!-- Logs Tab -->
-      <div v-if="activeTab === 'logs'" class="tab-content">
+      <div v-if="activeTab === 'logs'" :id="`audit-panel-logs`" role="tabpanel" :aria-labelledby="`audit-tab-logs`" class="tab-content">
         <AuditFilters
           :filter="filter"
           :operation-categories="operationCategories"
@@ -113,7 +82,7 @@
       </div>
 
       <!-- Failures Tab -->
-      <div v-if="activeTab === 'failures'" class="tab-content">
+      <div v-if="activeTab === 'failures'" :id="`audit-panel-failures`" role="tabpanel" :aria-labelledby="`audit-tab-failures`" class="tab-content">
         <div class="failures-header">
           <div class="failure-filter">
             <label for="failure-hours">{{ $t('views.auditLogs.timeRange') }}</label>
@@ -144,11 +113,11 @@
         />
       </div>
 
-      <div v-if="userStore.isAdmin && activeTab === 'eventLogs'" class="tab-content">
+      <div v-if="userStore.isAdmin && activeTab === 'eventLogs'" :id="`audit-panel-eventLogs`" role="tabpanel" :aria-labelledby="`audit-tab-eventLogs`" class="tab-content">
         <AuditEventLogsPanel :refresh-tick="refreshTick" />
       </div>
 
-      <div v-if="userStore.isAdmin && activeTab === 'commandHistory'" class="tab-content">
+      <div v-if="userStore.isAdmin && activeTab === 'commandHistory'" :id="`audit-panel-commandHistory`" role="tabpanel" :aria-labelledby="`audit-tab-commandHistory`" class="tab-content">
         <AuditCommandHistoryPanel :refresh-tick="refreshTick" />
       </div>
 
@@ -219,11 +188,11 @@
 
 <script setup lang="ts">
 // Issue #1359: i18n string extraction
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuditState } from '@/composables/useAuditApi'
 import AuditStatistics from '@/components/audit/AuditStatistics.vue'
-import { BaseModal, BaseButton } from '@autobot/ui'
+import { BaseModal, BaseButton, BaseTabs } from '@autobot/ui'
 import AuditFilters from '@/components/audit/AuditFilters.vue'
 import AuditLogTable from '@/components/audit/AuditLogTable.vue'
 import AuditTimeline from '@/components/audit/AuditTimeline.vue'
@@ -273,7 +242,29 @@ const {
 } = useAuditState()
 
 // Local UI state
-const activeTab = ref<'dashboard' | 'logs' | 'failures' | 'eventLogs' | 'commandHistory'>('dashboard')
+const activeTab = ref<AuditTab>('dashboard')
+type AuditTab = 'dashboard' | 'logs' | 'failures' | 'eventLogs' | 'commandHistory'
+const TAB_ICONS: Record<string, string> = {
+  dashboard: 'chart-pie', logs: 'list-alt', failures: 'exclamation-triangle', eventLogs: 'clipboard-list', commandHistory: 'terminal',
+}
+// Admin-only routes: shown to admins, the backend stays the gate (#22214). `id` / `controls` pair each tab with its panel.
+const tabItems = computed(() => {
+  const tabs: Array<[AuditTab, string, boolean]> = [
+    ['dashboard', t('views.auditLogs.dashboard'), true],
+    ['logs', t('views.auditLogs.auditLogs'), true],
+    ['failures', t('views.auditLogs.failedOperations'), true],
+    ['eventLogs', t('views.auditLogs.eventLogs'), userStore.isAdmin],
+    ['commandHistory', t('views.auditLogs.commandHistory'), userStore.isAdmin],
+  ]
+  return tabs.filter(([, , shown]) => shown).map(([value, label]) => ({
+    value, label, id: `audit-tab-${value}`, controls: `audit-panel-${value}`,
+  }))
+})
+function selectTab(value: string) {
+  if (value === 'failures') loadFailuresTab()
+  else activeTab.value = value as AuditTab
+}
+
 const showTimeline = ref(false)
 const timelineType = ref<'session' | 'user'>('session')
 const timelineEntityId = ref('')

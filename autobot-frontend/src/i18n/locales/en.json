@@ -6509,7 +6509,8 @@
       "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data",
       "eventLogs": "Event Logs",
-      "commandHistory": "Command History"
+      "commandHistory": "Command History",
+      "tabsLabel": "Audit sections"
     },
     "browserAutomation": {
       "title": "Browser Automation",

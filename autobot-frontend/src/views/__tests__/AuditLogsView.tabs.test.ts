@@ -48,7 +48,7 @@ function render(role: 'admin' | 'user') {
     },
   })
 }
-const tab = (w: ReturnType<typeof render>, text: string) => w.findAll('.tab-btn').find((b) => b.text() === text)
+const tab = (w: ReturnType<typeof render>, text: string) => w.findAll('[role="tab"]').find((b) => b.text() === text)
 
 describe('AuditLogsView admin tabs', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -69,5 +69,23 @@ describe('AuditLogsView admin tabs', () => {
 
     expect(tab(w, en.views.auditLogs.eventLogs)).toBeUndefined()
     expect(tab(w, en.views.auditLogs.commandHistory)).toBeUndefined()
+  })
+
+  it('exposes the tabs as a tablist with selection and panel relationships', async () => {
+    const w = render('admin')
+    await flushPromises()
+
+    expect(w.find('[role="tablist"]').exists()).toBe(true)
+    const tabs = w.findAll('[role="tab"]')
+    expect(tabs).toHaveLength(5)
+    expect(tabs.map((b) => b.attributes('aria-selected'))).toEqual(['true', 'false', 'false', 'false', 'false'])
+
+    await tab(w, en.views.auditLogs.eventLogs)!.trigger('click')
+    await flushPromises()
+    const selected = w.findAll('[role="tab"]').filter((b) => b.attributes('aria-selected') === 'true')
+    expect(selected.map((b) => b.text())).toEqual([en.views.auditLogs.eventLogs])
+    const panel = w.find('[role="tabpanel"]')
+    expect(selected[0].attributes('aria-controls')).toBe(panel.attributes('id'))
+    expect(panel.attributes('aria-labelledby')).toBe(selected[0].attributes('id'))
   })
 })
