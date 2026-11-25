@@ -20,6 +20,7 @@ from api import secrets as secrets_module
 from api import secrets_audit, secrets_system_vault
 from api.schemas_system import ChatSecretScope, SecretCreateRequest, SecretUpdateRequest
 from api.secrets_system_vault_17731_test import _SECRET_ID, _FakeVault, client_and_vault  # noqa: F401 -- fixture
+from services.audit import audit as audit_store
 
 _OLD = "old-value-20557"  # pragma: allowlist secret
 _NEW = "new-value-20557"  # pragma: allowlist secret
@@ -139,7 +140,7 @@ def real_audit(client_and_vault, monkeypatch):  # noqa: F811
 @pytest.mark.parametrize("failure", [AsyncMock(return_value=False), AsyncMock(side_effect=RuntimeError("down"))])
 def test_a_failed_audit_write_stops_a_credential_delete(real_audit, monkeypatch, failure) -> None:
     client, vault = real_audit
-    monkeypatch.setattr(secrets_audit, "audit_log", failure)
+    monkeypatch.setattr(audit_store, "record_committed", failure)
 
     response = client.delete(f"/api/secrets/{_SECRET_ID}")
 
@@ -151,7 +152,7 @@ def test_a_failed_audit_write_stops_a_credential_delete(real_audit, monkeypatch,
 @pytest.mark.parametrize("failure", [AsyncMock(return_value=False), AsyncMock(side_effect=RuntimeError("down"))])
 def test_a_failed_audit_write_stops_a_credential_rotate(real_audit, monkeypatch, failure) -> None:
     client, vault = real_audit
-    monkeypatch.setattr(secrets_audit, "audit_log", failure)
+    monkeypatch.setattr(audit_store, "record_committed", failure)
 
     response = client.put(f"/api/secrets/{_SECRET_ID}", json={"value": _NEW})
 
@@ -163,11 +164,11 @@ def test_the_record_is_written_before_the_delete(real_audit, monkeypatch) -> Non
     client, vault = real_audit
     order: list[str] = []
 
-    async def record(*args, **kwargs):
+    async def record(event):
         order.append(f"audit:{'present' if _VAULT_KEY in vault.store else 'gone'}")
         return True
 
-    monkeypatch.setattr(secrets_audit, "audit_log", record)
+    monkeypatch.setattr(audit_store, "record_committed", record)
 
     assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 200
     assert order[0] == "audit:present"
@@ -230,27 +231,28 @@ def test_best_effort_operations_still_survive_a_down_audit_store(real_audit, mon
     assert client.put("/api/secrets/legacy-1", json={"description": "d"}).status_code == 200
 
 
-def test_the_required_record_is_awaited_durably_and_best_effort_ones_are_not(real_audit, monkeypatch) -> None:
-    """Train review: `required` must wait for the committed row, not merely schedule the write."""
+def test_the_attempt_and_its_outcome_are_awaited_durably_and_linked(real_audit, monkeypatch) -> None:
+    """`attempted` waits for the committed row, and the outcome row is the shared helper's, linked to it (#21375)."""
     client, _ = real_audit
     record = AsyncMock(return_value=True)
-    monkeypatch.setattr(secrets_audit, "audit_log", record)
+    monkeypatch.setattr(audit_store, "record_committed", record)
 
     assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 200
 
-    durable = [call.kwargs["durable"] for call in record.await_args_list]
-    assert durable[0] is True  # the "attempted" record written before the delete
-    assert durable[1:] == [False] * (len(durable) - 1)  # the outcome record stays best-effort
+    events = [call.args[0] for call in record.await_args_list]
+    assert [e.outcome for e in events] == ["attempted", "success"]
+    assert events[1].metadata["attempt_id"] == events[0].id
+    assert events[1].id != events[0].id
 
 
 def test_every_record_of_a_delete_names_the_resolved_actor(real_audit, monkeypatch) -> None:
     """The actor is looked up once; a second lookup that fails must not file the delete as `system`."""
     client, _ = real_audit
     record = AsyncMock(return_value=True)
-    monkeypatch.setattr(secrets_audit, "audit_log", record)
+    monkeypatch.setattr(audit_store, "record_committed", record)
     monkeypatch.setattr(secrets_audit, "_actor", lambda _r: None)  # the second lookup comes back empty
 
     assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 200
 
-    users = {call.kwargs["user_id"] for call in record.await_args_list}
-    assert users and None not in users
+    users = {call.args[0].actor_id for call in record.await_args_list}
+    assert users and users != {"system"} and None not in users

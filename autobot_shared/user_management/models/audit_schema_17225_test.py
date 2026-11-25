@@ -41,6 +41,18 @@ _ADDED: dict[str, tuple[Any, ...]] = {
     "session_id": ("VARCHAR(255)", True, None, []),
     "resource_ref": ("VARCHAR(512)", True, None, []),
 }
+#: The tamper-evident chain's columns (#17219): all nullable, no default, added by revision 122.
+_CHAIN: dict[str, tuple[Any, ...]] = {
+    name: (sql_type, True, None, [])
+    for name, sql_type in (
+        ("chain_seq", "BIGINT"),
+        ("prev_hash", "VARCHAR(64)"),
+        ("row_hash", "VARCHAR(64)"),
+        ("row_mac", "VARCHAR(64)"),
+        ("key_id", "VARCHAR(32)"),
+        ("org_ref", "VARCHAR(64)"),
+    )
+}
 _BACKEND_MIGRATION = _ROOT / "autobot-backend/migrations/versions/20261011_098_audit_logs_canonical_columns.py"
 _SLM_MIGRATION = _ROOT / "autobot-slm-backend/migrations/add_audit_logs_canonical_columns.py"
 
@@ -59,7 +71,7 @@ def test_every_pre_existing_column_is_unchanged() -> None:
 
 
 def test_the_table_is_exactly_the_old_columns_plus_the_added_ones() -> None:
-    assert _spec() == {**_BEFORE, **_ADDED}
+    assert _spec() == {**_BEFORE, **_ADDED, **_CHAIN}
 
 
 def test_every_added_column_rewrites_no_existing_row() -> None:

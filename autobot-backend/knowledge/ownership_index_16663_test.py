@@ -156,6 +156,11 @@ class _KB(FactsMixin):
         }
         self.vector_store = None
         self.ownership_manager = ownership_manager
+        self._async_redis = AsyncMock()
+        self._async_redis.hget.return_value = None  # uncategorised: no quarantine index to sync
+
+    def redis(self):
+        return self._async_redis
 
 
 @pytest.mark.asyncio

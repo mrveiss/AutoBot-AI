@@ -37,6 +37,11 @@ health:
   retries: 3
   expected_status: 200
 
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  slm-database:
+    checked: false
+
 secrets:
   own:
     - db_password
