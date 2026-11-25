@@ -123,7 +123,8 @@ def stable_prefix_text(language: Optional[str], company_id: Optional[str]) -> st
     """The stable text as the live path records it: the system prompt after the SYSTEM_PROMPT_READY hook (#17277)."""
     import asyncio
 
-    from chat_workflow.llm_handler import LLMHandlerMixin, _emit_system_prompt_ready
+    from chat_workflow.llm_handler import LLMHandlerMixin
+    from chat_workflow.system_prompt_hook import _emit_system_prompt_ready
 
     text = LLMHandlerMixin._get_system_prompt(LLMHandlerMixin(), language, company_id)
     return asyncio.run(_emit_system_prompt_ready(text, None))

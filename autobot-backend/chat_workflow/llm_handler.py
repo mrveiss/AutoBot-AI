@@ -30,33 +30,10 @@ from .interpretation_guard import interpretation_never_fails_the_tool
 from .models import WorkflowSession
 from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
 from .prompt_drift import record_session_prefix
+from .system_prompt_hook import _emit_system_prompt_ready
 from .tool_timing import mark_tool_started, take_tool_elapsed, tool_outcome_fields
 
 logger = get_logger(__name__)
-
-
-async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
-    """Emit ON_SYSTEM_PROMPT_READY to registered extensions and return result.
-
-    Issue #3405: Fires after _get_system_prompt() with the STABLE text only; per-turn memory is
-    appended after it (#17278), so a rewrite becomes part of the hashed, cache-reused prefix (#17277).
-    With no extension registered the original prompt is returned unchanged.
-
-    Returns the (possibly rewritten) prompt; ``session`` rides in ``data["session"]``.
-    """
-    ctx = HookContext(
-        session_id=getattr(session, "session_id", ""),
-        data={"system_prompt": system_prompt, "session": session},
-    )
-    result = await get_extension_manager().invoke_with_transform(HookPoint.SYSTEM_PROMPT_READY, ctx, "system_prompt")
-    if isinstance(result, str) and result != system_prompt:
-        logger.debug(
-            "[#3405] SYSTEM_PROMPT_READY modified system prompt (%d -> %d chars)",
-            len(system_prompt),
-            len(result),
-        )
-        return result
-    return system_prompt
 
 
 async def _emit_full_prompt_ready(prompt: str, llm_params: Dict[str, Any], context: Dict[str, Any]) -> str:
