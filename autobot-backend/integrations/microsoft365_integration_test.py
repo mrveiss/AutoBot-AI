@@ -336,3 +336,12 @@ async def test_unauthorized_connection_message_is_fixed(mock_get_client):
     mock_get_client.return_value = _mock_client(401, {"error": {"message": "secret graph detail"}})
     health = await Microsoft365Integration(_make_config()).test_connection()
     assert "secret graph detail" not in health.model_dump_json()
+
+
+def test_action_catalog_is_fifteen_actions_in_order_with_top_level_folders():
+    actions = Microsoft365Integration(_make_config()).get_available_actions()
+    names = [a.name for a in actions]
+    assert len(names) == 15 and names[0] == "list_calendar_events" and names[-1] == "create_teams_meeting"
+    assert next(a for a in actions if a.name == "list_folders").description == "List top-level mail folders"
+    actions[0].parameters["x"] = "y"  # a caller's mutation must not reach the shared catalog
+    assert "x" not in Microsoft365Integration(_make_config()).get_available_actions()[0].parameters
