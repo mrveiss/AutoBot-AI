@@ -21,11 +21,13 @@ Images: the only image on this path is the last tool screenshot (``_extract_late
 read from ``execution_history``; a turn that has one has run a tool, so it is already "acted" and
 surfaces. ``LLMRequest`` has no image field, so an image could not be carried to a backup anyway.
 
-What the backup request carries: the system prompt, the prompt, and ``temperature`` / ``top_p`` as the
-primary's own payload sets them. Not carried: ``num_ctx`` (an Ollama option), ``api_kwargs`` (thinking
-budgets, ``betas`` and effort parameters are provider-specific payload fields, not ``LLMRequest`` fields),
-and the image. Neither path redacts the prompt (redaction is for logs and traces only), so the backup
-receives exactly the text the primary did.
+What the backup request carries: the system prompt, the prompt, and ``temperature`` / ``top_p`` / the reply cap
+(``num_predict`` as ``max_tokens``) as the primary's own payload sets them. Not carried: ``num_ctx`` (an Ollama
+option), ``api_kwargs`` (thinking budgets, ``betas`` and effort parameters are provider-specific payload
+fields, not ``LLMRequest`` fields), and the image.
+
+A hop whose known context window cannot hold the request (input plus the reply cap) is skipped by the
+coordinator before dispatch (#21864); the turn then surfaces the original error as for an empty chain.
 
 Default chains name only hosted model families (``claude-*``, ``gpt-*``), so an Ollama chat model has a
 chain only from an operator's ``AUTOBOT_FALLBACK_CHAIN_*`` variable; without one a failure is surfaced.
@@ -102,6 +104,7 @@ def _build_request(call: IterationCall) -> LLMRequest:
         model_name=ctx.selected_model,
         temperature=options["temperature"],
         top_p=options["top_p"],
+        max_tokens=options.get("num_predict"),  # the reply cap the budget reserved: also sizes the hop check (#21864)
         metadata={"conversation_id": ctx.session_id},
     )
 

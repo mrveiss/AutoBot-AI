@@ -45,6 +45,7 @@ from .provider_error_category import (
     failure_from_exception,
     failure_from_response,
 )
+from .token_budget import _estimate_request_tokens
 
 if TYPE_CHECKING:
     from .provider_registry import ProviderRegistry
@@ -56,6 +57,8 @@ _MAX_FALLBACK_ATTEMPTS: int = env_int("AUTOBOT_MAX_FALLBACK_ATTEMPTS", 3)
 REASON_RATE_LIMIT = "rate_limit_429"
 #: Pre-emptive switch on observed headroom (#15028) -- no 429 was paid for.
 REASON_HEADROOM_PREEMPT = "headroom_preempt"
+#: Every remaining hop was skipped because the request cannot fit its context window (#21864).
+REASON_REQUEST_TOO_LARGE = "request_exceeds_window"
 
 
 def _reason_for(category: ProviderErrorCategory) -> str:
@@ -78,6 +81,7 @@ class _FallbackTrail:
     def __init__(self) -> None:
         self.reasons: list[str] = []
         self.preempted: list[dict] = []
+        self.size_skipped: list[dict] = []
 
     @property
     def reason(self) -> str:
@@ -97,6 +101,21 @@ class _FallbackTrail:
             {"from_model": from_model, "from_provider": hop.provider, "window": hop.window,
              "to_model": hop.next_model, "to_provider": hop.next_provider}
         )  # fmt: skip
+
+
+def _window_overflow(request: LLMRequest, model: str) -> dict | None:
+    """``{"model", "estimated_tokens", "window"}`` when *request* cannot fit *model*'s known window, else ``None``.
+
+    The window is ``known_context_window_tokens`` and the estimate is the token budget's own request
+    estimator (input + ``max_tokens``). An unknown window (0) is no evidence of overflow: the hop is offered (#21864).
+    """
+    from context_window_lookup import known_context_window_tokens
+
+    window = known_context_window_tokens(model)
+    estimated = _estimate_request_tokens(request)
+    if window > 0 and estimated > window:
+        return {"model": model, "estimated_tokens": estimated, "window": window}
+    return None
 
 
 class _FallbackRun:
@@ -140,6 +159,7 @@ class _FallbackRun:
         hop = {"fallback_provider": self.provider, "operator_configured": self.operator_configured}
         return {
             **({"preemptive_switches": list(self.trail.preempted)} if self.trail.preempted else {}),
+            **({"size_skipped": list(self.trail.size_skipped)} if self.trail.size_skipped else {}),
             **(hop if fallback_used else {"fallback_provider": None, "operator_configured": None}),
         }
 
@@ -317,6 +337,8 @@ class ModelFallbackCoordinator:
         hop = await self._next_usable_hop(run)
         if hop is None:
             logger.warning("quota-fallback: no usable fallback for model=%r provider=%r", run.model, run.provider)
+            if run.trail.size_skipped:  # the chain was not empty: its remaining hops could not hold the request
+                run.trail.reasons.append(REASON_REQUEST_TOO_LARGE)
             return False
         self._log_hop(run, failure, attempt, hop)
         run.trail.reasons.append(_reason_for(failure.category))
@@ -367,6 +389,8 @@ class ModelFallbackCoordinator:
 
         Each model is tried at most once per request (``chain_tried``). A hop that would move the
         prompt from a local provider to an external one is skipped unless the operator wrote the chain.
+        A hop whose known context window cannot hold the request is skipped too (#21864); that is no
+        degradation mark -- the model is healthy, this request is too big for it -- and is recorded on the trail.
         """
         manager, store = get_fallback_chain_manager(), get_degradation_store()
         tried = {m.lower() for m in run.chain_tried}
@@ -376,7 +400,13 @@ class ModelFallbackCoordinator:
             tried.add(hop.model.lower())
             allowed = locality_allows(from_provider, hop.provider, operator_configured=hop.operator_configured)
             if allowed and not (hop.provider and await store.is_degraded(hop.provider, hop.model)):
-                return hop
+                if (overflow := _window_overflow(run.request, hop.model)) is None:
+                    return hop
+                logger.warning(
+                    "failover: skipping %(model)r: request ~%(estimated_tokens)d tokens exceeds its window %(window)d",
+                    overflow,
+                )
+                run.trail.size_skipped.append(overflow)
             model, owner = hop.model, hop.provider
         return None
 
