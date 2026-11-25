@@ -174,18 +174,25 @@ async def test_every_caller_path_sends_the_same_chat_options(monkeypatch, llm_sh
 
 
 @pytest.mark.parametrize(
-    "toggle, supported, expected",
-    [(False, True, {"think": False}), (True, True, {"think": True}), (True, False, {}), (None, True, {})],
+    "toggle, supported, expected", [(False, True, {"think": False}), (True, True, {"think": True}), (True, False, {})]
 )
-def test_think_is_a_top_level_field_only_for_a_thinking_model_with_a_set_toggle(toggle, supported, expected):
+def test_think_is_a_top_level_field_only_for_a_thinking_model(toggle, supported, expected):
     assert chat_model_context.chat_think_field(toggle, supported) == expected
     assert "think" not in chat_context_options(CHAT, reuses_chat=True)  # never an option
+
+
+def test_an_unset_toggle_is_off_in_the_request_exactly_as_the_gui_shows_it():
+    from api.chat_sessions_thinking import stored_thinking_preferences
+
+    assert stored_thinking_preferences(None)["enabled"] is False  # what the GET endpoint returns for no preference
+    assert stored_thinking_preferences({"thinking_preferences": {"enabled": True}})["enabled"] is True
+    assert chat_model_context.session_thinking("never-noted") is False
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "capabilities, toggle, expected",
-    [(["thinking"], False, {"think": False}), (["completion"], False, {}), (None, True, {})],
+    [(["thinking"], False, {"think": False}), (["completion"], False, {}), (None, False, {})],
 )
 async def test_the_capability_comes_from_the_runtime_not_the_model_name(monkeypatch, capabilities, toggle, expected):
     from chat_workflow import reasoning_kwargs, vision_capability
@@ -215,3 +222,17 @@ async def test_the_continuation_payload_interpretation_and_provider_agree_on_thi
     provider = executor(models.LLMSettings(), streaming()).build_request_data(request, CHAT, False)
     assert kwargs == interpretation == {"think": False} and provider["think"] is False
     assert "think" not in provider["options"]
+
+
+@pytest.mark.asyncio
+async def test_a_context_without_the_toggle_sends_think_false_and_an_explicit_on_sends_true(monkeypatch):
+    from chat_workflow import reasoning_kwargs, vision_capability
+
+    async def _caps(model, endpoint):
+        return frozenset({"thinking"})
+
+    monkeypatch.setattr(vision_capability, "resolve_model_capabilities", _caps)
+    assert await reasoning_kwargs.build_reasoning_api_kwargs({}, CHAT, "http://o", "s2") == {"think": False}
+    assert await reasoning_kwargs.build_reasoning_api_kwargs(
+        {"thinking_mode_enabled": True}, CHAT, "http://o", "s2"
+    ) == {"think": True}

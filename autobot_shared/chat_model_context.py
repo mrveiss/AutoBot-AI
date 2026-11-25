@@ -97,28 +97,25 @@ _THINKING_SESSIONS_MAX = 256
 _thinking_by_session: dict[str, bool] = {}
 
 
-def note_session_thinking(session_id: str | None, enabled: bool | None) -> None:
-    """Record the conversation's thinking toggle (``None`` = the user never set it) for *session_id* (#22258)."""
+def note_session_thinking(session_id: str | None, enabled: bool) -> None:
+    """Record the conversation's resolved thinking toggle for *session_id* (#22258)."""
     if not session_id:
         return
     _thinking_by_session.pop(session_id, None)
-    if enabled is not None:
-        _thinking_by_session[session_id] = bool(enabled)
-        while len(_thinking_by_session) > _THINKING_SESSIONS_MAX:
-            _thinking_by_session.pop(next(iter(_thinking_by_session)))
+    _thinking_by_session[session_id] = bool(enabled)
+    while len(_thinking_by_session) > _THINKING_SESSIONS_MAX:
+        _thinking_by_session.pop(next(iter(_thinking_by_session)))
 
 
-def session_thinking(session_id: str | None) -> bool | None:
-    """The toggle noted for *session_id*, or None."""
-    return _thinking_by_session.get(session_id) if session_id else None
+def session_thinking(session_id: str | None) -> bool:
+    """The toggle noted for *session_id*; a session never noted is off, the GUI default."""
+    return _thinking_by_session.get(session_id, False) if session_id else False
 
 
-def chat_think_field(thinking_enabled: bool | None, supports_thinking: bool) -> dict[str, bool]:
-    """Ollama's top-level ``think`` (NOT an ``options`` key) from the thinking toggle, only for a model with the
-    ``thinking`` capability and a toggle the user set; else ``{}`` and the model's own default applies (#22258)."""
-    if thinking_enabled is None or not supports_thinking:
-        return {}
-    return {"think": bool(thinking_enabled)}
+def chat_think_field(thinking_enabled: bool, supports_thinking: bool) -> dict[str, bool]:
+    """Ollama's top-level ``think`` (NOT an ``options`` key): the resolved toggle for a model with the ``thinking``
+    capability, else ``{}``. The toggle is already resolved (unset = off), so the UI and the request agree (#22258)."""
+    return {"think": bool(thinking_enabled)} if supports_thinking else {}
 
 
 def interpretation_llm_options(model: str | None) -> dict[str, float | int | None]:

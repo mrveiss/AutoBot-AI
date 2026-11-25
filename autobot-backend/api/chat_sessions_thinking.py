@@ -25,6 +25,18 @@ from utils.response_helpers import create_success_response
 router = APIRouter(tags=["chat-thinking"])
 logger = get_logger(__name__)
 
+DEFAULT_THINKING_ENABLED = False
+DEFAULT_THINKING_BUDGET_TOKENS = 10000
+
+
+def stored_thinking_preferences(session_metadata: Dict | None) -> Dict[str, object]:
+    """A conversation's thinking toggle and budget, defaults applied: one answer for GUI and request (#22258)."""
+    prefs = (session_metadata or {}).get("thinking_preferences") or {}
+    return {
+        "enabled": prefs.get("enabled", DEFAULT_THINKING_ENABLED),
+        "budget_tokens": prefs.get("budget_tokens", DEFAULT_THINKING_BUDGET_TOKENS),
+    }
+
 
 @router.get(
     "/sessions/{session_id}/thinking-preferences",
@@ -57,15 +69,10 @@ async def get_thinking_preferences(
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
 
     # Extract thinking preferences from session metadata
-    metadata = session_data.get("metadata", {})
-    thinking_prefs = metadata.get("thinking_preferences", {})
+    thinking_prefs = stored_thinking_preferences(session_data.get("metadata"))
 
     return create_success_response(
-        data={
-            "session_id": session_id,
-            "enabled": thinking_prefs.get("enabled", False),
-            "budget_tokens": thinking_prefs.get("budget_tokens", 10000),
-        },
+        data={"session_id": session_id, **thinking_prefs},
         message="Thinking preferences retrieved",
     )
 

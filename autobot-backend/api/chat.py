@@ -32,6 +32,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.chat_citations import retrieve_citations
+from api.chat_sessions_thinking import stored_thinking_preferences
 from api.chat_streaming import (
     _stream_chat_workflow_messages,
     _stream_direct_response,
@@ -1513,12 +1514,14 @@ async def send_chat_message_by_id(
     if language:
         context["language"] = language
 
+    # #22258: a request that carries no toggle gets the conversation's stored one (default off, as the GUI shows).
+    stored = stored_thinking_preferences(((await chat_history_manager.get_session(chat_id)) or {}).get("metadata"))
     thinking_mode_enabled = request_data.get("thinking_mode_enabled")
     thinking_budget_tokens = request_data.get("thinking_budget_tokens")
-    if thinking_mode_enabled is not None:
-        context["thinking_mode_enabled"] = thinking_mode_enabled
-    if thinking_budget_tokens is not None:
-        context["thinking_budget_tokens"] = thinking_budget_tokens
+    context["thinking_mode_enabled"] = stored["enabled"] if thinking_mode_enabled is None else thinking_mode_enabled
+    context["thinking_budget_tokens"] = (
+        stored["budget_tokens"] if thinking_budget_tokens is None else thinking_budget_tokens
+    )
 
     # #9017: per-conversation reasoning effort — inject into context for workflow resolution.
     reasoning_effort = request_data.get("reasoning_effort")
