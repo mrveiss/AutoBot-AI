@@ -350,9 +350,15 @@ class SimplePTY:
 
             except Exception as e:
                 logger.error("Error in PTY write loop: %s", e)
+                self._write_loop_failed()
                 break
 
         logger.info("PTY write loop ended for session %s", self.session_id)
+
+    def _write_loop_failed(self) -> None:
+        """The writer thread is gone: the session is not alive and says why; no input is queued for nobody (#17399)."""
+        self.running = False
+        self.output_queue.put(("error", "PTY write failed; the session can no longer take input"))
 
     def write_input(self, text: str) -> bool:
         """Write input to PTY"""
