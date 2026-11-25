@@ -12,7 +12,6 @@
         v-model="eventType"
         :options="typeOptions"
         :label="$t('audit.eventLogs.typeFilter')"
-        :placeholder="$t('audit.eventLogs.allTypes')"
         size="sm"
       />
       <BaseButton size="sm" :disabled="loading" @click="applyFilters">
@@ -62,6 +61,8 @@ import { formatDateTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 
 const PAGE_SIZE = 50
+// reka-ui's SelectItem rejects value="" (it means 'clear'), so 'all event types' is a sentinel, mapped to no filter.
+const ALL_TYPES = '__all__'
 
 // The header Auto-refresh bumps this while the tab is open; the panel reloads its applied view (#22214).
 const props = defineProps<{ refreshTick?: number }>()
@@ -71,7 +72,7 @@ const logger = createLogger('AuditEventLogsPanel')
 const { queryEventLogs } = useAuditApi()
 
 const userId = ref('')
-const eventType = ref('')
+const eventType = ref(ALL_TYPES)
 // What the loaded rows were fetched with. Paging and retry read these, never the editable fields above.
 const appliedUserId = ref('')
 const appliedEventType = ref('')
@@ -93,7 +94,7 @@ const rows = computed(() =>
   events.value.map((e) => ({ ...e, time: formatDateTime(new Date(e.occurred_at * 1000)) })),
 )
 const typeOptions = computed(() => [
-  { value: '', label: t('audit.eventLogs.allTypes') },
+  { value: ALL_TYPES, label: t('audit.eventLogs.allTypes') },
   ...eventTypes.value.map((type) => ({ value: type, label: type })),
 ])
 
@@ -127,7 +128,7 @@ function goToPage(next: number) {
 
 function applyFilters() {
   appliedUserId.value = userId.value.trim()
-  appliedEventType.value = eventType.value
+  appliedEventType.value = eventType.value === ALL_TYPES ? '' : eventType.value
   page.value = 1
   load()
 }
