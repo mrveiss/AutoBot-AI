@@ -1,0 +1,103 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# xrdp removal (#22211): the desktop server serves one VNC desktop, not RDP.
+#
+# Reached from provision-fleet-roles.yml (after the vnc role is applied and verified up) and, through
+# the per-role hook, from remove-role.yml. Idempotent: a node that never had xrdp passes through.
+#
+# Never touches /home, the login users or the SLM database. The stored rdp credential rows are left
+# in place: deleting credentials is proposed to the approval queue (#17038), never done by a playbook.
+
+# Fails CLOSED (#22211): any failure to LOOK (loginctl missing, logind or dbus down, a session ending between the
+# list and the show) exits non-zero and fails the task, so "could not look" never reads as "no session".
+# `set -e` does that, and every loginctl output is captured into a variable rather than piped into a loop:
+# a failing command inside `a | while ...` would only end a subshell and the loop would see empty input.
+# A session logind does not know about is caught by the xrdp-sesexec check; only a pgrep exit above 1
+# (an error, as opposed to "no match") fails there. Executed against stub commands by the role's test.
+- name: xrdp | Find logged-in RDP sessions
+  ansible.builtin.shell:
+    cmd: |
+      set -eo pipefail
+      command -v loginctl >/dev/null || { echo "loginctl not found: cannot check for RDP sessions" >&2; exit 1; }
+      listing=$(loginctl list-sessions --no-legend)
+      for s in $(printf '%s\n' "$listing" | awk '{print $1}'); do
+        svc=$(loginctl show-session "$s" -p Service --value)
+        if [ "$svc" = "xrdp-sesman" ]; then
+          name=$(loginctl show-session "$s" -p Name --value)
+          echo "$name"
+        fi
+      done
+      rc=0
+      pgrep -x xrdp-sesexec >/dev/null || rc=$?
+      if [ "$rc" -gt 1 ]; then echo "pgrep failed ($rc): cannot check for xrdp session processes" >&2; exit "$rc"; fi
+      if [ "$rc" -eq 0 ]; then echo "xrdp-sesexec"; fi
+    executable: /bin/bash
+  register: _xrdp_live_sessions
+  changed_when: false
+  check_mode: false
+
+- name: xrdp | Refuse to remove xrdp while an RDP session is live
+  ansible.builtin.assert:
+    that:
+      - (_xrdp_live_sessions.stdout_lines | length == 0) or (xrdp_remove_with_live_session | bool)
+    fail_msg: >-
+      REFUSING to remove xrdp: RDP session(s) are logged in as {{ _xrdp_live_sessions.stdout_lines | unique | join(', ') }}.
+      Stopping xrdp would end them and lose unsaved work. Ask the user(s) to log out and re-run, or
+      re-run with xrdp_remove_with_live_session=true to remove anyway.
+    quiet: true
+
+- name: xrdp | Check for the xrdp configuration directory
+  ansible.builtin.stat:
+    path: "{{ xrdp_config_dir }}"
+  register: _xrdp_conf
+
+- name: xrdp | Create the backup directory
+  ansible.builtin.file:
+    path: "{{ xrdp_backup_dir }}"
+    state: directory
+    mode: "0750"
+  when: _xrdp_conf.stat.exists
+
+- name: xrdp | Back up the xrdp configuration directory before the purge removes it
+  ansible.builtin.archive:
+    path: "{{ xrdp_config_dir }}"
+    dest: "{{ xrdp_backup_dir }}/xrdp-{{ ansible_facts['date_time']['epoch'] }}.tar.gz"
+    format: gz
+    mode: "0640"
+  when: _xrdp_conf.stat.exists
+
+- name: xrdp | Stop and disable the xrdp units
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - "{{ xrdp_service_name }}"
+    - xrdp-sesman
+  # a node that never had xrdp has no such unit
+  failed_when: false
+
+- name: xrdp | Purge the xrdp packages
+  ansible.builtin.apt:
+    name:
+      - xrdp
+      - xorgxrdp
+    state: absent
+    purge: true
+
+- name: xrdp | Delete the RDP firewall rule
+  community.general.ufw:
+    rule: allow
+    port: "{{ xrdp_port | string }}"
+    proto: tcp
+    src: "{{ network_subnet }}"
+    delete: true
+
+- name: xrdp | Verify the RDP port is closed
+  ansible.builtin.wait_for:
+    port: "{{ xrdp_port | int }}"
+    state: stopped
+    timeout: "{{ xrdp_port_close_wait_seconds | int }}"

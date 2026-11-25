@@ -36,7 +36,7 @@ from api.schemas_knowledge import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.principal import resolve_principal_id
+from autobot_shared.principal import require_principal_id
 from autobot_shared.singleton_factory import lazy_singleton
 from markdown_reference_system import MarkdownReferenceSystem
 from memory import MemoryManager, TaskPriority, TaskStatus
@@ -248,9 +248,7 @@ async def add_markdown_reference(
     try:
         memory_manager, _ = await _get_managers()
 
-        owner = resolve_principal_id(current_user)
-        if not owner:
-            raise HTTPException(status_code=401, detail="User identity required")
+        owner = require_principal_id(current_user)
 
         success = await asyncio.to_thread(
             memory_manager.add_markdown_reference,

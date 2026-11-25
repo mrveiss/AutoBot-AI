@@ -160,5 +160,8 @@ UNSCOPED = frozenset(
         "worker-identity-one-home-21518",  # every tracked non-test .py: an identity can live anywhere (#21518)
         # #21713: the items are parsed workflow jobs, not paths, so no prefix describes them.
         "release-promotion-base-wiring-21713",
+        # #22110: every tracked non-test .py file, since a second with_error_handling can be defined in any
+        # component; the population is the whole tree by suffix, not a set of prefixes.
+        "with-error-handling-tracked-sources",
     }
 )

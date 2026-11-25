@@ -16,6 +16,7 @@ const logger = createLogger('BrowserTool')
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { autobotApiErrorMessage, useAutobotApi } from '@/composables/useAutobotApi'
+import { parseBrowseUrl } from '@/utils/browseUrl'
 import {
   readBrowserVmStatus,
   readFleetMembershipSource,
@@ -28,9 +29,9 @@ const { t } = useI18n()
 // State
 const loading = ref(false)
 const error = ref<string | null>(null)
-// Relative default: the guard admits loopback and any node the SLM registry
-// lists, so an internal target needs no special casing here (#15228).
-const url = ref('/')
+// Empty by default: the backend admits only an absolute http(s) URL, so there is no
+// default that could be submitted as-is (#22142).
+const url = ref('')
 const screenshot = ref<string | null>(null)
 const browserStatus = ref<BrowserUiStatus>('unknown')
 
@@ -56,12 +57,17 @@ async function checkStatus(): Promise<void> {
 }
 
 async function startBrowser(): Promise<void> {
+  const target = parseBrowseUrl(url.value)
+  if (target === null) {
+    error.value = t('tools.admin.browserTool.invalidUrl')
+    return
+  }
   loading.value = true
   error.value = null
   browserStatus.value = 'connecting'
 
   try {
-    await api.browserNavigate(url.value)
+    await api.browserNavigate(target)
     isConnected.value = true
     browserStatus.value = 'connected'
     await takeScreenshot()
@@ -81,13 +87,18 @@ function closeBrowser(): void {
 }
 
 async function navigate(): Promise<void> {
-  if (!isConnected.value || !url.value) return
+  if (!isConnected.value) return
+  const target = parseBrowseUrl(url.value)
+  if (target === null) {
+    error.value = t('tools.admin.browserTool.invalidUrl')
+    return
+  }
 
   loading.value = true
   error.value = null
 
   try {
-    await api.browserNavigate(url.value)
+    await api.browserNavigate(target)
     await takeScreenshot()
   } catch (e: unknown) {
     error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.navigateFailed'))
@@ -110,7 +121,7 @@ async function takeScreenshot(): Promise<void> {
 async function goBack(): Promise<void> {
   if (!isConnected.value) return
   try {
-    await api.browserGoBack('')
+    await api.browserGoBack()
     await takeScreenshot()
   } catch (e) {
     error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.backFailed'))
@@ -120,7 +131,7 @@ async function goBack(): Promise<void> {
 async function goForward(): Promise<void> {
   if (!isConnected.value) return
   try {
-    await api.browserGoForward('')
+    await api.browserGoForward()
     await takeScreenshot()
   } catch (e) {
     error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.forwardFailed'))
@@ -130,7 +141,7 @@ async function goForward(): Promise<void> {
 async function refresh(): Promise<void> {
   if (!isConnected.value) return
   try {
-    await api.browserRefresh('')
+    await api.browserRefresh()
     await takeScreenshot()
   } catch (e) {
     error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.refreshFailed'))
@@ -176,7 +187,7 @@ onMounted(() => {
           <button
             v-if="!isConnected"
             @click="startBrowser"
-            :disabled="loading"
+            :disabled="loading || !url.trim()"
             class="px-3 py-1 text-xs bg-autobot-success text-(--text-on-success) rounded-sm hover:bg-autobot-success-hover transition-colors disabled:opacity-50"
           >
             {{ $t('tools.admin.browserTool.startBrowser') }}

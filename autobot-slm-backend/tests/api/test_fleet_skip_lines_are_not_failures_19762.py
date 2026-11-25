@@ -128,4 +128,5 @@ def test_an_all_skipped_host_on_the_strict_path_fails() -> None:
 
 def test_the_self_update_call_passes_its_own_node_as_the_one_that_must_run() -> None:
     source = (_BACKEND_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
-    assert '"update-all-nodes.yml", limit=limit, detach=True, must_run=[node_id])' in source
+    # #22211: the self-update runs through run_update_all_nodes, which forwards these to execute_playbook
+    assert "resume_after_restart=True, detach=True, must_run=[node_id]" in source

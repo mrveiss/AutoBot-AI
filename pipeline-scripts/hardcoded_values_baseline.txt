@@ -424,7 +424,6 @@
 1|other|autobot-backend/services/agents/subagent_spawner.py|30
 1|other|autobot-backend/services/agents/subagent_task.py|300
 2|other|autobot-backend/services/ai_stack_client.py|10
-1|other|autobot-backend/services/ai_stack_client.py|60
 1|other|autobot-backend/services/approval_gate_service.py|50
 2|other|autobot-backend/services/audit/audit.py|100
 1|other|autobot-backend/services/audit_logger.py|100
@@ -635,8 +634,6 @@
 2|ssot|autobot-frontend/src/test/vitest-setup.ts|:3000
 2|other|autobot-frontend/src/utils/ApiClient.ts|'user'
 1|other|autobot-frontend/src/utils/urlUtils.ts|https://duckduckgo.com/?q=${encodeURIComponent(input
-1|other|autobot-frontend/src/views/EvolutionView.vue|"/opt/autobot
-1|other|autobot-frontend/src/views/EvolutionView.vue|'/opt/autobot
 2|other|autobot-frontend/src/views/SharedChatView.vue|'user'
 1|other|autobot-frontend/src/views/llc/ProjectBrowserView.vue|https://github.com/${p.code_source.repo}
 3|ssot|autobot-frontend/start-frontend-dev.sh|:5173
@@ -1189,8 +1186,6 @@
 1|other|autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue|https://oauth2.googleapis.com/token
 1|other|autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue|https://openidconnect.googleapis.com/v1/userinfo
 2|other|autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue|'user'
-1|other|autobot-slm-frontend/src/views/tools/admin/VoiceTool.vue|'assistant'
-3|other|autobot-slm-frontend/src/views/tools/admin/VoiceTool.vue|'user'
 1|other|autobot_shared/auth/mcp_tool_permissions.py|"user"
 1|other|autobot_shared/env_registry.py|http://10.0.0.4:9090
 1|other|autobot_shared/env_registry.py|http://10.255.255.254:8001
