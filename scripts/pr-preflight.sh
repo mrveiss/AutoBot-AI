@@ -292,8 +292,7 @@ if [ -n "$BODY_FILE" ]; then
     # this ## header and the next ## header, comments stripped, must be
     # non-empty. A heading present but empty fails there and must fail here.
     for heading in "Thinking Path" "What Changed" "Verification" "Model Used"; do
-      content=$(printf '%s' "$BODY" \
-        | awk "/^## ${heading}/{found=1; next} found && /^## /{exit} found{print}" \
+      content=$(awk "/^## ${heading}/{found=1; next} found && /^## /{exit} found{print}" <<<"$BODY" \
         | sed 's/<!--[^>]*-->//g' \
         | sed '/^[[:space:]]*$/d')
       if [ -z "$content" ]; then
@@ -309,8 +308,7 @@ if [ -n "$BODY_FILE" ]; then
     # it has no branch to derive from and no fork/same-repo distinction to make.
     # A fork contributor relying on that relaxation therefore sees a FAIL here for
     # a check CI will pass -- a false negative, not a false accept.
-    if printf '%s' "$BODY" \
-      | grep -iqE "(resolves|closes|fixes|refs|references|part of)[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then
+    if grep -iqE "(resolves|closes|fixes|refs|references|part of)[[:space:]]+(#?[0-9]+|MVA-[0-9]+)" <<<"$BODY"; then
       pass "carries a close/refs keyword"
     else
       fail "no Closes/Fixes/Refs keyword -- the issue-link gate requires one even for partial work"

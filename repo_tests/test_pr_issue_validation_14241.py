@@ -296,3 +296,35 @@ def test_no_workflow_step_under_pipefail_pipes_a_producer_into_quiet_grep():
                         offenders.append(f"{path.name}:{job_id}:{step.get('name')}: {line.strip()[:80]}")
 
     assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"
+
+
+_SET_PIPEFAIL = re.compile(r"\bset\s+(?:-\w+\s+)*-\w*o\s+pipefail")
+
+
+# Piped input is a few bytes of fixed text, far below the pipe buffer, so the producer
+# cannot be mid-write when grep exits; the `$?` of the pipeline is what each case asserts.
+_FIXED_INPUT_SCRIPTS = {"fleet-ip-rule_test.sh"}
+
+
+def _logical_lines(text: str) -> list[str]:
+    """Join `\\` continuations and lines ending in a pipe, so `cmd \\ \\n | grep -q` is one line."""
+    joined = re.sub(r"\\\n\s*", " ", text)
+    joined = re.sub(r"(?<!\|)\|\s*\n\s*", "| ", joined)
+    return joined.splitlines()
+
+
+def test_no_shell_script_under_pipefail_pipes_a_producer_into_quiet_grep():
+    """The script half of the class: a file with `set -o pipefail` (any flag mix) must
+    not pipe a producer into `grep -q`, including across a continued line."""
+    offenders = []
+    for path in sorted((repo_root() / "scripts").rglob("*.sh")):
+        if path.name in _FIXED_INPUT_SCRIPTS:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if not _SET_PIPEFAIL.search(text):
+            continue
+        for line in _logical_lines(text):
+            if not line.lstrip().startswith("#") and _PIPE_INTO_QUIET_GREP.search(line):
+                offenders.append(f"{path.relative_to(repo_root())}: {line.strip()[:90]}")
+
+    assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"

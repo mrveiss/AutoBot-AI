@@ -28,14 +28,16 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT="${HERE}/pr-preflight.sh"
 TMP="$(mktemp -d)"
-# .pr-preflight-fixture-tmp (repo root) is a throwaway file the path-filter
+# FILTER_FIXTURE (.pr-preflight-fixture-<pid>, repo root, unique per run so
+# concurrent runs never delete each other's file) is a throwaway file the path-filter
 # dispatch tests below use to give CHANGED one real, non-matching entry. It is
 # only ever staged in a temporary index inside TMP, never the real one, so
 # removing TMP undoes the staging and this trap has only the file itself left
 # to delete -- the ONE place both are removed, however the run ends (rm on a
 # path that was never created is a silent no-op, so registering this before
 # the fixture exists is safe).
-trap 'rm -rf "${TMP}"; rm -f -- ".pr-preflight-fixture-tmp"' EXIT
+FILTER_FIXTURE=".pr-preflight-fixture-$$"
+trap 'rm -rf "${TMP}"; rm -f -- "${FILTER_FIXTURE}"' EXIT
 
 pass=0
 fail=0
@@ -335,7 +337,6 @@ fi
 echo ""
 echo "path-filter dispatch (#15933 AC4/AC5)"
 
-FILTER_FIXTURE=".pr-preflight-fixture-tmp"
 FIXTURE_INDEX="${TMP}/index"
 PATH_FILTER_CHECK='^workflow path filters$'
 : > "${FILTER_FIXTURE}"
