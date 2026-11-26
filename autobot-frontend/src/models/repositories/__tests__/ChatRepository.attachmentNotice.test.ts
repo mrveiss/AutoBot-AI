@@ -43,7 +43,7 @@ describe('ChatRepository.getChatMessages stored attachment notices (#21006)', ()
   it('renders the same text as the live notice, not the stored fallback', async () => {
     const [message] = await new ChatRepository().getChatMessages('chat-1')
     expect(message.content).toBe(attachmentNoticeText({ code: 'truncated', filename: 'big.txt' }))
-    expect(message.content).toBe('chat.attachmentNotice.truncated|big.txt|')
+    expect(message.content).toBe('chat.attachmentNotice.truncated_legacy|big.txt|')
   })
 
   it('leaves an ordinary stored message text alone', async () => {

@@ -24,6 +24,7 @@ _COORDINATOR_AND_DEPS = (
     ("optimization.router", "optimization/router.py"),
     ("provider_error_category", "provider_error_category.py"),
     ("failover_policy", "failover_policy.py"),
+    ("token_budget", "token_budget.py"),  # the request estimator the size check reuses (#21864)
     ("model_fallback_coordinator", "model_fallback_coordinator.py"),
 )
 
