@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from autobot_shared.chat_model_context import chat_think_field, note_session_thinking
+from autobot_shared.chat_model_context import chat_think_field, note_chat_turn_think, note_session_thinking
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.vision_capability import resolve_model_supports_thinking
 from llm_shared.providers.anthropic_request import thinking_request_kwargs
@@ -57,6 +57,8 @@ async def ollama_think_kwargs(model: str, endpoint: str, thinking_enabled: bool)
     """``{"think": bool}`` for a thinking-capable local model with a user-set toggle, else ``{}`` (#22258).
 
     The decision is ``chat_model_context.chat_think_field``; this only reads the model's capability from the runtime.
+    Only on/off is sent: the runtime's ``/api/show`` lists a ``thinking`` capability and no budget or level for it, so
+    there is no reported value to map the UI's budget onto (a level such as ``low`` would be guessed from a name).
     """
     if "claude" in model.lower():
         return {}
@@ -70,6 +72,8 @@ async def build_reasoning_api_kwargs(
     toggle = bool(context.get("thinking_mode_enabled", False))  # unset = off, as the GUI shows (#22258)
     note_session_thinking(session_id, toggle)  # the interpretation pass of this session carries no context
     think = await ollama_think_kwargs(selected_model, ollama_endpoint, toggle) if ollama_endpoint else {}
+    if ollama_endpoint:
+        note_chat_turn_think(think)  # the verifier and planner of this turn send the same field (#22258)
     kwargs = await _provider_reasoning_kwargs(context, selected_model)
     return {**(kwargs or {}), **think} or None
 

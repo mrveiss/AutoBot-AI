@@ -181,6 +181,20 @@ def test_think_is_a_top_level_field_only_for_a_thinking_model(toggle, supported,
     assert "think" not in chat_context_options(CHAT, reuses_chat=True)  # never an option
 
 
+def test_a_provider_path_call_to_the_chat_model_sends_the_turns_think_field():
+    """#22258: the verifier and the planner ask the chat model with the toggle the turn resolved; others do not."""
+    note_chat_turn_model(CHAT)
+    chat_model_context.note_chat_turn_think({"think": False})
+    try:
+        assert chat_model_context.chat_think_options(CHAT) == {"think": False}
+        assert chat_model_context.chat_think_options(OTHER) == {}  # a different model keeps its own default
+        assert chat_model_context.chat_think_options(OTHER, reuses_chat=True) == {"think": False}  # the verifier
+        chat_model_context.note_chat_turn_think({})  # a model with no thinking switch: no field
+        assert chat_model_context.chat_think_options(CHAT) == {}
+    finally:
+        chat_model_context.note_chat_turn_think({})
+
+
 def test_an_unset_toggle_is_off_in_the_request_exactly_as_the_gui_shows_it():
     from api.chat_sessions_thinking import stored_thinking_preferences
 

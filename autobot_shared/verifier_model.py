@@ -172,7 +172,7 @@ async def resolve_and_chat(
     provider: Any, system_prompt: str, user_prompt: str, tool_name: str, max_tokens: int, attempt: dict[str, Any]
 ) -> tuple[Any, Any]:
     """Resolve the model, record it in *attempt*, chat, and record the spend; returns (request, response)."""
-    from autobot_shared.chat_model_context import chat_context_options
+    from autobot_shared.chat_model_context import chat_context_options, chat_think_options
     from autobot_shared.ssot_constants import CategoryDefaults
     from llm_shared.models import LLMRequest
 
@@ -180,7 +180,11 @@ async def resolve_and_chat(
     attempt["model"] = await resolve_verifier_model(provider, decision)
     attempt["model_reason"] = decision.get("reason")
     # The chat model is asked with the chat's own context size: a different num_ctx makes Ollama reload the runner.
-    options = chat_context_options(attempt["model"], reuses_chat=bool(decision.get("reuses_chat")))
+    reuses_chat = bool(decision.get("reuses_chat"))
+    options = {
+        **chat_context_options(attempt["model"], reuses_chat=reuses_chat),
+        **chat_think_options(attempt["model"], reuses_chat=reuses_chat),  # the turn's thinking toggle (#22258)
+    }
     request = LLMRequest(
         model_name=attempt["model"],
         messages=[

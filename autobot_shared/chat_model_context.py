@@ -121,6 +121,27 @@ def session_thinking(session_id: str | None) -> bool:
     return _thinking_by_session.get(session_id, False) if session_id else False
 
 
+#: The ``think`` field the last chat turn resolved for its model (capability-checked, toggle applied); ``{}`` when the
+#: model has no thinking switch. Side calls on the provider path (the verifier, the planner) send the same one, as
+#: they send the chat's ``num_ctx``: process-wide like ``_last_turn_model``, set where the turn's request is built.
+_last_turn_think: dict[str, bool] = {}
+
+
+def note_chat_turn_think(field: dict[str, bool]) -> None:
+    """Record the resolved ``think`` field of the chat turn now running (#22258)."""
+    global _last_turn_think
+    _last_turn_think = dict(field)
+
+
+def chat_think_options(model: str | None, *, reuses_chat: bool = False) -> dict[str, bool]:
+    """The chat turn's ``think`` field for a provider-path request to the chat model, else ``{}`` (#22258).
+
+    Same gate as ``chat_context_options``: a caller of a different model keeps the model's own default, and
+    *reuses_chat* is a caller that has already decided it asks the resident chat model (the verifier).
+    """
+    return dict(_last_turn_think) if (reuses_chat or is_chat_model(model)) else {}
+
+
 def chat_think_field(thinking_enabled: bool, supports_thinking: bool) -> dict[str, bool]:
     """Ollama's top-level ``think`` (NOT an ``options`` key): the resolved toggle for a model with the ``thinking``
     capability, else ``{}``. The toggle is already resolved (unset = off), so the UI and the request agree (#22258)."""
