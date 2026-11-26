@@ -57,7 +57,7 @@ def test_the_shell_gets_the_sbin_dirs_and_pipefail_22251_22252(monkeypatch):
     monkeypatch.setattr(simple_pty_module.subprocess, "Popen", popen)
     monkeypatch.setattr(simple_pty_module.os, "close", lambda fd: None)
     monkeypatch.setattr(simple_pty_module.os, "set_blocking", lambda fd, flag: None)
-    pty = SimplePTY("t-1")
+    pty = SimplePTY("t-1", pipefail=True)
     pty.master_fd = 0
     pty._spawn_bash_process(5, simple_pty_module.with_sbin_on_path(dict(simple_pty_module.os.environ)), "/")
 
@@ -65,3 +65,16 @@ def test_the_shell_gets_the_sbin_dirs_and_pipefail_22251_22252(monkeypatch):
     assert {"/usr/local/sbin", "/usr/sbin", "/sbin"} <= set(env_dirs)
     assert env_dirs[:4] == ["/opt/venv/bin", "/usr/local/bin", "/usr/bin", "/bin"]  # existing order kept
     assert popen.call_args.args[0][-2:] == ["-o", "pipefail"]
+
+
+def test_an_interactive_shell_does_not_get_pipefail_22252(monkeypatch):
+    """Only the agent-command path asks for pipefail; a user's shell keeps `cmd | head` at exit 0."""
+    from unittest.mock import MagicMock
+
+    popen = MagicMock()
+    monkeypatch.setattr(simple_pty_module.subprocess, "Popen", popen)
+    monkeypatch.setattr(simple_pty_module.os, "close", lambda fd: None)
+    pty = SimplePTY("t-2")
+    pty._spawn_bash_process(5, {}, "/")
+
+    assert "pipefail" not in popen.call_args.args[0]

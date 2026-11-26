@@ -104,6 +104,8 @@ class SimplePTY:
         use_login_shell: If True, starts bash as login shell (--login flag)
                         Login shells load profile files like ~/.bash_profile
         custom_ps1: Optional custom PS1 prompt (e.g., r"\\u@\\h:\\w\\$ ")
+        pipefail: If True, the shell runs with ``-o pipefail`` (#22252). Only the agent-command path sets it: a
+                  user's interactive shell keeps ``cmd | head`` and ``grep -q`` exiting 0.
     """
 
     def __init__(
@@ -111,11 +113,13 @@ class SimplePTY:
         session_id: str,
         use_login_shell: bool = False,
         custom_ps1: str | None = None,
+        pipefail: bool = False,
     ) -> None:
         """Initialize SimplePTY with session ID and optional shell configuration."""
         self.session_id = session_id
         self.use_login_shell = use_login_shell
         self.custom_ps1 = custom_ps1
+        self.pipefail = pipefail
         self.master_fd: int | None = None
         self.process: subprocess.Popen[bytes] | None = None
         self.output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
@@ -185,7 +189,8 @@ class SimplePTY:
         if self.use_login_shell:
             bash_cmd.append("--login")
             logger.info(f"Starting login shell for session {self.session_id} (loads profile files)")
-        bash_cmd += ["-o", "pipefail"]  # #22252: a failing stage of a pipeline is not masked by the last one's 0
+        if self.pipefail:  # #22252: agent commands only; a failing stage is not masked by the last one's 0
+            bash_cmd += ["-o", "pipefail"]
         self.process = (
             subprocess.Popen(  # nosec B603  # bash_cmd is ["/bin/bash"] with optional --login; fixed absolute path
                 bash_cmd,
@@ -538,8 +543,10 @@ class SimplePTYManager:
         self.sessions: dict[str, SimplePTY] = {}
         self._lock = threading.Lock()  # CRITICAL: Protect concurrent session access
 
-    def create_session(self, session_id: str, initial_cwd: str | None = None) -> SimplePTY | None:
-        """Create PTY session"""
+    def create_session(
+        self, session_id: str, initial_cwd: str | None = None, pipefail: bool = False
+    ) -> SimplePTY | None:
+        """Create PTY session; ``pipefail`` is set by the agent-command callers only (#22252)."""
         # CRITICAL: Atomic check-and-create with lock
         with self._lock:
             if session_id in self.sessions:
@@ -548,7 +555,7 @@ class SimplePTYManager:
                 old_pty.cleanup()
                 del self.sessions[session_id]
 
-            pty = SimplePTY(session_id)
+            pty = SimplePTY(session_id, pipefail=pipefail)
             if pty.start(initial_cwd):
                 self.sessions[session_id] = pty
                 return pty

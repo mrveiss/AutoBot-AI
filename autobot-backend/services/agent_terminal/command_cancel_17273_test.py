@@ -18,7 +18,7 @@ import services.simple_pty as simple_pty_module
 from services.agent_terminal.command_executor import CommandExecutor
 from services.agent_terminal.models import AgentTerminalSession
 from services.command_approval_manager import AgentRole
-from tests.helpers.fake_pty_shell import FakeManager, FakeShell
+from tests.helpers._fake_pty_shell import FakeManager, FakeShell
 
 
 async def _start(monkeypatch, shell):

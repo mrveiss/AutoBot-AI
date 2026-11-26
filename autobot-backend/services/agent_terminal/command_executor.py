@@ -151,7 +151,9 @@ class CommandExecutor:
         logger.warning(
             f"[PTY_WRITE] PTY session {session.pty_session_id} not alive (exists={pty is not None}), recreating..."
         )
-        new_pty = simple_pty_manager.create_session(session.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT))
+        new_pty = simple_pty_manager.create_session(
+            session.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT), pipefail=True
+        )
         if not new_pty:
             logger.error(f"Failed to recreate PTY session {session.pty_session_id}")
             return None
@@ -333,4 +335,4 @@ class CommandExecutor:
                 "stdout": output,
             }
         logger.info(f"[PTY_EXEC] Command complete. Return code: {return_code}, output: {len(output)} chars")
-        return self._build_pty_result(output, return_code)
+        return self._build_pty_result(output, pty_command.effective_exit_code(command, return_code))

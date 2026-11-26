@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from services import pty_command
-from tests.helpers.fake_pty_shell import PROMPT, FakeShell
+from tests.helpers._fake_pty_shell import PROMPT, FakeShell
 
 
 def _typed(shell: FakeShell, command: str) -> tuple[str, int]:
@@ -84,3 +84,18 @@ async def test_a_shell_that_ends_is_not_a_timeout():
 
     assert await pty_command.await_exit_code(shell, start, marker, 5.0, on_timeout) == (None, False)
     on_timeout.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("command", "code", "expected"),
+    [
+        ("yes | head -1", 141, 0),
+        ("cat big.log | grep -q ERROR", 141, 0),
+        ("false || true", 141, 141),  # `||` is not a pipeline
+        ("sleep 1", 141, 141),
+        ("yes | head -1", 1, 1),
+        ("ls", 0, 0),
+    ],
+)
+def test_sigpipe_in_a_pipeline_is_success_22252(command, code, expected):
+    assert pty_command.effective_exit_code(command, code) == expected
