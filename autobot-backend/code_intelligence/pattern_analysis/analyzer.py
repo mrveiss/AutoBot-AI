@@ -111,8 +111,10 @@ class CodePatternAnalyzer(CancellableAnalysis):
         self.similarity_threshold = similarity_threshold
         self.exclude_dirs = exclude_dirs or ANALYSIS_EXCLUDE_DIRS
 
-    def _init_sub_analyzers(self, cc_threshold: int, mi_threshold: float) -> None:
-        """Initialize sub-analyzer instances based on feature flags. Issue #620."""
+    def _init_sub_analyzers(self, cc_threshold: int, mi_threshold: float, cancel_token: threading.Event | None) -> None:
+        """Initialize sub-analyzer instances based on feature flags (Issue #620) and keep the caller's cancel token."""
+        # Set by the caller when it stops waiting (#22094); checked per file and per report.
+        self.cancel_token = cancel_token
         self._clone_detector = (
             CloneDetector(exclude_dirs=list(self.exclude_dirs)) if self.enable_clone_detection else None
         )
@@ -156,7 +158,6 @@ class CodePatternAnalyzer(CancellableAnalysis):
                 project -- without it, patterns from different sources
                 sharing the global collection could cross-match. Mirrors the
                 #12356/#12374 cross-language-patterns fix.
-            cancel_token: Set by the caller when it stops waiting (#22094); checked before each file and phase.
         """
         self._init_feature_flags(
             enable_clone_detection,
@@ -167,13 +168,10 @@ class CodePatternAnalyzer(CancellableAnalysis):
             similarity_threshold,
             exclude_dirs,
         )
-        self._init_sub_analyzers(cc_threshold, mi_threshold)
-        self.cancel_token = cancel_token
+        self._init_sub_analyzers(cc_threshold, mi_threshold, cancel_token)
         self.source_id = self._source_tag = None if source_id is None else require_source_id(source_id, "analysis")
-        # Issue #12407: single reused EmbeddingCache instance (mirrors
-        # SemanticAnalysisMixin / CrossLanguagePatternDetector) so repeated
-        # calls to ``_generate_embedding`` actually benefit from the cache
-        # instead of instantiating a throwaway cache every call.
+        # Issue #12407: single reused EmbeddingCache (mirrors SemanticAnalysisMixin / CrossLanguagePatternDetector)
+        # so repeated ``_generate_embedding`` calls benefit from the cache instead of a throwaway one per call.
         self._embedding_cache = EmbeddingCache(maxsize=500, ttl_seconds=3600) if EMBEDDING_CACHE_AVAILABLE else None
 
     # Batch size for per-file analysis (tunable)
@@ -284,6 +282,7 @@ class CodePatternAnalyzer(CancellableAnalysis):
         start_time = time.time()
 
         async def _report(step: str, pct: float) -> None:
+            self._check_cancelled()  # every phase and batch reports first, so this is the per-phase and per-batch check
             if progress_callback:
                 await progress_callback(step, pct)
 
@@ -312,17 +311,9 @@ class CodePatternAnalyzer(CancellableAnalysis):
         start_batch = self._apply_resume_checkpoint(report, resume_from, total_batches)
 
         # Phase 2: Per-file analysis in batches (5% → 75%)
-        await self._process_file_batches(
-            batches,
-            start_batch,
-            report,
-            _report,
-            checkpoint_callback,
-            file_count,
-        )
+        await self._process_file_batches(batches, start_batch, report, _report, checkpoint_callback, file_count)
 
         # Phase 3: Clone detection (75% → 85%) — full directory, with timeout
-        self._check_cancelled()
         if self.enable_clone_detection:
             await _report("Running clone detection...", 75.0)
             try:
@@ -413,7 +404,6 @@ class CodePatternAnalyzer(CancellableAnalysis):
         all_complexity_modules: List = []
 
         for idx in range(start_batch, total_batches):
-            self._check_cancelled()
             batch = batches[idx]
             batch_pct = 5.0 + (batch_progress_range * (idx / total_batches))
             await progress_fn(

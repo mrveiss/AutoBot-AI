@@ -54,8 +54,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from github_api import TRUSTED_ASSOCIATIONS, build_api  # noqa: E402
 from issue_api import IssueApiError, IssueClient, ensure_label, list_issues, load_upsert  # noqa: E402
 
-from autobot_shared.env_utils import env_int  # noqa: E402
-from autobot_shared.html_comments import HTML_COMMENT_PATTERN  # noqa: E402  # the one env integer reader (#15691)
+from autobot_shared.env_utils import env_int  # noqa: E402  # the one env integer reader (#15691)
+from autobot_shared.html_comments import HTML_COMMENT_FLAGS, HTML_COMMENT_PATTERN  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ PHASE_LABEL_RE = re.compile(r"^phase:M(\d+)\.(\d+)$")
 _PARENT_REF_RE = re.compile(
     r"^[ \t]*(?:[-*+][ \t]+)?[*_]{0,2}parent[*_]{0,2}[ \t]*:?[*_]{0,2}[ \t]*#(\d+)\b", re.I | re.M
 )
-_CODE_AND_COMMENTS_RE = re.compile(HTML_COMMENT_PATTERN + r"|```.*?```|~~~.*?~~~|`[^`\n]*`", re.S)
+_CODE_AND_COMMENTS_RE = re.compile(HTML_COMMENT_PATTERN + r"|```.*?```|~~~.*?~~~|`[^`\n]*`", HTML_COMMENT_FLAGS)
 _ISSUE_URL_RE = re.compile(r"/repos/([^/]+/[^/]+)/issues/(\d+)/?$")
 
 
