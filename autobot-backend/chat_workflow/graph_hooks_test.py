@@ -14,6 +14,7 @@ import pytest
 from autobot_shared.plugin_sdk import Hook, HookRegistry
 from autobot_shared.plugin_sdk.base import PluginManifest
 from autobot_shared.plugin_sdk.hooks import HOOK_REGISTRY
+from chat_workflow import graph_hooks
 from chat_workflow.graph_hooks import _emit_agent_execute_hook
 from chat_workflow.graph_tool_dispatch import emit_tool_call_hook
 
@@ -102,3 +103,27 @@ async def test_the_tool_call_caller_passes_exactly_what_the_declaration_names(re
     await emit_tool_call_hook("session-1", [{"name": "ls", "params": {}}])
 
     assert set(seen) == set(HOOK_REGISTRY[Hook.ON_TOOL_CALL.value].params)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "hook, emit",
+    [
+        ("ON_AGENT_ERROR", lambda: graph_hooks._emit_planned_agent_error_hooks("s", 1, ValueError("x"))),
+        ("ON_AGENT_COMPLETE", lambda: graph_hooks._emit_planned_agent_complete_hook("s", 1, "done")),
+        ("ON_AGENT_EXECUTE", lambda: graph_hooks._emit_agent_execute_hook("s", 1)),
+    ],
+)
+async def test_a_failing_lifecycle_hook_is_logged_at_warning_with_its_name(monkeypatch, hook, emit):
+    """#20888 AC4: no lifecycle hook failure is debug-only; the registry itself names the failing plugin."""
+    records = []
+    monkeypatch.setattr(graph_hooks.logger, "warning", lambda *a, **k: records.append(a))
+
+    async def boom(self, *a, **k):
+        raise RuntimeError("registry down")
+
+    monkeypatch.setattr(HookRegistry, "call_hook", boom)
+
+    await emit()
+
+    assert len(records) == 1 and hook in records[0][0]

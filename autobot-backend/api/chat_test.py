@@ -101,3 +101,31 @@ async def test_unknown_role_400_names_the_valid_roles(_owned):
     assert caught.value.status_code == 400
     assert "no_such_role" in caught.value.detail
     assert "valid:" in caught.value.detail
+
+
+class _Cfg:
+    def get_selected_model(self):
+        return "configured-local-model"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "requested, answered, expected",
+    [
+        ("requested-model", "answering-model", "requested-model"),
+        (None, "answering-model", "answering-model"),
+        (None, "", "configured-local-model"),
+    ],
+)
+async def test_overflow_model_is_requested_then_answering_then_configured_never_a_literal(
+    requested, answered, expected
+):
+    """#19760: the overflow limit is computed for a model in use, never a hard-coded vendor name."""
+    response = type("R", (), {"model": answered})()
+    with (
+        patch.object(chat, "provide_config_manager", return_value=_Cfg()),
+        patch.object(chat, "handle_message_completion", new=AsyncMock(return_value={})) as handle,
+    ):
+        await chat._apply_context_overflow(AsyncMock(), "s1", requested, response, [])
+
+    assert handle.await_args.kwargs["model_name"] == expected

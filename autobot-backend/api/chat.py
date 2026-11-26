@@ -1711,7 +1711,7 @@ async def _durable_owner_metadata(chat_history_manager, session_id: str, ownersh
 async def save_chat_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
-    request_data: dict = None,
+    request_data: dict | None = None,
     request: Request = None,
     ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
 ):
@@ -1732,7 +1732,7 @@ async def save_chat_by_id(
             status_code=503,
         )
 
-    save_data = request_data.get("data", {})
+    save_data = (request_data or {}).get("data", {})
     merged_messages, discard = await _merge_chat_messages(
         chat_history_manager, chat_id, save_data.get("messages", []), request_id
     )

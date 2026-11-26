@@ -21,11 +21,13 @@ _PRIVATE_IP = re.compile(
     r"(?<![\d.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?![\d])"
 )
 _INTERNAL_HOST = re.compile(r"(?<![\w-])[\w-]+(?:\.[\w-]+)*\.(?:internal|lan|local|corp|intranet)(?![\w-])")
+# A workstation's home or mount path is internal to whoever wrote it, never a default worth publishing (#17440 AC3).
+_USER_PATH = re.compile(r"(?<![\w.])(?:/home/[\w.-]+|/Users/[\w.-]+|/mnt/[a-z]/[\w.-]+|[A-Z]:\\Users\\[\w.-]+)")
 
 
 def internal_values(text: str) -> list[str]:
-    """Every private IPv4 address and internal-looking hostname in *text*."""
-    return [m.group(0) for rx in (_PRIVATE_IP, _INTERNAL_HOST) for m in rx.finditer(text)]
+    """Every private IPv4 address, internal-looking hostname and user-home path in *text*."""
+    return [m.group(0) for rx in (_PRIVATE_IP, _INTERNAL_HOST, _USER_PATH) for m in rx.finditer(text)]
 
 
 def test_the_detector_flags_private_addresses_and_internal_hosts_and_passes_public_ones() -> None:
@@ -33,6 +35,9 @@ def test_the_detector_flags_private_addresses_and_internal_hosts_and_passes_publ
     assert internal_values(".".join(("192", "168", "0", "9"))) != []
     assert internal_values(".".join(("172", "20", "0", "1"))) != []
     assert internal_values("node" + ".internal") != []
+    assert internal_values("/home/" + "someone/work") != []
+    assert internal_values("/Users/" + "someone/work") != []
+    assert internal_values("/opt/autobot /var/log/autobot /home") == []
     assert internal_values("http://localhost:9090 127.0.0.1 8.8.8.8 172.32.0.1 example.com") == []
 
 
