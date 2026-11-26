@@ -177,3 +177,12 @@ def test_shared_package_launcher_keeps_its_package_prefix(tmp_path: Path) -> Non
         assert audit.derive_launcher_module_path(backend) == "mcp_server.main_b"
         assert audit.is_launched_module(shared, audit.derive_launcher_module_path(shared))
         assert audit.is_launched_module(backend, audit.derive_launcher_module_path(backend))
+
+
+def test_a_checkout_under_a_benchmarks_directory_does_not_exempt_every_module(tmp_path: Path) -> None:
+    """The ``benchmarks`` segment is judged relative to the repo root, not on the absolute path."""
+    root = tmp_path / "benchmarks" / "AutoBot-AI"
+    findings = _scan_tree(root, {"autobot-backend/lib/plain_library.py": '"""Issue #777: closed tracker."""\n'})
+    assert [f.file for f in findings] == ["autobot-backend/lib/plain_library.py"]
+    assert audit_entry_points.is_benchmark(root / "autobot-backend/benchmarks/x.py", root)
+    assert not audit_entry_points.is_benchmark(root / "autobot-backend/lib/plain_library.py", root)

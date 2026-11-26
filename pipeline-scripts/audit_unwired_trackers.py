@@ -374,7 +374,7 @@ def _is_exempt_from_scan(f: Path, registry_modules: set[str]) -> bool:
     if module_path and module_path in registry_modules:
         return True
     # #22199: launched modules (__main__.py, benchmarks, own `python -m`) are reached without imports.
-    return is_launched_module(f, derive_launcher_module_path(f))
+    return is_launched_module(f, derive_launcher_module_path(f), REPO_ROOT)
 
 
 def _finding_for(f: Path, closed_set: set[int]) -> Optional[Finding]:

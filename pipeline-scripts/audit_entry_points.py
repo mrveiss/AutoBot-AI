@@ -30,11 +30,16 @@ def is_package_main(path: Path) -> bool:
     return path.name == "__main__.py"
 
 
-def is_benchmark(path: Path) -> bool:
-    """A file under a ``benchmarks/`` segment, or named ``*_benchmark(s).py``."""
+def is_benchmark(path: Path, root: Optional[Path] = None) -> bool:
+    """A file under a ``benchmarks/`` segment, or named ``*_benchmark(s).py``.
+
+    The segment is looked for in the path *relative to* ``root`` (when given and the path is under it),
+    so a checkout that itself lives under a ``benchmarks`` directory does not exempt every module.
+    """
     if path.suffix != ".py":
         return False
-    return BENCHMARK_DIR_NAME in path.parts[:-1] or path.name.endswith(BENCHMARK_FILE_SUFFIXES)
+    rel = path.relative_to(root) if root is not None and path.is_relative_to(root) else path
+    return BENCHMARK_DIR_NAME in rel.parts[:-1] or path.name.endswith(BENCHMARK_FILE_SUFFIXES)
 
 
 def _read_module(path: Path) -> tuple[str, bool]:
@@ -57,6 +62,6 @@ def documents_own_module_run(path: Path, module_path: Optional[str]) -> bool:
     return has_main and module_path in MODULE_RUN_RE.findall(doc)
 
 
-def is_launched_module(path: Path, module_path: Optional[str]) -> bool:
+def is_launched_module(path: Path, module_path: Optional[str], root: Optional[Path] = None) -> bool:
     """Any of the launcher forms: ``__main__.py``, a benchmark, or a self-documented ``python -m``."""
-    return is_package_main(path) or is_benchmark(path) or documents_own_module_run(path, module_path)
+    return is_package_main(path) or is_benchmark(path, root) or documents_own_module_run(path, module_path)
