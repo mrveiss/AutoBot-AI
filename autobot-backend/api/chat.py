@@ -2598,7 +2598,7 @@ async def summarize_conversation(
         )
     except Exception as e:
         logger.exception("[%s] Failed to generate summary", request_id)
-        raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=safe_http_detail(e, "Summarization failed"))
     summary_text, summary_tokens = summary.text, summary.total_tokens  # provider usage when reported
 
     result_data = ConversationSummarizeData(

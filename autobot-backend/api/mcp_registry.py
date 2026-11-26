@@ -44,6 +44,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
@@ -1026,8 +1027,7 @@ async def reload_mcp_bridge(name: str) -> Metadata:
             ),
         )
     logger.warning(
-        "reload_mcp_bridge('%s'): importlib.reload affects only the current uvicorn worker. "
-        "Other workers retain the previous module state until restarted.",
+        "reload_mcp_bridge('%s'): importlib.reload affects only this uvicorn worker; others keep the old module.",
         name,
     )
     try:
@@ -1041,7 +1041,7 @@ async def reload_mcp_bridge(name: str) -> Metadata:
             logger.warning("Reloaded bridge '%s' has no MANIFEST attribute", name)
     except Exception as e:
         logger.error("Failed to reload bridge '%s': %s", name, e)
-        raise HTTPException(status_code=500, detail=f"Failed to reload bridge '{name}': {e}")
+        raise HTTPException(status_code=500, detail=safe_http_detail(e, f"Failed to reload bridge '{name}'"))
     mcp_cache.invalidate_all()
     toggle_svc = get_toggle_service()
     enabled = await toggle_svc.is_bridge_enabled(name)
