@@ -525,3 +525,13 @@ def test_a_single_line_jinja_comment_leaves_no_stray_brace_and_the_host_marker_s
     text = code_text(source, name="a.conf.j2", strip_trailing=True)
     assert "{" not in text and "why" not in text and "host comment" not in text and "trailing" not in text, text
     assert "listen 80;" in text and "root /x;" in text
+
+
+def test_the_html_comment_helpers_are_built_on_the_one_shared_pattern() -> None:
+    """#21569 AC3: `<!--` is the shared helper's, defined once in `autobot_shared.html_comments` (#22261)."""
+    from autobot_shared.html_comments import HTML_COMMENT_PATTERN
+    from tools.lint import _comment_syntax as cs
+
+    assert HTML_COMMENT_PATTERN in cs._HTML_SCRIPT_OR_COMMENT.pattern
+    assert HTML_COMMENT_PATTERN in cs._HTML_OR_BLOCK_COMMENT.pattern
+    assert strip_html_comments("a<!-- x\ny -->b") == "a\nb"
