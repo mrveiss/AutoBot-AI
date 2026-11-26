@@ -280,6 +280,43 @@ def extract_tracker_refs(file_path: Path) -> list[int]:
     return list(dict.fromkeys(refs))  # dedupe, preserve order
 
 
+def _caller_pattern(stem: str) -> str:
+    """The six-alternative ``grep -E`` pattern for a static or dynamic reference to ``stem``."""
+    return (
+        rf"from .*\b{stem}\b"  # py static `from X import …`
+        rf"|import .*\b{stem}\b"  # py/ts static `import X` (note: requires space)
+        rf"|import\([^)]*\b{stem}\b"  # ts/js dynamic `import('…/X')`
+        rf"|require\([^)]*\b{stem}\b"  # ts/js cjs `require('./X')`
+        rf"|importlib\.[a-z_]+\([^)]*\b{stem}\b"  # py `importlib.import_module(…)`
+        rf"|__import__\([^)]*\b{stem}\b"  # py `__import__(…)`
+    )
+
+
+def _caller_grep_cmd(pattern: str) -> list[str]:
+    """The recursive ``grep`` over the existing ``CALLER_SEARCH_DIRS``, limited to py/ts/vue files."""
+    return [
+        "grep",
+        "-rn",
+        "-E",
+        pattern,
+        *(str(REPO_ROOT / d) for d in CALLER_SEARCH_DIRS if (REPO_ROOT / d).exists()),
+        "--include=*.py",
+        "--include=*.ts",
+        "--include=*.vue",
+    ]
+
+
+def _run_caller_grep(stem: str, cmd: list[str]) -> str:
+    """Run the caller grep and return its stdout; a timeout or an exit above 1 is a lookup error."""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
+    except subprocess.TimeoutExpired as e:
+        raise TrackerLookupError(f"caller grep for {stem!r} timed out ({e})") from e
+    if result.returncode > 1:  # 0 = matches, 1 = no matches, >1 = error
+        raise TrackerLookupError(f"caller grep for {stem!r} failed (exit {result.returncode})")
+    return result.stdout
+
+
 def grep_count_production_callers(stem: str, self_path: Path) -> int:
     """Return number of production import lines referencing `stem`.
 
@@ -298,32 +335,9 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
     """
     if stem in AMBIGUOUS_STEMS:
         return -1  # skip
-    pattern = (
-        rf"from .*\b{stem}\b"  # py static `from X import …`
-        rf"|import .*\b{stem}\b"  # py/ts static `import X` (note: requires space)
-        rf"|import\([^)]*\b{stem}\b"  # ts/js dynamic `import('…/X')`
-        rf"|require\([^)]*\b{stem}\b"  # ts/js cjs `require('./X')`
-        rf"|importlib\.[a-z_]+\([^)]*\b{stem}\b"  # py `importlib.import_module(…)`
-        rf"|__import__\([^)]*\b{stem}\b"  # py `__import__(…)`
-    )
-    cmd = [
-        "grep",
-        "-rn",
-        "-E",
-        pattern,
-        *(str(REPO_ROOT / d) for d in CALLER_SEARCH_DIRS if (REPO_ROOT / d).exists()),
-        "--include=*.py",
-        "--include=*.ts",
-        "--include=*.vue",
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
-    except subprocess.TimeoutExpired as e:
-        raise TrackerLookupError(f"caller grep for {stem!r} timed out ({e})") from e
-    if result.returncode > 1:  # 0 = matches, 1 = no matches, >1 = error
-        raise TrackerLookupError(f"caller grep for {stem!r} failed (exit {result.returncode})")
     self_str = str(self_path)
-    return sum(1 for line in result.stdout.splitlines() if _is_production_caller_line(line, self_str))
+    output = _run_caller_grep(stem, _caller_grep_cmd(_caller_pattern(stem)))
+    return sum(1 for line in output.splitlines() if _is_production_caller_line(line, self_str))
 
 
 COMMENT_PREFIXES = {".py": ("#",), ".ts": ("//", "/*", "*"), ".vue": ("//", "/*", "*", "<!--")}
