@@ -14,7 +14,7 @@ what makes a click save a file, so a hand-rolled save cannot avoid it. The kit
 script-built save, and is not counted. Where a form carries a receiver, the receiver is read too
 (#21195): `Object.assign(settings, { download: value })` and a `download` attribute on a
 non-anchor receiver are not saves, and the shorthand `Object.assign(a, { download })` counts like
-the `download: name` spelling does (#21195).
+the `download: name` spelling does.
 
 **What the pin holds.** The saves in files that open PRs #21122, #21126, #21132 and #21087 still
 touch; each moves to the kit when its PR lands. The pin goes down as each does, and ends at 0.
