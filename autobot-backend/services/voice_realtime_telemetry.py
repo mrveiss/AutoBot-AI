@@ -451,9 +451,20 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         is never applied twice; an unreachable Redis leaves it for the next operation or the abandoned-age drop.
         """
         for sid in list(self._ended_unflushed):
-            entry = self._ended_unflushed.pop(sid)
-            if await self._commit_to_redis(sid, entry.delta, _end_stamp(entry.ended), entry.base) is None:
+            entry = self._ended_unflushed.pop(sid, None)  # a concurrent flush may already have claimed it
+            if entry is None:
+                continue
+            if not await self._flush_one_ended(sid, entry):
                 self._ended_unflushed.setdefault(sid, entry)
+
+    async def _flush_one_ended(self, session_id: str, entry: EndedSession) -> bool:
+        """True when committed. Never raises: a failed flush must not stop the caller recording its own usage."""
+        try:
+            stamp = _end_stamp(entry.ended)
+            return await self._commit_to_redis(session_id, entry.delta, stamp, entry.base) is not None
+        except Exception as exc:
+            logger.warning("voice_realtime: ended-session flush failed session_id=%s: %s", session_id, exc)
+            return False
 
     def _drop_stale_ended_sessions(self, max_age: int) -> None:
         now = now_utc()

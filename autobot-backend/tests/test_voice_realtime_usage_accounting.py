@@ -264,3 +264,26 @@ class TestSessionEndedDuringAnOutage:
         t._ended_unflushed["o1"].ended.ended_at = old.isoformat()
         t._evict_abandoned_sessions()
         assert t._ended_unflushed == {} and "session_id=o1" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_two_concurrent_flushes_neither_raise_nor_lose_a_delta(self, monkeypatch):
+        import asyncio
+
+        server, t, _ = await self._ended_during_outage(monkeypatch)
+        await t.session_start("o2")
+        t._get_redis = AsyncMock(return_value=None)
+        await t.record_response_done("o2", input_tokens=7)
+        await t.session_end("o2")
+        assert set(t._ended_unflushed) == {"o1", "o2"}
+        t._get_redis = AsyncMock(return_value=server)
+        real_get = server.get
+
+        async def yielding_get(key):
+            await asyncio.sleep(0)  # a flush awaits mid-loop, so the other one claims the later key first
+            return await real_get(key)
+
+        server.get = yielding_get
+        await asyncio.gather(t._flush_ended_sessions(), t._flush_ended_sessions())  # must not raise KeyError
+        assert t._ended_unflushed == {}
+        assert json.loads(server.stored["voice_realtime_session:o1"])["input_tokens"] == 500
+        assert json.loads(server.stored["voice_realtime_session:o2"])["input_tokens"] == 7
