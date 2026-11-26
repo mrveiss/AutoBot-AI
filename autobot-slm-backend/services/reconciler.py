@@ -56,8 +56,8 @@ from services.node_health_status import (
     status_level_and_reason,
     strip_reserved,
 )
-from services.self_model_store import apply_heartbeat_extra_data
 from services.pending_role_provisioning import provisioner_holds, set_role_status_if_unchanged
+from services.self_model_store import apply_heartbeat_extra_data
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 from services.service_remediation_tracker import (
     clear_service_remediation,
