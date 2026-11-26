@@ -9,7 +9,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fetchWithAuth = vi.fn()
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: (...args: unknown[]) => fetchWithAuth(...args) }))
-vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api', getBackendUrl: () => 'http://backend' }))
+vi.mock('@/config/ssot-config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config/ssot-config')>()),
+  getApiBase: () => '/api',
+  getBackendUrl: () => 'http://backend',
+}))
 vi.mock('@/composables/useToast', () => ({ useToast: () => ({ showToast: vi.fn() }) }))
 
 import { ChatRepository } from '../ChatRepository'
