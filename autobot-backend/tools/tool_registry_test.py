@@ -341,3 +341,14 @@ def test_worker_dispatched_tools_are_recorded_at_the_worker_not_the_backend():
     by_name = {r["name"]: r for r in tool_records()}
     for name in ("web_fetch", "ask_user_for_manual", "respond_conversationally"):
         assert by_name[name]["serving_service"] == LOCATION_WORKER, name
+
+
+def test_requires_is_declared_only_for_known_tools_and_sent_in_every_record():
+    """#22298: ``requires`` names commands for catalogue tools only; every record carries the field."""
+    from tools.tool_records import TOOL_REQUIRES, tool_records
+
+    records = {r["name"]: r for r in tool_records()}
+    assert set(TOOL_REQUIRES) <= set(records)
+    assert all("requires" in r["fields"] for r in records.values())
+    assert records["bring_window_to_front"]["fields"]["requires"] == ["xdotool"]
+    assert records["web_fetch"]["fields"]["requires"] == []
