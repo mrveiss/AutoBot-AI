@@ -120,7 +120,7 @@ class TracingService:
         self._provider: TracerProvider | None = None
         self._enabled: bool = False
         self._service_name: str = "autobot-backend"
-        self._service_version: str = "1.0.0"
+        self._service_version: str | None = None  # the repo declares no version: unset omits the tag (#17821)
 
         # Configuration from environment
         self._jaeger_endpoint = config.misc.jaeger_endpoint or f"http://{NetworkConstants.REDIS_VM_IP}:4317"
@@ -162,14 +162,14 @@ class TracingService:
         Returns:
             Resource with service name, version, and namespace
         """
-        return Resource.create(
-            {
-                SERVICE_NAME: self._service_name,
-                SERVICE_VERSION: self._service_version,
-                "deployment.environment": config.environment,  # #19315: AUTOBOT_ENV aliases it
-                "service.namespace": "autobot",
-            }
-        )
+        attributes = {
+            SERVICE_NAME: self._service_name,
+            "deployment.environment": config.environment,  # #19315: AUTOBOT_ENV aliases it
+            "service.namespace": "autobot",
+        }
+        if self._service_version:
+            attributes[SERVICE_VERSION] = self._service_version
+        return Resource.create(attributes)
 
     def _create_sampler(self):
         """
@@ -242,7 +242,7 @@ class TracingService:
     def initialize(
         self,
         service_name: str | None = None,
-        service_version: str = "1.0.0",
+        service_version: str | None = None,
         jaeger_endpoint: str | None = None,
         enable_console_export: bool = False,
     ) -> bool:
@@ -255,7 +255,7 @@ class TracingService:
 
         Args:
             service_name: Name of this service for trace attribution
-            service_version: Version string for the service
+            service_version: Release of the service; None omits service.version (never invented)
             jaeger_endpoint: OTLP endpoint for Jaeger (e.g., http://host:4317)
             enable_console_export: Also export spans to console for debugging
 
@@ -277,7 +277,8 @@ class TracingService:
 
             self._enabled = True
             logger.info(
-                f"OpenTelemetry tracing initialized for {self._service_name} " f"(version {self._service_version})"
+                f"OpenTelemetry tracing initialized for {self._service_name} "
+                f"(version {self._service_version or 'unknown'})"
             )
             return True
 
