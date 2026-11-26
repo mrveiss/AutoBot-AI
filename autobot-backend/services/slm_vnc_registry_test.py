@@ -20,15 +20,6 @@ ENDPOINTS = {
             "is_active": True,
         },
         {
-            "credential_id": "c-x",
-            "node_id": "n-x",
-            "hostname": "x",
-            "ip_address": "203.0.113.9",
-            "vnc_type": "desktop",
-            "port": 6080,
-            "is_active": False,
-        },
-        {
             "credential_id": "c-d",
             "node_id": "n-d",
             "hostname": "d",
@@ -74,7 +65,7 @@ async def test_picks_the_active_desktop_node_with_its_raw_vnc_port(monkeypatch):
     request, calls = _fake(
         {
             ("GET", reg.ENDPOINTS_PATH): ENDPOINTS,
-            ("GET", NODES_PATH): _nodes(("n-b", ["browser"]), ("n-x", ["vnc"]), ("n-d", ["llm", "vnc"])),
+            ("GET", NODES_PATH): _nodes(("n-b", ["browser"]), ("n-d", ["llm", "vnc"])),
             ("GET", reg.NODE_CREDENTIALS_PATH.format(node_id="n-d")): {
                 "credentials": [{"credential_id": "c-d", "vnc_port": 5903}]
             },

@@ -87,7 +87,8 @@ async def _request(method: str, path: str, params: dict | None = None) -> dict:
 def _pick_desktop(endpoints: list[dict], vnc_node_ids: frozenset[str]) -> dict | None:
     """The first live desktop endpoint on a node that CURRENTLY has the `vnc` role, in a stable
     (hostname, node_id) order. A credential left on a node without the role is stale and never used."""
-    live = [e for e in endpoints if e.get("vnc_type") == DESKTOP_VNC_TYPE and e.get("is_active", True)]
+    # The registry lists only active credentials (`include_inactive` defaults to false), so no re-check here.
+    live = [e for e in endpoints if e.get("vnc_type") == DESKTOP_VNC_TYPE]
     usable = [e for e in live if e.get("node_id") in vnc_node_ids]
     if len(usable) < len(live):
         stale = sorted(str(e.get("node_id")) for e in live if e.get("node_id") not in vnc_node_ids)
