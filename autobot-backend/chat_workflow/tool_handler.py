@@ -25,7 +25,7 @@ from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, BROWSER_TOOLS, approval_category_for
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, BROWSER_TOOLS
 from chat_workflow.browser_tool_handler import (
     extract_browser_image,
     format_browser_action_text,
@@ -685,16 +685,6 @@ def _schema_error_message(tool_name: str, tool_call: dict[str, Any], execution_r
             }
         )
     return validation_msg
-
-
-def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
-    """Return the declared category that gates *tool_name*, else None (GH#11160).
-
-    GH#11206: uses the canonical ``match_tool_name`` with word-boundary matching
-    (so ``deploy`` gates ``deploy_service`` but not ``deployment_status``). A false
-    positive only ever adds an approval hold — the fail-safe direction — never a bypass.
-    """
-    return approval_category_for(tool_name, declared)
 
 
 # Issue #11693: the tool-call grammar (parse pattern + close-variant
