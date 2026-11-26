@@ -387,8 +387,12 @@ def _detect(monkeypatch, row, status: str = "active"):
 @pytest.mark.parametrize("held", ["failed", "installing"])
 def test_the_detector_keeps_a_provisioner_owned_status_so_the_cooldown_holds(monkeypatch, held) -> None:
     row = _role(held, age=timedelta(minutes=5))
+    before = row.updated_at
+    row.current_version = "1.0"
     _detect(monkeypatch, row)
     assert row.status == held
+    assert row.current_version == "1.0"  # no write at all: any column write moves updated_at (the cooldown clock)
+    assert row.updated_at == before
     assert prp._needs_provisioning(row, set()) is False  # still inside the cooldown: not re-provisioned
 
 
@@ -405,3 +409,45 @@ def test_the_health_poll_skips_provisioner_owned_rows_and_uses_the_one_constant(
     assert "from services.pending_role_provisioning import PROVISIONER_HELD_STATUSES" in src
     assert "node_role.status in PROVISIONER_HELD_STATUSES" in src
     assert prp.PROVISIONER_HELD_STATUSES == ("failed", "installing")
+
+
+def _sync_record(monkeypatch, row):
+    """`SyncOrchestrator._update_node_role_record` itself, compiled from source, run against one NodeRole row."""
+    import ast
+
+    tree = ast.parse((_ROOT / "services" / "sync_orchestrator.py").read_text(encoding="utf-8"))
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "SyncOrchestrator")
+    fn = next(n for n in cls.body if getattr(n, "name", "") == "_update_node_role_record")
+    db = MagicMock(commit=AsyncMock())
+    db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=db)
+    session.__aexit__ = AsyncMock(return_value=False)
+    ns = {
+        "select": lambda *a, **k: MagicMock(),
+        "NodeRole": MagicMock(),
+        "RoleStatus": SimpleNamespace(ACTIVE=SimpleNamespace(value="active")),
+        "db_service": SimpleNamespace(session=lambda: session),
+        "datetime": datetime,
+        "timezone": timezone,
+        "PROVISIONER_HELD_STATUSES": prp.PROVISIONER_HELD_STATUSES,
+    }
+    exec(compile(ast.Module([fn], []), "sync_orchestrator.py", "exec"), ns)
+    asyncio.run(ns["_update_node_role_record"](None, "n1", "vnc", "abc123"))
+    return db
+
+
+@pytest.mark.parametrize("held", ["failed", "installing"])
+def test_a_role_file_sync_leaves_a_provisioner_held_row_untouched(monkeypatch, held) -> None:
+    row = SimpleNamespace(status=held, current_version="1.0", last_synced_at=None)
+    db = _sync_record(monkeypatch, row)
+    assert (row.status, row.current_version, row.last_synced_at) == (held, "1.0", None)
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.parametrize("status", ["not_installed", "installed", "inactive", "active"])
+def test_a_role_file_sync_still_activates_every_other_row(monkeypatch, status) -> None:
+    row = SimpleNamespace(status=status, current_version="1.0", last_synced_at=None)
+    _sync_record(monkeypatch, row)
+    assert (row.status, row.current_version) == ("active", "abc123")
+    assert row.last_synced_at is not None

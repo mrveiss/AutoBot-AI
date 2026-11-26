@@ -119,19 +119,14 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
         else:
             report = report_data
 
-        # Find or create NodeRole entry
+        # Only roles already assigned via the wizard are updated (#2900: no SLM-manager roles on every node). A
+        # provisioner-held row (failed/installing) is left untouched: any write moves updated_at, the retry
+        # cooldown's clock (#22262).
         result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id, NodeRole.role_name == role_name))
         node_role = result.scalar_one_or_none()
-
-        if not node_role:
-            # Only update roles that are already assigned — don't auto-create
-            # entries for roles detected on a node but not assigned via the
-            # wizard.  This prevents SLM-manager roles (slm-backend, etc.)
-            # from appearing on every node that runs the agent (#2900).
+        if not node_role or node_role.status in PROVISIONER_HELD_STATUSES:
             continue
-
-        if node_role.status not in PROVISIONER_HELD_STATUSES:  # provisioner-owned (#22262)
-            node_role.status = report.status
+        node_role.status = report.status
         node_role.current_version = report.version
 
     await db.flush()
