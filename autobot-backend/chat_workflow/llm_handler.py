@@ -11,7 +11,7 @@ and streaming response processing.
 
 import asyncio
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.chat_model_context import interpretation_llm_options, note_chat_turn_model, session_thinking
@@ -452,6 +452,36 @@ async def _emit_after_response_send(response: str, session_id: str, context: Dic
     await get_extension_manager().invoke_hook(HookPoint.AFTER_RESPONSE_SEND, ctx)
 
 
+async def _retrieve_trajectory_block(session: WorkflowSession, message: str, lightweight_mode: bool) -> str:
+    """#11261: search-before -- similar high-reward past turns as an untrusted reference block.
+
+    User/tenant-scoped by the store; skipped in lightweight mode and fully non-fatal.
+    """
+    if lightweight_mode:
+        return ""
+    from chat_workflow.trajectory_context import retrieve_trajectory_context
+
+    return await retrieve_trajectory_context(
+        message,
+        user_id=str(session.metadata.get("user_id") or ""),
+        tenant_id=str(session.metadata.get("tenant_id") or ""),
+    )
+
+
+async def _emit_prompt_hooks(
+    full_prompt: str, session: WorkflowSession, message: str, use_knowledge: bool, endpoint: str, model: str
+) -> str:
+    """Issue #4265: AFTER_PROMPT_BUILD, then the full-prompt-ready hook."""
+    full_prompt = await _emit_after_prompt_build(
+        full_prompt, session.session_id, {"message": message, "use_knowledge": use_knowledge}
+    )
+    return await _emit_full_prompt_ready(
+        full_prompt,
+        {"endpoint": endpoint, "model": model},
+        {"session_id": session.session_id, "message": message},
+    )
+
+
 class LLMHandlerMixin:
     """Mixin for LLM interaction handling."""
 
@@ -778,7 +808,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         session: WorkflowSession,
         message: str,
         use_knowledge: bool = True,
-        language: str = None,
+        language: Optional[str] = None,
         lightweight_mode: bool = False,
     ) -> Dict[str, Any]:
         """Prepare LLM request parameters including endpoint, model, and prompt.
@@ -791,94 +821,24 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         session binding, not from any parameter threaded through here — the
         request context and session metadata are both client-influenced.
         """
-        selected_model = self._get_selected_model(
-            session.metadata.get("model_override") if session and session.metadata else None
-        )
-        # Issue #1214: Try SLM service discovery first (fleet-managed endpoint),
-        # then fall back to local config-based resolution (#1070 model routing).
-        note_chat_turn_model(selected_model)  # #22016: before any budgeting; side calls match this model's context
-        slm_base = await self._discover_ollama_from_slm()
-        if slm_base:
-            ollama_endpoint = ollama_generate_url(slm_base)
-        else:
-            ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
-
+        selected_model = self._select_turn_model(session)
+        ollama_endpoint = await self._resolve_ollama_endpoint(selected_model)
         # Issue #4265: Emit BEFORE_PROMPT_BUILD hook before building prompts
         await _emit_before_prompt_build(
             session.session_id,
             {"message": message, "use_knowledge": use_knowledge, "language": language},
         )
-
-        company_id = session.metadata.get("company_id") if session and session.metadata else None
-        system_prompt = self._get_system_prompt(language=language, company_id=company_id)
-        # #17278: the stable text (hook-rewritten, hashed for drift) leads; volatile memory follows it.
-        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
-        record_session_prefix(session, language, company_id, bool(self._get_compose_tool_prompt()), system_prompt)
-        # Issue #5066: Tiered L0-L4 context wake-up.
-        # #13689 turned this ON on 2026-08-08; #13866 reverted it to OFF on
-        # 2026-08-10. The A/B's "all five layers render" was measured against
-        # test doubles: at this call site L2 cannot render (it reads
-        # description/content; entity documents carry observations — #13686),
-        # L3 cannot render (knowledge_service=None since #13742, below), and L0
-        # renders a compile-time constant carrying a hardcoded owner (#13867).
-        # Re-enabling is gated on #13686 + #13867 and an A/B re-run against a
-        # live backend. Full record: docs/research/tiered-context-ab-13689.md
-        # When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns all
-        # context prepending (L0 identity + L1 essential story + L2/L3 on-demand).
-        # When false the pre-existing unconditional EssentialStory path is used.
-        # Issue MVA-1992: Skip memory graph lookup when lightweight_mode=True.
-        if not lightweight_mode:
-            from chat_workflow import tiered_context_sources as tcs
-
-            system_prompt = await tcs.append_memory_context(system_prompt, session, message, selected_model)
+        system_prompt = await self._build_system_prompt(session, message, language, selected_model, lightweight_mode)
         conversation_context = self._build_conversation_context(session, await prompt_summary(session))
-
-        # Knowledge retrieval for RAG
-        # Issue MVA-1992: Skip RAG when lightweight_mode=True
-        knowledge_context, citations = "", []
-        if self.knowledge_service and use_knowledge and not lightweight_mode:
-            knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
-            # Issue #3770/#10837: compress KB results when context exceeds model budget.
-            # budget_grounded_context returns (context_str, effective_citations); rebind
-            # citations to the trimmed subset so params["citations"] only lists sources
-            # the model actually saw in the prompt (#10837 regression fix).
-            if knowledge_context and citations:
-                from services.knowledge.service import budget_grounded_context
-
-                knowledge_context, citations = await budget_grounded_context(
-                    citations, model_name=selected_model, context_label=message[:80]
-                )
-        else:
-            session.metadata["used_knowledge"] = False
-
-        # #11261: search-before — inject similar high-reward past turns as an
-        # untrusted reference block. User/tenant-scoped by the store; skipped in
-        # lightweight mode and fully non-fatal.
-        trajectory_context = ""
-        if not lightweight_mode:
-            from chat_workflow.trajectory_context import retrieve_trajectory_context
-
-            trajectory_context = await retrieve_trajectory_context(
-                message,
-                user_id=str(session.metadata.get("user_id") or ""),
-                tenant_id=str(session.metadata.get("tenant_id") or ""),
-            )
-
+        knowledge_context, citations = await self._retrieve_prompt_knowledge(
+            session, message, selected_model, use_knowledge, lightweight_mode
+        )
+        trajectory_context = await _retrieve_trajectory_block(session, message, lightweight_mode)
         full_prompt = self._build_full_prompt(
             knowledge_context, conversation_context, message, trajectory_context, selected_model, system_prompt
         )
-
-        # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built
-        full_prompt = await _emit_after_prompt_build(
-            full_prompt,
-            session.session_id,
-            {"message": message, "use_knowledge": use_knowledge},
-        )
-
-        full_prompt = await _emit_full_prompt_ready(
-            full_prompt,
-            {"endpoint": ollama_endpoint, "model": selected_model},
-            {"session_id": session.session_id, "message": message},
+        full_prompt = await _emit_prompt_hooks(
+            full_prompt, session, message, use_knowledge, ollama_endpoint, selected_model
         )
 
         logger.info("[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint)
@@ -892,6 +852,65 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             "citations": citations,
             "used_knowledge": bool(knowledge_context),
         }
+
+    def _select_turn_model(self, session: WorkflowSession) -> str:
+        """The turn's model, noted before any budgeting so side calls match this model's context (#22016)."""
+        override = session.metadata.get("model_override") if session and session.metadata else None
+        selected_model = self._get_selected_model(override)
+        note_chat_turn_model(selected_model)
+        return selected_model
+
+    async def _resolve_ollama_endpoint(self, selected_model: str) -> str:
+        """Issue #1214: SLM service discovery first (fleet-managed), then local config-based routing (#1070)."""
+        slm_base = await self._discover_ollama_from_slm()
+        if slm_base:
+            return ollama_generate_url(slm_base)
+        return self._get_ollama_endpoint_for_model(selected_model)
+
+    async def _build_system_prompt(
+        self,
+        session: WorkflowSession,
+        message: str,
+        language: Optional[str],
+        selected_model: str,
+        lightweight_mode: bool,
+    ) -> str:
+        """System prompt: the stable hashed text first, then the volatile memory context (#17278)."""
+        company_id = session.metadata.get("company_id") if session and session.metadata else None
+        system_prompt = self._get_system_prompt(language=language, company_id=company_id)
+        # #17278: the stable text (hook-rewritten, hashed for drift) leads; volatile memory follows it.
+        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
+        record_session_prefix(session, language, company_id, bool(self._get_compose_tool_prompt()), system_prompt)
+        # Issue #5066: Tiered L0-L4 context wake-up; #13689 turned it ON, #13866 reverted it to OFF (2026-08-10).
+        # Re-enabling is gated on #13686 + #13867 and an A/B re-run against a live backend. Full record:
+        # docs/research/tiered-context-ab-13689.md. When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns
+        # all context prepending; when false the pre-existing unconditional EssentialStory path is used.
+        # Issue MVA-1992: Skip memory graph lookup when lightweight_mode=True.
+        if not lightweight_mode:
+            from chat_workflow import tiered_context_sources as tcs
+
+            system_prompt = await tcs.append_memory_context(system_prompt, session, message, selected_model)
+        return system_prompt
+
+    async def _retrieve_prompt_knowledge(
+        self, session: WorkflowSession, message: str, selected_model: str, use_knowledge: bool, lightweight_mode: bool
+    ) -> tuple[str, list]:
+        """RAG context and the citations the model actually saw (Issue MVA-1992: skipped in lightweight mode)."""
+        if not (self.knowledge_service and use_knowledge and not lightweight_mode):
+            session.metadata["used_knowledge"] = False
+            return "", []
+        knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
+        # Issue #3770/#10837: compress KB results when context exceeds model budget.
+        # budget_grounded_context returns (context_str, effective_citations); rebind
+        # citations to the trimmed subset so params["citations"] only lists sources
+        # the model actually saw in the prompt (#10837 regression fix).
+        if knowledge_context and citations:
+            from services.knowledge.service import budget_grounded_context
+
+            knowledge_context, citations = await budget_grounded_context(
+                citations, model_name=selected_model, context_label=message[:80]
+            )
+        return knowledge_context, citations
 
     def _build_interpretation_prompt(self, command: str, stdout: str, stderr: str, return_code: int) -> str:
         """Build the interpretation prompt for LLM (Issue #332 - extracted helper)."""
