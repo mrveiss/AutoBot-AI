@@ -258,12 +258,14 @@ def test_the_chat_shell_tool_is_a_record_with_its_permission_and_the_host_it_is_
     assert shell["node_id"] and shell["serving_service"] == LOCATION_BACKEND
 
 
-def test_a_tool_served_from_a_placed_service_carries_its_host_and_one_not_placed_carries_none():
+def test_a_tool_served_from_a_placed_service_carries_its_host_and_a_worker_task_the_backends():
     from tools.tool_records import LOCATION_WORKER, tool_records
 
     by_name = {r["name"]: r for r in tool_records()}
     assert by_name["web_fetch"]["node_id"]
-    assert by_name["type_text"]["serving_service"] == LOCATION_WORKER and by_name["type_text"]["node_id"] is None
+    # Worker tasks run in the backend process (ToolRegistry -> WorkerNode.execute_task, in-process), so its host.
+    assert by_name["type_text"]["serving_service"] == LOCATION_WORKER
+    assert by_name["type_text"]["node_id"] == by_name["web_fetch"]["node_id"]
 
 
 @pytest.mark.asyncio
@@ -320,3 +322,12 @@ def test_requires_is_declared_only_for_known_tools_and_sent_in_every_record():
     assert all("requires" in r["fields"] for r in records.values())
     assert records["bring_window_to_front"]["fields"]["requires"] == ["xdotool"]
     assert records["web_fetch"]["fields"]["requires"] == []
+
+
+def test_a_worker_tool_with_a_required_command_is_placed_where_a_missing_command_marks_it_unavailable():
+    """#22298: the tools that declare ``requires`` carry a node, or ``unavailable_because`` would never fire."""
+    from tools.tool_records import TOOL_REQUIRES, tool_records
+
+    records = {r["name"]: r for r in tool_records()}
+    for name in TOOL_REQUIRES:
+        assert records[name]["node_id"], f"{name} declares requires but has no node to check them on"

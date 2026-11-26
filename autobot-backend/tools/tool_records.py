@@ -157,9 +157,18 @@ def _browser_permission(name: str) -> Optional[str]:
     return _value(_mcp_required_permission(name))
 
 
+#: location -> the service whose process really runs its code, where that is not the location's own service.
+#: ``ToolRegistry._execute_worker_task`` calls ``WorkerNode.execute_task`` in-process (it never publishes to Redis),
+#: and the task handlers drive ``worker.system_integration`` / ``gui_controller`` in that same process; the
+#: ``SystemReadToolsMixin`` fallback is ``SystemIntegration`` in the backend as well. So worker tasks run on the
+#: backend's host (#22298).
+_EXECUTING_SERVICE: Dict[str, str] = {LOCATION_WORKER: LOCATION_BACKEND}
+
+
 def location_host(location: str) -> Optional[str]:
-    """The SSOT host of the service serving *location*; None where the placement is not known from code."""
-    return next((d.host for d in SERVICE_DEFINITIONS.values() if d.name == location), None)
+    """The SSOT host that runs *location*'s code; None where the placement is not known from code."""
+    executing = _EXECUTING_SERVICE.get(location, location)
+    return next((d.host for d in SERVICE_DEFINITIONS.values() if d.name == executing), None)
 
 
 def _record(name: str, location: str, **fields: Any) -> Dict[str, Any]:
