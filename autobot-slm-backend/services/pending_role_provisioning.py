@@ -51,6 +51,13 @@ _PROVISIONER_STATUSES = (_FAILED, _INSTALLING, _INSTALLED)
 #: Provisioner-owned statuses the role detector and the health poll must NOT overwrite: a ``failed``/``installing``
 #: row stays so, so its ``updated_at`` keeps marking the attempt and the retry cooldown holds (#22262).
 PROVISIONER_HELD_STATUSES = (_FAILED, _INSTALLING)
+
+
+def is_provisioner_held(role) -> bool:
+    """True for an updater-provisioned role left failed/installing: only the updater retry settles it (#22262)."""
+    return role.role_name in UPDATER_PROVISIONED_ROLES and role.status in PROVISIONER_HELD_STATUSES
+
+
 #: Hours before a role already attempted on a node is provisioned again (registered in env_registry_slm_rollback).
 RETRY_COOLDOWN_HOURS = env_int_clamped("SLM_ROLE_PROVISION_RETRY_COOLDOWN_HOURS", 6, min_v=1, max_v=720)
 

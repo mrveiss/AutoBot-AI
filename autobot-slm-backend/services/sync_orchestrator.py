@@ -23,7 +23,7 @@ from autobot_shared.ssot_config import config
 from models.database import Node, NodeCodeSource, NodeRole, Role, RoleStatus
 from services.database import db_service
 from services.deploy_artifacts import RSYNC_NEVER_WORLD_WRITABLE, rsync_artifact_excludes
-from services.pending_role_provisioning import PROVISIONER_HELD_STATUSES
+from services.pending_role_provisioning import is_provisioner_held
 from services.post_sync_timeouts import POST_SYNC_TIMEOUT_S
 from services.process_group import kill_process_group
 from services.ssh_utils import _ssh_key_usable, ssh_destination_args, ssh_remote_path
@@ -212,7 +212,7 @@ class SyncOrchestrator:
             )
             node_role = role_result.scalar_one_or_none()
 
-            if node_role and node_role.status in PROVISIONER_HELD_STATUSES:
+            if node_role and is_provisioner_held(node_role):
                 return  # any write moves updated_at, the retry cooldown's clock
             if node_role:
                 node_role.current_version = commit

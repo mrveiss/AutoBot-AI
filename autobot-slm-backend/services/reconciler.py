@@ -57,7 +57,7 @@ from services.node_health_status import (
     status_level_and_reason,
     strip_reserved,
 )
-from services.pending_role_provisioning import PROVISIONER_HELD_STATUSES
+from services.pending_role_provisioning import is_provisioner_held
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 from services.service_remediation_tracker import (
     clear_service_remediation,
@@ -2061,7 +2061,7 @@ class ReconcilerService:
 
             for node_role in node_roles:
                 endpoint = loader.get_health_endpoint(node_role.role_name)
-                if not endpoint or node_role.status in PROVISIONER_HELD_STATUSES:  # provisioner-owned (#22262)
+                if not endpoint or is_provisioner_held(node_role):  # provisioner-owned (#22262)
                     continue
 
                 node_ip = node_ip_map.get(node_role.node_id)

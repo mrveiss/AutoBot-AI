@@ -380,7 +380,7 @@ def _detect(monkeypatch, row, status: str = "active"):
     db = MagicMock()
     db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
     db.flush = AsyncMock()
-    report = {"vnc": {"status": status, "version": "1.2"}}
+    report = {row.role_name: {"status": status, "version": "1.2"}}
     asyncio.run(_load_process_role_report(monkeypatch)(db, "n1", report))
 
 
@@ -406,8 +406,8 @@ def test_the_detector_still_writes_every_other_status(monkeypatch, status) -> No
 
 def test_the_health_poll_skips_provisioner_owned_rows_and_uses_the_one_constant() -> None:
     src = (_ROOT / "services" / "reconciler.py").read_text(encoding="utf-8")
-    assert "from services.pending_role_provisioning import PROVISIONER_HELD_STATUSES" in src
-    assert "node_role.status in PROVISIONER_HELD_STATUSES" in src
+    assert "from services.pending_role_provisioning import is_provisioner_held" in src
+    assert "is_provisioner_held(node_role)" in src
     assert prp.PROVISIONER_HELD_STATUSES == ("failed", "installing")
 
 
@@ -430,7 +430,7 @@ def _sync_record(monkeypatch, row):
         "db_service": SimpleNamespace(session=lambda: session),
         "datetime": datetime,
         "timezone": timezone,
-        "PROVISIONER_HELD_STATUSES": prp.PROVISIONER_HELD_STATUSES,
+        "is_provisioner_held": prp.is_provisioner_held,
     }
     exec(compile(ast.Module([fn], []), "sync_orchestrator.py", "exec"), ns)
     asyncio.run(ns["_update_node_role_record"](None, "n1", "vnc", "abc123"))
@@ -439,7 +439,7 @@ def _sync_record(monkeypatch, row):
 
 @pytest.mark.parametrize("held", ["failed", "installing"])
 def test_a_role_file_sync_leaves_a_provisioner_held_row_untouched(monkeypatch, held) -> None:
-    row = SimpleNamespace(status=held, current_version="1.0", last_synced_at=None)
+    row = SimpleNamespace(role_name="vnc", status=held, current_version="1.0", last_synced_at=None)
     db = _sync_record(monkeypatch, row)
     assert (row.status, row.current_version, row.last_synced_at) == (held, "1.0", None)
     db.commit.assert_not_awaited()
@@ -447,7 +447,20 @@ def test_a_role_file_sync_leaves_a_provisioner_held_row_untouched(monkeypatch, h
 
 @pytest.mark.parametrize("status", ["not_installed", "installed", "inactive", "active"])
 def test_a_role_file_sync_still_activates_every_other_row(monkeypatch, status) -> None:
-    row = SimpleNamespace(status=status, current_version="1.0", last_synced_at=None)
+    row = SimpleNamespace(role_name="vnc", status=status, current_version="1.0", last_synced_at=None)
     _sync_record(monkeypatch, row)
     assert (row.status, row.current_version) == ("active", "abc123")
     assert row.last_synced_at is not None
+
+
+@pytest.mark.parametrize("held", ["failed", "installing"])
+def test_a_role_the_updater_does_not_retry_is_never_held(monkeypatch, held) -> None:
+    """Nothing but the updater's retry settles a held row, so only `UPDATER_PROVISIONED_ROLES` may be held."""
+    assert prp.is_provisioner_held(_role(held)) is True
+    assert prp.is_provisioner_held(_role(held, name="other")) is False
+    row = _role(held, name="other")
+    _detect(monkeypatch, row, "active")
+    assert (row.status, row.current_version) == ("active", "1.2")
+    sync_row = SimpleNamespace(role_name="other", status=held, current_version="1.0", last_synced_at=None)
+    _sync_record(monkeypatch, sync_row)
+    assert (sync_row.status, sync_row.current_version) == ("active", "abc123")

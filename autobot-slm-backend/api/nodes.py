@@ -111,7 +111,7 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
     Updates NodeRole entries based on detected roles.
     """
     from models.schemas import RoleReportItem
-    from services.pending_role_provisioning import PROVISIONER_HELD_STATUSES
+    from services.pending_role_provisioning import is_provisioner_held
 
     for role_name, report_data in role_report.items():
         if isinstance(report_data, dict):
@@ -124,7 +124,7 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
         # cooldown's clock (#22262).
         result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id, NodeRole.role_name == role_name))
         node_role = result.scalar_one_or_none()
-        if not node_role or node_role.status in PROVISIONER_HELD_STATUSES:
+        if not node_role or is_provisioner_held(node_role):
             continue
         node_role.status = report.status
         node_role.current_version = report.version
