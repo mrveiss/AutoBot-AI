@@ -372,6 +372,34 @@ class TestSessionCompanyComesFromTheVerifiedScope:
         assert (await self._turn(context))["company_id"] == ""
 
 
+class TestReasoningPreferenceReaderGetsTheVerifiedUser:
+    """#16692: ``resolve_reasoning_effort`` reads ``context["user_id"]``; that must be the overlaid one."""
+
+    @staticmethod
+    async def _effort(context):
+        from chat_workflow.reasoning_kwargs import resolve_reasoning_effort
+
+        prefs = AsyncMock(return_value=SimpleNamespace(reasoning_effort="high"))
+        with patch("api.users._get_user_preferences_from_redis", prefs):
+            return await resolve_reasoning_effort(context), prefs
+
+    @pytest.mark.asyncio
+    async def test_the_preference_is_looked_up_for_the_verified_user_not_the_body_one(self):
+        context = apply_auth_role({"user_id": "spoofed"}, "user", {"user_id": ALICE_ID})
+
+        effort, prefs = await self._effort(context)
+
+        assert effort == "high"
+        prefs.assert_awaited_once_with(ALICE_ID)
+
+    @pytest.mark.asyncio
+    async def test_an_unverified_turn_looks_up_no_preference_for_the_spoofed_user(self):
+        effort, prefs = await self._effort(apply_auth_role({"user_id": "spoofed"}, None, None))
+
+        assert effort == "auto"
+        prefs.assert_not_awaited()
+
+
 class TestShortestPathSkipsVisitedBeforeTheHopRead:
     @pytest.mark.asyncio
     async def test_hop_allowed_is_called_once_per_node_not_once_per_edge(self):

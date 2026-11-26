@@ -117,6 +117,23 @@ def overlay_verified_identity(context: "dict | None", scope: "dict | None") -> d
     The one overlay for a new turn (``apply_auth_role``) and a resumed one (``resume_context``). Fail closed: a
     present value overwrites the old one, an absent value removes the key, so a previous or client-supplied
     identity never survives into the tool seam and the audit row falls to ``system``, never to another user.
+
+    Every reader of the request identity (#16692), each fed only by this overlay or the stamp built from it:
+
+    - ``manager.py:3257`` ``stamp_verified_identity`` -> ``session.metadata`` user_id/org_id (VERIFIED_* keys);
+      read by ``manager.py:3288`` (pre-compact hook), ``llm_handler.py:326`` (trajectory) and ``models.py:515``.
+    - ``manager.py:3259`` / ``:3407-3408`` context ``tenant_id``/``org_id``/``user_id`` (session tenant, stop
+      hook), ``reasoning_kwargs.py:38`` (``ctx.context`` preference lookup): overlaid here, never the body's.
+    - ``manager.py:3262`` -> ``llm_handler.py:746`` ``session.metadata["company_id"]``: VERIFIED_COMPANY_KEY.
+    - ``tool_handler.py:2543,2546`` LLC tools: VERIFIED_COMPANY_KEY / VERIFIED_USER_KEY.
+    - ``graph.py:281`` / ``attachment_context.py:409`` (resume): same overlay on the checkpointed context.
+    - ``orchestrator.py:807,925``, ``workflow_planner.py:347-348``, ``workflow_planning.py:253``: read
+      ``user_id``/``tenant_id`` from the context passed down from the chat seam, so the overlaid value.
+    - ``task_handlers/knowledge_base_handlers.py:34,58,80``: ``ctx.metadata`` is built by ``submitter_metadata``
+      (``executor.py:63``) from the task ENVELOPE, not chat context or ``session.metadata``; the in-repo
+      producer (``tools/tool_registry.py:85``) stamps none, so a handler with no user is refused (#19517).
+    - Body ``company_id`` in ``context`` has no chat-path reader (grep ``autobot-backend``: only scheduler
+      adapters and ``llc/``, whose context is server-built).
     """
     merged = _drop_body_identity({**(context or {})}, scope)
     for key, value in _identity_pairs(scope):
