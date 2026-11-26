@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 from uuid import uuid4
 
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
@@ -1139,7 +1140,7 @@ async def set_session_role(
     try:
         await SessionRoleService().set_role(session_id, role)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=safe_http_detail(exc, "Unknown agent role"))
     return DataResponse(data={"session_id": session_id, "role": role})
 
 
@@ -1288,7 +1289,7 @@ async def set_session_approval_categories(
     try:
         await SessionRoleService().set_approval_categories(session_id, categories)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=safe_http_detail(exc, "Unknown approval category"))
     return DataResponse(data={"session_id": session_id, "approval_categories": categories})
 
 
