@@ -52,8 +52,8 @@ SELF_MODEL_QUERY_TOOL_NAME = "query_self_model"
 REGISTRY_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = {
     "execute_system_command": ("system", LOCATION_WORKER, Permission.SHELL_EXECUTE),
     # These two fall back to the backend's SystemIntegration when no worker node is attached (#22267).
-    "query_system_information": ("system", LOCATION_WORKER, None),
-    "list_system_services": ("system", LOCATION_WORKER, None),
+    "query_system_information": ("system", LOCATION_WORKER, Permission.MCP_METRICS_READ),
+    "list_system_services": ("system", LOCATION_WORKER, Permission.MCP_METRICS_READ),
     "manage_service": ("system", LOCATION_WORKER, None),
     "get_process_info": ("system", LOCATION_WORKER, None),
     "terminate_process": ("system", LOCATION_WORKER, None),

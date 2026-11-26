@@ -14,7 +14,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from autobot_shared.ai_lines import VERIFIED_USER_KEY
+from chat_workflow.catalogue_tool_handlers import handle_registry_tool
 from chat_workflow.tool_handler import ToolHandlerMixin
+from middleware.builtin.permission_enforcement import PermissionEnforcementExtension
+from middleware.manager import get_extension_manager, reset_extension_manager
 
 _DISPATCH_ARGS = {
     "session_id": "sess-1",
@@ -96,3 +99,33 @@ async def test_a_schema_violation_is_refused_before_the_tool_runs():
 
     execute.assert_not_awaited()
     assert msgs[0].metadata.get("schema_validation_failed")
+
+
+async def _as_role(tool: str, role: str, results: list) -> list:
+    reset_extension_manager()
+    get_extension_manager().register(PermissionEnforcementExtension())
+    try:
+        return [m async for m in handle_registry_tool(tool, {"params": {}}, results, "sess-1", role, "user-1")]
+    finally:
+        reset_extension_manager()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["query_system_information", "list_system_services"])
+async def test_a_role_without_metrics_read_is_refused_the_system_read_tools(tool):
+    results = []
+    with _registry({"result": "ok", "status": "success"}) as execute:
+        msgs = await _as_role(tool, "readonly", results)
+
+    execute.assert_not_awaited()
+    assert msgs[0].metadata.get("reason") == "permission_denied" and results[0]["error"] == "permission_denied"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["query_system_information", "list_system_services"])
+async def test_a_role_holding_metrics_read_runs_the_system_read_tools(tool):
+    with _registry({"result": "ok", "status": "success"}) as execute:
+        msgs = await _as_role(tool, "user", [])
+
+    execute.assert_awaited_once_with(tool, {}, "user-1")
+    assert msgs[0].content == "ok"

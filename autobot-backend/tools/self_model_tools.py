@@ -30,6 +30,9 @@ MAX_LIMIT = 100
 SLM_PAGE = 500  # the SLM's own page ceiling
 MAX_PAGES = 10  # pages read for one filter set; a larger set is reported as incomplete, never silently cut
 _HOST_KINDS = frozenset({"node", "command", "package"})
+_SERVICE_KIND = (
+    "service"  # shown only when a permitted tool is served by it; routes, agents, models have no permission source
+)
 _TOOL_KIND = "tool"
 _FILTERS = ("name", "node_id", "status")
 
@@ -91,8 +94,8 @@ def _call_filters(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def _dependencies(read: _Read, kind: str, allowed: List[Dict[str, Any]], args: Dict[str, Any]):
-    """Host-kind rows the permitted tools depend on: nodes by filter; commands and packages by node and name."""
-    if kind == "node":
+    """Rows the permitted tools depend on: nodes and services by filter; commands and packages by node and name."""
+    if kind in ("node", _SERVICE_KIND):
         return [
             e
             for e in await read.fetch({"kind": kind, **_call_filters(args)})
@@ -115,7 +118,7 @@ async def _gather(args: Dict[str, Any], role: str | None) -> tuple[List[Dict[str
     for kind in [args["kind"]] if args.get("kind") else ENTITY_KINDS:
         if kind == _TOOL_KIND:
             found += [t for t in allowed if _matches(t, args)]
-        elif kind in _HOST_KINDS:
+        elif kind in _HOST_KINDS or kind == _SERVICE_KIND:
             found += await _dependencies(read, kind, allowed, args)
         else:
             found += await read.fetch({"kind": kind, **_call_filters(args)})

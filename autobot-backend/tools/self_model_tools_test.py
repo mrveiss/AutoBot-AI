@@ -239,3 +239,33 @@ async def test_the_shell_tool_is_hidden_from_a_role_without_shell_permission(mon
     monkeypatch.setattr(self_model_tools, "query_entities", _slm(graph))
     names = _names(await ToolRegistry().query_self_model({"kind": "tool"}, "user-1"))
     assert "tool execute_command" not in names
+
+
+def _services_graph():
+    return {
+        "revision": 1,
+        "entities": [
+            _entity("service", "open-svc"),
+            _entity("service", "gated-svc"),
+            _entity("tool", "open", parent_key="service:open-svc", attrs={"required_permission": None}),
+            _entity(
+                "tool", "gated", parent_key="service:gated-svc", attrs={"required_permission": "allow_shell_execute"}
+            ),
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_service_used_only_by_a_forbidden_tool_is_hidden(monkeypatch, role):
+    role["is"] = "user"
+    monkeypatch.setattr(self_model_tools, "query_entities", _slm(_services_graph()))
+    names = _names(await ToolRegistry().query_self_model({"kind": "service"}, "user-1"))
+    assert "service gated-svc" not in names
+
+
+@pytest.mark.asyncio
+async def test_a_service_used_by_a_permitted_tool_is_shown(monkeypatch, role):
+    role["is"] = "user"
+    monkeypatch.setattr(self_model_tools, "query_entities", _slm(_services_graph()))
+    names = _names(await ToolRegistry().query_self_model({"kind": "service"}, "user-1"))
+    assert names == {"service open-svc"}
