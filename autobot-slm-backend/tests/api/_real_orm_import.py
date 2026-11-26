@@ -59,44 +59,40 @@ def load_real_module(name: str, path: Path):
     return module
 
 
-def _build_real_modules() -> dict:
-    """One-time real sqlalchemy + models.database/models.schemas snapshot.
+# Real modules loaded after sqlalchemy, in dependency order, by default (what the routers' tests need).
+DEFAULT_REAL_MODULES = ("models.database", "models.schemas", "models.fleet_schemas", "models.post_sync_action_run")
+
+
+def build_real_modules(names: tuple[str, ...] = DEFAULT_REAL_MODULES) -> dict:
+    """One-time real sqlalchemy + the named ``models``/``services`` modules snapshot.
 
     The root conftest stubs these as MagicMocks for import-time safety. The real
     packages are loaded once here and swapped in on demand, so a router is
     exercised against genuine ORM machinery rather than mock identity.
+
+    ``names`` are loaded in order, each from the file its dotted name maps to under
+    the SLM root. Each caller passes only what it needs (#22157: five copies of this
+    function differed only in that list). Never repeat a name across calls to the one
+    real ``Base``: two loads would declare the same table twice (#17455).
     """
     saved = {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)}
-    saved.update(
-        {
-            name: sys.modules.get(name)
-            for name in ("models.database", "models.schemas", "models.fleet_schemas", "models.post_sync_action_run")
-        }
-    )
+    saved.update({name: sys.modules.get(name) for name in names})
     for name in list(saved):
         sys.modules.pop(name, None)
     try:
         for name in _SQLALCHEMY_MODULES:
             importlib.import_module(name)
         importlib.import_module("sqlalchemy.dialects.sqlite")
-        load_real_module("models.database", SLM_ROOT / "models" / "database.py")
-        load_real_module("models.schemas", SLM_ROOT / "models" / "schemas.py")
-        load_real_module("models.fleet_schemas", SLM_ROOT / "models" / "fleet_schemas.py")  # imports schemas (#18714)
-        # Loaded ONCE here: two loads would declare the same table on the one real Base (#17455).
-        load_real_module("models.post_sync_action_run", SLM_ROOT / "models" / "post_sync_action_run.py")
+        for name in names:  # models.fleet_schemas imports schemas (#18714)
+            load_real_module(name, SLM_ROOT.joinpath(*name.split(".")).with_suffix(".py"))
         return {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)} | {
-            "models.database": sys.modules["models.database"],
-            "models.schemas": sys.modules["models.schemas"],
-            "models.fleet_schemas": sys.modules["models.fleet_schemas"],
-            "models.post_sync_action_run": sys.modules["models.post_sync_action_run"],
+            name: sys.modules[name] for name in names
         }
     finally:
         for name in [n for n in sys.modules if _is_sqlalchemy_key(n)]:
             del sys.modules[name]
-        sys.modules.pop("models.database", None)
-        sys.modules.pop("models.schemas", None)
-        sys.modules.pop("models.fleet_schemas", None)
-        sys.modules.pop("models.post_sync_action_run", None)
+        for name in names:
+            sys.modules.pop(name, None)
         for name, mod in saved.items():
             if mod is not None:
                 sys.modules[name] = mod
@@ -104,7 +100,7 @@ def _build_real_modules() -> dict:
                 sys.modules.pop(name, None)
 
 
-REAL_MODULES = _build_real_modules()
+REAL_MODULES = build_real_modules()
 
 
 @contextlib.contextmanager

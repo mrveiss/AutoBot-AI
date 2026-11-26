@@ -43,7 +43,7 @@ from autobot_shared.slm_credential_actions import (
     INTERNAL_KEY_REALIGN,
     SPLIT_DEPLOYMENT_MESSAGE,
     SSH_PASSWORD_DELETE,
-    CredentialAction,
+    SlmApprovalAction,
     is_split_without_tls,
 )
 from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
@@ -83,7 +83,7 @@ register_ssh_password_action()
 register_internal_key_realign_action()
 
 
-async def _open_approval(service: ApprovalGateService, action: CredentialAction, node_id: str) -> Approval | None:
+async def _open_approval(service: ApprovalGateService, action: SlmApprovalAction, node_id: str) -> Approval | None:
     """The node's approval for *action* that can still be acted on: pending, or (where the action reuses
     one) approved and not yet spent."""
     states = [ApprovalStatus.PENDING.value] + ([ApprovalStatus.APPROVED.value] if action.reuse_approved else [])
@@ -102,7 +102,7 @@ async def _open_approval(service: ApprovalGateService, action: CredentialAction,
     return None
 
 
-def _claim_recorder(action: CredentialAction):
+def _claim_recorder(action: SlmApprovalAction):
     """The audit write that must succeed before a claim spends the approval; None where the action has none."""
     if action is not INTERNAL_KEY_REALIGN:
         return None
@@ -111,7 +111,7 @@ def _claim_recorder(action: CredentialAction):
 
 async def _create_proposal(
     service: ApprovalGateService,
-    action: CredentialAction,
+    action: SlmApprovalAction,
     body: CredentialProposal,
     approval_id: uuid.UUID,
     proposer: str,

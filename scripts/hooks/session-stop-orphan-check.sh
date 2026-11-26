@@ -93,7 +93,7 @@ report_parked_branch() {
 
   # MERGED means these commits are rebase leftovers; OPEN means it is already in
   # the pipeline. A closed-unmerged PR leaves the work parked, so it still reports.
-  if printf '%s\n' "$pr_states" | grep -qxE 'MERGED|OPEN'; then
+  if grep -qxE 'MERGED|OPEN' <<<"$pr_states"; then
     return 0
   fi
 

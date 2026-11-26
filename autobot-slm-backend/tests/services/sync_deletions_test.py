@@ -98,7 +98,7 @@ finally:
 
 compute_deletion_plan = _sd.compute_deletion_plan
 compute_bootstrap_plan = _sd.compute_bootstrap_plan
-_is_lexically_contained = _sd._is_lexically_contained
+is_lexically_contained = _sd.is_lexically_contained
 
 
 # ---------------------------------------------------------------------------
@@ -317,17 +317,17 @@ async def test_same_commit_no_op_never_requests_bootstrap(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _is_lexically_contained: MEDIUM 3, now lexical (the planner cannot resolve
+# is_lexically_contained: MEDIUM 3, now lexical (the planner cannot resolve
 # symlinks on a possibly-remote target)
 # ---------------------------------------------------------------------------
 
 
 def test_lexical_containment_rejects_traversal_and_absolute_paths() -> None:
-    assert _is_lexically_contained("comp/keep.py") is True
-    assert _is_lexically_contained("../outside.txt") is False
-    assert _is_lexically_contained("comp/../../outside.txt") is False
-    assert _is_lexically_contained("/etc/passwd") is False
-    assert _is_lexically_contained("") is False
+    assert is_lexically_contained("comp/keep.py") is True
+    assert is_lexically_contained("../outside.txt") is False
+    assert is_lexically_contained("comp/../../outside.txt") is False
+    assert is_lexically_contained("/etc/passwd") is False
+    assert is_lexically_contained("") is False
 
 
 async def test_a_traversal_candidate_is_kept_not_deleted(tmp_path) -> None:

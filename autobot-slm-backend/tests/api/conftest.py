@@ -122,7 +122,7 @@ if not _starlette_formparsers_import_works():
 # A runtest hook rather than an autouse fixture.  #13320 had no choice: an
 # autouse fixture requesting monkeypatch registers a finalizer for every test in
 # the package, and that reordered the async session fixture in
-# test_slm_endpoints_12515.py enough to break its session close (9 teardown
+# test_slm_endpoints.py enough to break its session close (9 teardown
 # errors).  That tripwire is fixed — the fixture now closes its session
 # explicitly and no longer patches the shared asyncio module, and the module
 # carries an autouse ``finalizer_ordering_guard`` that keeps it fixed (#13329) —

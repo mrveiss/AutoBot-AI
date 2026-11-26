@@ -26,7 +26,7 @@ import types
 
 import pytest
 
-from autobot_shared.slm_credential_actions import CredentialAction
+from autobot_shared.slm_credential_actions import SlmApprovalAction
 from autobot_shared.testfile_names import is_test_filename
 from services.approval_execution import registered_action_proposers
 
@@ -60,8 +60,8 @@ def _module_name(path: pathlib.Path) -> str:
 
 
 def _module_holds_action_object(module, action: str) -> bool:
-    """True when the module holds a real ``CredentialAction`` named ``action`` (#20750)."""
-    return any(isinstance(v, CredentialAction) and v.name == action for v in vars(module).values())
+    """True when the module holds a real ``SlmApprovalAction`` named ``action`` (#20750)."""
+    return any(isinstance(v, SlmApprovalAction) and v.name == action for v in vars(module).values())
 
 
 def _wiring_modules(site: pathlib.Path) -> list[pathlib.Path]:
@@ -147,7 +147,7 @@ def test_every_proposer_actually_names_its_action_and_creates_an_approval(regist
             f'"{action}"' in source
             or f"'{action}'" in source
             or any(value == action for value in vars(module).values() if isinstance(value, str))
-            # an imported action object (``CredentialAction``) names the action through ``.name`` (#20750)
+            # an imported action object (``SlmApprovalAction``) names the action through ``.name`` (#20750)
             or _module_holds_action_object(module, action)
         )
         assert names_it, (
@@ -163,6 +163,6 @@ def test_every_proposer_actually_names_its_action_and_creates_an_approval(regist
 
 
 def test_the_action_object_guard_rejects_an_unrelated_object_with_a_matching_name():
-    """Control: only a real ``CredentialAction`` satisfies the guard, not any ``.name`` holder."""
+    """Control: only a real ``SlmApprovalAction`` satisfies the guard, not any ``.name`` holder."""
     fake = types.SimpleNamespace(imposter=types.SimpleNamespace(name="some_action"))
     assert not _module_holds_action_object(fake, "some_action")

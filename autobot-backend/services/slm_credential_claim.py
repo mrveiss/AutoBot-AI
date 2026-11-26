@@ -31,7 +31,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import literal
 
-from autobot_shared.slm_credential_actions import CredentialAction
+from autobot_shared.slm_credential_actions import SlmApprovalAction
 from models.approval import Approval, ApprovalStatus
 
 #: ``context`` key that marks an approval as spent.
@@ -49,7 +49,7 @@ class ClaimNotRecorded(Exception):
     """The durable record of the claim could not be written, so the approval was NOT spent (#17038)."""
 
 
-def _refusal(approval: Approval | None, action: CredentialAction, node_id: str) -> str | None:
+def _refusal(approval: Approval | None, action: SlmApprovalAction, node_id: str) -> str | None:
     """Why *approval* cannot authorize *action* on *node_id*, or ``None`` when it can."""
     if approval is None:
         return "no such approval"
@@ -71,7 +71,7 @@ def _refusal(approval: Approval | None, action: CredentialAction, node_id: str) 
 async def claim_approval(
     session: AsyncSession,
     approval_id: uuid.UUID,
-    action: CredentialAction,
+    action: SlmApprovalAction,
     node_id: str,
     record_first: Callable[[Approval], Awaitable[bool]] | None = None,
 ) -> Approval:
@@ -115,7 +115,7 @@ def clean_detail(detail: str) -> str:
 
 
 async def record_outcome(
-    session: AsyncSession, approval_id: uuid.UUID, action: CredentialAction, node_id: str, result: str
+    session: AsyncSession, approval_id: uuid.UUID, action: SlmApprovalAction, node_id: str, result: str
 ) -> Approval:
     """Record the ONE terminal outcome of a claimed approval; a second report is refused, never overwritten."""
     approval = await session.get(Approval, approval_id)

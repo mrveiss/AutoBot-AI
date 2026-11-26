@@ -50,7 +50,7 @@ expect() {
         fail=$((fail + 1))
         echo "  FAIL: ${name} -- expected exit ${want_rc}, got ${rc}"
         printf '%s\n' "$out" | sed 's/^/         /'
-    elif printf '%s' "$out" | grep -q "$pattern"; then
+    elif grep -q "$pattern" <<<"$out"; then
         pass=$((pass + 1))
     else
         fail=$((fail + 1))

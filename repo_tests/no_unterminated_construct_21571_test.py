@@ -15,6 +15,7 @@ helper's own set, not a copy). A test file may hold an unterminated sample as da
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.testfile_names import is_test_filename
-from tools.lint._comment_syntax import BLOCK_COMMENT_SUFFIXES, unterminated_construct
+from tools.lint._comment_syntax import BLOCK_COMMENT_SUFFIXES, CodeLine, code_lines, unterminated_construct
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 
@@ -99,3 +100,46 @@ def test_contrast_an_unreadable_file_is_reported_not_skipped(tmp_path: Path) -> 
     """A missing or non-UTF-8 file comes back in the unreadable list, so the guard cannot go blind silently."""
     (tmp_path / "bin.ts").write_bytes(b"\xff\xfe\x00")
     assert _unterminated(["bin.ts", "gone.ts"], tmp_path) == ({}, ["bin.ts", "gone.ts"])
+
+
+_CLASS_ATTR = re.compile(r"(?:^|\s):?class\s*=")
+
+
+def _template_lines(text: str) -> range:
+    """The 1-based lines of the root `<template>` element of a `.vue` text, where no `/* */` comment exists."""
+    lines = text.splitlines()
+    opens = [n for n, line in enumerate(lines, 1) if line.startswith("<template")]
+    closes = [n for n, line in enumerate(lines, 1) if line.startswith("</template")]
+    return range(opens[0], closes[-1] + 1) if opens and closes else range(0)
+
+
+def _blanked_class_lines(text: str, name: str) -> list[int]:
+    """The 1-based lines of the template that carry a `class` attribute `code_lines` nevertheless blanks.
+
+    The template has no `/* */` comments, so a line there that loses its attribute was hidden by a construct that
+    opened elsewhere (the defect of #21571). A style block is not read: its multi-line comments blank prose lines.
+    """
+    kept = {line.lineno: line.text for line in code_lines(text, name=name)}
+    rows = text.splitlines()
+    return [
+        n for n in _template_lines(text) if _CLASS_ATTR.search(rows[n - 1]) and not _CLASS_ATTR.search(kept.get(n, ""))
+    ]
+
+
+def test_no_class_bearing_line_of_a_vue_file_is_blanked_on_the_real_tree() -> None:
+    """#21571 AC4: the measured count of blanked class lines (132 in 8 files when filed) is pinned at zero."""
+    root = repo_root()
+    vue = [rel for rel in tracked_paths(root, ".") if rel.endswith(".vue")]
+    assert vue, "no tracked .vue file; the count would be zero by emptiness"
+    blanked = {rel: n for rel in vue if (n := _blanked_class_lines((root / rel).read_text(encoding="utf-8"), rel))}
+    assert blanked == {}, f"#21571: class-bearing lines hidden from `code_lines`: {blanked}"
+
+
+def test_contrast_the_count_ignores_a_template_glob_and_sees_a_line_the_helper_would_blank(monkeypatch) -> None:
+    template = '<template>\n<p>/api/errors/*</p>\n<div class="a">x</div>\n</template>\n'
+    assert _blanked_class_lines(template, "ok.vue") == []
+    # The pre-fix behaviour, simulated: every line after the glob comes back as blanks.
+    monkeypatch.setitem(
+        _blanked_class_lines.__globals__, "code_lines", lambda text, name: [CodeLine(n, "") for n in range(1, 5)]
+    )
+    assert _blanked_class_lines(template, "bad.vue") == [3]

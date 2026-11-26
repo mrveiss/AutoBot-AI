@@ -451,6 +451,7 @@ import { useDashboardLoaders } from '@/composables/analytics/useDashboardLoaders
 import { useSourceRegistry } from '@/composables/analytics/useSourceRegistry'
 import { useAnalyticsDataFetchers } from '@/composables/analytics/useAnalyticsDataFetchers'
 import { openProjectPage } from '@/composables/analytics/openProjectPage'
+import { clearDuplicateResults } from '@/composables/analytics/duplicatePayload'
 import { useCodeIntelAnalysis } from '@/composables/analytics/useCodeIntelAnalysis'
 import { useAnalyticsDebug } from '@/composables/analytics/useAnalyticsDebug'
 import { useProjectSubTabs } from '@/composables/analytics/useProjectSubTabs'
@@ -872,8 +873,7 @@ const clearCache = () =>
   clearCache_composable(withSourceId, () => {
     codebaseStats.value = null
     problemsReport.value = []
-    declarationAnalysis.value = []
-    duplicateAnalysis.value = []
+    declarationAnalysis.value = []; clearDuplicateResults(duplicateAnalysis)
     hardcodeAnalysis.value = []
     chartData.value = null; resetSmells()
     progressStatus.value = t('analytics.codebase.status.cacheCleared')
