@@ -264,13 +264,35 @@ def test_a_large_body_whose_link_is_on_the_first_line_passes_every_time(tmp_path
         assert code == 0 and "status=success" in out, f"attempt {attempt}: {out[-200:]}"
 
 
-def test_no_workflow_run_block_pipes_printf_into_grep_quiet():
-    """The class, not the instance: every workflow `run:` body is scanned."""
-    offenders = []
-    pipe_into_quiet_grep = re.compile(r"printf\b[^\n|]*\|\s*(?:e|f)?grep\s+-[A-Za-z]*q")
-    for path in sorted((repo_root() / ".github" / "workflows").glob("*.yml")):
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if pipe_into_quiet_grep.search(line):
-                offenders.append(f"{path.name}:{number}")
+# A producer piped into an early-exiting grep: `grep -q` / `--quiet`, any producer.
+_PIPE_INTO_QUIET_GREP = re.compile(
+    r"(?<!\|)\|(?!\|)\s*(?:e|f)?grep\s+(?:[^|;&\n]*?\s)?(?:-[A-Za-z]*q[A-Za-z]*|--quiet)\b"
+)
 
-    assert not offenders, f"printf piped into grep -q (SIGPIPE under pipefail): {offenders}"
+
+def _pipefail_active(document: dict, job: dict, step: dict) -> bool:
+    """GitHub's default `bash -e {0}` has no pipefail; `shell: bash` (or an
+    explicit `set -o pipefail` in the body) does."""
+    shell = step.get("shell") or job.get("defaults", {}).get("run", {}).get("shell")
+    shell = shell or document.get("defaults", {}).get("run", {}).get("shell") or ""
+    body = step["run"]
+    return "pipefail" in body or shell.strip() == "bash" or "pipefail" in shell
+
+
+def test_no_workflow_step_under_pipefail_pipes_a_producer_into_quiet_grep():
+    """The class, not the instance: any `producer | grep -q` in a run block whose
+    shell has pipefail. A step with no pipefail (the default shell) is exempt: there
+    the pipeline status is grep's alone, so an early exit cannot fail it."""
+    offenders = []
+    for path in sorted((repo_root() / ".github" / "workflows").glob("*.yml")):
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        for job_id, job in (document.get("jobs") or {}).items():
+            for step in job.get("steps", []) if isinstance(job, dict) else []:
+                if "run" not in step or not _pipefail_active(document, job, step):
+                    continue
+                joined = step["run"].replace("\\\n", " ")
+                for line in joined.splitlines():
+                    if not line.lstrip().startswith("#") and _PIPE_INTO_QUIET_GREP.search(line):
+                        offenders.append(f"{path.name}:{job_id}:{step.get('name')}: {line.strip()[:80]}")
+
+    assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"

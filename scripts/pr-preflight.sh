@@ -231,7 +231,7 @@ fi
 # Trailers already committed on this branch would fail the same gate.
 if git rev-parse --verify --quiet "$BASE" >/dev/null; then
   section "commits on this branch"
-  if git log --format='%B' "$BASE..HEAD" | grep -qiE '^(co-authored-by|signed-off-by|assisted-by):'; then
+  if grep -qiE '^(co-authored-by|signed-off-by|assisted-by):' < <(git log --format='%B' "$BASE..HEAD"); then
     fail "a commit already on this branch carries an authorship trailer"
   else
     pass "no authorship trailers in $(git rev-list --count "$BASE..HEAD") commit(s)"
