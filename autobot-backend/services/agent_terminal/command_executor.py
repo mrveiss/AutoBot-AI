@@ -23,8 +23,19 @@ from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
-from services import pty_command
-from services.pty_command import TIMED_OUT_RETURN_CODE, TRUNCATED_NOTE  # noqa: F401 -- part of this module's contract
+
+# Names, not the module: this package is imported first by its own conftest, before `services.pty_command` is bound on
+# the backend conftest's `services` stub, and `from services import pty_command` would then be a MagicMock.
+# TIMED_OUT_RETURN_CODE and TRUNCATED_NOTE are part of this module's contract (re-exported).
+from services.pty_command import (  # noqa: F401
+    TIMED_OUT_RETURN_CODE,
+    TRUNCATED_NOTE,
+    await_exit_code,
+    effective_exit_code,
+    new_marker,
+    output_since,
+    typed_input,
+)
 from type_defs.common import Metadata
 
 from .models import AgentTerminalSession
@@ -308,25 +319,25 @@ class CommandExecutor:
         timeout = AGENT_COMMAND_TIMEOUT_S if timeout is None else timeout
         logger.info("[PTY_EXEC] Executing in PTY: %s", command)
 
-        marker = pty_command.new_marker()
+        marker = new_marker()
         try:
             pty = self._live_pty(session)
         except Exception as e:
             logger.error("Error preparing PTY: %s", e)
             pty = None
         start = pty.transcript_position() if pty else 0
-        if pty is None or not pty.write_input(pty_command.typed_input(command, marker)):
+        if pty is None or not pty.write_input(typed_input(command, marker)):
             return self._build_pty_error_result("Failed to write command to PTY")
 
         try:
-            return_code, timed_out = await pty_command.await_exit_code(
+            return_code, timed_out = await await_exit_code(
                 pty, start, marker, timeout, on_timeout=lambda: self._handle_poll_timeout(session, timeout)
             )
         except asyncio.CancelledError:
             # The shell outlives this task: without Ctrl+C the command it was waiting on runs on (#17273).
             self._send_sigint_to_pty(session)
             raise
-        output = pty_command.output_since(pty, start, command, marker)
+        output = output_since(pty, start, command, marker)
         if timed_out:
             return self._build_pty_timeout_result(output, timeout)
         if return_code is None:
@@ -335,4 +346,4 @@ class CommandExecutor:
                 "stdout": output,
             }
         logger.info(f"[PTY_EXEC] Command complete. Return code: {return_code}, output: {len(output)} chars")
-        return self._build_pty_result(output, pty_command.effective_exit_code(command, return_code))
+        return self._build_pty_result(output, effective_exit_code(command, return_code))

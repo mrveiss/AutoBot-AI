@@ -145,7 +145,7 @@ async def test_a_user_with_no_company_gets_line_two_for_their_terminal_commands(
     queued, ran = _service(), _service()
     for svc in (queued, ran):
         svc.get_session = AsyncMock(return_value=session)
-    with patch("services.agent_terminal.ai_line_gate._owner_user_id", AsyncMock(return_value=str(uuid.UUID(int=7)))):
+    with patch("services.agent_terminal.ai_line_gate.owner_user_id", AsyncMock(return_value=str(uuid.UUID(int=7)))):
         assert await _run(queued, stored=None, relaxed=ALL_RELAXED) == {"status": "pending_approval"}
         assert await _run(ran, stored=AiLine.AUTONOMOUS, relaxed=ALL_RELAXED) == {"status": "success"}
 

@@ -19,9 +19,15 @@ import aiohttp
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
 from chat_workflow.tool_call_args import clean_reply_text
+from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN, normalize_tool_call_brackets
 from chat_workflow.tool_call_loop import FINAL_ANSWER_INSTRUCTION
 
 logger = get_logger(__name__)
+
+
+def _without_tool_calls(text: str) -> str:
+    """*text* with every tool-call block removed, well-formed or not: this pass dispatches none of them."""
+    return clean_reply_text(TOOL_CALL_PATTERN.sub("", normalize_tool_call_brackets(text or "")))
 
 
 def settle_final_reply(
@@ -31,12 +37,12 @@ def settle_final_reply(
     kept: List[Dict[str, Any]] = []
     for message in new_messages:
         if message.get("type") == "response":
-            content = clean_reply_text(message.get("content") or "")
+            content = _without_tool_calls(message.get("content") or "")
             if not content:
                 continue
             message = {**message, "content": content}
         kept.append(message)
-    return kept, clean_reply_text(llm_response or "")
+    return kept, _without_tool_calls(llm_response or "")
 
 
 async def _run_held(state, config, iteration: int):

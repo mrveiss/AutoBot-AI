@@ -482,7 +482,6 @@ REACH_ROOTS = {
         "autobot-backend/app_factory.py",
         "autobot-backend/llm_self_awareness.py",
         "autobot-backend/mcp_server/",
-        "autobot-backend/services/tracing_service.py",
         "autobot_shared/ssot_tracing_settings.py",
         "autobot_shared/tracing.py",
     ),

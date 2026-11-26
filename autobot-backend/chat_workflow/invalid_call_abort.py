@@ -19,6 +19,7 @@ from langchain_core.runnables import RunnableConfig
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.logging_manager import get_logger
 from chat_workflow import limits
+from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 
 if TYPE_CHECKING:
@@ -46,7 +47,7 @@ async def abort_message(ctx, iteration: int) -> WorkflowMessage:
         limits.INVALID_TOOL_ABORT_LIMIT,
     )
     recorded = await audit_log(
-        "chat.invalid_tool_calls_abort",
+        AuditAction.CHAT_INVALID_TOOL_CALLS_ABORT.value,
         result="failed",
         session_id=ctx.session_id,
         details={"consecutive_invalid": ctx.consecutive_invalid_tool_calls, "iteration": iteration},

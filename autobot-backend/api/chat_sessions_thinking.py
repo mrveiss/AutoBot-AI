@@ -38,6 +38,17 @@ def stored_thinking_preferences(session_metadata: Dict | None) -> Dict[str, obje
     }
 
 
+def effective_thinking(
+    enabled: bool | None, budget_tokens: int | None, session_metadata: Dict | None
+) -> tuple[bool, int]:
+    """A request's thinking toggle and budget, each falling back to the conversation's stored one (#22258, #20922)."""
+    stored = stored_thinking_preferences(session_metadata)
+    return (
+        bool(stored["enabled"] if enabled is None else enabled),
+        int(stored["budget_tokens"] if budget_tokens is None else budget_tokens),  # type: ignore[call-overload]
+    )
+
+
 @router.get(
     "/sessions/{session_id}/thinking-preferences",
     response_model=DataResponse[ThinkingPreferencesData],

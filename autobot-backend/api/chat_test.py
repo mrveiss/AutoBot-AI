@@ -63,7 +63,7 @@ async def test_process_chat_message_citations_apply_quarantine_filter():
     ):
         await process_chat_message(
             message=message,
-            chat_history_manager=AsyncMock(),
+            chat_history_manager=AsyncMock(get_session=AsyncMock(return_value={})),
             llm_service=AsyncMock(),
             memory_interface=AsyncMock(),
             knowledge_base=mock_kb,

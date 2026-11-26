@@ -134,7 +134,8 @@ async def test_a_secret_in_a_tool_result_is_masked_through_the_real_hook_21884(m
     real = ExtensionManager()
     real.register(SecretMaskingExtension())
     monkeypatch.setattr(llm_handler, "get_extension_manager", lambda: real)
-    secret = "sk-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6"  # pragma: allowlist secret
+    # 48 characters: the shortest the OpenAI-key pattern masks
+    secret = "sk-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0u1V2w3X4"  # pragma: allowlist secret
 
     out = await llm_handler._emit_after_tool_execute("web_search", f"key is {secret} ok", SESSION, {})
 

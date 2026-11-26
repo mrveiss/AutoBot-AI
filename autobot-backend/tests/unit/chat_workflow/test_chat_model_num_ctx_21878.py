@@ -316,7 +316,9 @@ async def test_the_probe_runs_off_the_event_loop_and_only_for_a_local_endpoint(m
     assert seen == [] and chat_model_context._chat_endpoint_local.get() is False
     await chat_model_context.note_chat_turn_endpoint("http://127.0.0.1:11434/api/generate")
     assert seen == [False], "nvidia-smi ran in a worker thread, not on the loop"
-    assert chat_model_context.chat_num_gpu() == ModelConfig.CHAT_NUM_GPU_ALL_LAYERS
+    assert (
+        chat_model_context._host_gpu_probe is True
+    )  # the worker thread's answer is kept (the autouse fixture pins the verdict reader)
 
 
 @pytest.mark.asyncio

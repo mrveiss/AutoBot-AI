@@ -48,19 +48,6 @@ async def resolve_reasoning_effort(context: Dict[str, Any]) -> str:
     return "auto"
 
 
-def effective_thinking(
-    enabled: bool | None, budget_tokens: int | None, session_metadata: Dict | None
-) -> tuple[bool, int]:
-    """A request's thinking toggle and budget, each falling back to the conversation's stored one (#22258, #20922)."""
-    from api.chat_sessions_thinking import stored_thinking_preferences
-
-    stored = stored_thinking_preferences(session_metadata)
-    return (
-        bool(stored["enabled"] if enabled is None else enabled),
-        int(stored["budget_tokens"] if budget_tokens is None else budget_tokens),  # type: ignore[call-overload]
-    )
-
-
 def hosted_request_extras(effort: str | None, thinking_enabled: bool, budget_tokens: int) -> Dict[str, Any]:
     """``LLMService.chat`` kwargs carrying thinking (or, when it is off, reasoning effort) to a hosted provider.
 

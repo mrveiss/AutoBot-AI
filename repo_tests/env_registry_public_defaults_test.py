@@ -10,11 +10,12 @@ another route is still caught.
 from __future__ import annotations
 
 import re
-from pathlib import Path
+
+from repo_tests._paths import repo_root
 
 from autobot_shared.env_registry import REGISTRY
 
-_ROOT = Path(__file__).resolve().parent.parent
+_ROOT = repo_root()
 _DOC = _ROOT / "docs" / "developer" / "ENV_VARS.md"
 
 _PRIVATE_IP = re.compile(

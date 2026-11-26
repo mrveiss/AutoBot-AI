@@ -237,7 +237,7 @@ class TestReturnCodeAndUsageGuidance:
         manual = SimpleNamespace(syntax="ping [-c count] destination", description="", common_options=["-c count"])
         prompt = self._prompt([PING_USAGE], manual)
 
-        assert "the arguments were wrong" in prompt and "read the usage line" in prompt
+        assert "the arguments were wrong" in prompt and "Read the usage line" in prompt
         assert "ping [-c count] destination" in prompt
 
     def test_a_failure_with_no_manual_says_so(self):

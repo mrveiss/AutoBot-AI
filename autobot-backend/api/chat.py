@@ -14,8 +14,8 @@ Consolidated from chat.py and chat_enhanced.py per Issue #708.
 """
 
 import asyncio
-import functools
 import json
+import logging
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List
@@ -28,6 +28,7 @@ from api.chat_citations import retrieve_citations
 from api.chat_sessions import delete_session as _canonical_delete_session
 from api.chat_sessions import list_user_sessions, log_request_context, resolve_company_scope
 from api.chat_sessions import router as sessions_router
+from api.chat_sessions_thinking import effective_thinking
 from api.chat_streaming import (
     _stream_chat_workflow_messages,
     _stream_direct_response,
@@ -61,6 +62,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail, user_facing_detail
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from chat_history.deduplication import parse_message_timestamp, timestamp_sort_key
@@ -69,7 +71,7 @@ from chat_history.message_schema import llm_role, message_text, message_type
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
 from chat_history.session_merge import dropped_keys
-from chat_workflow.reasoning_kwargs import effective_thinking, hosted_request_extras, resolve_reasoning_effort
+from chat_workflow.reasoning_kwargs import hosted_request_extras, resolve_reasoning_effort
 from chat_workflow.session_work_item import SessionWorkItemService
 from chat_workflow.stall_pending import guarded_resume
 from constants.threshold_constants import TimingConstants
@@ -322,15 +324,6 @@ router = APIRouter(tags=["chat"])
 logger = get_logger(__name__)
 
 
-@functools.lru_cache(maxsize=1)
-def _log_ssot_mode_once() -> None:
-    """Phase 4 (#7590): tell operators which mode is active, on first use — never at import (#21264)."""
-    logger.info(
-        "AUTOBOT_CHAT_SSOT_STRICT=%s",
-        "true" if _CHAT_SSOT_STRICT else "false (default — session_id enforcement via schema only)",
-    )
-
-
 # Include session management router
 router.include_router(sessions_router)
 
@@ -370,7 +363,14 @@ def _validate_session_id(session_id: str | None) -> None:
         get_error_code,
     ) = get_exceptions_lazy()
 
-    _log_ssot_mode_once()
+    # Phase 4 (#7590): tell operators which mode is active, on first use — never at import (#21264)
+    log_once(
+        logger,
+        logging.INFO,
+        "chat-ssot-mode",
+        "AUTOBOT_CHAT_SSOT_STRICT=%s",
+        "true" if _CHAT_SSOT_STRICT else "false (default — session_id enforcement via schema only)",
+    )
     if _CHAT_SSOT_STRICT and not session_id:
         raise ValidationError("session_id is required (AUTOBOT_CHAT_SSOT_STRICT)")
 

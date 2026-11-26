@@ -19,6 +19,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import strip_trailing_comment
+
 _ROOT = repo_root()
 _ROOTS = (
     "autobot-backend/api/",
@@ -26,7 +28,6 @@ _ROOTS = (
     "autobot-backend/a2a/",
     "autobot-backend/app_factory.py",
     "autobot-backend/llm_self_awareness.py",
-    "autobot-backend/services/tracing_service.py",
     "autobot_shared/tracing.py",
     "autobot_shared/ssot_tracing_settings.py",
 )
@@ -40,7 +41,7 @@ _SITE = re.compile(
     rf"|\b(?:AUTOBOT|SERVICE|APP|PRODUCT)_VERSION\s*=\s*{_NUM}"
 )
 #: The comment that declares a literal to be a protocol / format / catalog / API-spec version.
-_GENUINE = re.compile(r"#.*\b(?:protocol|format|catalog|schema|api-spec)\s+version\b")
+_GENUINE = re.compile(r"\b(?:protocol|format|catalog|schema|api-spec)\s+version\b")
 
 
 def _sources(root: Path) -> list[Path]:
@@ -65,11 +66,15 @@ REACH = declare(
 )
 
 
+def _is_invented(line: str) -> bool:
+    """A version-stating code part whose trailing comment (quote-aware split) does not declare it genuine."""
+    code = strip_trailing_comment(line, ("#",))
+    return bool(_SITE.search(code)) and not _GENUINE.search(line[len(code) :])
+
+
 def invented_versions(text: str) -> list[int]:
     """Line numbers of version literals that carry no comment declaring them a protocol/format/catalog version."""
-    return [
-        number for number, line in enumerate(text.splitlines(), 1) if _SITE.search(line) and not _GENUINE.search(line)
-    ]
+    return [number for number, line in enumerate(text.splitlines(), 1) if _is_invented(line)]
 
 
 def test_no_service_reports_an_invented_version() -> None:
