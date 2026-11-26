@@ -40,6 +40,11 @@ def note_chat_turn_model(model: str | None) -> None:
     _last_turn_model.set(model or None)
 
 
+def chat_turn_model() -> str | None:
+    """The model this request's chat turn runs with, or None outside a turn (the public read of the context var)."""
+    return _last_turn_model.get()
+
+
 def sent_num_ctx() -> int:
     """The ``num_ctx`` every chat request sends to Ollama, whichever model it names (#22016).
 

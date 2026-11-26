@@ -43,10 +43,10 @@ def clear_generation_rates() -> None:
 
 def _chat_model_names() -> list[str]:
     """The chat model of this request, then the configured one: the names the chat's own rate may be noted under."""
-    from autobot_shared.chat_model_context import _last_turn_model
+    from autobot_shared.chat_model_context import chat_turn_model
     from autobot_shared.ssot_config import config
 
-    return [name for name in (_last_turn_model.get(), config.default_llm_model) if name]
+    return [name for name in (chat_turn_model(), config.default_llm_model) if name]
 
 
 def recent_tokens_per_second(model: str | None, reuses_chat: bool = False) -> float | None:

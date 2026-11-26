@@ -96,3 +96,27 @@ def test_the_ceiling_env_var_bounds_the_scaled_deadline(monkeypatch):
     monkeypatch.setenv("AUTOBOT_VERIFIER_TIMEOUT_MAX_S", "120")
     vd.note_generation_rate("m", 2.0)
     assert vd.verifier_deadline_s("m", 512, 10.0, explicit=False) == 120.0
+
+
+@pytest.mark.asyncio
+async def test_a_verifier_task_started_inside_a_turn_sees_the_turns_model_and_think_field():
+    import asyncio
+
+    from autobot_shared import chat_model_context as ctx
+
+    seen: dict[str, object] = {}
+
+    async def verifier() -> None:  # created after the turn set its ContextVars: create_task copies the context
+        seen["model"] = ctx.chat_turn_model()
+        seen["names"] = vd._chat_model_names()
+        seen["think"] = ctx.chat_think_options("other", reuses_chat=True)
+
+    async def turn() -> None:
+        ctx.note_chat_turn_model("turn-model")
+        ctx.note_chat_turn_think({"think": True})
+        await asyncio.create_task(verifier())
+
+    await asyncio.create_task(turn())
+    assert seen["model"] == "turn-model" and "turn-model" in seen["names"]
+    assert seen["think"] == {"think": True}
+    assert ctx.chat_turn_model() is None  # the turn's task did not leak its context to the caller
