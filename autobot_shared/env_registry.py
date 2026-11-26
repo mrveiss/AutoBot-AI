@@ -331,8 +331,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_OTEL_SERVICE_VERSION",
         type=str,
-        default="1.5.0",
-        description="Service version tag attached to all OTel spans.",
+        default="",
+        description="Service version tag attached to all OTel spans; unset omits `service.version` (#17821).",
         component="otel",
     )
 )
