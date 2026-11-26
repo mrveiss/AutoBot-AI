@@ -25,6 +25,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.text_tokens import word_token_list
 from autobot_shared.time_utils import parse_utc_iso
 from knowledge.query_term_replace import replace_whole_word
+from knowledge.stale_marker import demote_stale
 
 logger = get_logger(__name__)
 
@@ -402,16 +403,9 @@ class RelevanceScorer:
         return min(boosted_score / max_possible, 1.0)
 
     def calculate_relevance_score(self, base_score: float, query: str, result: Dict[str, Any]) -> float:
-        """Calculate final relevance score with all factors (Issue #398: refactored)."""
-        (
-            content,
-            title,
-            doc_id,
-            source,
-            verified,
-            created_at,
-        ) = self._parse_result_metadata(result)
-        return self._compute_boosted_score(base_score, query, content, title, doc_id, source, verified, created_at)
+        """Calculate final relevance score with all factors; a stale-marked fact ranks lower (#22299)."""
+        parsed = self._parse_result_metadata(result)
+        return demote_stale(self._compute_boosted_score(base_score, query, *parsed), result)
 
     def record_access(self, doc_id: str) -> None:
         """Record document access for popularity tracking."""
