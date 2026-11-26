@@ -304,3 +304,24 @@ async def test_ws_path_still_speaks_when_worker_lacks_stream_route():
     assert audio, "stale worker produced no audio at all"
     assert base64.b64decode(audio[0]["data"]) == WHOLE_WAV
     assert types[0] == "tts_start" and types[-1] == "tts_end"
+
+
+def test_voice_tts_provider_resolves_through_the_capability_registry():
+    """#22270: api.voice picks its TTS provider via CapabilityRegistry, falling back to the canonical client."""
+    from unittest.mock import patch
+
+    from api import voice
+    from integrations.capability_registry import TTS, CapabilityRegistry
+
+    registry = CapabilityRegistry()
+    registered = object()
+    registry.register(TTS, registered)
+    with patch("api.voice.get_capability_registry", return_value=registry):
+        assert voice.get_tts_client() is registered
+
+    sentinel = object()
+    with (
+        patch("api.voice.get_capability_registry", return_value=CapabilityRegistry()),
+        patch("api.voice._canonical_tts_client", return_value=sentinel),
+    ):
+        assert voice.get_tts_client() is sentinel

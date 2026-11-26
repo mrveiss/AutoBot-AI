@@ -29,9 +29,21 @@ from auth_service_opt_in import service_opt_in
 from autobot_shared.auth.permissions import is_admin_role, role_value
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from integrations.capability_registry import TTS, get_capability_registry
 from services.personality_service import resolve_voice_id
 from services.realtime_mcp_bridge import get_realtime_bridge
-from services.tts_client import TTSReferenceAudioRejected, get_tts_client
+from services.tts_client import TTSReferenceAudioRejected
+from services.tts_client import get_tts_client as _canonical_tts_client
+
+
+def get_tts_client():
+    """Resolve the TTS provider through the CapabilityRegistry (#22270).
+
+    Falls back to the canonical client when the registry holds no TTS provider.
+    """
+    impls = get_capability_registry().resolve(TTS)
+    return impls[0] if impls else _canonical_tts_client()
+
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
