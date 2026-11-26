@@ -419,12 +419,21 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
     async def _load_record(self, session_id: str) -> RealtimeSessionRecord | None:
         # Redis first when it is the system of record: another worker's updates land there, so a local copy
         # may be stale. The local map answers only when Redis is off, down, or never saw the session.
-        redis = await self._authoritative_redis()
-        if redis is not None:
-            record = _parse_record(await redis.get(_session_key(session_id)), session_id)
-            if record is not None:
-                return record
-        return self._in_memory_sessions.get(session_id)
+        record = await self._read_redis_record(session_id)
+        return record if record is not None else self._in_memory_sessions.get(session_id)
+
+    async def _read_redis_record(self, session_id: str) -> RealtimeSessionRecord | None:
+        """The Redis copy, or None when absent or unreadable (logged, so the caller falls back to the local one)."""
+        try:
+            redis = await self._authoritative_redis()
+            if redis is None:
+                return None
+            return _parse_record(await redis.get(_session_key(session_id)), session_id)
+        except Exception as exc:
+            logger.warning(
+                "voice_realtime: redis read failed session_id=%s, using the local record: %s", session_id, exc
+            )
+            return None
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────

@@ -543,3 +543,26 @@ class TestRedisIsSystemOfRecordAcrossWorkers:
         a._get_redis = AsyncMock(return_value=server)
         await a.record_response_done("x4", input_tokens=1)
         assert json.loads(server.stored["voice_realtime_session:x4"])["input_tokens"] == 10
+
+
+class TestUnreadableRedis:
+    """An unreadable Redis falls back to the local record, so the cost cap still runs (#21678)."""
+
+    @pytest.mark.asyncio
+    async def test_cap_check_uses_the_local_record_when_the_redis_read_fails(self, monkeypatch):
+        from services.voice_realtime_telemetry import CapBreachError
+
+        monkeypatch.setattr("services.voice_realtime_telemetry.get_telemetry_settings", lambda: {"enabled": True})
+        redis = _FakeRedis()
+        redis.get = AsyncMock(side_effect=ConnectionError("redis down"))
+        t = _bare_telemetry(redis)
+        t._in_memory_sessions["d1"] = _make_record(session_id="d1", audio_out_s=5400.0)
+        with pytest.raises(CapBreachError):
+            await t.check_caps("d1")
+
+    @pytest.mark.asyncio
+    async def test_a_session_nobody_can_read_is_not_capped(self, monkeypatch):
+        monkeypatch.setattr("services.voice_realtime_telemetry.get_telemetry_settings", lambda: {"enabled": True})
+        redis = _FakeRedis()
+        redis.get = AsyncMock(side_effect=ConnectionError("redis down"))
+        await _bare_telemetry(redis).check_caps("unknown")  # existing behaviour: no record, no breach
