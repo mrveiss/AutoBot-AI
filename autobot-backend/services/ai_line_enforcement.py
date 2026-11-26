@@ -70,7 +70,7 @@ from llc.services.ai_lines import stored_line
 from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.audit_logger import audit_log
-from services.command_line_risk import is_read_only_command as _is_read_only_command
+from services.command_line_risk import is_read_only_call as _is_read_only_command
 from services.command_line_risk import lift_by_learned_rule
 from user_management.database import get_async_session_factory
 

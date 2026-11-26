@@ -57,7 +57,7 @@ def assess_command_risk(command: str) -> Optional[CommandRisk]:
         return None
 
 
-def is_read_only_command(tool_name: str, params: Optional[Mapping[str, Any]]) -> bool:
+def is_read_only_call(tool_name: str, params: Optional[Mapping[str, Any]]) -> bool:
     """Whether this call is a shell command rated SAFE that also only reads (#19950).
 
     The tool name says only "runs a command", so the command decides. SAFE alone is not enough: it covers
