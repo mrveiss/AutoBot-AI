@@ -35,11 +35,19 @@ from chat_workflow.reply_persistence import (
     iteration_reply_entries,
     later_respond_entries,
     stamp_model,
+    stamp_usage,
+    surviving_reply,
 )
 from chat_workflow.step_collapse import render_history
 from chat_workflow.step_guidance import latest_step_guidance, return_code_line
 from chat_workflow.step_outcome import executed_count, not_run_note
-from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
+from chat_workflow.stream_identity import (
+    stream_identity_marker,
+    streamed_prose_identity,
+    streamed_prose_model,
+    streamed_prose_usage,
+    usage_marker,
+)
 from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
@@ -1719,7 +1727,7 @@ class ChatWorkflowManager(
                     break
             if chunk_data.get("done", False):
                 self._log_stream_completion(llm_response)
-                yield (None, llm_response, True, False)
+                yield (usage_marker(chunk_data, selected_model), llm_response, True, False)  # #21880
                 break
 
     def _format_execution_step(self, step_num: int, result: Dict[str, Any]) -> str:
@@ -3022,6 +3030,7 @@ before summarizing.
         entries.extend(tool_entries)
         for entry in tool_entries:
             stamp_model(entry, model)
+        stamp_usage(surviving_reply(final_entry, tool_entries), streamed_prose_usage(iter_messages))  # #21880
         return entries, consumed, final_entry
 
     def _build_persist_batch(
