@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
@@ -34,13 +34,21 @@ from services.self_model_reconcile import (
     entity_key,
     unavailable_because,
 )
-from services.self_model_store import apply_observations, load_rows, revision, rows_for_response, sweep_stale
+from services.self_model_store import (
+    apply_observations,
+    load_rows,
+    node_ids_by_host,
+    revision,
+    rows_for_response,
+    sweep_stale,
+)
 
 router = APIRouter(prefix="/self-model", tags=["self-model"])
 
 MAX_ENTITIES = 500
 DEFAULT_ENTITIES = 100
 MAX_OBSERVATIONS = 20000
+MAX_HOSTS = 100
 
 
 class ParentRef(BaseModel):
@@ -148,3 +156,20 @@ async def list_entities(
         row["available"] = not missing
         row["unavailable_because"] = missing
     return {"revision": await revision(db), "total": len(found), "entities": rows}
+
+
+@router.get("/node-ids")
+async def node_ids(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    hosts: Annotated[str, Query(min_length=1, max_length=4096, description="Comma-separated host addresses")],
+) -> Dict[str, str]:
+    """The SLM node id of each given host address that is a managed node (the mapping ``rename_hosts`` applies).
+
+    A backend fact names its host by address; the self-model keys its entities by node id. This is the one
+    translation, so a fact's link to a ``command`` entity cannot disagree with the entity the SLM wrote.
+    """
+    wanted = {h.strip() for h in hosts.split(",") if h.strip()}
+    if len(wanted) > MAX_HOSTS:
+        raise HTTPException(status_code=422, detail=f"at most {MAX_HOSTS} hosts per request")
+    return await node_ids_by_host(db, wanted)

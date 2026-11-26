@@ -8,7 +8,9 @@ Man pages used to reach the knowledge base through four writers that disagreed o
 metadata and on which host a fact belongs to. This is the canonical one: every fact it
 writes carries the host that owns the page (``utils.system_context.get_machine_id``) and a
 ``unique_key`` from ``generate_unique_key``, so the same command on two hosts is two facts
-and a re-run on one host overwrites its own.
+and a re-run on one host overwrites its own. It also records the self-model ``command`` entity the fact
+describes (``services/man_page_self_model.py``), so the model's view of that command on that host (absent,
+stale) can mark the fact stale (#22299).
 
 Callers: ``index_all_man_pages()`` below (the CLI script and the Celery refresh), and the
 ``/populate_man_pages`` endpoint, which passes its curated command list.
@@ -19,6 +21,7 @@ import os
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.ingestion_visibility import INGESTED_DOCUMENT_VISIBILITY
+from services.man_page_self_model import MAN_PAGE_TYPE, host_node_id, link_fields
 from utils.system_context import generate_unique_key, get_compatible_os_list, get_system_context
 
 logger = get_logger(__name__)
@@ -128,7 +131,9 @@ async def _get_man_page_description(command: str) -> str:
     return ""
 
 
-def build_man_page_metadata(command: str, section: str, system_ctx: dict, unique_key: str) -> dict:
+def build_man_page_metadata(
+    command: str, section: str, system_ctx: dict, unique_key: str, node_id: str | None = None
+) -> dict:
     """
     Build metadata dict for man page fact.
 
@@ -139,12 +144,13 @@ def build_man_page_metadata(command: str, section: str, system_ctx: dict, unique
         section: Man section
         system_ctx: System context dict
         unique_key: Unique key for deduplication
+        node_id: The SLM node id of the host (links the fact to its self-model ``command`` entity); None when unmanaged
 
     Returns:
         Metadata dictionary
     """
     return {
-        "type": "man_page",
+        "type": MAN_PAGE_TYPE,
         "command": command,
         "section": section,
         "title": f"man {command}({section})",
@@ -162,6 +168,7 @@ def build_man_page_metadata(command: str, section: str, system_ctx: dict, unique
         "category": "system/manpages",
         "source": "comprehensive_man_pages",
         "visibility": INGESTED_DOCUMENT_VISIBILITY,
+        **link_fields(node_id, command),
     }
 
 
@@ -244,6 +251,7 @@ async def index_command_batch(kb_v2, commands_batch, system_ctx=None):
     # Get system context once for the batch
     if system_ctx is None:
         system_ctx = get_system_context()
+    node_id = await host_node_id(system_ctx["machine_ip"])  # one lookup per batch; None leaves the facts unlinked
 
     for command, section in commands_batch:
         try:
@@ -262,7 +270,7 @@ async def index_command_batch(kb_v2, commands_batch, system_ctx=None):
             unique_key = generate_unique_key(system_ctx["machine_id"], system_ctx["os_name"], command, section)
 
             # Build metadata
-            metadata = build_man_page_metadata(command, section, system_ctx, unique_key)
+            metadata = build_man_page_metadata(command, section, system_ctx, unique_key, node_id)
 
             # Store in Knowledge Base
             result = await kb_v2.store_fact(content=content, metadata=metadata)

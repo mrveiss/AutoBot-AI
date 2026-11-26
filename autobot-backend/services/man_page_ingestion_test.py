@@ -88,3 +88,20 @@ def test_index_all_man_pages_without_a_knowledge_base_raises():
     with patch("knowledge_factory.get_knowledge_base_async", AsyncMock(return_value=None)):
         with pytest.raises(ingest.ManPageIndexingError):
             asyncio.run(ingest.index_all_man_pages())
+
+
+def test_a_fact_records_the_self_model_command_entity_it_describes():
+    """#22272: the key is the SLM's, under the node id the host address maps to."""
+    from autobot_shared.self_model_keys import entity_key
+
+    kb = MagicMock(store_fact=AsyncMock(return_value={"status": "success"}))
+    with (
+        patch.object(ingest, "_get_man_content", AsyncMock(return_value="NAME ls")),
+        patch.object(ingest, "_get_man_page_description", AsyncMock(return_value="list")),
+        patch.object(ingest, "host_node_id", AsyncMock(return_value="node-redis")) as lookup,
+    ):
+        asyncio.run(ingest.index_command_batch(kb, [("ls", "1")], _ctx("redis")))
+    lookup.assert_awaited_once_with("10.0.0.1")
+    metadata = kb.store_fact.await_args.kwargs["metadata"]
+    assert metadata["self_model_node_id"] == "node-redis"
+    assert metadata["self_model_entity_key"] == entity_key("command", "ls", entity_key("node", "node-redis"))
