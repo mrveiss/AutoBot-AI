@@ -17,8 +17,8 @@ other by comment; their overlapping core now lives in
 `autobot_shared/service_registry_core.py`. The guard therefore also fails, ANYWHERE in the
 repo, when a second service-definition table (>=4 known service names keyed to values
 carrying port literals) or a second copy of the URL-join logic is declared outside that
-core. The SLM backend's two port tables are a different domain (Ansible role vars, a
-systemd orchestrator with its own ports) and are listed in `_KNOWN_OTHER_TABLES`; that
+core. The SLM setup wizard's port table is a different domain (Ansible role vars) and is
+listed in `_KNOWN_OTHER_TABLES`; that
 list is shrink-only and bidirectional.
 """
 
@@ -40,10 +40,8 @@ _MIN_TABLE_SERVICES = 4
 _PORT_RANGE = range(1024, 65536)
 
 #: Port tables that are NOT the registry's: SLM role vars and the SLM systemd orchestrator.
-_KNOWN_OTHER_TABLES = (
-    "autobot-slm-backend/api/setup_wizard.py",
-    "autobot-slm-backend/services/service_orchestrator.py",
-)
+_KNOWN_OTHER_TABLES = ("autobot-slm-backend/api/setup_wizard.py",)
+_SLM_ORCHESTRATOR = "autobot-slm-backend/services/service_orchestrator.py"
 _CANONICAL = "autobot-infrastructure/shared/scripts/deployment_registry.py"
 
 #: The six scripts that held a copy before #18132 and must now import the shared one.
@@ -300,6 +298,19 @@ def test_no_service_table_is_declared_outside_the_core() -> None:
 def test_no_url_join_is_declared_outside_the_core() -> None:
     _, joins, _, _ = _repo_scan()
     assert not joins, f"#12771: service URL join reimplemented in {list(joins)}; use join_service_path from {_CORE}"
+
+
+def test_the_slm_orchestrator_reads_ports_from_the_core() -> None:
+    """#22273: the SLM table adds start/stop/probe facts; its ports and health paths come from the core."""
+    tree = parse_cache.parse(_read(_SLM_ORCHESTRATOR))
+    imported = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "autobot_shared.service_registry_core"
+        for alias in node.names
+    }
+    assert "shared_endpoint" in imported, f"{_SLM_ORCHESTRATOR} imports {sorted(imported)} from the core"
+    assert not _declares_service_table(tree), f"#22273: {_SLM_ORCHESTRATOR} declares its own port table again"
 
 
 @pytest.mark.parametrize("rel", ("autobot-backend/utils/service_registry.py", _CANONICAL))

@@ -143,6 +143,19 @@ SERVICE_DEFINITIONS: Dict[str, ServiceEndpointSpec] = {
 }
 
 
+def shared_endpoint(name: str, *, health_path: bool = True) -> Dict[str, Any]:
+    """Port (and health path) of a service, from the one definition (#22273).
+
+    A consumer that adds its own facts (the SLM orchestrator: how to start, stop and probe a
+    unit) spreads this into its entry instead of restating the port or the health path.
+    """
+    spec = SERVICE_DEFINITIONS[name]
+    fields: Dict[str, Any] = {"default_port": spec.port}
+    if health_path:
+        fields["health_check_path"] = spec.health_path
+    return fields
+
+
 def build_base_url(scheme: str, host: str, port: int) -> str:
     """Build `scheme://host:port`."""
     return f"{scheme}://{host}:{port}"

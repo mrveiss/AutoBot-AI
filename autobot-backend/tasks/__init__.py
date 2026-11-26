@@ -45,6 +45,7 @@ from .memory_tasks import (
     write_verbatim_task,
 )
 from .mobile_device_tasks import cleanup_stale_mobile_devices
+from .service_health_probe_task import probe_service_health
 from .snapshot_cleanup import cleanup_expired_snapshots
 from .system_tasks import check_available_updates, initialize_rbac, run_system_update
 from .transcriber_tasks import transcribe_recording
@@ -91,6 +92,7 @@ __all__ = [
     # "Received unregistered task of type ...".
     "reconcile_credentials",
     "run_capability_audit_task",
+    "probe_service_health",
     "cleanup_expired_snapshots",
     "cleanup_stale_mobile_devices",
     "transcribe_recording",

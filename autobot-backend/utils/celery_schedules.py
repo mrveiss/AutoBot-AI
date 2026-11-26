@@ -14,7 +14,15 @@ import logging
 
 from celery.schedules import crontab
 
+from autobot_shared.env_utils import env_int_clamped, env_str
+
 logger = logging.getLogger(__name__)
+
+#: Cron for the daily agent capability-manifest audit beat entry (#22271; registered in env_registry_llc).
+CAPABILITY_AUDIT_SCHEDULE = env_str("AUTOBOT_CAPABILITY_AUDIT_SCHEDULE", "40 3 * * *")
+
+#: Seconds between live service-health probes (#22273; registered in env_registry_llc).
+SERVICE_HEALTH_PROBE_INTERVAL_SECONDS = env_int_clamped("AUTOBOT_SERVICE_HEALTH_PROBE_INTERVAL_SECONDS", 60, min_v=10)
 
 
 def crontab_from_string(cron_expr: str) -> crontab:

@@ -180,7 +180,11 @@ import services.pricing_refresh  # noqa: F401
 from llc.storage_root import LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS  # noqa: E402
 from llm_shared.pricing.redis_store import REFRESH_INTERVAL_HOURS as _PRICING_REFRESH_INTERVAL_HOURS  # noqa: E402
 from services.trigger_secrets import TRIGGER_SECRET_AUDIT_SCHEDULE  # noqa: E402
-from utils.celery_schedules import crontab_from_string  # noqa: E402
+from utils.celery_schedules import (  # noqa: E402
+    CAPABILITY_AUDIT_SCHEDULE,
+    SERVICE_HEALTH_PROBE_INTERVAL_SECONDS,
+    crontab_from_string,
+)
 
 # =========================================================================
 # Issue #4455: Periodic knowledge-base cleanup schedule
@@ -305,7 +309,12 @@ celery_app.conf.beat_schedule = {
     # #22271: daily agent capability-manifest consistency audit (findings are logged and returned).
     "capability-manifest-audit-daily": {
         "task": "tasks.run_capability_audit",
-        "schedule": crontab(hour=3, minute=40),
+        "schedule": crontab_from_string(CAPABILITY_AUDIT_SCHEDULE),
+    },
+    # #22273: live service-health probe, so last_check / failure_count populate outside the CLI.
+    "service-health-probe": {
+        "task": "tasks.probe_service_health",
+        "schedule": timedelta(seconds=SERVICE_HEALTH_PROBE_INTERVAL_SECONDS),
     },
     # GH#8995: data-hygiene retention tasks (nightly, staggered to avoid Redis contention)
     # All tasks are no-ops when their respective retention_days == 0 (safe default).
