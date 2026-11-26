@@ -16,7 +16,7 @@ The Chat Terminal implements a sophisticated command approval workflow that ensu
 
 ### **1. Agent Terminal Session**
 
-Located in: `backend/services/agent_terminal_service.py`
+Located in: `autobot-backend/services/agent_terminal/service.py`
 
 ```python
 @dataclass
@@ -67,7 +67,7 @@ class CommandRisk(Enum):
 
 **Endpoint**: `POST /api/agent-terminal/execute`
 
-**Handler**: `agent_terminal.py:execute_agent_command()`
+**Handler**: `autobot-backend/api/agent_terminal.py:execute_agent_command()`
 
 ```python
 async def execute_agent_command(
@@ -122,7 +122,7 @@ async def execute_agent_command(
          ▼
 ```
 
-**Code Flow**: `agent_terminal_service.py:execute_command()`
+**Code Flow**: `autobot-backend/services/agent_terminal/service.py:execute_command()`
 
 ```python
 async def execute_command(
@@ -349,7 +349,7 @@ const approveCommand = async () => {
 }
 ```
 
-**Backend Code**: `agent_terminal.py:approve_pending_command()`
+**Backend Code**: `autobot-backend/api/agent_terminal.py:approve_agent_command()`
 
 ```python
 @router.post("/sessions/{session_id}/approve")
@@ -439,7 +439,7 @@ A command runs without approval only when the single AI-line decision (`services
          ▼
 ```
 
-**Code**: `agent_terminal_service.py:_execute_approved_command()`
+**Code**: `autobot-backend/services/agent_terminal/service.py:_execute_approved_command()`
 
 ```python
 async def _execute_approved_command(
@@ -565,7 +565,7 @@ async def _execute_approved_command(
                       ...
 ```
 
-**Code**: Output buffering in `terminal.py:send_output()`
+**Code**: Output buffering in `autobot-backend/api/terminal_handlers.py:send_output()`
 
 ```python
 async def send_output(self, content: str):
