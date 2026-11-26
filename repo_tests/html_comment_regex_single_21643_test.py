@@ -16,6 +16,7 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint._parse_cache import parse
 from tools.lint._scan_helpers import tracked_paths
 
 PATTERN = "<!--" + ".*?" + "-->"
@@ -38,7 +39,7 @@ def _docstring_nodes(tree: ast.AST) -> set[int]:
 def _defines_pattern(text: str) -> bool:
     """Whether *text* (Python source) carries the pattern in a string constant that is not a docstring."""
     try:
-        tree = ast.parse(text)
+        tree = parse(text)
     except SyntaxError:
         return PATTERN in text
     docs = _docstring_nodes(tree)
