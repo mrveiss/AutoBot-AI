@@ -11,8 +11,11 @@ consent flip or missing-key race can replace a larger total with a smaller one.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, fields
-from typing import Any
+from typing import Any, Callable
+
+from redis.exceptions import WatchError
 
 
 @dataclass
@@ -47,3 +50,49 @@ class EndedSession:
     base: Any
     delta: UsageDelta
     ended: Any
+
+
+def usage_view(record: Any, delta: UsageDelta, finish: Callable[[Any], None] | None) -> Any:
+    """A copy of *record* with *delta* (and the optional finish) applied; the stored record is not touched."""
+    view = type(record).from_dict(record.to_dict())
+    delta.apply_to(view)
+    if finish is not None:
+        finish(view)
+    return view
+
+
+async def update_in_redis(
+    redis: Any,
+    *,
+    key: str,
+    ttl: int,
+    parse: Callable[[Any], Any],
+    total: UsageDelta,
+    finish: Callable[[Any], None] | None,
+    base: Any | None,
+    attempts: int,
+) -> Any | None:
+    """Re-read, add *total*, SET under WATCH/MULTI; a conflicting write (another worker, or a concurrent create of a
+    missing key) re-reads and re-applies. A missing key is created from *base* only while it is still absent. A record
+    already ended is returned unchanged when *finish* is given, so a retried end never adds usage twice."""
+    for _ in range(attempts):
+        async with redis.pipeline(transaction=True) as pipe:
+            try:
+                return await _attempt(pipe, key, ttl, parse, total, finish, base)
+            except WatchError:
+                continue  # another write landed first: re-read its state and apply ours on top
+    raise RuntimeError(f"voice_realtime: {key} contended for {attempts} attempts")
+
+
+async def _attempt(pipe: Any, key: str, ttl: int, parse: Any, total: UsageDelta, finish: Any, base: Any) -> Any | None:
+    await pipe.watch(key)
+    raw = await pipe.get(key)
+    current = parse(raw) if raw is not None else base
+    if current is None or (finish is not None and current.ended_at):
+        await pipe.unwatch()
+        return current
+    record = usage_view(current, total, finish)
+    pipe.multi()
+    pipe.set(key, json.dumps(record.to_dict()), ex=ttl)
+    await pipe.execute()
+    return record

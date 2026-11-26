@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from services.voice_realtime_usage import EndedSession, UsageDelta
 from tests.helpers._voice_realtime_fakes import FakeRedis as _FakeRedis
 from tests.helpers._voice_realtime_fakes import bare_telemetry as _bare_telemetry
 from tests.helpers._voice_realtime_fakes import make_record as _make_record
@@ -100,20 +101,54 @@ class TestDeltaAccounting:
         return state, server, t
 
     @pytest.mark.asyncio
-    async def test_a_consent_flip_keeps_the_usage_collected_while_opted_out(self, monkeypatch):
+    async def test_a_consent_flip_counts_opted_out_usage_for_the_cap_but_never_persists_it(self, monkeypatch):
         from services.voice_realtime_telemetry import CapBreachError
 
         state, server, t = self._setup(monkeypatch)
         await t.session_start("c1")
+        writes = []
+        real_set = server.set
+
+        async def recording_set(key, value, ex=None):
+            writes.append((state["enabled"], key))
+            await real_set(key, value, ex=ex)
+
+        server.set = recording_set
         state["enabled"] = False
-        await t.record_audio("c1", "output", 1200.0)  # ~ $4 collected while opted out, kept off Redis
-        assert not json.loads(server.stored["voice_realtime_session:c1"])["audio_out_s"]
+        await t.record_audio("c1", "output", 1200.0)  # ~ $4 collected while opted out
+        assert not [w for w in writes if not w[0]]  # no voice_realtime_session:* write while opted out
         state["enabled"] = True
-        await t.check_caps("c1")  # $4 is under the $5 cap, and the pending usage is already counted
-        await t.record_audio("c1", "output", 600.0)  # ~ $2 more: the real total is ~ $6
+        await t.check_caps("c1")  # $4 is under the $5 cap, and already counted
+        await t.record_audio("c1", "output", 600.0)  # ~ $2 more opted in: the real total is ~ $6
         with pytest.raises(CapBreachError):
             await t.check_caps("c1")
-        assert json.loads(server.stored["voice_realtime_session:c1"])["audio_out_s"] == 1800.0
+        assert json.loads(server.stored["voice_realtime_session:c1"])["audio_out_s"] == 600.0  # never the 1200 s
+
+    @pytest.mark.asyncio
+    async def test_a_session_ended_while_opted_out_is_never_persisted_after_an_opt_in(self, monkeypatch):
+        state, server, t = self._setup(monkeypatch)
+        await t.session_start("c5")
+        before = dict(server.stored)
+        state["enabled"] = False
+        await t.record_audio("c5", "output", 100.0)
+        ended = await t.session_end("c5")
+        assert ended.ended_at and "c5" not in t._in_memory_sessions
+        assert t._ended_unflushed == {} and t._cap_only == {} and t._pending == {}
+        state["enabled"] = True
+        await t.session_start("other")  # any operation reaches Redis again
+        await t.record_audio("other", "input", 1.0)
+        assert server.stored["voice_realtime_session:c5"] == before["voice_realtime_session:c5"]
+
+    @pytest.mark.asyncio
+    async def test_a_retried_end_that_already_landed_adds_no_usage_twice(self, monkeypatch):
+        _, server, t = self._setup(monkeypatch)
+        await t.session_start("c6")
+        await t.record_response_done("c6", input_tokens=100)
+        local = t._in_memory_sessions["c6"]
+        ended = await t.session_end("c6")  # committed
+        t._ended_unflushed["c6"] = EndedSession(local, UsageDelta(input_tokens=100), ended)  # queued again
+        await t.session_start("other")
+        assert json.loads(server.stored["voice_realtime_session:c6"])["input_tokens"] == 100
 
     @pytest.mark.asyncio
     async def test_the_opted_out_usage_counts_toward_the_cap_before_any_flush(self, monkeypatch):
@@ -133,12 +168,12 @@ class TestDeltaAccounting:
 
         _, server, t = self._setup(monkeypatch)
         await t.session_start("c3")
-        real = module._update_in_redis
-        monkeypatch.setattr(module, "_update_in_redis", AsyncMock(side_effect=ConnectionError("down")))
+        real = module.update_in_redis
+        monkeypatch.setattr(module, "update_in_redis", AsyncMock(side_effect=ConnectionError("down")))
         await t.record_response_done("c3", input_tokens=500)
         assert (await t.get_session("c3")).input_tokens == 500  # the cap sees it although Redis never did
         assert json.loads(server.stored["voice_realtime_session:c3"])["input_tokens"] == 0
-        monkeypatch.setattr(module, "_update_in_redis", real)
+        monkeypatch.setattr(module, "update_in_redis", real)
         await t.record_response_done("c3", input_tokens=20)
         assert json.loads(server.stored["voice_realtime_session:c3"])["input_tokens"] == 520
         assert (await t.get_session("c3")).input_tokens == 520 and t._pending == {}

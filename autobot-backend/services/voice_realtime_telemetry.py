@@ -24,8 +24,6 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Callable
 
-from redis.exceptions import WatchError
-
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -34,7 +32,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.store_authority import system_of_record
 from autobot_shared.time_utils import now_utc
 from services.telemetry_settings import get_telemetry_settings
-from services.voice_realtime_usage import EndedSession, UsageDelta
+from services.voice_realtime_usage import EndedSession, UsageDelta, update_in_redis, usage_view
 
 logger = get_logger(__name__)
 
@@ -155,6 +153,9 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         self._in_memory_sessions: dict[str, RealtimeSessionRecord] = {}
         # Usage not yet committed to Redis (it was down, telemetry off, or a write failed), added on the next commit
         self._pending: dict[str, UsageDelta] = {}
+        # Usage collected while opted out (#9035): counts toward the caps, is never committed to Redis, and is
+        # dropped at session end and on eviction. Tagged by consent when collected, not when it would be flushed.
+        self._cap_only: dict[str, UsageDelta] = {}
         # Sessions that ended while Redis could not take them; flushed when it returns, dropped when abandoned
         self._ended_unflushed: dict[str, EndedSession] = {}
 
@@ -359,26 +360,59 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
     ) -> RealtimeSessionRecord | None:
         """Add *delta* (plus any pending usage) to the session; None when the session is unknown.
 
-        Committed to Redis under WATCH/MULTI when it is readable; otherwise (or when the commit fails) the usage is
-        kept pending and counted by every cap check until a later commit flushes it with that update.
+        Opted in: committed to Redis under WATCH/MULTI when it is readable; otherwise (or when the commit fails) the
+        usage is kept pending and counted by every cap check until a later commit flushes it with that update.
+        Opted out: never committed; kept in memory for the caps only (``_apply_opted_out``).
         """
         await self._flush_ended_sessions()
+        if not get_telemetry_settings()["enabled"]:
+            return self._apply_opted_out(session_id, delta, finish)
         total = self._pending.pop(session_id, UsageDelta()).merged(delta)  # taken whole, so no one else re-adds it
         record = await self._commit_to_redis(session_id, total, finish)
         if record is not None:
+            if record.ended_at:
+                self._release_usage(session_id)
             if record.ended_at or session_id in self._in_memory_sessions:
                 self._hold_locally(record)
             return record
-        local = self._in_memory_sessions.get(session_id)  # Redis off, down, or the commit failed
+        return self._keep_uncommitted(session_id, total, finish)  # Redis down, or the commit failed
+
+    def _keep_uncommitted(
+        self, session_id: str, total: UsageDelta, finish: Callable[[RealtimeSessionRecord], None] | None
+    ) -> RealtimeSessionRecord | None:
+        """Consent was on but the commit did not land: keep the usage pending, or queue the end for a later flush."""
+        local = self._in_memory_sessions.get(session_id)
         if local is None:
             return None
-        view = _usage_view(local, total, finish)
+        view = usage_view(local, total, finish)
         if view.ended_at:
+            self._release_usage(session_id)
             self._hold_locally(view)
-            self._ended_unflushed[session_id] = EndedSession(local, total, view)  # flushed when Redis returns
+            self._ended_unflushed[session_id] = EndedSession(local, total, view)
         else:
             self._pending[session_id] = self._pending.get(session_id, UsageDelta()).merged(total)
         return view
+
+    def _apply_opted_out(
+        self, session_id: str, delta: UsageDelta, finish: Callable[[RealtimeSessionRecord], None] | None
+    ) -> RealtimeSessionRecord | None:
+        """Opted out (#9035): count the usage toward the caps in memory only; an end is released, never persisted."""
+        local = self._in_memory_sessions.get(session_id)
+        if local is None:
+            return None
+        cap_only = self._cap_only.get(session_id, UsageDelta()).merged(delta)
+        view = usage_view(local, self._pending.get(session_id, UsageDelta()).merged(cap_only), finish)
+        if view.ended_at:
+            self._release_usage(session_id)
+            self._hold_locally(view)
+        else:
+            self._cap_only[session_id] = cap_only
+        return view
+
+    def _release_usage(self, session_id: str) -> None:
+        """A finished (or evicted) session keeps no usage buffers."""
+        self._pending.pop(session_id, None)
+        self._cap_only.pop(session_id, None)
 
     async def _commit_to_redis(
         self,
@@ -393,10 +427,20 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
             if redis is None:
                 return None
             base = base or self._in_memory_sessions.get(session_id)
-            return await _update_in_redis(redis, session_id, total, finish, base)
+            return await update_in_redis(
+                redis,
+                key=_session_key(session_id),
+                ttl=_SESSION_TTL,
+                parse=lambda raw: _parse_record(raw, session_id),
+                total=total,
+                finish=finish,
+                base=base,
+                attempts=_UPDATE_MAX_ATTEMPTS,
+            )
         except Exception as exc:
-            # An EXEC that raised after sending may have applied: the delta is still counted pending, i.e. it may be
-            # counted twice. Over-counting toward a cap is the safe side; under-counting would disable it.
+            # An EXEC that raised after sending may have applied: a usage delta is still counted pending, i.e. it may
+            # be counted twice (over-counting toward a cap is the safe side; under-counting would disable it). An end
+            # is idempotent: a retried end finds ended_at already set in Redis and adds nothing.
             logger.warning("voice_realtime: redis commit failed session_id=%s, usage kept pending: %s", session_id, exc)
             return None
 
@@ -430,7 +474,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         ]
         for sid in stale:
             del self._in_memory_sessions[sid]
-            self._pending.pop(sid, None)
+            self._release_usage(sid)
             logger.warning("voice_realtime: evicted abandoned session session_id=%s", sid)
 
     async def _load_record(self, session_id: str) -> RealtimeSessionRecord | None:
@@ -441,7 +485,8 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         record = record if record is not None else self._in_memory_sessions.get(session_id)
         if record is None:
             return None
-        return _usage_view(record, self._pending.get(session_id, UsageDelta()), None)
+        known = self._pending.get(session_id, UsageDelta()).merged(self._cap_only.get(session_id, UsageDelta()))
+        return usage_view(record, known, None)
 
     async def _read_redis_record(self, session_id: str) -> RealtimeSessionRecord | None:
         """The Redis copy, or None when absent or unreadable (logged, so the caller falls back to the local one)."""
@@ -477,46 +522,6 @@ def _parse_record(raw: str | bytes | None, session_id: str) -> RealtimeSessionRe
     except Exception as exc:
         logger.warning("voice_realtime: failed to parse record session_id=%s: %s", session_id, exc)
         return None
-
-
-def _usage_view(
-    record: RealtimeSessionRecord, delta: UsageDelta, finish: Callable[[RealtimeSessionRecord], None] | None
-) -> RealtimeSessionRecord:
-    """A copy of *record* with *delta* (and the optional finish) applied; the stored record is not touched."""
-    view = RealtimeSessionRecord.from_dict(record.to_dict())
-    delta.apply_to(view)
-    if finish is not None:
-        finish(view)
-    return view
-
-
-async def _update_in_redis(
-    redis: Any,
-    session_id: str,
-    total: UsageDelta,
-    finish: Callable[[RealtimeSessionRecord], None] | None,
-    base: RealtimeSessionRecord | None,
-) -> RealtimeSessionRecord | None:
-    """Re-read, add *total*, SET under WATCH/MULTI; a conflicting write (another worker, or a concurrent create of a
-    missing key) re-reads and re-applies. A missing key is created from *base* only while it is still absent."""
-    key = _session_key(session_id)
-    for _ in range(_UPDATE_MAX_ATTEMPTS):
-        async with redis.pipeline(transaction=True) as pipe:
-            try:
-                await pipe.watch(key)
-                raw = await pipe.get(key)
-                current = _parse_record(raw, session_id) if raw is not None else base
-                if current is None:
-                    await pipe.unwatch()
-                    return None
-                record = _usage_view(current, total, finish)
-                pipe.multi()
-                pipe.set(key, json.dumps(record.to_dict()), ex=_SESSION_TTL)
-                await pipe.execute()
-                return record
-            except WatchError:
-                continue  # another write landed first: re-read its state and apply ours on top
-    raise RuntimeError(f"voice_realtime: session {session_id} contended for {_UPDATE_MAX_ATTEMPTS} attempts")
 
 
 def _end_stamp(ended: RealtimeSessionRecord) -> Callable[[RealtimeSessionRecord], None]:
