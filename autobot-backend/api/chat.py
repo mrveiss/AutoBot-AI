@@ -34,7 +34,6 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.chat_citations import retrieve_citations
-from api.chat_sessions_thinking import stored_thinking_preferences
 from api.chat_streaming import (
     _stream_chat_workflow_messages,
     _stream_direct_response,
@@ -73,6 +72,7 @@ from chat_history.message_schema import llm_role, message_text, message_type
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
 from chat_history.session_merge import dropped_keys
+from chat_workflow.reasoning_kwargs import effective_thinking, hosted_request_extras, resolve_reasoning_effort
 from chat_workflow.session_work_item import SessionWorkItemService
 from chat_workflow.stall_pending import guarded_resume
 from constants.threshold_constants import TimingConstants
@@ -604,6 +604,7 @@ async def _generate_ai_response(
     reasoning_effort: str | None = None,
     model: str | None = None,
     provider: str | None = None,
+    thinking: tuple[bool, int] = (False, 0),
 ) -> tuple[Dict, Any]:
     """
     Generate AI response using LLM service with fallback handling.
@@ -620,9 +621,7 @@ async def _generate_ai_response(
         # #11585: conversation_id lets the registry apply the per-conversation
         # provider pin; explicit model_name/provider_name (per-request override)
         # take priority over it. request_id flows through **kwargs for tracing.
-        extra_kwargs: Dict[str, Any] = {}
-        if reasoning_effort and reasoning_effort != "auto":
-            extra_kwargs["metadata"] = {"api_kwargs": {"reasoning_effort": reasoning_effort}}
+        extra_kwargs = hosted_request_extras(reasoning_effort, *thinking)  # #20922: thinking reaches the provider
         response = await llm_service.chat(
             messages=llm_context,
             conversation_id=session_id,
@@ -733,22 +732,9 @@ def _validate_and_pin_provider(provider: str | None, session_id: str | None) -> 
 
 
 async def _resolve_chat_reasoning_effort(message: "ChatMessage", user_id: str | None) -> str:
-    """Resolve reasoning effort for /chat endpoint (#9017).
-
-    Priority: per-message field > user-default from Redis > 'auto'.
-    'auto' and None are both treated as inert (no extra params).
-    """
-    if message.reasoning_effort and message.reasoning_effort != "auto":
-        return message.reasoning_effort
-    if user_id:
-        try:
-            from api.users import _get_user_preferences_from_redis
-
-            prefs = await _get_user_preferences_from_redis(user_id)
-            return prefs.reasoning_effort
-        except Exception as exc:
-            logger.warning("[#9017] Failed to load user reasoning_effort pref: %s", exc)
-    return "auto"
+    """Resolve reasoning effort for /chat endpoint (#9017): per-message field > user default > 'auto' (inert)."""
+    requested = message.reasoning_effort if message.reasoning_effort != "auto" else None
+    return await resolve_reasoning_effort({"reasoning_effort": requested, "user_id": user_id})
 
 
 def _context_warning(overflow_status: Dict[str, Any]) -> Dict[str, Any]:
@@ -823,6 +809,12 @@ async def process_chat_message(
     # #9017: Resolve reasoning effort: per-message > user-default > 'auto' (inert).
     resolved_effort = await _resolve_chat_reasoning_effort(message, author_id)
 
+    # #20922: the toggle and budget of this request, else the conversation's stored ones.
+    stored_session = await chat_history_manager.get_session(session_id)
+    thinking = effective_thinking(
+        message.thinking_mode_enabled, message.thinking_budget_tokens, (stored_session or {}).get("metadata")
+    )
+
     # Generate AI response (Issue #281: uses helper, Issue #9043: returns LLMResponse for token tracking)
     ai_response, llm_response = await _generate_ai_response(
         llm_service,
@@ -832,6 +824,7 @@ async def process_chat_message(
         reasoning_effort=resolved_effort,
         model=message.model,
         provider=message.provider,
+        thinking=thinking,
     )
 
     # Store AI response (Issue #281: uses helper)
@@ -1519,12 +1512,9 @@ async def send_chat_message_by_id(
         context["language"] = language
 
     # #22258: a request that carries no toggle gets the conversation's stored one (default off, as the GUI shows).
-    stored = stored_thinking_preferences(((await chat_history_manager.get_session(chat_id)) or {}).get("metadata"))
-    thinking_mode_enabled = request_data.get("thinking_mode_enabled")
-    thinking_budget_tokens = request_data.get("thinking_budget_tokens")
-    context["thinking_mode_enabled"] = stored["enabled"] if thinking_mode_enabled is None else thinking_mode_enabled
-    context["thinking_budget_tokens"] = (
-        stored["budget_tokens"] if thinking_budget_tokens is None else thinking_budget_tokens
+    session_metadata = ((await chat_history_manager.get_session(chat_id)) or {}).get("metadata")
+    context["thinking_mode_enabled"], context["thinking_budget_tokens"] = effective_thinking(
+        request_data.get("thinking_mode_enabled"), request_data.get("thinking_budget_tokens"), session_metadata
     )
 
     # #9017: per-conversation reasoning effort — inject into context for workflow resolution.
