@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autobot_shared.time_utils import utc_timestamp
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,22 @@ def _bare_telemetry(fake_redis, prom=None, max_seconds=1800, max_cost=5.0):
     t._config.telemetry.enabled = True
     t._in_memory_sessions = {}
     return t
+
+
+class _FakeRedis:
+    """One in-memory Redis shared by every worker under test; its pipeline is the canonical fake (#18991)."""
+
+    def __init__(self, stored: dict[str, str] | None = None):
+        self.stored: dict[str, str] = stored if stored is not None else {}
+
+    async def get(self, key):
+        return self.stored.get(key)
+
+    async def set(self, key, value, ex=None):
+        self.stored[key] = value
+
+    def pipeline(self, transaction=True):
+        return FakeAsyncPipeline(self, transaction=transaction, detect_watch_conflicts=True)
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -213,9 +230,7 @@ class TestMetricIncrements:
         )
         stored = {"voice_realtime_session:s2": json.dumps(record.to_dict())}
 
-        fake_redis = AsyncMock()
-        fake_redis.set = AsyncMock(side_effect=lambda k, v, ex=None: stored.update({k: v}))
-        fake_redis.get = AsyncMock(side_effect=lambda k: stored.get(k))
+        fake_redis = _FakeRedis(stored)
 
         prom = MagicMock()
         vr = _fake_prom()
@@ -235,9 +250,7 @@ class TestMetricIncrements:
         record = _make_record(session_id="s3")
         stored = {"voice_realtime_session:s3": json.dumps(record.to_dict())}
 
-        fake_redis = AsyncMock()
-        fake_redis.set = AsyncMock(side_effect=lambda k, v, ex=None: stored.update({k: v}))
-        fake_redis.get = AsyncMock(side_effect=lambda k: stored.get(k))
+        fake_redis = _FakeRedis(stored)
 
         prom = MagicMock()
         vr = _fake_prom()
@@ -258,9 +271,7 @@ class TestMetricIncrements:
         record = _make_record(session_id="s4")
         stored = {"voice_realtime_session:s4": json.dumps(record.to_dict())}
 
-        fake_redis = AsyncMock()
-        fake_redis.set = AsyncMock(side_effect=lambda k, v, ex=None: stored.update({k: v}))
-        fake_redis.get = AsyncMock(side_effect=lambda k: stored.get(k))
+        fake_redis = _FakeRedis(stored)
 
         prom = MagicMock()
         vr = _fake_prom()
@@ -405,7 +416,7 @@ class TestConsentChangesMidSession:
 
     @pytest.mark.asyncio
     async def test_a_session_started_opted_out_can_still_end_after_an_opt_in(self, monkeypatch):
-        t = _bare_telemetry(AsyncMock())
+        t = _bare_telemetry(_FakeRedis())
         t._prom = MagicMock()
         self._consent(monkeypatch, False)
         await t._save_record(_make_record(session_id="flip2"))
@@ -446,7 +457,8 @@ class TestConsentChangesMidSession:
 
         t = _bare_telemetry(AsyncMock())
         self._consent(monkeypatch, False)
-        old = (datetime.now(timezone.utc) - timedelta(seconds=module._ABANDONED_SESSION_MAX_AGE_S + 60)).isoformat()
+        threshold = module.abandoned_session_max_age_s(t._max_seconds)
+        old = (datetime.now(timezone.utc) - timedelta(seconds=threshold + 60)).isoformat()
         t._in_memory_sessions["gone"] = _make_record(session_id="gone", started_at=old)
         await t._save_record(_make_record(session_id="fresh"))
         assert "gone" not in t._in_memory_sessions
@@ -459,7 +471,75 @@ class TestConsentChangesMidSession:
         cap = module._ABANDONED_SESSION_MAX_AGE_S * 2
         t = _bare_telemetry(AsyncMock(), max_seconds=cap)
         self._consent(monkeypatch, False)
+        assert module.abandoned_session_max_age_s(cap) > module._ABANDONED_SESSION_MAX_AGE_S
         started = datetime.now(timezone.utc) - timedelta(seconds=module._ABANDONED_SESSION_MAX_AGE_S + 60)
         t._in_memory_sessions["live"] = _make_record(session_id="live", started_at=started.isoformat())
         await t._save_record(_make_record(session_id="fresh"))
         assert "live" in t._in_memory_sessions
+
+
+class TestRedisIsSystemOfRecordAcrossWorkers:
+    """Two workers share one Redis; a stale local copy must never answer a cap check or clobber usage (#21678)."""
+
+    @staticmethod
+    def _workers(monkeypatch):
+        monkeypatch.setattr("services.voice_realtime_telemetry.get_telemetry_settings", lambda: {"enabled": True})
+        server = _FakeRedis()
+        a, b = _bare_telemetry(server), _bare_telemetry(server)
+        for t in (a, b):
+            t._prom = MagicMock()
+        return server, a, b
+
+    @pytest.mark.asyncio
+    async def test_cap_check_on_one_worker_sees_usage_recorded_by_another(self, monkeypatch):
+        from services.voice_realtime_telemetry import CapBreachError, DisconnectReason
+
+        _, a, b = self._workers(monkeypatch)
+        await a.session_start("x1")
+        await b.record_audio("x1", "output", 5400.0)  # ~$18, over the $5 cap; A's local copy is still zero
+        assert a._in_memory_sessions["x1"].audio_out_s == 0.0
+        with pytest.raises(CapBreachError) as exc:
+            await a.check_caps("x1")
+        assert exc.value.reason == DisconnectReason.COST_CAP
+
+    @pytest.mark.asyncio
+    async def test_session_end_on_one_worker_keeps_usage_recorded_by_another(self, monkeypatch):
+        server, a, b = self._workers(monkeypatch)
+        await a.session_start("x2")
+        await b.record_response_done("x2", input_tokens=700, output_tokens=300)
+        await b.record_tool_call("x2", tool="search")
+        ended = await a.session_end("x2")
+        stored = json.loads(server.stored["voice_realtime_session:x2"])
+        assert (stored["input_tokens"], stored["output_tokens"], stored["tool_calls"]) == (700, 300, 1)
+        assert stored["ended_at"] and ended.input_tokens == 700
+        assert "x2" not in a._in_memory_sessions
+
+    @pytest.mark.asyncio
+    async def test_a_write_between_read_and_commit_is_retried_not_overwritten(self, monkeypatch):
+        server, a, b = self._workers(monkeypatch)
+        await a.session_start("x3")
+        key = "voice_realtime_session:x3"
+        interleaved = []
+
+        def add_forty(record):
+            if not interleaved:  # worker B commits after A has read and before A commits
+                interleaved.append(1)
+                other = json.loads(server.stored[key])
+                other["input_tokens"] = 100
+                server.stored[key] = json.dumps(other)
+            record.input_tokens += 40
+
+        await a._update_record("x3", add_forty)
+        assert json.loads(server.stored[key])["input_tokens"] == 140
+
+    @pytest.mark.asyncio
+    async def test_a_session_started_while_redis_was_down_is_updated_locally_then_persisted(self, monkeypatch):
+        server, a, _ = self._workers(monkeypatch)
+        a._redis = None
+        a._get_redis = AsyncMock(return_value=None)
+        await a.session_start("x4")
+        await a.record_response_done("x4", input_tokens=9)
+        assert a._in_memory_sessions["x4"].input_tokens == 9 and not server.stored
+        a._get_redis = AsyncMock(return_value=server)
+        await a.record_response_done("x4", input_tokens=1)
+        assert json.loads(server.stored["voice_realtime_session:x4"])["input_tokens"] == 10

@@ -22,17 +22,23 @@ Issue #9035 — Respects telemetry opt-out configuration
 import json
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Callable
+
+from redis.exceptions import WatchError
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
+from autobot_shared.store_authority import system_of_record
 from autobot_shared.time_utils import now_utc
 from services.telemetry_settings import get_telemetry_settings
 
 logger = get_logger(__name__)
+
+# With telemetry on and Redis reachable, Redis holds the session; the local map is only the fallback (#21678).
+SYSTEM_OF_RECORD = system_of_record("voice_realtime_session")
 
 # ── Realtime audio pricing (USD per second, gpt-4o-realtime-preview) ────────
 # Source: OpenAI pricing page – audio input $0.10/min, output $0.20/min
@@ -64,6 +70,8 @@ _SESSION_TTL = config.misc.voice_realtime_session_ttl_days * 86400
 _ABANDONED_SESSION_MAX_AGE_S = env_int_clamped("AUTOBOT_VOICE_REALTIME_ABANDONED_SESSION_SECONDS", 7200, 60, 604800)
 #: Slack added past the duration cap so a session the cap is about to end is never evicted first.
 _ABANDONED_SESSION_CAP_MARGIN_S = 300
+#: WATCH/MULTI attempts for one cross-worker update before giving up (one session is rarely written by >1 worker).
+_UPDATE_MAX_ATTEMPTS = 8
 
 
 class DisconnectReason(str, Enum):
@@ -174,41 +182,30 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         reason: DisconnectReason = DisconnectReason.NORMAL,
     ) -> RealtimeSessionRecord | None:
         """Finalise the session record and flush Prometheus counters."""
-        record = await self._load_record(session_id)
+        record = await self._update_record(session_id, lambda r: _apply_end(r, reason))
         if record is None:
             logger.warning("voice_realtime session_end: unknown session_id=%s", session_id)
             return None
-
-        end_time = now_utc()
-        started = _parse_iso(record.started_at)
-        duration_s = max(0.0, (end_time - started).total_seconds())
-
-        record.ended_at = end_time.isoformat()
-        record.duration_s = duration_s
-        record.disconnect_reason = reason.value if isinstance(reason, DisconnectReason) else reason
-
-        # Accumulate audio cost if not already computed incrementally
-        record.estimated_cost_usd = _estimate_cost(record)
-
-        await self._save_record(record)
-
-        m = self._prom._voice_realtime
-        m.sessions_active.labels(model=record.model).dec()
-        m.session_seconds_total.labels(model=record.model).inc(duration_s)
-        m.session_duration.labels(model=record.model, disconnect_reason=record.disconnect_reason).observe(duration_s)
-        m.estimated_cost_usd.labels(model=record.model).inc(record.estimated_cost_usd)
-
-        if reason in (DisconnectReason.DURATION_CAP, DisconnectReason.COST_CAP):
-            m.cap_breaches_total.labels(reason=reason.value).inc()
-
+        self._emit_session_end_metrics(record, reason)
         logger.info(
             "voice_realtime session_end session_id=%s duration_s=%.1f cost_usd=%.4f reason=%s",
             session_id,
-            duration_s,
+            record.duration_s,
             record.estimated_cost_usd,
-            reason.value,
+            record.disconnect_reason,
         )
         return record
+
+    def _emit_session_end_metrics(self, record: RealtimeSessionRecord, reason: DisconnectReason) -> None:
+        m = self._prom._voice_realtime
+        m.sessions_active.labels(model=record.model).dec()
+        m.session_seconds_total.labels(model=record.model).inc(record.duration_s)
+        m.session_duration.labels(model=record.model, disconnect_reason=record.disconnect_reason).observe(
+            record.duration_s
+        )
+        m.estimated_cost_usd.labels(model=record.model).inc(record.estimated_cost_usd)
+        if reason in (DisconnectReason.DURATION_CAP, DisconnectReason.COST_CAP):
+            m.cap_breaches_total.labels(reason=reason.value).inc()
 
     async def record_audio(
         self,
@@ -217,16 +214,15 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         seconds: float,
     ) -> None:
         """Accumulate audio seconds (direction: 'input' | 'output')."""
-        record = await self._load_record(session_id)
-        if record is None:
+
+        def apply(record: RealtimeSessionRecord) -> None:
+            if direction == "input":
+                record.audio_in_s += seconds
+            else:
+                record.audio_out_s += seconds
+
+        if await self._update_record(session_id, apply) is None:
             return
-
-        if direction == "input":
-            record.audio_in_s += seconds
-        else:
-            record.audio_out_s += seconds
-
-        await self._save_record(record)
         self._prom._voice_realtime.audio_seconds_total.labels(direction=direction).inc(seconds)
 
     async def record_response_done(
@@ -239,17 +235,16 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         audio_out_s: float = 0.0,
     ) -> None:
         """Handle a response.done event — update token counts and audio."""
-        record = await self._load_record(session_id)
-        if record is None:
+
+        def apply(record: RealtimeSessionRecord) -> None:
+            record.input_tokens += input_tokens
+            record.output_tokens += output_tokens
+            record.cached_input_tokens += cached_input_tokens
+            record.audio_in_s += audio_in_s
+            record.audio_out_s += audio_out_s
+
+        if await self._update_record(session_id, apply) is None:
             return
-
-        record.input_tokens += input_tokens
-        record.output_tokens += output_tokens
-        record.cached_input_tokens += cached_input_tokens
-        record.audio_in_s += audio_in_s
-        record.audio_out_s += audio_out_s
-
-        await self._save_record(record)
 
         m = self._prom._voice_realtime
         if input_tokens:
@@ -271,10 +266,11 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         outcome: str = "success",
     ) -> None:
         """Record a single tool-call event."""
-        record = await self._load_record(session_id)
-        if record is not None:
+
+        def apply(record: RealtimeSessionRecord) -> None:
             record.tool_calls += 1
-            await self._save_record(record)
+
+        await self._update_record(session_id, apply)
 
         m = self._prom._voice_realtime
         m.tool_calls_total.labels(tool=tool, outcome=outcome).inc()
@@ -343,28 +339,74 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
-    async def _save_record(self, record: RealtimeSessionRecord) -> None:
-        # Active state stays in memory whatever the consent: cap checks and session_end need it even after an
-        # opt-out/opt-in flips mid-session. Consent (#9035) only governs persistence to Redis. A finished record is
-        # released on every path (Redis down, telemetry off, written), never held for the process lifetime.
+    async def _authoritative_redis(self) -> Any | None:
+        """Redis when telemetry is on and reachable (it is then the system of record), else None."""
+        if not get_telemetry_settings()["enabled"]:
+            return None
+        return await self._get_redis()
+
+    def _hold_locally(self, record: RealtimeSessionRecord) -> None:
+        """Keep the active record as the fallback copy; release a finished one on every path."""
         self._evict_abandoned_sessions()
         if record.ended_at:
             self._in_memory_sessions.pop(record.session_id, None)
         else:
             self._in_memory_sessions[record.session_id] = record
-        if not get_telemetry_settings()["enabled"]:
-            return
 
-        redis = await self._get_redis()
+    async def _save_record(self, record: RealtimeSessionRecord) -> None:
+        # The local copy is kept whatever the consent: cap checks and session_end need it when Redis is off or
+        # down, even after an opt-out/opt-in flips mid-session (#9035). It is never read ahead of Redis.
+        self._hold_locally(record)
+        redis = await self._authoritative_redis()
         if redis is None:
             return
-        key = f"{_KEY_PREFIX}:{record.session_id}"
-        await redis.set(key, json.dumps(record.to_dict()), ex=_SESSION_TTL)
+        await redis.set(_session_key(record.session_id), json.dumps(record.to_dict()), ex=_SESSION_TTL)
+
+    async def _update_record(
+        self, session_id: str, mutate: Callable[[RealtimeSessionRecord], None]
+    ) -> RealtimeSessionRecord | None:
+        """Apply *mutate* to the session atomically across workers; None when the session is unknown."""
+        redis = await self._authoritative_redis()
+        if redis is not None:
+            record = await self._update_in_redis(redis, session_id, mutate)
+            if record is not None:
+                if record.ended_at or session_id in self._in_memory_sessions:
+                    self._hold_locally(record)
+                return record
+        local = self._in_memory_sessions.get(session_id)  # started while Redis was off or down
+        if local is None:
+            return None
+        mutate(local)
+        await self._save_record(local)
+        return local
+
+    @staticmethod
+    async def _update_in_redis(
+        redis: Any, session_id: str, mutate: Callable[[RealtimeSessionRecord], None]
+    ) -> RealtimeSessionRecord | None:
+        """Read-modify-write under WATCH/MULTI so another worker's concurrent update is never overwritten."""
+        key = _session_key(session_id)
+        for _ in range(_UPDATE_MAX_ATTEMPTS):
+            async with redis.pipeline(transaction=True) as pipe:
+                try:
+                    await pipe.watch(key)
+                    record = _parse_record(await pipe.get(key), session_id)
+                    if record is None:
+                        await pipe.unwatch()
+                        return None
+                    mutate(record)
+                    pipe.multi()
+                    pipe.set(key, json.dumps(record.to_dict()), ex=_SESSION_TTL)
+                    await pipe.execute()
+                    return record
+                except WatchError:
+                    continue  # another worker wrote first: re-read its state and apply ours on top
+        raise RuntimeError(f"voice_realtime: session {session_id} contended for {_UPDATE_MAX_ATTEMPTS} attempts")
 
     def _evict_abandoned_sessions(self) -> None:
         """Drop in-memory sessions that never ended and are older than the max age (a dropped connection)."""
         now = now_utc()
-        max_age = max(_ABANDONED_SESSION_MAX_AGE_S, self._max_seconds + _ABANDONED_SESSION_CAP_MARGIN_S)
+        max_age = abandoned_session_max_age_s(self._max_seconds)
         stale = [
             sid
             for sid, rec in self._in_memory_sessions.items()
@@ -375,30 +417,45 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
             logger.warning("voice_realtime: evicted abandoned session session_id=%s", sid)
 
     async def _load_record(self, session_id: str) -> RealtimeSessionRecord | None:
-        # In-memory first: active sessions live there whatever the consent (#9035)
-        in_memory = self._in_memory_sessions.get(session_id)
-        if in_memory is not None or not get_telemetry_settings()["enabled"]:
-            return in_memory
-
-        redis = await self._get_redis()
-        if redis is None:
-            return None
-        key = f"{_KEY_PREFIX}:{session_id}"
-        raw = await redis.get(key)
-        if raw is None:
-            return None
-        try:
-            return RealtimeSessionRecord.from_dict(json.loads(raw))
-        except Exception as exc:
-            logger.warning(
-                "voice_realtime: failed to parse record session_id=%s: %s",
-                session_id,
-                exc,
-            )
-            return None
+        # Redis first when it is the system of record: another worker's updates land there, so a local copy
+        # may be stale. The local map answers only when Redis is off, down, or never saw the session.
+        redis = await self._authoritative_redis()
+        if redis is not None:
+            record = _parse_record(await redis.get(_session_key(session_id)), session_id)
+            if record is not None:
+                return record
+        return self._in_memory_sessions.get(session_id)
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
+
+
+def abandoned_session_max_age_s(max_seconds: int) -> int:
+    """Effective age past which an unended in-memory session is evicted (never below the duration cap + margin)."""
+    return max(_ABANDONED_SESSION_MAX_AGE_S, max_seconds + _ABANDONED_SESSION_CAP_MARGIN_S)
+
+
+def _session_key(session_id: str) -> str:
+    return f"{_KEY_PREFIX}:{session_id}"
+
+
+def _parse_record(raw: str | bytes | None, session_id: str) -> RealtimeSessionRecord | None:
+    if raw is None:
+        return None
+    try:
+        return RealtimeSessionRecord.from_dict(json.loads(raw))
+    except Exception as exc:
+        logger.warning("voice_realtime: failed to parse record session_id=%s: %s", session_id, exc)
+        return None
+
+
+def _apply_end(record: RealtimeSessionRecord, reason: DisconnectReason) -> None:
+    """Stamp the final duration, reason and cost onto *record* (computed from the freshest usage)."""
+    end_time = now_utc()
+    record.ended_at = end_time.isoformat()
+    record.duration_s = max(0.0, (end_time - _parse_iso(record.started_at)).total_seconds())
+    record.disconnect_reason = reason.value if isinstance(reason, DisconnectReason) else reason
+    record.estimated_cost_usd = _estimate_cost(record)
 
 
 def _estimate_cost(record: RealtimeSessionRecord) -> float:
