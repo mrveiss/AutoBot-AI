@@ -55,6 +55,7 @@ from autobot_shared.tool_catalogue import (
     SYSTEM_EXEC_TOOLS,
     TERMINAL_TOOLS,
 )
+from autobot_shared.verifier_deadline import verifier_deadline_s
 from autobot_shared.verifier_degradation import (
     VerifierDegradation,
     VerifierObservation,
@@ -325,13 +326,15 @@ async def _call_verifier_once(
 
     system_prompt, user_prompt = _build_verifier_prompt(tool_name, args, reason)
     attempt: dict[str, Any] = {}
+    # #22254: the deadline follows the model's measured speed (an env-set VERIFIER_TIMEOUT_S always wins).
+    deadline = verifier_deadline_s(configured_verifier_model(provider), VERIFIER_MAX_TOKENS, VERIFIER_TIMEOUT_S)
     try:
         import asyncio as _asyncio
 
         # One deadline covers the model lookup (a cache miss lists models over the network) and the chat call.
         _request, response = await _asyncio.wait_for(
             resolve_and_chat(provider, system_prompt, user_prompt, tool_name, VERIFIER_MAX_TOKENS, attempt),
-            timeout=VERIFIER_TIMEOUT_S,
+            timeout=deadline,
         )
     except Exception as exc:
         if "response" in attempt:  # the deadline hit during accounting: the reply is complete, so it decides (#21844)
@@ -341,7 +344,7 @@ async def _call_verifier_once(
                 model_used=getattr(attempt["response"], "model", None),
             )
         observation = replace(
-            failure_observation(exc),
+            failure_observation(exc, deadline),
             provider_used=provider.provider_name,
             model_used=(
                 attempt["model"] if "model" in attempt else configured_verifier_model(provider)
@@ -350,7 +353,7 @@ async def _call_verifier_once(
         # The deadline's own cancel reaches the provider as a bare CancelledError ("Stream cancelled", #22254): say here
         # that this deadline did it, with its length, so a chat model that always overruns it is visible as such.
         cause = (
-            f"exceeded VERIFIER_TIMEOUT_S={VERIFIER_TIMEOUT_S:g}s, the call was cancelled"
+            f"exceeded the {deadline:g}s deadline (VERIFIER_TIMEOUT_S={VERIFIER_TIMEOUT_S:g}s), the call was cancelled"
             if isinstance(exc, TimeoutError)
             else repr(exc)
         )

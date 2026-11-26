@@ -6,7 +6,18 @@
 
 import logging
 
+import pytest
+
+from autobot_shared import verifier_deadline
 from chat_workflow.generation_timing import generation_timing, log_generation_timing
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rates():
+    verifier_deadline.clear_generation_rates()
+    yield
+    verifier_deadline.clear_generation_rates()
+
 
 FINAL = {
     "done": True,
@@ -39,3 +50,8 @@ def test_the_final_chunk_is_logged_with_the_split(caplog):
         and "load=30.0s" in caplog.text
         and "generation=400 tok/190.0s" in caplog.text
     )
+
+
+def test_a_finished_generation_records_its_rate_for_the_verifier_deadline():
+    log_generation_timing(FINAL, "m")  # 400 tokens in 190 s
+    assert verifier_deadline.recent_tokens_per_second("m") == pytest.approx(400 / 190)

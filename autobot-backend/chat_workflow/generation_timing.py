@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.verifier_deadline import note_generation_rate
 
 logger = get_logger(__name__)
 
@@ -36,6 +37,7 @@ def log_generation_timing(chunk: Dict[str, Any], model: str = "") -> None:
     if not t:
         return
     rate = t["eval_count"] / t["eval_duration"] if t["eval_duration"] else 0.0
+    note_generation_rate(model, rate)  # the pre-action verifier's deadline follows this speed (#22254)
     logger.info(
         "[iteration_timing] model=%s total=%.1fs load=%.1fs "
         "prompt_eval=%d tok/%.1fs generation=%d tok/%.1fs (%.1f tok/s)",
