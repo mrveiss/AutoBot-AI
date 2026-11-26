@@ -167,3 +167,30 @@ class TestInjectAwarenessContext:
         result = await awareness.inject_awareness_context(prompt)
 
         assert result == prompt
+
+
+@pytest.mark.asyncio
+async def test_block_renders_collected_data_and_omits_route_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#22268: the block carries only collected fields; routes are not inlined."""
+    import llm_self_awareness_render as render
+
+    context = {
+        **REAL_DATA_CONTEXT,
+        "contextual_information": {"api_endpoints_available": ["/api/secret-route-xyz"]},
+    }
+    awareness = _make_awareness()
+
+    async def _fake(include_detailed: bool = False):
+        return context
+
+    monkeypatch.setattr(awareness, "get_system_context", _fake)
+    block = await awareness.inject_awareness_context("q")
+
+    assert "Phase: Phase 3: LLM Integration" in block
+    assert "Core: basic_api" in block and "Ai: llm_interface" in block
+    assert "Completed Phases: 2/10" in block
+    assert "/api/secret-route-xyz" not in block
+    assert "omits endpoint" in block
+
+    monkeypatch.setattr(render, "SELF_MODEL_QUERY_TOOL_NAME", "query_self_model")
+    assert "call the query_self_model tool" in await awareness.inject_awareness_context("q")
