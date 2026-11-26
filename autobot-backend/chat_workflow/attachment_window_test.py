@@ -14,11 +14,17 @@ from autobot_shared import chat_model_context
 from autobot_shared.ai_lines import VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_USER_KEY
 from autobot_shared.ssot_constants import ModelConfig
 from chat_workflow import attachment_context, prompt_window
-from context_window_manager import get_context_window_manager
+from context_window_manager import ContextWindowManager, get_context_window_manager
 
 MODEL = "chat-model-22016"
 SYSTEM = "S" * 11_000  # the real simple system prompt is about 11 KB
 BASE = "history and question " * 100
+
+
+@pytest.fixture(autouse=True)
+def declared_window(monkeypatch):
+    """Pin the declared window above the sent 8,192: the host's default model must not decide these tests."""
+    monkeypatch.setattr(ContextWindowManager, "get_adaptive_context_length", lambda self, model_name=None: 32768)
 
 
 @pytest.fixture
@@ -156,8 +162,12 @@ def test_a_failover_hop_gets_the_hop_models_declared_window_not_the_sent_one():
 async def test_a_hop_into_a_smaller_window_notifies_with_the_hop_windows_reserve_and_budget(chat_model, monkeypatch):
     cwm = get_context_window_manager()
     monkeypatch.setattr(attachment_context, "persist_notices", AsyncMock())
-    real = cwm.get_adaptive_context_length
-    monkeypatch.setattr(cwm, "get_adaptive_context_length", lambda m=None: 4096 if m == "hop-model" else real(m))
+    real = ContextWindowManager.get_adaptive_context_length  # class-level, so undo cannot leave an instance attribute
+    monkeypatch.setattr(
+        ContextWindowManager,
+        "get_adaptive_context_length",
+        lambda self, m=None: 4096 if m == "hop-model" else real(self, m),
+    )
     prompt = "x" * 14_000  # about 3,500 tokens: fits 8,192 with its reserve, not the hop's 4,096
     call = _call(prompt, system="sys")
     assert await attachment_context.send_point_notices(call) == []  # the sent window holds it

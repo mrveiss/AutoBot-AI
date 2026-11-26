@@ -17,13 +17,19 @@ from unittest.mock import patch
 import pytest
 
 from chat_history.layers import TieredContextBuilder
-from context_window_manager import get_context_window_manager
+from context_window_manager import ContextWindowManager, get_context_window_manager
 
 CHARS_PER_TOKEN = 4
 
 
 def _text(tokens: int, ch: str = "x") -> str:
     return ch * (tokens * CHARS_PER_TOKEN)
+
+
+@pytest.fixture(autouse=True)
+def declared_window(monkeypatch):
+    """Pin the declared window above the sent 8,192: the host's default model must not decide these tests."""
+    monkeypatch.setattr(ContextWindowManager, "get_adaptive_context_length", lambda self, model_name=None: 32768)
 
 
 @pytest.fixture
