@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
-from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
@@ -80,7 +79,7 @@ from chat_workflow.tool_permission_gate import caller_identity, permission_denia
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from services.remote_approval_sender import mirror_approval_request
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
-from tools.tool_records import CATEGORY_WEB_RESEARCH, tool_names_in_category
+from tools.tool_records import CATEGORY_WEB_RESEARCH, permission_value_for, tool_names_in_category
 from utils.errors import RepairableException
 from web_search_schema import WEB_SEARCH_SCHEMA  # noqa: F401  (re-exported: the schema lives in one module, #21877)
 
@@ -2423,7 +2422,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         # declaring the browser-read permission it requires.
         # #14529: folded onto the shared gate; also gains the execution_results record.
         denial = await permission_denial(
-            "web_search", params, session_id, Permission.MCP_BROWSER_READ.value, role, execution_results
+            "web_search", params, session_id, permission_value_for("web_search"), role, execution_results
         )
         if denial is not None:
             yield denial
@@ -2497,9 +2496,9 @@ class ToolHandlerMixin(InterpretationTurnMixin):
         # #14491: reuses the exact TOOL_PERMISSIONS entry already declared for
         # this tool name on the MCP-registry path — no bridge_name here (this
         # is the builtin path), so only the exact-name lookup can hit.
-        declared_permission = required_permission(tool_name)
-        perm = declared_permission.value if declared_permission else None
-        denial = await permission_denial(tool_name, params, session_id, perm, role, execution_results)
+        denial = await permission_denial(
+            tool_name, params, session_id, permission_value_for(tool_name), role, execution_results
+        )
         if denial is not None:
             yield denial
             return

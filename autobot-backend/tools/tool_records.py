@@ -25,8 +25,10 @@ literal list fails ``test_no_second_tool_list`` in ``tool_registry_test.py``.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+from autobot_shared.auth.mcp_tool_permissions import required_permission as _mcp_required_permission
+from autobot_shared.auth.permissions import Permission
 from autobot_shared.service_registry_core import SERVICE_DEFINITIONS
 from autobot_shared.tool_catalogue import BROWSER_TOOLS
 
@@ -44,47 +46,59 @@ CATEGORY_WEB_RESEARCH = "web_research"
 #: The read-only chat tool over the SLM self-model (#22278); the self-awareness block points at it.
 SELF_MODEL_QUERY_TOOL_NAME = "query_self_model"
 
-#: name -> (category, execution location). Order is the order the model's prompt lists them.
-REGISTRY_TOOLS: Dict[str, Tuple[str, str]] = {
-    "execute_system_command": ("system", LOCATION_WORKER),
+#: name -> (category, execution location, required Permission or None). The permission is the one the chat
+#: handler enforces for the tool; None means the handler declares no check, so any authenticated caller may use it
+#: (#22278). Order is the order the model's prompt lists them.
+REGISTRY_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = {
+    "execute_system_command": ("system", LOCATION_WORKER, None),
     # These two fall back to the backend's SystemIntegration when no worker node is attached (#22267).
-    "query_system_information": ("system", LOCATION_WORKER),
-    "list_system_services": ("system", LOCATION_WORKER),
-    "manage_service": ("system", LOCATION_WORKER),
-    "get_process_info": ("system", LOCATION_WORKER),
-    "terminate_process": ("system", LOCATION_WORKER),
-    "web_fetch": ("web", LOCATION_BACKEND),
-    "web_search": ("web", LOCATION_BACKEND),
-    "search_knowledge_base": ("knowledge", LOCATION_BACKEND),
-    "add_file_to_knowledge_base": ("knowledge", LOCATION_BACKEND),
-    "store_fact": ("knowledge", LOCATION_BACKEND),
-    "get_fact": ("knowledge", LOCATION_BACKEND),
-    SELF_MODEL_QUERY_TOOL_NAME: ("self_model", LOCATION_BACKEND),
-    "type_text": ("gui", LOCATION_WORKER),
-    "click_element": ("gui", LOCATION_WORKER),
-    "bring_window_to_front": ("gui", LOCATION_WORKER),
-    "read_text_from_region": ("gui", LOCATION_WORKER),  # #12070
-    "move_mouse": ("gui", LOCATION_WORKER),
-    "ask_user_for_manual": ("conversation", LOCATION_BACKEND),
-    "respond_conversationally": ("conversation", LOCATION_BACKEND),
-    "code_interpreter": ("code", LOCATION_BACKEND),
-    "scrape_url": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND),  # #7509
-    "crawl_site": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND),
-    "map_site": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND),
-    "extract_structured_data": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND),
-    "content_reach": ("web", LOCATION_BACKEND),  # #10932
+    "query_system_information": ("system", LOCATION_WORKER, None),
+    "list_system_services": ("system", LOCATION_WORKER, None),
+    "manage_service": ("system", LOCATION_WORKER, None),
+    "get_process_info": ("system", LOCATION_WORKER, None),
+    "terminate_process": ("system", LOCATION_WORKER, None),
+    "web_fetch": ("web", LOCATION_BACKEND, None),
+    "web_search": ("web", LOCATION_BACKEND, Permission.MCP_BROWSER_READ),
+    "search_knowledge_base": ("knowledge", LOCATION_BACKEND, None),
+    "add_file_to_knowledge_base": ("knowledge", LOCATION_BACKEND, None),
+    "store_fact": ("knowledge", LOCATION_BACKEND, None),
+    "get_fact": ("knowledge", LOCATION_BACKEND, None),
+    SELF_MODEL_QUERY_TOOL_NAME: ("self_model", LOCATION_BACKEND, None),
+    "type_text": ("gui", LOCATION_WORKER, None),
+    "click_element": ("gui", LOCATION_WORKER, None),
+    "bring_window_to_front": ("gui", LOCATION_WORKER, None),
+    "read_text_from_region": ("gui", LOCATION_WORKER, None),  # #12070
+    "move_mouse": ("gui", LOCATION_WORKER, None),
+    "ask_user_for_manual": ("conversation", LOCATION_BACKEND, None),
+    "respond_conversationally": ("conversation", LOCATION_BACKEND, None),
+    "code_interpreter": ("code", LOCATION_BACKEND, None),
+    "scrape_url": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ),  # #7509
+    "crawl_site": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_WRITE),
+    "map_site": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
+    "extract_structured_data": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
+    "content_reach": ("web", LOCATION_BACKEND, None),  # #10932
 }
 
 #: Offered only while the tool-output spill flag is on (#13754, #13865).
-SPILL_READ_TOOL = ("read_spilled_output", ("conversation", LOCATION_BACKEND))
+SPILL_READ_TOOL = ("read_spilled_output", ("conversation", LOCATION_BACKEND, None))
 
 
 def tool_names_in_category(category: str) -> List[str]:
     """Registry tool names of one category, in catalogue order."""
-    return [name for name, (cat, _) in REGISTRY_TOOLS.items() if cat == category]
+    return [name for name, (cat, _, _perm) in REGISTRY_TOOLS.items() if cat == category]
 
 
-def _spill_tools() -> Dict[str, Tuple[str, str]]:
+def required_permission_for(tool_name: str) -> Optional[Permission]:
+    """The Permission the chat handler requires for registry tool *tool_name*; None when it declares no check."""
+    return {**REGISTRY_TOOLS, **dict([SPILL_READ_TOOL])}.get(tool_name, (None, None, None))[2]
+
+
+def permission_value_for(tool_name: str) -> Optional[str]:
+    """:func:`required_permission_for` as the dot-style value the BEFORE_TOOL_EXECUTE gate takes."""
+    return _value(required_permission_for(tool_name))
+
+
+def _spill_tools() -> Dict[str, Tuple[str, str, Optional[Permission]]]:
     """The spill read tool when its flag is on, else nothing (never breaks prompt building)."""
     # Guarded: importing the leaf pulls in the whole ``agent_loop`` package (#13754).
     try:
@@ -108,6 +122,16 @@ def prompt_tool_names() -> List[str]:
     return [*REGISTRY_TOOLS, *_spill_tools(), *sorted(BROWSER_TOOL_NAMES)]
 
 
+def _value(permission: Optional[Permission]) -> Optional[str]:
+    """A Permission's dot-style value, or None."""
+    return permission.value if permission else None
+
+
+def _browser_permission(name: str) -> Optional[str]:
+    """The browser tool's declared permission: the one the browser handler enforces (#14469)."""
+    return _value(_mcp_required_permission(name))
+
+
 def _record(name: str, location: str, **fields: Any) -> Dict[str, Any]:
     """One tool as a plain record."""
     return {"kind": TOOL_RECORD_KIND, "name": name, "serving_service": location, "fields": fields}
@@ -126,6 +150,7 @@ def _sdk_records() -> List[Dict[str, Any]]:
             description=m.description,
             version=m.version,
             permission=m.permission.value,
+            required_permission=m.permission.value,
             tags=list(m.tags),
         )
         for m in get_tool_registry().list_tools()
@@ -135,8 +160,11 @@ def _sdk_records() -> List[Dict[str, Any]]:
 def tool_records() -> List[Dict[str, Any]]:
     """Every tool as a plain record (kind, stable name, serving service, declared fields)."""
     registry = [
-        _record(n, loc, source="tool_registry", category=cat)
-        for n, (cat, loc) in {**REGISTRY_TOOLS, **_spill_tools()}.items()
+        _record(n, loc, source="tool_registry", category=cat, required_permission=_value(perm))
+        for n, (cat, loc, perm) in {**REGISTRY_TOOLS, **_spill_tools()}.items()
     ]
-    browser = [_record(n, LOCATION_BROWSER, source="browser", category="browser") for n in BROWSER_TOOLS]
+    browser = [
+        _record(n, LOCATION_BROWSER, source="browser", category="browser", required_permission=_browser_permission(n))
+        for n in BROWSER_TOOLS
+    ]
     return [*registry, *browser, *_sdk_records()]

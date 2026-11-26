@@ -213,3 +213,59 @@ def test_no_second_tool_list():
                 if hits >= 5:
                     offenders.append(f"{path.relative_to(root)}:{node.lineno}")
     assert not offenders, f"#22276: second tool-name list in {offenders}; derive from tools.tool_records"
+
+
+# ---------------------------------------------------------------------------
+# One definition of each tool's required permission (#22278)
+# ---------------------------------------------------------------------------
+
+
+def test_every_registry_tool_declares_its_required_permission():
+    from autobot_shared.auth.permissions import Permission
+    from tools.tool_records import REGISTRY_TOOLS, SPILL_READ_TOOL
+
+    for name, entry in {**REGISTRY_TOOLS, **dict([SPILL_READ_TOOL])}.items():
+        assert len(entry) == 3, f"{name} must declare (category, location, required permission or None)"
+        assert entry[2] is None or isinstance(entry[2], Permission), name
+
+
+def test_catalogue_permissions_agree_with_the_mcp_permission_table():
+    from autobot_shared.auth.mcp_tool_permissions import TOOL_PERMISSIONS
+    from tools.tool_records import REGISTRY_TOOLS, required_permission_for
+
+    # search_knowledge_base is declared KNOWLEDGE_READ on the MCP path but the chat handler enforces no check
+    # for it (reported in #22278, not silently picked).
+    for name in set(REGISTRY_TOOLS) & set(TOOL_PERMISSIONS) - {"search_knowledge_base"}:
+        assert required_permission_for(name) == TOOL_PERMISSIONS[name], name
+
+
+def test_catalogue_declares_the_checks_the_handler_enforced():
+    from autobot_shared.auth.permissions import Permission
+    from tools.tool_records import required_permission_for
+
+    assert required_permission_for("web_search") == Permission.MCP_BROWSER_READ
+    assert required_permission_for("crawl_site") == Permission.KNOWLEDGE_WRITE
+    assert required_permission_for("scrape_url") == Permission.KNOWLEDGE_READ
+    assert required_permission_for("execute_system_command") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["scrape_url", "crawl_site"])
+async def test_handler_gate_takes_the_permission_from_the_catalogue(monkeypatch, tool):
+    from autobot_shared.auth.permissions import Permission
+    from chat_workflow import tool_handler
+    from tools import tool_records
+
+    gate = []
+
+    async def deny(name, params, session_id, permission, role, results):
+        gate.append(permission)
+        return object()
+
+    monkeypatch.setattr(tool_handler, "permission_denial", deny)
+    entry = tool_records.REGISTRY_TOOLS[tool]
+    monkeypatch.setitem(tool_records.REGISTRY_TOOLS, tool, (*entry[:2], Permission.WORKFLOW_CREATE))
+    handler = tool_handler.ToolHandlerMixin()
+    async for _ in handler._handle_web_research_tool(tool, {"params": {}}, [], "s", "user"):
+        pass
+    assert gate == [Permission.WORKFLOW_CREATE.value]
