@@ -231,7 +231,7 @@ def test_auto_fix_runs_only_after_verify_failed() -> None:
     assert "needs.run-generated-types.result == 'failure'" in condition
 
 
-def test_triage_structure_ignores_labels_that_cannot_change_its_verdict() -> None:
-    condition = _doc(_TRIAGE)["jobs"]["structure"]["if"]
-    assert "startsWith(github.event.label.name, 'phase:')" in condition
-    assert "github.event.label.name == 'needs-structure'" in condition
+def test_triage_structure_has_no_event_level_condition() -> None:
+    """#21854 replaced the #20552 label filter: a skipped run still takes the single pending
+    slot, so every run sweeps and the window (issue_structure.py) decides what is checked."""
+    assert "if" not in _doc(_TRIAGE)["jobs"]["structure"]

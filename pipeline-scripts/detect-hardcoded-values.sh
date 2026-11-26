@@ -115,6 +115,33 @@ if [ -n "$PATHS_FROM" ]; then
     done
 fi
 
+# Where an already-baselined occurrence of this value may have come from (#15196).
+#
+# The baseline is keyed by path, so code MOVED out of a baselined file reads as a
+# brand-new violation in its new home and a stranded entry in the old one. Both
+# halves are true to the detector and neither tells the maintainer the value is
+# years old. This names the file whose entry for the same class and value now
+# claims more than the scan found, i.e. the likely origin of a relocated value.
+# Prints nothing when there is none: a new value is then genuinely new. It only
+# annotates; it never suppresses, so it cannot be used to wave a finding through.
+# Needs a completed hv_partition (HV_BASELINE_SEEN is read).
+hv_relocation_note() {
+    local class="${1:?class required}" file="${2:?file required}" value="${3-}" key old
+    for key in "${HV_SORTED_KEYS[@]}"; do
+        [[ $key == "${class}|"*"|${value}" ]] || continue
+        old="${key#"${class}|"}"
+        old="${old%"|${value}"}"
+        [ "$old" != "$file" ] || continue
+        # A scoped audit (--paths-from) only scanned its own paths: an unscanned file's entry
+        # looks stranded but is simply unread, so it is no evidence of a move.
+        if [ "${#HV_ONLY_FILES[@]}" -gt 0 ] && [ -z "${HV_ONLY_FILES[$old]:-}" ]; then continue; fi
+        [ "${HV_BASELINE_SEEN[$key]:-0}" -lt "${HV_BASELINE[$key]}" ] || continue
+        printf ' (relocated? the baseline records this value under %s, which no longer has it: the value is old, not new; replace it with the SSOT constant rather than re-baselining it)' "$old"
+        return 0
+    done
+    return 0
+}
+
 RAW=$(mktemp); NEWFILE=$(mktemp)
 trap 'rm -f "$RAW" "$NEWFILE"' EXIT
 (
@@ -126,6 +153,8 @@ trap 'rm -f "$RAW" "$NEWFILE"' EXIT
 # its counters die with it — see the note on the function.
 hv_partition < "$RAW" > "$NEWFILE"
 SUPPRESSED="$HV_SUPPRESSED"
+# Sorted once, here, because hv_relocation_note runs in a subshell per finding and cannot cache.
+mapfile -t HV_SORTED_KEYS < <(printf '%s\n' "${!HV_BASELINE[@]}" | LC_ALL=C sort)
 NEW=$(cat "$NEWFILE")
 
 count_of() { grep -c "$1" "$NEWFILE" || true; }
@@ -170,7 +199,9 @@ if [ "$AUDIT_BASELINE" = true ]; then
     # the other, and the pre-push check that saw only the first passed the second.
     if [ "${#HV_ONLY_FILES[@]}" -gt 0 ] && [ "$TOTAL_VIOLATIONS" -gt 0 ]; then
         echo "${TOTAL_VIOLATIONS} hardcoded value(s) in the changed files are not in ${BASELINE#"$REPO_ROOT"/}:"
-        grep '^VIOLATION|' "$NEWFILE" | sed 's/^/  /'
+        grep '^VIOLATION|' "$NEWFILE" | while IFS='|' read -r sev class file lineno value; do
+            echo "  ${sev}|${class}|${file}|${lineno}|${value}$(hv_relocation_note "$class" "$file" "$value")"
+        done
         echo
         echo "Move each value to the SSOT config (see the detector's --report for the fix per class)."
         exit 1
@@ -312,7 +343,7 @@ elif [ "$REPORT_MODE" = true ]; then
     if [ -n "$NEW" ]; then
         echo "--- New findings ---"
         printf '%s\n' "$NEW" | while IFS='|' read -r sev class file lineno value; do
-            [ -n "$sev" ] && echo "[$sev/$class] $file:$lineno  $value"
+            [ -n "$sev" ] && echo "[$sev/$class] $file:$lineno  $value$(hv_relocation_note "$class" "$file" "$value")"
         done
     fi
 else

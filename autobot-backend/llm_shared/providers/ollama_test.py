@@ -301,3 +301,18 @@ class TestSessionTracking:
                 assert manager._active_requests == baseline + 1
 
         assert manager._active_requests == baseline, "counter must return to baseline after the CM exits"
+
+
+class TestRequestNumCtx:
+    """A request may carry its own context size (the verifier reusing the chat model, #21844)."""
+
+    def test_metadata_num_ctx_overrides_the_settings_default(self):
+        provider = _make_provider()
+        req = _make_request()
+        req.metadata["num_ctx"] = 8192
+        assert provider.build_request_data(req, "llama3.1", use_streaming=False)["options"]["num_ctx"] == 8192
+
+    def test_without_metadata_the_settings_num_ctx_is_kept(self):
+        provider = _make_provider()
+        data = provider.build_request_data(_make_request(), "llama3.1", use_streaming=False)
+        assert data["options"]["num_ctx"] == provider.settings.num_ctx

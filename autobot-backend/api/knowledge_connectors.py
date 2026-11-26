@@ -36,22 +36,24 @@ from redis.exceptions import RedisError
 
 from api._connector_auth_validation import validated_connector_auth
 from api._connector_keys import (
-    _HISTORY_KEY_SUFFIX,
     _REDIS_KEY_PREFIX,
     _connector_key,
     _delete_connector_keys,
     _history_key,
 )
+from api._connector_keys import is_config_key as _is_config_key
 from api._connector_sync_claim import claim_or_refuse, run_claimed_sync
 from api._connector_sync_result import record_last_sync
+from api.admin_connector_credentials import router as _credentials_router
+from api.knowledge_connector_oauth import attachable_secret_id
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from constants.error_constants import ERR_CONNECTOR_NOT_FOUND
 from knowledge.connectors.credential_store import get_credential_store
-from knowledge.connectors.job_state import JOB_KEY_SUFFIX as _JOB_KEY_SUFFIX
 from knowledge.connectors.job_state import read_job_state
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
@@ -79,6 +81,7 @@ router = APIRouter(
     tags=["knowledge-connectors"],
     dependencies=[Depends(check_admin_permission)],
 )
+router.include_router(_credentials_router)
 
 _SUPPORTED_TYPES = [
     "file_server",
@@ -107,8 +110,6 @@ _OAUTH_AUTH_TYPE = "OAuthRefreshAuth"
 # --- Redis helpers ---
 
 _MAX_HISTORY = 50
-# Suffixes / infixes that mark non-config Redis keys under connector: namespace.
-_NON_CONFIG_INFIXES = (_HISTORY_KEY_SUFFIX, _JOB_KEY_SUFFIX, ":schedule:", "scheduler:")
 
 
 # Config keys that hold an operator-configured *instance host* (#13625). These
@@ -231,10 +232,6 @@ async def _list_connector_ids() -> List[str]:
     ids: List[str] = []
     async_scan = hasattr(redis, "scan_iter") and asyncio.iscoroutinefunction(getattr(redis, "scan_iter", None))
 
-    def _is_config_key(key_str: str) -> bool:
-        stripped = key_str[len(_REDIS_KEY_PREFIX) :]
-        return not any(infix in stripped for infix in _NON_CONFIG_INFIXES)
-
     if async_scan:
         async for key in redis.scan_iter(match=pattern):
             key_str = key.decode("utf-8") if isinstance(key, bytes) else key
@@ -288,7 +285,7 @@ async def _cfg_with_credentials(cfg: ConnectorConfig, auth_cls: type | None) -> 
         full_config = await get_credential_store().load(cfg.secret_id, cfg.config, auth_cls, owner_id)
     except (LookupError, PermissionError) as exc:
         logger.error("Failed to load credentials for connector %s: %s", cfg.connector_id, exc, exc_info=True)
-        raise HTTPException(status_code=403, detail="Internal server error") from exc
+        raise fixed_refusal(403) from exc
 
     return dataclasses.replace(cfg, config=full_config)
 
@@ -304,7 +301,7 @@ async def _oauth_full_config(cfg: ConnectorConfig, auth_cls: type, owner_id: str
         access_token = await get_credential_store().get_access_token(cfg.secret_id, owner_id)
     except (LookupError, PermissionError) as exc:
         logger.error("Failed to resolve OAuth token for connector %s: %s", cfg.connector_id, exc, exc_info=True)
-        raise HTTPException(status_code=403, detail="Internal server error") from exc
+        raise fixed_refusal(403) from exc
     sensitive = sorted(auth_cls.__sensitive_fields__)
     token_field = sensitive[0] if sensitive else "token"
     return {**cfg.config, token_field: access_token}
@@ -463,10 +460,7 @@ async def create_connector(
 ):
     """Create a new connector, test the connection, and persist the config."""
     if request.connector_type not in _SUPPORTED_TYPES:
-        raise HTTPException(
-            status_code=422,
-            detail="connector_type must be one of: %s" % _SUPPORTED_TYPES,
-        )
+        raise HTTPException(status_code=422, detail="connector_type must be one of: %s" % _SUPPORTED_TYPES)
     connector_id = str(uuid.uuid4())
     klass, auth_cls, auth_type = validated_connector_auth(request)
 
@@ -480,10 +474,9 @@ async def create_connector(
         raise HTTPException(status_code=401, detail="Authenticated caller has no resolvable identity")
     safe_config = request.config
     secret_id: str | None = None
-    # OAuth flow already stored the token bundle (store_oauth) and handed back a
-    # secret_id; attach it by reference and mark it OAuth-managed — never re-store.
+    # The OAuth flow stored the token bundle and returned a secret_id: attach by reference, never re-store.
     if request.secret_id:
-        secret_id = request.secret_id
+        secret_id = await attachable_secret_id(request.secret_id, owner_id)
         auth_type = _OAUTH_AUTH_TYPE
     elif auth_cls is not None and hasattr(auth_cls, "__sensitive_fields__"):
         credential_store = get_credential_store()

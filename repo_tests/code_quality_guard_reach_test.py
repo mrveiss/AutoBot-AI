@@ -77,6 +77,18 @@ def test_backend_filter_patterns_survives_a_comment_mid_list(tmp_path):
     assert patterns == ["before/**", "after/**"]
 
 
+def test_backend_filter_patterns_reads_past_a_bullet_with_a_trailing_comment(tmp_path):
+    """#21471: `- 'x'  # #NNNN` is one bullet in YAML. Matching only a bare bullet ended the list at the
+    first cited addition, so every entry after it read as uncovered."""
+    filters = tmp_path / ".github" / "filters"
+    filters.mkdir(parents=True)
+    (filters / "code-quality-paths.yml").write_text(
+        "backend:\n" "  - 'before/**'\n" "  - 'cited/**'  # #21471: why\n" "  - 'after/**'\n" "other:\n" "  - 'no'\n",
+        encoding="utf-8",
+    )
+    assert checker.backend_filter_patterns(tmp_path) == ["before/**", "cited/**", "after/**"]
+
+
 def test_backend_filter_patterns_ignores_a_nested_backend_key(tmp_path):
     """A `backend:` inside a workflow's `filters: |` literal is a DIFFERENT set.
 

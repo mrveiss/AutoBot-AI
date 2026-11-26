@@ -247,6 +247,59 @@ def test_a_merge_the_gate_cannot_account_for_fails(train):
     assert "cannot account for" in gate.check_range("main..train").findings[0]
 
 
+def passenger(pr: int, head: str, *strategy: str, suffix: str = " (passenger)") -> None:
+    message = f"Merge the #{pr} research doc @ {head[:10]} into the merge train{suffix}"
+    run("merge", "-q", "--no-ff", *strategy, "-m", message, head)
+
+
+def test_a_passenger_merge_is_accepted_and_its_content_checked(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}))
+    report = gate.check_range("main..train", "chore(merge-train): #1")
+    assert report.findings == [] and (report.members, report.files, report.lines) == (2, 2, 2)
+    assert any(note.startswith("passenger #7: merged at") for note in report.notes)
+    assert "#7 is declared" in gate.check_range("main..train", "chore(merge-train): #1 #7").findings[0]
+
+
+def test_a_passenger_that_lost_its_file_is_reported(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}), "-s", "ours")
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "passenger #7 docs/seven.md: missing" in findings[0]
+
+
+def test_a_passenger_merged_twice_is_a_finding_not_an_overwrite(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}))
+    passenger(7, member("seven-b", {"docs/seven-b.md": LONG.format("7b")}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "passenger #7 merged more than once" in findings[0]
+    assert "merge each passenger once" in findings[0]
+    assert gate.check_range("main..train").files == 3
+
+
+def test_the_older_of_two_same_numbered_passenger_merges_is_measured_too(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}), "-s", "ours")
+    passenger(7, member("seven-b", {"docs/seven-b.md": LONG.format("7b")}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 2 and "merged more than once" in findings[0]
+    assert "passenger #7 (" in findings[1] and " docs/seven.md: missing" in findings[1]
+
+
+def test_a_range_with_only_a_passenger_merge_measures_nothing(train):
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "nothing was measured" in findings[0]
+
+
+def test_a_passenger_like_merge_without_the_suffix_is_unaccounted(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}), suffix="")
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "cannot account for" in findings[0]
+
+
 def test_merging_main_into_the_train_adds_no_member(train):
     board(1, member("one", {"one.txt": LONG.format(1)}))
     run("switch", "-q", "main")

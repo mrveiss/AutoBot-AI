@@ -23,7 +23,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from utils.chromadb_client import get_all_paginated
 
 from ..analyzers import normalize_hardcode_record
-from ..problem_dedup import dedupe_same_location_problems
+from ..problem_dedup import dedupe_same_location_problems, normalise_line
 from ..problem_query import ProblemCategory, problem_where, select_category
 from ..run_status import with_run_state
 from ..scanner import _tasks_sync_lock, indexing_tasks
@@ -401,13 +401,12 @@ async def get_hardcoded_values(
 
 def _parse_problem_metadata(metadata: dict) -> dict:
     """Parse problem from metadata. (Issue #315 - extracted)"""
-    line_num = metadata.get("line_number")
     return {
         "type": metadata.get("problem_type", ""),
         "severity": metadata.get("severity", ""),
         "file_path": metadata.get("file_path", ""),
         "file_category": metadata.get("file_category", "code"),
-        "line_number": int(line_num) if line_num else None,
+        "line_number": normalise_line(metadata.get("line_number")),  # #21782: a bad value is no line
         "description": metadata.get("description", ""),
         "suggestion": metadata.get("suggestion", ""),
     }
@@ -427,11 +426,12 @@ def _fetch_problems_from_chromadb(
     """
     where_filter = problem_where(require_source_id(source_id, "problems query"), problem_type, file_category)
     results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
-    problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
+    # #21782: narrow by category on the raw rows first, so a row of another category is never parsed.
+    problems = [_parse_problem_metadata(m) for m in select_category(results.get("metadatas", []), file_category)]
 
     # Issue #2724: Validate file paths against the indexed repository root.
     # #20513: the source's own root, never AutoBot's tree as a stand-in.
-    return select_category(filter_problems_by_file_existence(problems, source_root), file_category)
+    return filter_problems_by_file_existence(problems, source_root)
 
 
 async def _fetch_problems_from_redis(problem_type: str | None, source_id: str) -> tuple:

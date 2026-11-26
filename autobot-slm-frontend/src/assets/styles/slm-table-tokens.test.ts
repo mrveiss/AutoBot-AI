@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // The kit adapter maps every --aui-table-* token to a --tbl-* token (#14778). The SLM
-// must define each of those in every theme, high-contrast included, or the mapped
+// must define each of those in every theme, contrast and mono included, or the mapped
 // value is invalid and the table loses its sizes, borders and type.
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -15,8 +15,6 @@ const ADAPTER = read('../../../../libs/autobot-ui/src/tokens/adapter.css')
 const SCHEME = read('./slm-scheme.css')
 
 const ALL_THEMES = ":root[data-app='slm']"
-const HIGH_CONTRAST = ":root[data-app='slm'][data-theme='high-contrast']"
-const OTHER_THEMES = ":root[data-app='slm']:not([data-theme='high-contrast'])"
 
 const consumed = [...new Set([...ADAPTER.matchAll(/var\((--tbl-[a-z-]+)\)/g)].map((m) => m[1]))]
 
@@ -41,18 +39,12 @@ describe('SLM table tokens', () => {
     expect(consumed.length).toBeGreaterThan(10)
   })
 
-  it('defines every adapter table token under high-contrast', () => {
-    // fails if a --tbl-* token is defined only in the non-high-contrast block
-    expect(missingIn([ALL_THEMES, HIGH_CONTRAST])).toEqual([])
+  it('defines every adapter table token for every theme', () => {
+    // one selector now serves all four themes: the legacy high-contrast block is folded into contrast (#18239)
+    expect(missingIn([ALL_THEMES])).toEqual([])
   })
 
-  it('defines every adapter table token in the other themes', () => {
-    expect(missingIn([ALL_THEMES, OTHER_THEMES])).toEqual([])
-  })
-
-  it('does not count the non-high-contrast block toward high-contrast', () => {
-    // contrast case: the colours live in that block, so it must be told apart
-    expect(declaredUnder(OTHER_THEMES).has('--tbl-head-bg')).toBe(true)
-    expect(missingIn([ALL_THEMES])).toContain('--tbl-head-bg')
+  it('keeps no separate legacy high-contrast block', () => {
+    expect(SCHEME).not.toContain("data-theme='high-contrast'")
   })
 })

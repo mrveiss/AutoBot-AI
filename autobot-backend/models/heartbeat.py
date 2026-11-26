@@ -68,6 +68,16 @@ class HeartbeatStatus(str, Enum):
     TERMINATED = "terminated"
 
 
+def new_control_id() -> uuid.UUID:
+    """A fresh ``control_id``: every writer of an agent's status stamps one, so a failed control can tell its
+    own change from any newer one, even one that wrote the same status and actor (#21376)."""
+    return uuid.uuid4()
+
+
+DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 300
+DEFAULT_MAX_RUN_DURATION_SECONDS = 600
+
+
 class AgentRuntimeState(Base):
     """Persistent runtime state per agent, survives restarts (#1407)."""
 
@@ -75,17 +85,20 @@ class AgentRuntimeState(Base):
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(String(255), nullable=False, unique=True, index=True)
-    heartbeat_interval_seconds = Column(Integer, nullable=False, default=300)
-    max_run_duration_seconds = Column(Integer, nullable=False, default=600)
+    heartbeat_interval_seconds = Column(Integer, nullable=False, default=DEFAULT_HEARTBEAT_INTERVAL_SECONDS)
+    max_run_duration_seconds = Column(Integer, nullable=False, default=DEFAULT_MAX_RUN_DURATION_SECONDS)
     current_task_id = Column(String(255), nullable=True, index=True)
     session_params = Column(JSONB, nullable=True)
     last_heartbeat_at = Column(DateTime, nullable=True)
     extra = Column(JSONB, nullable=True)
-    # Explicit status replaces the old heartbeat_enabled boolean (GH#6476)
-    status = Column(String(32), nullable=False, default=HeartbeatStatus.ACTIVE.value, index=True)
+    # Explicit status replaces the old heartbeat_enabled boolean (GH#6476).
+    # A new row starts OFF: the heartbeat is opt-in, enabled only by a deliberate write (#21992, #15907).
+    status = Column(String(32), nullable=False, default=HeartbeatStatus.DISABLED.value, index=True)
     paused_reason = Column(Text, nullable=True)
     paused_at = Column(DateTime, nullable=True)
     paused_by = Column(String(255), nullable=True)
+    # A fresh id per committed pause/resume/terminate: a failed control restores only its own change (#21376)
+    control_id = Column(Uuid(as_uuid=True), nullable=True)
     # Error state metadata (MVA-1411)
     error_detail = Column(Text, nullable=True)
     error_at = Column(DateTime, nullable=True)
@@ -103,6 +116,7 @@ class AgentRuntimeState(Base):
     @heartbeat_enabled.setter
     def heartbeat_enabled(self, value: bool) -> None:
         self.status = HeartbeatStatus.ACTIVE.value if value else HeartbeatStatus.DISABLED.value
+        self.control_id = new_control_id()
         if value:
             # Clear pause metadata whenever the agent is re-enabled (P1: GH#6476)
             self.paused_reason = None

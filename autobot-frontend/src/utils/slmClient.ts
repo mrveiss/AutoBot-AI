@@ -31,6 +31,7 @@ import { getSLMUrl } from '@/config/ssot-config'
 const logger = createLogger('SlmClient')
 
 // Same env-backed default the SLM app's own client uses (30 s when unset).
+// Deliberate duplicate across the two apps: ARCHITECTURE_EXCEPTIONS.md, "SLM API Timeout" (#21810).
 const DEFAULT_TIMEOUT_MS = getEnvPositiveInt(import.meta.env, 'VITE_SLM_API_TIMEOUT_MS', 30_000)
 
 export class SlmClient extends ApiClientBase<TransportRequestOptions> {

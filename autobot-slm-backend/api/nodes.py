@@ -30,6 +30,7 @@ from api.node_ssh_helpers import (  # noqa: F401  # used by test-connection belo
     _handle_file_not_found_error,
 )
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+from autobot_shared.install_paths import safe_relative_dir
 from autobot_shared.ssot_config import config
 from models.database import (
     Certificate,
@@ -76,7 +77,7 @@ from models.schemas import (
     UpdatePolicyResponse,
 )
 from services.ansible_utils import summarize_playbook_failure
-from services.auth import get_current_user
+from services.auth import get_current_user, get_current_user_or_registry_service
 from services.code_status import derive_code_status as _derive_code_status
 from services.code_status import get_latest_code_version as _get_latest_code_version
 from services.code_status import reported_code_status as _reported_code_status
@@ -84,6 +85,7 @@ from services.database import get_db
 from services.encryption import encrypt_data
 from services.node_events import create_node_event, enrollment_details
 from services.reconciler import reconciler_service
+from services.role_removal_dir import record_role_report, role_removal_path
 from services.ssh_utils import build_ssh_base_cmd
 from services.temp_inventory import write_linked_inventory
 
@@ -109,26 +111,21 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
     Updates NodeRole entries based on detected roles.
     """
     from models.schemas import RoleReportItem
+    from services.pending_role_provisioning import provisioner_holds
 
     for role_name, report_data in role_report.items():
-        # Handle both dict and RoleReportItem
         if isinstance(report_data, dict):
             report = RoleReportItem(**report_data)
         else:
             report = report_data
 
-        # Find or create NodeRole entry
+        # Only roles already assigned via the wizard are updated (#2900: no SLM-manager roles on every node). A
+        # provisioner-held row (failed/installing) is left untouched: any write moves updated_at, the retry
+        # cooldown's clock (#22262).
         result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id, NodeRole.role_name == role_name))
         node_role = result.scalar_one_or_none()
-
-        if not node_role:
-            # Only update roles that are already assigned — don't auto-create
-            # entries for roles detected on a node but not assigned via the
-            # wizard.  This prevents SLM-manager roles (slm-backend, etc.)
-            # from appearing on every node that runs the agent (#2900).
+        if not node_role or await provisioner_holds(db, node_role):
             continue
-
-        # Update role status
         node_role.status = report.status
         node_role.current_version = report.version
 
@@ -396,7 +393,7 @@ async def _query_nodes_page(db: AsyncSession, status_filter: str | None, page: i
     if status_filter:
         query = query.where(Node.status == status_filter)
 
-    query = query.order_by(Node.hostname)
+    query = query.order_by(Node.hostname, Node.node_id)
 
     # Count the filtered set (the previous `query.whereclause or True`
     # always collapsed to True, silently dropping the filter -> wrong
@@ -434,7 +431,7 @@ async def _query_nodes_page(db: AsyncSession, status_filter: str | None, page: i
 @router.get("", response_model=NodeListResponse)
 async def list_nodes(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
+    _: Annotated[dict, Depends(get_current_user_or_registry_service)],
     status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -807,12 +804,12 @@ async def _run_preflight(node_id: str, role_name: str, db: AsyncSession) -> Pref
     Checks port conflicts, hard manifest conflicts, and soft warnings.
     """
     from services.manifest_loader import get_manifest_loader
+    from services.role_manifest_errors import manifest_errors, no_manifest_preflight
 
     loader = get_manifest_loader()
     candidate = loader.load(role_name)
-
-    if candidate is None:
-        return PreflightResult(allowed=True, role_name=role_name, node_id=node_id, manifest_found=False)
+    if candidate is None or role_name in manifest_errors():  # #22067: a failed manifest refuses
+        return no_manifest_preflight(node_id, role_name)
 
     candidate_ports = set(candidate.port_numbers())
     hard_conflicts = set(candidate.hard_conflicts())
@@ -1007,11 +1004,7 @@ async def assign_role_to_node(
 
 
 async def _execute_provision_playbook(
-    db: AsyncSession,
-    node_id: str,
-    node,
-    roles: list,
-    target_roles: list,
+    db: AsyncSession, node_id: str, node, roles: list, target_roles: list, **playbook_kwargs
 ) -> dict:
     """Helper for provision_node_roles. Ref: #1088, #2678, #2959.
 
@@ -1019,12 +1012,13 @@ async def _execute_provision_playbook(
     node_roles (same pattern as setup_wizard.py) so provision-fleet-roles.yml
     phase conditions evaluate correctly for the target node.
     """
+    import json
+
     from services.playbook_executor import get_playbook_executor
     from services.role_registry import ROLE_DEPENDENCIES
 
     executor = get_playbook_executor()
     ssh_user = node.ssh_user or "autobot"
-
     roles_yaml = "".join(f"        - {r}\n" for r in target_roles)
 
     deps: set = set()
@@ -1036,6 +1030,8 @@ async def _execute_provision_playbook(
         "all:\n"
         "  hosts:\n"
         "    provision_target:\n"
+        f"      node_hostname: {json.dumps(node.hostname)}\n"  # the credential name uses it (#22211)
+        f"      slm_node_id: {node_id}\n"  # the vnc role registers its credential only when this is set (#22211)
         f"      ansible_host: {node.ip_address}\n"
         f"      ansible_user: {ssh_user}\n"
         "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
@@ -1047,6 +1043,7 @@ async def _execute_provision_playbook(
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
             inventory_path=tmp_inv,
+            **playbook_kwargs,
         )
     finally:
         tmp_inv.unlink(missing_ok=True)
@@ -1139,11 +1136,12 @@ async def remove_role_from_node(
         )
 
     # Look up the systemd service name and target path from Role table
-    service_name, target_path = await _get_role_service_and_path(db, role_name)
+    service_name = await _get_role_service(db, role_name)
+    target_dir = await role_removal_path(db, node_id, role_name)  # #22030: own install dir, not the sync target
 
     # If there's a service, run Ansible to stop and clean up
     if service_name:
-        ansible_result = await _run_role_removal(node_id, role_name, service_name, backup, target_path)
+        ansible_result = await _run_role_removal(node_id, role_name, service_name, backup, target_dir)
         if not ansible_result["success"]:
             logger.error(
                 "Role removal failed for node %s role %s: %s",
@@ -1224,13 +1222,10 @@ async def mark_dependency_for_removal(
     return {"status": "marked_for_removal", "dependency": dep_name}
 
 
-async def _get_role_service_and_path(db: AsyncSession, role_name: str) -> tuple[str | None, str | None]:
-    """Look up the systemd service name and target path for a role (first unit, #16025)."""
-    result = await db.execute(select(Role.systemd_service, Role.target_path).where(Role.name == role_name))
-    row = result.one_or_none()
-    if row is None:
-        return None, None
-    return (row[0][0] if row[0] else None), row[1]
+async def _get_role_service(db: AsyncSession, role_name: str) -> str | None:
+    """The role's first systemd unit (#16025); its directory comes from ``role_removal_path`` (#22030)."""
+    units = (await db.execute(select(Role.systemd_service).where(Role.name == role_name))).scalar_one_or_none()
+    return units[0] if units else None
 
 
 async def _run_role_removal(
@@ -1238,9 +1233,9 @@ async def _run_role_removal(
     role_name: str,
     service_name: str,
     backup: bool,
-    target_path: str | None = None,
+    target_dir: str | None = None,
 ) -> dict:
-    """Execute the remove-role Ansible playbook."""
+    """Execute the remove-role Ansible playbook; ``target_dir`` is relative to the install root (#22030)."""
     from services.playbook_executor import get_playbook_executor
 
     executor = get_playbook_executor()
@@ -1249,14 +1244,13 @@ async def _run_role_removal(
         "systemd_service": service_name,
         "backup_before_removal": str(backup).lower(),
     }
-    if target_path:
-        extra_vars["role_target_dir"] = os.path.basename(target_path.rstrip("/"))  # /opt/x/y -> y
+    if rel_dir := safe_relative_dir(target_dir):  # #22030: never the root, "..", an absolute path or outside it
+        extra_vars["role_target_dir"] = rel_dir
     try:
         result = await executor.execute_playbook("playbooks/remove-role.yml", limit=[node_id], extra_vars=extra_vars)
     except ValueError:  # #19005: Role.systemd_service is not a unit name; the sink refused before spawning
         logger.warning("Role removal refused: role=%s systemd_service=%s", role_name, repr(service_name)[:80])
         return {"success": False, "output": "Role systemd_service is not a valid unit name"}
-    # Extract backup path from output if backup was requested
     if backup and result["success"]:
         result["backup_path"] = _parse_backup_path(result.get("output", ""))
     return result
@@ -1891,7 +1885,7 @@ async def _apply_heartbeat_reports(db: AsyncSession, node_id: str, heartbeat: He
     if heartbeat.role_report:
         try:
             await _process_role_report(db, node_id, heartbeat.role_report)
-            node.detected_roles = _detected_role_names(heartbeat.role_report)
+            record_role_report(node, _detected_role_names(heartbeat.role_report))
             node.role_versions = {
                 name: report.version for name, report in heartbeat.role_report.items() if report.version
             }

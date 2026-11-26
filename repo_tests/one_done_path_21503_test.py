@@ -12,8 +12,14 @@ What can still bypass it is code that skips ``transition_status``:
 * a ``DoneGate(...)`` built outside the two homes that build one (the accessors, which fill it with the real
   services, and the service, which rebuilds it from ``transition_to_done``'s arguments), since a caller's own
   permissive gate is a way round the real one; and
-* a write of ``WorkItemStatus.DONE`` to a work item outside the two homes that may stamp it: the service
-  (``transition_to_done``'s stamp) and ``HandoffService.approve`` (a reviewer's decision, the review flow itself).
+* a write of ``WorkItemStatus.DONE`` to a work item outside the service (``transition_to_done``'s stamp): a
+  reviewer's approval finishes the item through that same path (#21590), so the handoff no longer writes it; and
+* a LITERAL write of ``WorkItemStatus.IN_REVIEW`` outside its one home (the handoff's ``agent_to_human``),
+  since an item put in review with no reviewer named has nobody entitled to approve it (#21591). This census
+  sees only literal-member writes (``.status = IN_REVIEW``, a stamp helper given the literal,
+  ``.values(status=...)``, ``LLCWorkItem(status=...)``). The generic ``WorkItemService.transition_status``
+  path writes a status held in a variable, so it can still enter review without a reviewer; that path is
+  the open decision in #21645.
 
 Boundary: a name is followed through ``import ... as`` and ``Alias = Name``; a write is an assignment (plain or
 annotated) of the member to ``.status``, a stamp helper given it, ``.values(status=...)`` or ``LLCWorkItem(status=...)``
@@ -38,8 +44,10 @@ _SERVICE = "autobot-backend/llc/services/work_item_service.py"
 _HANDOFF = "autobot-backend/llc/services/handoff.py"
 #: Where a call to ``transition_to_done`` may be: the service itself (``transition_status`` delegates to it).
 _CALL_HOMES = frozenset({_SERVICE})
-#: Where ``WorkItemStatus.DONE`` may be written to a work item.
-_WRITE_HOMES = frozenset({_SERVICE, _HANDOFF})
+#: Where ``WorkItemStatus.DONE`` may be written to a work item: only the service (#21590).
+_DONE_HOMES = frozenset({_SERVICE})
+#: Where ``WorkItemStatus.IN_REVIEW`` may be written to a work item.
+_REVIEW_HOMES = frozenset({_HANDOFF})
 #: Where a ``DoneGate`` may be constructed.
 _GATE_HOMES = frozenset({_SERVICE, "autobot-backend/llc/services/accessors.py"})
 _STAMPS = frozenset({"stamp_status", "stamp_and_release"})
@@ -107,10 +115,10 @@ def _calls_of(tree: ast.AST, symbol: str) -> list[ast.Call]:
     return found
 
 
-def _is_done(node: ast.AST, status_names: set[str]) -> bool:
+def _is_done(node: ast.AST, status_names: set[str], member: str = "DONE") -> bool:
     return (
         isinstance(node, ast.Attribute)
-        and node.attr == "DONE"
+        and node.attr == member
         and isinstance(node.value, (ast.Name, ast.Attribute))
         and (getattr(node.value, "id", None) in status_names or getattr(node.value, "attr", None) == "WorkItemStatus")
     )
@@ -126,8 +134,13 @@ def gate_constructions(source: str) -> list[int]:
     return sorted(c.lineno for c in _calls_of(parse_cache.parse(source), "DoneGate"))
 
 
-def done_writes(source: str) -> list[int]:
-    """Lines writing ``WorkItemStatus.DONE`` to a work item. The write shapes, and only these:
+def review_writes(source: str) -> list[int]:
+    """Lines writing ``WorkItemStatus.IN_REVIEW`` to a work item: the same write shapes as ``done_writes``."""
+    return done_writes(source, "IN_REVIEW")
+
+
+def done_writes(source: str, member: str = "DONE") -> list[int]:
+    """Lines writing ``WorkItemStatus.<member>`` (DONE unless told) to a work item. The write shapes, and only these:
 
     * ``x.status = DONE`` and ``x.status: T = DONE``;
     * a stamp helper (``stamp_status`` / ``stamp_and_release``) given it as an argument;
@@ -138,7 +151,7 @@ def done_writes(source: str) -> list[int]:
     """
     tree = parse_cache.parse(source)
     status_names = _bound(tree, "WorkItemStatus")
-    done = lambda n: _is_done(n, status_names)  # noqa: E731
+    done = lambda n: _is_done(n, status_names, member)  # noqa: E731
     found = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None and done(node.value):
@@ -257,7 +270,7 @@ def _production() -> list[tuple[str, str]]:
         if is_test_filename(base, include_js=False) or "/tests/" in f"/{rel}" or "test_support" in base:
             continue
         text = (_ROOT / rel).read_text(encoding="utf-8")
-        if "DONE" in text or "transition_to_done" in text or "DoneGate" in text:
+        if "DONE" in text or "IN_REVIEW" in text or "transition_to_done" in text or "DoneGate" in text:
             sources.append((rel, text))
     return sources
 
@@ -268,8 +281,50 @@ def test_nothing_outside_the_service_calls_the_done_transition() -> None:
 
 
 def test_nothing_outside_the_homes_writes_done_to_a_work_item() -> None:
-    offenders = [f"{rel}:{n}" for rel, text in _production() if rel not in _WRITE_HOMES for n in done_writes(text)]
+    offenders = [f"{rel}:{n}" for rel, text in _production() if rel not in _DONE_HOMES for n in done_writes(text)]
     assert not offenders, "a work item is finished by WorkItemService.transition_status: " + ", ".join(offenders)
+
+
+def test_nothing_outside_the_homes_writes_in_review_to_a_work_item() -> None:
+    offenders = [f"{rel}:{n}" for rel, text in _production() if rel not in _REVIEW_HOMES for n in review_writes(text)]
+    message = "a literal IN_REVIEW write outside HandoffService.agent_to_human (generic transition path: #21645): "
+    assert not offenders, message + ", ".join(offenders)
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("item.status = WorkItemStatus.IN_REVIEW", [1]),
+        ("item.status: WorkItemStatus = WorkItemStatus.IN_REVIEW", [1]),
+        ("from m import WorkItemStatus as S\nitem.status = S.IN_REVIEW", [2]),
+        ("await s.execute(update(LLCWorkItem).values(status=WorkItemStatus.IN_REVIEW))", [1]),
+        ("row = LLCWorkItem(title=t, status=WorkItemStatus.IN_REVIEW)", [1]),
+        ("item.status = WorkItemStatus.DONE", []),
+        ("item.status = new_status", []),
+        ("if item.status == WorkItemStatus.IN_REVIEW:\n    pass", []),
+        ("q = select(LLCWorkItem).filter_by(status=WorkItemStatus.IN_REVIEW)", []),
+        ("q = select(LLCWorkItem).where(LLCWorkItem.status == WorkItemStatus.IN_REVIEW)", []),
+    ],
+    ids=[
+        "assign",
+        "annotated-assign",
+        "aliased-enum",
+        "update-values",
+        "new-row",
+        "done-is-the-other-guard",
+        "variable",
+        "compare",
+        "filter-by-is-a-read",
+        "where-is-a-read",
+    ],
+)
+def test_control_a_write_of_in_review_is_seen(source: str, expected: list[int]) -> None:
+    assert review_writes(source) == expected
+
+
+def test_the_review_home_is_real() -> None:
+    """Control: the handoff still writes in-review itself, so its excuse cannot outlive the code."""
+    assert review_writes(dict(_production())[_HANDOFF])
 
 
 def test_nothing_outside_the_homes_builds_a_done_gate() -> None:
@@ -282,5 +337,8 @@ def test_nothing_outside_the_homes_builds_a_done_gate() -> None:
 def test_the_homes_are_real() -> None:
     """Control: each home is examined and does what it is excused for, so an excuse cannot outlive its code."""
     seen = {rel: text for rel, text in _production()}
-    assert done_writes(seen[_SERVICE]) and done_writes(seen[_HANDOFF])
+    assert done_writes(seen[_SERVICE]), f"{_SERVICE} is the done home but no longer writes DONE: stale exemption"
+    for home in sorted(_REVIEW_HOMES):
+        assert review_writes(seen[home]), f"{home} is a review home but no longer writes IN_REVIEW: stale exemption"
+    assert not done_writes(seen[_HANDOFF]), "the handoff finishes an item through the done path, never its own write"
     assert all(gate_constructions(seen[home]) for home in _GATE_HOMES)

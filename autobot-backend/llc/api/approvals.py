@@ -20,8 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
 from autobot_shared.logging_manager import get_logger
-from llc.deps import assert_company_access, get_session, load_authorized, service_dep
+from autobot_shared.security.redaction import safe_log_text
+from llc.deps import SESSION_DEP, assert_company_access, load_authorized, service_dep
 from models.approval import Approval
 from services.ai_line_change_action import ACTION as LINE_CHANGE_ACTION
 from services.approval_execution import is_server_only_action, run_post_approval_actions, set_verified_decider
@@ -92,7 +94,7 @@ class ApprovalResponse(BaseModel):
 @router.post("/approvals", response_model=ApprovalResponse, status_code=201)
 async def request_approval(
     body: ApprovalRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: ApprovalService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -114,7 +116,7 @@ async def request_approval(
                 actor_user_id=ctx.user_id,
             )
     except ApprovalHookError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="approvals.request_approval") from None
     await svc.publish_requested(approval)
     return _to_response(approval)
 
@@ -123,7 +125,7 @@ async def request_approval(
 async def list_pending(
     company_id: str = Query(..., description="Filter by company"),
     type: Optional[ApprovalType] = Query(None, description="Filter by gate type"),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: ApprovalService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -147,7 +149,7 @@ class PendingCountResponse(BaseModel):
 @router.get("/companies/{company_id}/approvals/pending-count", response_model=PendingCountResponse)
 async def pending_count(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: ApprovalService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -161,7 +163,7 @@ async def pending_count(
 async def decide_approval(
     approval_id: str,
     body: ApprovalDecision,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     svc: ApprovalService = Depends(_service),
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -205,21 +207,25 @@ async def decide_approval(
         await session.commit()
     except NotAuthorisedError as exc:
         await session.rollback()
-        logger.warning("Refused approval decision on %s: %s", aid, exc)
+        logger.warning("Refused approval decision on %s: %s", aid, safe_log_text(repr(exc)))
         raise HTTPException(status_code=403, detail="Only a company owner or admin may decide an approval")
     except ApprovalHookError as exc:
         await session.rollback()
-        logger.warning("Approval %s left pending: its action could not be applied: %s", aid, exc)
+        logger.warning(
+            "Approval %s left pending: its action could not be applied: %s",
+            aid,
+            safe_log_text(repr(exc)),
+        )
         raise HTTPException(
             status_code=409, detail="The approved action could not be applied; the approval is still pending"
         )
     except ApprovalNotFoundError as exc:
         await session.rollback()
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error")
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise fixed_refusal(404)
     except (ApprovalStateError, ApprovalRequiredError):
         await session.rollback()
-        raise HTTPException(status_code=409, detail="Internal server error")
+        raise fixed_refusal(409)
     except Exception:
         await session.rollback()
         raise

@@ -36,12 +36,14 @@ export function isSuperadminRole(role: string | null | undefined): boolean {
 }
 
 /**
- * The roles an administrator may assign in the UI (#14937). The owner kept this to
- * admin/user/readonly: `set_user_role` is guarded by `require_platform_admin`, so
- * offering `superadmin` would let an admin grant a role above their own. The
- * backend's `RoleUpdateRequest` pattern accepts the same three.
+ * The roles an administrator may assign in the UI (#14937). `superadmin` is not offered:
+ * `set_user_role` is guarded by `require_platform_admin`, so it would let an admin grant
+ * a role above their own. `admin` is not offered either (#20670): the role route writes
+ * permission rows only and never changes platform admin status, which has its own route,
+ * `PUT /users/{id}/admin`, and its own control. The backend's `RoleUpdateRequest` still
+ * accepts `admin`, as a permission role.
  */
-export const ASSIGNABLE_ROLES = ['admin', 'user', 'readonly'] as const satisfies readonly Role[]
+export const ASSIGNABLE_ROLES = ['user', 'readonly'] as const satisfies readonly Role[]
 
 /** The role a user record without one is treated as -- the least-privileged named role an account is created with. */
 export const DEFAULT_ROLE: Role = 'user'

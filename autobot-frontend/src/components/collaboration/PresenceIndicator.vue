@@ -95,14 +95,14 @@ const props = defineProps<{
         class="ml-2 text-xs text-red-400 flex items-center gap-1"
       >
         <i class="bi bi-exclamation-triangle" />
-        {{ $t('collaboration.presence.offline') }}
+        {{ $t('collaboration.presenceIndicator.offline') }}
       </span>
     </div>
 
     <!-- Expanded View -->
     <div v-else class="space-y-2">
       <div class="text-xs font-medium text-autobot-text-muted mb-2">
-        {{ $t('collaboration.presence.participants', { count: sessionPresence.length }) }}
+        {{ $t('collaboration.presenceIndicator.participants', { count: sessionPresence.length }) }}
       </div>
 
       <!-- My entry -->
@@ -118,11 +118,11 @@ const props = defineProps<{
             <span class="text-sm font-medium text-autobot-text-primary truncate">
               {{ myPresence.username }}
             </span>
-            <span class="text-xs text-blue-400">{{ $t('collaboration.presence.you') }}</span>
+            <span class="text-xs text-blue-400">{{ $t('collaboration.presenceIndicator.you') }}</span>
           </div>
           <div class="flex items-center gap-1 text-xs text-autobot-text-muted">
             <i :class="`bi bi-${getTabIcon(myPresence.currentTab)}`" />
-            <span>{{ $t('collaboration.presence.tabLabel', { tab: myPresence.currentTab || $t('collaboration.presence.unknownTab') }) }}</span>
+            <span>{{ $t('collaboration.presenceIndicator.tabLabel', { tab: myPresence.currentTab || $t('collaboration.presenceIndicator.unknownTab') }) }}</span>
           </div>
         </div>
       </div>
@@ -142,7 +142,7 @@ const props = defineProps<{
           </div>
           <div class="flex items-center gap-1 text-xs text-autobot-text-muted">
             <i :class="`bi bi-${getTabIcon(collaborator.currentTab)}`" />
-            <span>{{ $t('collaboration.presence.tabLabel', { tab: collaborator.currentTab || $t('collaboration.presence.unknownTab') }) }}</span>
+            <span>{{ $t('collaboration.presenceIndicator.tabLabel', { tab: collaborator.currentTab || $t('collaboration.presenceIndicator.unknownTab') }) }}</span>
           </div>
         </div>
         <div class="text-xs text-autobot-text-muted">
@@ -156,7 +156,7 @@ const props = defineProps<{
         class="text-center py-4 text-autobot-text-muted"
       >
         <i class="bi bi-people text-lg mb-1" />
-        <div class="text-xs">{{ $t('collaboration.presence.noParticipants') }}</div>
+        <div class="text-xs">{{ $t('collaboration.presenceIndicator.noParticipants') }}</div>
       </div>
     </div>
   </div>

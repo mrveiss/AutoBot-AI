@@ -83,6 +83,13 @@ for _path in (str(_SCRIPT.parents[2]), str(_SCRIPT.parents[1])):
         sys.path.remove(_path)
     sys.path.insert(0, _path)
 
+# stdout is this CLI's interface (one JSON document, `| from_json`ed by ansible), and
+# get_logger() sends INFO to stdout: services/sync_deletions.py logs "keeping <path>" at INFO,
+# so a kept path put a timestamped line before the JSON (#22044). Route it before the import.
+from autobot_shared.stream_logging import route_console_to_stderr  # noqa: E402
+
+route_console_to_stderr()
+
 from services.git_subprocess import ensure_full_history  # noqa: E402
 from services.sync_deletions import DeletionPlan, compute_bootstrap_plan, compute_deletion_plan  # noqa: E402
 

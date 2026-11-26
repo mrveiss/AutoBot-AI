@@ -363,7 +363,9 @@ async def test_a_lost_success_audit_is_raised_not_swallowed(monkeypatch, fleet, 
 def _admins(*ids):
     session = MagicMock()
     result = MagicMock()
-    result.scalars.return_value.all.return_value = list(ids)
+    result.scalars.return_value.all.return_value = [
+        types.SimpleNamespace(id=i, is_platform_admin=True, is_active=True, deleted_at=None) for i in ids
+    ]
     session.execute = AsyncMock(return_value=result)
     return session
 

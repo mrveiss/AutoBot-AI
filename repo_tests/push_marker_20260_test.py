@@ -14,6 +14,7 @@ from pathlib import Path
 
 from repo_tests._machine_slot_hook import fake_load, hook_functions
 from repo_tests._paths import repo_root
+from repo_tests.branch_sync_19548_test import REPO, _pull  # the one PR fixture: it holds a CI slot (land-next)
 
 _ROOT = repo_root()
 _HOOK = (_ROOT / "tools/git-hooks/pre-push").read_text(encoding="utf-8")
@@ -50,17 +51,12 @@ class _Syncer:
 
 def _run(monkeypatch, being_pushed: set) -> dict:
     _Syncer.seen = []
-    pull = {
-        "number": 1,
-        "created_at": "2026-01-01",
-        "head": {"ref": "issue-1-a", "sha": "abc", "repo": {"full_name": "o/r"}},
-        "base": {"ref": "main"},
-    }
+    pull = _pull(1, "issue-1-a")
     monkeypatch.setattr(branch_sync, "Syncer", _Syncer)
     git = type(
         "G", (), {"branches": lambda s: ["issue-1-a"], "being_pushed": lambda s: being_pushed, "out": lambda s, *a: ""}
     )()
-    gh = type("H", (), {"repo": "o/r", "open_pulls": lambda s: [pull]})()
+    gh = type("H", (), {"repo": REPO, "open_pulls": lambda s: [pull]})()
     return branch_sync.run(git, gh, "main", dry_run=False)
 
 

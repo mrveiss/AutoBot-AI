@@ -1,0 +1,10 @@
+# The one-time re-measure of the #20910 mount fix (owner rulings 2026-11-15 and 2026-11-16, "Baseline + wiring issue"): judging SLM
+# routes at their real mount (the app's include graph) newly flagged these seven routes, which no caller in the repository
+# reaches; each is to be wired or retired under #21651. The list is frozen: it may not gain a line against the base.
+route:autobot-slm-backend/api/agent_ledger.py:GET /waitlists
+route:autobot-slm-backend/api/auth.py:POST /users
+route:autobot-slm-backend/api/code_source.py:POST /upload-package
+route:autobot-slm-backend/api/code_sync.py:GET /nodes/{node_id}/package
+route:autobot-slm-backend/api/memory_lifecycle_proxy.py:GET /lifecycle
+route:autobot-slm-backend/api/performance.py:GET /metrics/node/{node_id}
+route:autobot-slm-backend/api/redis_service.py:GET /status

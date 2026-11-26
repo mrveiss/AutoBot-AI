@@ -437,11 +437,11 @@ const tabs: Tab[] = [
 
 .wr-btn--primary {
   background: var(--color-primary);
-  color: var(--bg-primary);
+  color: var(--text-on-primary);
 }
 
 .wr-btn--primary:not(:disabled):hover {
-  filter: brightness(1.1);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text-on-primary) 35%, transparent);
 }
 
 .wr-btn--ghost {

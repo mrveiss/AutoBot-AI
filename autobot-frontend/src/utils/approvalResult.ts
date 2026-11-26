@@ -11,6 +11,14 @@
 /** The backend's refusal when Redis cannot confirm the approval's state. */
 export const APPROVAL_STATE_UNAVAILABLE = 'Approval state unavailable, retry'
 
+/** The refusal body for an approval that is not pending; the server now answers it with HTTP 409 (#19951). */
+export const NO_PENDING_APPROVAL = 'No pending approval'
+
+/** True when *err* is the 409 the server answers a second decision on a decided approval with (#19951). */
+export function isAlreadyDecided(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { status?: unknown }).status === 409
+}
+
 export interface ApprovalResponseBody {
   status?: string
   error?: string

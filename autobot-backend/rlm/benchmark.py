@@ -162,6 +162,11 @@ async def _generate(
 # -----------------------------------------------------------------------
 
 
+def _score_or_zero(score: float | None) -> float:
+    """A benchmark needs a number: a pass the evaluator gave no reading for counts as 0, never as a pass (#21845)."""
+    return 0.0 if score is None else score
+
+
 async def _run_single_pass(query: str, category: str, model: str) -> SinglePassResult:
     """Run a single-pass LLM call and evaluate the response."""
     evaluator = ResponseQualityEvaluator()
@@ -177,7 +182,7 @@ async def _run_single_pass(query: str, category: str, model: str) -> SinglePassR
         query=query,
         category=category,
         response=response,
-        quality_score=result.quality_score,
+        quality_score=_score_or_zero(result.quality_score),
         latency_ms=latency,
         response_tokens=tokens,
     )
@@ -204,9 +209,9 @@ async def _run_rlm_pass(
         total_tokens += len(response.split())
 
         result = await evaluator.evaluate(query=query, response=response, iteration=i + 1)
-        scores.append(result.quality_score)
+        scores.append(_score_or_zero(result.quality_score))
 
-        if result.quality_score >= cfg.quality_threshold:
+        if scores[-1] >= cfg.quality_threshold:
             break
 
         if i < cfg.max_reflections:

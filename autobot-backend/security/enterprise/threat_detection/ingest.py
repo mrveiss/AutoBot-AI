@@ -84,6 +84,11 @@ FILE_ACTION_BY_SUFFIX: Dict[str, str] = {
     "view": "file_read",
 }
 
+# The platform's own agent acting inside a user's turn (#18844): the AI-line gate reports each tool call it
+# lets run. It is not a request to the API, so it must not count toward `api_abuse` rate or endpoint rules.
+AGENT_ACTION_PREFIXES = ("ai_line.",)
+ENGINE_AGENT_ACTION = "agent_action"
+
 # Everything the engine should still see, behaviourally, without pretending to
 # be one of the specialised shapes above.
 DEFAULT_ENGINE_ACTION = "api_request"
@@ -110,6 +115,8 @@ def engine_action(audit_action: str) -> str:
         return DEFAULT_ENGINE_ACTION
     if action in ENGINE_ACTION_BY_CANONICAL:
         return ENGINE_ACTION_BY_CANONICAL[action]
+    if action.startswith(AGENT_ACTION_PREFIXES):
+        return ENGINE_AGENT_ACTION
     if any(action.startswith(prefix) for prefix in AUTHENTICATION_PREFIXES):
         return "authentication"
     if action.startswith("file."):

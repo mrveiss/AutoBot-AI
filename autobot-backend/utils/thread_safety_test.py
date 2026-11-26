@@ -6,123 +6,22 @@
 Tests for Issue #481 Race Condition Fixes
 
 Verifies thread safety of:
-1. TracingService singleton initialization
-2. Analytics dependencies global state protection
-3. Intelligent agent reload thread safety
-4. Config file write locking
+1. Analytics dependencies global state protection
+2. Intelligent agent reload thread safety
+3. Config file write locking
+
+(The TracingService singleton and its double-checked-lock tests went with the service, #21685.)
 
 These tests use concurrent execution to verify no race conditions exist.
 """
 
-import ast
 import asyncio
 import collections
-import inspect
-import textwrap
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
 import pytest
-
-# Enough concurrency to lose an unguarded double-check reliably on WSL2/CI.
-THREAD_COUNT = 20
-
-
-def _require_real_tracing_service() -> None:
-    """Skip when OpenTelemetry is absent; fail when TracingService is a stub.
-
-    #11681: the guarded import had rotted to ``pass`` (autoflake-era), so
-    missing otel instrumentation FAILED these tests instead of skipping them.
-
-    #13094: skipping on ``ImportError`` alone was not enough. conftest's
-    ``_real_load_light_services`` replaces any ``services/*.py`` whose exec
-    raises with a MagicMock package stub, so ``import services.tracing_service``
-    SUCCEEDED while ``TracingService`` resolved to a Mock — two tests failed
-    against the Mock's internals and two passed vacuously (a Mock class returns
-    the same ``return_value`` every call, so the singleton assertions held for
-    the wrong reason). A stub is a defect to surface, not a reason to skip.
-    """
-    try:
-        import opentelemetry  # noqa: F401
-    except ImportError as e:  # pragma: no cover - depends on the environment
-        pytest.skip(f"OpenTelemetry unavailable: {e}")
-    try:
-        from services.tracing_service import TracingService
-    except ImportError as e:  # pragma: no cover - depends on the environment
-        pytest.skip(f"TracingService unavailable: {e}")
-    assert isinstance(TracingService, type), (
-        "services.tracing_service resolved to a conftest MagicMock stub, not the real module — "
-        "the assertions in this file would be vacuous (#13094)"
-    )
-
-
-class TestTracingServiceSingleton:
-    """Test thread-safe singleton for TracingService (Issue #481)"""
-
-    @pytest.fixture(autouse=True)
-    def skip_if_opentelemetry_unavailable(self):
-        """Guard: real TracingService or skip — never a Mock (#11681, #13094)."""
-        _require_real_tracing_service()
-
-    def test_singleton_returns_same_instance(self):
-        """Test that TracingService returns same instance on multiple calls"""
-        from services.tracing_service import TracingService
-
-        # Get two instances
-        instance1 = TracingService()
-        instance2 = TracingService()
-
-        # Should be the same instance
-        assert instance1 is instance2
-
-    def test_concurrent_singleton_access(self):
-        """Test that concurrent access returns same singleton instance"""
-        from services.tracing_service import TracingService
-
-        # Reset singleton for clean test (#11681: canonical seam)
-        TracingService.reset_instance()
-
-        instances = []
-        errors = []
-
-        def get_instance():
-            try:
-                instance = TracingService()
-                instances.append(instance)
-            except Exception as e:
-                errors.append(e)
-
-        # Create 20 threads that all try to get the singleton simultaneously
-        threads = [threading.Thread(target=get_instance) for _ in range(20)]
-
-        # Start all threads at once
-        for t in threads:
-            t.start()
-
-        # Wait for all to complete
-        for t in threads:
-            t.join()
-
-        # Verify no errors
-        assert len(errors) == 0, f"Errors during concurrent access: {errors}"
-
-        # Verify all instances are the same object
-        assert len(instances) == 20
-        first_instance = instances[0]
-        for instance in instances[1:]:
-            assert instance is first_instance, "Different instances created!"
-
-    def test_singleton_lock_exists(self):
-        """Test that TracingService has a lock for thread safety"""
-        from services.tracing_service import TracingService
-
-        assert hasattr(TracingService, "_lock")
-        assert isinstance(TracingService._lock, type(threading.Lock()))
-
-
-# TestAnalyticsMonitoringThreadSafety class removed in Issue #532
-# analytics_monitoring.py was deleted - monitoring endpoints consolidated in monitoring.py
 
 
 class TestAnalyticsCodeThreadSafety:
@@ -201,7 +100,7 @@ class TestConfigServiceFileLocking:
         from services.config_service import ConfigService
 
         assert hasattr(ConfigService, "_config_write_lock")
-        assert isinstance(ConfigService._config_write_lock, type(threading.Lock()))
+        assert isinstance(ConfigService._config_write_lock, type(threading.RLock()))
 
     def test_save_config_uses_lock(self):
         """Test that _save_config_to_file uses lock"""
@@ -331,126 +230,6 @@ class TestExistingLockVerification:
 
         assert hasattr(analytics_controller, "_analytics_state_lock")
         assert isinstance(analytics_controller._analytics_state_lock, asyncio.Lock)
-
-
-def _run_on_threads(target, count: int = THREAD_COUNT) -> list:
-    """Release *count* threads simultaneously and collect their exceptions."""
-    barrier = threading.Barrier(count)
-    errors: list[BaseException] = []
-
-    def _wrapped():
-        try:
-            barrier.wait(timeout=5)
-            target()
-        except BaseException as exc:  # noqa: BLE001 - reported via `errors`
-            errors.append(exc)
-
-    threads = [threading.Thread(target=_wrapped) for _ in range(count)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join(timeout=10)
-    return errors
-
-
-def _lock_guarded_assignment_targets_from_source(source: str) -> set[str]:
-    """Names assigned inside a ``with ..._lock:`` block in *source*."""
-    guarded: set[str] = set()
-    for node in ast.walk(ast.parse(textwrap.dedent(source))):
-        if not isinstance(node, ast.With):
-            continue
-        if not any("_lock" in ast.unparse(item.context_expr) for item in node.items):
-            continue
-        for inner in ast.walk(node):
-            if isinstance(inner, ast.Assign):
-                guarded.update(ast.unparse(t) for t in inner.targets)
-    return guarded
-
-
-def _lock_guarded_assignment_targets(func) -> set[str]:
-    """Names assigned inside a ``with cls._lock:`` block in *func*.
-
-    The behavioural race test below cannot see a missing lock: under the GIL,
-    20 threads never interleave the two bytecodes between the ``is None`` check
-    and the assignment, so removing the lock leaves it green (#13311 review,
-    mutation M7). Whether a critical section is *held* is a structural property
-    of the code, so it is asserted structurally — same "kept as a lint, but
-    parsed" treatment used elsewhere in this PR.
-    """
-    return _lock_guarded_assignment_targets_from_source(inspect.getsource(func))
-
-
-class TestDoubleCheckedLocking:
-    """Test that double-checked locking pattern is correctly implemented"""
-
-    @pytest.fixture(autouse=True)
-    def skip_if_opentelemetry_unavailable(self):
-        """Guard: real TracingService or skip — never a Mock (#11681, #13094)."""
-        _require_real_tracing_service()
-
-    def test_racing_constructors_all_get_the_same_instance(self):
-        """The #481 defect: two threads past an unguarded check each built one.
-
-        This used to grep ``inspect.getsource(TracingService.__new__)`` for
-        ``with cls._lock:`` and count ``_instance is None`` (#13311). Race the
-        constructor instead and assert the singleton identity callers depend
-        on. Pairs with the lint below, which covers what a race cannot see.
-        """
-        from services.tracing_service import TracingService
-
-        TracingService.reset_instance()
-        instances = []
-
-        errors = _run_on_threads(lambda: instances.append(TracingService()))
-
-        assert not errors, f"errors during concurrent construction: {errors}"
-        assert len(instances) == THREAD_COUNT
-        distinct = {id(instance) for instance in instances}
-        assert len(distinct) == 1, (
-            f"#481 regression: {len(distinct)} distinct TracingService objects were "
-            f"created concurrently — spans would be split across tracer providers"
-        )
-
-    def test_the_singleton_assignment_happens_under_the_lock(self):
-        """A GIL-invisible unlocked window is still the #481 defect.
-
-        ``cls._instance = ...`` must sit inside ``with cls._lock:``; the race
-        test above stays green without it, so this is the half that catches it.
-        """
-        from services.tracing_service import TracingService
-
-        guarded = _lock_guarded_assignment_targets(TracingService.__new__)
-
-        assert "cls._instance" in guarded, (
-            "#481 regression: TracingService.__new__ assigns cls._instance outside "
-            f"`with cls._lock:` — a second thread can build a second singleton. "
-            f"Assignments currently under the lock: {sorted(guarded) or 'none'}"
-        )
-
-    def test_the_lock_lint_can_tell_the_two_shapes_apart(self):
-        """Guard the guard: a parser that returns nothing passes everything."""
-        locked = "def __new__(cls):\n    with cls._lock:\n        cls._instance = object()\n"
-        unlocked = "def __new__(cls):\n    # with cls._lock:\n    cls._instance = object()\n"
-
-        assert _lock_guarded_assignment_targets_from_source(locked) == {"cls._instance"}
-        assert _lock_guarded_assignment_targets_from_source(unlocked) == set()
-
-    def test_the_race_is_actually_run(self):
-        """Guard the guard: a singleton already built before the threads start
-        would make the identity assertion hold for the wrong reason."""
-        from services.tracing_service import TracingService
-
-        TracingService.reset_instance()
-        assert TracingService._instance is None
-
-        created = []
-        original_new = TracingService.__new__
-
-        errors = _run_on_threads(lambda: created.append(id(original_new(TracingService))))
-
-        assert not errors, f"errors during concurrent construction: {errors}"
-        assert len(created) == THREAD_COUNT, "the threads did not all reach __new__"
-        assert len(set(created)) == 1
 
 
 if __name__ == "__main__":

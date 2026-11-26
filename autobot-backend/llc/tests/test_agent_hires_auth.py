@@ -50,7 +50,7 @@ def _make_app(session_factory, *, org_id: uuid.UUID, is_platform_admin: bool):  
     from fastapi import FastAPI
 
     from llc.api import agent_hires as hires_api
-    from user_management.database import get_async_session
+    from llc.deps import get_session
     from user_management.services import TenantContext
 
     application = FastAPI()
@@ -65,7 +65,7 @@ def _make_app(session_factory, *, org_id: uuid.UUID, is_platform_admin: bool):  
                 await session.rollback()
                 raise
 
-    application.dependency_overrides[get_async_session] = _override_session
+    application.dependency_overrides[get_session] = _override_session
 
     def _override_current_user() -> dict:
         return {"id": str(_USER), "user_id": str(_USER), "username": "op", "role": "user"}
@@ -162,4 +162,34 @@ async def test_hire_same_tenant_authorized(session_factory) -> None:  # noqa: AN
                 f"/api/llc/companies/{_ORG_A}/agent-hires",
                 json={"agent_name": "MyAgent"},
             )
+    assert resp.status_code == 201, resp.text
+
+
+async def _post_hire(session_factory, commit: AsyncMock) -> httpx.Response:  # noqa: ANN001
+    """POST /agent-hires as a same-tenant caller, with the INSERT stubbed and *commit* as the commit outcome."""
+    app = _make_app(session_factory, org_id=_ORG_A, is_platform_admin=False)
+    client = await _client(app)
+    async with client:
+        with (
+            patch("sqlalchemy.ext.asyncio.AsyncSession.execute", AsyncMock(return_value=MagicMock())),
+            patch("sqlalchemy.ext.asyncio.AsyncSession.commit", commit),
+        ):
+            return await client.post("/api/llc/agent-hires", json={"company_id": str(_ORG_A)})
+
+
+@pytest.mark.asyncio
+async def test_a_hire_whose_commit_fails_is_not_answered_201(session_factory) -> None:  # noqa: ANN001
+    """#21332: the failed commit used to be logged and swallowed, and the caller got a 201 naming no row."""
+    from sqlalchemy.exc import OperationalError
+
+    failing = AsyncMock(side_effect=OperationalError("INSERT", {}, Exception("connection lost")))
+    resp = await _post_hire(session_factory, failing)
+    assert resp.status_code == 500, resp.text
+    assert resp.json() == {"detail": "The agent hire could not be recorded"}  # fixed text, never the driver message
+
+
+@pytest.mark.asyncio
+async def test_a_hire_whose_commit_succeeds_is_answered_201(session_factory) -> None:  # noqa: ANN001
+    """The control for the test above: the same request with a working commit is the 201 it always was."""
+    resp = await _post_hire(session_factory, AsyncMock())
     assert resp.status_code == 201, resp.text

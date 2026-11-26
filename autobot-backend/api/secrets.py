@@ -30,6 +30,7 @@ from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
+from api.infrastructure_host_rules import refuse_incomplete_host
 from api.schemas_common import DataResponse
 from api.schemas_system import (
     ChatSecretScope,
@@ -46,7 +47,7 @@ from api.schemas_system import (
     SecretUpdateRequest,
 )
 from api.secrets_audit import audit_secret_op, remember_actor
-from api.secrets_delete_outcome import record_delete_failure
+from api.secrets_delete_outcome import checked_secret_name, error_for, record_delete_failure
 from api.secrets_failure_log import describe_failure
 from api.secrets_ownership import stamp_owner
 from api.secrets_system_vault import create_system_vault_secret as _create_system_vault_secret
@@ -59,6 +60,7 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.auth import resolve_auth_type, validate_config_against_schema
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import REFUSAL_TEXT
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.ssot_config import config as ssot_config
@@ -70,6 +72,7 @@ from security.secrets_store_reader import load_secrets_json, secret_log_ref
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from services.json_secrets_read import load_imported_json_secret
 from services.provider_key_vault import mirror_provider_key_best_effort
+from services.secret_names import ReservedSecretNameError, refuse_reserved_secret_name
 from services.secrets_service import get_secrets_service
 from type_defs.common import Metadata
 from utils.secrets_store_migration import (
@@ -289,10 +292,10 @@ class SecretsManager:
 
     def create_secret(self, request: SecretCreateRequest) -> SecretModel:
         """Create a new secret (Issue #372 - uses model methods)."""
+        refuse_reserved_secret_name(request.name)  # #17850: at the store, so no caller can skip it
+        refuse_incomplete_host(request.type, request.metadata)  # #22145 E7
         secrets = self._load_secrets()
-
-        # Validate scope and chat_id consistency using model methods (Issue #372)
-        if request.requires_chat_id():
+        if request.requires_chat_id():  # scope/chat_id consistency (Issue #372)
             raise ValueError("Chat-scoped secrets must have a chat_id")
 
         # Create secret model using model method (Issue #372)
@@ -374,7 +377,7 @@ class SecretsManager:
 
         # Update fields
         if request.name is not None:
-            secret_data["name"] = request.name
+            secret_data["name"] = checked_secret_name(request.name)
         if request.description is not None:
             secret_data["description"] = request.description
         if request.tags is not None:
@@ -426,7 +429,7 @@ class SecretsManager:
         for secret_id in request.secret_ids:
             secret_data = secrets.get(secret_id)
             if not secret_data:
-                failed.append({"secret_id": secret_id, "reason": "Secret not found"})
+                failed.append({"secret_id": secret_id, "reason": REFUSAL_TEXT[404]})
                 continue
 
             # Check access permissions for source
@@ -673,8 +676,8 @@ async def create_secret(
     """Create a new secret (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
     try:
+        refuse_reserved_secret_name(request.name)  # #17850: one fixed 409 on every create branch, audited below
         _user = get_auth_middleware().get_user_from_request(http_request)
-
         if request.connector_id is not None:
             # #16428: bridged to ConnectorCredentialStore, never to this
             # store's own file -- #13632's one-store decision.
@@ -708,23 +711,20 @@ async def create_secret(
             outcome="success",
         )
         return JSONResponse(
-            status_code=201,
+            status_code=200 if secret_data.get("already_existed") else 201,
             content={
                 "status": "success",
                 "message": "Secret created successfully",
                 "secret": secret_data,
             },
         )
-    except PermissionError as e:
-        # #17099: a refused SYSTEM-vault write (non-admin) is a 403, not a 500.
+    except (PermissionError, ReservedSecretNameError) as e:  # #17099: 403 for a refused SYSTEM write; #17850: 409
         await audit_secret_op("CREATE", None, http_request, "denied", reason=type(e).__name__)
-        raise HTTPException(status_code=403, detail="Not permitted to create this secret")
+        raise error_for(e)
     except ValueError as e:
         await audit_secret_op("CREATE", None, http_request, "failed", reason=type(e).__name__)
-        raise HTTPException(status_code=400, detail="Internal server error")
-    except HTTPException:
-        # #16428: without this, get_coordinator()'s 503 (vault not configured)
-        # falls into the generic handler below and becomes a misleading 500.
+        raise HTTPException(status_code=400, detail=REFUSAL_TEXT[400])
+    except HTTPException:  # #16428: get_coordinator()'s 503 must not become the generic 500 below
         raise
     except Exception as e:
         await audit_secret_op("CREATE", None, http_request, "failed", reason=type(e).__name__)
@@ -885,8 +885,7 @@ async def get_secret(
         secret = await _get_secret_dual_read(secret_id, chat_id, owner_id)
         if not secret:
             await audit_secret_op("ACCESS", secret_id, http_request, "failed", reason="not_found")
-            raise HTTPException(status_code=404, detail="Secret not found")
-
+            raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
         # Issue #608: Track secret usage in memory graph when accessed within a chat
         if chat_id:
             memory_graph: AutoBotMemoryGraph | None = getattr(http_request.app.state, "memory_graph", None)
@@ -913,7 +912,7 @@ async def get_secret(
         return JSONResponse(status_code=200, content=secret)
     except PermissionError:
         await audit_secret_op("ACCESS", secret_id, http_request, "denied", reason="permission_denied")
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise HTTPException(status_code=403, detail=REFUSAL_TEXT[403])
     except HTTPException:
         raise
     except Exception as e:
@@ -955,11 +954,11 @@ async def update_secret(
                 await get_credential_store().rotate(secret_id, request.credentials, owner_id)
             except LookupError:
                 await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason="not_found")
-                raise HTTPException(status_code=404, detail="Secret not found")
+                raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
             secret_data = await _get_connector_bridged_secret(secret_id, owner_id)
         else:
             await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason="not_found")
-            raise HTTPException(status_code=404, detail="Secret not found")
+            raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
 
         await audit_secret_op("UPDATE", secret_id, http_request, phase="completed")  # #20557: the outcome
         return JSONResponse(
@@ -972,11 +971,11 @@ async def update_secret(
         )
     except PermissionError:
         await audit_secret_op("UPDATE", secret_id, http_request, "denied", reason="permission_denied")
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise HTTPException(status_code=403, detail=REFUSAL_TEXT[403])
     except ValueError as e:
         # #16428: rotate()'s merged-bundle validation failure: a bad request.
         await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason=type(e).__name__)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise HTTPException(status_code=400, detail=REFUSAL_TEXT[400])
     except HTTPException:
         raise
     except Exception as e:
@@ -1016,7 +1015,7 @@ async def delete_secret(
             # #16428: revoke() is idempotent, so check existence first to 404 an unknown id.
             bridged = await _get_connector_bridged_secret(secret_id, owner_id)
             if bridged is None:
-                raise HTTPException(status_code=404, detail="Secret not found")
+                raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
             await get_credential_store().revoke(secret_id, owner_id)
 
         audit_record(

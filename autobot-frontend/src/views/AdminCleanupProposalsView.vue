@@ -32,6 +32,18 @@
         {{ t('admin.cleanup.propose') }}
       </BaseButton>
     </BaseCard>
+
+    <!-- #20904: ownerless chat sessions get an owner only through a proposal a human approves. -->
+    <OwnerlessSessionsPanel />
+
+    <!-- #17850: duplicated credentials are managed on the Secrets page; this is an access point to it. -->
+    <BaseCard
+      :title="t('admin.cleanup.secretDuplicates.title')"
+      :subtitle="t('admin.cleanup.secretDuplicates.description')"
+      data-testid="cleanup-secretDuplicates"
+    >
+      <router-link :to="{ name: 'secrets-manager', query: { view: 'duplicates' } }">{{ t('admin.cleanup.secretDuplicates.open') }}</router-link>
+    </BaseCard>
   </div>
 </template>
 
@@ -41,6 +53,7 @@ import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseButton, BaseCard, PageHeader, isHttpError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import OwnerlessSessionsPanel from '@/components/admin/OwnerlessSessionsPanel.vue'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
 import type { components } from '@/types/generated/api'
 

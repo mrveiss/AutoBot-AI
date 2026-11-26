@@ -11,8 +11,9 @@ so there is one definition of "a swept module", not a second list in YAML.
 
 :func:`plan` picks the mode from a pull request's changed files:
 
-* **full** -- the diff touches the sweep itself (:data:`SELF_FILES`). Only a full run
-  judges every known-offender entry for whether it still fails.
+* **full** -- the diff touches the sweep itself (:data:`SELF_FILES`) or the environment it
+  installs (:func:`reaches_environment`). Only a full run judges every known-offender entry
+  for whether it still fails, and a version change can change any module's import.
 * **subset** -- the diff changes swept modules. The test examines those plus their
   direct importers (:func:`with_direct_importers`): if B calls into A at import, a
   change that makes A connect fails B's import, not A's. A listed entry among them
@@ -27,8 +28,23 @@ sweep on every push to main covers it:
 * a change confined to a module outside the swept packages, such as a backend
   ``services/`` module an ``api/`` module imports -- it has no entry to match;
 * a deleted module -- its former importers are not re-examined;
-* a change to the declared dependencies alone -- no module changed;
 * an import the AST cannot see, such as ``importlib.import_module`` on a computed name.
+
+What does NOT count as an environment input, so a diff touching only it plans by the
+rules above. Most of these are in neither ``paths:`` filter, so no pull request or push
+run sees them: the daily scheduled full run, or a manual dispatch, is the first to.
+
+* the composite actions the sweep calls (``.github/actions/setup-python-ci``,
+  ``install-ci-requirements``, ``free-disk-space``) -- they shape how the install runs,
+  not which versions it resolves, and their own callers exercise them. First seen by the
+  scheduled or dispatched run;
+* the root ``pytest.ini``, the root ``conftest.py`` and ``repo_tests/conftest.py`` --
+  run configuration, not the installed set. First seen by the scheduled or dispatched
+  run. A ``conftest.py`` or pytest config under one of the three swept trees
+  (``autobot-backend/``, ``autobot-slm-backend/``, ``autobot_shared/``) also starts the
+  full run on the push to main, since those trees are push triggers;
+* the unpinned ``pip``/``setuptools``/``wheel`` upgrade -- no file in the diff names it;
+  every run that installs takes the then-current release.
 """
 
 from __future__ import annotations
@@ -66,6 +82,27 @@ SELF_FILES: frozenset[str] = frozenset(
         "repo_tests/import_hermeticity_test.py",
     }
 )
+
+#: The files that seed the sweep's environment (#21471): ``.python-version`` picks the
+#: interpreter (``setup-python-ci``); ``install-ci-requirements`` installs
+#: ``requirements-ci.txt``, which includes ``requirements-ci/*``; ``pip install -e
+#: autobot_shared`` installs that manifest's dependencies; the shared constraints bind
+#: them. A change to any can make a module's import connect or fail, so a pull request
+#: touching one runs the full sweep, not none.
+ENVIRONMENT_FILES: frozenset[str] = frozenset(
+    {
+        ".python-version",
+        "autobot_shared/pyproject.toml",
+        "constraints/shared.txt",
+        "requirements-ci.txt",
+    }
+)
+ENVIRONMENT_DIRS: tuple[str, ...] = ("requirements-ci/",)
+
+
+def reaches_environment(path: str) -> bool:
+    """Whether *path* seeds the environment the sweep installs."""
+    return path in ENVIRONMENT_FILES or path.startswith(ENVIRONMENT_DIRS)
 
 
 @dataclass(frozen=True)
@@ -204,14 +241,15 @@ def plan(changed: Iterable[str], population: Sequence[Entry]) -> tuple[str, list
     to match a module.
     """
     paths = {path.strip() for path in changed if path.strip()}
-    if paths & SELF_FILES:
+    if paths & SELF_FILES or any(reaches_environment(path) for path in paths):
         return "full", []
     swept = sorted(paths & {entry.path for entry in population})
     return ("subset", swept) if swept else ("none", [])
 
 
 _SUMMARY = {
-    "full": "Full sweep: this pull request changes the sweep itself, so every module is examined.\n",
+    "full": "Full sweep: this pull request changes the sweep itself or its installed dependencies, "
+    "so every module is examined.\n",
     "subset": "Subset sweep: {count} changed module(s), plus every module importing one directly.\n",
     "none": "No swept module changed, nothing examined. A run that did not look, not a clean result.\n",
 }

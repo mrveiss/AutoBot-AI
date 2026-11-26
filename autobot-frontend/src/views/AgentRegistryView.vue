@@ -7,10 +7,11 @@
  * AgentRegistryView — Agent Registry dashboard (#1794, #1822)
  *
  * Three-tab view: Backend Agents (AutoBot workers), Specialized Agents
- * (parsed from .claude/agents/*.md files), and Settings (runtime config).
+ * (the host's Claude Code agent definitions), and Settings (runtime config).
  */
 
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAgentRegistry, type SpecializedAgent } from '@/composables/useAgentRegistry'
 import { useAvailableModels } from '@/composables/useAvailableModels'
 import AgentSettingsPanel from '@/components/agents/AgentSettingsPanel.vue'
@@ -18,6 +19,7 @@ import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AgentRegistryView')
+const { t, te } = useI18n()
 
 // #16278: the Settings tab reads and writes system config through
 // /api/settings/, which is admin-only. A non-admin would only see defaults
@@ -28,6 +30,7 @@ const isAdmin = computed(() => userStore.isAdmin)
 const {
   backendAgents,
   specializedAgents,
+  specializedAvailable,
   summary,
   selectedAgent,
   agentsByCategory,
@@ -68,6 +71,11 @@ const colorMap: Record<string, string> = {
   yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   purple: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
   gray: 'bg-autobot-bg-tertiary text-autobot-text-primary',
+}
+
+function tierLabel(tier: string): string {
+  const key = `agent.registry.tiers.${tier}`
+  return te(key) ? t(key) : tier
 }
 
 function getColorClasses(color: string): string {
@@ -295,7 +303,9 @@ onMounted(async () => {
         </div>
 
         <div v-if="filteredSpecializedAgents.length === 0" class="text-center py-12">
-          <p class="text-secondary">{{ $t('agent.registry.noSpecializedAgents') }}</p>
+          <p class="text-secondary">
+            {{ specializedAvailable ? $t('agent.registry.noSpecializedAgents') : $t('agent.registry.agentsDirMissing') }}
+          </p>
         </div>
         <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div
@@ -399,6 +409,9 @@ onMounted(async () => {
               <div class="flex flex-wrap gap-2">
                 <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 capitalize">
                   {{ selectedAgent.category }}
+                </span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-bg-tertiary text-autobot-text-secondary">
+                  {{ tierLabel(selectedAgent.tier) }}
                 </span>
                 <span v-for="tool in selectedAgent.tools" :key="tool"
                   class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-bg-tertiary text-autobot-text-secondary"

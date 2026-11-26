@@ -5,6 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref, nextTick } from 'vue'
+import { HttpError } from '@autobot/ui'
 
 const client = { get: vi.fn(), post: vi.fn(), delete: vi.fn() }
 vi.mock('@/plugins/api', () => ({ useApiClient: () => client }))
@@ -67,8 +68,25 @@ describe('useCompanyWorkflows', () => {
     expect(w.pending.value).toBe(false)
   })
 
-  it('create surfaces a 403 as a typed forbidden error', async () => {
+  it('create reads a plain Error worded HTTP 403 as no status at all', async () => {
     client.post.mockRejectedValue(new Error('HTTP 403: admin only'))
+    const w = useCompanyWorkflows(() => 'co1')
+    const err = await w.create({} as never).catch((e) => e)
+    expect(err).toBeInstanceOf(WorkflowWriteError)
+    expect(err.status).toBeUndefined()
+    expect(err.forbidden).toBe(false)
+  })
+
+  it('create reads the status of a plain error that carries a numeric status', async () => {
+    client.post.mockRejectedValue(Object.assign(new Error('refused'), { status: 403 }))
+    const w = useCompanyWorkflows(() => 'co1')
+    const err = await w.create({} as never).catch((e) => e)
+    expect(err.status).toBe(403)
+    expect(err.forbidden).toBe(true)
+  })
+
+  it('create surfaces a 403 as a typed forbidden error', async () => {
+    client.post.mockRejectedValue(new HttpError(403, 'admin only'))
     const w = useCompanyWorkflows(() => 'co1')
     const err = await w.create({} as never).catch((e) => e)
     expect(err).toBeInstanceOf(WorkflowWriteError)

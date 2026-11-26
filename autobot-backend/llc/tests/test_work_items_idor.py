@@ -134,8 +134,8 @@ def _make_idor_app(
         mock_item = None
 
     patch("llc.services.work_item_service.WorkItemService.get", new=AsyncMock(return_value=mock_item)).start()
-    # Also patch WorkItemService.update to return mock_item so PATCH succeeds.
     patch("llc.services.work_item_service.WorkItemService.update", new=AsyncMock(return_value=mock_item)).start()
+    patch("llc.api.work_items.require_may_act_as", new=AsyncMock()).start()  # tenant scope only; own tests (#20521)
     # #11684: _item_to_dict now awaits _relations_to_list (awaitable_attrs); these
     # IDOR tests use a MagicMock item without an awaitable awaitable_attrs and
     # don't exercise relation serialization — stub it (matches the sibling tests).

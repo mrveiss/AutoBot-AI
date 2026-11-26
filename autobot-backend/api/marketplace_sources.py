@@ -30,6 +30,7 @@ from api.schemas_workflows import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_egress_guard import assert_public_egress
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
@@ -244,10 +245,7 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
         await assert_public_egress(url)
         safe_ip = await resolve_safe_ip_async(host)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        ) from exc
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST) from exc
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT_SECONDS)
     resolver_map = {

@@ -204,19 +204,19 @@ class RoutineService(LLCServiceBase):
                     secret_name = m.group(1)
                     if secret_service is None:
                         logger.warning(
-                            "Secret ref '%s' in env key '%s' skipped — no SecretService",
-                            secret_name,
+                            "Secret ref in env key '%s' skipped — no SecretService (routine=%s)",
                             key,
+                            routine.id,
                         )
                         continue
                     try:
                         resolved[key] = await secret_service.get(session, company_id_str, secret_name)
                     except SecretNotFound:
                         logger.warning(
-                            "Secret '%s' not found for company %s (env key '%s') — skipping",
-                            secret_name,
+                            "Secret not found for company %s (env key '%s', routine=%s) — skipping",
                             company_id_str,
                             key,
+                            routine.id,
                         )
                     except Exception as exc:  # noqa: BLE001
                         logger.warning(

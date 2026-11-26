@@ -57,7 +57,10 @@ class _Collection:
 @pytest.fixture
 def collection():
     col = _Collection()
-    with patch.object(run_status, "get_code_collection_async", AsyncMock(return_value=col)):
+    with (
+        patch.object(run_status, "get_code_collection_async", AsyncMock(return_value=col)),
+        patch.object(run_status, "_source_exists", AsyncMock(return_value=True)),
+    ):
         yield col
 
 

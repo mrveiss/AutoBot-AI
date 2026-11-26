@@ -83,7 +83,6 @@
   "485afeef"
  ],
  "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": [
-  "1184e1f9",
   "57210fcc"
  ],
  "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": [
@@ -325,11 +324,7 @@
  ],
  "autobot-frontend/src/components/chat/ChatInterface.vue": [
   "0486524d",
-  "9439e749",
   "bc15f868"
- ],
- "autobot-frontend/src/components/chat/ChatMessages.vue": [
-  "a80dd66e"
  ],
  "autobot-frontend/src/components/chat/DeleteConversationDialog.vue": [
   "040192b7",
@@ -341,34 +336,6 @@
   "8d61de85",
   "a9673fc9",
   "b4218162"
- ],
- "autobot-frontend/src/components/chat/McpPromptPicker.vue": [
-  "07421717",
-  "2ba707ec",
-  "470e6c46",
-  "4d5d013c",
-  "50d87ce0",
-  "5cbf61ab",
-  "79904ccc",
-  "8198a23b",
-  "82bb251f",
-  "8d61de85",
-  "98f96d1e",
-  "9bdc93dc",
-  "9fadfece",
-  "b4218162",
-  "bf0d6d8c"
- ],
- "autobot-frontend/src/components/chat/MessageItem.vue": [
-  "3c9d733f",
-  "3c9d733f"
- ],
- "autobot-frontend/src/components/chat/OverseerStepMessage.vue": [
-  "94d5d8b7",
-  "e73288fc"
- ],
- "autobot-frontend/src/components/chat/SlashCommandDropdown.vue": [
-  "508a851f"
  ],
  "autobot-frontend/src/components/desktop/DesktopContextPanel.vue": [
   "9a47f891"
@@ -393,19 +360,6 @@
   "1d3591ec",
   "90188fc5",
   "bcaba128"
- ],
- "autobot-frontend/src/components/documents/AIDocumentEditor.vue": [
-  "09291a7d",
-  "2d06b3b5",
-  "44cd160c",
-  "45eb596d",
-  "4e201f34",
-  "6e926fec",
-  "8d61de85",
-  "91464cc8",
-  "a184b6d6",
-  "abcb4551",
-  "f9078a90"
  ],
  "autobot-frontend/src/components/examples/ThemingPatternExample.vue": [
   "0151c1ce",
@@ -504,23 +458,6 @@
  ],
  "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": [
   "ca160449"
- ],
- "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": [
-  "0910e9cc",
-  "1a8ff6a9",
-  "2ed6872a",
-  "4f07d0fd",
-  "5033f5a4",
-  "56289275",
-  "69e83d1f",
-  "6d1525cf",
-  "84a613fc",
-  "89ac0de4",
-  "d88b3004",
-  "dba59897",
-  "dc5579ed",
-  "e8180e46",
-  "fbd91534"
  ],
  "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": [
   "3495e788"
@@ -1097,17 +1034,5 @@
  ],
  "autobot-slm-frontend/src/views/tools/admin/MCPTool.vue": [
   "742ddc50"
- ],
- "autobot-slm-frontend/src/views/tools/admin/NoVNCTool.vue": [
-  "aa443191"
- ],
- "autobot-slm-frontend/src/views/tools/admin/VisionTool.vue": [
-  "b62d951c"
- ],
- "autobot-slm-frontend/src/views/tools/admin/VoiceTool.vue": [
-  "169f850b",
-  "d3e0a8de",
-  "e4d8c733",
-  "ec992044"
  ]
 }

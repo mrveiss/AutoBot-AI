@@ -107,7 +107,7 @@ const WAIVED_FILES = new Map([
   ["autobot-frontend/src/design-system/styles/dashboard-common.css", { count: 1, pr: "#19907" }],
   ["autobot-frontend/src/design-system/styles/dashboard-review-precommit.css", { count: 1, pr: "#19907" }],
   ["autobot-frontend/src/design-system/styles/panel-dependencies-charts-shared.css", { count: 9, pr: "#19907" }],
-  ["autobot-frontend/src/views/AdminUsersView.vue", { count: 3, pr: "#19907" }],
+  ["autobot-frontend/src/views/AdminUsersView.vue", { count: 2, pr: "#19907" }],
   ["autobot-frontend/src/views/BudgetPolicies.vue", { count: 1, pr: "#19907" }],
   ["autobot-frontend/src/views/ComponentShowcaseView.vue", { count: 1, pr: "#19907" }],
   ["autobot-frontend/src/views/CustomDashboard.vue", { count: 3, pr: "#19907" }],

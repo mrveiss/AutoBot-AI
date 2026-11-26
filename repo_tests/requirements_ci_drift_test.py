@@ -188,7 +188,7 @@ def test_pytesseract_is_mirrored_now_that_this_pr_landed_it():
 
 
 def test_the_9_corrected_baseline_entries_are_now_mirrored_not_allowlisted():
-    """Re-proves the code-reviewer finding this baseline was corrected against.
+    """Re-proves the review finding this baseline was corrected against.
 
     9 packages were allowlisted with a false "no CI-scoped test" rationale
     while a real importorskip/find_spec gate existed and silently skipped.

@@ -20,6 +20,8 @@ export interface PlanDecisionDeps {
   rejectPlan: (workflowId: string, reason: string) => Promise<boolean>
   notify: (key: string, kind: 'success' | 'info' | 'error') => void
   onApproved: () => void
+  /** False while the selected company and the one whose plan is shown disagree (#21520); the caller tells the user. */
+  companyAgrees?: () => boolean
 }
 
 export function usePlanDecision(deps: PlanDecisionDeps) {
@@ -28,6 +30,7 @@ export function usePlanDecision(deps: PlanDecisionDeps) {
   async function decide(send: (workflowId: string) => Promise<boolean>): Promise<boolean | null> {
     const plan = deps.pendingApproval.value
     if (!plan || deciding.value) return null
+    if (deps.companyAgrees && !deps.companyAgrees()) return null
     deciding.value = true
     try {
       return await send(plan.workflow_id)

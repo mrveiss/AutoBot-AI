@@ -323,7 +323,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
             )
             await log_autobot_command(self.terminal_logger, session, command, status, result)
             await self._save_command_to_chat(session.conversation_id, command, result, command_type="agent")
-            await self._interpret_command_result(session, command, result)
+            self._interpret_command_result(session, command, result)  # #21938: never awaited inline
             await self._finalize_auto_approved_execution(session, command, risk, result)
 
         return result
@@ -331,35 +331,6 @@ class AgentTerminalService(InterpretationOwnershipMixin):
     # ============================================================================
     # Helper Methods for auto-approved execution (Issue #665)
     # ============================================================================
-
-    async def _interpret_command_result(
-        self,
-        session: AgentTerminalSession,
-        command: str,
-        result: Metadata,
-    ) -> None:
-        """
-        Interpret command result using LLM if available.
-
-        Issue #665: Extracted from _execute_auto_approved_command.
-
-        Args:
-            session: Terminal session
-            command: Executed command
-            result: Execution result
-        """
-        if session.has_conversation() and self.chat_workflow_manager:
-            try:
-                logger.info(f"[INTERPRETATION] Starting LLM interpretation for command: {command}")
-                await self.chat_workflow_manager.interpret_terminal_command(
-                    command=command,
-                    stdout=result.get("stdout", ""),
-                    stderr=result.get("stderr", ""),
-                    return_code=result.get("return_code", 0),
-                    session_id=session.conversation_id,
-                )
-            except Exception as e:
-                logger.error("[INTERPRETATION] Failed to interpret results: %s", e)
 
     async def _finalize_auto_approved_execution(
         self,
@@ -432,7 +403,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
         """
         await self._save_command_to_chat(session.conversation_id, command, result, command_type="approved")
 
-        await self._interpret_approved_command(session, command, result)
+        self._interpret_in_background(session, command, result)  # #19951: the approve request does not wait on the LLM
 
         session.add_approved_to_history(
             command=command,
@@ -593,16 +564,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
             return
 
         if session.has_conversation() and self.chat_workflow_manager:
-            try:
-                await self.chat_workflow_manager.interpret_terminal_command(
-                    command=command,
-                    stdout=result.get("stdout", ""),
-                    stderr=result.get("stderr", ""),
-                    return_code=result.get("return_code", 0),
-                    session_id=session.conversation_id,
-                )
-            except Exception as e:
-                logger.error("Failed to interpret approved command results: %s", e)
+            await self._interpret_with_origin(session.conversation_id, command, result)
 
     async def _update_and_broadcast_approval_status(
         self,
@@ -642,16 +604,14 @@ class AgentTerminalService(InterpretationOwnershipMixin):
         reasons: list,
         is_interactive: bool,
         interactive_reasons: list,
-        force_approval: bool = False,
+        **line_flags: bool,
     ) -> tuple[bool, Metadata | None]:
         """Resolve the command's AI line, then check auto-approve rules or queue it (#665, #18430).
 
         Line 3 is refused and line 1 runs; only line 2 reaches the rules and this terminal's queue.
-        Returns ``(is_auto_approved, queue_or_refusal_response)``.
+        Returns ``(is_auto_approved, queue_or_refusal_response)``; ``line_flags`` go to ``decide_command`` (#21959).
         """
-        is_auto_approved, refusal = await decide_command(
-            self.approval_handler, session, command, risk, force_approval=force_approval
-        )
+        is_auto_approved, refusal = await decide_command(self.approval_handler, session, command, risk, **line_flags)
         if refusal is not None:
             return False, session.get_permission_denied_response(refusal, command, risk.value)
         if is_auto_approved:
@@ -674,6 +634,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
         command: str,
         description: str | None = None,
         force_approval: bool = False,
+        person_approved: bool = False,
     ) -> Metadata:
         """
         Execute a command in an agent terminal session.
@@ -685,7 +646,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
             session_id: Agent session ID
             command: Command to execute
             description: Optional command description
-            force_approval: Force user approval even for safe commands
+            force_approval / person_approved: force a yes even for a safe command / a person approved exactly this one
 
         Returns:
             Execution result with security metadata
@@ -712,6 +673,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
             is_interactive,
             interactive_reasons,
             force_approval=force_approval,
+            person_approved=person_approved,
         )
         if not is_auto_approved:
             return queue_response

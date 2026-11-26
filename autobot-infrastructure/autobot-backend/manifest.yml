@@ -6,6 +6,7 @@ target_node: backend
 deploy:
   source: autobot-backend/
   destination: /opt/autobot/autobot-backend/
+  sync_target: "{base_dir}/autobot-backend"   # #21974: the install directory the unit runs from (= `destination`)
   shared: true
   infrastructure: true
 
@@ -52,6 +53,17 @@ health:
   timeout: "15s"
   retries: 3
   expected_status: 200
+
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  backend:
+    checked: true
+    port: 8443
+    path: /api/health
+  celery:        # shares this manifest, but health.endpoint is the backend API's, not celery's
+    checked: false
+  scheduler:
+    checked: false
 
 secrets:
   own:

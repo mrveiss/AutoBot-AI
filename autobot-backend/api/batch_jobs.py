@@ -14,7 +14,6 @@ Issue #1287: Consolidated from batch.py — legacy batch optimization endpoints
 
 import asyncio
 import json
-import os
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List
@@ -47,6 +46,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.redis_utils import decode_redis_value
+from security.session_company import resolve_company_scope
+from services import batch_job_ownership as ownership
 from services.batch_job_store import deserialize_job as _deserialize_job
 from services.batch_job_store import get_job_key as _get_job_key
 from services.batch_job_store import get_logs_key as _get_logs_key
@@ -70,6 +71,14 @@ router = APIRouter(tags=["batch-jobs", "management"])
 # are re-exported from services.batch_job_store (the canonical implementation
 # shared with tasks/batch_job_tasks.py) so this module keeps its existing
 # private-name call sites and test seams unchanged.
+
+
+def _redis_or_503():
+    """The main-database Redis client, or 503 when it is unavailable."""
+    redis_client = get_redis_client(database="main")
+    if not redis_client:
+        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    return redis_client
 
 
 def _get_template_key(template_id: str) -> str:
@@ -122,9 +131,7 @@ async def create_batch_job(
     Returns:
         BatchJob: Created job with ID and initial status
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_id = str(uuid.uuid4())
     now = datetime.now(tz=timezone.utc)
@@ -139,10 +146,9 @@ async def create_batch_job(
         created_at=now,
     )
 
-    job_key = _get_job_key(job_id)
-    redis_client.set(job_key, _serialize_job(job))
-    redis_client.sadd("batch:jobs:all", job_id)
-    redis_client.zadd("batch:jobs:created", {job_id: now.timestamp()})
+    ownership.create_record(
+        redis_client, ownership.JOBS, job_id, _get_job_key(job_id), _serialize_job(job), current_user, now.timestamp()
+    )
 
     logger.info("Created batch job %s: %s", job_id, job_data.name)
     return job
@@ -173,16 +179,13 @@ async def list_batch_jobs(
     Returns:
         BatchJobList: List of jobs with counts
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
-    job_ids = redis_client.smembers("batch:jobs:all")
+    job_ids = ownership.visible_ids(redis_client, ownership.JOBS, redis_client.smembers("batch:jobs:all"), current_user)
     jobs = []
     status_counts: Dict[str, int] = {}
 
-    for job_id_bytes in job_ids:
-        job_id = decode_redis_value(job_id_bytes)
+    for job_id in job_ids:
         job_key = _get_job_key(job_id)
         job_data = redis_client.get(job_key)
 
@@ -246,9 +249,10 @@ async def batch_chat_initialization(request: Request, current_user: dict = Depen
     start_time = time.time()
     logger.info("Starting batch chat initialization...")
 
+    company = await resolve_company_scope(request, current_user)  # a refusal (403) is the caller's answer, not a 500
     try:
         results = await asyncio.gather(
-            get_chat_sessions(request.app),
+            get_chat_sessions(request.app, current_user.get("username"), company),
             get_system_health(),
             get_service_health_legacy(),
             get_settings(request.app),
@@ -300,15 +304,14 @@ async def get_batch_job(
     Returns:
         BatchJob: Full job details
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_key = _get_job_key(job_id)
     job_data = redis_client.get(job_key)
 
     if not job_data:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    ownership.require_access(redis_client, ownership.JOBS, job_id, current_user, "Job")
 
     return _deserialize_job(decode_redis_value(job_data))
 
@@ -334,15 +337,14 @@ async def delete_batch_job(
     Returns:
         dict: Success status
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_key = _get_job_key(job_id)
     job_data = redis_client.get(job_key)
 
     if not job_data:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    ownership.require_access(redis_client, ownership.JOBS, job_id, current_user, "Job")
 
     job = _deserialize_job(decode_redis_value(job_data))
 
@@ -352,6 +354,7 @@ async def delete_batch_job(
 
     redis_client.delete(job_key)
     redis_client.srem("batch:jobs:all", job_id)
+    ownership.forget_owner(redis_client, ownership.JOBS, job_id)
     redis_client.zrem("batch:jobs:created", job_id)
 
     logs_key = _get_logs_key(job_id)
@@ -385,14 +388,13 @@ async def run_batch_job_now(
         BatchJob: Current job state (status unchanged until the worker
         picks up the task and transitions it to running).
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_key = _get_job_key(job_id)
     job_data = redis_client.get(job_key)
     if not job_data:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    ownership.require_access(redis_client, ownership.JOBS, job_id, current_user, "Job")
 
     job = _deserialize_job(decode_redis_value(job_data))
     if job.status == BatchJobStatus.running:
@@ -431,13 +433,12 @@ async def get_job_logs(
     Returns:
         List[BatchLogEntry]: Job execution logs
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_key = _get_job_key(job_id)
     if not redis_client.exists(job_key):
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    ownership.require_access(redis_client, ownership.JOBS, job_id, current_user, "Job")
 
     logs_key = _get_logs_key(job_id)
     log_entries = redis_client.lrange(logs_key, 0, -1)
@@ -469,15 +470,14 @@ async def list_batch_templates(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
-    template_ids = redis_client.smembers("batch:templates:all")
+    template_ids = ownership.visible_ids(
+        redis_client, ownership.TEMPLATES, redis_client.smembers("batch:templates:all"), current_user
+    )
     templates = []
 
-    for template_id_bytes in template_ids:
-        template_id = decode_redis_value(template_id_bytes)
+    for template_id in template_ids:
         template_key = _get_template_key(template_id)
         template_data = redis_client.get(template_key)
 
@@ -505,9 +505,7 @@ async def create_batch_template(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     template_id = str(uuid.uuid4())
     template = BatchTemplate(
@@ -518,9 +516,9 @@ async def create_batch_template(
         created_at=datetime.now(tz=timezone.utc),
     )
 
-    template_key = _get_template_key(template_id)
-    redis_client.set(template_key, template.model_dump_json())
-    redis_client.sadd("batch:templates:all", template_id)
+    key = _get_template_key(template_id)
+    payload = template.model_dump_json()
+    ownership.create_record(redis_client, ownership.TEMPLATES, template_id, key, payload, current_user)
 
     logger.info("Created batch template %s: %s", template_id, name)
     return template
@@ -541,15 +539,14 @@ async def get_batch_template(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     template_key = _get_template_key(template_id)
     template_data = redis_client.get(template_key)
 
     if not template_data:
         raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
+    ownership.require_access(redis_client, ownership.TEMPLATES, template_id, current_user, "Template")
 
     template_dict = json.loads(decode_redis_value(template_data))
     return BatchTemplate(**template_dict)
@@ -570,16 +567,16 @@ async def delete_batch_template(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     template_key = _get_template_key(template_id)
     if not redis_client.exists(template_key):
         raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
+    ownership.require_access(redis_client, ownership.TEMPLATES, template_id, current_user, "Template")
 
     redis_client.delete(template_key)
     redis_client.srem("batch:templates:all", template_id)
+    ownership.forget_owner(redis_client, ownership.TEMPLATES, template_id)
 
     logger.info("Deleted batch template %s", template_id)
     return {"status": "success", "template_id": template_id}
@@ -604,15 +601,14 @@ async def list_batch_schedules(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
-    schedule_ids = redis_client.smembers("batch:schedules:all")
+    schedule_ids = ownership.visible_ids(
+        redis_client, ownership.SCHEDULES, redis_client.smembers("batch:schedules:all"), current_user
+    )
     schedules = []
 
-    for schedule_id_bytes in schedule_ids:
-        schedule_id = decode_redis_value(schedule_id_bytes)
+    for schedule_id in schedule_ids:
         schedule_key = _get_schedule_key(schedule_id)
         schedule_data = redis_client.get(schedule_key)
 
@@ -640,13 +636,12 @@ async def create_batch_schedule(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     job_key = _get_job_key(job_id)
     if not redis_client.exists(job_key):
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    ownership.require_access(redis_client, ownership.JOBS, job_id, current_user, "Job")
 
     # Issue #12439: a brand-new schedule must fire on its next cron tick, not
     # immediately — dispatch_due_batch_schedules() treats next_run <= now as
@@ -667,9 +662,9 @@ async def create_batch_schedule(
         next_run=next_run,
     )
 
-    schedule_key = _get_schedule_key(schedule_id)
-    redis_client.set(schedule_key, schedule.model_dump_json())
-    redis_client.sadd("batch:schedules:all", schedule_id)
+    key = _get_schedule_key(schedule_id)
+    payload = schedule.model_dump_json()
+    ownership.create_record(redis_client, ownership.SCHEDULES, schedule_id, key, payload, current_user)
 
     logger.info("Created batch schedule %s for job %s", schedule_id, job_id)
     return schedule
@@ -695,15 +690,14 @@ async def update_batch_schedule(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     schedule_key = _get_schedule_key(schedule_id)
     schedule_data = redis_client.get(schedule_key)
 
     if not schedule_data:
         raise HTTPException(status_code=404, detail=f"Schedule {schedule_id} not found")
+    ownership.require_access(redis_client, ownership.SCHEDULES, schedule_id, current_user, "Schedule")
 
     schedule = BatchSchedule(**json.loads(decode_redis_value(schedule_data)))
     updates = update.model_dump(exclude_unset=True)
@@ -744,16 +738,16 @@ async def delete_batch_schedule(
 
     Issue #744: Requires authenticated user.
     """
-    redis_client = get_redis_client(database="main")
-    if not redis_client:
-        raise HTTPException(status_code=503, detail="Redis service unavailable")
+    redis_client = _redis_or_503()
 
     schedule_key = _get_schedule_key(schedule_id)
     if not redis_client.exists(schedule_key):
         raise HTTPException(status_code=404, detail=f"Schedule {schedule_id} not found")
+    ownership.require_access(redis_client, ownership.SCHEDULES, schedule_id, current_user, "Schedule")
 
     redis_client.delete(schedule_key)
     redis_client.srem("batch:schedules:all", schedule_id)
+    ownership.forget_owner(redis_client, ownership.SCHEDULES, schedule_id)
 
     logger.info("Deleted batch schedule %s", schedule_id)
     return {"status": "success", "schedule_id": schedule_id}
@@ -804,28 +798,6 @@ async def probe_batch_jobs(request) -> ComponentHealth:
 # =============================================================================
 
 
-def _process_session_file(filename: str, chats_directory: str):
-    """Process a single session file and return session metadata"""
-    if not (filename.startswith("chat_") and filename.endswith(".json")):
-        return None
-
-    chat_id = filename.replace("chat_", "").replace(".json", "")
-    chat_path = os.path.join(chats_directory, filename)
-
-    try:
-        stat = os.stat(chat_path)
-        return {
-            "id": chat_id,
-            "title": (f"Chat {chat_id[-8:]}" if len(chat_id) > 8 else f"Chat {chat_id}"),
-            "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-            "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            "message_count": 0,
-        }
-    except Exception as e:
-        logger.warning("Failed to get stats for %s: %s", filename, e)
-        return None
-
-
 @router.post("/load", response_model=BatchLoadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -841,41 +813,18 @@ async def batch_load(batch_request: APIBatchRequest, request: Request, current_u
     return BatchLoadResponse(results=await dispatch_batch(request, batch_request.requests))
 
 
-async def get_chat_sessions(app):
-    """Get chat sessions list; `app` is passed in, not imported (#13558)."""
-    if hasattr(app.state, "chat_history_manager") and app.state.chat_history_manager:
-        try:
-            sessions = await asyncio.to_thread(
-                _get_sessions_sync,
-                app.state.chat_history_manager,
-            )
-            return {"sessions": sessions}
-        except Exception as e:
-            logger.warning("Failed to get chat sessions: %s", e)
-            return {"sessions": []}
-    return {"sessions": []}
+async def get_chat_sessions(app, username: str | None, company):
+    """The caller's own chat sessions (the ``GET /chat/sessions`` listing, #21653), narrowed to *company* (#21997)."""
+    manager = getattr(app.state, "chat_history_manager", None)
+    if not manager:
+        return {"sessions": []}
+    from api.chat_sessions import list_user_sessions
 
-
-def _get_sessions_sync(chat_history_manager):
-    """Synchronous helper for getting sessions"""
     try:
-        sessions = []
-        chats_directory = chat_history_manager._get_chats_directory()
-
-        if not os.path.exists(chats_directory):
-            os.makedirs(chats_directory, exist_ok=True)
-            return sessions
-
-        for filename in os.listdir(chats_directory):
-            session = _process_session_file(filename, chats_directory)
-            if session:
-                sessions.append(session)
-
-        return sessions
-
+        return company.listing(await list_user_sessions(manager, username, company))
     except Exception as e:
-        logger.error("Failed to list chat sessions: %s", e)
-        return []
+        logger.warning("Failed to get chat sessions: %s", e)
+        return {"sessions": []}
 
 
 async def get_system_health():

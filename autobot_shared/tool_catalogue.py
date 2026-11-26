@@ -83,6 +83,31 @@ BROWSER_ACTION_TOOLS = ("navigate", "click", "fill", "select", "evaluate")
 BROWSER_READ_TOOLS = ("hover", "screenshot", "get_text", "get_attribute", "wait_for_selector", "browser_state")
 BROWSER_INDEXED_TOOLS = ("click_index", "fill_index", "select_index", "hover_index")
 BROWSER_TOOLS = BROWSER_ACTION_TOOLS + BROWSER_READ_TOOLS + BROWSER_INDEXED_TOOLS
+#: #21772: tools that read a page without a selector. Governed elsewhere (read effect / web research), so kept out of
+#: BROWSER_TOOLS; the chat prompt teaches the union below.
+PAGE_READING_TOOLS = ("extract_content", "scrape_url", "extract_structured_data")
+BROWSER_PROMPT_TOOLS = BROWSER_TOOLS + PAGE_READING_TOOLS
+#: tool name -> (params hint, one-line description). Prompt wording per tool; membership is BROWSER_PROMPT_TOOLS.
+BROWSER_PROMPT_WORDING: "dict[str, tuple[str, str]]" = {
+    "navigate": ('{"url": ...}', "go to a URL"),
+    "screenshot": ("{}", "capture the current page"),
+    "click": ('{"selector": ...}', "click an element by CSS selector"),
+    "fill": ('{"selector": ..., "value": ...}', "type into an input by CSS selector"),
+    "select": ('{"selector": ..., "value": ...}', "choose an option in a dropdown"),
+    "hover": ('{"selector": ...}', "hover over an element"),
+    "evaluate": ('{"script": ...}', "run JavaScript on the page"),
+    "get_text": ('{"selector": ...}', "text of ONE element you already know the selector of"),
+    "get_attribute": ('{"selector": ..., "attribute": ...}', "an attribute of an element"),
+    "wait_for_selector": ('{"selector": ...}', "wait for an element to appear"),
+    "browser_state": ("{}", "URL, title and a numbered menu of the page's interactive elements"),
+    "click_index": ('{"index": N}', "click an element by its menu number"),
+    "fill_index": ('{"index": N, "value": ...}', "fill an element by its menu number"),
+    "select_index": ('{"index": N, "value": ...}', "select an option by its menu number"),
+    "hover_index": ('{"index": N}', "hover an element by its menu number"),
+    "extract_content": ('{"goal": ...}', "READ the live page you are on, guided by a goal (no selector needed)"),
+    "scrape_url": ('{"url": ...}', "fetch a URL and read it as markdown without driving the browser"),
+    "extract_structured_data": ('{"url": ..., "schema": {...}}', "fetch a URL and return data matching a JSON schema"),
+}
 DELEGATION_TOOLS = ("compose", "delegate")
 
 # --- composed catalogues (each reproduces its former literal exactly) ------
@@ -108,6 +133,11 @@ SENSITIVE_TOOLS = frozenset(
     + BROWSER_ACTION_TOOLS
     + DELEGATION_TOOLS
 )
+
+#: Owner ruling 2026-11-17 (#17237, approval only): navigate is always available. It stays in "browser actions", a
+#: sensitive tool and a mutating effect, so a work item can still ask for approval and roles and the verifier still
+#: cover it; only the AI lines leave it unmanaged -- no baseline floor, no unset-line hold. A stored line still applies.
+ALWAYS_AVAILABLE_TOOLS = frozenset({"navigate"})
 
 #: Work-item approval categories → the tools that constitute each action (seam gate).
 #: Note: "destructive operations" intentionally excludes SYSTEM_EXEC/DEPLOY, and

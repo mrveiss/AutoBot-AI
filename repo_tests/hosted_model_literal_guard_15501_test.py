@@ -268,7 +268,7 @@ REACH_CLAUDE_IDS = declare(
     discover=_claude_scan_files,
     what="files scanned for a pinned Claude model id",
     roots=_SCAN_ROOTS,
-    floor=5851,  # mid-window: population 6051, window [5651, 6051]
+    floor=6190,  # mid-window: population 6390, window (5990, 6390)
     growth=400,
 )
 

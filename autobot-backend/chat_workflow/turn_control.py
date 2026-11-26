@@ -117,8 +117,9 @@ async def _finish_cancelled(turn: _Turn, queue: asyncio.Queue) -> None:
     queue.put_nowait({"type": "cancelled", "content": CANCELLED_MESSAGE, "metadata": {"reason": turn.reason}})
 
 
-async def _finish_failed(turn: _Turn, queue: asyncio.Queue, exc: Exception) -> None:
-    timed_out = isinstance(exc, (TimeoutError, asyncio.TimeoutError))
+async def _finish_failed(turn: _Turn, queue: asyncio.Queue, exc: Exception, deadline_expired: bool) -> None:
+    """*deadline_expired*: the turn's own deadline fired; an inner ``TimeoutError`` is just a failure (#21938)."""
+    timed_out = deadline_expired
     if timed_out:
         logger.error("Chat turn timed out: session=%s after %ss", turn.session_id, CHAT_TURN_TIMEOUT_SECONDS)
     else:
@@ -134,13 +135,13 @@ TurnBody = Callable[[asyncio.Queue], Awaitable[None]]
 async def _run_turn(body: TurnBody, queue: asyncio.Queue, turn: _Turn) -> None:
     """Execute *body* under the turn timeout and signal the end via the queue sentinel."""
     try:
-        async with asyncio.timeout(CHAT_TURN_TIMEOUT_SECONDS):
+        async with asyncio.timeout(CHAT_TURN_TIMEOUT_SECONDS) as deadline:
             await body(queue)
     except asyncio.CancelledError:
         await _finish_cancelled(turn, queue)
         raise
     except Exception as exc:  # noqa: BLE001 - reported to the client, never raised into the consumer
-        await _finish_failed(turn, queue, exc)
+        await _finish_failed(turn, queue, exc, deadline.expired())
     finally:
         queue.put_nowait(None)
 

@@ -51,6 +51,7 @@
             <th>{{ t('adminUsers.colEmail') }}</th>
             <th>{{ t('adminUsers.colDisplayName') }}</th>
             <th>{{ t('adminUsers.colRole') }}</th>
+            <th v-if="canSetAdmin">{{ t('adminUsers.colAdmin') }}</th>
             <th>{{ t('adminUsers.colVoiceBundle') }}</th>
             <th>{{ t('adminUsers.colStatus') }}</th>
             <th>{{ t('adminUsers.colActions') }}</th>
@@ -60,23 +61,14 @@
           <tr v-for="user in users" :key="user.id">
             <td class="username-cell">
               <span class="username">{{ user.username }}</span>
-              <span v-if="user.is_platform_admin" class="badge badge-admin">{{ t('adminUsers.roleAdmin') }}</span>
+              <span v-if="user.is_platform_admin" class="badge badge-admin">{{ t('adminUsers.adminBadge') }}</span>
             </td>
             <td>{{ user.email }}</td>
             <td>{{ user.display_name || t('adminUsers.displayNameNotSet') }}</td>
-            <td>
-              <select
-                class="role-select"
-                :value="primaryRole(user)"
-                @change="onRoleChange(user, ($event.target as HTMLSelectElement).value)"
-              >
-                <!-- #14937: a role the UI does not assign still shows as itself
-                     instead of leaving the select blank. -->
-                <option v-if="!isAssignableRole(primaryRole(user))" :value="primaryRole(user)" disabled>
-                  {{ roleLabel(primaryRole(user)) }}
-                </option>
-                <option v-for="role in ASSIGNABLE_ROLES" :key="role" :value="role">{{ roleLabel(role) }}</option>
-              </select>
+            <!-- #20670: the role changes permissions only; admin status has its own control -->
+            <td><UserRoleSelect :user="user" @changed="onAccessChanged" /></td>
+            <td v-if="canSetAdmin">
+              <AdminStatusControl :user="user" :is-self="user.username === userStore.currentUser?.username" @changed="onAccessChanged" />
             </td>
             <td class="bundle-cell">
               <span v-if="userBundles[user.id] !== undefined" class="badge badge-bundle">
@@ -123,7 +115,7 @@
             </td>
           </tr>
           <tr v-if="!loading && users.length === 0">
-            <td colspan="7" class="empty-row">{{ t('adminUsers.empty') }}</td>
+            <td :colspan="canSetAdmin ? 8 : 7" class="empty-row">{{ t('adminUsers.empty') }}</td>
           </tr>
         </tbody>
       </table>
@@ -243,11 +235,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ASSIGNABLE_ROLES, isAssignableRole } from '@/constants/roles'
-import type { Role } from '@/types/_generated/workflow'
 import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
 import Icon from '@/components/ui/Icon.vue'
+import AdminStatusControl from '@/components/admin/AdminStatusControl.vue'
+import UserRoleSelect from '@/components/admin/UserRoleSelect.vue'
+import { useUserStore } from '@/stores/useUserStore'
 import { BaseModal, HttpError, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import {
@@ -259,6 +252,9 @@ import type { VoiceBundleName } from '@/composables/useVoiceBundle'
 
 const { t } = useI18n()
 const logger = createLogger('AdminUsersView')
+const userStore = useUserStore()
+// The admin-status control is offered to platform admins only, the same JWT test the route applies (#20670).
+const canSetAdmin = computed(() => userStore.isAdmin)
 
 interface UserRecord {
   id: string
@@ -306,28 +302,6 @@ const bundleModalFetchToken = ref<symbol | null>(null)
 const bundleModalLoading = ref(false)
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
-
-function primaryRole(user: UserRecord): string {
-  if (user.is_platform_admin) return 'admin'
-  const sysRole = user.roles.find(r => r.is_system)
-  return sysRole?.name ?? 'user'
-}
-
-// #14937: every canonical role has a label, so a role the UI does not assign
-// still renders as itself; `Record<Role, ...>` fails to compile when one is added.
-const roleLabels = computed<Record<Role, string>>(() => ({
-  admin: t('adminUsers.roleAdmin'),
-  superadmin: t('adminUsers.roleSuperadmin'),
-  operator: t('adminUsers.roleOperator'),
-  analyst: t('adminUsers.roleAnalyst'),
-  editor: t('adminUsers.roleEditor'),
-  user: t('adminUsers.roleUser'),
-  readonly: t('adminUsers.roleReadonly'),
-}))
-
-function roleLabel(role: string): string {
-  return (roleLabels.value as Record<string, string>)[role] ?? role
-}
 
 async function loadUsers(): Promise<void> {
   loading.value = true
@@ -433,21 +407,10 @@ function changePage(delta: number): void {
   loadUsers()
 }
 
-async function onRoleChange(user: UserRecord, role: string): Promise<void> {
-  try {
-    const res = await apiClient.rawRequest(`/api/user-management/users/${user.id}/role`, {
-      method: 'PUT',
-      body: { role },
-    })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
-    }
-    await loadUsers()
-  } catch (err) {
-    logger.error('Failed to update role:', err)
-    error.value = err instanceof Error ? err.message : 'Failed to update role'
-  }
+/** After a role or admin-status attempt: re-read the list, then show the failure, if any. */
+async function onAccessChanged(failure: string | null): Promise<void> {
+  await loadUsers()
+  if (failure) error.value = failure
 }
 
 async function toggleActive(user: UserRecord, activate: boolean): Promise<void> {
@@ -687,14 +650,6 @@ onMounted(loadUsers)
 .bundle-user-name {
   margin: 0 0 var(--spacing-4);
   font-size: var(--text-sm);
-}
-
-.role-select {
-  padding: var(--spacing-1) var(--spacing-2);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  font-size: 0.8125rem;
-  background: transparent;
 }
 
 .actions-cell {

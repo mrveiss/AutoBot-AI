@@ -55,9 +55,11 @@ Check all items before flipping ``AUTOBOT_DELEGATION_ENABLED=true`` in productio
       per-turn limit fires after MAX delegations in a single turn.
 """
 
+import time
 from typing import Any, Awaitable, Callable, Dict, List
 
 from autobot_shared import tool_catalogue as _tc
+from autobot_shared.ai_lines import DECLARED_CATEGORIES_KEY
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.run_authority import NO_INHERITANCE, Inheritance, gated_tools
@@ -94,6 +96,13 @@ def _claude_tool_for(token: str) -> "str | None":
     if token in _FILE_TOOL_FOR:
         return _FILE_TOOL_FOR[token]
     return "Bash" if token in _BASH_TOKENS else None
+
+
+def _declared_for_child(own_categories: "List[str] | set[str]", inherited: Inheritance) -> Dict[str, List[str]]:
+    """The child's declared-categories stamp: its own plus its parent's; nothing when the parent had none (#19957)."""
+    if inherited.declared_categories is None:
+        return {}
+    return {DECLARED_CATEGORIES_KEY: sorted(set(own_categories) | set(inherited.declared_categories))}
 
 
 def forbidden_to_claude_tools(forbidden: "frozenset[str] | list[str]") -> List[str]:
@@ -189,6 +198,8 @@ async def _run_internal_subagent(
         context={
             "delegation_depth": depth + 1,
             **({ATTACHMENT_TURN_KEY: True} if inherited.approve_every_call else {}),
+            # #19957: the child declares what its parent declared, so it holds exactly what the parent holds.
+            **_declared_for_child(approval_categories, inherited),
         },
         # #13821: a subagent acts for the same authenticated user, so it inherits
         # their role rather than silently dropping to the default. Leaving it
@@ -249,7 +260,10 @@ async def run_delegated_subtask(
     from orchestration.agent_registry import is_unbounded_agent_id
 
     if depth >= MAX_DELEGATION_DEPTH:
-        raise ValueError(f"max delegation depth {MAX_DELEGATION_DEPTH} reached (depth={depth})")
+        raise ValueError(
+            f"max delegation depth {MAX_DELEGATION_DEPTH} reached (depth={depth}); "
+            "complete this task directly instead of delegating further"
+        )
     # GH#13588: ``agent_type`` reaches here straight from the model's tool call, so a
     # delegating agent could name a designated executor and obtain a subagent with no
     # boundary — an escalation the parent's own manifest cannot express, since
@@ -274,4 +288,9 @@ async def run_delegated_subtask(
         depth,
         task,
     )
-    return await runner(task, agent_type, depth, auth_role, inherited)
+    started = time.monotonic()
+    result = await runner(task, agent_type, depth, auth_role, inherited)
+    logger.info(
+        "[GH#11266] delegation done: child=%s depth=%d elapsed=%.2fs", agent_type, depth, time.monotonic() - started
+    )
+    return result

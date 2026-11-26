@@ -18,7 +18,7 @@ LOW, MEDIUM, HIGH = (Severity.LOW.value, Severity.MEDIUM.value, Severity.HIGH.va
 
 
 def _p(type_, line, severity=MEDIUM):
-    return {"type": type_, "line": line, "severity": severity, "description": "d"}
+    return {"type": type_, "line": line, "severity": severity, "description": "d", "file_path": "a.py"}
 
 
 class TestDedupe:
@@ -66,10 +66,36 @@ class TestEveryTypeCountsOncePerLocation:
         b = dict(_p("race_condition", 9), description="shared counter")
         assert len(dedupe_same_location_problems([a, b])) == 2
 
-    def test_descriptions_differing_only_in_case_and_spacing_are_one_defect(self):
+    def test_descriptions_differing_only_in_spacing_are_one_defect(self):
         a = dict(_p("debug_code", 9), description="print  call")
-        b = dict(_p("debug_code", 9), description="Print call ")
+        b = dict(_p("debug_code", 9), description="print call ")
         assert len(dedupe_same_location_problems([a, b])) == 1
+
+    def test_identifiers_differing_only_in_case_are_two_defects(self):
+        """#21782: globals ``Cache`` and ``cache`` on one line are two findings."""
+        a = dict(_p("global_variable", 9), description="global Cache")
+        b = dict(_p("global_variable", 9), description="global cache")
+        assert len(dedupe_same_location_problems([a, b])) == 2
+
+    @pytest.mark.parametrize("second", ["5", 5, " 5 ", 5.0])
+    def test_a_line_number_is_compared_as_a_number(self, second):
+        """#21782: ``5`` and ``"5"`` are one line, so the report does not count it twice."""
+        a, b = dict(_p("debug_code", 5), line=None, line_number=5), dict(
+            _p("debug_code", 5), line=None, line_number=second
+        )
+        assert len(dedupe_same_location_problems([a, b])) == 1
+
+    def test_findings_without_a_file_path_are_not_merged_across_files(self):
+        """#21782: two stored findings with no path are not provably one defect."""
+        a, b = _p("debug_code", 3), _p("debug_code", 3)
+        del a["file_path"], b["file_path"]
+        assert len(dedupe_same_location_problems([a, b])) == 2
+
+    def test_within_one_file_a_missing_path_still_merges(self):
+        """One file's own findings carry no path yet (``analyzers._run_analysis_phases``)."""
+        a, b = _p("debug_code", 3), _p("debug_code", 3)
+        del a["file_path"], b["file_path"]
+        assert len(dedupe_same_location_problems([a, b], within_file=True)) == 1
 
     def test_the_same_line_of_two_files_is_two_defects(self):
         a, b = dict(_p("debug_code", 3), file_path="a.py"), dict(_p("debug_code", 3), file_path="b.py")

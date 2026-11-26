@@ -91,7 +91,7 @@ _SCOPED_ADMIN_ROUTER = (
 )
 
 _RAG_LEG = (
-    "SCOPED: reached only through RAGService (services/rag_service.py:230,241,507), which post-filters every leg with "
+    "SCOPED: reached only through RAGService (services/rag_legs.py), which post-filters every leg with "
     "filter_ranked (#16664), and the module's convenience functions, which take a required principal (#18944); "
     "services/knowledge_sync_service.py only initialises it"
 )
@@ -104,7 +104,7 @@ _PRESERVE = (
     "the route returns a status and the fact id, never content"
 )
 _ADAPTER = (
-    "SCOPED: the adapter's only production caller is services/rag_service.py (:995), whose results pass "
+    "SCOPED: the adapter's only production caller is the fallback in services/rag_legs.py, whose results pass "
     "filter_ranked before use (#16664); get_all_facts has no production caller"
 )
 _RESEARCH_QUARANTINE = (

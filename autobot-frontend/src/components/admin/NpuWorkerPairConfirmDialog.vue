@@ -350,7 +350,7 @@ function cancel() {
 
 .pair-confirm-btn-confirm {
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
 }
 
 .pair-confirm-btn-confirm:hover {

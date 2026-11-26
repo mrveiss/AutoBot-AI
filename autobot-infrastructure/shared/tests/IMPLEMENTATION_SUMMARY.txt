@@ -137,7 +137,7 @@ NEXT STEPS
 ================================================================================
 
 1. Code Review (MANDATORY)
-   - Launch code-reviewer agent
+   - Launch code reviewer agent
    - Validate test quality and coverage
    - Check for edge cases
 

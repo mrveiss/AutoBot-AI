@@ -53,11 +53,14 @@ async def session(fresh_db_url):
 
 
 async def _seed_vault(session, marker: str, value: str):
+    # (owner_vault, name) is unique (#17850), so each row needs its own name. The marker lives in
+    # `extra_data`, which is NOT constrained, so two rows can still claim one marker (#17773): the
+    # collided-marker scenarios keep their meaning with distinct names and a shared marker.
     svc = EnvelopeSecretsService(root_key=_ROOT)
     secret = await svc.create(
         session,
         owner_vault=VaultRef(VaultKind.USER, str(_OWNER)),
-        name="connector:c:auth",
+        name=f"connector:c:auth:{uuid.uuid4().hex}",
         secret_type="connector_oauth_token",
         plaintext=value.encode("utf-8"),
         created_by=_OWNER,

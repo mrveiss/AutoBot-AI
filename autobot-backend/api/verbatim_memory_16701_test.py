@@ -11,7 +11,7 @@ middleware enforced session ownership; nothing in this file did.
 Search's cross-user proof uses a real VerbatimStore over a mocked ChromaDB
 collection (not a mock asserting call args), so this proves the route's own
 scoping actually works end to end, not just that an argument was passed.
-Delete's proof mounts the real router and overrides validate_session_ownership
+Delete's proof mounts the real router and overrides validate_session_owner (#21898)
 the same way FastAPI would invoke it, so a refusal there is proven to happen
 before the handler body ever runs.
 """
@@ -23,9 +23,9 @@ import pytest
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
+from api.chat_session_sharing import validate_session_owner
 from api.verbatim_memory import router as verbatim_router
 from memory.verbatim_store import VerbatimStore
-from security.session_ownership import validate_session_ownership
 from testkit.canonical_gate import canonical_resolver
 
 _STORED = [
@@ -123,13 +123,13 @@ def _build_app() -> FastAPI:
 
 
 def test_delete_session_refuses_a_caller_who_does_not_own_it():
-    """#16701: the route must run validate_session_ownership, not just 'is signed in'."""
+    """#16701: the route must run validate_session_owner, not just 'is signed in'."""
 
     async def _refuse(session_id: str, request: Request):
         raise HTTPException(status_code=403, detail="not your session")
 
     app = _build_app()
-    app.dependency_overrides[validate_session_ownership] = _refuse
+    app.dependency_overrides[validate_session_owner] = _refuse
 
     response = TestClient(app).delete("/verbatim-memory/session/s1")
 
@@ -141,7 +141,7 @@ def test_delete_session_allows_the_owner():
         return {"user_id": "user-a"}
 
     app = _build_app()
-    app.dependency_overrides[validate_session_ownership] = _allow
+    app.dependency_overrides[validate_session_owner] = _allow
 
     with patch("memory.verbatim_store.get_verbatim_store") as get_store:
         store = AsyncMock()

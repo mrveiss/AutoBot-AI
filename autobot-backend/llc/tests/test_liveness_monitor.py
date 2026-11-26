@@ -29,8 +29,19 @@ class _Savepoint:
 
 @pytest.fixture(autouse=True)
 def _no_live_publish():  # noqa: ANN202
-    """The monitor now audits through a real log; its pub/sub fan-out is not under test here."""
-    with patch.object(LLCActivityLogService, "_deliver", AsyncMock()):
+    """Stub the two Redis reaches these tests do not exercise.
+
+    The monitor audits through a real log, and its pub/sub fan-out is not under test. ``_recover``
+    also asks ``agent_ref_block_reason`` whether the agent was paused, which reads Redis through
+    ``dispatch_gate``'s own ``get_async_redis_client`` binding (bound at import). Patching only
+    ``liveness_monitor``'s binding leaves that read live, so a raising or "paused" client makes
+    ``_recover`` exit before cancelling and the test fails depending on what ran before it (#22324).
+    ``None`` means "not paused" on this path: ``deliberate_only=True`` passes no company id.
+    """
+    with (
+        patch.object(LLCActivityLogService, "_deliver", AsyncMock()),
+        patch("llc.scheduler.dispatch_gate.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+    ):
         yield
 
 

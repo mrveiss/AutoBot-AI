@@ -9,6 +9,7 @@ deploy:
   # post_sync_cmd / ansible both deploy from are here.
   source: autobot-infrastructure/shared/docker/ai-stack/
   destination: /opt/autobot/autobot-ai-stack/
+  sync_target: "{base_dir}/autobot-ai-stack"   # #16025, #21974: what role_registry rsyncs INTO; equals `destination`
   shared: true
   infrastructure: true
 
@@ -36,6 +37,13 @@ health:
   timeout: "15s"
   retries: 3
   expected_status: 200
+
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  ai-stack:
+    checked: true
+    port: 8080
+    path: /health
 
 secrets:
   own:

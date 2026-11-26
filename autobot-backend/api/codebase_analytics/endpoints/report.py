@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter
 
+from api.analytics_shared import git_root_of
 from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
 from api.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
@@ -29,7 +30,6 @@ from code_intelligence.cross_language_patterns import CrossLanguageAnalysis, Cro
 
 # Issue #208: Code Pattern Detection & Optimization
 from code_intelligence.pattern_analysis import CodePatternAnalyzer, PatternAnalysisReport
-from constants.path_constants import PATH
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
 from utils.cancel_tokens import new_cancel_token, run_cancellable
 from utils.chromadb_client import get_all_paginated
@@ -62,7 +62,6 @@ from .duplicates import _run_standard_analysis
 from .scan_responses import ScanUnavailable
 from .shared import (
     filter_problems_by_file_existence,
-    resolve_git_repo_root,
     resolve_scan_root,
 )
 
@@ -1297,8 +1296,8 @@ def _build_analysis_task_list(
     include_cross_language_analysis: bool,
     include_pattern_analysis: bool,
     use_semantic: bool,
-    source_id: str | None = None,
-    scan_root: Path | None = None,
+    source_id: str,
+    scan_root: Path,
 ) -> List[Tuple[str, Any, float]]:
     """
     Build list of analysis tasks to run, each with its own deadline.
@@ -1326,7 +1325,7 @@ def _build_analysis_task_list(
             (
                 "bug_prediction",
                 _get_bug_prediction(
-                    project_root=str(scan_root) if scan_root else None,
+                    project_root=str(scan_root),
                     use_semantic=use_semantic,
                     source_id=source_id,
                 ),
@@ -1390,8 +1389,8 @@ async def _run_parallel_analyses(
     include_cross_language_analysis: bool,
     include_pattern_analysis: bool,
     use_semantic: bool,
-    source_id: str | None = None,
-    scan_root: Path | None = None,
+    source_id: str,
+    scan_root: Path,
 ) -> Dict[str, object | None]:
     """
     Run multiple code analyses in parallel.
@@ -1523,8 +1522,8 @@ def _generate_empty_report_with_analyses(
 
 
 async def _get_cross_language_analysis(
-    source_id: str | None = None,
-    project_root: Path | None = None,
+    source_id: str,
+    project_root: Path,
 ) -> CrossLanguageAnalysis | None:
     """
     Get cross-language pattern analysis for the project (Issue #244).
@@ -1536,15 +1535,14 @@ async def _get_cross_language_analysis(
 
     Args:
         source_id: Code source this analysis is scoped to (Issue #12372).
-        project_root: Resolved filesystem root to scan for this source.
-            Falls back to AutoBot's own root when None.
+        project_root: Resolved filesystem root to scan for this source (required, #20513).
 
     Returns:
         CrossLanguageAnalysis or None if analysis fails
     """
     try:
         detector = CrossLanguagePatternDetector(
-            project_root=str(project_root) if project_root else None,
+            project_root=str(project_root),
             use_llm=True,
             use_cache=True,
             source_id=source_id,
@@ -1571,15 +1569,18 @@ async def _get_cross_language_analysis(
 
 
 async def _get_pattern_analysis(
-    project_root: Path | None = None,
+    project_root: Path,
 ) -> PatternAnalysisReport | None:
     """
     Get code pattern analysis for the project (Issue #208).
 
-    Issue #2655: Scope analysis to autobot-backend/ (PATH.BACKEND_DIR) instead of
-    the full repo root to avoid the 180s timeout on large codebases -- this
-    optimization only applies to AutoBot's own tree (no distinct source
-    resolved), since other registered sources don't share AutoBot's layout.
+    #20513: the analysis scans the selected source's root and nothing else. The earlier #2655
+    shortcut (scan AutoBot's own backend directory when the root was the install's) is gone.
+
+    Bounds, as they are: only the clone-detection phase has a deadline of its own (``ANALYZER_TIMEOUT``).
+    The request is bounded at about 180 s by the outer ``wait_for`` below, which stops this coroutine from
+    waiting but not the executor threads, which keep walking the tree. A cooperative cancel token, like
+    ``_get_api_endpoint_analysis`` has, is #22094.
 
     Issue #12372: When a distinct source is resolved, scan that source's root
     instead of always defaulting to AutoBot's own backend directory --
@@ -1587,23 +1588,14 @@ async def _get_pattern_analysis(
     pattern-analysis findings for every source.
 
     Args:
-        project_root: Resolved filesystem root for the requested source.
-            Falls back to AutoBot's own backend dir when None or when it
-            resolves to AutoBot's own project root (a self-scan; no source is implied).
+        project_root: Resolved filesystem root for the requested source (required, #20513): the
+            analysis never substitutes AutoBot's own backend dir.
 
     Returns:
         PatternAnalysisReport or None if analysis fails
     """
     try:
-        # #12399: compare against resolve_git_repo_root() (deployed-layout-aware),
-        # matching the scan_root fallback — otherwise in the deployed layout an
-        # AutoBot self-report (project_root == code_source) fails this identity
-        # check and scans the full repo instead of PATH.BACKEND_DIR, dropping the
-        # #2655 timeout optimization.
-        if project_root and Path(project_root).resolve() != Path(resolve_git_repo_root()).resolve():
-            scan_target = str(project_root)
-        else:
-            scan_target = str(PATH.BACKEND_DIR)
+        scan_target = str(project_root)
 
         analyzer = CodePatternAnalyzer(
             enable_clone_detection=True,
@@ -1641,7 +1633,7 @@ async def _get_pattern_analysis(
 
 
 async def _get_duplicate_analysis(
-    project_root: Path | None = None,
+    project_root: Path,
 ) -> DuplicateAnalysis | None:
     """
     Get duplicate code analysis for the project (Issue #528).
@@ -1652,14 +1644,13 @@ async def _get_duplicate_analysis(
     findings for every source.
 
     Args:
-        project_root: Resolved filesystem root for the requested source.
-            Falls back to AutoBot's own project root when None.
+        project_root: Resolved filesystem root for the requested source (required, #20513).
 
     Returns:
         DuplicateAnalysis or None if analysis fails
     """
     try:
-        scan_target = str(project_root) if project_root else str(Path(__file__).resolve().parents[4])
+        scan_target = str(project_root)
 
         # #13602: delegate to the guarded scan in `duplicates`. This submitted
         # straight to the executor with neither the single-flight lock nor the
@@ -1694,7 +1685,7 @@ async def _get_duplicate_analysis(
 
 
 async def _get_api_endpoint_analysis(
-    project_root: Path | None = None,
+    project_root: Path,
 ) -> APIEndpointAnalysis | None:
     """
     Get API endpoint analysis for the project (Issue #527).
@@ -1705,9 +1696,7 @@ async def _get_api_endpoint_analysis(
     coverage findings for every source.
 
     Args:
-        project_root: Resolved filesystem root for the requested source.
-            Falls back to AutoBot's own project root (APIEndpointChecker
-            default) when None.
+        project_root: Resolved filesystem root for the requested source (required, #20513).
 
     Returns:
         APIEndpointAnalysis or None if analysis fails
@@ -1746,10 +1735,10 @@ async def _get_api_endpoint_analysis(
 
 
 async def _get_bug_prediction(
-    project_root: str | None = None,
+    project_root: str,
+    source_id: str,
     limit: int = BUG_PREDICTION_FILE_LIMIT,
     use_semantic: bool = False,
-    source_id: str | None = None,
 ) -> PredictionResult | None:
     """
     Get bug prediction data for the project (Issue #505).
@@ -1760,17 +1749,15 @@ async def _get_bug_prediction(
     collection when use_semantic=True; with use_semantic=False (the
     pipeline default) it degrades to the same synchronous per-file
     analysis as the old sync path, so this is a safe default baseline.
-
     Issue #554: Enhanced with optional semantic analysis:
     - use_semantic=True enables LLM-based bug pattern matching
     - Uses ChromaDB for vector similarity and Redis for caching
-
     Issue #12384: Threads source_id into the detector so a report requested
     for one source never reads another source's (or AutoBot's own) learned
     bug patterns from the shared ``bug_pattern_vectors`` collection.
 
     Args:
-        project_root: Root directory to analyze (defaults to current directory)
+        project_root: The source's checkout to analyze (required, #20513)
         limit: Maximum number of files to analyze
         use_semantic: Enable semantic analysis via LLM embeddings (Issue #554)
         source_id: Code source this analysis is scoped to (Issue #12384).
@@ -1778,15 +1765,13 @@ async def _get_bug_prediction(
     Returns:
         PredictionResult or None if analysis fails or times out
     """
+    root = await asyncio.to_thread(git_root_of, Path(project_root))  # own repository only (#20513)
+    if root is None:  # `git log` would read another repository's history: this section fails closed
+        logger.warning("Bug prediction skipped: the source checkout is not a git repository of its own")
+        return None
     try:
-        # Issue #2655: Use PATH.PROJECT_ROOT as fallback — Path.cwd() is unreliable
-        # in deployed environments where the backend process CWD may differ from
-        # the project root, causing FileNotFoundError in git subprocess calls.
-        root = project_root or str(PATH.PROJECT_ROOT)
-
-        # Issue #554: Pass semantic analysis flag
-        # Issue #12384: Pass source_id for ChromaDB metadata/query scoping
-        predictor = BugPredictor(project_root=root, use_semantic_analysis=use_semantic, source_id=source_id)
+        # Issue #554/#12384: semantic flag; source_id scopes the ChromaDB metadata/query
+        predictor = BugPredictor(project_root=str(root), use_semantic_analysis=use_semantic, source_id=source_id)
 
         # Issue #12406: analyze_directory_async is the path that writes/reads
         # the source_id-scoped bug_pattern_vectors collection; the previous
@@ -2122,8 +2107,8 @@ async def _resolve_analyses(
     include_cross_language_analysis: bool,
     include_pattern_analysis: bool,
     use_semantic: bool,
-    source_id: str | None = None,
-    scan_root: Path | None = None,
+    source_id: str,
+    scan_root: Path,
 ) -> dict:
     """Helper for generate_analysis_report. Resolve analysis results or quick-mode blanks. Ref: #1088.
 

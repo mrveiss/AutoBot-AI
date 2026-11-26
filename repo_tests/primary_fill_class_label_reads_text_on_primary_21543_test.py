@@ -57,6 +57,7 @@ _FIRES = {
     "fill-with-hover-shade": '<a class="bg-autobot-primary hover:bg-autobot-primary-hover text-white">x</a>',
     "opacity-fill": '<a class="bg-autobot-primary/90 text-white">x</a>',
     "hover-label": '<a class="bg-autobot-primary hover:text-white">x</a>',
+    "second-token-inverse": '<a class="bg-autobot-primary text-autobot-text-inverse">x</a>',
     "arbitrary-white": '<a class="bg-autobot-primary text-[#fff]">x</a>',
     "bound-class-ternary": "<a :class=\"on ? 'bg-autobot-primary text-white' : 'bg-autobot-bg-card'\">x</a>",
     "bound-class-object-key": "<a :class=\"{ 'bg-autobot-primary text-white': on }\">x</a>",
@@ -72,7 +73,6 @@ _QUIET = {
     "fill-without-a-text-utility": '<a class="bg-autobot-primary rounded">x</a>',
     "label-in-another-attribute": '<a class="bg-autobot-primary" :class="[\'text-white\']">x</a>',
     "label-on-a-sibling-element": '<a class="bg-autobot-primary"><b class="text-white">x</b></a>',
-    "inverse-token": '<a class="bg-autobot-primary text-autobot-text-inverse">x</a>',
 }
 #: Comment controls, chosen so they hold for every version of the shared helper that strips these two forms:
 #: a block comment and a whole-line ``//`` comment. Trailing ``//`` and ``<!-- -->`` are not asserted either way.

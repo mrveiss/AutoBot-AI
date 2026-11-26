@@ -27,13 +27,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import client_getdel, client_setex, get_redis_client
 from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config
 from knowledge.connectors import oauth_flow
 from knowledge.connectors.credential_store import get_credential_store
+from services.credential_read import assert_attachable_secret, find_connector_secret_ids
 
 logger = get_logger(__name__)
 
@@ -44,6 +45,8 @@ _OAUTH_STATE_TTL_SECONDS = 600
 _OAUTH_STATE_PREFIX = "connector:oauth:state:"
 # Double-submit cookie binding the completing browser to the initiating one (CSRF).
 _OAUTH_STATE_COOKIE = "connector_oauth_state"
+# Fixed, non-secret notice for a re-authorization whose replaced credential could not be removed (#13710).
+_STALE_CREDENTIAL_WARNING = "A previous credential could not be removed; it will be retried on the next authorization."
 _OAUTH_CALLBACK_PATH = "/api/knowledge_base/connectors/oauth/callback"
 
 
@@ -79,11 +82,28 @@ def _validate_redirect_uri(redirect_uri: str) -> None:
         raise HTTPException(status_code=400, detail="redirect_uri must use HTTPS")
 
 
+async def _resolve_flow_owner(prov, user: dict, http_request: Request) -> str:
+    """The owner a flow's credential is filed under: the caller, or a service provider's declared owner.
+
+    A service-owned provider (#13710) is connected by an admin only and files ONE shared credential under
+    its declared owner; that is the provider's config, not the silent "system" fallback #13628 removed.
+    """
+    if prov.service_owner_id:
+        await check_admin_permission(http_request)
+    # #13628: no silent ``or "system"`` fallback. ``get_current_user`` does NOT guarantee ``user_id``: the
+    # internal-API-key path returns only ``username`` and SLM-minted JWTs carry ``sub`` (api/voice.py:73).
+    owner_id = str(user.get("user_id") or user.get("sub") or user.get("username") or "")
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Authenticated caller has no resolvable identity")
+    return prov.service_owner_id or owner_id
+
+
 @router.post("/knowledge_base/connectors/oauth/{provider}/authorize", response_model=AuthorizeResponse)
 async def start_oauth(
     provider: str,
     request: AuthorizeRequest,
     response: Response,
+    http_request: Request,
     user: dict = Depends(get_current_user),
 ) -> AuthorizeResponse:
     """Begin a connector OAuth flow; return the provider authorization URL."""
@@ -96,24 +116,12 @@ async def start_oauth(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     _validate_redirect_uri(request.redirect_uri)
-
-    # #13628: no silent ``or "system"`` fallback — minting a shared literal owner
-    # made every credential created that way mutually readable by the others.
-    #
-    # Resolve identity the way the rest of the codebase does (api/voice.py:73,
-    # api/agent_terminal.py:614). ``get_current_user`` does NOT guarantee
-    # ``user_id``: the internal-API-key path returns only ``username``, the
-    # dev-header path likewise, and SLM-minted JWTs carry ``sub``. Requiring
-    # ``user_id`` alone would 401 those callers, who authenticate fine everywhere
-    # else. Only a caller with no identity at all is refused.
-    owner_id = str(user.get("user_id") or user.get("sub") or user.get("username") or "")
-    if not owner_id:
-        raise HTTPException(status_code=401, detail="Authenticated caller has no resolvable identity")
-
+    owner_id = await _resolve_flow_owner(prov, user, http_request)
     state = oauth_flow.generate_state()
     verifier, challenge = oauth_flow.generate_pkce()
-    connector_id = str(uuid.uuid4())
-    scopes = tuple(request.scopes) if request.scopes else None
+    connector_id = prov.service_connector_id or str(uuid.uuid4())
+    # #13710: a service-owned provider's consent is pinned to its declared scopes; client scopes are ignored.
+    scopes = tuple(request.scopes) if request.scopes and not prov.service_owner_id else None
 
     payload = {
         "provider": provider,
@@ -169,7 +177,7 @@ async def oauth_callback(
         return _clear_cookie(_result_page(error="missing_authorization_code", provider=payload.get("provider")))
 
     try:
-        secret_id = await _exchange_and_store(payload, code)
+        secret_id, stale_left = await _exchange_and_store(payload, code)
     except (ValueError, KeyError) as exc:
         logger.error("OAuth callback config error: %s", exc)
         return _clear_cookie(_result_page(error="provider_not_configured", provider=payload.get("provider")))
@@ -182,18 +190,20 @@ async def oauth_callback(
             secret_id=secret_id,
             provider=payload.get("provider"),
             connector_id=payload.get("connector_id"),
+            warning=_STALE_CREDENTIAL_WARNING if stale_left else None,
         )
     )
 
 
-async def _exchange_and_store(payload: dict, code: str) -> str:
-    """Exchange the auth code and persist tokens; return the secret id."""
+async def _exchange_and_store(payload: dict, code: str) -> tuple[str, bool]:
+    """Exchange the auth code and persist tokens; return ``(secret_id, a_replaced_credential_is_still_active)``."""
     prov = oauth_flow.get_provider(payload["provider"])
     client_id, client_secret = oauth_flow.resolve_client_credentials(prov)
     token_response = await oauth_flow.exchange_code(
         prov, client_id, client_secret, code, payload["redirect_uri"], payload["code_verifier"]
     )
-    return await get_credential_store().store_oauth(
+    previous = await find_connector_secret_ids(payload["connector_id"]) if prov.service_owner_id else []
+    secret_id = await get_credential_store().store_oauth(
         connector_id=payload["connector_id"],
         owner_id=payload["owner_id"],
         provider=payload["provider"],
@@ -201,6 +211,8 @@ async def _exchange_and_store(payload: dict, code: str) -> str:
         token_url=prov.token_url,
         scopes=payload.get("scopes") or list(prov.default_scopes),
     )
+    stale_left = await _revoke_replaced_credentials([i for i in previous if i != secret_id], prov.service_owner_id)
+    return secret_id, stale_left
 
 
 def _result_page(
@@ -208,9 +220,11 @@ def _result_page(
     provider: str | None = None,
     connector_id: str | None = None,
     error: str | None = None,
+    warning: str | None = None,
 ) -> HTMLResponse:
     """Render the popup result page that messages the opener and self-closes."""
     message = {
+        "warning": warning,
         "type": "connector-oauth",
         "ok": error is None,
         "secret_id": secret_id,
@@ -219,6 +233,8 @@ def _result_page(
         "error": error,
     }
     status = "Connected — you can close this window." if error is None else ("Connection failed: %s" % error)
+    if warning:
+        status = "%s %s" % (status, warning)
     # Every attacker-influenced value (error is a provider query param) reaches the
     # response only through html.escape, a recognized XSS sanitizer. The visible
     # status is escaped as HTML text; the postMessage payload is serialized to JSON,
@@ -247,6 +263,34 @@ def _clear_cookie(response: HTMLResponse) -> HTMLResponse:
     """Delete the single-use state-binding cookie on the result response."""
     response.delete_cookie(_OAUTH_STATE_COOKIE, path=_OAUTH_CALLBACK_PATH)
     return response
+
+
+async def attachable_secret_id(secret_id: str, owner_id: str) -> str:
+    """*secret_id*, once it is one *owner_id* may attach to a connector; never a service-owned one (#13710)."""
+    try:
+        await assert_attachable_secret(secret_id, owner_id)
+    except (LookupError, PermissionError) as exc:
+        logger.warning("Refused to attach a secret to a new connector: %s", type(exc).__name__)
+        raise HTTPException(status_code=400, detail="secret cannot be attached to this connector") from exc
+    return secret_id
+
+
+async def _revoke_replaced_credentials(previous_ids: list[str], owner_id: str) -> bool:
+    """Revoke every credential a service-owned re-authorization replaced, AFTER the new one is stored (#13710).
+
+    Never the new id, and never before the store: a failed store must leave the old credential intact. Every
+    older row is attempted, so an earlier failed revoke is retried here. A failure is logged with the old id (never
+    a value) and reported, not raised: the new credential is stored and is the newest, so it is the one used.
+    Returns True when any replaced credential is still active.
+    """
+    stale_left = False
+    for previous_id in previous_ids:
+        try:
+            await get_credential_store().revoke(previous_id, owner_id)
+        except Exception as exc:  # noqa: BLE001 - the new credential is already stored
+            stale_left = True
+            logger.warning("Could not revoke replaced service credential %s: %s", previous_id, type(exc).__name__)
+    return stale_left
 
 
 # Redis single-use-state helpers now live in autobot_shared.redis_client

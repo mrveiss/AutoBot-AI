@@ -420,7 +420,7 @@ class StubSet:
         return _reattach_stubs
 
 
-def make_pkg_stub(name: str) -> types.ModuleType:
+def make_pkg_stub(name: str, real_dir: Path | None = None) -> types.ModuleType:
     """Create a minimal package stub that Python's import machinery accepts.
 
     A bare MagicMock() cannot serve as a package because the importer
@@ -429,13 +429,21 @@ def make_pkg_stub(name: str) -> types.ModuleType:
     create a real ModuleType with ``__path__ = []`` so the dotted import chain
     succeeds while leaving every attribute access as a MagicMock via
     ``__getattr__``.
+
+    With *real_dir* the stub fronts a real package directory: ``__path__`` points
+    at it and an attribute naming a real submodule there (``from models import
+    settings``) imports that module instead of answering with the mock, so the
+    result does not depend on whether the real package happened to be imported
+    before the stub was installed (#17850).
     """
     mod = types.ModuleType(name)
-    mod.__path__ = []  # marks this as a package to the import system
+    mod.__path__ = [] if real_dir is None else [str(real_dir)]  # marks this as a package to the import system
     mod.__package__ = name
     mock_attr = MagicMock()
 
     def _getattr(attr: str) -> MagicMock:  # noqa: ANN001
+        if real_dir is not None and not attr.startswith("__") and (real_dir / f"{attr}.py").is_file():
+            return importlib.import_module(f"{name}.{attr}")
         return mock_attr
 
     mod.__getattr__ = _getattr  # type: ignore[attr-defined]

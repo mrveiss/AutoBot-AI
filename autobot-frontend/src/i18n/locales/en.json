@@ -173,6 +173,7 @@
       "edit": "Edit message",
       "copy": "Copy message",
       "delete": "Delete message",
+      "saveAsDocument": "Save as document",
       "tokens": "{count} tokens",
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
@@ -262,15 +263,29 @@
       "showSources": "Show Sources",
       "autoScroll": "Auto-scroll",
       "confirmDeleteSelected": "Delete {count} selected chats? This cannot be undone.",
-      "deletedWithFactsMixed": "Deleted {count} chats (facts removed from some, preserved in others)",
-      "deletedWithFactsRemoved": "Deleted {count} chats and removed associated facts",
-      "deletedWithFactsPreserved": "Deleted {count} chats (facts preserved in knowledge base)",
-      "deletedSuccess": "Deleted {count} chats",
+      "deletedWithFactsMixed": "Deleted {count} chat (facts removed from some, preserved in others) | Deleted {count} chats (facts removed from some, preserved in others)",
+      "deletedWithFactsRemoved": "Deleted {count} chat and removed associated facts | Deleted {count} chats and removed associated facts",
+      "deletedWithFactsPreserved": "Deleted {count} chat (facts preserved in knowledge base) | Deleted {count} chats (facts preserved in knowledge base)",
+      "deletedSuccess": "Deleted {count} chat | Deleted {count} chats",
       "deleteFailed": "Failed to delete some chats",
       "sharedSuccess": "Chat shared successfully",
       "searchChats": "Search chats",
       "noSearchResults": "No chats match your search",
-      "showFallbackChip": "Show fallback badge"
+      "unassigned": "Unassigned",
+      "unassignedHint": "These chats belong to no company yet. Assign each one to a company; nothing is moved automatically.",
+      "assignCompanyLabel": "Company for {title}",
+      "assignCompanyPlaceholder": "Choose a company",
+      "assignCompany": "Assign",
+      "assignedSuccess": "Chat assigned to {company}",
+      "assignFailed": "Could not assign the chat to a company",
+      "showFallbackChip": "Show fallback badge",
+      "selectChats": "Select chats",
+      "sessionActions": "Chat actions",
+      "moveToFolder": "Move to {name}",
+      "untitledChat": "Chat {id}...",
+      "previewFailed": "Could not load the file and knowledge previews for this chat. You can still delete it.",
+      "preserveFailed": "Some knowledge facts could not be preserved; they were deleted with the chat.",
+      "moreActions": "More actions"
     },
     "folders": {
       "folders": "Folders",
@@ -300,6 +315,8 @@
       "overseerError": "Overseer error: {error}",
       "executionCompleted": "Execution completed",
       "feedbackSent": "Feedback sent",
+      "alreadyDecided": "This command was already decided",
+      "approvalAlreadyHandled": "This approval has already been handled",
       "feedbackFailed": "Failed to send feedback",
       "toolApprovalTitle": "Agent Tool Approval Required",
       "toolApprovalTool": "Tool",
@@ -381,9 +398,9 @@
       "typeMessage": "Type a message...",
       "generate": "Generate",
       "generateImage": "Generate image",
-      "generateImageTitle": "generate Image",
+      "generateImageTitle": "Generate image",
       "generating": "Generating",
-      "imagePromptLabel": "image Prompt",
+      "imagePromptLabel": "Describe the image",
       "imagePromptPlaceholder": "Enter image prompt...",
       "imageProvider": "Image provider",
       "selectPromptTemplate": "Select prompt template",
@@ -396,7 +413,48 @@
       "stopFailed": "Couldn't stop the reply",
       "fileTooLarge": "File \"{name}\" is too large (max {max})",
       "voiceUnsupported": "Voice input requires Chrome, Edge, or Safari 15+. Transcription is not available in this browser.",
-      "micDenied": "Microphone access was denied. Please allow microphone access in your browser settings."
+      "micDenied": "Microphone access was denied. Please allow microphone access in your browser settings.",
+      "uploadsInProgress": "Uploads in progress",
+      "removeFileNamed": "Remove {name}",
+      "uploadStatus": {
+        "preparing": "Preparing…",
+        "uploading": "Uploading…",
+        "uploadingPercent": "Uploading… {percent}%",
+        "complete": "Complete",
+        "failed": "Failed",
+        "retrying": "Retrying…"
+      },
+      "imageGenerationFailed": "Image generation failed",
+      "quickActionText": {
+        "help": "Can you help me with ",
+        "summarize": "Please summarize our conversation",
+        "explain": "Can you explain "
+      },
+      "emoji": {
+        "u1f600": "grinning face",
+        "u1f602": "face with tears of joy",
+        "u1f60a": "smiling face with smiling eyes",
+        "u1f60d": "smiling face with heart-eyes",
+        "u1f914": "thinking face",
+        "u1f44d": "thumbs up",
+        "u1f44e": "thumbs down",
+        "u2764": "red heart",
+        "u1f525": "fire",
+        "u2b50": "star",
+        "u1f4a1": "light bulb",
+        "u2705": "check mark button"
+      },
+      "imageProviders": {
+        "dalle": "DALL·E 3",
+        "flux": "Flux",
+        "stable_diffusion": "Stable Diffusion"
+      },
+      "slashSuggestions": "Slash command suggestions",
+      "slashPresets": "Presets",
+      "slashHint": "↑ ↓ move · Enter insert · Esc close",
+      "keyboardHintAdvanced": "type / for commands and MCP tools",
+      "charactersLeft": "{count} left",
+      "hiddenActive": "Active: {options}"
     },
     "translate": {
       "title": "Translate Text",
@@ -410,11 +468,14 @@
       "error": "Translation failed. Please try again."
     },
     "messages": {
+      "newMessageAnnouncement": "New message from {sender}: {preview}",
+      "saveAsDocumentFailed": "Could not save the message as a document.",
       "conversation": "Conversation messages",
       "aiAssistant": "AI Assistant",
       "editMessage": "Edit Message",
       "enterMessage": "Enter your message...",
       "ctrlEnterToSave": "Press Ctrl+Enter (Cmd+Enter on Mac) to save",
+      "downloadAttachment": "Download {name}",
       "tokens": "{count} tokens",
       "attachments": "{count} attachment | {count} attachments",
       "thinking": "Thinking...",
@@ -440,6 +501,7 @@
       "statusSent": "Sent",
       "statusFailed": "Failed to send",
       "confirmDelete": "Delete this message? This action cannot be undone.",
+      "copyFailed": "Could not copy the message to the clipboard",
       "thinkingUsed": "Thinking used"
     },
     "stallQuestion": {
@@ -517,7 +579,15 @@
       "webSource": "Web Source",
       "knowledgeBase": "Knowledge Base",
       "modelOnly": "Model only",
-      "modelOnlyTooltip": "This claim is based on model training data only — no sources were retrieved"
+      "modelOnlyTooltip": "This claim is based on model training data only — no sources were retrieved",
+      "tool": "Tool:",
+      "arguments": "Arguments:",
+      "host": "Host:",
+      "exitCode": "Exit code:",
+      "resultLinks": "Result links:",
+      "checkPartial": "The check of quoted values was partial: some tool output was too long to read in full or is no longer available.",
+      "unprovenTitle": "Not found in this turn's tool results:",
+      "unprovenHint": "These exact values appear in no tool result of this turn. They may be reformatted or computed, so this is not a verdict that they are wrong."
     },
     "tabContent": {
       "openInNewWindow": "Open in new window",
@@ -613,6 +683,8 @@
     },
     "overseer": {
       "executionPlan": "Execution Plan",
+      "stepOf": "Step {current} of {total}",
+      "exitCode": "Exit: {code}",
       "stepsProgress": "{completed} of {total} steps",
       "copyCommand": "Copy command",
       "whatCommandDoes": "What this command does",
@@ -668,6 +740,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "Require login to view",
       "requireLoginHint": "Only signed-in users can open this link",
@@ -798,7 +877,11 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "lightweightModeTooltip": "About 90% cheaper than standard mode",
+    "streamPreview": {
+      "thought": "Thinking: {text}",
+      "planning": "Planning: {text}"
+    },
     "errors": {
       "budgetExhausted": "Your {period} spending limit for this {scope} (${limit}) has been reached. Chat is unavailable until it resets or an administrator raises the limit.",
       "budgetScope": {
@@ -842,8 +925,55 @@
       "unsupported": "\"{filename}\" is not a text file this assistant can read, so it was not used.",
       "unreadable": "\"{filename}\" could not be read, so it was not used.",
       "empty": "\"{filename}\" has no readable text, so it was not used.",
-      "truncated": "\"{filename}\" is long, so only the start of it was used.",
-      "over_budget": "The attached files reached the size limit, so \"{filename}\" was not used."
+      "truncated": "\"{filename}\" is long, so only the first {used} of {total} characters were used.",
+      "truncated_legacy": "\"{filename}\" is long, so only the start of it was used.",
+      "over_budget": "The attached files reached the size limit, so \"{filename}\" was not used.",
+      "over_window": "The conversation is too long for the model's window, so some earlier text may not reach it."
+    },
+    "header": {
+      "voiceControls": "Voice controls",
+      "essentialsNote": "Showing essentials",
+      "showAllFeatures": "Show all features",
+      "overseerOn": "Overseer on",
+      "overseerOff": "Overseer off",
+      "overseerTip": "Overseer plans multi-step tasks and asks before risky commands",
+      "startedAt": "started {time}",
+      "sessionId": "Session {id}",
+      "connectedTip": "Connected to the backend — replies stream live",
+      "knowledgeOn": "Knowledge on",
+      "knowledgeOff": "Knowledge off",
+      "knowledgeTip": "Answers draw on your knowledge base"
+    },
+    "newChatTip": "New chat · Ctrl ⇧ O",
+    "composer": {
+      "knowledgeTip": "Ground answers in your knowledge base (RAG)",
+      "thinkingLabel": "Thinking",
+      "thinkingTip": "Extended reasoning before answering — slower, more thorough",
+      "budgetTokens": "{label} tokens",
+      "budget": {
+        "b1000": "1k",
+        "b5000": "5k",
+        "b10000": "10k",
+        "b32000": "32k",
+        "b128000": "max"
+      }
+    },
+    "mcpPrompts": {
+      "title": "Prompt templates",
+      "loading": "Loading templates…",
+      "loadFailed": "Failed to load prompt templates. Please try again.",
+      "requiredParam": "Please fill in required parameter: {name}",
+      "insertFailed": "Failed to load prompt template. Please try again.",
+      "source": "Source",
+      "bridges": {
+        "git": "Git",
+        "knowledge": "Knowledge",
+        "filesystem": "Filesystem"
+      },
+      "empty": "No templates available from {bridge}",
+      "parameters": "Parameters:",
+      "insert": "Insert template",
+      "bridgesFailed": "Could not load prompts from: {bridges}"
     }
   },
   "settings": {
@@ -1230,7 +1360,7 @@
       "quality": {
         "title": "Code Quality",
         "overallScore": "Overall Score",
-        "testCoverage": "Test Coverage",
+        "testability": "Testability",
         "codeDuplicates": "Code Duplicates",
         "technicalDebt": "Technical Debt",
         "notAvailable": "Not available",
@@ -2396,6 +2526,8 @@
     "codeSmells": {
       "title": "Code Smells",
       "found": "found",
+      "exportMd": "MD",
+      "exportJson": "JSON",
       "total": "Total",
       "critical": "Critical",
       "high": "High",
@@ -2501,7 +2633,7 @@
       "noCommunicationData": "No communication data available",
       "codeQuality": "Code Quality",
       "overallScore": "Overall Score",
-      "testCoverage": "Test Coverage",
+      "testability": "Testability",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
       "notAvailable": "Not available",
@@ -2577,6 +2709,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "Failed to load evolution data",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -3226,11 +3359,19 @@
     "batchToolbar": {
       "documentsSelected": "{count} document(s) selected",
       "vectorizeSelected": "Vectorize Selected",
-      "clearSelection": "Clear Selection"
+      "clearSelection": "Clear Selection",
+      "label": "Selected documents",
+      "vectorizeTip": "Create embeddings so these documents become searchable"
     },
     "browserHeader": {
-      "searchPlaceholder": "Search files and folders...",
-      "clearSearch": "Clear search"
+      "searchPlaceholder": "Search the knowledge base…",
+      "clearSearch": "Clear search",
+      "title": "Knowledge Browser",
+      "subtitle": "Everything your agents can retrieve, by category",
+      "breadcrumb": "Knowledge Base / Browse",
+      "searchLabel": "Search knowledge",
+      "options": "Search options",
+      "optionsLabel": "Search options"
     },
     "browser": {
       "populate": "Populate",
@@ -3257,13 +3398,45 @@
       "documentsSelected": "{count} document(s) selected",
       "backToRoot": "Back to root",
       "filters": "Filters",
-      "editCategory": "Edit category"
+      "editCategory": "Edit category",
+      "categoriesLabel": "Categories",
+      "showCategory": "Show {name} in the tree",
+      "factsTip": "Fact: one stored, retrievable unit of knowledge (a chunk with metadata)",
+      "populateTip": "Auto-fill this category from its configured sources",
+      "importTip": "Upload files or a JSON export into this category. Audio and video (mp3, m4a, wav, mp4, mov, mkv) are transcribed first, then the transcript is added as text.",
+      "treeLabel": "Documents",
+      "filesLabel": "Files",
+      "folderLoadFailed": "Could not load this folder's documents. Open it again to retry.",
+      "loadMoreFailed": "Could not load more documents. Try again.",
+      "factFallback": "Fact {n}",
+      "entryFallback": "Entry {n}",
+      "documentFallback": "Document {n}",
+      "uncategorized": "Uncategorized",
+      "statusRefreshFailed": "Could not refresh the vectorization status. Try again.",
+      "contentUnavailable": "The full text of this document could not be loaded.",
+      "vectorizeFailed": "Vectorization failed. Check the document status and retry.",
+      "populateFailed": "Populate failed. Try again.",
+      "fallbackCategories": {
+        "autobotDocumentation": {
+          "name": "AutoBot Documentation",
+          "description": "AutoBot's initial knowledge - documentation and guides"
+        },
+        "systemKnowledge": {
+          "name": "System Knowledge",
+          "description": "AutoBot's initial knowledge - system info, man pages, OS knowledge"
+        },
+        "userKnowledge": {
+          "name": "User Knowledge",
+          "description": "What AutoBot is used for - user-provided domain knowledge"
+        }
+      }
     },
     "contentViewer": {
       "noFileSelected": "No file selected",
       "selectFileHint": "Select a file from the tree to view its contents",
       "loadingContent": "Loading content...",
-      "closeFileViewer": "Close file viewer"
+      "closeFileViewer": "Close file viewer",
+      "label": "Document"
     },
     "entries": {
       "uploadTab": "Upload",
@@ -3321,7 +3494,13 @@
       "cancel": "Cancel",
       "saveChanges": "Save Changes",
       "confirmDelete": "Delete \"{title}\"?",
-      "confirmDeleteSelected": "Delete {count} selected entries?",
+      "confirmDeleteSelected": "Propose deleting {count} selected entries for approval?",
+      "deleteTitle": "Deletion proposed",
+      "deleteProposed": "Deletion proposed for approval. Nothing is deleted until an administrator approves it in the Approvals inbox.",
+      "deleteNothingSelected": "Nothing is selected, so no deletion was proposed.",
+      "deleteTooMany": "Too many entries are selected. Select at most {max} and try again.",
+      "deleteUnknownError": "Unknown error",
+      "deleteProposeFailed": "The deletion could not be proposed: {message}",
       "verified": "Verified",
       "pendingReview": "Pending review",
       "unverified": "Unverified",
@@ -4080,7 +4259,9 @@
       "tooltipFailed": "Vectorization failed for this document",
       "tooltipPending": "Document is pending vectorization",
       "tooltipUnknown": "Vectorization status unknown",
-      "tooltipVectorized": "Document has been vectorized and is searchable via RAG"
+      "tooltipVectorized": "Document has been vectorized and is searchable via RAG",
+      "overallProgress": "Overall vectorization progress",
+      "documentProgress": "Vectorization progress for {name}"
     },
     "batchSelection": {
       "selected": "{count} selected",
@@ -4272,12 +4453,13 @@
       "errorLoadDocs": "Failed to load documents"
     },
     "treeNode": {
-      "itemsCount": "Items count",
-      "retryTitle": "Retry title",
-      "unvectorized": "Unvectorized",
-      "vectorizeFolderTitle": "Vectorize folder title",
-      "vectorizeTitle": "Vectorize title",
-      "zeroSize": "0B"
+      "itemsCount": "{count} documents in folder",
+      "retryTitle": "Retry vectorization",
+      "unvectorized": "{count} to vectorize",
+      "vectorizeFolderTitle": "Vectorize the {count} documents in this folder that are not searchable yet",
+      "vectorizeTitle": "Vectorize this document",
+      "zeroSize": "0B",
+      "selectDocument": "Select {name}"
     },
     "verification": {
       "approve": "Approve",
@@ -4481,6 +4663,51 @@
       "7": "miscellaneous",
       "8": "system administration",
       "9": "kernel routines"
+    },
+    "browserFilter": {
+      "removeFilter": "Remove filter",
+      "removeFilterNamed": "Remove filter: {category}"
+    },
+    "healthSummary": {
+      "label": "Knowledge base health",
+      "totalFacts": "Total Facts",
+      "totalVectors": "Total Vectors",
+      "vectorsTip": "Embeddings stored for semantic search; a fact can have several",
+      "databaseSize": "Database Size",
+      "ragAvailable": "RAG Available",
+      "ragUnavailable": "RAG Unavailable",
+      "ragTipOn": "Retrieval-augmented generation is on: chat answers can cite this knowledge",
+      "ragTipOff": "Retrieval-augmented generation is off: chat answers cannot cite this knowledge yet"
+    },
+    "searchPanel": {
+      "label": "Search results",
+      "searching": "Searching…",
+      "resultsFor": "{count} result(s) for",
+      "noResultsFor": "No results for",
+      "close": "Close search results",
+      "rankedLabel": "Ranked search results",
+      "relevance": "Relevance: {score}%",
+      "rerank": "Re-rank score: {score}%",
+      "general": "general",
+      "text": "text",
+      "untitled": "Untitled",
+      "viewerLabel": "Document viewer",
+      "selectResult": "Select a result to view the document",
+      "keyboardHint": "Use arrow keys to navigate, Enter to open",
+      "match": "{score}% match",
+      "loadingDocument": "Loading document…",
+      "copy": "Copy",
+      "copied": "Copied"
+    },
+    "abandonedUploads": {
+      "title": "Abandoned uploads",
+      "description": "Uploads that expired unfinished still take up disk space until an admin frees them.",
+      "none": "No abandoned uploads.",
+      "loadFailed": "The abandoned uploads could not be listed.",
+      "progress": "{received} of {total} received",
+      "free": "Free upload",
+      "freeFailed": "The upload could not be freed.",
+      "confirm": "Free this abandoned upload? Its staged data is removed and the decision is recorded."
     }
   },
   "workflow": {
@@ -4801,6 +5028,9 @@
       "controlRefused": "Refused: only an administrator or the workflow's owner may control it",
       "stepSkipped": "Step skipped",
       "rerunNotFound": "Could not find workflow to re-run",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "Re-running \"{name}\"",
       "rerunFailed": "Failed to re-run workflow",
       "notificationsSaved": "Notification settings saved"
@@ -4981,6 +5211,10 @@
   "agent": {
     "title": "Agents",
     "systemActor": "System",
+    "heartbeatReasons": {
+      "manual_pause_ui": "Manual pause from UI",
+      "manual_wakeup_ui": "Manual wakeup from UI"
+    },
     "status": "Agent Status",
     "config": "Agent Configuration",
     "orchestrator": "Orchestrator",
@@ -5001,6 +5235,13 @@
       "error": "Error",
       "noBackendAgents": "No backend agents configured",
       "noSpecializedAgents": "No specialized agents found",
+      "agentsDirMissing": "No Claude Code agents directory was found on this host. Set AUTOBOT_CLAUDE_CONFIG_DIR (or CLAUDE_CONFIG_DIR) to the Claude Code configuration directory.",
+      "tiers": {
+        "tier1_default": "Default tier",
+        "tier2_analysis": "Analysis tier",
+        "tier3_specialized": "Specialized tier",
+        "tier4_orchestrator": "Orchestrator tier"
+      },
       "systemPrompt": "System Prompt",
       "noModel": "no model",
       "defaultModel": "default",
@@ -6086,7 +6327,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Username missing: set it in Secrets",
+      "desktopVm": "AutoBot desktop VM",
+      "desktopVmDesc": "AutoBot's own desktop",
+      "noDesktopVm": "No desktop VM is registered, so only your Secrets hosts are listed."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6214,6 +6459,11 @@
     },
     "minimalNote": "Showing essentials · technical widgets hidden",
     "minimalNoteAction": "Show all features",
+    "advancedArea": {
+      "title": "This is an advanced area",
+      "body": "It's hidden from navigation while Minimal interface is on.",
+      "goHome": "Go to Home"
+    },
     "themePresets": {
       "title": "Theme Presets",
       "description": "Choose a pre-configured theme or customize your own color scheme",
@@ -6338,7 +6588,11 @@
       "cleanupConfirm": "Delete Old Logs",
       "cancel": "Cancel",
       "deleteOldLogs": "Delete Old Logs",
-      "initError": "Failed to initialize audit data"
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
+      "initError": "Failed to initialize audit data",
+      "eventLogs": "Event Logs",
+      "commandHistory": "Command History",
+      "tabsLabel": "Audit sections"
     },
     "browserAutomation": {
       "title": "Browser Automation",
@@ -6832,16 +7086,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "collaboratorTooltip": "Collaborator",
-      "noParticipants": "No participants",
-      "offline": "Offline",
-      "participants": "Participants",
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "Collaboration",
       "invite": "Invite",
@@ -6849,7 +7093,9 @@
       "tabParticipants": "Participants",
       "tabActivity": "Activity",
       "tabNotifications": "Notifications",
-      "tabInvitations": "Invitations"
+      "tabInvitations": "Invitations",
+      "tabsLabel": "Collaboration sections",
+      "tabCounted": "{label} ({count})"
     },
     "invitations": {
       "loading": "Loading invitations...",
@@ -6888,6 +7134,8 @@
       "openVnc": "Open VNC Desktop",
       "solved": "I've Solved It",
       "skipSource": "Skip Source",
+      "restoreFailed": "Pending CAPTCHAs could not be checked.",
+      "retry": "Try again",
       "types": {
         "recaptcha": "reCAPTCHA",
         "hcaptcha": "hCaptcha",
@@ -7190,6 +7438,9 @@
       "hidePassword": "Hide password",
       "showPassword": "Show password",
       "vncPasswordPlaceholder": "VNC password (optional)",
+      "vncCompanionName": "{name} (VNC credential)",
+      "vncCompanionDescription": "VNC credential for {host}",
+      "vncCompanionNoHostId": "The host was saved but its id was not returned, so the VNC credential was not stored.",
       "osPlaceholder": "e.g., Ubuntu 22.04, CentOS 8",
       "hideValue": "Hide value",
       "showValue": "Show value",
@@ -7234,7 +7485,8 @@
         "slackDesc": "Slack bot token",
         "serverLabel": "Server Host",
         "serverDesc": "SSH/VNC server access"
-      }
+      },
+      "vncRetry": "The host was saved, but its VNC password was not. Save again to retry; the host will not be created twice."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7333,6 +7585,7 @@
       "subtitle": "Discover and interact with UI elements on the current screen",
       "refresh": "Refresh",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "verifying": "Verifying...",
       "execute": "Execute",
       "details": "Details",
@@ -7762,7 +8015,8 @@
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
       "toggleViewAriaLabel": "Toggle view mode",
-      "uploadFailedHint": "Please check file size limits and format requirements"
+      "uploadFailedHint": "Please check file size limits and format requirements",
+      "uploadAlreadyExists": "A file with this name already exists"
     },
     "header": {
       "title": "File Browser",
@@ -8101,6 +8355,38 @@
       "hideDetails": "Hide Details",
       "showDetails": "Show Details",
       "refresh": "Refresh"
+    },
+    "eventLogs": {
+      "caption": "Compliance events, newest first",
+      "userFilter": "User ID",
+      "userPlaceholder": "Filter by user ID",
+      "typeFilter": "Event type",
+      "allTypes": "All event types",
+      "refresh": "Refresh",
+      "loading": "Loading event logs",
+      "empty": "No compliance events",
+      "emptyHint": "No events match the current filters.",
+      "error": "Event logs could not be loaded.",
+      "retry": "Try again",
+      "time": "Time",
+      "user": "User",
+      "event": "Event",
+      "outcome": "Outcome"
+    },
+    "commandHistory": {
+      "caption": "Command execution history, newest first",
+      "userFilter": "User",
+      "userPlaceholder": "Filter by user",
+      "refresh": "Refresh",
+      "loading": "Loading command history",
+      "empty": "No commands recorded",
+      "emptyHint": "No command executions match the current filter.",
+      "error": "Command history could not be loaded.",
+      "retry": "Try again",
+      "time": "Time",
+      "user": "User",
+      "action": "Action",
+      "outcome": "Outcome"
     }
   },
   "slm": {
@@ -8192,12 +8478,19 @@
       "download": "Download",
       "cancel": "Cancel",
       "errorServiceTimeout": "Desktop service timed out. Please try again.",
+      "noHostSelected": "Select a host with VNC to use the desktop.",
       "errorServiceDisabled": "Desktop service is currently disabled.",
       "errorInitFailed": "Failed to initialize desktop connection.",
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "vncCredentialMissing": "No VNC password is stored for this host. Add it in Secrets.",
+      "hostNotFound": "This host is not one of your Secrets hosts.",
+      "hostFieldsMissing": "This host is missing a username or capabilities. Set them in Secrets.",
+      "hostVncUnavailable": "This host has no VNC capability or port in Secrets.",
+      "desktopVmUnavailable": "No VNC desktop is registered, so the desktop VM is not available.",
+      "registryUnavailable": "The desktop registry could not be read. Try again shortly."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -8304,6 +8597,7 @@
     "about": "About",
     "chat": "Chat",
     "canvas": "Canvas",
+    "batchJobs": "Batch Processing",
     "knowledge": "Knowledge",
     "automation": "Automation",
     "analytics": "Analytics",
@@ -8398,6 +8692,8 @@
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "llcRoles": "Roles",
     "keywords": {
+      "batchJobs": "batch jobs queue bulk processing",
+      "vision": "image camera screenshot capture analyse picture",
       "knowledge": "documents files library transcriber notes",
       "companyOs": "company llc business organization",
       "automation": "workflow pipeline schedule jobs",
@@ -8946,6 +9242,9 @@
       "loadingProjects": "Loading projects…",
       "loadingSprints": "Loading sprints…",
       "noSprints": "No open sprints in this project.",
+      "sprintsLoadFailed": "Couldn't load this project's sprints.",
+      "assignError": "Couldn't assign the items to the sprint. Please try again.",
+      "assignErrorDetail": "Couldn't assign the items to the sprint: {detail}",
       "assigning": "Assigning...",
       "assign": "Assign",
       "createError": "Couldn't create the work item. Please try again.",
@@ -9101,7 +9400,6 @@
       "attachRoleLabel": "Role",
       "attachRolePlaceholder": "Choose a role…",
       "attachWorkflowLabel": "Workflow id",
-      "attachWorkflowPlaceholder": "Workflow id",
       "attachError": "Could not attach that workflow.",
       "detachError": "Could not detach that workflow.",
       "processDetach": "Detach {workflow} from {role}",
@@ -9400,6 +9698,9 @@
     "board": {
       "loadFailed": "Could not load this board",
       "moveFailed": "Could not move this task",
+      "moveRefusedStatus": "This task cannot move to that column from its current status.",
+      "moveRefusedWipFull": "That column is full: it has reached its work-in-progress limit.",
+      "moveRefusedForbidden": "You are not allowed to move this task.",
       "retry": "Retry",
       "loadingItem": "Loading work item…",
       "itemLoadFailed": "Could not load this work item"
@@ -9949,7 +10250,29 @@
     "transcriberProjects": "Transcriber Projects",
     "viewAll": "View all",
     "saveHintPrefix": "Save an AI response from the",
-    "saveHintSuffix": "to create a document."
+    "saveHintSuffix": "to create a document.",
+    "loadFailed": "Failed to load documents",
+    "deleteFailed": "Delete failed",
+    "editor": {
+      "loadFailed": "Failed to load document",
+      "untitled": "Untitled Document",
+      "saveFailed": "Save failed",
+      "refineFailed": "Refinement failed",
+      "titleLabel": "Document title",
+      "editTitleTip": "Click to edit title",
+      "saving": "Saving…",
+      "refine": "Refine",
+      "refineTip": "Ask the AI to revise this document",
+      "refineHeading": "Refine with AI",
+      "refinePlaceholder": "Describe how to refine this document…",
+      "refining": "Refining…",
+      "applyRefinement": "Apply Refinement",
+      "contentPlaceholder": "Document content (markdown supported)…",
+      "contentLabel": "Document content",
+      "updated": "Updated {when}",
+      "sourceFacts": "{count} source facts",
+      "sourceFactsTip": "Knowledge-base facts the AI cited when writing this document"
+    }
   },
   "llcBrowser": {
     "retry": "Retry",
@@ -10234,6 +10557,12 @@
         "description": "The organizations.subscription_tier column no longer used by AutoBot. Approving it deletes every stored value for good.",
         "present": "The column is still in this database.",
         "absent": "The column is not in this database."
+      },
+      "secretDuplicates": {
+        "title": "Duplicated stored credentials",
+        "description": "Several stored credentials share one name and vault. Each copy is checked against what it connects to; the proposal asks an administrator to remove the copies that do not work, or to choose when that cannot be told. Names and values are never shown.",
+        "copies": "{count} copies in total.",
+        "open": "Review them on the Secrets page"
       }
     },
     "conversations": {
@@ -10265,6 +10594,18 @@
       "noMessagesBody": "This conversation has no messages on this page.",
       "unknownSender": "Unknown sender",
       "transcriptPages": "Transcript pages"
+    },
+    "ownerless": {
+      "title": "Ownerless chat sessions",
+      "description": "These sessions record no owner. A proposal waits in the approvals inbox; nothing is assigned until a person approves it.",
+      "none": "Every chat session has an owner.",
+      "loadFailed": "The ownerless session report could not be loaded.",
+      "ownerLabel": "Proposed owner (username)",
+      "ownerPlaceholder": "Username of an active user",
+      "propose": "Propose owner",
+      "proposed": "Proposal pending approval",
+      "refusedConflict": "That session is no longer ownerless or already has a pending proposal.",
+      "refusedOwner": "That owner is not an active user."
     }
   },
   "components": {
@@ -10515,7 +10856,21 @@
     "useRoleDefault": "— Use role default —",
     "deleteUserTitle": "Delete User",
     "deleteConfirm": "Delete",
-    "deleteUndone": "This cannot be undone."
+    "deleteUndone": "This cannot be undone.",
+    "colAdmin": "Platform admin",
+    "adminBadge": "platform admin",
+    "adminStatusLabel": "Platform admin status for {username}",
+    "revokeAdminTitle": "Remove platform admin status",
+    "revokeAdminConfirm": "Remove platform admin status from {username}? They are signed out and sign in again without admin access.",
+    "revokeAdminSelf": "Remove your own platform admin status? You are signed out and lose access to this page.",
+    "revokeAdminAction": "Remove admin status",
+    "adminStatusFailed": "Could not change platform admin status.",
+    "adminStatusLastAdmin": "This is the last active platform admin. Make another user a platform admin first.",
+    "adminStatusRetry": "Another admin change was in progress. Nothing was changed; try again.",
+    "adminStatusRevocationIncomplete": "The platform admin status changed, but earlier sign-ins may still work.",
+    "adminStatusRetryRevocation": "Retry ending earlier sign-ins",
+    "roleSelectLabel": "Role for {username}. Sets permissions only, not platform admin status.",
+    "roleUpdateFailed": "Could not update the role."
   },
   "schedulers": {
     "title": "Background schedulers",
@@ -10578,7 +10933,6 @@
     "endTenure": "End tenure",
     "holderIdPlaceholder": "Holder id",
     "permissionPlaceholder": "e.g. knowledge.read",
-    "workflowPlaceholder": "Workflow id",
     "toolPlaceholder": "Tool name",
     "credentialPlaceholder": "Secret id",
     "errorAssign": "Could not assign that holder.",
@@ -10839,5 +11193,159 @@
       "moved": "{name} moved to position {position} of {total}.",
       "resized": "{name} is now {span} of 12 columns wide and {height} pixels tall."
     }
+  },
+  "batchJobs": {
+    "title": "Batch Processing",
+    "subtitle": "Your batch jobs: create, follow, retry and remove them.",
+    "refresh": "Refresh",
+    "newJob": "New job",
+    "counts": {
+      "total": "Total",
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "filterLabel": "Show jobs by status",
+    "filterAll": "All statuses",
+    "status": {
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "type": {
+      "data_processing": "Data processing",
+      "file_conversion": "File conversion",
+      "report_generation": "Report generation",
+      "backup": "Backup",
+      "custom": "Custom"
+    },
+    "typeAndId": "{type} · {id}",
+    "progress": "{value}% done",
+    "progressLabel": "Progress of {name}",
+    "created": "Created",
+    "started": "Started",
+    "duration": "Duration",
+    "notStarted": "Not started",
+    "notReported": "Not reported",
+    "run": "Run",
+    "retry": "Retry",
+    "cancelAndRemove": "Cancel and remove",
+    "remove": "Remove",
+    "loading": "Loading batch jobs…",
+    "loadFailed": "Batch jobs could not be loaded",
+    "loadFailedDetail": "The batch service did not answer.",
+    "tryAgain": "Try again",
+    "empty": "No batch jobs yet",
+    "emptyDetail": "Jobs you create appear here.",
+    "emptyFiltered": {
+      "pending": "No pending jobs",
+      "running": "No running jobs",
+      "completed": "No completed jobs",
+      "failed": "No failed jobs",
+      "cancelled": "No cancelled jobs"
+    },
+    "emptyFilteredDetail": "None of your jobs has this status right now.",
+    "clearFilter": "Show all jobs",
+    "confirm": {
+      "cancelTitle": "Cancel and remove this job?",
+      "removeTitle": "Remove this job?",
+      "message": "\"{name}\" and its logs will be removed. This cannot be undone."
+    },
+    "errors": {
+      "create": "The job could not be created.",
+      "retry": "The job could not be run again.",
+      "run": "The job could not be started.",
+      "remove": "The job could not be removed."
+    },
+    "create": {
+      "title": "New batch job",
+      "close": "Close",
+      "name": "Job name",
+      "namePlaceholder": "Name this job",
+      "type": "Job type",
+      "cancel": "Cancel",
+      "submit": "Create job"
+    }
+  },
+  "visionCapture": {
+    "title": "Vision",
+    "subtitle": "Analyse an image from a file, your camera or a screen you share.",
+    "sourceTitle": "Image",
+    "sourceLabel": "Where the image comes from",
+    "source": {
+      "upload": "File",
+      "camera": "Camera",
+      "screen": "Screen"
+    },
+    "chooseFile": "Choose an image file",
+    "capture": {
+      "camera": "Take a photo",
+      "screen": "Capture a screen"
+    },
+    "unsupported": "This browser cannot capture here. A secure (HTTPS) connection is required.",
+    "analyzeTitle": "Analyse",
+    "clear": "Clear",
+    "previewAlt": "The image to analyse",
+    "intent": "Analysis type",
+    "question": "Question",
+    "questionPlaceholder": "What do you want to know about the image?",
+    "analyze": "Analyse image",
+    "noImage": "No image yet",
+    "noImageDetail": "Choose a file, take a photo or capture a screen to start.",
+    "historyTitle": "Recent analyses",
+    "historyEmpty": "Analyses from this visit appear here (the last 10).",
+    "result": {
+      "title": "Result",
+      "confidence": "{value}% confidence",
+      "nothing": "The service returned no description or labels for this image.",
+      "time": "Took {seconds} s",
+      "showRaw": "Show full reply",
+      "hideRaw": "Hide full reply"
+    },
+    "errors": {
+      "capture": "The image could not be captured: {detail}",
+      "unknown": "unknown reason",
+      "noImage": "the camera or screen returned no picture",
+      "analysis": "The image could not be analysed.",
+      "analysisUnsuccessful": "The analysis did not succeed: {detail}"
+    }
+  },
+  "driftPrune": {
+    "batch": "Batch of {count} of {total} file(s); confirm to remove this batch, the next one is shown afterwards",
+    "cancel": "Cancel",
+    "confirm": "Confirm removal of {count} file(s)",
+    "intro": "Git proves these files were deleted from source and they are still deployed. Only these files are removed. Host state, build bundles and modified files are never touched.",
+    "nothingToRemove": "Nothing to remove: no deployed file is confirmed as deleted from source any more. Re-run the drift check.",
+    "previewAction": "Preview removal",
+    "previewing": "Loading preview…",
+    "removing": "Removing…",
+    "requestFailed": "Drift prune request failed",
+    "result": "Removed {removed} file(s); {left} left in place",
+    "title": "{count} file(s) would be removed from {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "These controls pause or resume every agent, not a single one",
+    "loadFailed": "Failed to load agents",
+    "noLastActivity": "No activity reported",
+    "notReported": "Not reported",
+    "pauseAll": "Pause all agents",
+    "pauseFailed": "Failed to pause agents",
+    "resumeAll": "Resume all agents",
+    "resumeFailed": "Failed to resume agents",
+    "successRate": "Success Rate",
+    "tasksCompleted": "Tasks Completed"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Enter a full web address that starts with http:// or https://",
+    "recognitionUnsupported": "Speech recognition is not supported in this browser",
+    "recognitionError": "Speech recognition error: {error}",
+    "speakFailed": "Failed to speak the text",
+    "playbackFailed": "Audio playback failed",
+    "spoken": "Spoken:",
+    "speakToInteractWith": "Speak, and hear it read back",
+    "voiceId": "Voice ID"
   }
 }

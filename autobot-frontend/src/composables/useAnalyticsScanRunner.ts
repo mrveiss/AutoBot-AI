@@ -20,7 +20,7 @@
  * Author: mrveiss
  */
 
-import { ref, computed, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, getCurrentScope, onScopeDispose, type Ref, type ComputedRef } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useAnalyticsScanRunner')
@@ -128,6 +128,10 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
    * @param scans  Array of scan definitions to execute in order.
    */
   const runAll = async (scans: ScanDefinition[]): Promise<void> => {
+    if (disposed) {
+      logger.info('runAll refused: the owning scope is disposed')
+      return
+    }
     if (running.value) {
       logger.info('runAll already in progress, skipping')
       return
@@ -176,6 +180,16 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
   const cancel = (): void => {
     cancelled.value = true
     logger.info('Scan runner cancellation requested')
+  }
+
+  // #21474: the runner ends with its owner. A page left mid-run (a source switch remounts it)
+  // starts none of the remaining scans, and a disposed runner starts no new run.
+  let disposed = false
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disposed = true
+      cancel()
+    })
   }
 
   return {

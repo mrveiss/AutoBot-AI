@@ -24,7 +24,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref, type Ref } from 'vue'
 
 const saved = vi.hoisted(() => vi.fn())
-const fetched = vi.hoisted(() => ({ onSuccess: undefined as undefined | ((d: unknown[]) => void) }))
+type Ctx = { category: string; seq: number }
+const fetched = vi.hoisted(() => ({
+  onSuccess: undefined as undefined | ((d: unknown[], raw: unknown, ctx: unknown) => void),
+  ctx: undefined as unknown,
+}))
 
 // Partial: the module graph (debugUtils -> log/createLogger) needs the rest of the kit.
 vi.mock('@autobot/ui', async (importOriginal) => ({
@@ -33,10 +37,12 @@ vi.mock('@autobot/ui', async (importOriginal) => ({
   isoTimestampStamp: () => 'TS',
 }))
 vi.mock('@/composables/api/useFetchEndpoint', () => ({
-  useFetchEndpoint: (cfg: { path?: string; fallbackData?: unknown; onSuccess?: (d: unknown[]) => void }) => {
+  useFetchEndpoint: (cfg: { path?: string; fallbackData?: unknown; onSuccess?: (d: unknown[], raw: unknown, ctx: unknown) => void }) => {
     // The smells composable's endpoint: capture its success hook to deliver findings.
     if (cfg.path === '/api/analytics/codebase/problems') fetched.onSuccess = cfg.onSuccess
-    return { load: vi.fn(async () => undefined), error: ref(''), loading: ref(false), data: ref(cfg.fallbackData ?? null) }
+    // Like the real loader, hand the per-request context given to load() back to the success hook.
+    const load = vi.fn(async (_extras?: unknown, ctx?: unknown) => { fetched.ctx = ctx })
+    return { load, error: ref(''), loading: ref(false), data: ref(cfg.fallbackData ?? null) }
   },
 }))
 
@@ -50,6 +56,9 @@ const FINDINGS = [
   // Not in CODE_SMELL_TYPES and no `code_smell_` prefix: isCodeSmellType drops it from panel and export.
   { type: 'god_class', severity: 'low', message: 'not a smell finding', file_path: 'src/not-a-smell.py', line: 30 },
 ]
+
+/** The findings arrive for the request the composable last made, as the real loader delivers them. */
+const deliver = (rows: unknown[]) => fetched.onSuccess?.(rows, {}, fetched.ctx as Ctx)
 
 function exporterFor(smellsExport: Ref<unknown>) {
   return useCodebaseExport({
@@ -70,7 +79,7 @@ describe('code smells: the export is built from the findings the panel shows (#2
   it('MD and JSON of smellsExport return the findings smellsForPanel displays', async () => {
     const s = useCodeSmellProblems((u) => u)
     await s.loadSmellProblems()
-    fetched.onSuccess?.(FINDINGS)
+    deliver(FINDINGS)
     const shown = s.smellsForPanel.value
     expect(shown).toHaveLength(2) // 3 loaded; the non-smell entry is filtered out
     expect(shown.map((f) => f.file_path)).toEqual(['src/first-smell.py', 'src/second-smell.py'])
@@ -93,8 +102,9 @@ describe('code smells: the export is built from the findings the panel shows (#2
 
   it('a reload that replaces the findings replaces the export with them', async () => {
     const s = useCodeSmellProblems((u) => u)
-    fetched.onSuccess?.(FINDINGS)
-    fetched.onSuccess?.([FINDINGS[0]])
+    await s.loadSmellProblems()
+    deliver(FINDINGS)
+    deliver([FINDINGS[0]])
     expect(s.smellsForPanel.value).toHaveLength(1)
     expect(s.smellsExport.value.smells).toEqual(s.smellsForPanel.value)
   })

@@ -112,9 +112,14 @@ sys.stdout.write("\nREACH-BASE " + json.dumps({"counts": counts, "errors": error
 
 
 def _git(*args: str, cwd: Path = REPO_ROOT) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(cwd), *args], capture_output=True, text=True, timeout=600, env=scrubbed_git_env()
-    )
+    try:
+        return subprocess.run(
+            ["git", "-C", str(cwd), *args], capture_output=True, text=True, timeout=600, env=scrubbed_git_env()
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise BaseUnavailable(
+            f"git {args[0]} timed out after 600 s; refusing to compute a floor without the base."
+        ) from exc
 
 
 def _cache_root() -> Path:

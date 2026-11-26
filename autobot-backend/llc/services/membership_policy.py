@@ -23,6 +23,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import MembershipRole
 from ..models.membership import LLCCompanyMembership
 from .authz import GRANTING_ROLES, NotAuthorisedError, require_company_admin
@@ -44,7 +45,7 @@ def grantable_roles(actor_role: Optional[str], *, platform_admin: bool) -> list[
     return []
 
 
-class LastOwnerError(Exception):
+class LastOwnerError(PublicMessageMixin, Exception):
     """The change would leave the company with no owner."""
 
 

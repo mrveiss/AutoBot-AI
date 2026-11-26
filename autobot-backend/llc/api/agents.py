@@ -20,9 +20,11 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
+from llc.deps import SESSION_DEP
 from models.agent_org import AgentOrgNode
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..org_role_authority import describe_role_bound
@@ -42,7 +44,7 @@ class AgentHeartbeatTriggerResponse(BaseModel):
 @router.get("", response_model=List[Dict[str, Any]])
 async def list_agents(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -107,7 +109,7 @@ def _owned_by_caller(agent_company: object, org_id: object) -> bool:
 )
 async def trigger_heartbeat(
     agent_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> AgentHeartbeatTriggerResponse:
@@ -127,10 +129,10 @@ async def trigger_heartbeat(
                 status_code=404,
                 detail=f"Agent {agent_id!r} not found or not configured",
             )
-        raise HTTPException(status_code=409, detail=f"Cannot run: {exc.reason}")
+        raise http_refusal(409, exc, scope="agents.trigger_heartbeat") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error")
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
+        raise fixed_refusal(404)
 
     agent_company = agent_cfg.get("company_id")
     if ctx.org_id is None or (agent_company is not None and agent_company != ctx.org_id):

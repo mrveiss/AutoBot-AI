@@ -46,6 +46,7 @@ from autobot_shared.user_management.password_epoch import set_password_epoch
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from services.audit.audit import ComplianceEventType
 from services.audit.audit import emit_compliance as _emit_event  # #17225
+from services.config_manager_writer import set_nested_and_save
 from user_management.database import db_session_context
 from user_management.middleware.rate_limit import SESSION_MAX_ATTEMPTS, SESSION_WINDOW_SECONDS  # #15757
 from user_management.services.user_service import UserService
@@ -384,11 +385,7 @@ def _persist_password_change(username: str, new_password_hash: str) -> None:
 
     # Persist to disk
     config_manager = get_config_manager()
-    config_manager.set_nested(
-        f"security_config.allowed_users.{username}.password_hash",
-        new_password_hash,
-    )
-    config_manager.save_settings()
+    set_nested_and_save(config_manager, f"security_config.allowed_users.{username}.password_hash", new_password_hash)
 
 
 @router.post("/change-password", response_model=ChangePasswordResponse)

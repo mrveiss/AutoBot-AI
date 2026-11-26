@@ -19,7 +19,12 @@ import json
 import os
 from typing import List, Optional
 
-from autobot_shared.ai_lines import VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
+from autobot_shared.ai_lines import (
+    DECLARED_CATEGORIES_KEY,
+    VERIFIED_ATTACHMENT_ACCESS_KEY,
+    VERIFIED_COMPANY_KEY,
+    VERIFIED_USER_KEY,
+)
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -30,10 +35,17 @@ logger = get_logger(__name__)
 # TTL for a session's role binding — env-tunable, never hard-coded.
 SESSION_ROLE_TTL_SECONDS: int = env_int("AUTOBOT_SESSION_ROLE_TTL_SECONDS", 24 * 3600)
 
-# GH#11202: master switch for the chat approval gate. OFF by default — the gate
-# routes tool calls through the LangGraph approval interrupt, which the frontend
-# must render/resolve, so it stays disabled until that path is verified end-to-end.
-CHAT_APPROVAL_GATE_ENABLED: bool = os.environ.get("AUTOBOT_CHAT_APPROVAL_GATE", "").lower() in ("1", "true", "yes")
+
+# GH#11202, #19957: master switch for the chat approval gate. ON by default: the gate routes tool calls through
+# the LangGraph approval interrupt, which the chat UI renders and resolves through ``POST /chats/{id}/resume``.
+# It is the one path on which a held call can be approved and run; the inline path can only end the turn.
+# ``AUTOBOT_CHAT_APPROVAL_GATE=0`` turns it off.
+def approval_gate_enabled(raw: Optional[str]) -> bool:
+    """The gate's setting from ``AUTOBOT_CHAT_APPROVAL_GATE``: unset means on, only 1/true/yes is on otherwise."""
+    return (raw if raw is not None else "1").strip().lower() in ("1", "true", "yes")
+
+
+CHAT_APPROVAL_GATE_ENABLED: bool = approval_gate_enabled(os.environ.get("AUTOBOT_CHAT_APPROVAL_GATE"))
 
 _KEY = "autobot:session:{session_id}:role"
 _APPROVAL_KEY = "autobot:session:{session_id}:approval_categories"
@@ -210,14 +222,18 @@ class SessionRoleService(AsyncRedisClientMixin):
         )
         logger.info("session_role.set_approval session=%s categories=%s", session_id, categories)
 
+    async def read_approval_categories(self, session_id: str) -> List[str]:
+        """The session's declared approval categories; raises when they cannot be read (#19957)."""
+        redis = await self._get_redis()
+        raw = await redis.get(_APPROVAL_KEY.format(session_id=session_id))
+        if not raw:
+            return []
+        return list(json.loads(raw.decode() if isinstance(raw, bytes) else raw))
+
     async def get_approval_categories(self, session_id: str) -> List[str]:
         """Return the session's declared approval categories (never raises into chat)."""
         try:
-            redis = await self._get_redis()
-            raw = await redis.get(_APPROVAL_KEY.format(session_id=session_id))
-            if not raw:
-                return []
-            return list(json.loads(raw.decode() if isinstance(raw, bytes) else raw))
+            return await self.read_approval_categories(session_id)
         except Exception as exc:  # defensive; must never break chat
             logger.warning("session_role.get_approval failed for session=%s: %s", session_id, exc)
             return []
@@ -238,7 +254,7 @@ async def apply_session_governance(
     baseline and the session's approval categories are overlaid as ``requires_approval_before``. #20195: the
     attachment floor (this chat used a file; an admin may waive it) is written from server state, never the client.
     """
-    from chat_workflow.approval_baseline import with_baseline_categories
+    from chat_workflow.approval_baseline import stamp_declared_categories, with_baseline_categories
     from chat_workflow.attachment_floor import stamp_attachment_floor
     from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
 
@@ -249,7 +265,18 @@ async def apply_session_governance(
     # #13704: a server-set work-item binding overrides any client-supplied work_item_id (#13687).
     context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
     context = await stamp_attachment_floor(context, session_id)
+    session_categories: "List[str] | None" = []
+    if CHAT_APPROVAL_GATE_ENABLED:
+        try:
+            session_categories = await svc.read_approval_categories(session_id)
+        except Exception as exc:  # noqa: BLE001 - fail closed (#19957): an unread declaration must not lift a gate
+            logger.error(
+                "Session approval categories unreadable for %s (%s); every category stays gated", session_id, exc
+            )
+            session_categories = None
+    # #19957: stamped before the overlay mixes the baseline in; None (unreadable) stamps every category as declared.
+    context = stamp_declared_categories(context, session_categories)
     if CHAT_APPROVAL_GATE_ENABLED:
         # #18294: all categories gated by default; only the SLM setting relaxes one.
-        context = await with_baseline_categories(context, await svc.get_approval_categories(session_id))
+        context = await with_baseline_categories(context, context[DECLARED_CATEGORIES_KEY])  # declared stays gated
     return context

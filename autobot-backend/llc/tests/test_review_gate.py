@@ -72,9 +72,8 @@ def _make_work_item(
     wi.status = status.value
     wi.checkout_run_id = "some-run"
     wi.checkout_locked_at = datetime.now(timezone.utc)
-    wi.completed_at = None
-    wi.cancelled_at = None
-    wi.started_at = None
+    wi.completed_at, wi.cancelled_at, wi.started_at = None, None, None
+    wi.requires_human_review = False  # also the "policy" a mocked session returns: no role is demanded (#21588)
     wi.version = 1
     wi.title, wi.identifier = "Bug: crash on startup", "WI-1"
     return wi
@@ -463,7 +462,7 @@ class TestHandoffService:
         session.execute = AsyncMock(return_value=execute_result)
 
         with (
-            patch("llc.services.handoff.get_async_redis_client", new_callable=AsyncMock, return_value=None),
+            patch("llc.services.work_item_own_task.get_async_redis_client", new_callable=AsyncMock, return_value=None),
             patch("llc.services.commit_publish.get_async_redis_client", new_callable=AsyncMock, return_value=None),
         ):
             result = await HandoffService().agent_to_human(

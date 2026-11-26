@@ -65,14 +65,14 @@ CREATE TABLE IF NOT EXISTS session_file_associations (
 CREATE TABLE IF NOT EXISTS file_access_log (
     log_id INTEGER PRIMARY KEY AUTOINCREMENT,
     file_id TEXT NOT NULL,                         -- Foreign key to conversation_files
-    access_type TEXT NOT NULL,                     -- Type: 'upload', 'download', 'view', 'delete'
+    access_type TEXT NOT NULL,                     -- Type: 'upload', 'download', 'view', 'delete', 'restore', 'reference' (#21404)
     accessed_by TEXT,                              -- User identifier
     accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     access_metadata TEXT,                          -- JSON for additional context (IP, user agent, etc.)
 
     -- Constraints
     FOREIGN KEY (file_id) REFERENCES conversation_files(file_id) ON DELETE CASCADE,
-    CHECK (access_type IN ('upload', 'download', 'view', 'delete', 'restore'))
+    CHECK (access_type IN ('upload', 'download', 'view', 'delete', 'restore', 'reference'))
 );
 
 -- file_cleanup_queue: Queue for scheduled file cleanup operations

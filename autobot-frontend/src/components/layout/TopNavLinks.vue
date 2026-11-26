@@ -3,7 +3,7 @@
   SPDX-License-Identifier: Apache-2.0
 
   TopNavLinks — the header's primary link rail (#18240): Home, Chat,
-  Knowledge, Company OS, Analytics. The active link is a 2px underline in the
+  Knowledge, Company OS, Analytics. The active link is an underline of the --nav-on-bw width (2px, 4px in High contrast) in the
   accent colour. Entries come from the nav registry. Advanced links are
   filtered out in Minimal mode here, in script, because the overflow
   measurement counts DOM links -- a CSS-hidden one would still take a slot.
@@ -22,7 +22,7 @@
         :class="isActive(item.to)
           ? 'border-autobot-accent text-autobot-text-primary'
           : 'border-transparent text-autobot-text-secondary hover:bg-autobot-bg-tertiary hover:text-autobot-text-primary'"
-        class="inline-flex h-14 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-autobot-primary"
+        class="inline-flex h-14 shrink-0 items-center gap-1.5 border-b-(length:--nav-on-bw) px-3 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-autobot-primary"
       >
         <NavItemIcon :item="item" class="h-4 w-4" />
         <span>{{ $t(item.labelKey) }}</span>

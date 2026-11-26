@@ -31,6 +31,8 @@ from llc.services import attachment_files as files
 from llc.services import attachment_outbox as outbox
 from llc.storage_root import LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS, llc_local_storage_root
 
+from ..exceptions import PublicMessageMixin
+
 logger = get_logger(__name__)
 
 # Configurable max upload size (bytes). Default 20 MB.
@@ -45,7 +47,7 @@ _STORAGE_BACKEND = os.getenv("LLC_STORAGE_BACKEND", "local_disk")
 _LOCAL_STORAGE_PATH = llc_local_storage_root()
 
 
-class AttachmentTooLarge(Exception):
+class AttachmentTooLarge(PublicMessageMixin, Exception):
     pass
 
 

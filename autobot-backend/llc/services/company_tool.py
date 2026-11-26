@@ -40,6 +40,7 @@ from ..models.role_tool import LLCRoleTool
 from ..models.role_workflow import LLCRoleWorkflow
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError
 from .tool_registry_ref import RegisteredTool, registered_tools, require_registered_tool
 
 
@@ -209,7 +210,7 @@ class CompanyToolService(LLCServiceBase):
     ) -> LLCCompanyTool:
         """Record or update this company's facts about one registered tool."""
         if company_id is None:
-            raise ValueError("company_id is required")
+            raise CompanyOsError("company_id is required")
 
         await require_company_admin(session, company_id, actor_user_id)
         cleaned = require_registered_tool(tool_name)
@@ -222,7 +223,7 @@ class CompanyToolService(LLCServiceBase):
                 # Neither our insert nor the conflict re-read produced a row.
                 # Refusing beats returning None to a caller typed to receive a
                 # row, which would surface as an AttributeError far from here.
-                raise ValueError(f"could not record company facts for tool {cleaned!r}")
+                raise CompanyOsError(f"could not record company facts for tool {cleaned!r}")
 
         overlay.url = url
         overlay.logo_url = logo_url

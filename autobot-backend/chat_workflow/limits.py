@@ -22,12 +22,21 @@ accident of ordering.
 
 from __future__ import annotations
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_float, env_int
 
 #: Maximum multi-step continuation iterations for one turn (#352, #17468).
 #: Env-backed per the project's configuration rule -- a budget written as a bare
 #: literal cannot be changed without a deploy, and this one is a safety limit.
 MAX_CONTINUATION_ITERATIONS: int = env_int("AUTOBOT_MAX_CONTINUATION_ITERATIONS", default=5)
+
+#: Deprecated name of ``AUTOBOT_CHAT_INVALID_CALL_LIMIT`` (shipped in #21749, one release): read as its default so an
+#: install that set it keeps its value. Remove after the next release.
+_DEPRECATED_PARSE_RETRY_BUDGET: int = env_int("AUTOBOT_CHAT_PARSE_RETRY_BUDGET", default=2)
+
+#: Invalid tool calls one turn tolerates before it stops with an honest failure (#20848, #21843). ONE bound: a reply
+#: whose TOOL_CALL did not parse is re-asked this many times on both the graph path and the legacy loop, and the
+#: unknown-tool counter (#20848) is to read the same constant. Past it the user gets ``NO_ANSWER_FALLBACK``.
+INVALID_CALL_LIMIT: int = env_int("AUTOBOT_CHAT_INVALID_CALL_LIMIT", default=_DEPRECATED_PARSE_RETRY_BUDGET)
 
 #: Seconds the chat planner may take to write a plan (#21023). Past it the turn runs with no plan, never blocked.
 PLANNER_TIMEOUT_SECONDS: int = env_int("AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS", default=30)
@@ -66,3 +75,7 @@ ATTACHMENT_TEXT_CACHE_SECONDS: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE
 
 #: Files whose extracted text the in-process cache holds at once (#20195); the oldest is dropped first.
 ATTACHMENT_TEXT_CACHE_MAX_ENTRIES: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE_MAX_ENTRIES", default=32)
+
+#: Share of the chat window the prompt budget keeps free for the reply (#22016), clamped to 0.05-0.5 as documented.
+#: The budget reserves it, and ``chat_request_options`` also sends it as ``num_predict``: it caps the reply length.
+OUTPUT_RESERVE_SHARE: float = min(0.5, max(0.05, env_float("AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE", default=0.25)))

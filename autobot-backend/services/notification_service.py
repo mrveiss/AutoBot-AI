@@ -456,19 +456,13 @@ class NotificationService:
         # is directly usable outside this system — reduce it (channel-identity
         # rule, #14540) before it reaches evaluate() and the denial log line.
         masked_to = _mask_email(to)
-        verdict = await egress_governor.evaluate(
+        verdict = await egress_governor.gate(
             platform="email",
             channel_id=masked_to,
-            message_id="",
+            subject=f"email notification to {masked_to}",
             require_approval=False,
         )
         if not verdict.allowed:
-            logger.warning(
-                "email notification to %s blocked by egress governance (%s): %s",
-                masked_to,
-                verdict.rule,
-                verdict.reason,
-            )
             return
 
         try:
@@ -510,19 +504,13 @@ class NotificationService:
         # to the audit record and this log line alike (channel-identity rule,
         # #14540, see services.gateway.egress_governor).
         host = urlparse(url).hostname or "unknown"
-        verdict = await egress_governor.evaluate(
+        verdict = await egress_governor.gate(
             platform="webhook",
             channel_id=host,
-            message_id="",
+            subject=f"webhook notification to {host}",
             require_approval=False,
         )
         if not verdict.allowed:
-            logger.warning(
-                "webhook notification to %s blocked by egress governance (%s): %s",
-                host,
-                verdict.rule,
-                verdict.reason,
-            )
             return
 
         headers = {

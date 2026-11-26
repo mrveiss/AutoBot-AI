@@ -192,7 +192,7 @@ const createRipple = (event: TouchEvent) => {
 .button-primary {
   @apply border border-transparent;
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
 }
 
 .button-primary:hover:not(.button-disabled):not(.button-loading) {

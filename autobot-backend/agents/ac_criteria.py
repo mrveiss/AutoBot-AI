@@ -46,7 +46,7 @@ _AC_HEADING = re.compile(r"^\s*(?:#{1,6}\s*|\*\*)\s*acceptance\s+criteria\b", re
 
 #: A heading at COLUMN ZERO, with its level captured. Anchored at column zero
 #: and levelled because the first version was neither, and both mistakes
-#: silently dropped criteria (found by a code-reviewer pass on the merged
+#: silently dropped criteria (found by a review pass on the merged
 #: #17090):
 #:
 #:   - `^\s*` let an INDENTED `**Note:** ...` under a criterion match the bold

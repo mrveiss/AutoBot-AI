@@ -4235,6 +4235,129 @@
         "title": "DevLoopIssuesResponse",
         "type": "object"
       },
+      "DriftPruneFile": {
+        "description": "One file a prune would remove, and the commit that removed it from source.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "DriftPruneFile",
+        "type": "object"
+      },
+      "DriftPrunePreview": {
+        "description": "Exactly what a prune of *component* would remove.",
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/DriftPruneFile"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "component",
+          "files"
+        ],
+        "title": "DriftPrunePreview",
+        "type": "object"
+      },
+      "DriftPrunePreviewRequest": {
+        "description": "Which component to preview.",
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          }
+        },
+        "required": [
+          "component"
+        ],
+        "title": "DriftPrunePreviewRequest",
+        "type": "object"
+      },
+      "DriftPruneRequest": {
+        "description": "The exact paths the operator confirmed from the preview.",
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "component",
+          "paths"
+        ],
+        "title": "DriftPruneRequest",
+        "type": "object"
+      },
+      "DriftPruneResponse": {
+        "description": "Per-path outcome of a confirmed prune.",
+        "properties": {
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "failed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Failed",
+            "type": "object"
+          },
+          "refused": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Refused",
+            "type": "object"
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "component",
+          "removed",
+          "refused",
+          "failed"
+        ],
+        "title": "DriftPruneResponse",
+        "type": "object"
+      },
       "DriftResolveJobResponse": {
         "description": "Accepted async component-resolve job (#11303).",
         "properties": {
@@ -5753,6 +5876,18 @@
           "frontend": {
             "default": "unknown",
             "title": "Frontend",
+            "type": "string"
+          },
+          "manifest_errors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Manifest Errors",
+            "type": "object"
+          },
+          "manifests": {
+            "default": "healthy",
+            "title": "Manifests",
             "type": "string"
           },
           "nodes_online": {
@@ -19854,6 +19989,136 @@
         ]
       }
     },
+    "/api/code-sync/drift/prune": {
+      "post": {
+        "description": "Remove the confirmed paths that are still ``removed_from_source`` (#22082).\n\nAnything else in *paths* -- a host_state, artifact or modified file, or one\nthat stopped being eligible since the preview -- is refused and left alone.",
+        "operationId": "confirm_drift_prune_api_code_sync_drift_prune_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriftPruneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftPruneResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm Drift Prune",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/drift/prune/preview": {
+      "post": {
+        "description": "List exactly the deployed files git proves were deleted from source (#22082).",
+        "operationId": "preview_drift_prune_api_code_sync_drift_prune_preview_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriftPrunePreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftPrunePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Drift Prune",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
     "/api/code-sync/drift/resolve": {
       "post": {
         "description": "Resync a single component from code_source/ to /opt/autobot/<component>/ (#7149, #9982).\n\nUses `_rsync_component_local()` to pull files from the local code_source\ncheckout and overwrite the deployed copy.  Used by the CodeSyncView\n\"Resync from Source\" button to clear drift in one click.\n\nAfter a successful rsync the handler runs component-appropriate post-steps\n(#9982) so that the synced code is immediately live:\n  - Python backend components: pip install -r requirements.txt + service restart\n  - Frontend components: npm ci + npm run build + nginx restart\n  - Library components (autobot_shared): restart every dependent service so\n    the new shared code is loaded (#10248)\n\nBody:\n    component: Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.\n               #12450: intentionally NOT VISIBILITY_COMPONENTS — the extra\n               read-only components (ai-stack, npu-worker, browser-worker,\n               slm-agent, plugins) have no per-component post-sync\n               (pip/npm/docker/symlink) wired, so resolving them would\n               rsync files but never install deps or restart the right\n               service. Deferred pending owner sign-off.\n\nReturns DriftResolveResponse with success flag, rsync output, deps_changed\nflag, and a log of post-sync steps performed.",
@@ -30173,6 +30438,22 @@
               "title": "Include Inactive",
               "type": "boolean"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
           }
         ],
         "responses": {
@@ -38471,6 +38752,22 @@
               "title": "Credential Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
           }
         ],
         "responses": {
@@ -38520,6 +38817,22 @@
               "title": "Include Inactive",
               "type": "boolean"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
           }
         ],
         "responses": {
@@ -38567,6 +38880,22 @@
             "schema": {
               "title": "Token",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
             }
           }
         ],

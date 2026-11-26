@@ -15,11 +15,13 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from api.schemas_common import MAX_THOUGHT_COUNT, SuccessDataResponse, SuccessMessageResponse
+from api.schemas_desktop_host import DesktopHostRequest
 from api.schemas_secrets import StorableSecretType
 from api.system_health import HealthStatus
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
 from services.feature_flags import EnforcementMode
+from services.secret_names import reserved_or_validated
 from type_defs.common import Metadata
 
 # ---------------------------------------------------------------------------
@@ -1192,39 +1194,33 @@ class SessionScreenshotSaveResponse(BaseModel):
     screenshot_path: str | None = None
 
 
-class MouseClickRequest(BaseModel):
-    x: int = Field(..., ge=0, description="X coordinate")
-    y: int = Field(..., ge=0, description="Y coordinate")
+class MouseClickRequest(DesktopHostRequest):
+    x: int = Field(..., ge=0, le=65535, description="X coordinate")
+    y: int = Field(..., ge=0, le=65535, description="Y coordinate")
     button: str = Field(default="left", description="Mouse button: left, middle, right")
-    # Issue #12002 (#11506 T1): gates agent actuation against the desktop control-lock.
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
-class KeyboardTypeRequest(BaseModel):
+class KeyboardTypeRequest(DesktopHostRequest):
     text: str = Field(..., description="Text to type")
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
-class SpecialKeyRequest(BaseModel):
+class SpecialKeyRequest(DesktopHostRequest):
     key: str = Field(..., description="Special key name (e.g., Return, Escape, ctrl+c)")
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
-class MouseScrollRequest(BaseModel):
+class MouseScrollRequest(DesktopHostRequest):
     direction: str = Field(..., description="Scroll direction: up or down")
     amount: int = Field(default=3, ge=1, le=10, description="Scroll amount (1-10)")
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
-class MouseDragRequest(BaseModel):
-    x1: int = Field(..., ge=0, description="Start X coordinate")
-    y1: int = Field(..., ge=0, description="Start Y coordinate")
-    x2: int = Field(..., ge=0, description="End X coordinate")
-    y2: int = Field(..., ge=0, description="End Y coordinate")
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
+class MouseDragRequest(DesktopHostRequest):
+    x1: int = Field(..., ge=0, le=65535, description="Start X coordinate")
+    y1: int = Field(..., ge=0, le=65535, description="Start Y coordinate")
+    x2: int = Field(..., ge=0, le=65535, description="End X coordinate")
+    y2: int = Field(..., ge=0, le=65535, description="End Y coordinate")
 
 
-class ClipboardSyncRequest(BaseModel):
+class ClipboardSyncRequest(DesktopHostRequest):
     content: str = Field(..., description="Text content to copy to clipboard")
 
 
@@ -3335,7 +3331,7 @@ class SecretCreateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        return _validate_secret_name(v)
+        return reserved_or_validated(v, _validate_secret_name)
 
     @model_validator(mode="after")
     def _validate_value_or_connector_bridge(self) -> "SecretCreateRequest":
@@ -3397,9 +3393,7 @@ class SecretUpdateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str | None) -> str | None:
-        if v is not None:
-            return _validate_secret_name(v)
-        return v
+        return v if v is None else reserved_or_validated(v, _validate_secret_name)
 
 
 class SecretTransferRequest(BaseModel):
@@ -3415,7 +3409,7 @@ class SecretTransferRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class VNCOCRRequest(BaseModel):
+class VNCOCRRequest(DesktopHostRequest):
     """OCR text recognition request (VNC desktop)."""
 
     region: Dict[str, int] = Field(
@@ -3424,14 +3418,14 @@ class VNCOCRRequest(BaseModel):
     )
 
 
-class FindImageRequest(BaseModel):
+class FindImageRequest(DesktopHostRequest):
     """Find image on screen request."""
 
     template_data: str = Field(..., description="Base64-encoded template image (PNG)")
     threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="Match confidence threshold (0-1)")
 
 
-class WaitForTextRequest(BaseModel):
+class WaitForTextRequest(DesktopHostRequest):
     """Wait for text to appear request."""
 
     text: str = Field(..., description="Text to wait for")
@@ -3439,7 +3433,7 @@ class WaitForTextRequest(BaseModel):
     region: Dict[str, int] = Field(default_factory=dict, description="Optional region to search")
 
 
-class WaitForImageRequest(BaseModel):
+class WaitForImageRequest(DesktopHostRequest):
     """Wait for image to appear request."""
 
     template_data: str = Field(..., description="Base64-encoded template image")
@@ -3591,13 +3585,13 @@ class VncProxyStatusResponse(BaseModel):
 class DesktopControlAcquireRequest(BaseModel):
     """Request for POST /vnc-proxy/{vnc_type}/control/acquire (#12002)."""
 
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
+    session_id: str = Field(..., min_length=1, description="Selected /secrets host id (the control-lock key)")
 
 
 class DesktopControlReleaseRequest(BaseModel):
     """Request for POST /vnc-proxy/{vnc_type}/control/release (#12002)."""
 
-    session_id: str = Field(default="default", description="Desktop control-lock session id")
+    session_id: str = Field(..., min_length=1, description="Selected /secrets host id (the control-lock key)")
 
 
 class DesktopControlLockResponse(BaseModel):

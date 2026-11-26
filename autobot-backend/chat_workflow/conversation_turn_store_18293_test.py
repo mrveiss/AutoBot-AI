@@ -10,6 +10,7 @@ location (``config.path.legacy_transcripts_dir``) pointed at that same directory
 so "no file was written" is checked against the exact place the old code wrote to.
 """
 
+import asyncio
 import json
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock
@@ -91,10 +92,45 @@ async def test_an_unreadable_chat_session_does_not_fall_back_to_the_legacy_file(
 
 
 @pytest.mark.asyncio
-async def test_a_warm_cache_is_served_without_reading_chat_sessions(monkeypatch) -> None:
+async def test_a_short_stale_cache_never_wins_over_chat_sessions(monkeypatch) -> None:
+    """#21847: the durable projection is authoritative; the cache is refreshed from it."""
     redis = AsyncMock()
     redis.get.return_value = json.dumps([{"user": "c", "assistant": "d"}])
-    _fake_chat_history(monkeypatch, AssertionError("chat_sessions must not be read on a cache hit"))
+    msgs: List[Dict[str, Any]] = []
+    for i in range(3):
+        msgs += [
+            {"sender": "user", "text": f"q{i}"},
+            {"sender": "assistant", "text": f"a{i}", "messageType": "response"},
+        ]
+    _fake_chat_history(monkeypatch, msgs)
+
+    history = await _Handler(redis)._load_conversation_history(SESSION)
+
+    assert [h["user"] for h in history] == ["q0", "q1", "q2"]
+    await asyncio.sleep(0)  # let the fire-and-forget cache refill run
+    redis.set.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_a_cache_that_already_equals_the_projection_is_not_rewritten(monkeypatch) -> None:
+    """#21847: no Redis write per turn when nothing changed."""
+    redis = AsyncMock()
+    redis.get.return_value = json.dumps([{"user": "q", "assistant": "a"}])
+    _fake_chat_history(
+        monkeypatch, [{"sender": "user", "text": "q"}, {"sender": "assistant", "text": "a", "messageType": "response"}]
+    )
+
+    await _Handler(redis)._load_conversation_history(SESSION)
+    await asyncio.sleep(0)
+
+    redis.set.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_the_cache_serves_only_when_chat_sessions_is_unreadable(monkeypatch) -> None:
+    redis = AsyncMock()
+    redis.get.return_value = json.dumps([{"user": "c", "assistant": "d"}])
+    _fake_chat_history(monkeypatch, PermissionError("denied"))
 
     assert await _Handler(redis)._load_conversation_history(SESSION) == [{"user": "c", "assistant": "d"}]
 

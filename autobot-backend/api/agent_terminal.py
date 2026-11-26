@@ -204,7 +204,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_SESSION_NOT_FOUND
-from services.agent_terminal import AgentSessionState, AgentTerminalService
+from services.agent_terminal import ALREADY_DECIDED, AgentSessionState, AgentTerminalService, decision_response
 from services.command_approval_manager import AgentRole
 from services.command_execution_queue import get_command_queue
 
@@ -416,7 +416,7 @@ async def execute_agent_command(
     return result
 
 
-@router.post("/sessions/{session_id}/approve", response_model=AgentTerminalApproveResponse)
+@router.post("/sessions/{session_id}/approve", response_model=AgentTerminalApproveResponse, responses=ALREADY_DECIDED)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_agent_command",
@@ -452,7 +452,7 @@ async def approve_agent_command(
     )
 
     logger.info(f"[API] Approval result: {result.get('status')}, error={result.get('error')}")
-    return result
+    return decision_response(result)  # #19951: a decision on an already-decided approval is a 409
 
 
 @router.post("/tools/approve/{approval_id}", response_model=AgentTerminalToolApprovalResponse)

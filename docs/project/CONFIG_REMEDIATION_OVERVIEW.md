@@ -78,32 +78,32 @@
 
 ### Agent Team (6 Specialists):
 
-1. **senior-backend-engineer** (35 hours)
+1. **autobot-dev-skills:senior-developer (senior-backend-engineer lens)** (35 hours)
    - Core infrastructure fixes
    - Critical path items
    - Phases 1-3
 
-2. **database-engineer** (6 hours)
+2. **autobot-dev-skills:senior-developer (database-engineer lens)** (6 hours)
    - Redis database configurations
    - Analysis scripts
    - Phase 2
 
-3. **devops-engineer** (22 hours)
+3. **autobot-dev-skills:senior-developer (devops-engineer lens)** (22 hours)
    - Deployment scripts
    - Utilities and tools
    - Phases 2-4
 
-4. **testing-engineer** (12 hours)
+4. **autobot-dev-skills:senior-developer (testing-engineer lens)** (12 hours)
    - Test configuration
    - Final validation
    - Phases 3-4
 
-5. **documentation-engineer** (13 hours)
+5. **autobot-dev-skills:writer (documentation-engineer lens)** (13 hours)
    - Documentation updates
    - Schema reference
    - Phases 3-4
 
-6. **code-reviewer** (12 hours) - **MANDATORY**
+6. **autobot-dev-skills:reviewer (code-reviewer lens)** (12 hours) - **MANDATORY**
    - Review after each phase
    - Quality gates
    - All phases
@@ -253,7 +253,7 @@ Week 4 │ DOCUMENTATION & FINALIZATION
 5. **Security Tests:** CORS, permissions, no leaked secrets
 
 ### Code Review Gates (MANDATORY):
-- Review after each phase by code-reviewer agent
+- Review after each phase by autobot-dev-skills:reviewer (code-reviewer lens) agent
 - No hardcoded values in changed files
 - Error handling adequate
 - Tests comprehensive
@@ -278,7 +278,7 @@ Week 4 │ DOCUMENTATION & FINALIZATION
    - Confirm agent assignments
 
 2. **Begin Phase 1 (Week 1)**
-   - Launch senior-backend-engineer agent for critical fixes
+   - Launch autobot-dev-skills:senior-developer (senior-backend-engineer lens) agent for critical fixes
    - Start with knowledge base DB fallback (highest priority)
    - Daily progress check-ins
 

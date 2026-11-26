@@ -103,6 +103,70 @@ def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tupl
     return True, None
 
 
+# Databases that hold user content (KB facts, conversations, sessions). Raw tools reach them
+# only for admins: a raw hash read there bypasses per-fact visibility and the research
+# quarantine (#21605). Names, resolved to numbers so an alias or an env override follows.
+RESTRICTED_DATABASES = frozenset({"knowledge", "sessions", "agents"})
+
+# Tool arguments that name a key (or a key glob) the call reads, and the one naming a search index.
+_READ_KEY_ARGS = ("key", "pattern", "prefix")
+INDEX_ARG = "index_name"
+# Non-admins may query only agent-namespace indexes (default-deny); the tools' own default is inside it.
+AGENT_INDEX_PREFIX = "idx:agent_"
+SCOPED_READ_ARGS = frozenset((*_READ_KEY_ARGS, INDEX_ARG))
+
+
+def is_agent_index(args: dict) -> bool:
+    """True when the call names no index (the tool default is an agent index) or an agent-namespace one."""
+    return INDEX_ARG not in args or str(args[INDEX_ARG]).startswith(AGENT_INDEX_PREFIX)
+
+
+def _database_number(name: str) -> int | None:
+    from autobot_shared.redis_management.types import DATABASE_MAPPING  # noqa: PLC0415
+
+    return DATABASE_MAPPING.get(name)
+
+
+def is_restricted_database(name: str | None) -> bool:
+    """True when *name* (or an alias of it) is a database raw tools may reach only as an admin."""
+    if not name:
+        return False
+    number = _database_number(name)
+    return number is not None and number in {_database_number(n) for n in RESTRICTED_DATABASES}
+
+
+def read_keys(args: dict) -> list[str]:
+    """Every key, key glob or index prefix (string or list) a call names; an empty value is still named."""
+    named: list[str] = []
+    for arg in _READ_KEY_ARGS:
+        if arg in args:
+            value = args[arg]
+            if isinstance(value, (list, tuple)):
+                # An empty list still names the argument: "" fails the namespace check instead of passing it.
+                named.extend(str(v) for v in value or [""])
+            else:
+                named.append(str(value))
+    return named
+
+
+def validate_read_scope(args: dict, is_admin: bool) -> tuple[bool, str | None]:
+    """Confine a non-admin raw read like a write: agent namespace only, no user-content database (#21605)."""
+    if is_admin:
+        return True, None
+    database = args.get("database")
+    if is_restricted_database(database):
+        return False, f"Read denied: database '{database}' is admin-only for raw tools"
+    for key in read_keys(args):
+        if not key.startswith(AGENT_NAMESPACE_PREFIX):
+            return (
+                False,
+                f"Read denied: key '{key}' is outside the allowed namespace '{AGENT_NAMESPACE_PREFIX}*'",
+            )
+    if not is_agent_index(args):
+        return False, f"Read denied: index '{args[INDEX_ARG]}' is outside the allowed prefix '{AGENT_INDEX_PREFIX}*'"
+    return True, None
+
+
 # ---------------------------------------------------------------------------
 # Voice-context toolset bundles (#7344)
 # ---------------------------------------------------------------------------

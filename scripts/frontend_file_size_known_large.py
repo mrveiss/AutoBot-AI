@@ -21,7 +21,7 @@ lowered here when its file shrinks.
 from __future__ import annotations
 
 KNOWN_LARGE: dict[str, int] = {
-    "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
+    "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 756,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 721,
     "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 896,
@@ -48,10 +48,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
-    "autobot-frontend/src/components/chat/ChatInput.vue": 1619,  # #20133: 1672 -> 1631; #20195: 1628; 1620; 1619
-    "autobot-frontend/src/components/chat/ChatInterface.vue": 1514,
-    "autobot-frontend/src/components/chat/ChatMessages.vue": 2097,  # #20195: 2118 -> 2097 (approval routing moved out)
-    "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
+    "autobot-frontend/src/components/chat/ChatInterface.vue": 1457,
     "autobot-frontend/src/components/chat/DocumentationSearchSidebar.vue": 766,
     "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 693,
     "autobot-frontend/src/components/chat/VisualBrowserPanel.vue": 632,
@@ -68,8 +65,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/EntityGraphManager.vue": 692,
     "autobot-frontend/src/components/knowledge/GraphConnectionPath.vue": 701,
     "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": 713,
-    "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": 625,
-    "autobot-frontend/src/components/knowledge/KnowledgeBrowser.vue": 1772,  # #17563: 1785 -> 1772 (kit Breadcrumb)
     "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1358,  # #19118: 1359 -> 1358
     "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": 2068,
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,
@@ -122,18 +117,18 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1278,  # #17677: 1293 -> 1292 -> 1284; #21033: -> 1278
     "autobot-frontend/src/config/__tests__/ssot-config.spec.ts": 626,
     "autobot-frontend/src/config/ssot-config.ts": 804,  # #19821 -15
-    "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
+    "autobot-frontend/src/models/controllers/ChatController.ts": 1085,
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
     "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 890,
     "autobot-frontend/src/router/index.ts": 1305,  # #20605 + #20631: 1385 -> 1305
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,
     "autobot-frontend/src/services/TerminalService.ts": 1137,
-    "autobot-frontend/src/stores/useChatStore.ts": 1176,
+    "autobot-frontend/src/stores/useChatStore.ts": 1159,
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
     "autobot-frontend/src/utils/RumAgent.ts": 852,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
-    "autobot-frontend/src/views/AdminUsersView.vue": 796,
+    "autobot-frontend/src/views/AdminUsersView.vue": 751,  # #20670: 796 -> 751, role and admin cells extracted
     "autobot-frontend/src/views/AdvancedControlView.vue": 1049,
     "autobot-frontend/src/views/BudgetPolicies.vue": 879,
     "autobot-frontend/src/views/BusinessIntelligenceView.vue": 982,  # #20004: 988 -> 987
@@ -146,7 +141,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/PluginsView.vue": 1058,
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 848,
-    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2142,  # #21043: 2166 -> 2151 -> 2142; #17677; #13421
+    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2120,  # #21520: 2142 -> 2120; #21043; #17677; #13421
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 755,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)

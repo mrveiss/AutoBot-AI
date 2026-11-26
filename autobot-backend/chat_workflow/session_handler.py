@@ -47,7 +47,7 @@ class SessionHandlerMixin:
                 )
 
                 logger.info(
-                    "Created new workflow session: %s with %d messages from history",
+                    "Created new workflow session: %s with %d completed exchange(s) from history",
                     session_id,
                     len(conversation_history),
                 )

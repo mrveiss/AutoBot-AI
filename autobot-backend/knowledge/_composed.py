@@ -23,6 +23,7 @@ from knowledge.metadata import MetadataMixin
 from knowledge.relations import RelationsMixin
 from knowledge.retrieval_invalidation import invalidating_writes
 from knowledge.search import SearchMixin
+from knowledge.selected_delete import SelectedFactsDeleteMixin
 from knowledge.stats import StatsMixin
 from knowledge.suggestions import SuggestionsMixin
 from knowledge.tags import TagsMixin
@@ -42,18 +43,19 @@ class KnowledgeBase(
     TagsMixin,
     CategoriesMixin,
     CollectionsMixin,
+    SelectedFactsDeleteMixin,
     SuggestionsMixin,
     MetadataMixin,
     VersioningMixin,
     BulkOperationsMixin,
     RelationsMixin,
 ):
-    """Unified Knowledge Base composed from 14 specialised mixins."""
+    """Unified Knowledge Base composed from 15 specialised mixins."""
 
     def __init__(self, config_manager=None):
         """Compose the knowledge base, optionally with an injected ConfigManager (#13162)."""
         super().__init__(config_manager=config_manager)
-        logger.debug("KnowledgeBase instance created (composed from 14 mixins)")
+        logger.debug("KnowledgeBase instance created (composed from 15 mixins)")
 
     async def initialize(self) -> bool:
         """Initialize the knowledge base asynchronously."""

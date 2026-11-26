@@ -38,6 +38,7 @@ from .bedrock_credentials import (
     scrub_credentials,
     validate_credential_pair,
 )
+from .message_formatting import anthropic_tool_schemas
 
 logger = get_logger(__name__)
 
@@ -206,9 +207,7 @@ class BedrockProvider(BaseProvider):
 
         # Tool use support for Claude
         if request.tools:
-            body["tools"] = [
-                {"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in request.tools
-            ]
+            body["tools"] = anthropic_tool_schemas(request.tools)
             if request.tool_choice:
                 body["tool_choice"] = {"type": request.tool_choice}
 

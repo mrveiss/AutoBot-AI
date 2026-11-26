@@ -13,9 +13,12 @@ source of truth for the index; it used to be declared twice (once as a redisvl
 the two free to drift (#12840).
 """
 
+import argparse
+import asyncio
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import List
 
 logger = logging.getLogger(__name__)
@@ -32,22 +35,12 @@ VECTOR_DIM = 768
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# The shared wipe-request helper sits beside this script; put it on the path when loaded by file path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 # Import centralized Redis client
-from autobot_shared.redis_client import get_redis_client
-from autobot_shared.redis_utils import decode_redis_list
-
-
-def _drop_existing_indexes(r) -> None:
-    """Drop existing indexes if they exist.
-
-    Helper for create_index_with_correct_dimensions (Issue #825).
-    """
-    for index_name in (INDEX_NAME, LEGACY_INDEX_NAME):
-        try:
-            r.execute_command("FT.DROPINDEX", index_name, "DD")
-            logger.info("Dropped existing %s", index_name)
-        except Exception as e:
-            logger.info("No existing %s to drop: %s", index_name, e)
+from autobot_shared.redis_client import get_redis_client  # noqa: E402
+from autobot_shared.redis_utils import decode_redis_list  # noqa: E402
 
 
 def _build_index_create_command() -> List:
@@ -110,8 +103,6 @@ def create_index_with_correct_dimensions():
         logger.error("Error: Could not connect to Redis")
         return False
 
-    _drop_existing_indexes(r)
-
     create_cmd = _build_index_create_command()
 
     logger.info("Creating index with schema:")
@@ -127,15 +118,36 @@ def create_index_with_correct_dimensions():
 
     except Exception as e:
         logger.error(f"Error creating index: {e}")
+        logger.error(
+            "An existing index is never dropped here. To rebuild it, run with --request-wipe (needs approval)."
+        )
         return False
 
     return True
 
 
-if __name__ == "__main__":
-    success = create_index_with_correct_dimensions()
-    if success:
+def _parse_args(argv=None) -> argparse.Namespace:
+    import kb_wipe_cli
+
+    parser = argparse.ArgumentParser(description="Create the KB index, or request the wipe that lets it be rebuilt.")
+    kb_wipe_cli.add_wipe_arguments(parser)
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    """Create the index; with ``--request-wipe`` / ``--dry-run`` only raise or preview the wipe. Deletes nothing."""
+    args = _parse_args(argv)
+    import kb_wipe_cli
+
+    if kb_wipe_cli.wipe_wanted(args):
+        return 0 if asyncio.run(kb_wipe_cli.request_wipe(args.dry_run)) else 1
+    if create_index_with_correct_dimensions():
         logger.info("\nIndex created successfully with %d dimensions!", VECTOR_DIM)
         logger.info("You can now run populate_knowledge_base.py")
-    else:
-        logger.error("\nFailed to create index")
+        return 0
+    logger.error("\nFailed to create index")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

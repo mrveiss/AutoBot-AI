@@ -15,17 +15,29 @@ Composes all functionality through mixins:
 import asyncio
 import functools
 import json
-import os
 from contextlib import aclosing
 from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.chat_model_context import note_chat_turn_model
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
+from chat_workflow.persisted_metadata import persisted_metadata
+from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
+from chat_workflow.reply_persistence import (
+    build_final_response_entry,
+    iteration_reply_entries,
+    later_respond_entries,
+    stamp_model,
+)
+from chat_workflow.step_outcome import executed_count, not_run_note
+from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
+from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
     TOOL_CALL_COMPLETE_RE,
@@ -35,13 +47,13 @@ from chat_workflow.tool_call_grammar import (
 )
 from chat_workflow.tool_call_loop import framed_tool_output
 from constants.api_constants import PATH_OLLAMA_GENERATE
-from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
 from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
-from .attachment_context import apply_attachments, take_notices
+from .answer_sources import answer_target, attach_answer_proof, kb_source, proof_message
+from .attachment_context import NOTICE_TYPE, apply_attachments, take_notices
 from .budget_refusal import budget_refusal_message
 from .conversation import ConversationHandlerMixin
 from .kb_sources import _kb_sources_from_citations
@@ -56,12 +68,14 @@ from .models import (
     filter_internal_prompts,
 )
 from .plan_runner import open_for_ctx
+from .prompt_window import chat_request_options, note_prompt_eval
 from .reasoning_kwargs import build_reasoning_api_kwargs
 from .session_handler import SessionHandlerMixin
 from .session_role import resolve_auth_role, stamp_verified_identity
 from .thought_markers import detect_content_type, find_last_tag_positions, find_new_segment_start
 from .tool_handler import ToolHandlerMixin
 from .turn_control import CHAT_LLM_CALL_TIMEOUT_SECONDS, stream_graph_turn, stream_legacy_turn
+from .vision_capability import image_fits_budget, model_name_suggests_vision, resolve_model_supports_vision
 
 logger = get_logger(__name__)
 
@@ -104,27 +118,9 @@ VISION_TOOL_LOOKBACK_MESSAGES = env_int("CHAT_VISION_TOOL_LOOKBACK_MESSAGES", de
 # representative default, env-overridable — never hardcode a tunable).
 VISION_IMAGE_TOKEN_ESTIMATE = env_int("CHAT_VISION_IMAGE_TOKEN_ESTIMATE", default=1100)
 
-# Case-insensitive substrings of a model name that indicate vision support.
-# Ollama exposes no per-tag capability registry (unlike the fixed AIProvider
-# registry in modern_ai_integration.py), so this is the pragmatic gate.
-_DEFAULT_VISION_MODEL_PATTERNS = (
-    "llava,vision,gpt-4o,gpt-4-vision,claude-3,claude-4,gemini,qwen-vl,qwen2-vl,qwen2.5-vl,pixtral,bakllava"
-)
-VISION_MODEL_NAME_PATTERNS = tuple(
-    p.strip().lower()
-    for p in os.getenv("CHAT_VISION_MODEL_PATTERNS", _DEFAULT_VISION_MODEL_PATTERNS).split(",")
-    if p.strip()
-)
-
-
-def _model_supports_vision(model_name: str) -> bool:
-    """Heuristic vision-capability gate for the chat continuation loop (#11538).
-
-    Ollama exposes no per-tag capability registry, so this matches known
-    vision-model name substrings (env-overridable via CHAT_VISION_MODEL_PATTERNS).
-    """
-    name = (model_name or "").lower()
-    return any(pattern in name for pattern in VISION_MODEL_NAME_PATTERNS)
+# Vision gate (#21770): the runtime's reported capabilities decide; the name patterns are only the
+# fallback. Both live in vision_capability.py; this alias keeps the historical import name.
+_model_supports_vision = model_name_suggests_vision
 
 
 def _filter_step_output(cmd: str, output_text: str, *, is_shell: bool) -> str:
@@ -453,30 +449,9 @@ class ChatWorkflowManager(
         rag_citations: List[Dict[str, Any]],
         selected_model: str,
     ) -> List[Dict[str, Any]]:
-        """Build citation list always containing >=1 entry. Issue #1186.
-
-        When KB was used, KB citations come first.
-        LLM training data entry is always appended last so users
-        always see what the response is based on.
-        """
-        sources: List[Dict[str, Any]] = []
-        if used_knowledge and not rag_citations:
-            logger.warning("_build_source_list: used_knowledge=True but rag_citations is empty")
-        if used_knowledge and rag_citations:
-            for c in rag_citations:
-                sources.append({**c, "type": "knowledge_base", "reliability": "high"})
-        sources.append(
-            {
-                "type": "llm_training",
-                "title": "AI Training Data",
-                "model": selected_model,
-                "reliability": "medium",
-                "source": "LLM",
-                "content": "Response generated using LLM training data.",
-                "score": 0.5,
-            }
-        )
-        return sources
+        """Knowledge-base passages only. A chunk streams before its tools run, so it cannot say what fed the answer
+        (``llm_training`` is no longer guessed here); the answer's own sources arrive at the turn's end (#21976)."""
+        return [kb_source(c) for c in rag_citations or [] if used_knowledge]
 
     def _parse_stream_chunk(self, line: bytes) -> Dict[str, Any] | None:
         """Parse a single stream chunk line (Issue #315: depth reduction).
@@ -1698,6 +1673,7 @@ class ChatWorkflowManager(
             chunk_data = self._parse_stream_chunk(line)
             if not chunk_data:
                 continue
+            note_prompt_eval(chunk_data, selected_model)  # #22016: the final chunk says how much input was kept
             params = self._build_chunk_iteration_params(
                 chunk_data,
                 llm_response,
@@ -1763,7 +1739,7 @@ class ChatWorkflowManager(
         cmd = result.get("command") or result.get("tool") or "unknown"
         stdout = _as_output_text(result.get("stdout"))
         stderr = _as_output_text(result.get("stderr"))
-        status = result.get("status", "unknown")
+        status = f"{result.get('status', 'unknown')}{not_run_note(result)}"  # #21959
 
         # `stdout` first so a shell result is unchanged; the others only fill a
         # gap, never override it. `error`/`reason` last: a failure that says
@@ -1790,7 +1766,7 @@ class ChatWorkflowManager(
         Returns a non-empty string only when the LLM has made 2+ consecutive invalid
         tool calls (Issue #2310), so the reminder is injected into the next prompt.
         """
-        if consecutive_invalid_tool_calls < 2:
+        if consecutive_invalid_tool_calls < limits.INVALID_CALL_LIMIT:  # #21843: the one invalid-call bound
             return ""
         logger.warning(
             "[Issue #2310] Injecting available-tools reminder after %d consecutive invalid tool calls",
@@ -1803,21 +1779,7 @@ class ChatWorkflowManager(
             "You MUST use ONLY the following tool names:\n"
             "- execute_command: Run shell commands\n"
             "- web_search: Search the web for information\n"
-            "- navigate: Browse to a URL\n"
-            "- click: Click an element on a web page\n"
-            "- fill: Fill a form field on a web page\n"
-            "- select: Select an option on a web page\n"
-            "- hover: Hover over an element\n"
-            "- screenshot: Capture the current page\n"
-            "- evaluate: Evaluate JavaScript on a web page\n"
-            "- get_text: Get text from an element\n"
-            "- get_attribute: Get an attribute from an element\n"
-            "- wait_for_selector: Wait for an element to appear\n"
-            "- browser_state: Get the current page's numbered interactive-element menu\n"
-            "- click_index: Click an element by its numbered index\n"
-            "- fill_index: Fill an element by its numbered index\n"
-            "- select_index: Select an option on an element by its numbered index\n"
-            "- hover_index: Hover over an element by its numbered index\n"
+            f"{render_tool_name_reminder_lines()}"
             "- delegate: Delegate a subtask to a subordinate agent\n"
             "- respond: Signal task completion with a final message\n"
             "Do NOT invent new tool names. Use ONLY the names listed above.\n\n"
@@ -1882,7 +1844,7 @@ before summarizing.
         """
         history_parts = [self._format_execution_step(i, result) for i, result in enumerate(execution_history, 1)]
         history_text = "\n\n".join(history_parts)
-        steps_completed = len(execution_history)
+        steps_completed = executed_count(execution_history)  # #21959: a step that did not run is not completed
         instructions = self._get_continuation_instructions(
             original_message, steps_completed, consecutive_invalid_tool_calls
         )
@@ -1894,20 +1856,6 @@ before summarizing.
 
 ---
 {instructions}"""
-
-    def _image_fits_budget(self, prompt: str, model_name: str) -> bool:
-        """Gate image attachment on the context budget (#11538).
-
-        Uses ContextWindowManager's token estimate plus the fixed per-image
-        token cost (VISION_IMAGE_TOKEN_ESTIMATE) so a screenshot never
-        silently blows the model's max-history-token budget.
-        """
-        from context_window_manager import ContextWindowManager
-
-        mgr = ContextWindowManager()
-        prompt_tokens = mgr.estimate_tokens(prompt)
-        max_tokens = mgr.get_max_history_tokens(model_name)
-        return (prompt_tokens + VISION_IMAGE_TOKEN_ESTIMATE) <= max_tokens
 
     def _build_vision_messages(self, current_prompt: str, image_b64: str) -> list[dict]:
         """Build the OpenAI-style image content block for an OpenAI-compatible
@@ -1948,6 +1896,7 @@ before summarizing.
         api_kwargs: dict | None = None,
         image_b64: str | None = None,
         ollama_endpoint: str = "",
+        vision_capable: bool | None = None,
     ) -> dict:
         """Build LLM request payload.
 
@@ -1957,22 +1906,20 @@ before summarizing.
         actually consumes (see _attach_vision_payload) — vision-capable models get it,
         non-vision models keep the existing text-only "prompt" field, unaffected.
         """
+        note_chat_turn_model(selected_model)  # #21878: this model is resident now; side calls match its context
         payload = {
             "model": selected_model,
             "prompt": current_prompt,
             "stream": True,
-            "options": {
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "num_ctx": ModelConfig.CHAT_NUM_CTX,
-            },
+            "options": chat_request_options(selected_model),  # #22016: num_ctx and num_predict from one module
         }
         if system_prompt:
             payload["system"] = system_prompt
         if api_kwargs:
             payload.update(api_kwargs)
-        vision_ready = image_b64 and _model_supports_vision(selected_model)
-        if vision_ready and self._image_fits_budget(current_prompt, selected_model):
+        supports_vision = vision_capable if vision_capable is not None else _model_supports_vision(selected_model)
+        vision_ready = image_b64 and supports_vision
+        if vision_ready and image_fits_budget(current_prompt, selected_model, VISION_IMAGE_TOKEN_ESTIMATE):
             self._attach_vision_payload(payload, ollama_endpoint, current_prompt, image_b64)
         return payload
 
@@ -2069,6 +2016,7 @@ before summarizing.
             yield refusal
             yield (None, None)
             return
+        vision_capable = await resolve_model_supports_vision(selected_model, ollama_endpoint) if image_b64 else None
         payload = self._get_llm_request_payload(
             selected_model,
             current_prompt,
@@ -2076,6 +2024,7 @@ before summarizing.
             api_kwargs=api_kwargs,
             image_b64=image_b64,
             ollama_endpoint=ollama_endpoint,
+            vision_capable=vision_capable,
         )
         llm_response = ""
 
@@ -2402,6 +2351,8 @@ before summarizing.
                 # Don't persist streaming chunks - they're for live display only
                 # The final complete response is persisted in _persist_workflow_messages
                 is_streaming_chunk = hasattr(item, "metadata") and item.metadata.get("streaming", False)
+                if marker := stream_identity_marker(item, iteration, ctx.workflow_messages):  # #21846
+                    ctx.workflow_messages.append(marker)
                 if not is_streaming_chunk:
                     # Issue #13295: stamp the iteration that produced this
                     # message so _build_persist_batch can interleave it with
@@ -2442,16 +2393,37 @@ before summarizing.
             yield (None, None, True)
             return
 
+        if not tool_calls and record_parse_failure(ctx, llm_response, iteration, self.MAX_CONTINUATION_ITERATIONS):
+            yield (llm_response, tool_calls, False)  # #21843: the parse error is fed back, the turn continues
+            return
+
         if not tool_calls:
             logger.info(
                 "[Issue #651] Iteration %d: No tool calls in response - task complete after %d step(s)",
                 iteration,
                 len(ctx.execution_history),
             )
+            if fallback := self._parse_exhausted_fallback(ctx, llm_response, iteration):
+                yield fallback
             yield (llm_response, tool_calls, True)
             return
 
         yield (llm_response, tool_calls, False)
+
+    @staticmethod
+    def _parse_exhausted_fallback(ctx, llm_response: str, iteration: int) -> WorkflowMessage | None:
+        """The readable fallback when the last permitted iteration left only an unparsed TOOL_CALL (#21843).
+
+        Cleaning removes the call, so without this the turn would store no reply at all; the graph path
+        substitutes the same ``NO_ANSWER_FALLBACK`` (``graph_parse_feedback``).
+        """
+        if clean_reply_text(llm_response) or parse_failure_step(llm_response, iteration) is None:
+            return None
+        message = WorkflowMessage(
+            type="response", content=NO_ANSWER_FALLBACK, metadata={"parse_fallback": True, "iteration": iteration}
+        )
+        ctx.workflow_messages.append(message)
+        return message
 
     def _parse_tool_result_tuple(
         self,
@@ -2555,10 +2527,10 @@ before summarizing.
             )
             return False
 
-        # Issue #651: Log decision to continue
+        # #19951: a terminal approval is decided in-line; a hold that cannot be already ended the loop (break_loop).
         logger.info(
             "[Issue #651] Iteration %d: Completed with %d new result(s), "
-            "pending_approval=%s - continuing to next iteration",
+            "pending_approval=%s (decided in-line) - continuing to next iteration",
             iteration,
             len(new_results),
             has_pending_approval,
@@ -2812,7 +2784,7 @@ before summarizing.
         logger.info(
             "[Issue #651] Built continuation prompt: %d chars, %d executed steps",
             len(current_prompt),
-            len(execution_history),
+            executed_count(execution_history),
         )
         instructions_start = current_prompt.find("MULTI-STEP TASK CONTINUATION")
         if instructions_start > -1:
@@ -2825,9 +2797,7 @@ before summarizing.
     def _log_task_complete(self, iteration: int, history_count: int) -> None:
         """Issue #665: Extracted from _run_llm_iterations to reduce function length."""
         logger.info(
-            "[Issue #651] Task complete after %d iteration(s). Executed %d command(s) total.",
-            iteration,
-            history_count,
+            "[Issue #651] Task complete after %d iteration(s). Executed %d command(s) total.", iteration, history_count
         )
 
     def _log_max_iterations_warning(self, iteration: int) -> None:
@@ -2940,74 +2910,21 @@ before summarizing.
         llm_response: str,
         batch: List[Dict[str, Any]],
         iteration: int | None = None,
+        streamed: tuple = (None, None),
+        model: str | None = None,
     ) -> Dict[str, Any] | None:
         """Build the chat-history entry for one iteration's completed prose (#13214).
 
-        Streamed chunks carry ``metadata.streaming = True`` (set unconditionally by
-        ``StreamingMessage.to_workflow_message``) and are deliberately excluded from
-        ``workflow_messages`` by both accumulators — see ``graph._run_llm_iteration``
-        and ``_collect_llm_iteration_response``, whose comment states the complete
-        reply "is persisted in _persist_workflow_messages". That was never true:
-        ``llm_response`` arrived here and was dropped, so a conversational streamed
-        reply persisted nothing and ``chat:session:*`` read back user-turns only.
+        Streamed chunks are never persisted (``metadata.streaming``); the completed reply
+        arrives here as *llm_response* and is persisted from the accumulated text (#13214).
+        *iteration* records which continuation pass produced it (#13295). *model* is the
+        model that produced it (#21881): the entry carries it from the start, never ``""``.
 
-        Issue #13295: *iteration* records which continuation pass produced this
-        prose (1-indexed, matching ``all_llm_responses``) so a reload can be
-        cross-referenced against the tool output it was interleaved with.
-        The entry is built WITHOUT ``selected_model``/``rag_citations`` — Issue
-        #13292's model badge/KB sources are attached retroactively by
-        ``_attach_model_and_citations`` to whichever prose entry actually ends
-        up LAST in the persisted batch, since the "final" iteration's own
-        entry can be ``None`` (empty content, or deduped) and #13292 must not
-        regress by leaving no entry carrying them at all (review F5).
-
-        Returns None when there is nothing to add — an empty reply, or an assistant
-        entry in *batch* already carrying byte-identical text. The scan is restricted
-        to assistant entries so that a ``terminal_output`` or other system message
-        echoing the reply cannot suppress the assistant turn.
+        Returns None for an empty reply, or prose that repeats an assistant entry already in
+        *batch* (the rule in ``reply_persistence``, #21880). Only assistant entries count, so
+        a ``terminal_output`` echoing the reply cannot suppress the assistant turn.
         """
-        content = strip_unparsed_tool_tags(llm_response or "").strip()
-        if not content:
-            return None
-        assistant_texts = ((e.get("text") or "").strip() for e in batch if e.get("sender") == "assistant")
-        if any(text == content for text in assistant_texts):
-            return None
-        return chat_mgr._build_message_dict(
-            "assistant",
-            content,
-            "response",
-            {
-                "message_type": "llm_response",
-                "streamed": True,
-                "model": "",
-                "iteration": iteration,
-            },
-            None,
-            sources=[],
-        )
-
-    def _attach_model_and_citations(
-        self,
-        entry: Dict[str, Any],
-        selected_model: str,
-        rag_citations: List[Dict[str, Any]] | None,
-        used_knowledge: bool,
-    ) -> None:
-        """Retroactively tag the LAST prose entry actually persisted (#13292, review F5).
-
-        Issue #13292: the streamed chunks carried ``metadata.model`` and KB
-        citations but, being streaming, were never the entries actually
-        persisted. Attaching these at build time only to "the final
-        iteration's" entry breaks when that entry is ``None`` (empty content
-        or deduped) — no entry would carry them at all. Called once, after
-        the whole batch is built, on whichever entry is actually last.
-        """
-        entry["metadata"]["model"] = selected_model
-        kb_sources = _kb_sources_from_citations(rag_citations or []) if used_knowledge else []
-        # Never blank out sources an entry already carries — the fallback target
-        # may be a tool entry that legitimately has its own.
-        if kb_sources or not entry.get("sources"):
-            entry["sources"] = kb_sources
+        return build_final_response_entry(chat_mgr, llm_response, batch, iteration, streamed, model)
 
     def _build_workflow_message_batch(self, chat_mgr, workflow_messages: List[WorkflowMessage]) -> List[Dict[str, Any]]:
         """Build the chat-history message dicts for one turn's WorkflowMessages.
@@ -3018,9 +2935,9 @@ before summarizing.
         """
         batch = []
         for wf_msg in workflow_messages:
-            # Skip segment_complete markers — internal stream control
-            # messages with empty content (Issue #1141).
-            if wf_msg.type == "segment_complete":
+            # Skip segment_complete markers: internal stream control, empty content (Issue #1141). Skip notices
+            # too: ``persist_notices`` stored them once as system entries; this copy is the live display only (#22016).
+            if wf_msg.type in ("segment_complete", NOTICE_TYPE):
                 continue
 
             sender = "system" if wf_msg.type == "terminal_output" else "assistant"
@@ -3028,7 +2945,10 @@ before summarizing.
             # final user-visible reply — strip any <TOOL_CALL ...> tag
             # that never matched the full grammar (genuinely unparsed)
             # so raw markup never renders. Guarded no-op otherwise.
-            content = strip_unparsed_tool_tags(wf_msg.content)
+            # Tool output is data, not a reply: only the guarded strip applies, never the reply cleaner (#21843).
+            content = (
+                clean_reply_text(wf_msg.content) if sender == "assistant" else strip_unparsed_tool_tags(wf_msg.content)
+            )
             # Issue #4448: Extract KB-only citations into top-level sources list.
             # metadata.citations includes the always-appended llm_training entry —
             # filter it out so sources contains only knowledge-base references.
@@ -3039,9 +2959,11 @@ before summarizing.
                     sender,
                     content,
                     wf_msg.type,
-                    wf_msg.metadata,
+                    persisted_metadata(wf_msg),
                     None,
                     sources=_kb_sources_from_citations(kb_citations),
+                    message_id=wf_msg.id,
+                    created_at=wf_msg.timestamp,
                 )
             )
         return batch
@@ -3053,6 +2975,8 @@ before summarizing.
         response_text: str,
         iteration: int,
         batch: List[Dict[str, Any]],
+        selected_model: str = "",
+        turn_id: str = "",
     ) -> tuple[List[Dict[str, Any]], set, Dict[str, Any] | None]:
         """Build one iteration's prose + tool-message entries, in that order.
 
@@ -3071,15 +2995,17 @@ before summarizing.
         # workflow message carrying byte-identical text — is still caught even
         # though it is placed AFTER the prose entry in the final order.
         tool_entries = self._build_workflow_message_batch(chat_mgr, iter_messages)
+        model = streamed_prose_model(iter_messages) or selected_model  # #21881: this iteration's own model
 
-        final_entry = self._build_final_response_entry(
-            chat_mgr,
-            response_text,
-            batch + tool_entries,
-            iteration=iteration,
+        streamed = streamed_prose_identity(iter_messages)  # #21846; the time is when the prose was said (#21904)
+        judged = batch + tool_entries + later_respond_entries(workflow_messages, iteration)
+        build = functools.partial(self._build_final_response_entry, chat_mgr)
+        entries, final_entry = iteration_reply_entries(
+            chat_mgr, build, response_text, iteration, model, streamed, judged, turn_id
         )
-        entries = [final_entry] if final_entry else []
         entries.extend(tool_entries)
+        for entry in tool_entries:
+            stamp_model(entry, model)
         return entries, consumed, final_entry
 
     def _build_persist_batch(
@@ -3090,6 +3016,9 @@ before summarizing.
         selected_model: str,
         rag_citations: List[Dict[str, Any]] | None,
         used_knowledge: bool,
+        turn_id: str = "",
+        history: List[Dict[str, Any]] | None = None,
+        user_message: str = "",
     ) -> List[Dict[str, Any]]:
         """Build the full persisted batch for one turn, in true chronological order.
 
@@ -3124,32 +3053,39 @@ before summarizing.
         """
         batch: List[Dict[str, Any]] = []
         consumed: set = set()
-        last_prose_entry: Dict[str, Any] | None = None
 
         for idx, response_text in enumerate(all_llm_responses):
             iteration = idx + 1
-            entries, group_consumed, final_entry = self._iteration_persist_group(
+            entries, group_consumed, _ = self._iteration_persist_group(
                 chat_mgr,
                 workflow_messages,
                 response_text,
                 iteration,
                 batch,
+                selected_model,
+                turn_id,
             )
-            if final_entry is not None:
-                last_prose_entry = final_entry
             batch.extend(entries)
             consumed.update(group_consumed)
 
         leftover = [m for m in workflow_messages if id(m) not in consumed]
-        batch.extend(self._build_workflow_message_batch(chat_mgr, leftover))
+        leftover_entries = self._build_workflow_message_batch(chat_mgr, leftover)
+        for entry in leftover_entries:
+            stamp_model(entry, selected_model)
+        batch.extend(leftover_entries)
 
-        # Review F5: when every iteration's prose is empty or deduped away — the
-        # ``respond``-tool turn — no prose entry exists, and the model badge and
-        # KB sources would be carried by nothing. Fall back to the last assistant
-        # entry actually written so #13292 cannot regress to "no entry has them".
-        target = last_prose_entry or next((e for e in reversed(batch) if e.get("sender") == "assistant"), None)
+        # The answer entry (#13292, review F5; #21976): the respond reply, else the last prose reply, else the last
+        # assistant entry. It carries the model, the answer's sources and the quoted-value proof.
+        target = answer_target(batch)
         if target is not None:
-            self._attach_model_and_citations(target, selected_model, rag_citations, used_knowledge)
+            attach_answer_proof(
+                target,
+                model=selected_model,
+                rag_citations=rag_citations,
+                used_knowledge=used_knowledge,
+                history=history or [],
+                user_message=user_message,
+            )
         return batch
 
     async def _persist_workflow_messages(
@@ -3161,7 +3097,10 @@ before summarizing.
         selected_model: str = "",
         rag_citations: List[Dict[str, Any]] | None = None,
         used_knowledge: bool = False,
-    ) -> None:
+        turn_id: str = "",
+        history: List[Dict[str, Any]] | None = None,
+        user_message: str = "",
+    ) -> WorkflowMessage | None:
         """Persist WorkflowMessages to chat history in a single batch.
 
         Issue #332: Original implementation.
@@ -3187,7 +3126,15 @@ before summarizing.
         try:
             chat_mgr = ChatHistoryManager()
             batch = self._build_persist_batch(
-                chat_mgr, workflow_messages, all_llm_responses, selected_model, rag_citations, used_knowledge
+                chat_mgr,
+                workflow_messages,
+                all_llm_responses,
+                selected_model,
+                rag_citations,
+                used_knowledge,
+                turn_id,
+                history,
+                user_message,
             )
 
             if batch:
@@ -3199,6 +3146,8 @@ before summarizing.
                 len(workflow_messages or []),
                 len(batch),
             )
+            target = answer_target(batch)
+            return proof_message(target) if target else None  # the live answer's sources, as stored (#21976)
 
         except Exception as persist_error:
             logger.error(
@@ -3206,6 +3155,7 @@ before summarizing.
                 persist_error,
                 exc_info=True,
             )
+        return None
 
     async def _persist_user_message(self, session_id: str, message: str) -> None:
         """Persist user message immediately to prevent data loss on restart.
@@ -3457,14 +3407,18 @@ before summarizing.
         filtered_responses = [self._filter_internal_prompts(r) for r in all_llm_responses]
         combined_response = "\n\n".join(filtered_responses)
         await self._persist_conversation(session_id, session, message, combined_response, model=ctx.selected_model)
-        await self._persist_workflow_messages(
+        proof = await self._persist_workflow_messages(
             session_id,
             workflow_messages,
             filtered_responses,
             selected_model=ctx.selected_model,
             rag_citations=ctx.rag_citations,
             used_knowledge=ctx.used_knowledge,
+            history=ctx.execution_history,
+            user_message=message,
         )
+        if proof is not None:
+            yield proof  # #21976: the answer's sources and proof, live as stored
 
         # Issue #5073: fire-and-forget memory tasks via stop hook (non-blocking).
         # Replaces the direct verbatim-store asyncio.create_task from #5070 with

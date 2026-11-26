@@ -33,7 +33,7 @@
     </div>
 
     <!-- Upload Tab Content -->
-    <KnowledgeUpload v-if="manageTab === 'upload'" />
+    <KnowledgeUploadTab v-if="manageTab === 'upload'" />
 
     <!-- Watch Folders Tab Content -->
     <WatchFoldersPanel v-if="manageTab === 'watchFolders'" />
@@ -438,7 +438,7 @@ import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
-import KnowledgeUpload from './KnowledgeUpload.vue'
+import KnowledgeUploadTab from './KnowledgeUploadTab.vue'
 import WatchFoldersPanel from './WatchFoldersPanel.vue'
 import ConnectorManager from './connectors/ConnectorManager.vue'
 import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
@@ -657,7 +657,7 @@ const deleteEntry = async (entry: KnowledgeDocument) => {
 }
 
 const deleteSelected = async () => {
-  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }) }))) return
+  if (selection.selectedCount.value && !(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }) }))) return
 
   try {
     await controller.bulkDeleteDocuments([...selection.selected.value])

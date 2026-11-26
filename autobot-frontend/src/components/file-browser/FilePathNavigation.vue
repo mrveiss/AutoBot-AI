@@ -91,7 +91,7 @@ const pathForCrumb = (index: number): string => '/' + pathParts.value.slice(0, i
 .path-go-btn {
   @apply px-4 py-2 rounded-md focus:outline-none focus:ring-2;
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
   --tw-ring-color: var(--color-primary);
 }
 

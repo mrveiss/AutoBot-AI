@@ -577,6 +577,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "Nepieciešama pieteikšanās, lai skatītu",
       "requireLoginHint": "Šo saiti var atvērt tikai pieteikušies lietotāji",
@@ -792,8 +799,10 @@
       "unsupported": "\"{filename}\" nav teksta fails, ko asistents var nolasīt, tāpēc tas netika izmantots.",
       "unreadable": "Failu \"{filename}\" neizdevās nolasīt, tāpēc tas netika izmantots.",
       "empty": "Failā \"{filename}\" nav nolasāma teksta, tāpēc tas netika izmantots.",
-      "truncated": "Fails \"{filename}\" ir garš, tāpēc tika izmantots tikai tā sākums.",
-      "over_budget": "Pievienotie faili sasniedza izmēra ierobežojumu, tāpēc \"{filename}\" netika izmantots."
+      "truncated": "Fails \"{filename}\" ir garš, tāpēc tika izmantotas tikai pirmās {used} no {total} rakstzīmēm.",
+      "truncated_legacy": "Fails \"{filename}\" ir garš, tāpēc tika izmantots tikai tā sākums.",
+      "over_budget": "Pievienotie faili sasniedza izmēra ierobežojumu, tāpēc \"{filename}\" netika izmantots.",
+      "over_window": "Saruna ir garāka par modeļa logu, tāpēc daļa iepriekšējā teksta var tam nenonākt."
     }
   },
   "settings": {
@@ -1114,7 +1123,6 @@
       "quality": {
         "title": "Koda kvalitāte",
         "overallScore": "Kopējais rezultāts",
-        "testCoverage": "Testa pārklājums",
         "codeDuplicates": "Kodu dublikāti",
         "technicalDebt": "Tehniskais parāds",
         "noMetrics": "Nav pieejama koda kvalitātes metrika."
@@ -2313,7 +2321,6 @@
       "noCommunicationData": "No communication data available",
       "codeQuality": "Code Quality",
       "overallScore": "Overall Score",
-      "testCoverage": "Test Coverage",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
       "noQualityMetrics": "No quality metrics available",
@@ -2388,6 +2395,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "Neizdevās ielādēt evolūcijas datus",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -4546,6 +4554,9 @@
       "stepApproved": "Solis apstiprināts",
       "stepSkipped": "Solis izlaists",
       "rerunNotFound": "Neizdevās atrast darbplūsmu atkārtotai palaišanai",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "Atkārtoti palaiž “{name}”",
       "rerunFailed": "Neizdevās atkārtoti palaist darbplūsmu",
       "notificationsSaved": "Paziņojumu iestatījumi saglabāti"
@@ -5804,7 +5815,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Trūkst lietotājvārda: iestatiet to sadaļā Noslēpumi",
+      "desktopVm": "AutoBot darbvirsmas VM",
+      "desktopVmDesc": "AutoBot paša darbvirsma",
+      "noDesktopVm": "Nav reģistrēta darbvirsmas VM, tāpēc tiek rādīti tikai jūsu Noslēpumu resursdatori."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6007,6 +6022,7 @@
       "cleanupConfirm": "Delete Old Logs",
       "cancel": "Cancel",
       "deleteOldLogs": "Delete Old Logs",
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data"
     },
     "browserAutomation": {
@@ -6489,16 +6505,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "noParticipants": "No participants",
-      "participants": "Participants",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "Sadarbība",
       "invite": "Uzaicināt",
@@ -6858,7 +6864,11 @@
         "slackDesc": "Slack robota žetons",
         "serverLabel": "Servera resursdators",
         "serverDesc": "SSH/VNC servera piekļuve"
-      }
+      },
+      "vncCompanionName": "{name} (VNC akreditācijas dati)",
+      "vncCompanionDescription": "VNC akreditācijas dati resursdatoram {host}",
+      "vncCompanionNoHostId": "Resursdators tika saglabāts, bet tā id netika atgriezts, tāpēc VNC akreditācijas dati netika saglabāti.",
+      "vncRetry": "Resursdators tika saglabāts, bet tā VNC parole ne. Saglabājiet vēlreiz, lai mēģinātu vēlreiz; resursdators netiks izveidots divreiz."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -6957,6 +6967,7 @@
       "subtitle": "Discover and interact with UI elements on the current screen",
       "refresh": "Refresh",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "verifying": "Verifying...",
       "execute": "Execute",
       "details": "Details",
@@ -7369,7 +7380,8 @@
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
       "toggleViewAriaLabel": "Toggle view mode",
-      "uploadFailedHint": "Lūdzu, pārbaudiet failu izmēra ierobežojumus un formāta prasības"
+      "uploadFailedHint": "Lūdzu, pārbaudiet failu izmēra ierobežojumus un formāta prasības",
+      "uploadAlreadyExists": "A file with this name already exists"
     },
     "header": {
       "title": "File Browser",
@@ -7751,7 +7763,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Atlasiet resursdatoru ar VNC, lai izmantotu darbvirsmu.",
+      "vncCredentialMissing": "Šim resursdatoram nav saglabāta VNC parole. Pievienojiet to sadaļā Noslēpumi.",
+      "hostNotFound": "Šis resursdators nav viens no jūsu Noslēpumu resursdatoriem.",
+      "hostFieldsMissing": "Šim resursdatoram trūkst lietotājvārda vai iespēju. Iestatiet tos sadaļā Noslēpumi.",
+      "hostVncUnavailable": "Šim resursdatoram sadaļā Noslēpumi nav VNC iespējas vai porta.",
+      "desktopVmUnavailable": "Nav reģistrēta neviena VNC darbvirsma, tāpēc darbvirsmas VM nav pieejama.",
+      "registryUnavailable": "Darbvirsmu reģistru neizdevās nolasīt. Mēģiniet vēlreiz pēc brīža."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -8573,7 +8592,6 @@
       "attachRoleLabel": "Loma",
       "attachRolePlaceholder": "Izvēlieties lomu…",
       "attachWorkflowLabel": "Darbplūsmas ID",
-      "attachWorkflowPlaceholder": "Darbplūsmas ID",
       "attachError": "Neizdevās pievienot šo darbplūsmu.",
       "detachError": "Neizdevās noņemt šo darbplūsmu.",
       "processDetach": "Noņemt {workflow} no {role}",
@@ -9815,7 +9833,6 @@
     "endTenure": "Beigt pilnvaras",
     "holderIdPlaceholder": "Izpildītāja ID",
     "permissionPlaceholder": "piem., knowledge.read",
-    "workflowPlaceholder": "Darbplūsmas ID",
     "toolPlaceholder": "Rīka nosaukums",
     "credentialPlaceholder": "Noslēpuma ID",
     "errorAssign": "Neizdevās piešķirt izpildītāju.",
@@ -10014,5 +10031,40 @@
     "invalid_generic": "Šis grafiks nav derīgs.",
     "conflicting_fields": "Grafiks tiek saglabāts vai nu kā cron, vai kā kalendāra noteikums vai vienreizēja izpilde, nekad abi.",
     "gatedNote": "Pēdējā diena, nedēļas diena mēnesī, 29.–31. datums un vienreizējas izpildes būs pieejamas pēc plānotāja atjaunināšanas."
+  },
+  "driftPrune": {
+    "batch": "{count} failu(-u) partija no {total}; apstipriniet, lai noņemtu šo partiju, nākamā tiks parādīta pēc tam",
+    "cancel": "Atcelt",
+    "confirm": "Apstiprināt {count} failu(-u) noņemšanu",
+    "intro": "Git pierāda, ka šie faili ir izdzēsti no pirmkoda un joprojām ir izvietoti. Tiek noņemti tikai šie faili. Resursdatora stāvoklis, būvējuma pakotnes un mainītie faili netiek skarti nekad.",
+    "nothingToRemove": "Nav ko noņemt: neviens izvietotais fails vairs nav apstiprināts kā izdzēsts no pirmkoda. Palaidiet neatbilstību pārbaudi vēlreiz.",
+    "previewAction": "Priekšskatīt noņemšanu",
+    "previewing": "Notiek priekšskatījuma ielāde…",
+    "removing": "Notiek noņemšana…",
+    "requestFailed": "Neatbilstību tīrīšanas pieprasījums neizdevās",
+    "result": "Noņemti {removed} failu(-u); {left} atstāti vietā",
+    "title": "No {component} tiktu noņemti {count} failu(-u)"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Šīs vadīklas aptur vai atsāk visus aģentus, nevis vienu",
+    "loadFailed": "Neizdevās ielādēt aģentus",
+    "noLastActivity": "Aktivitāte nav ziņota",
+    "notReported": "Nav ziņots",
+    "pauseAll": "Apturēt visus aģentus",
+    "pauseFailed": "Neizdevās apturēt aģentus",
+    "resumeAll": "Atsākt visus aģentus",
+    "resumeFailed": "Neizdevās atsākt aģentus",
+    "successRate": "Veiksmes rādītājs",
+    "tasksCompleted": "Pabeigtie uzdevumi"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Ievadiet pilnu tīmekļa adresi, kas sākas ar http:// vai https://",
+    "recognitionUnsupported": "Šī pārlūkprogramma neatbalsta runas atpazīšanu",
+    "recognitionError": "Runas atpazīšanas kļūda: {error}",
+    "speakFailed": "Neizdevās izrunāt tekstu",
+    "playbackFailed": "Audio atskaņošana neizdevās",
+    "spoken": "Izrunāts:",
+    "speakToInteractWith": "Runājiet un klausieties priekšlasījumu",
+    "voiceId": "Balss ID"
   }
 }

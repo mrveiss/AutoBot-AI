@@ -23,9 +23,11 @@ def validated_approval_categories(values: Optional[List[str]], existing: Optiona
     """
     from autobot_shared.tool_catalogue import valid_approval_categories
 
+    from .company_os.errors import CompanyOsError
+
     vals = list(values or [])
     allowed = valid_approval_categories() | set(existing or [])
     unknown = [v for v in vals if v not in allowed]
     if unknown:
-        raise ValueError(f"unknown approval categories: {unknown} (valid: {sorted(valid_approval_categories())})")
+        raise CompanyOsError(f"unknown approval categories: {unknown} (valid: {sorted(valid_approval_categories())})")
     return vals

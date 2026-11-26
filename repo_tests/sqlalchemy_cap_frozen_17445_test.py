@@ -17,7 +17,7 @@ suites against 2.1.x first.
 | `autobot-backend/requirements.txt` | `/autobot-backend` | `<2.1` upper bound |
 | `autobot-slm-backend/requirements.txt` | `/autobot-slm-backend` | `<2.1` upper bound |
 | `autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt` | the ai-stack directory | `<2.1` upper bound |
-| `requirements-ci/storage.txt` | `/` | exact `==2.0.x` |
+| `requirements-ci/storage.txt` | `/` | `<2.1` upper bound, via its `-c` line (#21471) |
 
 **A comment did not hold it.** #17706 proposed `sqlalchemy>=2.1.0,<2.2` and left
 the explanatory paragraph in place directly above the line it contradicted. The
@@ -67,7 +67,7 @@ _ROWS = [
         "/autobot-infrastructure/shared/docker/ai-stack",
         "upper-bound",
     ),
-    ("requirements-ci/storage.txt", "/", "exact"),
+    ("requirements-ci/storage.txt", "/", "upper-bound"),
 ]
 _IDS = [row[0] for row in _ROWS]
 
@@ -269,7 +269,7 @@ _NO_ENTRY = {"updates": [{"package-ecosystem": "pip", "directory": "/x", "ignore
     [
         ("sqlalchemy>=2.0.54,<2.1\n", "upper-bound", False, True),  # real shape
         ("SQLAlchemy[asyncio]>=2.0.54,<2.1  # why\n", "upper-bound", False, True),
-        ("sqlalchemy==2.0.54\n", "exact", False, True),  # real shape (storage.txt)
+        ("sqlalchemy==2.0.54\n", "exact", False, True),  # storage.txt's shape before #21471
         ("sqlalchemy>=2.1.0,<2.2\n", "upper-bound", True, False),  # the #17706 bump
         ("sqlalchemy>=2.0.54\n", "upper-bound", True, False),  # cap deleted
         ("sqlalchemy==2.1.0\n", "exact", True, False),

@@ -105,6 +105,14 @@ export function useVirtualChatScroll(opts: UseVirtualChatScrollOptions) {
     }
   }
 
+  /** Scroll to the first message of the tool step *stepId* (#21976); false when none is in the list. */
+  const scrollToStep = (stepId: string): boolean => {
+    const index = filteredMessages.value.findIndex((m) => m.metadata?.step_id === stepId)
+    if (index < 0) return false
+    virtualizer.value.scrollToIndex(index, { align: 'center' })
+    return true
+  }
+
   // --- Mount: locate external scroll container ---
   if (getCurrentInstance()) {
     onMounted(() => {
@@ -151,6 +159,7 @@ export function useVirtualChatScroll(opts: UseVirtualChatScrollOptions) {
     totalSize,
     measureElement,
     scrollToBottom,
+    scrollToStep,
     isStuckToBottom,
   }
 }

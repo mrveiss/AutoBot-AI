@@ -20,7 +20,7 @@ applied separately at the time.
 |---|---|---|---|
 | **protobuf** | `>=5.29.6,<7.0.0` | `>=7.36.0,<8.0.0` | The consumers raised their own ceiling. See the rule below — the cap moved because `opentelemetry-proto` and `googleapis-common-protos` moved, not because protobuf was re-judged (#15070, #10678, #3973). |
 | **reportlab** | `>=4.0.0` | `>=5.0.1` | Raised past the 5.0 major; declared in both `autobot-backend/requirements.txt` and `requirements-ci/document.txt`, so the PDF-export paths are covered by CI rather than by the manual smoke test this row once asked for. |
-| **structlog** | `>=25.5.0` | `>=26.1.0` | CalVer bump taken; declared at `>=26.1.0` in `requirements-dev.txt`, `autobot-backend/requirements.txt` and the ai-stack/npu-worker images, pinned `==26.1.0` in `requirements-ci/monitoring.txt`. |
+| **structlog** | `>=25.5.0` | `>=26.1.0` | CalVer bump taken; declared at `>=26.1.0` in `requirements-dev.txt`, `autobot-backend/requirements.txt` and the ai-stack/npu-worker images, pinned `==26.1.0` in `requirements-ci/monitoring.txt` at the time. That file now lists it bare and takes the version from `constraints/shared.txt` through its `-c` line, like every constrained package in `requirements-ci/` (#21471). |
 
 ## The protobuf cap is a mirror, not a judgement
 

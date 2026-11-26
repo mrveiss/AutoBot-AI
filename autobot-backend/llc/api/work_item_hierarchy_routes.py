@@ -20,7 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llc.deps import assert_company_access, get_session
+from autobot_shared.security.redaction import safe_log_text
+from llc.deps import SESSION_DEP, assert_company_access
 from user_management.services import TenantContext
 
 from ..services.authz import NotAuthorisedError, require_company_admin_unless_platform
@@ -86,7 +87,7 @@ async def get_hierarchy_rules(
 @router.get("/hierarchy-violations", response_model=HierarchyViolationsResponse)
 async def get_hierarchy_violations(
     company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> HierarchyViolationsResponse:
@@ -96,7 +97,11 @@ async def get_hierarchy_violations(
             session, uuid.UUID(str(company_id)), ctx.user_id, platform_admin=ctx.is_platform_admin
         )
     except NotAuthorisedError as exc:
-        logger.warning("Refused hierarchy-violations report for company %s: %s", company_id, exc)
+        logger.warning(
+            "Refused hierarchy-violations report for company %s: %s",
+            company_id,
+            safe_log_text(repr(exc)),
+        )
         raise HTTPException(status_code=403, detail="Only a company owner or admin may read the violation report")
     rows, truncated = await find_hierarchy_violations(session, company_id)
     return HierarchyViolationsResponse(

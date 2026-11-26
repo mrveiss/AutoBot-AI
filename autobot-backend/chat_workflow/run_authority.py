@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, FrozenSet, Iterable
 
+from autobot_shared.ai_lines import declared_categories_of
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS
 from security.authority import TOP, Authority
 
@@ -25,8 +26,11 @@ def authority_of(ctx: Any) -> Authority:
 
     agent_context = getattr(ctx, "agent_context", None)
     agent_id = agent_context.agent_id if agent_context is not None else None
+    gates = getattr(ctx, "approval_gates_snapshot", None)  # #19957: what the run held before its dispatch cleared them
+    declared = getattr(ctx, "declared_snapshot", None)
     own = Authority(
-        approval_gates=frozenset(getattr(ctx, "requires_approval_before", None) or ()),
+        approval_gates=frozenset(gates if gates is not None else getattr(ctx, "requires_approval_before", None) or ())
+        | frozenset(declared if declared is not None else declared_categories_of(ctx)),
         forbidden_tools=resolve_forbidden_tools(agent_id),
     )
     inherited = getattr(ctx, "authority", None)
@@ -40,6 +44,7 @@ class Inheritance:
     authority: Authority = TOP
     work_item_id: str | None = None
     approve_every_call: bool = False  # #20195: the parent's turn carries attached files; every child call asks
+    declared_categories: tuple[str, ...] | None = None  # #19957: what the parent declared, apart from the baseline
 
     @classmethod
     def of(cls, parent_ctx: Any) -> Inheritance:
@@ -50,6 +55,11 @@ class Inheritance:
             authority=authority_of(parent_ctx),
             work_item_id=getattr(parent_ctx, "work_item_id", None),
             approve_every_call=bool(getattr(parent_ctx, "approve_every_call", False)),
+            declared_categories=(
+                snapshot
+                if (snapshot := getattr(parent_ctx, "declared_snapshot", None)) is not None
+                else declared_categories_of(parent_ctx)
+            ),
         )
 
 

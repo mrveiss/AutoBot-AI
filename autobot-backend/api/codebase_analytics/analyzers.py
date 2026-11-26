@@ -1609,7 +1609,7 @@ async def _run_analysis_phases(file_path: str, content: str, tree: ast.AST, use_
         "classes": classes,
         "imports": imports,
         "hardcodes": hardcodes,
-        "problems": dedupe_same_location_problems(problems),  # #20493
+        "problems": dedupe_same_location_problems(problems, within_file=True),  # #20493
         "technical_debt": technical_debt,
         **line_counts,
     }

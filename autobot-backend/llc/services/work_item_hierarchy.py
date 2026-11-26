@@ -20,6 +20,7 @@ from sqlalchemy.orm import aliased
 
 from autobot_shared.env_utils import env_int_clamped
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import WorkItemType
 from ..models.sprint import LLCProject
 from ..models.work_item import LLCWorkItem
@@ -64,7 +65,7 @@ SUBTREE_UPDATE_BATCH = 10_000
 ItemGetter = Callable[..., Awaitable[Optional[LLCWorkItem]]]
 
 
-class HierarchyViolation(ValueError):
+class HierarchyViolation(PublicMessageMixin, ValueError):
     """A write would break the hierarchy rules. A ``ValueError`` like the sibling validation."""
 
 

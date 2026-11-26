@@ -241,24 +241,24 @@ const triggerFileUpload = () => {
 
 const { execute: uploadFiles, loading: _isUploadingFiles } = useAsyncHandler(
   async (fileList: FileList) => {
-    await composableUploadFiles(fileList, currentPath.value)
+    const outcome = await composableUploadFiles(fileList, currentPath.value)
     await refreshFiles()
+    // #22015: each refused file is named with the server's reason, never a bare status.
+    const reasons = outcome
+      ? outcome.failed.map(f => `${f.name}: ${f.reason}`).join('; ')
+      : t('fileBrowser.browser.uploadFailedHint')
+    if (reasons) showToast(t('fileBrowser.browser.uploadFailed', { error: reasons }), 'error')
 
-    // Issue #608: Log file upload activity
-    if (props.chatContext) {
-      const fileNames = Array.from(fileList).map(f => f.name).join(', ')
-      const totalSize = Array.from(fileList).reduce((sum, f) => sum + f.size, 0)
+    // Issue #608: Log the files that were stored
+    if (props.chatContext && outcome?.uploaded.length) {
+      const stored = Array.from(fileList).filter(f => outcome.uploaded.includes(f.name))
       logFileActivity('upload', currentPath.value, {
-        fileNames,
-        fileCount: fileList.length,
-        totalSize
+        fileNames: outcome.uploaded.join(', '), fileCount: stored.length,
+        totalSize: stored.reduce((sum, f) => sum + f.size, 0)
       })
     }
   },
   {
-    onError: () => {
-      showToast(t('fileBrowser.browser.uploadFailed', { error: t('fileBrowser.browser.uploadFailedHint') }), 'error')
-    },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
   }

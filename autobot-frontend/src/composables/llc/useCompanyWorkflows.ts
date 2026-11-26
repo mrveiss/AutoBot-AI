@@ -15,6 +15,7 @@
  * response for a company no longer shown is discarded.
  */
 import { computed, ref, watch } from 'vue'
+import { isHttpError } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
 import type { components } from '@/types/generated/api'
 import { planRequest } from '@/composables/llc/workflowPlanRequest'
@@ -50,12 +51,11 @@ export class WorkflowWriteError extends Error {
   }
 }
 
-/** ApiClient errors read `HTTP <status>: <detail>`; some callers attach `status`. */
+/** The kit client throws `HttpError` carrying `status`; some callers attach a numeric `status` to a plain error. Never the message text. */
 function statusOf(err: unknown): number | undefined {
-  const direct = (err as { status?: number })?.status
-  if (typeof direct === 'number') return direct
-  const hit = err instanceof Error ? /^HTTP (\d{3})/.exec(err.message) : null
-  return hit ? Number(hit[1]) : undefined
+  if (isHttpError(err)) return err.status
+  const direct = (err as { status?: number } | null)?.status
+  return typeof direct === 'number' ? direct : undefined
 }
 
 export interface CompanyWorkflowsOptions {

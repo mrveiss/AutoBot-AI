@@ -104,9 +104,7 @@ ALLOWLIST: dict[str, str] = {
     "autobot-backend/services/fact_extraction_service.py::FactExtractionService._filter_and_deserialize_fact::is_active::READ": _INVALIDATION_FLAG,
     "autobot-backend/services/json_secrets_read.py::_find_by_marker::is_active::READ": _CREDENTIAL,
     "autobot-backend/services/llc_secrets_read.py::_find_by_marker::is_active::READ": _CREDENTIAL,
-    "autobot-backend/services/provider_key_vault.py::_find_system_secret_id::is_active::READ": _CREDENTIAL,
     "autobot-backend/services/secrets_access_audit.py::_inactive_users::is_active::READ": _CREDENTIAL,
-    "autobot-backend/services/secrets_coordinator.py::SecretsCoordinator._bearer_matches::is_active::READ": _CREDENTIAL,
     "autobot-backend/services/secrets_principal_resolver.py::resolve_principal_facts::is_active::READ": _CREDENTIAL,
     "autobot-backend/services/temporal_invalidation_service.py::InvalidationRule.matches_fact::valid_from::READ": _TEMPORAL,
     "autobot-backend/services/temporal_invalidation_service.py::TemporalInvalidationService._build_sample_facts_list::valid_from::READ": _TEMPORAL,
@@ -120,4 +118,4 @@ ALLOWLIST: dict[str, str] = {
     "autobot_shared/user_management/user_service.py::UserService._build_user_list_base_query::is_active::READ": _ACCOUNT,
 }
 
-FROZEN_TOTAL = 76
+FROZEN_TOTAL = 74

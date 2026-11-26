@@ -41,6 +41,7 @@ from autobot_shared.redis_client import get_redis_client
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.agent_terminal import AgentTerminalService
 from services.agent_terminal.conversation_owner import ConversationNotOwnedError
+from services.agent_terminal.decision_session import already_decided
 from services.agent_terminal.redis_usability import usable_redis
 
 logger = get_logger(__name__)
@@ -179,8 +180,10 @@ async def approve_over_websocket(data: Mapping[str, Any], user: Mapping[str, Any
     require_interactive_human(user, f"agent terminal decision on session {session_id}")
     service = get_agent_terminal_service(redis_client=get_redis_client())
     await require_session_access(service, session_id, user)
-    return await service.approve_command(
+    result = await service.approve_command(
         session_id=session_id,
         approved=data.get("approved", False),
         user_id=verified_actor(user, data.get("user_id")),
     )
+    # #19951: the route answers an already-decided approval with HTTP 409; a socket has no status, so it carries it.
+    return {**result, "status_code": 409} if already_decided(result) else result

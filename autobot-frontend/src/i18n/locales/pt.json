@@ -577,6 +577,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "Exigir login para visualizar",
       "requireLoginHint": "Apenas usuários autenticados podem abrir este link",
@@ -792,8 +799,10 @@
       "unsupported": "\"{filename}\" não é um arquivo de texto que o assistente consiga ler, por isso não foi usado.",
       "unreadable": "Não foi possível ler \"{filename}\", por isso ele não foi usado.",
       "empty": "\"{filename}\" não tem texto legível, por isso não foi usado.",
-      "truncated": "\"{filename}\" é longo, por isso apenas o início foi usado.",
-      "over_budget": "Os arquivos anexados atingiram o limite de tamanho, por isso \"{filename}\" não foi usado."
+      "truncated": "\"{filename}\" é longo, por isso apenas os primeiros {used} de {total} caracteres foram usados.",
+      "truncated_legacy": "\"{filename}\" é longo, por isso apenas o início foi usado.",
+      "over_budget": "Os arquivos anexados atingiram o limite de tamanho, por isso \"{filename}\" não foi usado.",
+      "over_window": "A conversa é maior que a janela do modelo, por isso parte do texto anterior pode não chegar a ele."
     }
   },
   "settings": {
@@ -1114,7 +1123,6 @@
       "quality": {
         "title": "Qualidade do código",
         "overallScore": "Pontuação geral",
-        "testCoverage": "Cobertura de teste",
         "codeDuplicates": "Duplicatas de código",
         "technicalDebt": "Dívida Técnica",
         "noMetrics": "Nenhuma métrica de qualidade de código disponível."
@@ -2313,7 +2321,6 @@
       "noCommunicationData": "No communication data available",
       "codeQuality": "Code Quality",
       "overallScore": "Overall Score",
-      "testCoverage": "Test Coverage",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
       "noQualityMetrics": "No quality metrics available",
@@ -2388,6 +2395,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "Falha ao carregar os dados de evolução",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -4546,6 +4554,9 @@
       "stepApproved": "Etapa aprovada",
       "stepSkipped": "Etapa ignorada",
       "rerunNotFound": "Não foi possível encontrar o fluxo de trabalho para executar novamente",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "Executando novamente \"{name}\"",
       "rerunFailed": "Falha ao executar o fluxo de trabalho novamente",
       "notificationsSaved": "Configurações de notificação salvas"
@@ -5804,7 +5815,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Nome de usuário ausente: defina-o em Segredos",
+      "desktopVm": "VM de área de trabalho do AutoBot",
+      "desktopVmDesc": "A área de trabalho própria do AutoBot",
+      "noDesktopVm": "Nenhuma VM de área de trabalho está registrada, então só os seus hosts de Segredos são listados."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6007,6 +6022,7 @@
       "cleanupConfirm": "Delete Old Logs",
       "cancel": "Cancel",
       "deleteOldLogs": "Delete Old Logs",
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data"
     },
     "browserAutomation": {
@@ -6489,16 +6505,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "noParticipants": "No participants",
-      "participants": "Participants",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "Colaboração",
       "invite": "Convidar",
@@ -6858,7 +6864,11 @@
         "slackDesc": "Token do bot do Slack",
         "serverLabel": "Host do servidor",
         "serverDesc": "Acesso a servidor SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (credencial VNC)",
+      "vncCompanionDescription": "Credencial VNC para {host}",
+      "vncCompanionNoHostId": "O host foi salvo, mas seu id não foi retornado, então a credencial VNC não foi armazenada.",
+      "vncRetry": "O host foi salvo, mas a senha VNC não. Salve novamente para tentar de novo; o host não será criado duas vezes."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -6957,6 +6967,7 @@
       "subtitle": "Discover and interact with UI elements on the current screen",
       "refresh": "Refresh",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "verifying": "Verifying...",
       "execute": "Execute",
       "details": "Details",
@@ -7369,7 +7380,8 @@
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
       "toggleViewAriaLabel": "Toggle view mode",
-      "uploadFailedHint": "Verifique os limites de tamanho de arquivo e os requisitos de formato"
+      "uploadFailedHint": "Verifique os limites de tamanho de arquivo e os requisitos de formato",
+      "uploadAlreadyExists": "A file with this name already exists"
     },
     "header": {
       "title": "File Browser",
@@ -7751,7 +7763,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Selecione um host com VNC para usar a área de trabalho.",
+      "vncCredentialMissing": "Nenhuma senha VNC está armazenada para este host. Adicione-a em Segredos.",
+      "hostNotFound": "Este host não é um dos seus hosts de Segredos.",
+      "hostFieldsMissing": "Este host não tem nome de usuário ou capacidades. Defina-os em Segredos.",
+      "hostVncUnavailable": "Este host não tem capacidade VNC nem porta em Segredos.",
+      "desktopVmUnavailable": "Nenhuma área de trabalho VNC está registrada, então a VM de área de trabalho não está disponível.",
+      "registryUnavailable": "Não foi possível ler o registro de áreas de trabalho. Tente novamente em breve."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -8573,7 +8592,6 @@
       "attachRoleLabel": "Função",
       "attachRolePlaceholder": "Escolher uma função…",
       "attachWorkflowLabel": "ID do fluxo",
-      "attachWorkflowPlaceholder": "ID do fluxo",
       "attachError": "Não foi possível anexar esse fluxo.",
       "detachError": "Não foi possível remover esse fluxo.",
       "processDetach": "Remover {workflow} de {role}",
@@ -9815,7 +9833,6 @@
     "endTenure": "Terminar atribuição",
     "holderIdPlaceholder": "ID do titular",
     "permissionPlaceholder": "ex. knowledge.read",
-    "workflowPlaceholder": "ID do fluxo",
     "toolPlaceholder": "Nome da ferramenta",
     "credentialPlaceholder": "ID do segredo",
     "errorAssign": "Não foi possível atribuir esse titular.",
@@ -10014,5 +10031,40 @@
     "invalid_generic": "Este agendamento não é válido.",
     "conflicting_fields": "Um agendamento é salvo como cron ou como regra de calendário ou execução única, nunca ambos.",
     "gatedNote": "O último dia, o dia da semana do mês, os dias 29 a 31 e as execuções únicas ficam disponíveis quando o agendador for atualizado."
+  },
+  "driftPrune": {
+    "batch": "Lote de {count} de {total} arquivo(s); confirme para remover este lote, o próximo será exibido em seguida",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar a remoção de {count} arquivo(s)",
+    "intro": "O Git comprova que estes arquivos foram excluídos da origem e ainda estão implantados. Somente estes arquivos são removidos. O estado do host, os pacotes de build e os arquivos modificados nunca são tocados.",
+    "nothingToRemove": "Nada a remover: nenhum arquivo implantado continua confirmado como excluído da origem. Execute a verificação de divergências novamente.",
+    "previewAction": "Visualizar remoção",
+    "previewing": "Carregando visualização…",
+    "removing": "Removendo…",
+    "requestFailed": "Falha na solicitação de limpeza de divergências",
+    "result": "{removed} arquivo(s) removido(s); {left} mantido(s) no lugar",
+    "title": "{count} arquivo(s) seriam removidos de {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Estes controles pausam ou retomam todos os agentes, não apenas um",
+    "loadFailed": "Falha ao carregar os agentes",
+    "noLastActivity": "Nenhuma atividade informada",
+    "notReported": "Não informado",
+    "pauseAll": "Pausar todos os agentes",
+    "pauseFailed": "Falha ao pausar os agentes",
+    "resumeAll": "Retomar todos os agentes",
+    "resumeFailed": "Falha ao retomar os agentes",
+    "successRate": "Taxa de sucesso",
+    "tasksCompleted": "Tarefas concluídas"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Introduza um endereço web completo que comece por http:// ou https://",
+    "recognitionUnsupported": "O reconhecimento de voz não é suportado neste navegador",
+    "recognitionError": "Erro de reconhecimento de voz: {error}",
+    "speakFailed": "Não foi possível falar o texto",
+    "playbackFailed": "Falha na reprodução de áudio",
+    "spoken": "Falado:",
+    "speakToInteractWith": "Fale e ouça a leitura em voz alta",
+    "voiceId": "ID da voz"
   }
 }

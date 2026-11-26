@@ -10,10 +10,11 @@ Keys are ``<kind>:<identifier>``:
 ``route:<file>:<METHOD> <path>``     a route decorator no frontend, client or declared prefix reaches
 ``queue:<file>:<key>``               a Redis list/stream pushed and never read
 ``table:<name>``                     a SQL table defined and never read or written
+``frontend:<file>``                  a frontend source file nothing imports and no ``import.meta.glob`` reaches
 ``declared:<symbol>=<files>``        a symbol whose ONLY production references (outside the file(s)
                                      defining it) are the listed files -- see :func:`declared_state`
 
-The first four are detected. ``declared`` is a hand-recorded entry for a case no detector can
+The first five are detected. ``declared`` is a hand-recorded entry for a case no detector can
 see (a function whose only caller is itself unused, a service whose only reader is an admin list
 route). It stays true only while its stated reference set is exactly the live one, so wiring the
 symbol in anywhere new turns the entry stale and the gate asks for it to be removed.
@@ -24,6 +25,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from repo_tests import _unconnected_frontend as frontend
 from repo_tests import _unconnected_modules as modules
 from repo_tests import _unconnected_routes as routes
 from repo_tests import _unconnected_stores as stores
@@ -32,7 +34,7 @@ from repo_tests._unconnected_common import Tree
 from tools.lint._comment_syntax import code_lines
 
 BASELINE_REL = "repo_tests/unconnected_code_baseline.txt"
-KINDS = ("module", "route", "queue", "table", "declared")
+KINDS = ("module", "route", "queue", "table", "frontend", "declared")
 
 
 def detected(tree: Tree, audit: "routes.Audit") -> set[str]:
@@ -41,6 +43,7 @@ def detected(tree: Tree, audit: "routes.Audit") -> set[str]:
     found.update(f"route:{key}" for key in routes.unconnected(tree, audit))
     found.update(f"queue:{key}" for key in stores.unread_queues(tree))
     found.update(f"table:{name}" for name in stores.unread_tables(tree))
+    found.update(f"frontend:{rel}" for rel in frontend.unconnected(tree))
     return found
 
 

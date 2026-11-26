@@ -115,7 +115,8 @@ export const llcCompanyChildren: RouteRecordRaw[] = [
     // #16901: no longer hidden — it has a Company OS sidebar entry now.
     // keepOnCompanySwitch (#21502): route.meta is the merge of every matched record, so this one
     // flag on the parent covers the children. The builder holds an unsaved draft in component state;
-    // a remount on a sidebar company switch would discard it. Its switch behaviour is tracked in #21520.
+    // a remount on a sidebar company switch would discard it. On a switch it reloads in place, drops the draft with a notice and
+    // refuses Save/Start while the sidebar and route companies disagree (decided and implemented in #21520).
     meta: { title: 'Workflow Automation', requiresAuth: true, keepOnCompanySwitch: true },
     children: [
       {

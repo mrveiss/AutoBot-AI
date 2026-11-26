@@ -50,23 +50,23 @@ describe('BrowserTool status indicator', () => {
       browser_vm: { url: 'http://browser.invalid:1', status: 'healthy' },
       security: { fleet_membership_source: 'slm_node_registry' },
     })
-    expect(indicatorClasses(wrapper)).toContain('bg-green-500')
+    expect(indicatorClasses(wrapper)).toContain('bg-autobot-dot-ok')
     expect(wrapper.text()).toContain(en.tools.admin.browserTool.status.connected)
   })
 
   it('distinguishes degraded from unavailable', async () => {
     const degraded = await mountWithStatus({ browser_vm: { status: 'degraded' } })
-    expect(indicatorClasses(degraded)).toContain('bg-amber-500')
+    expect(indicatorClasses(degraded)).toContain('bg-autobot-dot-warn')
 
     const down = await mountWithStatus({ browser_vm: { status: 'unavailable' } })
-    expect(indicatorClasses(down)).toContain('bg-red-500')
+    expect(indicatorClasses(down)).toContain('bg-autobot-dot-bad')
   })
 
   it('does not read connected from the top-level field the route never sends', async () => {
     // Exactly the body the old client believed in. If the component reverts to
     // `data.status`, this goes green and this test fails.
     const wrapper = await mountWithStatus({ status: 'connected' })
-    expect(indicatorClasses(wrapper)).not.toContain('bg-green-500')
+    expect(indicatorClasses(wrapper)).not.toContain('bg-autobot-dot-ok')
     expect(wrapper.text()).toContain(en.tools.admin.browserTool.status.unknown)
   })
 
@@ -75,7 +75,7 @@ describe('BrowserTool status indicator', () => {
     // or a renamed field would be indistinguishable from a dead VM.
     const wrapper = await mountWithStatus({ success: true, browser_vm: {} })
     expect(wrapper.text()).toContain(en.tools.admin.browserTool.status.unknown)
-    expect(indicatorClasses(wrapper)).toContain('bg-gray-400')
+    expect(indicatorClasses(wrapper)).toContain('bg-autobot-dot-idle')
   })
 
   it('flags a degraded fleet source so a stale exception set is never silent', async () => {
@@ -99,10 +99,77 @@ describe('BrowserTool status indicator', () => {
 
     const detail = "Refused: '10.0.0.5' resolves to a non-public address and is neither a loopback host nor a node the fleet registry knows."
     backendClient.post.mockRejectedValue(new HttpError(400, 'Bad Request', { detail }))
+    await wrapper.get('input[type="text"]').setValue('https://example.test/')
     await wrapper.get('button').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain(detail)
     expect(wrapper.text()).not.toContain('whitelist')
+  })
+})
+
+/** The address bar and the first button (Start, until connected) of a mounted tool. */
+async function startWith(address: string) {
+  const wrapper = await mountWithStatus({ browser_vm: { status: 'unavailable' } })
+  backendClient.post.mockReset()
+  backendClient.post.mockResolvedValue({})
+  await wrapper.get('input[type="text"]').setValue(address)
+  await wrapper.findAll('button').find((b) => b.text() === en.tools.admin.browserTool.startBrowser)!.trigger('click')
+  await flushPromises()
+  return wrapper
+}
+
+function postedPaths(): string[] {
+  return backendClient.post.mock.calls.map((call) => call[0] as string)
+}
+
+describe('BrowserTool Start needs a real http(s) URL (#22142)', () => {
+  beforeEach(() => {
+    backendClient.get.mockReset()
+    backendClient.post.mockReset()
+  })
+
+  it('cannot submit the empty default: Start is disabled and nothing is posted', async () => {
+    const wrapper = await mountWithStatus({ browser_vm: { status: 'unavailable' } })
+    const start = wrapper.findAll('button').find((b) => b.text() === en.tools.admin.browserTool.startBrowser)!
+    expect(start.attributes('disabled')).toBeDefined()
+    await start.trigger('click')
+    expect(backendClient.post).not.toHaveBeenCalled()
+  })
+
+  it.each(['/', 'javascript:history.back()', 'ftp://host.test/x', 'not a url'])(
+    'refuses %j with the localised message and no request',
+    async (address) => {
+      const wrapper = await startWith(address)
+      expect(backendClient.post).not.toHaveBeenCalled()
+      expect(wrapper.text()).toContain(en.tools.admin.browserTool.invalidUrl)
+    },
+  )
+
+  it('posts a valid https URL to navigate', async () => {
+    await startWith('https://example.test/page')
+    expect(backendClient.post).toHaveBeenCalledWith('/browser/mcp/navigate', { url: 'https://example.test/page' })
+  })
+})
+
+describe('BrowserTool history buttons use real history routes (#22142)', () => {
+  beforeEach(() => {
+    backendClient.get.mockReset()
+    backendClient.post.mockReset()
+  })
+
+  it.each([
+    ['back', '/playwright/back'],
+    ['forward', '/playwright/forward'],
+    ['refresh', '/playwright/reload'],
+  ])('%s posts %s and never a javascript: URL', async (label, route) => {
+    const wrapper = await startWith('https://example.test/')
+    backendClient.post.mockClear()
+    const title = en.tools.admin.browserTool[label as 'back' | 'forward' | 'refresh']
+    await wrapper.get(`button[title="${title}"]`).trigger('click')
+    await flushPromises()
+    expect(postedPaths()[0]).toBe(route)
+    expect(JSON.stringify(backendClient.post.mock.calls)).not.toContain('javascript:')
+    expect(postedPaths()).not.toContain('/browser/mcp/navigate')
   })
 })

@@ -40,19 +40,14 @@ from api.user_management.dependencies import (
     get_current_user,
     require_org_context,
 )
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.api.company_member_schemas import CompanyMembersResponse
-from llc.deps import assert_company_access, get_session, logged_server_error, service_dep
+from llc.deps import SESSION_DEP, assert_company_access, log_unexpected, logged_server_error, service_dep
 from llc.kb.collections import KbCollectionManager, company_id_of
-from llc.models.company import (
-    CompanyAncestor,
-    CompanyCreate,
-    CompanyRead,
-    CompanyTreeNode,
-    CompanyUpdate,
-)
+from llc.models.company import CompanyAncestor, CompanyCreate, CompanyRead, CompanyTreeNode, CompanyUpdate
 from llc.models.enums import (
     AssigneeType,
     ExternalPMType,
@@ -75,13 +70,10 @@ from llc.services.company import (
 )
 from llc.services.company_move_lock import CompanyMoveContendedError
 from llc.services.member_standing import member_people, person_is_active, viewer_standing
-from llc.services.membership_service import (
-    MembershipService,
-)
+from llc.services.membership_service import MembershipService
 from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
 from llc.services.org_chart_rows import assigned_counts_by_agent, latest_runs_by_agent
 from llc.services.portability import PortabilityService
-from user_management.database import get_async_session
 from user_management.models.organization import Organization
 from user_management.services import TenantContext
 
@@ -128,7 +120,7 @@ def _to_read(org: Organization) -> CompanyRead:
     return CompanyRead.model_validate(org)
 
 
-def _get_service(session: AsyncSession = Depends(get_async_session)) -> CompanyService:
+def _get_service(session: AsyncSession = SESSION_DEP) -> CompanyService:
     return CompanyService(session=session)
 
 
@@ -222,13 +214,13 @@ async def create_company(
         return await _create_and_commit(svc, membership_svc, body, user_id)
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
     except (CompanyBudgetError, CompanyCycleError):
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY)
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except Exception:
         await svc.session.rollback()
         raise
@@ -248,7 +240,7 @@ async def get_company(
         org = await svc.get(company_id)
         return _to_read(org)
     except CompanyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
 
 
 @router.patch("/{company_id}", response_model=CompanyRead)
@@ -270,16 +262,16 @@ async def update_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
     except CompanyMoveContendedError:  # lost a lock race, nothing changed (#19593)
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Concurrent move in progress; try again")
     except (CompanyBudgetError, CompanyCycleError):
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY)
     except NotAuthorisedError as exc:  # fixed public text only; the ids/roles are logged by the service (#19634)
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.public_detail)
@@ -298,7 +290,7 @@ async def delete_company(
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
-        await svc.delete(company_id)
+        await svc.delete(company_id, actor_user_id=_current_user_id(_current_user))
         await svc.session.commit()
         # #13920: drop the three collections a company's writes can make
         # (base, agents, decisions). Derived from the same constants
@@ -308,10 +300,10 @@ async def delete_company(
             await _kb_manager.drop_collection(KbCollectionManager.COMPANY_PREFIX, company_id, suffix)
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except CompanyHasChildrenError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
     except Exception:
         await svc.session.rollback()
         raise
@@ -347,10 +339,10 @@ async def activate_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.activate_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -377,10 +369,10 @@ async def suspend_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.suspend_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -408,10 +400,10 @@ async def offboard_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.offboard_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -437,10 +429,10 @@ async def archive_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.archive_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -458,7 +450,7 @@ async def get_company_tree(
     try:
         return await svc.get_sub_company_tree(company_id)
     except CompanyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
 
 
 @router.get("/{company_id}/ancestry", response_model=List[CompanyAncestor])
@@ -482,7 +474,7 @@ async def get_company_ancestry(
             for a in ancestors
         ]
     except CompanyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
 
 
 # ------------------------------------------------------------------
@@ -501,7 +493,7 @@ class KbAncestryCollection(BaseModel):
 @router.get("/{company_id}/kb/ancestry-collections", response_model=List[KbAncestryCollection])
 async def get_kb_ancestry_collections(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[KbAncestryCollection]:
@@ -520,7 +512,7 @@ async def get_kb_ancestry_collections(
     try:
         chain = await resolver.get_query_collections(session, str(company_id))
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
 
     return [
         KbAncestryCollection(
@@ -542,7 +534,7 @@ async def get_kb_ancestry_collections(
 @router.get("/{company_id}/members", response_model=CompanyMembersResponse)
 async def list_members(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -585,7 +577,7 @@ class PMConfigRead(BaseModel):
 async def set_pm_config(
     company_id: uuid.UUID,
     body: PMConfigSetRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> PMConfigRead:
@@ -613,7 +605,7 @@ async def set_pm_config(
 @router.post("/{company_id}/pm-config/test")
 async def test_pm_config(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -644,7 +636,7 @@ async def test_pm_config(
         health = await _test_pm_connectivity(pm_type, pm_config)
     except Exception as exc:
         # #17300: str(exc) to the caller leaked the decrypted pm_config URL and its credentials.
-        logger.warning("PM connectivity test failed for %s: %s", pm_type, exc, exc_info=True)
+        log_unexpected(logger, f"companies.test_pm_config {pm_type}", exc)
         return {"ok": False, "error": "Connectivity test failed; see server logs"}
     return {"ok": health.get("ok", False), "details": health}
 
@@ -734,7 +726,7 @@ class BacklogReorderResponse(BaseModel):
 async def reorder_backlog(
     company_id: uuid.UUID,
     body: BacklogReorderRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> BacklogReorderResponse:
@@ -1019,7 +1011,7 @@ def _compose_agent_node(
 @router.get("/{company_id}/org-chart", response_model=OrgChartResponse)
 async def get_org_chart(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> OrgChartResponse:
@@ -1209,7 +1201,7 @@ def _executor_class_case(work_item_model):
 @router.get("/{company_id}/work-items/executor-rollup", response_model=ExecutorRollupResponse)
 async def get_work_item_executor_rollup(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ExecutorRollupResponse:
@@ -1316,7 +1308,7 @@ class ProcessNodesResponse(BaseModel):
 @router.get("/{company_id}/process-nodes", response_model=ProcessNodesResponse)
 async def get_process_nodes(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ProcessNodesResponse:
@@ -1384,7 +1376,7 @@ class ToolNodesResponse(BaseModel):
 @router.get("/{company_id}/tool-nodes", response_model=ToolNodesResponse)
 async def get_tool_nodes(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ToolNodesResponse:
@@ -1425,7 +1417,7 @@ async def get_tool_nodes(
 @router.get("/{company_id}/teams", response_model=CompanyTeamsResponse)
 async def get_company_teams(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyTeamsResponse:
@@ -1550,7 +1542,7 @@ async def search_agents(
 
 
 # Export endpoints (GH#8245)
-def _get_portability_service(session: AsyncSession = Depends(get_async_session)) -> PortabilityService:
+def _get_portability_service(session: AsyncSession = SESSION_DEP) -> PortabilityService:
     return PortabilityService(session=session)
 
 

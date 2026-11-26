@@ -19,9 +19,13 @@ What was merged in, all opt-in so the default run is byte-identical to before:
 * ``--cache`` (skip files unchanged since the last ``--apply``; ``--force`` ignores it)
   and ``--stats`` for the byte-level report.
 
-#14546: this tool rewrites hand-written files under ``.claude/agents/`` and,
-before #14517 fixed its project-root resolution, could never actually reach
-them (see below). Once it became reachable, it still wrote in place with no
+The agent directory is the host's Claude Code user-level agents directory
+(``claude_agents_dir()``: ``AUTOBOT_CLAUDE_CONFIG_DIR``, then
+``CLAUDE_CONFIG_DIR``, then ``~/.claude``), never a path inside the source
+tree; ``--agent-dir`` overrides it. Git backup tags live in that directory's own
+repository, so ``--git-backup`` needs it to be inside a git work tree.
+
+#14546: this tool rewrites hand-written agent files in place with no
 preview and no opt-out, so the safe default here is a **dry run**: the tool
 reports, per file, exactly what it would change and writes nothing unless the
 operator passes ``--apply``. A tool that can destroy hand-written content
@@ -39,10 +43,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from autobot_shared.claude_config import backup_repo_problem, claude_agents_dir
 from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.generated_file_output import write_atomically
 from autobot_shared.logging_manager import get_logger, setup_logging
-from autobot_shared.paths import project_root, scrubbed_git_env
+from autobot_shared.paths import scrubbed_git_env
 
 logger = get_logger(__name__)
 
@@ -478,7 +483,7 @@ def list_backup_tags(root: Path) -> int:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the CLI parser. Dry-run is the default; --apply opts into writing."""
-    parser = argparse.ArgumentParser(description="Optimize .claude/agents/*.md files (safe by default: dry-run).")
+    parser = argparse.ArgumentParser(description="Optimize the host's Claude Code agent *.md files (safe by default: dry-run).")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--dry-run",
@@ -500,11 +505,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cache", action="store_true", help="Skip files unchanged since the last --apply run.")
     parser.add_argument("--force", action="store_true", help="With --cache: reprocess even cached files.")
     parser.add_argument("--stats", action="store_true", help="Print detailed byte-level statistics.")
+    parser.add_argument("--allow-enclosing-repo", action="store_true", help="With --git-backup: allow an unrelated enclosing repo.")
     parser.add_argument("--git-backup", action="store_true", help="With --apply: tag before writing, commit after.")
     parser.add_argument("--restore", nargs="?", const="", metavar="TAG", help="Restore from a backup tag (latest).")
     parser.add_argument("--list-backups", action="store_true", help="List the backup tags.")
     parser.add_argument(
-        "--agent-dir", type=Path, default=Path(".claude/agents"), help="Agent dir under the project root."
+        "--agent-dir", type=Path, default=None, help="Agent dir (default: the configured Claude Code agents dir).",
     )
     return parser
 
@@ -526,7 +532,12 @@ def _run(args: argparse.Namespace, root: Path, agents_dir: Path, agent_files: li
     cache_file = agents_dir / _CACHE_FILENAME
     cache = load_cache(cache_file, options) if args.cache else None
     mode_label = "APPLY (files will be rewritten)" if apply_changes else "DRY RUN (default; pass --apply to write)"
-    print(f"\nOptimizing {len(agent_files)} agent configuration file(s) - mode: {mode_label}\n")
+    print(f"\nOptimizing {len(agent_files)} agent configuration file(s) in {agents_dir} - mode: {mode_label}\n")
+    if apply_changes and args.git_backup:
+        problem = backup_repo_problem(agents_dir, args.allow_enclosing_repo)
+        if problem:
+            logger.error("Refusing to apply: %s", problem)
+            return 1  # nothing written yet
 
     try:
         backup_tag = create_backup_tag(root, agents_dir) if apply_changes and args.git_backup else None
@@ -563,11 +574,9 @@ def _commit_or_report(root: Path, agents_dir: Path, summary: dict[str, int], bac
 def main() -> int:
     """Main optimization routine."""
     args = build_arg_parser().parse_args()
-    # #14517: project_root() resolves the checkout/deployment root regardless of the
-    # caller's current directory (a shell placeholder in a plain string used to make
-    # the exists() check always fail, #13149).
-    root = project_root()
-    agents_dir = root / args.agent_dir
+    agents_dir = (args.agent_dir or claude_agents_dir()).expanduser().resolve()
+    # Git backups act on the agents dir's own repository, not the AutoBot checkout.
+    root = agents_dir if agents_dir.is_dir() else agents_dir.parent
 
     if args.list_backups:
         return list_backup_tags(root)

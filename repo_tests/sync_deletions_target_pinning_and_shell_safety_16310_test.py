@@ -66,6 +66,7 @@ from __future__ import annotations
 import re
 
 import pytest
+import yaml
 from repo_tests.sync_deletions_ansible_wiring_16310_test import (
     _ANSIBLE_ROOT,
     _SHARED_TASK_FILE,
@@ -397,27 +398,61 @@ def test_planted_regression_a_fatal_cleanup_task_is_caught() -> None:
 # the truthy STRING "False") is filtered through `| bool`.
 # --------------------------------------------------------------------------
 
-_BOOTSTRAP_FACT_ASSIGNMENT = re.compile(r"^\s*_sd_need_bootstrap:\s*>-\s*$")
 _BOOTSTRAP_FACT_USE = re.compile(r"_sd_need_bootstrap(?!\w)(\s*\|\s*bool)?")
 
 
+def _string_values(node: object):
+    """Every string VALUE in a loaded YAML document; mapping keys are not values.
+
+    Ansible renders values, so the question "is the fact used unfiltered" is a
+    question about values. Reading the parsed document answers it with the
+    processor's own idea of a comment (#17941): a `#` line is gone because
+    YAML dropped it, and a `#` line inside a `>-` block is kept because YAML
+    treats it as content that Jinja will render. A text skip of every line
+    starting with a hash got the second case wrong in the permissive direction.
+    """
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for value in node.values():
+            yield from _string_values(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _string_values(item)
+
+
+def _bootstrap_fact_uses(text: str) -> list[bool]:
+    """One entry per reference to `_sd_need_bootstrap` in a rendered value: True when filtered through `| bool`.
+
+    The assignment target is a mapping key, so it is never a value. Raises when the YAML loads to nothing, so a
+    moved or emptied target fails rather than reading as "no offenders".
+    """
+    loaded = yaml.safe_load(text)
+    assert loaded, "the target YAML loaded to an empty value -- the file moved or was emptied"
+    return [
+        match.group(1) is not None
+        for value in _string_values(loaded)
+        for line in value.splitlines()
+        for match in _BOOTSTRAP_FACT_USE.finditer(line)
+    ]
+
+
 def _unfiltered_bootstrap_fact_lines(text: str) -> list[str]:
-    """Lines that reference `_sd_need_bootstrap` as a Jinja value -- never
-    its own `set_fact:` assignment target, never a comment -- where the
-    reference is NOT immediately filtered through `| bool`. Empty once the
-    fix holds everywhere."""
+    """Lines of rendered values that reference `_sd_need_bootstrap` where the
+    reference is NOT immediately filtered through `| bool`. Empty once the fix holds
+    everywhere."""
     offenders = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or _BOOTSTRAP_FACT_ASSIGNMENT.match(line):
-            continue
-        if any(match.group(1) is None for match in _BOOTSTRAP_FACT_USE.finditer(line)):
-            offenders.append(stripped)
+    for value in _string_values(yaml.safe_load(text)):
+        for line in value.splitlines():
+            if any(match.group(1) is None for match in _BOOTSTRAP_FACT_USE.finditer(line)):
+                offenders.append(line.strip())
     return offenders
 
 
 def test_bootstrap_fact_uses_are_bool_filtered() -> None:
     text = _SHARED_TASK_FILE.read_text(encoding="utf-8")
+    examined = _bootstrap_fact_uses(text)
+    assert examined, "no reference to _sd_need_bootstrap was examined -- the sweep looked at nothing"
     offenders = _unfiltered_bootstrap_fact_lines(text)
     assert not offenders, (
         f"_sd_need_bootstrap used without `| bool` on: {offenders} -- Ansible templating can hand this fact "
@@ -429,8 +464,19 @@ def test_bootstrap_fact_uses_are_bool_filtered() -> None:
 def test_planted_regression_an_unfiltered_bootstrap_use_is_caught() -> None:
     """Self-test: a synthetic snippet with one filtered and one unfiltered
     use must report only the unfiltered one."""
-    synthetic = "when: _sd_need_bootstrap\nwhen: _sd_need_bootstrap | bool\n"
-    assert _unfiltered_bootstrap_fact_lines(synthetic) == ["when: _sd_need_bootstrap"]
+    synthetic = "- when: _sd_need_bootstrap\n- when: _sd_need_bootstrap | bool\n"
+    assert _unfiltered_bootstrap_fact_lines(synthetic) == ["_sd_need_bootstrap"]
+
+
+def test_a_comment_naming_the_fact_does_not_satisfy_or_trip_it() -> None:
+    """Contrast (#17941): prose mentioning the fact is not a use, and the
+    assignment key is not a use; a hash line inside a literal block IS content."""
+    comment_only = "# _sd_need_bootstrap is explained here\n- when: _sd_need_bootstrap | bool\n"
+    assert _unfiltered_bootstrap_fact_lines(comment_only) == []
+    assignment = "- set_fact:\n    _sd_need_bootstrap: >-\n      {{ x | bool }}\n"
+    assert _unfiltered_bootstrap_fact_lines(assignment) == []
+    inside_block = "- set_fact:\n    y: |\n      {{ a }}\n      # {{ _sd_need_bootstrap }}\n"
+    assert _unfiltered_bootstrap_fact_lines(inside_block) == ["# {{ _sd_need_bootstrap }}"]
 
 
 def test_the_ansible_root_constant_still_resolves() -> None:

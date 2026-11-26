@@ -25,9 +25,14 @@ _ALL = [
 ]
 
 
+# The session files record no owner: the durable rebuild (#21664) finds nothing to add.
+_NO_DISK_OWNER = AsyncMock(return_value=None)
+
+
 def _validator(owned):
     v = MagicMock()
     v.get_user_sessions = AsyncMock(return_value=owned)
+    v.redis.exists = AsyncMock(return_value=1)  # the index is marked complete (#21664)
     return v
 
 
@@ -35,7 +40,7 @@ def _validator(owned):
 async def test_returns_only_the_users_own_sessions():
     with patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock()):
         with patch("api.chat_sessions._build_ownership_validator", return_value=_validator(["mine-1"])):
-            result = await _filter_user_sessions(list(_ALL), "alice")
+            result = await _filter_user_sessions(list(_ALL), "alice", _NO_DISK_OWNER)
 
     assert [s["id"] for s in result] == ["mine-1"]
 
@@ -45,7 +50,7 @@ async def test_agent_session_is_excluded_when_not_owned():
     """The reported symptom: a CEO agent conversation in a user's list."""
     with patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock()):
         with patch("api.chat_sessions._build_ownership_validator", return_value=_validator(["mine-1"])):
-            result = await _filter_user_sessions(list(_ALL), "alice")
+            result = await _filter_user_sessions(list(_ALL), "alice", _NO_DISK_OWNER)
 
     assert not any("CEO ·" in s["title"] for s in result)
 
@@ -55,7 +60,7 @@ async def test_lookup_failure_raises_instead_of_returning_everything():
     """The core fix: an error, not a silent unfiltered list."""
     with patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock(side_effect=RuntimeError("redis down"))):
         with pytest.raises(OwnershipUnavailableError) as exc:
-            await _filter_user_sessions(list(_ALL), "alice")
+            await _filter_user_sessions(list(_ALL), "alice", _NO_DISK_OWNER)
 
     assert exc.value.status_code == 503, "a transient store outage is 503, not 500"
 
@@ -67,21 +72,17 @@ async def test_validator_failure_also_raises():
         v.get_user_sessions = AsyncMock(side_effect=RuntimeError("boom"))
         with patch("api.chat_sessions._build_ownership_validator", return_value=v):
             with pytest.raises(OwnershipUnavailableError):
-                await _filter_user_sessions(list(_ALL), "alice")
+                await _filter_user_sessions(list(_ALL), "alice", _NO_DISK_OWNER)
 
 
 @pytest.mark.asyncio
-async def test_no_ownership_records_still_returns_all_but_warns(caplog):
-    """Legacy-session path, deliberately unchanged — but no longer silent.
-
-    Failing closed here would hide a user's own history on installs predating
-    ownership tracking, so the decision is deferred to #12685. The exposure is
-    logged so it is visible rather than invisible.
-    """
+async def test_no_ownership_records_returns_nothing():
+    """#21664 (decided 2026-11-16: fail closed) — replaces the legacy fallback that
+    returned every session to a caller with no ownership records. Legacy unowned
+    sessions stay unlisted until an owner is approved through the ownerless-session
+    proposal (#20030, #17038)."""
     with patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock()):
         with patch("api.chat_sessions._build_ownership_validator", return_value=_validator([])):
-            with caplog.at_level("WARNING"):
-                result = await _filter_user_sessions(list(_ALL), "alice")
+            result = await _filter_user_sessions(list(_ALL), "alice", _NO_DISK_OWNER)
 
-    assert len(result) == 3
-    assert any("No ownership records" in r.getMessage() for r in caplog.records)
+    assert result == []

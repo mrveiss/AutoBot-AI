@@ -118,6 +118,7 @@ class TestAuditEntry:
             "session_id",
             "ip_address",
             "resource",
+            "resource_type",
             "vm_source",
             "vm_name",
             "user_role",
@@ -153,6 +154,20 @@ class TestAuditLoggerLog:
         finally:
             audit_logger_module._audit_logger = None
         assert emit.call_args.args[0].action == "config.update"
+
+    @pytest.mark.asyncio
+    async def test_audit_log_carries_resource_type_onto_the_event(self) -> None:
+        emit = MagicMock(return_value=True)
+        audit_logger_module._audit_logger = None
+        try:
+            with patch.object(audit_logger_module.canonical, "emit", new=emit):
+                await audit_log("session.share", resource="s1", resource_type="chat_session")
+                await audit_log("config.update")
+        finally:
+            audit_logger_module._audit_logger = None
+        shared, other = (c.args[0] for c in emit.call_args_list)
+        assert (shared.resource_type, shared.resource_id) == ("chat_session", "s1")
+        assert other.resource_type is None
 
     @pytest.mark.asyncio
     async def test_a_failing_record_returns_false_and_never_raises(self) -> None:

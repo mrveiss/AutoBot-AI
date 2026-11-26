@@ -909,36 +909,6 @@ class SelfCapabilitiesResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class AgentCapabilityInfo(BaseModel):
-    """Single agent entry in the /agents/available response."""
-
-    name: str
-    description: str
-    capabilities: List[str]
-    status: str
-
-
-class AgentAvailableData(BaseModel):
-    """data payload for GET /agent/agents/available."""
-
-    total_agents: int
-    agents: List[AgentCapabilityInfo]
-    coordination_modes: List[str]
-    multi_agent_support: bool
-
-
-class AgentStatusData(BaseModel):
-    """data payload for GET /agent/agents/status."""
-
-    ai_stack_status: str
-    total_agents: int
-    available_agents: List[str]
-    multi_agent_coordination: bool
-    npu_acceleration: bool
-    research_capabilities: bool
-    development_tools: bool
-
-
 # ---------------------------------------------------------------------------
 # Typed inner result models for AgentTaskData subclasses (Issue #6407)
 # extra='allow' keeps the schema backward-compatible while the external
@@ -2072,58 +2042,6 @@ class EnterprisePhase4ValidationResponse(BaseModel):
     status: str
     validation: Dict[str, Any] = Field(default_factory=dict)
     message: str = ""
-
-
-# ---------------------------------------------------------------------------
-# agent_config.py schemas (GH #6509 Batch D)
-# ---------------------------------------------------------------------------
-
-
-class AgentConfigListAgentsResponse(BaseModel):
-    """Response for GET /agents."""
-
-    agents: List[Dict[str, Any]] = Field(default_factory=list)
-    total_count: int = 0
-    global_provider_type: str = ""
-    timestamp: str = ""
-
-
-class AgentConfigAllAgentsResponse(BaseModel):
-    """Response for GET /agents/all."""
-
-    agents: List[Dict[str, Any]] = Field(default_factory=list)
-    specialized_agents: List[Dict[str, Any]] = Field(default_factory=list)
-    summary: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: str = ""
-
-
-class AgentConfigSpecializedListResponse(BaseModel):
-    """Response for GET /agents/specialized."""
-
-    agents: List[Dict[str, Any]] = Field(default_factory=list)
-    total_count: int = 0
-    categories: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: str = ""
-
-
-class AgentConfigSpecializedDetailResponse(BaseModel):
-    """Response for GET /agents/specialized/{agent_id}."""
-
-    id: str = ""
-    name: str = ""
-    description: str = ""
-    tools: List[str] = Field(default_factory=list)
-    model: str | None = None
-    category: str | None = None
-
-
-class AgentConfigUsageResponse(BaseModel):
-    """Response for GET /agents/usage."""
-
-    agents: List[Dict[str, Any]] = Field(default_factory=list)
-    daily_trend: List[Dict[str, Any]] = Field(default_factory=list)
-    total_tasks: int = 0
-    timestamp: str = ""
 
 
 # ---------------------------------------------------------------------------

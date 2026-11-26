@@ -10,7 +10,9 @@ LLM and model configuration management.
 import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from typing import Any, Dict, Tuple
 
+from autobot_shared.ollama_urls import ollama_base_url, ollama_generate_url
 from autobot_shared.ssot_config import config
+from services.config_write_lock import locked_config_write
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,7 @@ class ModelConfigMixin:
         logger.warning("UNIFIED CONFIG: No model configured, using fallback: %s", fallback_model)
         return fallback_model
 
+    @locked_config_write
     def update_llm_model(self, model_name: str) -> None:
         """Update the selected LLM model in config.yaml (GUI integration)"""
         logger.info("UNIFIED CONFIG: Updating selected model to '%s'", model_name)
@@ -98,6 +101,7 @@ class ModelConfigMixin:
         # Lazy import to avoid circular dependency
         from constants.network_constants import NetworkConstants
 
+        local_host = ollama_base_url(f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}")
         return {
             "provider_type": "local",
             "local": {
@@ -106,10 +110,8 @@ class ModelConfigMixin:
                     "ollama": {
                         "selected_model": self.get_selected_model(),
                         "models": [],
-                        "endpoint": (
-                            f"http://{NetworkConstants.LOCALHOST_NAME}" f":{NetworkConstants.OLLAMA_PORT}/api/generate"
-                        ),
-                        "host": (f"http://{NetworkConstants.LOCALHOST_NAME}" f":{NetworkConstants.OLLAMA_PORT}"),
+                        "endpoint": ollama_generate_url(local_host),
+                        "host": local_host,
                     }
                 },
             },
@@ -134,7 +136,7 @@ class ModelConfigMixin:
         if gpu_endpoint and gpu_models:
             gpu_set = {m.strip().lower() for m in gpu_models}
             if model_name.strip().lower() in gpu_set:
-                return gpu_endpoint
+                return ollama_base_url(gpu_endpoint)
         # Fall back to default endpoint
         return self._resolve_default_ollama_endpoint()
 
@@ -142,10 +144,10 @@ class ModelConfigMixin:
         """Get the default (CPU) Ollama endpoint URL."""
         endpoint = self.get_nested("backend.llm.ollama.endpoint")
         if endpoint:
-            return endpoint
+            return ollama_base_url(endpoint)
         ollama_host = self.get_host("ollama")
         ollama_port = self.get_port("ollama")
-        return f"http://{ollama_host}:{ollama_port}"
+        return ollama_base_url(f"http://{ollama_host}:{ollama_port}")
 
     def _resolve_ollama_endpoint(self, backend_llm: Dict[str, Any]) -> str:
         """
@@ -169,7 +171,7 @@ class ModelConfigMixin:
         if not ollama_endpoint:
             ollama_host = self.get_host("ollama")
             ollama_port = self.get_port("ollama")
-            ollama_endpoint = f"http://{ollama_host}:{ollama_port}"
+            ollama_endpoint = ollama_base_url(f"http://{ollama_host}:{ollama_port}")
 
         return ollama_endpoint
 

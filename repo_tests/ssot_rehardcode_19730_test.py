@@ -48,7 +48,6 @@ PENDING: dict[str, tuple[int, str]] = {
     ),
     "autobot_shared/redis_management/config.py::_CIRCUIT_BREAKER_THRESHOLD=5": (1, f"{_BUSY} (#19365, #19400, #19722)"),
     "autobot_shared/redis_management/connection_manager.py::_BACKOFF_BASE=2.0": (1, f"RetryConfig; {_BUSY} (#19365)"),
-    "autobot_shared/ssot_tls.py::ssh_user='autobot'": (1, f"config.path.ssh_user; {_BUSY} (#19400, #19722)"),
     "autobot-backend/api/http_client_mcp.py::DEFAULT_TIMEOUT=30": (1, f"config.timeout.mcp_call; {_CEILING}"),
     "autobot-backend/api/schemas_analytics.py::provider='ollama'": (
         1,

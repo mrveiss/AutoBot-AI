@@ -21,6 +21,7 @@ from fastapi import FastAPI, HTTPException
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.datetime_utils import datetime_now
 from llc.api import companies
+from llc.services.company_os.errors import CompanyOsError
 from user_management.services import TenantContext
 
 _ORG_ID = uuid.uuid4()
@@ -93,7 +94,7 @@ async def test_activate_endpoint_returns_active_and_commits():
 @pytest.mark.asyncio
 async def test_activate_endpoint_invalid_transition_maps_to_409():
     svc = _svc()
-    svc.activate = AsyncMock(side_effect=ValueError("Cannot activate company in 'archived' state"))
+    svc.activate = AsyncMock(side_effect=CompanyOsError("Cannot activate company in 'archived' state"))
     async with _client(_app(svc)) as client:
         resp = await client.post(f"/api/llc/companies/{_ORG_ID}/activate")
     assert resp.status_code == 409
@@ -143,7 +144,7 @@ async def test_offboard_endpoint_returns_offboarding_and_commits():
 @pytest.mark.asyncio
 async def test_offboard_endpoint_invalid_transition_maps_to_409():
     svc = _svc()
-    svc.offboard = AsyncMock(side_effect=ValueError("Cannot offboard company in 'paused' state"))
+    svc.offboard = AsyncMock(side_effect=CompanyOsError("Cannot offboard company in 'paused' state"))
     async with _client(_app(svc)) as client:
         resp = await client.post(f"/api/llc/companies/{_ORG_ID}/offboard")
     assert resp.status_code == 409

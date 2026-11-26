@@ -23,6 +23,7 @@ from fastapi import HTTPException, Request, status
 from pydantic import AfterValidator
 
 from autobot_shared.auth.interactive_principal import is_interactive_human
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 
 from ..services.work_item_hierarchy import HierarchyViolation
@@ -51,7 +52,7 @@ def actor_id(current_user: dict) -> uuid.UUID:
 #: An agent id a checkout can fence: a request carrying one that cannot is refused with 422 (#21083). It must be an
 #: agent UUID (a ``user:<id>`` or empty value is not one) and is canonicalised, so the fence and every release name
 #: the same spelling as the stored assignee (#19631). Input validation only: WHO may check out or release as a named
-#: agent is the open decision on #20521.
+#: agent is ``_named_agent.require_may_act_as`` (#20521).
 FenceSafeAgentId = Annotated[str, AfterValidator(ensure_fence_safe_agent_id), AfterValidator(canonical_agent_id)]
 
 
@@ -106,11 +107,11 @@ def acting_user_id(current_user: dict) -> Optional[str]:
 
 
 def bad_request(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return http_refusal(status.HTTP_400_BAD_REQUEST, exc, scope="llc.bad_request")
 
 
 def forbidden(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    return http_refusal(status.HTTP_403_FORBIDDEN, exc, scope="llc.forbidden")
 
 
 def registry_unavailable(exc: Exception) -> HTTPException:
@@ -120,7 +121,7 @@ def registry_unavailable(exc: Exception) -> HTTPException:
     a bad request tells the caller to fix their input when there is nothing
     wrong with it.
     """
-    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    return http_refusal(status.HTTP_503_SERVICE_UNAVAILABLE, exc, scope="llc.registry_unavailable")
 
 
 async def agent_node_uuid(agent_id: str, company_id: str) -> Optional[uuid.UUID]:
@@ -230,7 +231,21 @@ def require_work_item_id(request: Request) -> None:
     handler's own logic is not caught. This runs before each handler's auth, so an
     unauthenticated caller with a malformed id gets 404 too; it says nothing about any row.
     """
-    raw = request.path_params.get("work_item_id")
+    _parse_path_work_item_id(request, "work_item_id")
+
+
+def require_context_item_id(request: Request) -> None:
+    """Route dependency for ``/context/{item_id}``: the same 404 as ``require_work_item_id`` (#20120).
+
+    A route-level dependency resolves before the route's own parameters, so a malformed id is
+    refused before the request session (``SESSION_DEP``) is opened (#21332).
+    """
+    _parse_path_work_item_id(request, "item_id")
+
+
+def _parse_path_work_item_id(request: Request, param: str) -> None:
+    """404 when the *param* path segment is present and not a UUID."""
+    raw = request.path_params.get(param)
     if raw is not None:
         parse_work_item_id(raw)
 
@@ -276,15 +291,13 @@ async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
 
 
 def refused_transition(exc: Exception) -> HTTPException:
-    """A refused status move as 409, with the service's reason (#12740).
+    """A refused status move as 409 (#12740).
 
-    The reason names statuses and permitted moves, or why a finish needs review (the item's reviewer or
-    creator is missing or not a member, the agent does not hold the item), so it is safe to show, and
-    the UI can tell the user what went wrong. 409, not 422: the request is well-formed but conflicts with the
-    item's state.
+    The caller sees the exception's ``public_detail`` when it has one (the service's reason: statuses and
+    permitted moves, or why a finish needs review), else the fixed 409 text; the raw message is only ever
+    logged, redacted (#21579). 409, not 422: the request is well-formed but conflicts with the item's state.
     """
-    logger.info("Rejected illegal work-item transition: %s", exc)
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    return http_refusal(status.HTTP_409_CONFLICT, exc, scope="llc.refused_transition")
 
 
 def write_refusal(exc: ValueError) -> HTTPException:
@@ -293,4 +306,4 @@ def write_refusal(exc: ValueError) -> HTTPException:
     Any other ``ValueError`` (e.g. an unknown approval category, GH#11206) stays 400.
     """
     code = status.HTTP_422_UNPROCESSABLE_ENTITY if isinstance(exc, HierarchyViolation) else status.HTTP_400_BAD_REQUEST
-    return HTTPException(status_code=code, detail=str(exc))
+    return http_refusal(code, exc, scope="llc.write_refusal")

@@ -1114,6 +1114,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/drift/prune": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Drift Prune
+         * @description Remove the confirmed paths that are still ``removed_from_source`` (#22082).
+         *
+         *     Anything else in *paths* -- a host_state, artifact or modified file, or one
+         *     that stopped being eligible since the preview -- is refused and left alone.
+         */
+        post: operations["confirm_drift_prune_api_code_sync_drift_prune_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/drift/prune/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Drift Prune
+         * @description List exactly the deployed files git proves were deleted from source (#22082).
+         */
+        post: operations["preview_drift_prune_api_code_sync_drift_prune_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/drift/resolve": {
         parameters: {
             query?: never;
@@ -9444,6 +9487,72 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * DriftPruneFile
+         * @description One file a prune would remove, and the commit that removed it from source.
+         */
+        DriftPruneFile: {
+            /** Detail */
+            detail?: string | null;
+            /** Path */
+            path: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DriftPrunePreview
+         * @description Exactly what a prune of *component* would remove.
+         */
+        DriftPrunePreview: {
+            /** Component */
+            component: string;
+            /** Files */
+            files: components["schemas"]["DriftPruneFile"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DriftPrunePreviewRequest
+         * @description Which component to preview.
+         */
+        DriftPrunePreviewRequest: {
+            /** Component */
+            component: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DriftPruneRequest
+         * @description The exact paths the operator confirmed from the preview.
+         */
+        DriftPruneRequest: {
+            /** Component */
+            component: string;
+            /** Paths */
+            paths: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DriftPruneResponse
+         * @description Per-path outcome of a confirmed prune.
+         */
+        DriftPruneResponse: {
+            /** Component */
+            component: string;
+            /** Failed */
+            failed: {
+                [key: string]: string;
+            };
+            /** Refused */
+            refused: {
+                [key: string]: string;
+            };
+            /** Removed */
+            removed: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * DriftResolveJobResponse
          * @description Accepted async component-resolve job (#11303).
          */
@@ -10169,6 +10278,15 @@ export interface components {
              * @default unknown
              */
             frontend: string;
+            /** Manifest Errors */
+            manifest_errors?: {
+                [key: string]: string;
+            };
+            /**
+             * Manifests
+             * @default healthy
+             */
+            manifests: string;
             /** Nodes Online */
             nodes_online: number;
             /** Nodes Total */
@@ -17529,6 +17647,76 @@ export interface operations {
             };
         };
     };
+    confirm_drift_prune_api_code_sync_drift_prune_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriftPruneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriftPruneResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_drift_prune_api_code_sync_drift_prune_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriftPrunePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriftPrunePreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     resolve_drift_api_code_sync_drift_resolve_post: {
         parameters: {
             query?: never;
@@ -23275,7 +23463,9 @@ export interface operations {
             query?: {
                 include_inactive?: boolean;
             };
-            header?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
             path: {
                 node_id: string;
             };
@@ -28223,7 +28413,9 @@ export interface operations {
     get_vnc_connection_info_api_vnc_credentials__credential_id__connect_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
             path: {
                 credential_id: string;
             };
@@ -28256,7 +28448,9 @@ export interface operations {
             query?: {
                 include_inactive?: boolean;
             };
-            header?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -28287,7 +28481,9 @@ export interface operations {
             query: {
                 token: string;
             };
-            header?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };

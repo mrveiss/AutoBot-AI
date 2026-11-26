@@ -43,7 +43,7 @@ _ALL_SESSIONS = [
 
 
 def _manager(sessions=None):
-    manager = MagicMock(spec=["list_sessions_fast"])
+    manager = MagicMock(spec=["list_sessions_fast", "get_session_owner"])  # #21664: the durable-owner reader
     manager.list_sessions_fast = AsyncMock(return_value=list(sessions if sessions is not None else _ALL_SESSIONS))
     return manager
 
@@ -54,6 +54,7 @@ def _validator_owning_everything():
     ownership filter."""
     v = MagicMock()
     v.get_user_sessions = AsyncMock(return_value=[s["id"] for s in _ALL_SESSIONS])
+    v.redis.exists = AsyncMock(return_value=1)  # the index is marked complete (#21664)
     return v
 
 
@@ -121,8 +122,9 @@ class TestLegacyUntaggedSessionsAreNotLost:
 class TestIsAgentScopedSessionHelper:
     """Cheap structural pins on the discriminator itself."""
 
-    def test_company_id_alone_is_sufficient(self):
-        assert chat_sessions._is_agent_scoped_session({"companyId": "co-1"}) is True
+    def test_company_id_alone_is_an_ordinary_company_chat(self):
+        """#21997: a ``companyId`` alone no longer hides a chat; the company filter decides who sees it."""
+        assert chat_sessions._is_agent_scoped_session({"companyId": "co-1"}) is False
 
     def test_session_kind_alone_is_sufficient(self):
         assert chat_sessions._is_agent_scoped_session({"sessionKind": "agent"}) is True

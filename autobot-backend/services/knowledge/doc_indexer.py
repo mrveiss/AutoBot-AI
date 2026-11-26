@@ -39,7 +39,7 @@ from knowledge.chunk_identity import carry_store_id, stamp_chunk_id
 from knowledge.platform_docs import PLATFORM_DOCS_GRANT, PLATFORM_DOCS_GRANT_VERSION
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from services.knowledge import doc_index_store_guard as store_guard
-from services.knowledge.doc_index_orphans import chunk_base_id, drop_collection, reindex_file
+from services.knowledge.doc_index_orphans import chunk_base_id, drop_collection, reindex_file, resolve_collection
 from services.knowledge.doc_markdown_chunks import (
     _chunk_markdown,
     _extract_tags,
@@ -394,7 +394,7 @@ class DocIndexerService:
             embed_dim = await asyncio.to_thread(
                 self._resolve_embed_dim, embed_model_name, effective.embedding_dimension
             )
-            self._collection = await asyncio.to_thread(self._resolve_collection, embed_model_name, embed_dim)
+            self._collection = await resolve_collection(self, embed_model_name, embed_dim)
 
             doc_count = store_guard.read_count(self._collection)
             logger.info(

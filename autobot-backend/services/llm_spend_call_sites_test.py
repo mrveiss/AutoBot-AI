@@ -53,7 +53,7 @@ _RECORDED = {
         1,
         "report_spend hook, registered at startup (#19650); asserted by _USES_SPEND_HOOK",
     ),
-    "autobot_shared/pre_action_verifier_guard.py::_call_verifier_once": (
+    "autobot_shared/verifier_model.py::resolve_and_chat": (
         1,
         "report_spend hook, registered at startup (#19650); asserted by _USES_SPEND_HOOK",
     ),
@@ -85,7 +85,7 @@ _KNOWN_UNRECORDED_CEILING = 4
 # source, so a site that stops calling ``report_spend`` fails (#19650).
 _USES_SPEND_HOOK = (
     "autobot-backend/llm_shared/tiered_routing/complexity_router.py::ComplexityRouter.route_with_escalation",
-    "autobot_shared/pre_action_verifier_guard.py::_call_verifier_once",
+    "autobot_shared/verifier_model.py::resolve_and_chat",
 )
 
 # Raw-HTTP inference no method-name scan can see, exempt by a stated condition.

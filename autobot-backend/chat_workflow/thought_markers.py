@@ -180,3 +180,35 @@ def find_new_segment_start(llm_response: str, new_type: str, previous_type: str 
         match = candidate
 
     return llm_response[match.end() :] if match else ""
+
+
+#: Stands for one complete tool call in text given to ``split_reasoning_blocks``; an unclosed block ends there (#21880).
+TOOL_CALL_MARK = "\ue000"
+
+_REASONING_BLOCK_RE = re.compile(
+    rf"\[(THOUGHT|PLANNING)\](.*?)(?:\[/\1\]|(?=\[(?:THOUGHT|PLANNING)\]|{TOOL_CALL_MARK}))",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def split_reasoning_blocks(text: str) -> tuple[list[tuple[str, str]], str]:
+    """(``(type, body)`` of each thought/planning block, the text without them) (#21904).
+
+    The live view types a block as ``thought`` / ``planning`` and badges it; the stored reply kept the markers'
+    text inline, and a reload strips only the markers, so the reasoning showed as part of the answer. Markers in
+    code regions are not blocks (#17513). A block ends at its closing marker, at the next opener, or at a
+    ``TOOL_CALL_MARK`` (#21880: a thought left open before its tool call). An unclosed block with none stays in
+    the text: live it runs to the end, but storing it that way would swallow the answer.
+    """
+    masked = mask_code_regions(text)
+    blocks: list[tuple[str, str]] = []
+    rest: list[str] = []
+    pos = 0
+    for match in _REASONING_BLOCK_RE.finditer(masked):
+        rest.append(text[pos : match.start()])
+        body = text[match.start(2) : match.end(2)].strip()
+        if body:
+            blocks.append((match.group(1).lower(), body))
+        pos = match.end()
+    rest.append(text[pos:])
+    return blocks, "".join(rest).strip()

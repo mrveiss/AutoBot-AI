@@ -304,7 +304,7 @@ class SecretsService:
 
         except sqlite3.IntegrityError:
             conn.rollback()
-            raise ValueError(f"Secret with name '{name}' already exists in scope '{scope}' for chat '{chat_id}'")
+            raise ValueError(f"A secret with this name already exists in scope '{scope}' for chat '{chat_id}'")
         finally:
             conn.close()
 

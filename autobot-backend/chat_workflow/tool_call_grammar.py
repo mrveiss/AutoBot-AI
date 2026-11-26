@@ -81,6 +81,9 @@ TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool_?\s*call\b\s*>?", re.IGNORECASE)
 # `</toolbox` from matching here.
 TOOL_CALL_BARE_CLOSE_RE = re.compile(r"</\s*tool\b", re.IGNORECASE)
 TOOL_CALL_OPENING_RE = re.compile(r"<\s*tool_?\s*call\b[^>]*>", re.IGNORECASE)
+# #21843: generation cut off inside the opening tag (no `>` before the end of the text). Anchored to the end and to
+# `name=` so prose that merely mentions the tag is not mistaken for a truncated call.
+TOOL_CALL_TRUNCATED_OPENING_RE = re.compile(r"<\s*tool_?\s*call\s+name\s*=[^>]*\Z", re.IGNORECASE)
 
 # Issue #650 / #11545 / #11552: pre-compiled FULL parser (perf + single
 # source of truth). Handles both uppercase and lowercase TOOL_CALL tags

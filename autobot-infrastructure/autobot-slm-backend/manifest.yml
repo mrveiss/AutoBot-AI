@@ -6,6 +6,7 @@ target_node: slm
 deploy:
   source: autobot-slm-backend/
   destination: /opt/autobot/autobot-slm-backend/
+  sync_target: "{base_dir}/autobot-slm-backend"   # #21974: the install directory the unit runs from (= `destination`)
   shared: true
   infrastructure: true
 
@@ -38,6 +39,13 @@ health:
   timeout: "10s"
   retries: 3
   expected_status: 200
+
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  slm-backend:   # the process's own bind port, not the proxied health.endpoint above (nginx fronts it)
+    checked: true
+    port: 8000
+    path: /api/health
 
 secrets:
   own:

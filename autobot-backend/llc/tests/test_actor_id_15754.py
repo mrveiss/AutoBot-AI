@@ -7,7 +7,7 @@
 import uuid
 
 import pytest
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 
 from llc.api import _common, contacts, roles, workflows
 from llc.services.authz import NotAuthorisedError
@@ -53,7 +53,8 @@ def test_the_route_modules_use_the_shared_helper(module) -> None:
     assert not hasattr(module, "_actor_id")
 
 
-# --- error translators (#15754): the shared ones answer exactly as the roles/contacts copies did.
+# --- error translators (#15754): the shared ones keep the status codes the roles/contacts copies answered with.
+# Their text no longer follows ``str(exc)`` (#21579); ``test_llc_common_refusals_21579.py`` covers it.
 
 _EXCS = [
     ValueError("bad input"),
@@ -63,30 +64,17 @@ _EXCS = [
 ]
 
 
-def _old_bad_request(exc):
-    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-
-
-def _old_forbidden(exc):
-    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
-
-
-def _old_unavailable(exc):
-    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
-
-
 @pytest.mark.parametrize(
-    ("new", "old", "code"),
+    ("new", "code"),
     [
-        (_common.bad_request, _old_bad_request, 400),
-        (_common.forbidden, _old_forbidden, 403),
-        (_common.registry_unavailable, _old_unavailable, 503),
+        (_common.bad_request, 400),
+        (_common.forbidden, 403),
+        (_common.registry_unavailable, 503),
     ],
 )
 @pytest.mark.parametrize("exc", _EXCS)
-def test_translators_answer_as_the_old_local_copies_did(new, old, code, exc) -> None:
-    got, was = new(exc), old(exc)
-    assert (got.status_code, got.detail) == (was.status_code, was.detail) == (code, str(exc))
+def test_translators_keep_the_old_local_copies_status_codes(new, code, exc) -> None:
+    assert new(exc).status_code == code
 
 
 @pytest.mark.parametrize("module", [contacts, roles])

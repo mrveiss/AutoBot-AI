@@ -2,7 +2,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 # Closure-gate wiring check: verify new modules added in this PR have production callers.
-# Single source of truth referenced by /implement, /issue, /batch-implement skills.
+# Single source of truth referenced by `/autobot-dev-skills:lifecycle implement`, `/autobot-dev-skills:lifecycle issue` and `/autobot-dev-skills:lifecycle batch-implement`.
 #
 # The required CI form of this check is the population gate
 # repo_tests/unconnected_code_gate_20512_test.py (#20512): same question and same production-file

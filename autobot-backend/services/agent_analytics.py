@@ -30,6 +30,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import TaskStatus
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
+from services.agent_history_records import parse_history_records
 from services.agent_metrics_model import AgentMetrics
 
 logger = get_logger(__name__)
@@ -430,17 +431,7 @@ class AgentAnalytics(AsyncRedisClientMixin):
         pipe = redis.pipeline()
         for agent_id in agent_ids:
             pipe.lrange(f"{self.AGENT_HISTORY_KEY}:{agent_id}", 0, limit - 1)
-        return {a: self._parse_history(a, raw) for a, raw in zip(agent_ids, await pipe.execute())}
-
-    @staticmethod
-    def _parse_history(agent_id: str, raw: List[Any]) -> List[Dict[str, Any]]:
-        records = []
-        for item in raw:
-            try:
-                records.append(json.loads(item))
-            except (TypeError, ValueError) as exc:
-                logger.warning("Skipping unparsable history record for %s: %s", agent_id, exc)
-        return records
+        return {a: parse_history_records(a, raw) for a, raw in zip(agent_ids, await pipe.execute())}
 
     async def read_agent_history(self, agent_id: str, limit: int = 100) -> List[Dict[str, Any]] | None:
         """Strict single-agent history: ``None`` when the store cannot be read."""

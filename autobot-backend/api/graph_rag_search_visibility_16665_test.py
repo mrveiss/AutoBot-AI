@@ -18,9 +18,9 @@ from fastapi.testclient import TestClient
 
 from api import graph_rag
 from api.user_management.dependencies import get_tenant_context
-from knowledge.read_path_fakes_16665 import PRIVATE_A, RESEARCH, SHARED, FakeKB, QuarantineGatedKB
 from services.graph_rag_service import GraphRAGService
 from services.rag_service import RAGService
+from testkit.read_path_fakes_16665 import PRIVATE_A, RESEARCH, SHARED, FakeKB, QuarantineGatedKB
 
 
 def _tenant(user_id: str, admin: bool = False):

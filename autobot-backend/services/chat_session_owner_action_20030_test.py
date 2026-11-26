@@ -41,7 +41,10 @@ def _session(user_exists: bool = True, admins: int = 2) -> MagicMock:
     session.commit = AsyncMock()
     found = MagicMock()
     found.scalars.return_value.first.return_value = _USER_ID if user_exists else None
-    found.scalars.return_value.all.return_value = [_ADMIN] + [uuid.uuid4() for _ in range(admins - 1)]
+    found.scalars.return_value.all.return_value = [
+        SimpleNamespace(id=i, is_platform_admin=True, is_active=True, deleted_at=None)
+        for i in [_ADMIN] + [uuid.uuid4() for _ in range(admins - 1)]
+    ]
     session.execute = AsyncMock(return_value=found)
     return session
 

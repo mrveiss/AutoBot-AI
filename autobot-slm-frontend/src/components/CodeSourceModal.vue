@@ -11,17 +11,17 @@
  * The code-source POST is migrated onto the canonical `slmApiClient` (#12420
  * Phase 2): it resolves the base URL via `getSlmApiBase()`, injects the SLM
  * bearer token, and centrally handles 401 — replacing the local axios instance
- * and request interceptor. Node loading still flows through `useSlmApi`.
+ * and request interceptor. Node loading flows through the fleet store.
  */
 
 import { ref, onMounted } from 'vue'
 import { BaseModal, createLogger } from '@autobot/ui'
-import { useSlmApi } from '@/composables/useSlmApi'
+import { useFleetStore } from '@/stores/fleet'
 import slmApiClient from '@/utils/ApiClient'
 import type { SLMNode } from '@/types/slm'
 
 const logger = createLogger('CodeSourceModal')
-const slmApi = useSlmApi()
+const fleetStore = useFleetStore()
 
 const props = defineProps<{
   currentNodeId?: string
@@ -46,8 +46,9 @@ const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
-    // Reuse existing API composable (Issue #860)
-    nodes.value = await slmApi.getNodes()
+    // The one node-list fetch, through the fleet store (Issue #860, #21584)
+    await fleetStore.fetchNodes() // a partial read is kept and announced once by the shell
+    nodes.value = fleetStore.nodeList
   } catch (e: unknown) {
     // Show actual error for debugging (Issue #860)
     const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -88,14 +89,14 @@ async function handleAssign(): Promise<void> {
     :close-label="$t('ui.modal.closeDialog')"
     @close="emit('close')"
   >
-    <div v-if="isLoading" class="text-gray-500">{{ $t('codeSourceModal.loadingNodes') }}</div>
+    <div v-if="isLoading" class="text-autobot-text-tertiary">{{ $t('codeSourceModal.loadingNodes') }}</div>
 
     <div v-else class="space-y-4">
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.node') }}</label>
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('codeSourceModal.node') }}</label>
         <select
           v-model="selectedNodeId"
-          class="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
+          class="w-full border border-autobot-border-strong rounded-md p-2 bg-white text-autobot-text-primary"
         >
           <option value="">{{ $t('codeSourceModal.selectANode') }}</option>
           <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
@@ -105,24 +106,24 @@ async function handleAssign(): Promise<void> {
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.repositoryPath') }}</label>
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('codeSourceModal.repositoryPath') }}</label>
         <input
           v-model="repoPath"
           type="text"
-          class="w-full border border-gray-300 rounded-md p-2 text-gray-900"
+          class="w-full border border-autobot-border-strong rounded-md p-2 text-autobot-text-primary"
         />
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.branch') }}</label>
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('codeSourceModal.branch') }}</label>
         <input
           v-model="branch"
           type="text"
-          class="w-full border border-gray-300 rounded-md p-2 text-gray-900"
+          class="w-full border border-autobot-border-strong rounded-md p-2 text-autobot-text-primary"
         />
       </div>
 
-      <div v-if="error" class="text-red-600 text-sm">{{ error }}</div>
+      <div v-if="error" class="text-autobot-error text-sm">{{ error }}</div>
     </div>
 
     <template #actions>

@@ -1,0 +1,4 @@
+{"id": "docs-q1", "query": "how do sessions reach redis", "bucket": "docs", "gold": ["docs-1"]}
+{"id": "docs-q2", "query": "which operating systems are supported for install", "bucket": "docs", "gold": ["docs-2"]}
+{"id": "docs-q3", "query": "where do I restore a nightly backup", "bucket": "docs", "gold": ["docs-3"]}
+{"id": "docs-q4", "query": "which authentication does each router require", "bucket": "docs", "gold": ["docs-4"]}

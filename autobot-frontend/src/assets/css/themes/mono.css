@@ -101,4 +101,6 @@
   --color-primary-dark: var(--primary-h);
   --color-primary-bg: color-mix(in srgb, var(--primary) 10%, transparent);
   --color-primary-bg-hover: color-mix(in srgb, var(--primary) 15%, transparent);
+  /* accents.css sets --text-on-primary per accent; this theme keeps its own ink */
+  --text-on-primary: var(--on-primary);
 }

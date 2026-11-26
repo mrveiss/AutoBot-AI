@@ -4,65 +4,42 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Script to reset and recreate the knowledge base index with correct dimensions.
+Request a reset of the knowledge base so its index is recreated with the correct dimensions.
+
+The reset itself (dropping the index and deleting its keys) runs in the backend only after a human approves
+the #17038 proposal this script raises; the script deletes nothing (#21383).
 """
 
+import argparse
 import asyncio
-import logging
-import os
 import sys
+from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# The shared wipe-request helper sits beside this script; put it on the path when loaded by file path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import config_manager
-from autobot_shared.redis_client import get_async_redis_client
+import kb_wipe_cli  # noqa: E402
+from autobot_shared.logging_manager import get_logger, setup_logging  # noqa: E402
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
-async def reset_knowledge_base_index():
-    """Reset the knowledge base Redis index to use correct embedding dimensions."""
+async def reset_knowledge_base_index(dry_run: bool = False) -> bool:
+    """Request (or, with ``dry_run``, preview) the knowledge-base wipe. Deletes nothing."""
+    logger.info("Resetting the knowledge base index: requesting a wipe through the approval gate")
+    done = await kb_wipe_cli.request_wipe(dry_run)
+    if done and not dry_run:
+        logger.info("Once an admin approves it the index is recreated with correct dimensions on the next add.")
+    return done
 
-    redis_client = await get_async_redis_client(database="main")
-    if not redis_client:
-        logger.error("Redis client not available")
-        return
 
-    index_name = config_manager.get_nested("memory.redis.index_name", "autobot_knowledge_index")
-
-    logger.info("Resetting knowledge base index: %s", index_name)
-
-    try:
-        # Get all keys for the index
-        pattern = f"{index_name}:*"
-        keys = await redis_client.keys(pattern)
-
-        if keys:
-            logger.info("Found %s keys to delete", len(keys))
-            # Delete all keys
-            for key in keys:
-                await redis_client.delete(key)
-            logger.info("All keys deleted")
-        else:
-            logger.info("No existing keys found")
-
-        # Try to drop the index itself using FT.DROPINDEX
-        try:
-            await redis_client.execute_command("FT.DROPINDEX", index_name)
-            logger.info("Dropped index: %s", index_name)
-        except Exception as e:
-            logger.info("Could not drop index (may not exist): %s", e)
-
-        logger.info("")
-        logger.info("Knowledge base index has been reset.")
-        logger.info("The index will be recreated with correct dimensions when you add documents.")
-
-    except Exception as e:
-        logger.error("Error resetting knowledge base: %s", e)
+def _parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Request a knowledge-base reset (needs admin approval).")
+    parser.add_argument("--dry-run", action="store_true", help="list what the reset would delete; delete nothing")
+    return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
-    asyncio.run(reset_knowledge_base_index())
+    setup_logging()  # script startup: file logging on (#20894)
+    args = _parse_args()
+    sys.exit(0 if asyncio.run(reset_knowledge_base_index(dry_run=args.dry_run)) else 1)

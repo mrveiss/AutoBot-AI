@@ -116,6 +116,7 @@ from .anthropic_request import (  # noqa: F401
     _thinking_budget_to_effort,
 )
 from .cache_utils import sorted_for_cache
+from .message_formatting import anthropic_tool_schemas
 
 logger = get_logger(__name__)
 
@@ -332,9 +333,7 @@ class AnthropicProvider(BaseProvider):
         """Set ``kwargs["tools"]``/``["tool_choice"]`` from *request*, in place."""
         if not request.tools:
             return
-        kwargs["tools"] = [
-            {"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in request.tools
-        ]
+        kwargs["tools"] = anthropic_tool_schemas(request.tools)
         if request.tool_choice:
             kwargs["tool_choice"] = {"type": request.tool_choice}
 

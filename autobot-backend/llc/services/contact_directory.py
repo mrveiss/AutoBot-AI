@@ -40,15 +40,17 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..exceptions import PublicMessageMixin
 from ..models.activity import ActorType
 from ..models.contact import LLCContact
 from ..models.enums import RoleHolderType
 from ..models.role_assignment import LLCRoleAssignment
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError, CompanyOsNotFound
 
 
-class ContactInUseError(Exception):
+class ContactInUseError(PublicMessageMixin, Exception):
     """The contact still holds a role, so deleting them would break a company.
 
     Distinct from a plain ``ValueError``: the request is well formed and the
@@ -209,12 +211,12 @@ class ContactDirectoryService(LLCServiceBase):
         """
         await require_company_admin(session, company_id, actor_user_id)
         if keep_id == merge_id:
-            raise ValueError("cannot merge a contact into itself")
+            raise CompanyOsError("cannot merge a contact into itself")
 
         for contact_id in (keep_id, merge_id):
             found = await session.execute(select(LLCContact.id).where(LLCContact.id == contact_id))
             if found.scalar_one_or_none() is None:
-                raise ValueError(f"contact {contact_id} does not exist")
+                raise CompanyOsNotFound(f"contact {contact_id} does not exist")
 
         # Roles the survivor already holds openly. Two duplicates of one person
         # usually hold the same role — that is often *why* they are duplicates —

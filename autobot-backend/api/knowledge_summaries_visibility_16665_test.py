@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from api import knowledge_graph_routes
 from auth_middleware import get_current_user
-from knowledge.read_path_fakes_16665 import FakeKB
+from testkit.read_path_fakes_16665 import FakeKB
 
 DOC_A, DOC_S = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
 ORPHAN = "33333333-3333-4333-8333-333333333333"

@@ -22,6 +22,7 @@ from user_management.models.base import Base, TenantMixin, TimestampMixin
 from user_management.models.mfa import UserMFA
 from user_management.models.organization import Organization
 from user_management.models.person_link import PersonLink
+from user_management.models.plugin_enable_state import PluginEnableState
 from user_management.models.retention_policy import RetentionPolicy
 from user_management.models.role import Permission, Role, RolePermission, UserRole
 from user_management.models.sso import SSOProvider, UserSSOLink
@@ -34,6 +35,7 @@ __all__ = [
     "TimestampMixin",
     "Organization",
     "PersonLink",
+    "PluginEnableState",
     "User",
     "Team",
     "TeamMembership",

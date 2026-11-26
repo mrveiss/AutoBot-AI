@@ -15,8 +15,9 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from autobot_shared.paths import project_root
 from autobot_shared.network_constants import ServiceURLs
+from autobot_shared.ollama_urls import ollama_tags_url
+from autobot_shared.paths import project_root
 from autobot_shared.redis_client import RedisDatabase, require_redis_client
 
 # The sibling helper module lives beside this script; put its directory on the path so the import
@@ -182,7 +183,7 @@ class RedisVectorStoreAnalyzer:
 
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    "%s/api/tags" % self.ollama_base_url,
+                    ollama_tags_url(self.ollama_base_url),
                 )
                 if response.status_code == 200:
                     data = response.json()

@@ -14,9 +14,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { KnowledgeRepository } from '../KnowledgeRepository'
 import type { ConnectorConfig, ConnectorStatus } from '@/types/connectors'
 
-vi.mock('@/config/ssot-config', () => ({
+// Partial: KnowledgeRepository loads the typed ApiClient, which reads the real config at import (#21886).
+vi.mock('@/config/ssot-config', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/config/ssot-config')>()),
   getApiBase: () => '/api',
-  getBackendUrl: () => '',
+  getBackendUrl: () => ''
 }))
 
 function mkConfig(id: string, name = 'demo'): ConnectorConfig {

@@ -13,6 +13,7 @@ Routes:
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from typing import Any, Dict, List, Optional, Union
 
@@ -24,9 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.env_utils import env_str
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text, sanitize_log_value
 from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET, current_claude_model
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
-from llc.deps import assert_company_access, service_dep
+from llc.deps import SESSION_DEP, assert_company_access, log_unexpected, logged_server_error, service_dep
 from llc.services.agent_hire_service import (
     AgentHirePending,
     HirePayload,
@@ -38,11 +40,11 @@ from llc.services.agent_hire_service import (
 from llc.services.approval import ApprovalService
 from llc.services.model_tiers import get_model_tier_service
 from services.agent_org_service import AgentOrgService
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 logger = get_logger(__name__)
 
+HIRE_NOT_RECORDED_DETAIL = "The agent hire could not be recorded"  # not a 201: no row, no id (#21332)
 router = APIRouter(tags=["llc-agent-hires"])
 _approval_service = service_dep(ApprovalService)
 
@@ -209,13 +211,11 @@ def _validated_default_cron() -> str:
         # prevent -- `get_next()` is what raises CroniterBadDateError.
         croniter(raw).get_next()
     except Exception as exc:
-        logger.error(
-            "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON=%r is not a valid cron (%s); "
-            "falling back to %r so hired agents are schedulable",
-            raw,
-            exc,
-            _FALLBACK_HEARTBEAT_CRON,
+        headline = (
+            f"AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON={sanitize_log_value(raw, max_chars=64)} is not a valid cron; "
+            "falling back so hired agents are schedulable"
         )
+        log_unexpected(logger, "agent_hires.default_heartbeat_cron", exc, headline=headline, level=logging.ERROR)
         return _FALLBACK_HEARTBEAT_CRON
     return raw
 
@@ -286,7 +286,7 @@ async def _fetch_agent_config(
         if row and row[0]:
             return dict(row[0]) if isinstance(row[0], dict) else {}
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not fetch adapter_config for agent %r: %s", agent_id, exc)
+        log_unexpected(logger, f"agent_hires.adapter_config {agent_id}", exc)
     return None
 
 
@@ -303,7 +303,7 @@ async def _fetch_company_model_overrides(
         if row and row[0]:
             return dict(row[0]) if isinstance(row[0], dict) else None
     except Exception as exc:  # noqa: BLE001
-        logger.debug("Could not fetch company model_tier_overrides for %r: %s", company_id, exc)
+        log_unexpected(logger, f"agent_hires.model_tier_overrides {company_id}", exc, level=logging.DEBUG)
     return None
 
 
@@ -315,7 +315,7 @@ async def _fetch_company_model_overrides(
 @router.post("/agent-hires", response_model=AgentHireRead, status_code=201)
 async def create_agent_hire(
     body: AgentHireCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> AgentHireRead:
@@ -377,8 +377,8 @@ async def create_agent_hire(
         )
         await session.commit()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not persist hire record (table may not exist): %s", exc)
         await session.rollback()
+        raise logged_server_error(logger, HIRE_NOT_RECORDED_DETAIL, "agent_hires.persist_hire_record", exc) from None
 
     return AgentHireRead(
         id=hire_id,
@@ -393,7 +393,7 @@ async def create_agent_hire(
 
 @router.get("/agent-hires", response_model=List[AgentHireRead])
 async def list_agent_hires(
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentHireRead]:
@@ -412,7 +412,7 @@ async def list_agent_hires(
         )
         rows = result.fetchall()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("llc_agent_hires table not available: %s", exc)
+        log_unexpected(logger, "agent_hires.hire_table", exc)
         return []
 
     return [
@@ -543,7 +543,7 @@ async def _require_manager_here(session: AsyncSession, company_id: uuid.UUID, re
     try:
         await AgentOrgService(session).assert_manager_in_company(reports_to, company_id)
     except ValueError as exc:
-        logger.warning("Refused hire in company %s: %s", company_id, exc)
+        logger.warning("Refused hire in company %s: %s", company_id, safe_log_text(repr(exc)))
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="reports_to is not an agent of this company"
         ) from exc
@@ -559,7 +559,7 @@ async def hire_agent(
     company_id: uuid.UUID,
     body: AgentHireRequest,
     response: Response,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     svc: ApprovalService = Depends(_approval_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),

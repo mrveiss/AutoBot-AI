@@ -10,8 +10,8 @@ import pytest
 
 from autobot_shared.scoping import Principal
 from knowledge import summary_visibility
-from knowledge.read_path_fakes_16665 import FakeKB
 from knowledge.search_filters import KbReader
+from testkit.read_path_fakes_16665 import FakeKB
 
 
 class _CountingKB(FakeKB):

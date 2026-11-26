@@ -26,7 +26,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from services.credential_read import load_imported_credential
-from services.credential_write import delete_credential_from_vault, mirror_credential_to_vault
+from services.credential_write import connector_secret_name, delete_credential_from_vault, mirror_credential_to_vault
 
 logger = get_logger(__name__)
 
@@ -240,7 +240,7 @@ class ConnectorCredentialStore:
         creds = {k: v for k, v in config.items() if k in sensitive}
         sanitized = {k: v for k, v in config.items() if k not in sensitive}
 
-        name = f"connector:{connector_id}:auth"
+        name = connector_secret_name(connector_id)
         secret_type = _AUTH_TYPE_TO_SECRET_TYPE.get(auth_cls.__name__, "connector_api_key")
 
         value = json.dumps(creds, ensure_ascii=False)
@@ -392,7 +392,7 @@ class ConnectorCredentialStore:
         provider config at refresh time (#13630).  Returns the secret id.
         """
         creds = self._oauth_bundle(token_response, token_url, scopes, provider)
-        name = f"connector:{connector_id}:auth"
+        name = connector_secret_name(connector_id)
         value = json.dumps(creds, ensure_ascii=False)
         result = await asyncio.get_running_loop().run_in_executor(
             None,

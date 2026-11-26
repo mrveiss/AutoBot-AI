@@ -27,7 +27,8 @@ YAML_FILE_EXTENSIONS = {".yaml", ".yml"}
 # for apply_env_overrides function to reduce function length
 ENV_VAR_MAPPINGS = {
     # Backend configuration
-    "AUTOBOT_BACKEND_HOST": ["backend", "server_host"],
+    # bind address; AUTOBOT_BACKEND_HOST is the dialed host, not a bind setting (#18810)
+    "AUTOBOT_BACKEND_BIND_HOST": ["backend", "server_host"],
     "AUTOBOT_BACKEND_PORT": ["backend", "server_port"],
     "AUTOBOT_BACKEND_TIMEOUT": ["backend", "timeout"],
     "AUTOBOT_BACKEND_MAX_RETRIES": ["backend", "max_retries"],

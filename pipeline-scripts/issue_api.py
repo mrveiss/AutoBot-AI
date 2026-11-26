@@ -19,7 +19,7 @@ import importlib.util
 import urllib.parse
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 UPSERT_PATH = Path(__file__).resolve().parent.parent / ".github/actions/upsert-pr-comment/upsert_pr_comment.py"
 _MODULE_NAME = "_upsert_pr_comment_pipeline"
@@ -76,6 +76,24 @@ class IssueClient:
         if self._upsert is not None:
             return self._upsert(number, marker, body)
         return load_upsert().upsert(self.api.api_root, self.repo, number, self.api.token, marker, body)
+
+
+def list_issues(
+    client: IssueClient, params: Dict[str, Any], page_size: int = 100, max_pages: int = 50
+) -> Tuple[List[Dict[str, Any]], bool]:
+    """Issues matching ``params`` (never pull requests), paginated: ``(items, complete)``.
+
+    ``complete`` is False when the page cap ended the listing, so a caller that must not act on a
+    partial list can say so. The one issue paginator of the pipeline scripts (#21592).
+    """
+    items: List[Dict[str, Any]] = []
+    for page in range(1, max_pages + 1):
+        query = urllib.parse.urlencode({**params, "per_page": page_size, "page": page})
+        batch = client.call("GET", f"/repos/{client.repo}/issues?{query}")
+        items += [item for item in batch if not item.get("pull_request")]
+        if len(batch) < page_size:
+            return items, True
+    return items, False
 
 
 def ensure_label(client: IssueClient, name: str, color: str, description: str) -> None:

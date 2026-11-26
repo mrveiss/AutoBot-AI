@@ -24,6 +24,7 @@ const run = (over: Partial<CodebaseRunState>): CodebaseRunState => ({
   partial: true,
   reason: 'killed by the hard timeout: run exceeded 1800s',
   started_at: '2026-11-01T14:25:50+00:00',
+  ordered_at: '2026-11-01T14:25:50+00:00',
   finished_at: '2026-11-01T14:54:53+00:00',
   last_completed_at: '2026-10-30T09:00:00+00:00',
   ...over,

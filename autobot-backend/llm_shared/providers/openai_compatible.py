@@ -29,6 +29,7 @@ from llm_shared.structured_output import StructuredOutputMode, response_format_f
 
 from ..base_provider import BaseProvider
 from .cache_utils import sorted_for_cache
+from .message_formatting import openai_function_tool_schemas
 
 logger = get_logger(__name__)
 
@@ -163,7 +164,7 @@ class OpenAICompatibleProvider(BaseProvider):
         if request.stop:
             params["stop"] = request.stop
         if request.tools:
-            params["tools"] = self._tools_payload(request)
+            params["tools"] = openai_function_tool_schemas(request.tools)
             if request.tool_choice:
                 params["tool_choice"] = request.tool_choice
         if self.forward_penalty_params:
@@ -192,21 +193,6 @@ class OpenAICompatibleProvider(BaseProvider):
         reject (``note_structured_output`` records what was applied).
         """
         return response_format_for_mode(request, self.structured_output_mode)
-
-    @staticmethod
-    def _tools_payload(request: LLMRequest) -> List[Dict[str, Any]]:
-        """Map ToolDefinition objects to OpenAI function-tool dicts."""
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema,
-                },
-            }
-            for t in request.tools
-        ]
 
     @staticmethod
     def _parse_tool_calls(message: Any) -> List[ToolCall]:

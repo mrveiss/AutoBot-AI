@@ -13,7 +13,7 @@
  * Issue #1579: Extracted from CodebaseAnalytics.vue
  */
 
-import { ref, watch, type Ref } from 'vue'
+import { getCurrentScope, onScopeDispose, ref, watch, type Ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
@@ -185,6 +185,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
   // Ended by a source switch and by every restart of polling: a poll or follow-up that was
   // already in flight resumes after its `await` and must not write the old session's answer.
   const pollSession = createPollSession()
+  if (getCurrentScope()) onScopeDispose(pollSession.renew) // #21474: a page that was left (a source switch remounts it) ends its session
 
   const startJobPolling = () => {
     pollSession.renew()

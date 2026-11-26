@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.regex_whitespace import NOT_WS, WS, WS_CHARS
 from autobot_shared.status_enums import CommandRisk
 from command_run_policy import CommandRunPolicy
 from constants.network_constants import NetworkConstants
@@ -43,21 +44,16 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-
-# #7375: env-var prefix injection — surfaced by #7367 test rot triage.
-# Production previously classified `PATH=/x:$PATH ls` and
-# `LD_PRELOAD=/x.so ls` as MODERATE because the base-command lookup hit
-# `ls` (a SAFE/MODERATE command) without parsing the env-var prefix as a
-# distinct injection vector. Both are real attacker techniques:
-#   - PATH manipulation shadows standard binaries (sudo helpers, cron,
-#     login shells) by prepending an attacker-controlled directory.
-#   - LD_PRELOAD / LD_LIBRARY_PATH / DYLD_INSERT_LIBRARIES hijack any
-#     dynamic-linker symbol before the target binary runs — used in
-#     container-escape and privilege-escalation chains.
-#   - IFS / BASH_ENV / ENV affect shell parsing in subshells.
-#   - PYTHONPATH / PERL5LIB / RUBYLIB / NODE_PATH inject malicious
-#     libraries into interpreter startup.
-_ENV_VAR_PREFIX_RE = re.compile(r"^\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|\"[^\"]*\"|\S*)\s+)+")
+# #7375: env-var prefix injection (`PATH=/x:$PATH ls`, `LD_PRELOAD=/x.so ls`) classified MODERATE because the
+# base-command lookup hit `ls` without parsing the prefix. Real attacker techniques: PATH shadowing of standard
+# binaries, LD_PRELOAD / LD_LIBRARY_PATH / DYLD_INSERT_LIBRARIES linker hijack, IFS / BASH_ENV / ENV shell-parsing
+# changes, PYTHONPATH / PERL5LIB / RUBYLIB / NODE_PATH interpreter-startup injection.
+# #21987: linear form of ``^\s*(?:NAME=(?:'[^']*'|"[^"]*"|\S*)\s+)+`` (py/redos): quoted arms keep only values holding
+# whitespace, and the bare arm is skipped where a quoted arm plus ``\s`` would match; every match is identical.
+_SQ, _DQ = f"'[^'{WS_CHARS}]*{WS}[^']*'", f'"[^"{WS_CHARS}]*{WS}[^"]*"'
+_ENV_VAR_PREFIX_RE = re.compile(
+    rf"^{WS}*(?:[A-Za-z_][A-Za-z0-9_]*=(?:{_SQ}|{_DQ}|(?!{_SQ}{WS})(?!{_DQ}{WS}){NOT_WS}*){WS}+)+"
+)
 _DANGEROUS_ENV_VARS = frozenset(
     {
         # Linker / loader hijack

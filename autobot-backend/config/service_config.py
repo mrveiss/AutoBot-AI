@@ -12,6 +12,7 @@ import os
 from typing import Any, Dict
 from urllib.parse import urlparse
 
+from autobot_shared.ollama_urls import ollama_base_url
 from autobot_shared.ssot_config import config as ssot_config
 from config.registry import ConfigRegistry
 from constants.network_constants import NetworkConstants
@@ -237,7 +238,7 @@ class ServiceConfigMixin:
         # Then check configuration
         endpoint = self.get_nested("backend.llm.local.providers.ollama.endpoint")
         if endpoint:
-            return endpoint.replace("/api/generate", "")  # Get base URL
+            return ollama_base_url(endpoint)
 
         host = self.get_nested("backend.llm.local.providers.ollama.host")
         if host:
@@ -247,8 +248,8 @@ class ServiceConfigMixin:
         ollama_host = self.get_host("ollama")
         ollama_port = self.get_port("ollama")
         if ollama_host and ollama_port:
-            return f"http://{ollama_host}:{ollama_port}"
-        return f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+            return ollama_base_url(f"http://{ollama_host}:{ollama_port}")
+        return ollama_base_url(f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}")
 
     def get_ollama_url_for_model(self, model_name: str) -> str:
         """Get Ollama URL routed by model name (#1070).

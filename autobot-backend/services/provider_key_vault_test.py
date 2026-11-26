@@ -48,7 +48,7 @@ async def test_a_failed_mirror_logs_the_key_name_and_never_the_value(monkeypatch
 
     assert wrote is False
     logged = caplog.text
-    assert name in logged, "the key name was dropped; the failure is no longer diagnosable"
+    assert "mirror failed" in logged and name not in logged, "the log must say what failed, never which credential"
     assert _SECRET not in logged, "the credential reached the log"
 
 

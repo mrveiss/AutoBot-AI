@@ -111,7 +111,7 @@ export function filterByFeatureFlag(
 // ─── Primary nav (≤7 items for non-admin users at 1440 px) ───────────────────
 // Data-driven navigation items: single source of truth for desktop + mobile nav
 export const navItems: NavItem[] = [
-  { to: '/home', labelKey: 'nav.home', icon: 'M10.707 2.293a1 1 0 00-1.414 0l-7 7v11a1 1 0 001 1h2a1 1 0 001-1v-5a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 001 1h2a1 1 0 001-1v-7l7-7a1 1 0 000-1.414z', iconViewBox: '0 0 24 24', iconRule: 'evenodd' },
+  { to: '/home', labelKey: 'nav.home', iconPaths: [ICONS.home], iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/chat', labelKey: 'nav.chat', icon: 'M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z', iconRule: 'evenodd' },
   // GH#8757: AI Documents and the Transcriber moved into the Knowledge sidebar
   // (BROWSE group) — see KnowledgeView.vue. Routes live under /knowledge/* now;
@@ -140,6 +140,9 @@ export const profileMenuItems: NavItem[] = [
   // MVA-360: Live Canvas — experimental, gated by VITE_FEATURE_CANVAS (GH#8758).
   // Fails CLOSED (hidden) unless the env var is explicitly 'true'.
   { to: '/canvas', labelKey: 'nav.canvas', icon: 'M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z', iconViewBox: '0 0 24 24', iconStroke: true, featureFlag: 'canvas' },
+  // #20644: Batch Processing and Vision moved here from the SLM console; any signed-in user's work.
+  { to: '/batch', labelKey: 'nav.batchJobs', keywords: ['nav.keywords.batchJobs'], icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10', iconViewBox: '0 0 24 24', iconStroke: true },
+  { to: '/vision', labelKey: 'nav.vision', keywords: ['nav.keywords.vision'], iconPaths: ['M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z'], iconViewBox: '0 0 24 24', iconStroke: true },
 ];
 
 // ─── Header icon cluster (#18240) ────────────────────────────────────────────

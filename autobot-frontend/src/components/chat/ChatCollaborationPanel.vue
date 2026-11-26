@@ -1,66 +1,63 @@
 <template>
   <div
     tabindex="-1" role="complementary" :aria-label="$t('collaboration.panel.title')"
-    class="w-80 max-w-80 min-w-80 h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
+    class="flex h-full w-80 min-w-80 max-w-80 flex-col border-s border-[var(--aui-color-border)] bg-[var(--aui-color-surface)]"
   >
     <!-- Header -->
-    <div class="flex items-center justify-between p-3 border-b border-autobot-border shrink-0">
-      <div class="flex items-center gap-2">
-        <Icon name="users" class="text-autobot-text-secondary" />
-        <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('collaboration.panel.title') }}</h3>
+    <div class="flex shrink-0 items-center justify-between border-b border-[var(--aui-color-border)] p-3">
+      <div class="flex items-center gap-2 text-[var(--aui-color-text-muted)]">
+        <Icon name="users" />
+        <h3 class="m-0 text-sm font-semibold text-[var(--aui-color-text)]">{{ $t('collaboration.panel.title') }}</h3>
       </div>
       <div class="flex items-center gap-1">
-        <button
-          @click="showInviteDialog = true"
-          class="w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary"
+        <BaseButton
+          variant="ghost"
+          size="xs"
           :title="$t('collaboration.panel.invite')"
           :aria-label="$t('collaboration.panel.invite')"
+          @click="showInviteDialog = true"
         >
           <Icon name="user-plus" class="text-xs" />
-        </button>
-        <button
-          @click="$emit('close')"
-          class="w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary"
+        </BaseButton>
+        <BaseButton
+          variant="ghost"
+          size="xs"
           :title="$t('collaboration.panel.closePanel')"
           :aria-label="$t('collaboration.panel.closePanel')"
+          @click="$emit('close')"
         >
           <Icon name="times" class="text-xs" />
-        </button>
+        </BaseButton>
       </div>
     </div>
 
-    <!-- Tabs: Participants / Activity / Notifications -->
-    <div class="flex border-b border-autobot-border shrink-0" role="tablist">
-      <button
-        v-for="tab in tabs"
-        :key="tab.id"
-        role="tab"
-        :aria-selected="activeTab === tab.id"
-        class="flex-1 px-3 py-2 text-xs font-medium border-b-2 transition-colors"
-        :class="activeTab === tab.id
-          ? 'border-electric-500 text-autobot-text-primary'
-          : 'border-transparent text-autobot-text-muted hover:text-autobot-text-secondary'"
-        @click="activeTab = tab.id"
-      >
-        {{ tab.label }}
-        <span v-if="tab.id === 'notifications' && secretNotifications.length > 0" class="ml-1 text-electric-500">
-          ({{ secretNotifications.length }})
-        </span>
-        <span v-if="tab.id === 'invitations' && pendingInvitations.length > 0" class="ml-1 text-electric-500">
-          ({{ pendingInvitations.length }})
-        </span>
-      </button>
-    </div>
+    <!-- Tabs: Participants / Activity / Notifications / Invitations. List-only: the panel below owns the tabpanel. -->
+    <BaseTabs
+      list-only
+      size="sm"
+      :items="tabItems"
+      :label="$t('collaboration.panel.tabsLabel')"
+      :model-value="activeTab"
+      @update:model-value="activeTab = $event as PanelTab"
+    />
 
     <!-- Tab content -->
-    <div class="flex-1 min-h-0 overflow-y-auto">
-      <ParticipantList
-        v-if="activeTab === 'participants'"
-        allow-management
-        @invite="showInviteDialog = true"
-        @remove-participant="handleRemoveParticipant"
-        @change-role="handleChangeRole"
-      />
+    <div
+      id="chat-collab-tabpanel"
+      role="tabpanel"
+      :aria-labelledby="`chat-collab-tab-${activeTab}`"
+      class="min-h-0 flex-1 overflow-y-auto"
+    >
+      <template v-if="activeTab === 'participants'">
+        <!-- #21993: who is present, above the roster -->
+        <PresenceIndicator expanded class="border-b border-[var(--aui-color-border)] p-3" />
+        <ParticipantList
+          allow-management
+          @invite="showInviteDialog = true"
+          @remove-participant="handleRemoveParticipant"
+          @change-role="handleChangeRole"
+        />
+      </template>
       <ActivityFeed v-else-if="activeTab === 'activity'" />
       <SecretNotifications v-else-if="activeTab === 'notifications'" />
       <PendingInvitations v-else-if="activeTab === 'invitations'" />
@@ -90,9 +87,12 @@
  * current user, so this tab is reachable (and useful) even though the
  * panel that hosts it only opens for an already-collaborative session.
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { BaseButton, BaseTabs } from '@autobot/ui'
+import type { TabItem } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
+import PresenceIndicator from '@/components/collaboration/PresenceIndicator.vue'
 import ParticipantList from '@/components/collaboration/ParticipantList.vue'
 import ActivityFeed from '@/components/collaboration/ActivityFeed.vue'
 import SecretNotifications from '@/components/collaboration/SecretNotifications.vue'
@@ -112,15 +112,25 @@ defineEmits<{
   close: []
 }>()
 
-const activeTab = ref<'participants' | 'activity' | 'notifications' | 'invitations'>('participants')
+type PanelTab = 'participants' | 'activity' | 'notifications' | 'invitations'
+const activeTab = ref<PanelTab>('participants')
 const showInviteDialog = ref(false)
 
-const tabs = [
-  { id: 'participants' as const, get label() { return t('collaboration.panel.tabParticipants') } },
-  { id: 'activity' as const, get label() { return t('collaboration.panel.tabActivity') } },
-  { id: 'notifications' as const, get label() { return t('collaboration.panel.tabNotifications') } },
-  { id: 'invitations' as const, get label() { return t('collaboration.panel.tabInvitations') } }
-]
+/** A tab's text carries its pending count, so the number is read with the name; the template is translated. */
+function withCount(label: string, count: number): string {
+  return count > 0 ? t('collaboration.panel.tabCounted', { label, count }) : label
+}
+
+const tabItems = computed<TabItem[]>(() => [
+  { value: 'participants', label: t('collaboration.panel.tabParticipants') },
+  { value: 'activity', label: t('collaboration.panel.tabActivity') },
+  { value: 'notifications', label: withCount(t('collaboration.panel.tabNotifications'), secretNotifications.value.length) },
+  { value: 'invitations', label: withCount(t('collaboration.panel.tabInvitations'), pendingInvitations.value.length) },
+].map((tab) => ({
+  ...tab,
+  id: `chat-collab-tab-${tab.value}`,
+  controls: tab.value === activeTab.value ? 'chat-collab-tabpanel' : undefined,
+})))
 
 const handleInvited = (_userId: string, username: string) => {
   logger.info(`Invited ${username} to the session`)

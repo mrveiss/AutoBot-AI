@@ -39,7 +39,9 @@ comments are read and upserted by the one helper, ``.github/actions/upsert-pr-co
 from __future__ import annotations
 
 import argparse
+import datetime
 import logging
+import os
 import re
 import sys
 import urllib.parse
@@ -48,8 +50,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from github_api import TRUSTED_ASSOCIATIONS, build_api  # noqa: E402
-from issue_api import IssueApiError, IssueClient, ensure_label, load_upsert  # noqa: E402
+from issue_api import IssueApiError, IssueClient, ensure_label, list_issues, load_upsert  # noqa: E402
+
+from autobot_shared.env_utils import env_int  # noqa: E402  # the one env integer reader (#15691)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +67,14 @@ SWEEP_PAGE_SIZE = 100
 SWEEP_MAX_PAGES = 50  # 5,000 open issues; the backlog is about half that
 # Full checks per sweep run: each costs 2-4 API calls against the 1,000/hour GITHUB_TOKEN budget.
 SWEEP_MAX_CHECKS = 100
+# #21854: the workflow runs one at a time and every run covers what changed since the last
+# successful run's start; with no successful run on record this window bounds the first one.
+TRIAGE_WORKFLOW_FILE = "issue-triage.yml"
+# Issues one run checks from the changed set (each costs 2-4 API calls here plus the triage and
+# wording jobs against the same 1,000/hour token budget); the rest wait for the next run.
+CHANGED_MAX = env_int("ISSUE_TRIAGE_MAX_CHANGED", 50)
+CURSOR_JOB_PREFIX = "Window cursor "
+FALLBACK_WINDOW_HOURS = env_int("ISSUE_TRIAGE_FALLBACK_WINDOW_HOURS", 24)
 
 ACTION_NONE = "none"
 ACTION_LINK = "link"
@@ -366,14 +379,9 @@ def check_issue_structure(client: StructureClient, number: int) -> List[str]:
 
 def open_issues(client: StructureClient) -> List[Dict[str, Any]]:
     """Every open issue (not PRs), paginated up to the page cap."""
-    items: List[Dict[str, Any]] = []
-    for page in range(1, SWEEP_MAX_PAGES + 1):
-        query = urllib.parse.urlencode({"state": "open", "per_page": SWEEP_PAGE_SIZE, "page": page})
-        batch = client.call("GET", f"/repos/{client.repo}/issues?{query}")
-        items += [item for item in batch if not item.get("pull_request")]
-        if len(batch) < SWEEP_PAGE_SIZE:
-            return items
-    logger.warning("sweep stopped at the %d-page cap; later issues wait for an issue event", SWEEP_MAX_PAGES)
+    items, complete = list_issues(client, {"state": "open"}, SWEEP_PAGE_SIZE, SWEEP_MAX_PAGES)
+    if not complete:
+        logger.warning("sweep stopped at the %d-page cap; later issues wait for an issue event", SWEEP_MAX_PAGES)
     return items
 
 
@@ -406,15 +414,103 @@ def sweep_targets(items: Iterable[Dict[str, Any]], cap: int = SWEEP_MAX_CHECKS) 
     return [number for _, number in ranked[:cap]]
 
 
+_CURSOR_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)(?:#(\d+))?$")
+
+
+def parse_window_cursor(text: str) -> Tuple[str, int]:
+    """``(updated_at, issue number)``: issues at or before this pair were processed; 0 = whole second."""
+    match = _CURSOR_RE.match(text.strip())
+    if not match:
+        raise StructureError(f"unparseable window cursor {text!r}")
+    return match.group(1), int(match.group(2) or 0)
+
+
+def last_success_cursor(client: StructureClient) -> Optional[str]:
+    """The newest successful run's cursor text; None when no run succeeded.
+
+    The run publishes it in the name of its final ``cursor`` job (``CURSOR_JOB_PREFIX``), which
+    exists only when every other job succeeded. Only when that run has NO cursor job (it predates
+    the cursor) does its ``run_started_at`` stand in; a cursor job that does not parse fails loud,
+    since guessing a start there could skip issues.
+    """
+    path = f"/repos/{client.repo}/actions/workflows/{TRIAGE_WORKFLOW_FILE}/runs?status=success&per_page=1"
+    runs = client.call("GET", path).get("workflow_runs") or []
+    if not runs:
+        return None
+    jobs = client.call("GET", f"/repos/{client.repo}/actions/runs/{runs[0]['id']}/jobs?per_page=100")
+    for job in jobs.get("jobs") or []:
+        if str(job.get("name", "")).startswith(CURSOR_JOB_PREFIX):
+            text = job["name"][len(CURSOR_JOB_PREFIX) :]
+            try:
+                parse_window_cursor(text)
+            except StructureError as exc:
+                raise StructureError(f"run {runs[0]['id']}: {exc}") from exc
+            return text.strip()
+    return runs[0].get("run_started_at")
+
+
+def _utc(moment: datetime.datetime) -> str:
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def fallback_since(now: Optional[datetime.datetime] = None) -> str:
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    return _utc(now - datetime.timedelta(hours=FALLBACK_WINDOW_HOURS))
+
+
+def changed_window(client: StructureClient, cap: int = CHANGED_MAX) -> Tuple[str, List[int], str]:
+    """``(cursor, at most cap open issues after it, next cursor)`` (#21854).
+
+    Issues are ordered by ``(updated_at, number)`` and those after the cursor pair are taken, so
+    a tie on one second is broken by number and the cursor always moves. When the whole window
+    fits, the next cursor is the moment before it was listed; when capped it is the last
+    processed issue's ``updated_at#number``, so success advances only over what was processed.
+    """
+    cursor = last_success_cursor(client) or fallback_since()
+    since, after = parse_window_cursor(cursor)
+    listed_at = _utc(datetime.datetime.now(datetime.timezone.utc))
+    params = {"state": "open", "since": since, "sort": "updated", "direction": "asc"}
+    items, _ = list_issues(client, params, SWEEP_PAGE_SIZE, SWEEP_MAX_PAGES)
+    pending = sorted((i for i in items if (i["updated_at"], i["number"]) > (since, after)), key=_cursor_key)
+    if len(pending) <= cap:
+        return cursor, sorted(i["number"] for i in pending), listed_at
+    logger.warning("%d issues changed after %s; %d this run, the rest on the next", len(pending), cursor, cap)
+    last = pending[cap - 1]
+    return cursor, sorted(i["number"] for i in pending[:cap]), f"{last['updated_at']}#{last['number']}"
+
+
+def _cursor_key(item: Dict[str, Any]) -> Tuple[str, int]:
+    return item["updated_at"], item["number"]
+
+
+def write_outputs(values: Dict[str, str]) -> None:
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.writelines(f"{key}={value}\n" for key, value in values.items())
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("check").add_argument("--number", type=int, required=True)
-    sub.add_parser("sweep")
+    sweep = sub.add_parser("sweep")
+    sweep.add_argument("--changed", default="", help="space-separated issue numbers to check")
+    sweep.add_argument("--backlog", action="store_true", help="also check the backlog entries the sweep ranks")
+    sub.add_parser("window")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     client = StructureClient(build_api())
-    numbers = [args.number] if args.command == "check" else sweep_targets(open_issues(client))
+    if args.command == "window":
+        since, changed, until = changed_window(client)
+        logger.info("window %s .. %s: %d changed issue(s)", since, until, len(changed))
+        write_outputs({"since": since, "changed": " ".join(map(str, changed)), "until": until})
+        return 0
+    if args.command == "check":
+        numbers = [args.number]
+    else:
+        backlog = sweep_targets(open_issues(client)) if args.backlog else []
+        numbers = sorted({*map(int, args.changed.split()), *backlog})
     failed = []
     for number in numbers:
         try:

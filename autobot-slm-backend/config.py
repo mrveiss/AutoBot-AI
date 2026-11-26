@@ -9,6 +9,7 @@ Centralized configuration for the standalone SLM backend.
 PostgreSQL replaces SQLite for all database operations (Issue #786).
 """
 
+import json
 import logging
 import os
 import secrets
@@ -16,15 +17,16 @@ import socket
 import stat
 from functools import cached_property
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import ConfigDict, field_validator
-from pydantic_settings import BaseSettings
+from pydantic import ConfigDict, ValidationInfo, field_validator
+from pydantic_settings import BaseSettings, NoDecode
 
 from autobot_shared import postgres_identity as pg
 from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.service_registry_core import DeploymentMode, resolve_deployment_mode
+from autobot_shared.ssot_config import config as _ssot_config
 from user_management.config import get_autobot_db_config, get_slm_db_config
 
 logger = logging.getLogger(__name__)
@@ -94,6 +96,11 @@ def _get_local_ip() -> str:
         return "127.0.0.1"
 
 
+def _split_csv(raw: str) -> list:
+    """Split a comma-separated env value into stripped, non-empty entries."""
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 def _get_cors_origins() -> list:
     """Build CORS origins from env var or infrastructure SSOT.
 
@@ -104,9 +111,9 @@ def _get_cors_origins() -> list:
     Issue #2862 — removed hardcoded fallback IPs; all values now flow through
     NetworkConstants so ConfigRegistry overrides are respected.
     """
-    env_origins = os.getenv("SLM_CORS_ORIGINS", "")
+    env_origins = os.getenv("SLM_CORS_ORIGINS", "").strip()
     if env_origins:
-        return [o.strip() for o in env_origins.split(",") if o.strip()]
+        return _split_csv(env_origins)
 
     try:
         from autobot_shared.network_constants import NetworkConstants
@@ -136,9 +143,9 @@ def _get_trusted_proxies() -> list:
 
     Issue #2862 — replaced hardcoded IP fallback with SSOT-derived values.
     """
-    env_proxies = os.getenv("SLM_TRUSTED_PROXIES", "")
+    env_proxies = os.getenv("SLM_TRUSTED_PROXIES", "").strip()
     if env_proxies:
-        return [ip.strip() for ip in env_proxies.split(",") if ip.strip()]
+        return _split_csv(env_proxies)
 
     proxies = ["127.0.0.1", "::1"]
     try:
@@ -445,11 +452,11 @@ class Settings(RedactedReprMixin, BaseSettings):
     monitoring_host: str | None = None
     grafana_url: str = os.getenv(
         "SLM_GRAFANA_URL",
-        f"http://{os.getenv('AUTOBOT_BACKEND_HOST', '127.0.0.1')}:{os.getenv('AUTOBOT_GRAFANA_PORT', '3000')}",
+        f"http://{_ssot_config.vm.main}:{os.getenv('AUTOBOT_GRAFANA_PORT', '3000')}",
     )
     prometheus_url: str = os.getenv(
         "SLM_PROMETHEUS_URL",
-        f"http://{os.getenv('AUTOBOT_BACKEND_HOST', '127.0.0.1')}:{os.getenv('AUTOBOT_PROMETHEUS_PORT', '9090')}",
+        f"http://{_ssot_config.vm.main}:{os.getenv('AUTOBOT_PROMETHEUS_PORT', '9090')}",
     )
 
     # Health checks
@@ -490,14 +497,39 @@ class Settings(RedactedReprMixin, BaseSettings):
         return resolve_deployment_mode() is DeploymentMode.DOCKER_LOCAL
 
     # CORS settings
-    cors_origins: list = _get_cors_origins()
+    cors_origins: Annotated[list, NoDecode] = _get_cors_origins()
 
     # Trusted reverse-proxy IPs (Issue #2239, #2862).
     # X-Forwarded-For is only honoured when the direct TCP connection comes
     # from one of these addresses.  Override with SLM_TRUSTED_PROXIES
     # (comma-separated).  The default is derived from NetworkConstants so the
     # ConfigRegistry SSOT is respected; no IPs are hardcoded here.
-    trusted_proxies: list = _get_trusted_proxies()
+    trusted_proxies: Annotated[list, NoDecode] = _get_trusted_proxies()
+
+    @field_validator("cors_origins", "trusted_proxies", mode="before")
+    @classmethod
+    def _parse_csv_list(cls, value, info: ValidationInfo):
+        """Comma-separated is the one env format for these list fields (#22116).
+
+        ``NoDecode`` stops pydantic-settings JSON-decoding the env value, so a
+        string reaches here and is split by ``_split_csv`` (same helper the
+        default factories use). A blank value means unset and keeps the
+        default, as the default factories treat it. A JSON array string is
+        also accepted for backward compatibility; text that only looks like
+        one (a bracketed IPv6 such as ``[::1]``) is split as CSV. Lists pass
+        through unchanged.
+        """
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if not text:
+            return cls.model_fields[info.field_name].default
+        if text.startswith("["):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                pass
+        return _split_csv(text)
 
     # External URL - remote nodes use nginx reverse proxy.
     # Issue #2758: derive dynamically from local IP when SLM_EXTERNAL_URL is

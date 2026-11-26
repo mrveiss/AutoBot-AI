@@ -57,6 +57,16 @@ def _state(context=None, tool_calls=None, extra=None):
     return base
 
 
+_COMPANY = {"verified_company_id": "00000000-0000-0000-0000-000000018430"}  # a mutating call needs a scope
+
+
+def _line_world():
+    """The line store and SLM read faked as readable (unreadable is line 3, which gets no card, #19957)."""
+    from tests.unit.chat_workflow.test_ai_line_support import ai_line_world
+
+    return ai_line_world()
+
+
 # --- (a) flag OFF: zero behavior change, old inline-dispatch path used -----
 
 
@@ -136,9 +146,10 @@ async def test_flag_on_work_item_category_sets_needs_approval_before_execution(m
     manager._process_tool_calls = fake_dispatch_should_not_run
 
     config = {"configurable": {"manager": manager, "stream_callback": None}}
-    state = _state(context={"work_item_id": "wi-1", "requires_approval_before": ["destructive operations"]})
+    state = _state(context={**_COMPANY, "work_item_id": "wi-1", "requires_approval_before": ["destructive operations"]})
 
-    result = await graph.generate_response(state, config)
+    with _line_world():
+        result = await graph.generate_response(state, config)
 
     assert dispatch_calls["count"] == 0, "generate_response must never dispatch tools in the gated path"
     assert result["tool_calls"][0]["needs_approval"] is True
@@ -159,9 +170,10 @@ async def test_flag_on_approval_category_sets_needs_approval_before_execution(mo
     manager._run_llm_iteration_plan_only = fake_plan_only
 
     config = {"configurable": {"manager": manager, "stream_callback": None}}
-    state = _state(context={"requires_approval_before": ["pushing commits"]})
+    state = _state(context={**_COMPANY, "requires_approval_before": ["pushing commits"]})
 
-    result = await graph.generate_response(state, config)
+    with _line_world():
+        result = await graph.generate_response(state, config)
 
     assert result["tool_calls"][0]["needs_approval"] is True
     assert graph.route_after_generation({**state, **result}) == "request_approval"
@@ -261,7 +273,9 @@ async def test_deny_skips_execution_entirely(monkeypatch):
     result = await graph.execute_tools(state, config)
 
     assert dispatch_calls["count"] == 0
-    assert result["should_continue"] is False
+    # #19957: the refusal is a result the model reads next, so the turn continues rather than ending silently.
+    assert result["should_continue"] is True
+    assert [r["status"] for r in result["execution_history"]] == ["refused"]
 
 
 # --- execute_tools must not re-block an already-approved/never-gated tool -
@@ -369,6 +383,9 @@ async def test_tool_call_needs_approval_asks_the_single_resolver():
     # ... but the baseline alone holds it back again if the category is not relaxed.
     with ai_line_world(stored=AiLine.AUTONOMOUS):
         assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is True
-    # Line 3 always interrupts (the seam then refuses).
+    # Line 3 gets no card, since no yes lifts it (#19957): the dispatch seam refuses it and the model is told.
     with ai_line_world(stored=AiLine.NEVER, slm_relaxed=relaxed):
-        assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is True
+        assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is False
+    # An unreadable line store resolves to line 3 too: no Approve card that could only be refused.
+    with ai_line_world(store_unavailable=True):
+        assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is False

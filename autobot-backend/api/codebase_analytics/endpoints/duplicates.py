@@ -39,6 +39,7 @@ from utils.celery_task_status import known_task_status_or_404, store_latest_task
 from utils.io_executor import get_analytics_executor
 
 from ..duplicate_detector import DuplicateCodeDetector, detect_duplicates_async
+from ..run_status import run_response_fields
 from .duplicate_results import (  # noqa: F401  (re-exported: the Celery task and tests import them from here)
     _build_detection_error_response,
     _convert_analysis_to_result,
@@ -310,9 +311,13 @@ async def _handle_detection_failure(error: Exception, source_id: str) -> JSONRes
     """
     logger.error("Duplicate detection failed: %s", error, exc_info=True)
 
+    # #21418: the fallback serves the INDEX's findings, so it carries the source's run state like
+    # every other results route (#21003): the one ``run_response_fields`` shape, read BEFORE the
+    # findings for the same reason ``with_run_state`` reads it first.
+    run_fields = await run_response_fields(source_id)
     fallback = await asyncio.to_thread(_get_chromadb_fallback, str(error), source_id)
     if fallback:
-        return JSONResponse(fallback)
+        return JSONResponse({**fallback, **run_fields})
 
     resp = _build_detection_error_response()
     return JSONResponse(resp)

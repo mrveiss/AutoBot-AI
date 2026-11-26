@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict
 from autobot_shared.env_utils import env_flag, env_float, env_int_clamped
 from autobot_shared.log_dir import FirstWriteFileHandler, resolve_logs_dir
 from autobot_shared.logging_once import first_time
-from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
+from autobot_shared.stream_logging import EmitOnceFilter, build_stderr_handler, build_stdout_handler
 
 if TYPE_CHECKING:
     from config.manager import ConfigManager
@@ -461,6 +461,7 @@ class LoggingManager:
             log_file, max_bytes=max_bytes, backup_count=backup_count, on_unwritable=cls._file_unwritable
         )
         handler.setFormatter(cls._get_formatter())
+        handler.addFilter(EmitOnceFilter(f"file:{key}"))  # #21773: a package logger and its modules share it
         cls._file_handlers[key] = handler
         return handler
 

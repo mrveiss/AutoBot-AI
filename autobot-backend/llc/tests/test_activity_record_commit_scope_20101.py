@@ -31,7 +31,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.activity import ActorType
-from llc.models.enums import ActivityEventType, AssigneeType, WorkItemStatus
+from llc.models.enums import ActivityEventType, AssigneeType, WorkItemStatus, WorkItemType
 from llc.services import activity_log as activity_log_module
 from llc.services.activity_log import LLCActivityLogService
 from llc.services.actor import ActivityRecordError, audit
@@ -297,7 +297,13 @@ def _service_whose_audit_fails() -> HandoffService:
 
 def _a2h_session(agent_id: str) -> AsyncMock:
     item = MagicMock(
-        assignee_agent_id=uuid.UUID(agent_id), project_id=None, title="t", description="d", version=1, identifier="W-1"
+        type=WorkItemType.TASK.value,  # agent_to_human converts it for the reviewer-role check (handoff.py:575)
+        assignee_agent_id=uuid.UUID(agent_id),
+        project_id=None,
+        title="t",
+        description="d",
+        version=1,
+        identifier="W-1",
     )
     session = AsyncMock()
     session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=item)))
@@ -306,7 +312,13 @@ def _a2h_session(agent_id: str) -> AsyncMock:
 
 async def test_a_failed_audit_leaves_the_key_and_sends_nothing_on_agent_to_human():
     agent, redis, service = str(uuid.uuid4()), _redis(), _service_whose_audit_fails()
-    with patch("llc.services.handoff.get_async_redis_client", AsyncMock(return_value=redis)):
+    with (
+        patch("llc.services.handoff.get_async_redis_client", AsyncMock(return_value=redis)),
+        patch(
+            "llc.services.handoff.get_review_gate_service",
+            return_value=MagicMock(missing_reviewer_role=AsyncMock(return_value=None)),
+        ),  # the policy's reviewer role has its own tests (#21588)
+    ):
         with pytest.raises(ActivityRecordError):
             await service.agent_to_human(_a2h_session(agent), str(uuid.uuid4()), agent, USER, COMPANY)
     redis.eval.assert_not_called()  # the owner-checked release (delete_if_holder / delete_if_value)

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from knowledge.category_quarantine import rebuild_category_quarantine_index
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -97,6 +98,7 @@ async def _adopt_then_backfill(kb) -> None:
     """
     await kb.adopt_legacy_facts()
     await kb.backfill_document_visibility()
+    await rebuild_category_quarantine_index(kb.redis())  # #21957: once; marker-guarded
 
 
 def _publish_knowledge_base(kb, app: "FastAPI | None" = None) -> None:

@@ -21,6 +21,21 @@ export function factByKeyUrl(documentId: string): string {
   return `${getApiBase()}/knowledge_base/fact/${encodeURIComponent(factKey)}`
 }
 
+/**
+ * The ONE default fact category the knowledge UI shows and submits when none is set (#21921).
+ * The display form of the backend's `CategoryDefaults.GENERAL` (`autobot_shared/category_defaults.py`,
+ * `'general'`); `repo_tests/knowledge_default_category_mirror_21921_test.py` fails if the two drift apart.
+ */
+export const DEFAULT_FACT_CATEGORY = 'General'
+/** The UI document class a fact shows as when the backend sent no `type`. */
+export const DEFAULT_FACT_TYPE = 'document'
+const DOCUMENT_TYPES: readonly KnowledgeDocument['type'][] = ['document', 'webpage', 'api', 'upload']
+
+/** The backend `type` when it is a UI document class, else the default (an unknown fact type such as `man_page`). */
+function documentType(factType: string): KnowledgeDocument['type'] {
+  return DOCUMENT_TYPES.find((t) => t === factType) ?? DEFAULT_FACT_TYPE
+}
+
 function metaString(meta: Record<string, unknown>, key: string): string {
   const value = meta[key]
   return typeof value === 'string' ? value : ''
@@ -30,15 +45,17 @@ export function factToDocument(documentId: string, fact: FactByKeyBody): Knowled
   const meta = fact.metadata ?? {}
   const parsed = fact.created_at ? new Date(fact.created_at) : null
   const created = parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date(0)
+  const factType = metaString(meta, 'type')
   return {
     id: documentId,
     title: metaString(meta, 'title'),
     content: typeof fact.content === 'string' ? fact.content : '',
     source: metaString(meta, 'source'),
-    type: 'document',
+    type: documentType(factType),
     tags: Array.isArray(meta.tags) ? meta.tags.filter((tag): tag is string => typeof tag === 'string') : [],
-    category: metaString(meta, 'category'),
+    category: metaString(meta, 'category') || DEFAULT_FACT_CATEGORY,
     createdAt: created,
     updatedAt: created,
+    metadata: { factType: factType || undefined },
   }
 }

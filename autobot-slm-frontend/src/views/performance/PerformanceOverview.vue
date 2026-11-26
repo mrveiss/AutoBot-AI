@@ -49,18 +49,18 @@ const topSlowTraces = computed(() => overview.value?.top_slow_traces ?? [])
  * Determine color class for latency values.
  */
 function latencyColor(ms: number): string {
-  if (ms < 200) return 'text-green-600'
-  if (ms < 1000) return 'text-amber-600'
-  return 'text-red-600'
+  if (ms < 200) return 'text-autobot-success'
+  if (ms < 1000) return 'text-autobot-warning'
+  return 'text-autobot-error'
 }
 
 /**
  * Determine color class for error rate.
  */
 function errorRateColor(pct: number): string {
-  if (pct < 1) return 'text-green-600'
-  if (pct < 5) return 'text-amber-600'
-  return 'text-red-600'
+  if (pct < 1) return 'text-autobot-success'
+  if (pct < 5) return 'text-autobot-warning'
+  return 'text-autobot-error'
 }
 
 /**
@@ -68,9 +68,9 @@ function errorRateColor(pct: number): string {
  */
 function sloBarColor(): string {
   const pct = sloCompliance.value
-  if (pct >= 99) return 'bg-green-500'
-  if (pct >= 95) return 'bg-amber-500'
-  return 'bg-red-500'
+  if (pct >= 99) return 'bg-autobot-dot-ok'
+  if (pct >= 95) return 'bg-autobot-dot-warn'
+  return 'bg-autobot-dot-bad'
 }
 
 /**
@@ -78,10 +78,10 @@ function sloBarColor(): string {
  */
 function statusBadgeClass(status: string): string {
   switch (status) {
-    case 'ok': return 'bg-green-100 text-green-700'
-    case 'error': return 'bg-red-100 text-red-700'
-    case 'timeout': return 'bg-amber-100 text-amber-700'
-    default: return 'bg-gray-100 text-gray-700'
+    case 'ok': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
+    case 'error': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
+    case 'timeout': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
   }
 }
 
@@ -100,14 +100,14 @@ function statusBadgeClass(status: string): string {
 
     <!-- Refresh Bar -->
     <div class="flex items-center justify-between mb-6">
-      <div class="text-sm text-gray-500">
+      <div class="text-sm text-autobot-text-tertiary">
         <span v-if="totalTraces > 0">{{ $t('performance.performanceOverview.value0TotalTraces', { value0: totalTraces.toLocaleString() }) }}</span>
         <span v-if="activeSlos > 0" class="ml-4">{{ $t('performance.performanceOverview.value0ActiveSLOs', { value0: activeSlos }) }}</span>
       </div>
       <button
         @click="poller.start('')"
         :disabled="loading"
-        class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+        class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover transition-colors disabled:opacity-50"
       >
         <svg
           :class="['w-4 h-4', loading ? 'animate-spin' : '']"
@@ -129,88 +129,88 @@ function statusBadgeClass(status: string): string {
     <!-- Metric Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <!-- Avg Latency -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500 mb-1">{{ $t('performance.performanceOverview.avgLatency') }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+        <p class="text-sm text-autobot-text-tertiary mb-1">{{ $t('performance.performanceOverview.avgLatency') }}</p>
         <p :class="['text-3xl font-bold', latencyColor(avgLatency)]">
           {{ formatDuration(avgLatency, { style: 'msSeconds2dp' }) }}
         </p>
-        <p class="text-xs text-gray-400 mt-1">P95: {{ formatDuration(p95Latency, { style: 'msSeconds2dp' }) }}</p>
+        <p class="text-xs text-autobot-text-tertiary mt-1">P95: {{ formatDuration(p95Latency, { style: 'msSeconds2dp' }) }}</p>
       </div>
 
       <!-- P95 Latency -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500 mb-1">{{ $t('performance.performanceOverview.p95Latency') }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+        <p class="text-sm text-autobot-text-tertiary mb-1">{{ $t('performance.performanceOverview.p95Latency') }}</p>
         <p :class="['text-3xl font-bold', latencyColor(p95Latency)]">
           {{ formatDuration(p95Latency, { style: 'msSeconds2dp' }) }}
         </p>
-        <p class="text-xs text-gray-400 mt-1">
+        <p class="text-xs text-autobot-text-tertiary mt-1">
           P99: {{ formatDuration(overview?.p99_latency_ms ?? 0, { style: 'msSeconds2dp' }) }}
         </p>
       </div>
 
       <!-- Throughput -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500 mb-1">{{ $t('performance.performanceOverview.throughput') }}</p>
-        <p class="text-3xl font-bold text-gray-900">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+        <p class="text-sm text-autobot-text-tertiary mb-1">{{ $t('performance.performanceOverview.throughput') }}</p>
+        <p class="text-3xl font-bold text-autobot-text-primary">
           {{ throughput.toLocaleString() }}
         </p>
-        <p class="text-xs text-gray-400 mt-1">{{ $t('performance.performanceOverview.requestsMin') }}</p>
+        <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('performance.performanceOverview.requestsMin') }}</p>
       </div>
 
       <!-- Error Rate -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500 mb-1">{{ $t('performance.performanceOverview.errorRate') }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+        <p class="text-sm text-autobot-text-tertiary mb-1">{{ $t('performance.performanceOverview.errorRate') }}</p>
         <p :class="['text-3xl font-bold', errorRateColor(errorRate)]">
           {{ errorRate.toFixed(2) }}%
         </p>
-        <p class="text-xs text-gray-400 mt-1">{{ $t('performance.performanceOverview.ofTotalRequests') }}</p>
+        <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('performance.performanceOverview.ofTotalRequests') }}</p>
       </div>
     </div>
 
     <!-- SLO Compliance -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 mb-6">
       <div class="flex items-center justify-between mb-2">
-        <h2 class="text-sm font-medium text-gray-700">{{ $t('performance.performanceOverview.sLOCompliance') }}</h2>
-        <span class="text-sm font-semibold text-gray-900">
+        <h2 class="text-sm font-medium text-autobot-text-secondary">{{ $t('performance.performanceOverview.sLOCompliance') }}</h2>
+        <span class="text-sm font-semibold text-autobot-text-primary">
           {{ sloCompliance.toFixed(1) }}%
         </span>
       </div>
-      <div class="w-full bg-gray-200 rounded-full h-3">
+      <div class="w-full bg-autobot-bg-active rounded-full h-3">
         <div
           :class="['h-3 rounded-full transition-all duration-500', sloBarColor()]"
           :style="{ width: `${Math.min(sloCompliance, 100)}%` }"
         ></div>
       </div>
-      <p class="text-xs text-gray-400 mt-1">{{ $t('performance.performanceOverview.value0ActiveSLOPluralTracked', { value0: activeSlos, plural: activeSlos !== 1 ? 's' : '' }) }}</p>
+      <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('performance.performanceOverview.value0ActiveSLOPluralTracked', { value0: activeSlos, plural: activeSlos !== 1 ? 's' : '' }) }}</p>
     </div>
 
     <!-- Top 10 Slowest Traces -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200">
-      <div class="px-4 py-3 border-b border-gray-200">
-        <h2 class="text-sm font-medium text-gray-700">{{ $t('performance.performanceOverview.top10SlowestTraces') }}</h2>
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+      <div class="px-4 py-3 border-b border-autobot-border">
+        <h2 class="text-sm font-medium text-autobot-text-secondary">{{ $t('performance.performanceOverview.top10SlowestTraces') }}</h2>
       </div>
-      <div v-if="topSlowTraces.length === 0 && !loading" class="p-8 text-center text-gray-400">
+      <div v-if="topSlowTraces.length === 0 && !loading" class="p-8 text-center text-autobot-text-tertiary">
         {{ $t('performance.performanceOverview.noTraceDataAvailable') }}
       </div>
       <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+        <table class="min-w-full divide-y divide-autobot-border">
+          <thead class="bg-autobot-bg-secondary">
             <tr>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.name') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.duration') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.spans') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.status') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.node') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('performance.performanceOverview.time') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.performanceOverview.name') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.performanceOverview.duration') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.performanceOverview.spans') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.performanceOverview.status') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.performanceOverview.node') }}</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('performance.performanceOverview.time') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200">
+          <tbody class="divide-y divide-autobot-border">
             <tr
               v-for="trace in topSlowTraces"
               :key="trace.trace_id"
-              class="hover:bg-gray-50"
+              class="hover:bg-autobot-bg-hover"
             >
-              <td class="px-4 py-2 text-sm text-gray-900 font-medium max-w-xs truncate">
+              <td class="px-4 py-2 text-sm text-autobot-text-primary font-medium max-w-xs truncate">
                 {{ trace.name }}
               </td>
               <td class="px-4 py-2 text-sm font-mono">
@@ -218,7 +218,7 @@ function statusBadgeClass(status: string): string {
                   {{ formatDuration(trace.duration_ms, { style: 'msSeconds2dp' }) }}
                 </span>
               </td>
-              <td class="px-4 py-2 text-sm text-gray-600">{{ trace.span_count }}</td>
+              <td class="px-4 py-2 text-sm text-autobot-text-secondary">{{ trace.span_count }}</td>
               <td class="px-4 py-2">
                 <span
                   :class="['px-2 py-0.5 text-xs font-medium rounded-full', statusBadgeClass(trace.status)]"
@@ -226,10 +226,10 @@ function statusBadgeClass(status: string): string {
                   {{ trace.status }}
                 </span>
               </td>
-              <td class="px-4 py-2 text-sm text-gray-500">
+              <td class="px-4 py-2 text-sm text-autobot-text-tertiary">
                 {{ trace.source_node_id ?? '-' }}
               </td>
-              <td class="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">
+              <td class="px-4 py-2 text-sm text-autobot-text-tertiary whitespace-nowrap">
                 {{ formatFleetDateTime(trace.created_at) }}
               </td>
             </tr>

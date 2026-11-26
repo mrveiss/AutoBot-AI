@@ -13,7 +13,7 @@
  */
 
 import { BrandMark, usePollingJob } from '@autobot/ui'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -21,7 +21,8 @@ import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useCodeSync } from '@/composables/useCodeSync'
 import { useSystemUpdates } from '@/composables/useSystemUpdates'
-import { useHighContrast } from '@/composables/useAccessibility'
+import { useSlmTheme } from '@/composables/useSlmTheme'
+import { useKeyboardNav } from '@/composables/useAccessibility'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,7 +31,7 @@ const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 const codeSync = useCodeSync()
 const systemUpdates = useSystemUpdates()
-const highContrast = useHighContrast()
+const theme = useSlmTheme()
 
 // Polling interval for code sync + system updates status (1 minute)
 const STATUS_POLL_INTERVAL = 60000
@@ -105,7 +106,7 @@ const healthClass = computed(() => {
     case 'healthy': return 'bg-success-500'
     case 'degraded': return 'bg-warning-500'
     case 'unhealthy': return 'bg-error-500'
-    default: return 'bg-gray-400'
+    default: return 'bg-autobot-dot-idle'
   }
 })
 
@@ -120,38 +121,18 @@ function navigate(path: string): void {
   router.push(path)
 }
 
-/**
- * Handle keyboard navigation within sidebar nav items.
- *
- * Helper for Sidebar keyboard navigation (Issue #754).
- */
-function handleNavKeydown(event: KeyboardEvent, index: number): void {
-  const items = visibleNavItems.value
-  let targetIndex = -1
+const navButtons = ref<HTMLElement[]>([])
 
-  switch (event.key) {
-    case 'ArrowDown':
-      targetIndex = index < items.length - 1 ? index + 1 : 0
-      break
-    case 'ArrowUp':
-      targetIndex = index > 0 ? index - 1 : items.length - 1
-      break
-    case 'Home':
-      targetIndex = 0
-      break
-    case 'End':
-      targetIndex = items.length - 1
-      break
-    default:
-      return
-  }
-
-  event.preventDefault()
-  const navEl = document.querySelector(`[data-nav-index="${targetIndex}"]`)
-  if (navEl instanceof HTMLElement) {
-    navEl.focus()
-  }
+function setNavButton(el: unknown, index: number): void {
+  if (el instanceof HTMLElement) navButtons.value[index] = el
 }
+
+// Keep one slot per visible item: a removed tail item (admin-only entry after a role change)
+// must not leave a hole that End / wrap-around would target. Post-flush, after the refs settle.
+watch(() => visibleNavItems.value.length, (count) => { navButtons.value.length = count }, { flush: 'post' })
+
+// Arrow / Home / End navigation of the menu comes from the shared a11y composable (#754).
+const navKeys = useKeyboardNav(navButtons, { orientation: 'vertical', wrap: true })
 
 /**
  * Handle user logout.
@@ -188,22 +169,22 @@ onMounted(() => {
 
 <template>
   <aside
-    class="w-64 bg-gray-900 text-white min-h-screen flex flex-col"
+    class="w-64 bg-(--slm-bar) text-(--slm-bar-fg) min-h-screen flex flex-col"
     :aria-label="$t('common.sidebar.sidebarNavigationAria')"
   >
     <!-- Logo & Title -->
-    <div class="p-4 border-b border-gray-800">
+    <div class="p-4 border-b border-(--slm-bar-line)">
       <div class="flex items-center gap-3">
         <BrandMark :size="40" />
         <div>
           <h1 class="font-bold text-lg">{{ $t('common.sidebar.sLMAdmin') }}</h1>
-          <p class="text-xs text-gray-400">{{ $t('common.sidebar.serviceLifecycleManager') }}</p>
+          <p class="text-xs text-(--slm-bar-muted)">{{ $t('common.sidebar.serviceLifecycleManager') }}</p>
         </div>
       </div>
     </div>
 
     <!-- Fleet Health Summary -->
-    <div class="p-4 border-b border-gray-800" role="status" :aria-label="healthLabel">
+    <div class="p-4 border-b border-(--slm-bar-line)" role="status" :aria-label="healthLabel">
       <div class="flex items-center gap-2 mb-2">
         <div
           :class="['w-3 h-3 rounded-full', healthClass]"
@@ -214,7 +195,7 @@ onMounted(() => {
       </div>
       <div class="grid grid-cols-2 gap-2 text-xs">
         <div class="flex justify-between">
-          <span class="text-gray-400">{{ $t('common.sidebar.total') }}</span>
+          <span class="text-(--slm-bar-muted)">{{ $t('common.sidebar.total') }}</span>
           <span>{{ fleetStore.fleetSummary.total_nodes }}</span>
         </div>
         <div class="flex justify-between">
@@ -238,16 +219,17 @@ onMounted(() => {
         <li v-for="(item, index) in visibleNavItems" :key="item.path" role="none">
           <button
             @click="navigate(item.path)"
-            @keydown="handleNavKeydown($event, index)"
-            :data-nav-index="index"
+            :ref="(el) => setNavButton(el, index)"
+            @keydown="navKeys.handleKeyDown"
+            @focus="navKeys.activeIndex.value = index"
             :aria-current="isItemActive(item.path) ? 'page' : undefined"
             role="menuitem"
             :tabindex="isItemActive(item.path) ? 0 : -1"
             :class="[
-              'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
+              'w-full flex items-center gap-3 px-3 py-2 rounded-lg border-l-(length:--nav-on-bw) transition-colors',
               isItemActive(item.path)
-                ? 'bg-primary-600 text-white'
-                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                ? 'bg-primary-600 text-white border-(--slm-bar-on)'
+                : 'text-(--slm-bar-fg) border-transparent hover:bg-(--slm-bar-hover)'
             ]"
           >
             <span class="w-5 h-5 flex items-center justify-center" aria-hidden="true">
@@ -344,21 +326,21 @@ onMounted(() => {
     </nav>
 
     <!-- User & Logout -->
-    <div class="p-4 border-t border-gray-800">
+    <div class="p-4 border-t border-(--slm-bar-line)">
       <!-- #14781: the console carries 11 locales; this is how a user reaches them -->
       <LanguageSwitcher />
 
       <!-- Issue #754: High contrast toggle -->
       <button
-        @click="highContrast.toggle()"
-        class="w-full flex items-center gap-2 px-3 py-2 mb-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
-        :aria-pressed="highContrast.enabled.value"
+        @click="theme.toggleContrast()"
+        class="w-full flex items-center gap-2 px-3 py-2 mb-2 text-sm text-(--slm-bar-fg) hover:bg-(--slm-bar-hover) rounded-lg transition-colors"
+        :aria-pressed="theme.isContrast.value"
         :aria-label="$t('common.sidebar.toggleHighContrastAria')"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
         </svg>
-        <span>{{ highContrast.enabled.value ? $t('common.sidebar.standardMode') : $t('common.sidebar.highContrast') }}</span>
+        <span>{{ theme.isContrast.value ? $t('common.sidebar.standardMode') : $t('common.sidebar.highContrast') }}</span>
       </button>
 
       <div class="flex items-center justify-between mb-2">
@@ -371,12 +353,12 @@ onMounted(() => {
           </div>
           <div>
             <p class="text-sm font-medium">{{ authStore.user?.username || $t('common.sidebar.user') }}</p>
-            <p class="text-xs text-gray-400">{{ authStore.isAdmin ? $t('common.sidebar.admin') : $t('common.sidebar.user') }}</p>
+            <p class="text-xs text-(--slm-bar-muted)">{{ authStore.isAdmin ? $t('common.sidebar.admin') : $t('common.sidebar.user') }}</p>
           </div>
         </div>
         <button
           @click="handleLogout"
-          class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+          class="p-2 text-(--slm-bar-muted) hover:text-(--slm-bar-fg) hover:bg-(--slm-bar-hover) rounded-lg transition-colors"
           :aria-label="$t('common.sidebar.logOutAria')"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -384,7 +366,7 @@ onMounted(() => {
           </svg>
         </button>
       </div>
-      <p class="text-xs text-gray-500">{{ $t('common.sidebar.sLMAdminV10') }}</p>
+      <p class="text-xs text-(--slm-bar-muted)">{{ $t('common.sidebar.sLMAdminV10') }}</p>
     </div>
   </aside>
 </template>

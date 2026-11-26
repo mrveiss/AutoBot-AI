@@ -123,7 +123,12 @@ def test_the_release_route_answers_409_to_a_stale_run_id_and_leaves_the_checkout
     item = _held_at("run-2")
     service = wis.WorkItemService(activity_log=MagicMock(record=AsyncMock()))
     service.get = AsyncMock(return_value=item)
-    with patch.object(work_items_api, "_service", return_value=service):
+    with (
+        patch.object(work_items_api, "_service", return_value=service),
+        patch.object(
+            work_items_api, "require_may_act_as", AsyncMock()
+        ),  # who may name an agent: test_named_agent_checkout_20521
+    ):
         response = _client(item).post(f"/work-items/{_ITEM_ID}/release", json={"agent_id": _AGENT, "run_id": "run-1"})
     assert response.status_code == 409
     assert item.checkout_run_id == "run-2"

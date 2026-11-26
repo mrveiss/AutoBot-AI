@@ -19,7 +19,11 @@
 
 export interface CodeQualityData {
   overall_score: number | null
-  test_coverage: number | null
+  /**
+   * The health score's 0-100 testability factor (#21395). It is NOT test coverage: no coverage
+   * source is wired, so the tile is labelled "Testability" and shows no % sign.
+   */
+  testability: number | null
   code_duplicates: number | null
   /** Estimated debt in hours. */
   technical_debt: number | null
@@ -44,7 +48,7 @@ export function buildCodeQuality(health: Json, duplicates: Json, debt: Json): Co
   const summary = (debt?.summary as Record<string, unknown> | undefined) ?? {}
   return {
     overall_score: rounded(num(health?.overall)),
-    test_coverage: rounded(num(breakdown.testability)),
+    testability: rounded(num(breakdown.testability)),
     code_duplicates: duplicateCount(duplicates),
     technical_debt: num(summary.total_hours),
   }

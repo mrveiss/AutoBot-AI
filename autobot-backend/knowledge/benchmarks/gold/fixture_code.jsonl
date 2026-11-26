@@ -1,0 +1,4 @@
+{"id": "code-q1", "query": "function returning a configured logger", "bucket": "code", "gold": ["code-1"]}
+{"id": "code-q2", "query": "class implementing chunk search with vector and keyword stage", "bucket": "code", "gold": ["code-2"]}
+{"id": "code-q3", "query": "async function that reranks facts after retrieval", "bucket": "code", "gold": ["code-3"]}
+{"id": "code-q4", "query": "function computing a sha256 digest for deduplication", "bucket": "code", "gold": ["code-4"]}

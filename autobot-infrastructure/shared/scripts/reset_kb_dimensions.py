@@ -7,94 +7,28 @@
 """
 Complete fix for AutoBot knowledge base embedding dimension issues.
 This script:
-1. Clears all Redis vector store data
-2. Resets the Redis index with correct dimensions
-3. Fixes async/sync Redis client issues
-4. Tests the knowledge base with a simple document
+1. Requests the wipe of the Redis vector store data (a #17038 proposal; ``--request-wipe`` / ``--dry-run``)
+2. After an approved wipe, tests the knowledge base with a simple document (the index is recreated)
+
+The script itself deletes nothing (#21383).
 """
 
+import argparse
 import asyncio
 import logging
 import os
 import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import centralized Redis client
-from autobot_shared.redis_client import get_redis_client
+# The shared wipe-request helper sits beside this script; put it on the path when loaded by file path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-
-def _cleanup_redis_databases(r) -> int:
-    """
-    Clean up Redis databases by removing llama_index, doc, and vector keys.
-
-    Issue #281: Extracted from reset_knowledge_base to reduce function length.
-
-    Args:
-        r: Redis client for dropping index.
-
-    Returns:
-        Total count of keys removed.
-    """
-    # Drop the index if it exists
-    try:
-        r.execute_command("FT.DROPINDEX", "llama_index", "DD")
-        logger.info("✅ Dropped llama_index")
-    except Exception as e:
-        logger.warning(f"⚠️  Index drop: {e} (may not exist)")
-
-    # Clean specific databases using centralized client
-    cleanup_count = 0
-    database_names = [
-        "main",
-        "knowledge",
-        "prompts",
-        "agents",
-        "metrics",
-        "logs",
-        "sessions",
-        "workflows",
-        "vectors",
-        "models",
-    ]
-
-    for db_name in database_names:
-        try:
-            r_db = get_redis_client(database=db_name)
-            if r_db is None:
-                continue
-
-            # Delete any llama_index related keys
-            keys = r_db.keys("llama_index:*")
-            if keys:
-                for key in keys:
-                    r_db.delete(key)
-                cleanup_count += len(keys)
-                logger.info(f"✅ Cleaned {len(keys)} llama_index keys from {db_name} database")
-
-            # Also look for doc: prefixed keys
-            doc_keys = r_db.keys("doc:*")
-            if doc_keys:
-                for key in doc_keys:
-                    r_db.delete(key)
-                cleanup_count += len(doc_keys)
-                logger.info(f"✅ Cleaned {len(doc_keys)} doc keys from {db_name} database")
-
-            # Clean any vector index keys
-            vector_keys = r_db.keys("*vector*")
-            if vector_keys:
-                for key in vector_keys:
-                    r_db.delete(key)
-                cleanup_count += len(vector_keys)
-                logger.info(f"✅ Cleaned {len(vector_keys)} vector keys from {db_name} database")
-
-        except Exception as e:
-            logger.warning(f"⚠️  Database {db_name}: {e}")
-
-    return cleanup_count
+import kb_wipe_cli  # noqa: E402
 
 
 async def _test_knowledge_base_operations(kb) -> bool:
@@ -159,25 +93,9 @@ async def reset_knowledge_base():
     """
     logger.info("🔧 AutoBot Knowledge Base Reset Tool")
     logger.info("=" * 50)
+    logger.info("Run after the wipe was approved (--request-wipe); this step deletes nothing.")
 
-    # Connect to Redis using centralized client
-    try:
-        r = get_redis_client(database="main")
-        if r is None:
-            raise Exception("Redis client is None")
-        r.ping()
-        logger.info("✅ Connected to Redis")
-    except Exception as e:
-        logger.error(f"❌ Failed to connect to Redis: {e}")
-        return False
-
-    logger.info("\n1. Cleaning up Redis vector store data...")
-
-    # Issue #281: Use extracted helper for database cleanup
-    cleanup_count = _cleanup_redis_databases(r)
-    logger.info(f"\n2. Total cleanup: {cleanup_count} keys removed")
-
-    logger.info("\n3. Testing knowledge base initialization...")
+    logger.info("\n1. Testing knowledge base initialization...")
 
     try:
         from knowledge_factory import get_knowledge_base_async
@@ -208,7 +126,7 @@ async def reset_knowledge_base():
 
 async def test_api_compatibility():
     """Test that the knowledge base works with the API endpoints."""
-    logger.info("\n4. Testing API compatibility...")
+    logger.info("\n2. Testing API compatibility...")
 
     try:
         # Test category retrieval (this was failing before)
@@ -219,27 +137,20 @@ async def test_api_compatibility():
         logger.warning(f"⚠️  API compatibility test incomplete: {e}")
 
 
+def _parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Request the KB wipe, or test the KB after an approved wipe.")
+    kb_wipe_cli.add_wipe_arguments(parser)
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    """Request/preview the wipe, or run the post-wipe test; the process exit code."""
+    args = _parse_args(argv)
+    if kb_wipe_cli.wipe_wanted(args):
+        return 0 if asyncio.run(kb_wipe_cli.request_wipe(args.dry_run)) else 1
+    return 0 if asyncio.run(reset_knowledge_base()) else 1
+
+
 if __name__ == "__main__":
     logger.info("Starting knowledge base reset process...\n")
-
-    success = asyncio.run(reset_knowledge_base())
-
-    if success:
-        logger.info("\n" + "=" * 50)
-        logger.info("🎉 KNOWLEDGE BASE RESET SUCCESSFUL!")
-        logger.info("\nNext steps:")
-        logger.info("1. Restart the AutoBot backend: ./run_agent.sh")
-        logger.info("2. Try importing documentation via the web UI")
-        logger.info("3. Test knowledge base search functionality")
-        logger.info("\nThe following issues have been fixed:")
-        logger.info("✅ Embedding dimension mismatch (now using 768-dim nomic-embed-text)")
-        logger.error("✅ Redis async/await errors (now using sync operations)")
-        logger.info("✅ Vector index schema conflicts (index recreated)")
-        logger.info("✅ Knowledge base initialization problems")
-    else:
-        logger.info("\n" + "=" * 50)
-        logger.error("❌ KNOWLEDGE BASE RESET FAILED")
-        logger.error("Please check the error messages above and try:")
-        logger.info("1. Ensure Redis is running: redis-cli ping")
-        logger.info("2. Check Redis modules: redis-cli MODULE LIST")
-        logger.info("3. Verify AutoBot dependencies are installed")
+    sys.exit(main())

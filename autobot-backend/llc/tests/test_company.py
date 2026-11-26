@@ -469,9 +469,11 @@ class TestDeleteOrphanFix:
         svc._get_or_404 = AsyncMock(return_value=org)
         svc.list_children = AsyncMock(return_value=[])
 
-        await svc.delete(org.id)
+        with patch("llc.services.company.CompanyCEOService.stop_company_heartbeats", AsyncMock()) as stop:
+            await svc.delete(org.id)
 
         org.soft_delete.assert_called_once()
+        stop.assert_awaited_once_with(svc.session, org.id, None)  # #15907: no deleted company keeps a heartbeat
 
 
 class TestListRootCompaniesArchiveFilter:

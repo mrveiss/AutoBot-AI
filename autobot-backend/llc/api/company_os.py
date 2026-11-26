@@ -28,7 +28,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import get_session
+from autobot_shared.http_refusal import http_refusal
+from llc.deps import SESSION_DEP
 from llc.models.company_os_enums import WorkflowKind
 from llc.services.authz import NotAuthorisedError
 from llc.services.company_os.errors import CompanyOsConflict, CompanyOsError, CompanyOsNotFound, GraphInvalid
@@ -58,17 +59,17 @@ _graphs = GraphService()
 
 
 def http_error(exc: Exception) -> HTTPException:
-    """Map a service error to its status: 404 / 409 / 422 / 403 / 400."""
+    """Map a service error to its status: 404 / 409 / 422 / 403 / 400; text only via ``public_detail`` (#21579)."""
     if isinstance(exc, NotAuthorisedError):
-        return HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc))
+        return http_refusal(status.HTTP_403_FORBIDDEN, exc, scope="company_os.http_error")
     if isinstance(exc, CompanyOsNotFound):
-        return HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc))
+        return http_refusal(status.HTTP_404_NOT_FOUND, exc, scope="company_os.http_error")
     if isinstance(exc, CompanyOsConflict):
-        return HTTPException(status.HTTP_409_CONFLICT, detail=str(exc))
+        return http_refusal(status.HTTP_409_CONFLICT, exc, scope="company_os.http_error")
     if isinstance(exc, GraphInvalid):
         return HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"errors": exc.errors})
     if isinstance(exc, CompanyOsError):
-        return HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return http_refusal(status.HTTP_400_BAD_REQUEST, exc, scope="company_os.http_error")
     raise exc
 
 
@@ -78,7 +79,7 @@ def http_error(exc: Exception) -> HTTPException:
 @router.get("/processes", response_model=List[ProcessResponse])
 async def list_processes(
     owner_role_id: Optional[uuid.UUID] = None,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[ProcessResponse]:
@@ -89,7 +90,7 @@ async def list_processes(
 @router.post("/processes", response_model=ProcessResponse, status_code=status.HTTP_201_CREATED)
 async def create_process(
     body: ProcessCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ProcessResponse:
@@ -104,7 +105,7 @@ async def create_process(
 @router.get("/processes/{process_key}", response_model=ProcessResponse)
 async def get_process(
     process_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ProcessResponse:
@@ -118,7 +119,7 @@ async def get_process(
 async def update_process(
     process_key: str,
     body: ProcessUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ProcessResponse:
@@ -135,7 +136,7 @@ async def update_process(
 @router.delete("/processes/{process_key}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_process(
     process_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -153,7 +154,7 @@ async def delete_process(
 async def list_workflows(
     kind: Optional[WorkflowKind] = None,
     owner_role_id: Optional[uuid.UUID] = None,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[CompanyWorkflowResponse]:
@@ -164,7 +165,7 @@ async def list_workflows(
 @router.post("/workflows", response_model=CompanyWorkflowResponse, status_code=status.HTTP_201_CREATED)
 async def create_workflow(
     body: CompanyWorkflowCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowResponse:
@@ -181,7 +182,7 @@ async def create_workflow(
 @router.get("/workflows/{workflow_id}", response_model=CompanyWorkflowResponse)
 async def get_workflow(
     workflow_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowResponse:
@@ -195,7 +196,7 @@ async def get_workflow(
 async def update_workflow(
     workflow_id: str,
     body: CompanyWorkflowUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowResponse:
@@ -212,7 +213,7 @@ async def update_workflow(
 @router.delete("/workflows/{workflow_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_workflow(
     workflow_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -229,7 +230,7 @@ async def delete_workflow(
 @router.get("/workflows/{workflow_id}/graph", response_model=GraphResponse)
 async def get_graph(
     workflow_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GraphResponse:
@@ -245,7 +246,7 @@ async def get_graph(
 async def put_graph(
     workflow_id: str,
     body: GraphSpec,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GraphResponse:
@@ -261,7 +262,7 @@ async def put_graph(
 async def validate_graph_body(
     workflow_id: str,
     body: GraphSpec,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GraphValidation:
@@ -275,7 +276,7 @@ async def validate_graph_body(
 @router.get("/workflows/{workflow_id}/validation", response_model=GraphValidation)
 async def validate_stored_graph(
     workflow_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GraphValidation:

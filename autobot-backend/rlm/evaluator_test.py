@@ -86,9 +86,9 @@ class TestEvaluatorErrorPath:
                 result = await evaluator.evaluate(query="q", response="r", iteration=1)
 
         log_text = " ".join(r.getMessage() for r in caplog.records)
-        # Either the log uses INDETERMINATE wording OR doesn't claim acceptance —
+        # The log names the verdict it returns and says the response is not accepted (#21845),
         # not the previous "accepting response" while returning FAIL.
-        assert "INDETERMINATE" in log_text or "passing through" in log_text
+        assert "INDETERMINATE" in log_text and "not accepted" in log_text
         assert result.verdict == ReflectionVerdict.INDETERMINATE
 
     @pytest.mark.asyncio

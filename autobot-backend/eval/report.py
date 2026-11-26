@@ -41,7 +41,7 @@ class TrajectoryOutcome:
     trajectory_id: str
     task_class: str
     baseline_score: float
-    candidate_score: float
+    candidate_score: float | None
     #: True/False are comparison results; None means the comparison never
     #: happened, because the candidate supplied no actual side for it. The
     #: third state is load-bearing: recording a not-compared field as True
@@ -51,8 +51,8 @@ class TrajectoryOutcome:
     candidate_tools: List[str] = field(default_factory=list)
     detail: str = ""
     #: The scorer could not produce a verdict (evaluator infrastructure failure,
-    #: `ReflectionVerdict.INDETERMINATE`). Its `candidate_score` is a
-    #: pass-through default, not a measurement of this trajectory.
+    #: `ReflectionVerdict.INDETERMINATE`). Its `candidate_score` is None: there is
+    #: no measurement of this trajectory, and the report says so (#21845).
     score_indeterminate: bool = False
     #: Live-mode fields (#20843); None/empty for baseline and recorded replays, which leave them alone.
     model: str | None = None
@@ -88,7 +88,7 @@ class TrajectoryOutcome:
         """
         if self.tools_ok is False or self.status_ok is False:
             return "regression"
-        if self.tools_ok is None or self.status_ok is None or self.score_indeterminate:
+        if self.tools_ok is None or self.status_ok is None or self.score_indeterminate or self.candidate_score is None:
             return "unmeasured"
         if self.passed is not None:
             return "unchanged" if self.passed else "regression"
@@ -192,7 +192,7 @@ class RegressionReport:
             "task_class": o.task_class,
             "verdict": o.classify(self.epsilon),
             "baseline_score": round(o.baseline_score, 3),
-            "candidate_score": round(o.candidate_score, 3),
+            "candidate_score": None if o.candidate_score is None else round(o.candidate_score, 3),
             "tools_ok": o.tools_ok,
             "status_ok": o.status_ok,
             "detail": o.detail,
@@ -206,7 +206,8 @@ class RegressionReport:
         if outcome.is_live:
             return f"- [{outcome_state(outcome).upper()}] {head} model={_md_escape(outcome.model)}{detail}"
         verdict = outcome.classify(self.epsilon).upper()
-        scores = f"baseline={outcome.baseline_score:.2f} candidate={outcome.candidate_score:.2f}"
+        candidate = "n/a" if outcome.candidate_score is None else f"{outcome.candidate_score:.2f}"
+        scores = f"baseline={outcome.baseline_score:.2f} candidate={candidate}"
         return f"- [{verdict}] {head} {scores}{detail}"
 
     def render_markdown(self) -> str:

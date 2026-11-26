@@ -1,0 +1,235 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""The ``/slm/api`` proxy: same machine vs separate SLM node, and the refused open routes (#19832).
+
+Resolves the frontend role's defaults with plain jinja2 (the ``bool`` filter registered as in
+Ansible), renders ``nginx-frontend.conf.j2`` with the result, and asserts on the text. Limits,
+stated: plain jinja2 rather than Ansible's templar, and nginx itself is not run, so a refused
+route is asserted as rendered config, not as a live 403.
+"""
+
+from __future__ import annotations
+
+import re
+
+import jinja2
+import pytest
+import yaml
+from repo_tests._paths import repo_root
+
+ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
+ROLE = ANSIBLE / "roles" / "frontend"
+TEMPLATE = ROLE / "templates" / "nginx-frontend.conf.j2"
+GROUP_VARS = yaml.safe_load((ANSIBLE / "inventory" / "group_vars" / "all.yml").read_text(encoding="utf-8"))
+DEFAULTS = yaml.safe_load((ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))
+
+_THIS_NODE = ["192.0.2.10", "10.0.0.1"]
+
+
+def _env() -> jinja2.Environment:
+    env = jinja2.Environment(trim_blocks=True, undefined=jinja2.StrictUndefined)
+    env.filters["bool"] = lambda v: v if isinstance(v, bool) else str(v).strip().lower() == "true"
+    env.tests["match"] = lambda v, pat: re.match(pat, str(v)) is not None
+    # main's nginx-frontend.conf.j2 inlines the upload cap via lookup(); the file content is not
+    # under test here.
+    env.globals["lookup"] = lambda kind, path: ""
+    env.globals["role_path"] = "/role"
+    return env
+
+
+def _resolve(slm_host: str | None, remote: bool = False) -> dict:
+    """Resolve the role defaults the way Ansible does: lazily, each against the same context."""
+    env = _env()
+    ctx: dict = {k: v for k, v in GROUP_VARS.items() if not (isinstance(v, str) and "{{" in v)}
+    ctx["ansible_facts"] = {}
+    ctx["inventory_hostname"] = "node-a"
+    ctx["ansible_host"] = _THIS_NODE[0]
+    ctx["autobot_tls_remote_cert_dir"] = "/etc/c"
+    if slm_host is not None:
+        ctx["slm_host"] = slm_host
+    pending = {k: v for k, v in DEFAULTS.items() if k.startswith(("frontend_slm_", "frontend_tls_cert_dir"))}
+    pending["frontend_slm_remote"] = remote  # the inventory value outranks the role default
+    for _ in range(len(pending) + 1):
+        for key, raw in list(pending.items()):
+            if not isinstance(raw, str) or ("{{" not in raw and "{%" not in raw):
+                ctx[key] = raw
+                del pending[key]
+                continue
+            try:
+                ctx[key] = env.from_string(raw).render(**ctx).strip()
+                del pending[key]
+            except jinja2.UndefinedError:
+                continue
+    assert not pending, f"unresolved defaults: {sorted(pending)}"
+    return ctx
+
+
+def _render(slm_host: str | None, remote: bool = False) -> str:
+    ctx = _resolve(slm_host, remote)
+    ctx.update(
+        ansible_host="backend.test.invalid",
+        nginx_http_port=80,
+        frontend_tls_port=443,
+        frontend_tls_cert="/c.pem",
+        frontend_tls_key="/k.pem",
+        frontend_dist_dir="/dist",
+        frontend_upstream_backend_port="8443",
+    )
+    return _env().from_string(TEMPLATE.read_text(encoding="utf-8")).render(**ctx)
+
+
+def _block(text: str, header: str) -> str:
+    start = text.index(header)
+    depth, i = 0, text.index("{", start)
+    begin = i
+    while True:
+        depth += {"{": 1, "}": -1}.get(text[i], 0)
+        i += 1
+        if depth == 0:
+            return text[begin:i]
+
+
+@pytest.mark.parametrize(
+    "slm_host",
+    ["192.0.2.10", "127.0.0.1", None, "198.51.100.7"],
+    ids=["lan-address-of-this-node", "loopback", "unset", "other-address-but-not-declared-remote"],
+)
+def test_same_machine_stays_on_loopback_uvicorn(slm_host: str | None) -> None:
+    out = _render(slm_host)
+    assert "server 127.0.0.1:8000 " in _block(out, "upstream autobot_slm_backend")
+    api = _block(out, "location ^~ /slm/api/ ")
+    assert "proxy_pass http://autobot_slm_backend/api/;" in api
+    assert "proxy_ssl" not in api
+
+
+def test_separate_node_proxies_https_to_the_slm_nginx_keeping_the_path() -> None:
+    out = _render("198.51.100.7", remote=True)
+    assert "server 198.51.100.7:443 " in _block(out, "upstream autobot_slm_backend")
+    for loc, upstream in (("location ^~ /slm/api/ ", "/slm/api/;"), ("location ^~ /slm/api/ws/ ", "/slm/api/ws/;")):
+        block = _block(out, loc)
+        assert f"proxy_pass https://autobot_slm_backend{upstream}" in block
+        assert "proxy_ssl_server_name on;" in block
+        assert "proxy_ssl_name 198.51.100.7;" in block
+        assert "proxy_ssl_verify on;" in block
+        assert "proxy_ssl_verify off" not in block
+        assert "proxy_ssl_trusted_certificate /etc/c/ca-cert.pem;" in block
+        assert "proxy_set_header Host $host;" in block or loc.endswith("ws/ ")
+
+
+def test_the_remote_proxy_never_turns_verification_off() -> None:
+    assert (
+        "proxy_ssl_verify off"
+        not in _render("198.51.100.7", remote=True).split("location ^~ /slm/api/ws/")[1].split("location /api/voice")[0]
+    )
+
+
+def test_ports_come_from_the_group_vars_not_the_template() -> None:
+    assert GROUP_VARS["slm_nginx_tls_port"] == 443
+    vhost = (ANSIBLE / "roles/slm_manager/templates/autobot-slm.conf.j2").read_text(encoding="utf-8")
+    assert "listen {{ slm_nginx_tls_port }} ssl http2;" in vhost
+    assert "listen 443 ssl" not in vhost
+
+
+REFUSED = [
+    "health",
+    "health/database",
+    "ready",
+    "ready/",
+    "live",
+    "live/",
+    "recovery",
+    "recovery/",
+    "metrics/prometheus",
+    "performance/metrics/prometheus",
+]
+# Paths the main app calls through /slm/api (useHostInventory, useTLSCredentials, ssot-config discover).
+STAYS_OPEN = ["nodes", "auth/login", "discover/redis", "monitoring/health", "ready-check"]
+
+
+def _refusals(out: str) -> list[tuple[str, str]]:
+    return re.findall(r"location (=|\^~) (/slm/api/\S+) \{\n\s+return 403;", out)
+
+
+def _nginx_match(refusals: list[tuple[str, str]], path: str) -> bool:
+    """True when an exact or ^~ refusal location matches `path` (nginx exact / prefix semantics)."""
+    return any(path == loc if mod == "=" else path.startswith(loc) for mod, loc in refusals)
+
+
+def test_open_health_and_metrics_routes_are_refused_on_the_main_origin() -> None:
+    """#19832: none of these has a main-app caller; the SLM's own UI and Prometheus use the SLM vhost."""
+    refusals = _refusals(_render("192.0.2.10"))
+    assert len(refusals) == len(DEFAULTS["frontend_slm_refused_routes"]), refusals
+    for path in REFUSED:
+        assert _nginx_match(refusals, f"/slm/api/{path}"), path
+    for path in STAYS_OPEN:
+        assert not _nginx_match(refusals, f"/slm/api/{path}"), path
+
+
+def test_the_refusals_are_exact_or_prefix_never_regex() -> None:
+    """An asset-extension regex must not shadow a refusal, nor a refusal be a regex the ^~ prefix beats."""
+    out = _render("192.0.2.10")
+    assert "location ~ ^/slm/api/" not in out
+    assert "location /slm/api/ " not in out and "location /slm/api/ws/ " not in out
+    assert "location ^~ /slm/api/ {" in out and "location ^~ /slm/api/ws/ {" in out
+
+
+def test_the_refusals_are_longer_prefixes_than_the_generic_proxy() -> None:
+    """nginx picks the longest matching prefix: every refusal path is longer than `/slm/api/`."""
+    out = _render("192.0.2.10")
+    for mod, loc in _refusals(out):
+        assert len(loc) > len("/slm/api/")
+        assert mod == "=" or loc.startswith("/slm/api/")
+
+
+def test_the_internal_slm_api_is_denied_at_the_edge() -> None:
+    """#20046: the SLM's service-to-service routes are not reachable through the public /slm/api/ proxy."""
+    out = _render("192.0.2.10")
+    assert "return 404;" in _block(out, "location ^~ /slm/api/internal/ ")
+    assert out.index("location ^~ /slm/api/internal/ ") < out.index("location ^~ /slm/api/ {")
+
+
+def _effective_location(out: str, path: str) -> str:
+    """The location nginx picks for `path`: exact, else the longest ^~ prefix, else the first regex, else the longest prefix."""
+    locs = re.findall(r"^\s*location\s+(=|\^~|~\*|~)?\s*(\S+)\s+\{", out, re.M)
+    exact = [f"= {p}" for m, p in locs if m == "=" and p == path]
+    if exact:
+        return exact[0]
+    prefixes = [(m, p) for m, p in locs if m in ("", "^~") and path.startswith(p)]
+    best = max(prefixes, key=lambda mp: len(mp[1]), default=None)
+    if best and best[0] == "^~":
+        return f"^~ {best[1]}"
+    for m, p in locs:
+        if m in ("~", "~*") and re.search(p, path, re.I if m == "~*" else 0):
+            return f"{m} {p}"
+    return f"{best[0]} {best[1]}".strip() if best else ""
+
+
+@pytest.mark.parametrize(
+    "path", [f"/slm/api/{p}" for p in REFUSED] + ["/slm/api/health/report.html", "/slm/api/health/x.js"]
+)
+def test_every_refused_route_is_handled_by_a_refusal_not_a_regex_or_the_proxy(path: str) -> None:
+    out = _render("192.0.2.10")
+    chosen = _effective_location(out, path)
+    assert chosen.startswith(("= /slm/api/", "^~ /slm/api/")) and chosen not in (
+        "^~ /slm/api/",
+        "^~ /slm/api/ws/",
+    ), chosen
+    assert "return 403;" in _block(out, f"location {chosen.replace('= ', '= ', 1)} ")
+
+
+@pytest.mark.parametrize("path", ["/slm/api/nodes/logo.png", "/slm/api/export/report.html", "/slm/api/files/app.js"])
+def test_a_proxied_slm_route_ending_in_an_asset_suffix_is_not_shadowed_by_a_static_regex(path: str) -> None:
+    assert _effective_location(_render("192.0.2.10"), path) == "^~ /slm/api/"
+
+
+def test_the_ws_prefix_beats_the_generic_prefix_and_the_static_regexes() -> None:
+    assert _effective_location(_render("192.0.2.10"), "/slm/api/ws/x.js") == "^~ /slm/api/ws/"
+
+
+def test_the_effective_location_detector_has_a_contrast_pair() -> None:
+    shadowed = "location ~ \\.html$ {\n}\nlocation /slm/api/ {\n}\n"
+    assert _effective_location(shadowed, "/slm/api/health/report.html").startswith("~")
+    protected = "location ~ \\.html$ {\n}\nlocation ^~ /slm/api/ {\n}\n"
+    assert _effective_location(protected, "/slm/api/health/report.html") == "^~ /slm/api/"

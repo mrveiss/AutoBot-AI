@@ -124,17 +124,19 @@ class LoggingExtension(Extension):
     async def on_after_tool_execute(self, ctx: HookContext) -> None:
         """Log tool execution complete."""
         tool_name = ctx.get("tool_name", "unknown")
-        success = ctx.get("success", True)
-        execution_time = ctx.get("execution_time", 0)
+        success = ctx.get("success")
+        execution_time = ctx.get("execution_time")
 
-        status = "SUCCESS" if success else "FAILED"
+        # #21879: a value the call site did not supply is logged as unknown, never as SUCCESS / 0.00s.
+        status = "UNKNOWN" if success is None else ("SUCCESS" if success else "FAILED")
+        duration = "duration unknown" if execution_time is None else f"{execution_time:.2f}s"
         logger.log(
             self.log_level,
-            "[%s] Tool %s: %s (%.2fs)",
+            "[%s] Tool %s: %s (%s)",
             ctx.session_id[:8] if ctx.session_id else "no-session",
             tool_name,
             status,
-            execution_time,
+            duration,
         )
         return None
 

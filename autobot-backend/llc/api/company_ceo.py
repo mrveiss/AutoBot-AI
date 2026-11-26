@@ -35,9 +35,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.user_management.base_service import TenantContext
-from llc.deps import assert_company_access, get_session
+from llc.deps import SESSION_DEP, assert_company_access
 from llc.models.enums import RoleHolderType
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.company_ceo import CompanyCEOService
@@ -117,7 +119,7 @@ async def _require_owner_or_admin(session: AsyncSession, ctx: TenantContext, com
             session, company_id, ctx.user_id, platform_admin=ctx.is_platform_admin
         )
     except NotAuthorisedError as exc:
-        logger.warning("Refused CEO change in company %s: %s", company_id, exc)
+        logger.warning("Refused CEO change in company %s: %s", company_id, safe_log_text(repr(exc)))
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Only a company owner or admin may change the CEO"
         ) from exc
@@ -126,7 +128,7 @@ async def _require_owner_or_admin(session: AsyncSession, ctx: TenantContext, com
 @router.get("/{company_id}/ceo", response_model=CEODesignationRead)
 async def get_company_ceo(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CEODesignationRead:
@@ -151,7 +153,7 @@ async def get_company_ceo(
 async def set_company_ceo(
     company_id: uuid.UUID,
     body: CEODesignationWrite,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CEODesignationRead:
@@ -175,7 +177,9 @@ async def set_company_ceo(
         row = await svc.set_ceo(session, company_id, body.holder_type, body.holder_id)
     except ValueError as exc:
         await session.rollback()
-        detail = await _explain_refusal(session, body, str(exc))
+        detail = await _explain_refusal(
+            session, body, http_refusal(422, exc, scope="company_ceo.set_company_ceo").detail
+        )
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail) from exc
 
     holder_type, holder_id = row.holder_type, row.holder_id
@@ -199,7 +203,7 @@ async def set_company_ceo(
 @router.delete("/{company_id}/ceo", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_company_ceo(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

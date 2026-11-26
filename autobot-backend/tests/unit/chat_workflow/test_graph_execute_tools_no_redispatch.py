@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""#11958: default (AUTOBOT_CHAT_APPROVAL_GATE OFF) graph path must not
+"""#11958: the inline (AUTOBOT_CHAT_APPROVAL_GATE=0) graph path must not
 re-dispatch already-executed tool-call summaries.
 
 Root cause: generate_response's flag-OFF tail (chat_workflow/graph.py) reads

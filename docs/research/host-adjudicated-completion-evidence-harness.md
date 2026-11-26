@@ -608,7 +608,7 @@ run, `security.yml`/`coverage.yml` nightly) plus Celery Beat tasks in `workers/a
 
 Repair authority is encoded **per skill**, not centrally: `research-to-issues` is research-only with
 a *tool-restricted agent* variant giving "a hard guarantee (structurally unable to write code)"
-(`.claude/skills/research-to-issues/SKILL.md:26`); `repo-sweeper` "never draws conclusions… Do NOT
+(plugin `autobot-dev-skills` `skills/lifecycle/references/research-to-issues.md`, formerly `.claude/skills/research-to-issues/SKILL.md:26`); `repo-sweeper` "never draws conclusions… Do NOT
 use for anything that writes"; `bulk-audit` may fix but only after validating on 2–3 files first.
 `bugfix`, `implement`, `adopt`, `parallel` are unrestricted. There is **no** repo-wide "exactly one
 loop may repair" rule and **no** fix-in-lane-vs-file size threshold — greps for

@@ -75,6 +75,7 @@ const statusColor = computed(() => {
 })
 
 async function handleLaunchSession() {
+  if (!LAUNCH_ENABLED) return
   const url = urlInput.value.trim() || 'about:blank'
   const session = await launchSession(url)
   if (session) {
@@ -101,6 +102,7 @@ async function handleClick() {
 }
 
 async function handleType() {
+  if (!SESSION_INPUT_ENABLED) return
   if (!currentSession.value || !selectorInput.value.trim() || !textInput.value) return
   const success = await typeText(currentSession.value.id, selectorInput.value, textInput.value)
   if (success) {
@@ -118,6 +120,7 @@ async function handleScreenshot() {
 }
 
 async function handleExecuteScript() {
+  if (!SESSION_INPUT_ENABLED) return
   if (!currentSession.value || !scriptInput.value.trim()) return
   const result = await executeScript(currentSession.value.id, scriptInput.value)
   logger.debug('Script result:', result)
@@ -125,6 +128,7 @@ async function handleExecuteScript() {
 }
 
 async function handleRunAutomation() {
+  if (!AUTOMATION_SCRIPT_ENABLED) return
   if (!automationScriptInput.value.trim()) return
   const result = await runAutomationScript(automationScriptInput.value)
   logger.debug('Automation result:', result)

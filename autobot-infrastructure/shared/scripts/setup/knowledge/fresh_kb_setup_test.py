@@ -117,8 +117,8 @@ async def test_dry_run_lists_the_plan_and_neither_proposes_nor_deletes(monkeypat
         proposed.append(plan)
         return "id"
 
-    monkeypatch.setattr(fresh_kb_setup, "_propose_wipe", fake_propose)
-    with caplog.at_level("INFO", logger=fresh_kb_setup.logger.name):
+    monkeypatch.setattr(fresh_kb_setup.kb_wipe_cli, "propose_wipe", fake_propose)
+    with caplog.at_level("INFO", logger=fresh_kb_setup.kb_wipe_cli.logger.name):
         assert await fresh_kb_setup.fresh_setup(dry_run=True) is True
     assert proposed == [] and "Database knowledge: 3 keys" in caplog.text
     assert "Chroma collection autobot_memory: 8 vectors" in caplog.text
@@ -134,7 +134,7 @@ async def test_a_bare_run_only_requests_approval(monkeypatch):
         proposed.append(plan)
         return "approval-1"
 
-    monkeypatch.setattr(fresh_kb_setup, "_propose_wipe", fake_propose)
+    monkeypatch.setattr(fresh_kb_setup.kb_wipe_cli, "propose_wipe", fake_propose)
     assert await fresh_kb_setup.fresh_setup() is True
     assert proposed == [_Plan.value]
 

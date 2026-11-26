@@ -14,7 +14,6 @@ UPDATED: Now uses config_manager for consistent model selection
 """
 
 import fcntl
-import threading
 from typing import Dict
 
 import yaml
@@ -26,6 +25,7 @@ from autobot_shared.ssot_config import get_config as get_ssot_config
 
 # Legacy import for backward compatibility - these now read from SSOT
 from constants.network_constants import NetworkConstants
+from services.config_write_lock import CONFIG_WRITE_LOCK, locked_config_write
 from type_defs.common import Metadata
 
 # Get SSOT config
@@ -50,8 +50,7 @@ class ConfigService:
     _cached_config = None
     _cache_timestamp = None
     CACHE_DURATION = 30  # Cache for 30 seconds
-    # Issue #481: Thread-safe lock for config file writes
-    _config_write_lock = threading.Lock()
+    _config_write_lock = CONFIG_WRITE_LOCK  # Issue #481, #18478: see services/config_write_lock.py
 
     @staticmethod
     def _should_refresh_cache() -> bool:
@@ -106,13 +105,9 @@ class ConfigService:
         default_api_endpoint = _ssot.backend_url if _ssot else f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}"
         default_port = _ssot.port.backend if _ssot else BACKEND_PORT
 
-        # #10502: report the reachable backend host, not the bind-all sentinel.
-        # "0.0.0.0" is the listen address; the audit/security dashboard needs
-        # the address clients actually connect to. Default to the SSOT host and
-        # rewrite an explicitly-configured bind-all value to the reachable host.
-        configured_host = get("backend.server_host", BACKEND_HOST_IP)
-        if configured_host == NetworkConstants.BIND_ALL_INTERFACES:
-            configured_host = BACKEND_HOST_IP
+        # #10502/#18810: report the dial address (the SSOT host), never the listen address.
+        # `backend.server_host` is a bind setting (AUTOBOT_BACKEND_BIND_HOST) and is not read here.
+        configured_host = BACKEND_HOST_IP
 
         return {
             "api_endpoint": get("backend.api_endpoint", default_api_endpoint),
@@ -385,6 +380,7 @@ class ConfigService:
             raise
 
     @staticmethod
+    @locked_config_write
     def update_llm_config(config_data: Metadata) -> Dict[str, str]:
         """Update LLM configuration using unified config system"""
         try:
@@ -423,6 +419,7 @@ class ConfigService:
             raise
 
     @staticmethod
+    @locked_config_write
     def update_redis_config(config_data: Metadata) -> Dict[str, str]:
         """Update Redis configuration"""
         try:
@@ -452,18 +449,8 @@ class ConfigService:
             if "priority" in config_data:
                 redis_config["priority"] = int(config_data["priority"])
 
-            # Filter out prompts before saving (prompts are managed separately)
-            import copy
-
-            filtered_config = copy.deepcopy(current_config)
-            if "prompts" in filtered_config:
-                logger.info(
-                    "Removing prompts section from Redis config save - prompts are managed in prompts/ directory"
-                )
-                del filtered_config["prompts"]
-
-            # Save updated config to file
-            ConfigService._save_config_to_file(filtered_config)
+            # Save updated config (the save path strips the prompts section)
+            ConfigService._save_config_to_file(current_config)
 
             # Reload the global config manager
             config_manager.reload()
@@ -478,6 +465,21 @@ class ConfigService:
             raise
 
     @staticmethod
+    def _keep_persisted_bind_host(config_data: Metadata) -> None:
+        """A saved config must not persist the reported dial host as the bind setting (#18810).
+
+        The stored value is read raw from ``config.yaml`` (the merged config carries the environment override)."""
+        backend = config_data.get("backend")
+        if not isinstance(backend, dict) or "server_host" not in backend:
+            return
+        path = config_manager.base_config_file
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None  # raw, not env-merged
+        stored = ((raw or {}).get("backend") or {}).get("server_host")
+        backend = {k: v for k, v in backend.items() if k != "server_host"}
+        config_data["backend"] = {**backend, "server_host": stored} if stored is not None else backend
+
+    @staticmethod
+    @locked_config_write
     def save_full_config(config_data: Metadata) -> Dict[str, str]:
         """Save complete application configuration to config.yaml and reload"""
         try:
@@ -489,6 +491,8 @@ class ConfigService:
             if "prompts" in filtered_config:
                 logger.info("Removing prompts section from config - " "prompts are managed in prompts/ directory")
                 del filtered_config["prompts"]
+
+            ConfigService._keep_persisted_bind_host(filtered_config)
 
             # Issue #594: Normalize logging field names from frontend to config format
             if "logging" in filtered_config:
@@ -540,6 +544,7 @@ class ConfigService:
             raise
 
     @staticmethod
+    @locked_config_write
     def update_backend_settings(backend_settings: Metadata) -> Dict[str, str]:
         """Update backend-specific settings in config.yaml"""
         try:
@@ -549,18 +554,8 @@ class ConfigService:
             # Update backend settings
             current_config["backend"] = backend_settings
 
-            # Filter out prompts before saving (prompts are managed separately)
-            import copy
-
-            filtered_config = copy.deepcopy(current_config)
-            if "prompts" in filtered_config:
-                logger.info(
-                    "Removing prompts section from backend settings save - prompts are managed in prompts/ directory"
-                )
-                del filtered_config["prompts"]
-
-            # Save updated config to file
-            ConfigService._save_config_to_file(filtered_config)
+            # Save updated config (the save path strips the prompts section)
+            ConfigService._save_config_to_file(current_config)
 
             # Reload the global config manager
             config_manager.reload()

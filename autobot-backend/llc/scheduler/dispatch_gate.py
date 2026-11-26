@@ -28,6 +28,7 @@ from models.agent_org import AgentOrgNode
 
 from ..adapters import get_adapter
 from ..adapters.subprocess_base import is_subprocess_adapter
+from ..exceptions import PublicMessageMixin
 from ..models.activity import ActorType
 from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, ActivityEventType, LLCAgentStatus
 from ..org_role_authority import describe_role_bound, role_bound_refusal
@@ -47,13 +48,18 @@ _activity_log = LLCActivityLogService()
 _DELIBERATE_STOP_STATUSES = frozenset({LLCAgentStatus.PAUSED.value, LLCAgentStatus.TERMINATED.value})
 
 
-class AgentNotDispatchable(ValueError):
+class AgentNotDispatchable(PublicMessageMixin, ValueError):
     """A run was requested for an agent the gate refuses."""
 
     def __init__(self, agent_id: str, company_id: Any, reason: str) -> None:
         super().__init__(f"Agent {agent_id} cannot run: {reason}")
         self.company_id = company_id
         self.reason = reason
+
+    @property
+    def public_detail(self) -> str:
+        """The gate builds every ``reason`` itself (a status, a pause flag, the budget)."""
+        return f"Cannot run: {self.reason}"
 
 
 def as_uuid(value: Any) -> Optional[uuid.UUID]:

@@ -54,7 +54,7 @@ def _make_client(
 ) -> TestClient:
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
     from llc.api.secrets import router as secrets_router  # noqa: PLC0415
-    from user_management.database import get_async_session  # noqa: PLC0415
+    from llc.deps import get_session  # noqa: PLC0415
 
     app = FastAPI()
     app.include_router(secrets_router, prefix="/api/llc")
@@ -70,7 +70,7 @@ def _make_client(
     async def _fake_session():
         yield mock_session
 
-    app.dependency_overrides[get_async_session] = _fake_session
+    app.dependency_overrides[get_session] = _fake_session
     app.dependency_overrides[get_current_user] = lambda: {"id": str(_FIXED_USER_ID)}
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=uuid.UUID(caller_org_id), user_id=_FIXED_USER_ID, is_platform_admin=is_platform_admin
@@ -100,7 +100,7 @@ class TestSecretsNoAuth:
 
     def _make_unauthenticated_client(self) -> TestClient:
         from llc.api.secrets import router as secrets_router
-        from user_management.database import get_async_session
+        from llc.deps import get_session
 
         app = FastAPI()
         app.include_router(secrets_router, prefix="/api/llc")
@@ -108,7 +108,7 @@ class TestSecretsNoAuth:
         async def _fake_session():
             yield AsyncMock()
 
-        app.dependency_overrides[get_async_session] = _fake_session
+        app.dependency_overrides[get_session] = _fake_session
         return TestClient(app)
 
     def test_list_secrets_no_token_returns_401(self):

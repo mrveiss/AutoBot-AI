@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import {
   BaseButton,
   BaseBadge,
@@ -42,7 +43,7 @@ describe('@autobot/ui kit wiring (#12019)', () => {
   it('renders a migrated SLM modal through the kit BaseModal (#14777)', async () => {
     const wrapper = mount(CodeSourceModal, {
       // BaseModal teleports to body; stub the teleport so the dialog renders inline
-      global: { mocks: { $t: (key: string) => key }, stubs: { teleport: true } },
+      global: { plugins: [createPinia()], mocks: { $t: (key: string) => key }, stubs: { teleport: true } },
     })
     await flushPromises()
     const dialog = wrapper.find('[role="dialog"]')

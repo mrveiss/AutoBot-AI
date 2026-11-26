@@ -1,0 +1,137 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import VoiceTool from './VoiceTool.vue'
+import { backendClient } from '@/testing/mockAutobotBackendClient'
+import en from '@/locales/en.json'
+
+/**
+ * `POST /voice/speak` answers `audio/wav` (#17779). The tool used to parse that as JSON and read two
+ * fields it never had, so every success showed "No response received" (#17784). These drive the
+ * success path through a stubbed recogniser and assert the audio is fetched and played, with no role sent (#22143).
+ */
+
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ token: 'test-token' }) }))
+vi.mock('@/utils/ApiClient', async (importOriginal) =>
+  (await import('@/testing/mockAutobotBackendClient')).withMockedBackendClient(importOriginal),
+)
+
+const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
+
+const play = vi.fn().mockResolvedValue(undefined)
+
+class FakeRecognition {
+  static last: FakeRecognition | null = null
+  continuous = false
+  interimResults = false
+  lang = ''
+  onstart: (() => void) | null = null
+  onresult: ((e: unknown) => void) | null = null
+  onend: (() => void) | null = null
+  onerror: (() => void) | null = null
+  start(): void {
+    FakeRecognition.last = this
+    this.onstart?.()
+  }
+  stop(): void {}
+  abort(): void {}
+}
+
+class FakeAudio {
+  playbackRate = 1
+  onplay: (() => void) | null = null
+  onended: (() => void) | null = null
+  onerror: (() => void) | null = null
+  constructor(public src: string) {}
+  play = play
+  pause(): void {}
+}
+
+/**
+ * A 200 `audio/wav` reply. The body is bytes, not a jsdom `Blob`: Node 22's `Response` calls `.stream()` on a Blob
+ * body, which jsdom's Blob does not have, so `new Response(new Blob(...))` throws there (Node 24 tolerates it).
+ */
+function wavResponse(): Response {
+  return new Response(new Uint8Array([0x52, 0x49, 0x46, 0x46]), { status: 200, headers: { 'content-type': 'audio/wav' } })
+}
+
+async function dictate(text: string) {
+  const wrapper = mount(VoiceTool, { global: { plugins: [i18n] } })
+  await wrapper.get('button').trigger('click')
+  FakeRecognition.last?.onresult?.({ resultIndex: 0, results: { length: 1, 0: { isFinal: true, 0: { transcript: text } } } })
+  FakeRecognition.last?.onend?.()
+  await flushPromises()
+  return wrapper
+}
+
+describe('VoiceTool speaks the transcript through the audio route', () => {
+  beforeEach(() => {
+    vi.stubGlobal('webkitSpeechRecognition', FakeRecognition)
+    vi.stubGlobal('Audio', FakeAudio)
+    URL.createObjectURL = vi.fn(() => 'blob:test')
+    URL.revokeObjectURL = vi.fn()
+    backendClient.rawRequest.mockReset()
+    play.mockClear()
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('plays the returned audio and never shows the old fallback', async () => {
+    backendClient.rawRequest.mockResolvedValue(wavResponse())
+    const wrapper = await dictate('hello there')
+
+    const [path, options] = backendClient.rawRequest.mock.calls[0]
+    expect(path).toBe('/voice/speak')
+    expect((options.body as FormData).get('text')).toBe('hello there')
+    expect((options.body as FormData).has('user_role')).toBe(false)
+    expect((options.body as FormData).get('language')).toBe('en-US')
+    expect((options.body as FormData).has('voice_id')).toBe(false)
+    expect(play).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('hello there')
+    expect(wrapper.text()).not.toContain('No response received')
+  })
+
+  it('sends the chosen voice id with the language', async () => {
+    backendClient.rawRequest.mockResolvedValue(wavResponse())
+    const wrapper = mount(VoiceTool, { global: { plugins: [i18n] } })
+    await wrapper.get('input[type="text"]').setValue(' voice-7 ')
+    await wrapper.get('button').trigger('click')
+    FakeRecognition.last?.onresult?.({ resultIndex: 0, results: { length: 1, 0: { isFinal: true, 0: { transcript: 'hi' } } } })
+    FakeRecognition.last?.onend?.()
+    await flushPromises()
+    expect((backendClient.rawRequest.mock.calls[0][1].body as FormData).get('voice_id')).toBe('voice-7')
+  })
+
+  it('does not start playback when unmounted before the audio arrives', async () => {
+    let resolveAudio: (r: Response) => void = () => {}
+    backendClient.rawRequest.mockReturnValue(new Promise<Response>((resolve) => { resolveAudio = resolve }))
+    const wrapper = await dictate('hello')
+    wrapper.unmount()
+    resolveAudio(wavResponse())
+    await flushPromises()
+    expect(play).not.toHaveBeenCalled()
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('ignores a late recognition result after unmount', async () => {
+    const wrapper = await dictate('first')
+    const recognition = FakeRecognition.last
+    wrapper.unmount()
+    expect(recognition?.onend).toBeNull()
+    expect(recognition?.onresult).toBeNull()
+  })
+
+  it('shows the localised failure with the status, and plays nothing, when the route refuses', async () => {
+    backendClient.rawRequest.mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Permission denied to speak via voice.' }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const wrapper = await dictate('hello')
+    expect(play).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain(en.tools.admin.voiceTool.speakFailed)
+    expect(wrapper.text()).toContain('403')
+  })
+})

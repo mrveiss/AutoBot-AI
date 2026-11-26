@@ -29,6 +29,7 @@ from typing import Any, Dict, List
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import SprintStatus, WorkItemStatus
 from ..models.sprint import LLCSprint
 from ..models.work_item import LLCWorkItem
@@ -37,7 +38,7 @@ from .base import LLCServiceBase
 logger = logging.getLogger(__name__)
 
 
-class SprintNotFound(ValueError):
+class SprintNotFound(PublicMessageMixin, ValueError):
     """Raised when a sprint_id does not exist."""
 
 

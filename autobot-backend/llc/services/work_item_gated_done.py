@@ -15,10 +15,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.enums import WorkItemType
 from ..models.work_item import LLCWorkItem
 from .authz import is_company_member
-from .work_item_own_task import InvalidTransition
+from .work_item_own_task import InvalidTransition, refuse_unheld_agent_move
 
 _NO_NODE = "this agent has no org node, so a gated item cannot be handed to review"
+_NO_REVIEWER = "A reviewer is required to initiate the handoff: it has none and no creator."
+_REVIEWER_NOT_A_MEMBER = "The item's reviewer or creator is not a member of the company."
 _NOT_A_PERSON = "this credential is neither a person nor the agent holding the item"
+
+
+class ReviewRefused(InvalidTransition):
+    """A handoff to review that was refused; ``reason`` is a code a caller can branch on without parsing the text.
+
+    It is an ``InvalidTransition``, so every caller that catches that keeps working (#21591).
+    """
+
+    NO_SERVICE = "no_handoff_service"
+    NO_REVIEWER = "no_reviewer"
+    NOT_A_MEMBER = "reviewer_not_a_member"
+    NOT_THE_HOLDER = "not_the_holder"
+    LACKS_ROLE = "reviewer_lacks_role"  # the policy's reviewer_role is not held by the reviewer (#21588)
+
+    def __init__(self, message: str, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 @dataclass(frozen=True)
@@ -35,6 +54,10 @@ class DoneGate:
     agent_id: Optional[str] = None
     is_agent: bool = False
     local_person: Optional[str] = None
+
+    def refuse_unheld(self, item: LLCWorkItem) -> None:
+        """An agent caller changes only an item it holds, and never one waiting on its reviewer (#21586)."""
+        refuse_unheld_agent_move(item, self.agent_id, self.is_agent)
 
     def finish_args(self, acting_user: Optional[uuid.UUID]) -> Dict[str, Any]:
         """The keyword arguments of ``WorkItemService.transition_to_done`` for this caller."""
@@ -67,26 +90,28 @@ async def hand_off_for_review(
     """Move the item to review through ``HandoffService.agent_to_human``, naming the arguments it declares.
 
     The gate blocks the agent's done, so the item must go to a current member of the company: with no handoff
-    service, no reviewer, a reviewer who is not a member, or an agent that does not hold the item the transition
-    is refused, never completed past the gate.
+    service, no reviewer, a reviewer who is not a member or lacks the policy's role, or an agent that does not
+    hold the item the transition is refused, never completed past the gate.
     """
-    from .handoff import HandoffNotAllowed  # lazy: the handoff module pulls in llc.kb (#13057)
+    from .handoff import HandoffNotAllowed, ReviewerLacksRole  # lazy: the handoff module pulls in llc.kb (#13057)
 
     work_item_id = str(item.id)
     refusal = f"Work item {work_item_id} requires human review before it can be marked done. "
     if handoff_svc is None:
-        raise InvalidTransition(refusal + "No HandoffService available to initiate handoff.")
+        raise ReviewRefused(refusal + "No HandoffService available to initiate handoff.", ReviewRefused.NO_SERVICE)
     reviewer = item_reviewer(item)
     if not reviewer:
-        raise InvalidTransition(refusal + "A reviewer is required to initiate the handoff: it has none and no creator.")
+        raise ReviewRefused(refusal + _NO_REVIEWER, ReviewRefused.NO_REVIEWER)
     if not await is_company_member(session, company_id, reviewer):
-        raise InvalidTransition(refusal + "The item's reviewer or creator is not a member of the company.")
+        raise ReviewRefused(refusal + _REVIEWER_NOT_A_MEMBER, ReviewRefused.NOT_A_MEMBER)
     try:
         return await handoff_svc.agent_to_human(
             session, work_item_id, agent_id=agent_id, reviewer_user_id=reviewer, company_id=company_id
         )
+    except ReviewerLacksRole as exc:  # must precede HandoffNotAllowed, its base class, or this reason is never reached
+        raise ReviewRefused(refusal + str(exc), ReviewRefused.LACKS_ROLE) from exc
     except HandoffNotAllowed as exc:
-        raise InvalidTransition(str(exc)) from exc
+        raise ReviewRefused(str(exc), ReviewRefused.NOT_THE_HOLDER) from exc
 
 
 async def review_outcome(

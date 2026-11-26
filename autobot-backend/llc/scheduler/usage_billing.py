@@ -24,7 +24,14 @@ logger = get_logger(__name__)
 
 
 async def ingest_run_cost(
-    service: Any, session: Any, result: AdapterRunStatus, agent_id: str, company_id: str, usage: tuple, model: str
+    service: Any,
+    session: Any,
+    result: AdapterRunStatus,
+    agent_id: str,
+    company_id: str,
+    usage: tuple,
+    model: str,
+    idempotency_key: str | None = None,
 ) -> None:
     """``service.ingest_cost_event`` for one run, charging dollars only when it was API-billed.
 
@@ -35,7 +42,14 @@ async def ingest_run_cost(
     subscription = result.billing == BILLING_SUBSCRIPTION
     try:
         await service.ingest_cost_event(
-            session, agent_id, company_id, tokens_in, tokens_out, model, bill_dollars=not subscription
+            session,
+            agent_id,
+            company_id,
+            tokens_in,
+            tokens_out,
+            model,
+            bill_dollars=not subscription,
+            idempotency_key=idempotency_key,
         )
     except BudgetExhausted as exc:
         if not subscription:

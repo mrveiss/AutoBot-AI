@@ -189,28 +189,28 @@ class TestPrometheusMetricsManager:
         """Test recording successful task execution"""
         metrics_manager.record_task_execution(
             task_type="code_analysis",
-            agent_type="code-reviewer",
+            agent_type="research",
             status="success",
             duration=120.5,
         )
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'task_type="code_analysis"' in metrics_output
-        assert 'agent_type="code-reviewer"' in metrics_output
+        assert 'agent_type="research"' in metrics_output
         assert 'status="success"' in metrics_output
 
     def test_record_task_execution_failed(self, metrics_manager):
         """Test recording failed task execution"""
         metrics_manager.record_task_execution(
             task_type="deployment",
-            agent_type="devops-engineer",
+            agent_type="system-commands",
             status="failed",
             duration=30.2,
         )
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'task_type="deployment"' in metrics_output
-        assert 'agent_type="devops-engineer"' in metrics_output
+        assert 'agent_type="system-commands"' in metrics_output
         assert 'status="failed"' in metrics_output
 
     def test_record_task_execution_without_duration(self, metrics_manager):
@@ -222,11 +222,11 @@ class TestPrometheusMetricsManager:
 
     def test_update_active_tasks(self, metrics_manager):
         """Test updating active tasks count"""
-        metrics_manager.update_active_tasks("code_analysis", "code-reviewer", 3)
+        metrics_manager.update_active_tasks("code_analysis", "research", 3)
 
         metrics_output = metrics_manager.get_metrics().decode("utf-8")
         assert 'task_type="code_analysis"' in metrics_output
-        assert 'agent_type="code-reviewer"' in metrics_output
+        assert 'agent_type="research"' in metrics_output
 
     def test_update_task_queue_size(self, metrics_manager):
         """Test updating task queue size"""
@@ -411,11 +411,11 @@ class TestPrometheusMetricsManager:
     def test_task_labels_bounded(self, metrics_manager):
         """Test that task labels use bounded value sets"""
         valid_agents = [
-            "code-reviewer",
-            "testing-engineer",
-            "devops-engineer",
-            "frontend-engineer",
-            "senior-backend-engineer",
+            "research",
+            "chat",
+            "system-commands",
+            "rag",
+            "summarization",
         ]
 
         for agent in valid_agents:
@@ -464,7 +464,7 @@ class TestPrometheusMetricsPerformance:
             for i in range(100):
                 metrics_manager.record_workflow_execution("code_review", "success", 10.0)
                 metrics_manager.record_github_commit("owner/repo", "created")
-                metrics_manager.record_task_execution("code_analysis", "code-reviewer", "success", 60.0)
+                metrics_manager.record_task_execution("code_analysis", "research", "success", 60.0)
 
         # Should complete in reasonable time (benchmark handles timing)
         benchmark(record_batch)

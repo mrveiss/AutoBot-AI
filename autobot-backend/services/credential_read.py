@@ -92,3 +92,67 @@ async def load_imported_credential(secret_id: str, owner_id: str) -> dict | None
     factory = get_async_session_factory()
     async with factory() as session:
         return await read_imported_credential_in_session(session, secret_id, owner_id, root_key)
+
+
+def _active_secret_ids_newest_first(db_path: str, name: str) -> list[str]:
+    """Ids of every active, unexpired ``user``-scope secret named *name*, newest first (ids only, no values)."""
+    import sqlite3
+
+    from autobot_shared.time_utils import now_utc
+
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT id FROM secrets WHERE is_active = 1 AND name = ? AND scope = 'user' "
+            "AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC, rowid DESC",
+            (name, now_utc().isoformat()),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [row[0] for row in rows]
+
+
+async def find_connector_secret_ids(connector_id: str) -> list[str]:
+    """Every active credential id filed under *connector_id*, NEWEST first (#13710).
+
+    ``UNIQUE(name, scope, chat_id)`` does not stop duplicates (``chat_id`` is NULL, and SQLite treats NULLs as
+    distinct), and ``get_secret(name=...)`` takes an arbitrary first row, so a stale duplicate could win.
+    """
+    import asyncio
+
+    from services.credential_write import connector_secret_name
+    from services.secrets_service import get_secrets_service
+
+    return await asyncio.to_thread(
+        _active_secret_ids_newest_first, get_secrets_service().db_path, connector_secret_name(connector_id)
+    )
+
+
+async def find_connector_secret_id(connector_id: str) -> str | None:
+    """The id of the NEWEST credential filed under *connector_id*, or ``None`` when none is stored (#13710)."""
+    ids = await find_connector_secret_ids(connector_id)
+    return ids[0] if ids else None
+
+
+async def assert_attachable_secret(secret_id: str, owner_id: str) -> None:
+    """Refuse to attach *secret_id* to a connector *owner_id* may not own (#13710).
+
+    Raises ``LookupError`` when the secret does not exist, ``PermissionError`` when its recorded owner is not
+    *owner_id*, or when it (or *owner_id*) belongs to a service-owned OAuth provider -- the company mailbox,
+    whose sync, update or delete would otherwise use, rotate or revoke that shared credential.
+    """
+    import asyncio
+
+    from knowledge.connectors.oauth_flow import OAUTH_PROVIDERS
+    from services.credential_write import connector_secret_name
+    from services.secrets_service import get_secrets_service
+
+    secret = await asyncio.to_thread(get_secrets_service().get_secret, secret_id=secret_id, include_value=False)
+    if secret is None:
+        raise LookupError("secret not found")
+    service = [p for p in OAUTH_PROVIDERS.values() if p.service_owner_id]
+    owners = {p.service_owner_id for p in service}
+    names = {connector_secret_name(p.service_connector_id) for p in service}
+    created_by = secret.get("created_by") or ""
+    if created_by != owner_id or owner_id in owners or created_by in owners or secret.get("name") in names:
+        raise PermissionError("secret cannot be attached by this owner")

@@ -1,6 +1,6 @@
 # Sandboxed agent VM/container orchestration CLI — source analysis
 
-Fetched 2026-09-17 via `gh api` (no clone). Source is anonymized per the research skill's
+Fetched 2026-09-17 via `gh api` (no clone). Source is anonymized per the `/autobot-dev-skills:lifecycle research` skill's
 default: name and repo URL stay in the chat reply, not on disk.
 
 ## Source Analysis: a multi-provider sandbox-orchestration CLI for coding agents

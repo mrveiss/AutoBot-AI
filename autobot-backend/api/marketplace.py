@@ -25,7 +25,7 @@ from api.schemas_workflows import (
     MarketplaceInstalledResponse,
     MarketplacePluginActionResponse,
 )
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -415,7 +415,9 @@ async def get_catalog_entry(
     operation="list_categories",
     error_code_prefix="MARKETPLACE",
 )
-async def list_categories() -> dict[str, list[str]]:
+async def list_categories(
+    user: dict = Depends(get_current_user),
+) -> dict[str, list[str]]:
     """
     List valid plugin categories and sort options.
 
@@ -475,7 +477,9 @@ async def _get_installed() -> set[str]:
     operation="list_installed",
     error_code_prefix="MARKETPLACE",
 )
-async def list_installed() -> dict[str, list[str]]:
+async def list_installed(
+    user: dict = Depends(get_current_user),
+) -> dict[str, list[str]]:
     """
     List names of installed marketplace plugins.
 
@@ -493,7 +497,7 @@ async def list_installed() -> dict[str, list[str]]:
 )
 async def install_plugin(
     body: InstallRequest,
-    user: dict = Depends(get_current_user),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, str]:
     """
     Mark a catalog plugin as installed.
@@ -554,6 +558,7 @@ async def uninstall_plugin(
         default=BUILTIN_SOURCE_ID,
         description=f"Marketplace source id; '{BUILTIN_SOURCE_ID}' or a user-added source UUID (#7366)",
     ),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, str]:
     """
     Remove a marketplace plugin from the installed set.

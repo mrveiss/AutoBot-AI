@@ -206,7 +206,8 @@ def test_generate_report_complete():
 
     # Check footer
     assert "## How to Regenerate" in report
-    assert "claude /claims-audit" in report
+    assert "python3 .claude/skills/claims-audit/generate_report.py" in report
+    assert "/claims-audit" not in report.replace(".claude/skills/claims-audit", "")
 
 
 def test_load_inventory(tmp_path):

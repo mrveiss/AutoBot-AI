@@ -253,7 +253,14 @@ def _producer_msg(channel: str, body: dict) -> dict:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "event_type",
-    ["budget.soft_alert", "budget.hard_stop", "work_item.handoff_ready", "work_item.handoff"],
+    [
+        "budget.soft_alert",
+        "budget.hard_stop",
+        "budget.company_soft_alert",
+        "budget.company_hard_stop",
+        "work_item.handoff_ready",
+        "work_item.handoff",
+    ],
 )
 async def test_notifications_channel_republished_with_channel_company(event_type):
     """Producer events on llc:notifications:{id} reach company:{id} (#21080)."""
@@ -314,3 +321,31 @@ async def test_non_dict_payload_drops_flat_company_id():
         _producer_msg(f"llc:notifications:{_CO_A}", {"event_type": "x", "payload": "s", "company_id": _CO_B, "k": 1})
     )
     assert pub.calls[0]["payload"] == {"k": 1}
+
+
+_COMPANY_COUNTS = {"spent_cents": 9000, "budget_cents": 10000, "ts": "2026-11-21T10:00:00+00:00"}
+
+
+def _watchdog_company_body(event_type: str) -> dict:
+    """The body BudgetWatchdog._notify publishes for a company-level notice (budget_watchdog.py:203/:214)."""
+    body = {"event_type": event_type, "company_id": _CO_A, **_COMPANY_COUNTS}
+    if event_type == "budget.company_soft_alert":
+        body["ratio"] = 0.9
+    return body
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("event_type", ["budget.company_soft_alert", "budget.company_hard_stop"])
+async def test_company_notice_real_watchdog_shape(event_type):
+    """The watchdog's real company-level body: channel company wins, company_id never lands in the payload."""
+    pub = _FakePublisher()
+    router = LLCNotificationRouter(publisher=pub)
+    body = _watchdog_company_body(event_type)
+
+    await router._dispatch(_producer_msg(f"llc:notifications:{_CO_A}", body))
+
+    expected = {k: v for k, v in body.items() if k not in ("event_type", "company_id")}
+    assert len(pub.calls) == 1
+    assert pub.calls[0]["company_id"] == _CO_A
+    assert pub.calls[0]["event_type"] == event_type
+    assert pub.calls[0]["payload"] == expected

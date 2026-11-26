@@ -2,7 +2,7 @@
 
 ## Batch Execution Default
 
-When the user says "implement all X-labeled issues", "fix all Y bugs", or "run `/batch-implement` on Z" — **launch immediately without asking for scope clarification.**
+When the user says "implement all X-labeled issues", "fix all Y bugs", or "run `/autobot-dev-skills:lifecycle batch-implement` on Z" — **launch immediately without asking for scope clarification.**
 
 Default behavior:
 - Batch size: 3 agents max per round (API rate limit)
@@ -40,7 +40,7 @@ Checklist", all 8 steps — batch work is exactly the case where steps 5-8 apply
 2. **Agents work in isolated worktrees** — no cross-contamination
 3. **Batch size: 3 implementation agents max** — avoid API rate limiting (529 errors), wait between batches. The cap is on *implementation* agents; read-only Haiku sweeps are cheap and may fan out wider
 4. **Agents commit locally only** — do NOT push; main session handles all pushes
-5. **After each batch:** `/batch-implement` auto-detects failures:
+5. **After each batch:** `/autobot-dev-skills:lifecycle batch-implement` auto-detects failures:
    - API 529 → wait 60s, retry
    - Merge conflicts → merge main, retry (never rebase a pushed branch)
    - Already resolved → skip
@@ -51,7 +51,7 @@ Checklist", all 8 steps — batch work is exactly the case where steps 5-8 apply
 
 ## Which Tier Runs the Batch
 
-Every agent definition in `.claude/agents/` declares its own tier — read it there, never
+Every agent definition in the `autobot-dev-skills` plugin declares its own tier — read it there, never
 restate it here. Two rules govern dispatch:
 
 - **An agent with no `model:` in its frontmatter inherits the session model**, so a mechanical
@@ -91,9 +91,9 @@ thing catching it today.
 ```bash
 # Validate all open PRs before merge window
 for pr in $(gh pr list --state open --limit 20 --json number -q '.[].number'); do
-  /pre-merge-validate $pr || gh pr comment $pr -b "❌ Validation failed"
+  /autobot-dev-skills:review pre-merge-validate $pr || gh pr comment $pr -b "❌ Validation failed"
 done
 
 # Nightly codebase audit (cron: 0 23 * * *)
-/dead-code-audit >> /var/log/codebase-audit.log
+/autobot-dev-skills:audit dead-code-audit >> /var/log/codebase-audit.log
 ```

@@ -15,6 +15,7 @@ from typing import Any, Optional, Sequence
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..exceptions import PublicMessageMixin
 from ..models.activity import ActorType
 from ..models.enums import ActivityEventType, MembershipRole
 from ..models.membership import LLCCompanyMembership
@@ -23,11 +24,11 @@ from .base import LLCServiceBase
 logger = logging.getLogger(__name__)
 
 
-class MemberAlreadyExistsError(Exception):
+class MemberAlreadyExistsError(PublicMessageMixin, Exception):
     """Raised when a membership already exists for (company, user)."""
 
 
-class MemberNotFoundError(Exception):
+class MemberNotFoundError(PublicMessageMixin, Exception):
     """Raised when a membership does not exist for (company, user)."""
 
 

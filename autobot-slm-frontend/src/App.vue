@@ -19,9 +19,10 @@ import UpdateNotification from '@/components/UpdateNotification.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
-import { useHighContrast, useDarkMode } from '@/composables/useAccessibility'
+import { useSlmTheme } from '@/composables/useSlmTheme'
 import { ensureTimezone } from '@/composables/useTimezone'
 import { provideToast } from '@/composables/useToast'
+import FleetIncompleteNotice from '@/components/FleetIncompleteNotice.vue'
 
 provideToast()
 
@@ -29,8 +30,7 @@ const route = useRoute()
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 const ws = useSlmWebSocket()
-const highContrast = useHighContrast()
-const darkMode = useDarkMode()
+const theme = useSlmTheme()
 
 const isLoginPage = computed(() => route.name === 'login')
 
@@ -68,10 +68,8 @@ async function initializeApp(): Promise<void> {
 }
 
 onMounted(async () => {
-  // Issue #754: Initialize high contrast preference from localStorage
-  highContrast.init()
-  // Issue #3305: Initialize dark mode preference from localStorage
-  darkMode.init()
+  // #18239: restore the saved theme (light / dark / contrast / mono) from localStorage
+  theme.init()
 
   if (authStore.isAuthenticated) {
     await initializeApp()
@@ -82,6 +80,7 @@ onMounted(async () => {
 <template>
   <!-- Issue #754: Skip link for keyboard navigation -->
   <SkipLink />
+  <FleetIncompleteNotice />
   <!-- Canonical toast notification container (GH#7449) -->
   <ToastContainer
     :label="$t('common.toastContainer.notifications')"
@@ -95,7 +94,7 @@ onMounted(async () => {
 
   <!-- Authenticated pages - with sidebar -->
   <template v-else>
-    <div class="flex min-h-screen bg-gray-100">
+    <div class="flex min-h-screen bg-autobot-bg-tertiary">
       <Sidebar />
       <div class="flex-1 flex flex-col overflow-hidden">
         <!-- Issue #741: Top-bar notification for code updates -->

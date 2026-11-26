@@ -257,6 +257,19 @@ FIELD_FORMAT_PREFIX = "fe1."  # "." is outside the base64url alphabet, so a lega
 _FIELD_KEY_INFO = b"autobot-field-encryption:v1"
 
 
+#: Its own HKDF label for the audit-trail MAC key (#17219): the key is derived, never stored.
+_AUDIT_CHAIN_KEY_INFO = b"autobot-audit-chain-mac:v1"
+
+
+def derive_audit_chain_key(root_key: bytes | None = None) -> bytes:
+    """The 32-byte HMAC key of the tamper-evident audit chain, derived from the root key (#17219).
+
+    Raises RuntimeError (from :func:`load_root_key`) when the root key is unusable, so a caller
+    that needs the key fails closed instead of writing a row it cannot authenticate.
+    """
+    return _hkdf(load_root_key() if root_key is None else root_key, _AUDIT_CHAIN_KEY_INFO)
+
+
 def _field_aad(context: str) -> bytes:
     if not context:
         raise ValueError("context must name where the sealed value is stored")

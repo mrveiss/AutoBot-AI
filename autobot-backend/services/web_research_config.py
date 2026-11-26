@@ -16,6 +16,8 @@ differs.
 import copy
 from typing import Any, Dict, Protocol
 
+from services.config_write_lock import locked_config_write
+
 SECTION = "web_research"
 
 # Web research is on until an admin turns it off: the startup initializer enabled it
@@ -77,6 +79,7 @@ def load_settings(manager: ConfigManagerLike) -> Dict[str, Any]:
     return settings
 
 
+@locked_config_write
 def save_settings(manager: ConfigManagerLike, changes: Dict[str, Any]) -> Dict[str, Any]:
     """Persist ``changes`` (API field names) to the ``web_research`` section; returns the full set."""
     unknown = set(changes) - set(DEFAULTS)

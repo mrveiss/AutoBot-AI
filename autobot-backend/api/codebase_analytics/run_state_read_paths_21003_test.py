@@ -82,7 +82,10 @@ class _RunStore:
 @pytest.fixture
 def run_store():
     store = _RunStore()
-    with patch.object(run_status, "get_code_collection_async", AsyncMock(return_value=store)):
+    with (
+        patch.object(run_status, "get_code_collection_async", AsyncMock(return_value=store)),
+        patch.object(run_status, "_source_exists", AsyncMock(return_value=True)),
+    ):
         yield store
 
 

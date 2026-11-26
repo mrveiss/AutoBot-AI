@@ -300,7 +300,7 @@ After ALL PRs merged:
 
 After merging all PRs in a batch:
 
-1. Run `/dead-code-audit` to discover new gaps introduced by merged code
+1. Run `/autobot-dev-skills:audit dead-code-audit` to discover new gaps introduced by merged code
 2. File discovery issues for any new dead/orphaned code
 3. Do NOT fix gaps inline in this audit — file issues under `dead-code` and `not-wired` labels, each to be fixed in its own reviewed PR. Findings are always **wire-it-in** issues, never deletion issues
 
@@ -308,7 +308,7 @@ After merging all PRs in a batch:
 
 ## Validation Gates Before Merging
 
-**Use `/pre-merge-validate <PR>` before merging any code:**
+**Use `/autobot-dev-skills:review pre-merge-validate <PR>` before merging any code:**
 
 0. Squash-Duplicate Detection (Gate 0)
 1. Syntax + Imports
@@ -318,7 +318,7 @@ After merging all PRs in a batch:
 5. Type Check (TypeScript)
 6. Linting (errors only, not warnings)
 
-`/batch-implement` runs this automatically before creating PRs.
+`/autobot-dev-skills:lifecycle batch-implement` runs this automatically before creating PRs.
 
 ---
 

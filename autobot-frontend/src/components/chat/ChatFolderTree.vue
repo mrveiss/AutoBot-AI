@@ -20,20 +20,16 @@
     />
 
     <!-- Create root folder button -->
-    <button
-      v-if="!creatingRoot"
-      class="mt-1 flex items-center gap-1 w-full text-xs text-autobot-text-muted hover:text-autobot-text-secondary px-1 py-1 rounded transition-colors"
-      @click="creatingRoot = true"
-    >
-      <Icon name="folder-plus" class="text-xs" />
+    <BaseButton v-if="!creatingRoot" variant="ghost" size="xs" block @click="creatingRoot = true">
+      <template #icon-left><Icon name="folder-plus" class="text-xs" /></template>
       {{ $t('chat.folders.newFolder') }}
-    </button>
+    </BaseButton>
     <div v-else class="mt-1 flex items-center gap-1">
       <input
         ref="rootInput"
         v-model="rootFolderName"
         type="text"
-        class="flex-1 text-xs px-2 py-1 border border-autobot-border rounded bg-autobot-bg-card focus:outline-none focus:ring-1 focus:ring-electric-500"
+        class="flex-1 text-xs px-2 py-1 border border-[var(--aui-color-border)] rounded bg-[var(--aui-color-surface)] focus:outline-none focus:ring-1 focus:ring-[var(--aui-color-focus-ring)]"
         :placeholder="$t('chat.folders.folderName')"
         @keyup.enter="createRootFolder"
         @keyup.escape="cancelRootCreate"
@@ -45,6 +41,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
+import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import FolderNode from './ChatFolderNode.vue'
 import { useFolderStore } from '@/stores/useFolderStore'
@@ -93,4 +90,3 @@ watch(creatingRoot, async (v) => {
   }
 })
 </script>
-

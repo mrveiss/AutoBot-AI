@@ -81,11 +81,18 @@ def _unterminated(text: str) -> bool:
     return len(TOOL_CALL_OPENING_RE.findall(text)) > sum(1 for _ in TOOL_CALL_PATTERN.finditer(text))
 
 
-def _malformed(texts: List[str]) -> bool:
+#: The ``execution_history`` tool the graph records when a TOOL_CALL did not parse (``tool_call_args``, #21843).
+_PARSE_FAILURE_TOOL = "tool_call_parse"
+
+
+def _malformed(texts: List[str], history: List[Dict[str, Any]] | None = None) -> bool:
     """True when a response announces a tool call the handler's own extractor cannot fully parse.
 
-    That covers an unparseable call and an unterminated one following valid calls.
+    That covers an unparseable call and an unterminated one following valid calls. The graph feeds a parse failure
+    back and stores the retried reply cleaned, so the recorded ``tool_call_parse`` step is also a witness (#21843).
     """
+    if any(entry.get("tool") == _PARSE_FAILURE_TOOL for entry in history or []):
+        return True
     for text in texts:
         announced, _ = _PARSER._detect_tool_call_markers(text or "")
         if not announced:
@@ -106,7 +113,7 @@ def _stalled(record: LiveRunRecord) -> bool:
 
 
 def _every_attempt_errored(record: LiveRunRecord) -> bool:
-    history = record.execution_history
+    history = [e for e in record.execution_history if e.get("tool") != _PARSE_FAILURE_TOOL]
     return bool(history) and all(entry.get("status") == "error" for entry in history)
 
 
@@ -129,7 +136,7 @@ def _unsupported(record: LiveRunRecord) -> bool:
 def classify_failures(record: LiveRunRecord) -> List[str]:
     """The failure categories of *record*, in ``CATEGORIES`` order; empty for a clean run."""
     found = {
-        MALFORMED_TOOL_CALL: _malformed(record.raw_responses),
+        MALFORMED_TOOL_CALL: _malformed(record.raw_responses, record.execution_history),
         UNKNOWN_TOOL: _unknown_tool(record.messages),
         LOOP_STALL: _stalled(record),
         FALSE_DONE: _false_done(record),

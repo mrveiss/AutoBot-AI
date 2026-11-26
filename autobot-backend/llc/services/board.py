@@ -30,6 +30,7 @@ from ..models.board import LLCBoard, LLCBoardColumn
 from ..models.enums import BoardType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError, CompanyOsNotFound
 from .work_item_gated_done import DoneGate
 from .work_item_service import WorkItemService
 
@@ -211,7 +212,7 @@ class BoardService(LLCServiceBase):
         """
         board = await self.get_board(session, board_id)
         if board is None:
-            raise ValueError(f"Board {board_id} not found")
+            raise CompanyOsNotFound(f"Board {board_id} not found")
 
         # Collect all statuses covered by this board's columns so we can
         # fetch matching work items in one query.
@@ -315,7 +316,7 @@ class BoardService(LLCServiceBase):
         """
         board = await self.get_board(session, board_id)
         if board is None:
-            raise ValueError(f"Board {board_id} not found")
+            raise CompanyOsNotFound(f"Board {board_id} not found")
 
         col_result = await session.execute(
             select(LLCBoardColumn).where(
@@ -325,11 +326,11 @@ class BoardService(LLCServiceBase):
         )
         column = col_result.scalar_one_or_none()
         if column is None:
-            raise ValueError(f"Column {column_id} not found on board {board_id}")
+            raise CompanyOsNotFound(f"Column {column_id} not found on board {board_id}")
 
         await self._enforce_wip_limit(session, board, column)
         if not column.status_filter:
-            raise ValueError(f"Column {column_id} has no status_filter configured")
+            raise CompanyOsError(f"Column {column_id} has no status_filter configured")
 
         new_status = WorkItemStatus(column.status_filter[0])
         work_item_svc = WorkItemService(activity_log=self.activity_log)

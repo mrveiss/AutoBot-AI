@@ -72,7 +72,9 @@ describe('useSlmApi — migrated onto slmApiClient (#12420 Phase 2 batch 5)', ()
       const result = await useSlmApi().getNodes()
 
       const [url, opts] = mockRaw.mock.calls[0] as RawCall
-      expect(url).toBe('/nodes')
+      // #21584: the list is read page by page, 100 at most; a fleet of one is one request.
+      expect(mockRaw).toHaveBeenCalledTimes(1)
+      expect(url).toBe('/nodes?page=1&per_page=100')
       expect(opts.method).toBe('GET')
       expect(result).toHaveLength(1)
       expect(result[0]!.node_id).toBe('n1')

@@ -6,7 +6,8 @@ AutoBot supports comprehensive configuration through environment variables with 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_BACKEND_HOST` | `127.0.0.1` (or `0.0.0.0` on WSL2) | Backend server host — automatically configured by Ansible from `backend_host` variable (MVA-2418) |
+| `AUTOBOT_BACKEND_HOST` | `127.0.0.1` | Address clients dial; Ansible writes `backend_advertised_host`, never a bind-all value (#18810) |
+| `AUTOBOT_BACKEND_BIND_HOST` | `127.0.0.1` (or `0.0.0.0` on WSL2) | Listen address, from the Ansible `backend_host` variable |
 | `AUTOBOT_BACKEND_PORT` | `8001` | Backend server port |
 | `AUTOBOT_BACKEND_API_ENDPOINT` | `http://localhost:8001` | Full API endpoint URL |
 | `AUTOBOT_BACKEND_TIMEOUT` | `60` | Request timeout in seconds |
@@ -33,6 +34,7 @@ AutoBot supports comprehensive configuration through environment variables with 
 | `AUTOBOT_ROUTING_MODEL` | `llama3.2:1b` | Routing | Orchestrator, request routing |
 | `AUTOBOT_CLASSIFICATION_MODEL` | `gemma2:2b` | Classification | Intent detection, category assignment |
 | `AUTOBOT_LIGHT_PROCESSING_MODEL` | `phi3:mini` | Light Processing | Extraction, formatting |
+| `AUTOBOT_VERIFIER_MODEL` | `""` (the light-processing model) | Verifier | Pre-action verifier (own small model; #21844). Fit rule: the dedicated model is used only when the provider is Ollama AND it is already loaded or nothing else is loaded (`/api/ps`). Ollama reports no free VRAM, so a verifier model that is not resident never evicts the chat model: the configured chat model answers instead when it is loaded (else this model is used), with the chat `num_ctx` so the runner is not reloaded (a cold chat reload was measured at 74 s). To keep both resident set `OLLAMA_MAX_LOADED_MODELS` to at least 2 and size VRAM for both. Must be pulled on the Ollama host, else the provider default answers and a startup warning plus a `verifier_model` health degradation say so. |
 | `AUTOBOT_INSTRUCTION_MODEL` | `mistral:7b-instruct` | Instruction | RAG, step execution |
 | `AUTOBOT_SYSTEM_MODEL` | `dolphin-llama3:8b` | System | Commands, security |
 | `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | Quality | Chat, research, code |

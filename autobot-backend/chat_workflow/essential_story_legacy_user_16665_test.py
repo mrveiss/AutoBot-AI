@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from chat_workflow.models import WorkflowSession
-from chat_workflow.tiered_context_sources import prepend_memory_context
+from chat_workflow.tiered_context_sources import append_memory_context
 from knowledge.ownership import KnowledgeOwnership
 
 
@@ -36,7 +36,7 @@ async def _prompt(**session_meta):
         patch("memory.essential_story.EssentialStoryGenerator._set_cached", AsyncMock()),
         patch("memory.essential_story.EssentialStoryGenerator._get_token_budget", AsyncMock(return_value=600)),
     ):
-        return await prepend_memory_context("SYSTEM", session, "hi", "m")
+        return await append_memory_context("SYSTEM", session, "hi", "m")
 
 
 @pytest.mark.asyncio

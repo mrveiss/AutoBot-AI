@@ -56,6 +56,7 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_text, base_tree_texts, literal_in
 
 from autobot_shared.testfile_names import is_test_filename
+from tools.lint._comment_syntax import code_text, strip_html_comments
 
 _REPO_ROOT = repo_root()
 
@@ -267,8 +268,23 @@ def _hand_typed_response_count(root: Path) -> int:
 
 
 def _inline_generic_count(root: Path) -> int:
-    """Unverified response-shape assertions at the call site."""
-    return sum(len(_INLINE_GENERIC_RE.findall(_read(path))) for path in _source_files(root))
+    """Unverified response-shape assertions at the call site, counted in code only (#15771).
+
+    The pattern also matches the prose that explains a removal, so a correct change that
+    documents itself left the count unchanged and failed the build. The shared stripper
+    (#17941) reads each file with its own comment syntax and drops trailing `// ...` comments
+    too; it tracks quotes, so a generic inside a string literal is still counted. A `.vue` file's HTML
+    comments (outside `<script>`) are dropped first, since the code-comment stripper does not know them.
+    """
+    return sum(
+        len(_INLINE_GENERIC_RE.findall(code_text(_vue_markup_uncommented(path), name=path.name, strip_trailing=True)))
+        for path in _source_files(root)
+    )
+
+
+def _vue_markup_uncommented(path: Path) -> str:
+    text = _read(path)
+    return strip_html_comments(text) if path.suffix == ".vue" else text
 
 
 def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | None = None) -> dict[str, int]:

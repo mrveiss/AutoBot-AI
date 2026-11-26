@@ -10,10 +10,10 @@ of SpecializedAgentService, using tmp_path for filesystem isolation.
 """
 
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
+from agent_tier_classifier import AgentTier, get_agent_tier
 from autobot_shared.logging_manager import get_logger
 from services.specialized_agent_service import (
     SpecializedAgentService,
@@ -30,14 +30,14 @@ logger = get_logger(__name__)
 
 FULL_AGENT_MD = """\
 ---
-name: Senior Backend Engineer
+name: Backend Helper
 description: Expert Python backend developer
 model: claude-sonnet-4-20250514
 color: blue
 tools: Bash, Read, Write, Glob, Grep
 ---
 
-You are a senior backend engineer specializing in Python.
+You are a backend helper specializing in Python.
 """
 
 MINIMAL_AGENT_MD = """\
@@ -60,7 +60,7 @@ def agents_dir(tmp_path: Path) -> Path:
     """Create a temporary agents directory with sample .md files."""
     d = tmp_path / "agents"
     d.mkdir()
-    (d / "senior-backend-engineer.md").write_text(FULL_AGENT_MD, encoding="utf-8")
+    (d / "backend-helper.md").write_text(FULL_AGENT_MD, encoding="utf-8")
     (d / "quick-helper.md").write_text(MINIMAL_AGENT_MD, encoding="utf-8")
     return d
 
@@ -82,7 +82,7 @@ class TestParseFrontmatter:
     def test_full_frontmatter(self):
         """All supported fields are extracted correctly."""
         result = _parse_frontmatter(FULL_AGENT_MD)
-        assert result["name"] == "Senior Backend Engineer"
+        assert result["name"] == "Backend Helper"
         assert result["description"] == "Expert Python backend developer"
         assert result["model"] == "claude-sonnet-4-20250514"
         assert result["color"] == "blue"
@@ -149,7 +149,7 @@ class TestCategorizeAgent:
     @pytest.mark.parametrize(
         "name,description,expected",
         [
-            ("Senior Backend Engineer", "Python dev", "implementation"),
+            ("Backend Helper", "Python dev", "implementation"),
             ("Frontend Engineer", "Vue.js expert", "implementation"),
             ("DevOps Engineer", "Infrastructure", "implementation"),
             ("Testing Engineer", "QA specialist", "implementation"),
@@ -241,7 +241,7 @@ class TestExtractSystemPromptExcerpt:
         """Short body is returned in full without ellipsis."""
         result = _extract_system_prompt_excerpt(FULL_AGENT_MD, max_chars=5000)
         assert "\u2026" not in result
-        assert "senior backend engineer" in result.lower()
+        assert "backend helper" in result.lower()
 
     def test_no_frontmatter(self):
         """Content without frontmatter uses the whole text as body."""
@@ -271,15 +271,11 @@ class TestListAgents:
     """Tests for SpecializedAgentService.list_agents (#1821)."""
 
     def test_happy_path(self, service, agents_dir):
-        """Returns all parseable .md files in sorted order."""
-        with patch(
-            "services.specialized_agent_service._REPO_ROOT",
-            agents_dir.parent,
-        ):
-            agents = service.list_agents()
+        """Returns all parseable .md files, sorted by file name (backend-helper < quick-helper)."""
+        agents = service.list_agents()
         assert len(agents) == 2
         ids = [a["id"] for a in agents]
-        assert ids == ["quick-helper", "senior-backend-engineer"]
+        assert ids == ["backend-helper", "quick-helper"]
 
     def test_missing_directory(self, tmp_path):
         """Returns empty list when agents directory does not exist."""
@@ -292,12 +288,8 @@ class TestListAgents:
         bad_file.write_text("---\nname: B\n---\nBody", encoding="utf-8")
         bad_file.chmod(0o000)
 
-        with patch(
-            "services.specialized_agent_service._REPO_ROOT",
-            agents_dir.parent,
-        ):
-            svc = SpecializedAgentService(agents_dir=agents_dir)
-            agents = svc.list_agents()
+        svc = SpecializedAgentService(agents_dir=agents_dir)
+        agents = svc.list_agents()
 
         # Restore permissions for tmp_path cleanup
         bad_file.chmod(0o644)
@@ -307,20 +299,12 @@ class TestListAgents:
     def test_non_md_files_ignored(self, agents_dir):
         """Non-.md files in the directory are ignored."""
         (agents_dir / "notes.txt").write_text("ignore me", encoding="utf-8")
-        with patch(
-            "services.specialized_agent_service._REPO_ROOT",
-            agents_dir.parent,
-        ):
-            agents = SpecializedAgentService(agents_dir=agents_dir).list_agents()
+        agents = SpecializedAgentService(agents_dir=agents_dir).list_agents()
         assert len(agents) == 2
 
     def test_agent_fields_populated(self, service, agents_dir):
         """Each agent dict contains all expected keys."""
-        with patch(
-            "services.specialized_agent_service._REPO_ROOT",
-            agents_dir.parent,
-        ):
-            agents = service.list_agents()
+        agents = service.list_agents()
         expected_keys = {
             "id",
             "name",
@@ -330,6 +314,7 @@ class TestListAgents:
             "tools",
             "category",
             "source_file",
+            "tier",
             "type",
             "excerpt",
         }
@@ -339,12 +324,8 @@ class TestListAgents:
     def test_no_frontmatter_uses_stem_as_name(self, agents_dir):
         """Agent file without frontmatter uses filename stem as name."""
         (agents_dir / "plain-agent.md").write_text(NO_FRONTMATTER_MD, encoding="utf-8")
-        with patch(
-            "services.specialized_agent_service._REPO_ROOT",
-            agents_dir.parent,
-        ):
-            svc = SpecializedAgentService(agents_dir=agents_dir)
-            agents = svc.list_agents()
+        svc = SpecializedAgentService(agents_dir=agents_dir)
+        agents = svc.list_agents()
         plain = [a for a in agents if a["id"] == "plain-agent"][0]
         assert plain["name"] == "plain-agent"
 
@@ -359,25 +340,17 @@ class TestGetAgent:
 
     def test_existing_agent(self, service, agents_dir):
         """Returns agent dict with system_prompt for valid ID."""
-        with patch(
-            "services.specialized_agent_service._REPO_ROOT",
-            agents_dir.parent,
-        ):
-            agent = service.get_agent("senior-backend-engineer")
+        agent = service.get_agent("backend-helper")
         assert agent is not None
-        assert agent["id"] == "senior-backend-engineer"
-        assert agent["name"] == "Senior Backend Engineer"
+        assert agent["id"] == "backend-helper"
+        assert agent["name"] == "Backend Helper"
         assert "system_prompt" in agent
 
     def test_system_prompt_included(self, service, agents_dir):
         """get_agent includes full system_prompt (not just excerpt)."""
-        with patch(
-            "services.specialized_agent_service._REPO_ROOT",
-            agents_dir.parent,
-        ):
-            agent = service.get_agent("senior-backend-engineer")
+        agent = service.get_agent("backend-helper")
         prompt = agent["system_prompt"]
-        assert "senior backend engineer" in prompt.lower()
+        assert "backend helper" in prompt.lower()
 
     def test_nonexistent_agent(self, service):
         """Returns None for an agent ID that does not exist."""
@@ -420,11 +393,7 @@ class TestGetCategoriesSummary:
 
     def test_delegates_to_list_agents(self, service, agents_dir):
         """When agents=None, delegates to list_agents()."""
-        with patch(
-            "services.specialized_agent_service._REPO_ROOT",
-            agents_dir.parent,
-        ):
-            result = service.get_categories_summary()
+        result = service.get_categories_summary()
         # Two agents: one implementation, one general
         assert sum(result.values()) == 2
 
@@ -434,3 +403,75 @@ class TestGetCategoriesSummary:
         svc = SpecializedAgentService(agents_dir=Path("/nonexistent"))
         result = svc.get_categories_summary(agents=agents)
         assert result == {"analysis": 1, "general": 1}
+
+
+class TestTier:
+    """Tier for arbitrary user agents: declared tier wins, else the classifier default."""
+
+    def test_declared_tier_is_used(self, tmp_path):
+        d = tmp_path / "agents"
+        d.mkdir()
+        (d / "x.md").write_text("---\nname: X\ntier: tier3_specialized\n---\nBody", encoding="utf-8")
+        agent = SpecializedAgentService(agents_dir=d).get_agent("x")
+        assert agent["tier"] == "tier3_specialized"
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            'tier: "tier3_specialized"',
+            "tier: 'tier3_specialized'",
+            "tier: tier3_specialized  # specialised",
+            'tier: "tier3_specialized" # c',
+        ],
+    )
+    def test_quoted_or_commented_tier_is_decoded(self, tmp_path, line):
+        d = tmp_path / "agents"
+        d.mkdir()
+        (d / "x.md").write_text(f"---\nname: X\n{line}\n---\nBody", encoding="utf-8")
+        agent = SpecializedAgentService(agents_dir=d).get_agent("x")
+        assert agent["tier"] == "tier3_specialized"
+
+    def test_invalid_declared_tier_falls_back_to_default(self, tmp_path, caplog):
+        d = tmp_path / "agents"
+        d.mkdir()
+        (d / "x.md").write_text("---\nname: X\ntier: nonsense\n---\nBody", encoding="utf-8")
+        with caplog.at_level("WARNING"):
+            agent = SpecializedAgentService(agents_dir=d).get_agent("x")
+        assert agent["tier"] == get_agent_tier("x").value
+        assert "unknown tier" in caplog.text and "nonsense" in caplog.text
+
+    def test_blank_declared_tier_falls_back_silently(self, tmp_path, caplog):
+        d = tmp_path / "agents"
+        d.mkdir()
+        (d / "x.md").write_text("---\nname: X\ntier:\n---\nBody", encoding="utf-8")
+        with caplog.at_level("WARNING"):
+            agent = SpecializedAgentService(agents_dir=d).get_agent("x")
+        assert agent["tier"] == get_agent_tier("x").value
+        assert "unknown tier" not in caplog.text
+
+    def test_undeclared_tier_is_the_classifier_default(self, service):
+        assert service.get_agent("quick-helper")["tier"] == get_agent_tier("quick-helper").value
+        assert get_agent_tier("quick-helper") == AgentTier.TIER_1_DEFAULT
+
+
+class TestDefaultDirectory:
+    """With no explicit dir the service reads the SSOT-configured agents dir."""
+
+    def test_default_dir_is_ssot(self, tmp_path, monkeypatch):
+        d = tmp_path / "agents"
+        d.mkdir()
+        (d / "cfg.md").write_text(MINIMAL_AGENT_MD, encoding="utf-8")
+        monkeypatch.setattr("services.specialized_agent_service.claude_agents_dir", lambda: d)
+        assert [a["id"] for a in SpecializedAgentService().list_agents()] == ["cfg"]
+
+
+class TestAvailability:
+    """A missing agents dir is a visible state, not an empty list."""
+
+    def test_missing_dir_is_unavailable(self, tmp_path):
+        svc = SpecializedAgentService(agents_dir=tmp_path / "absent")
+        assert svc.is_available() is False
+        assert svc.list_agents() == []
+
+    def test_existing_empty_dir_is_available(self, tmp_path):
+        assert SpecializedAgentService(agents_dir=tmp_path).is_available() is True

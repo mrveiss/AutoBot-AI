@@ -419,3 +419,15 @@ def test_each_line_of_a_multi_line_text_node_has_its_own_line_number() -> None:
     """A literal reports its own line, even after a multi-line interpolation (#18802 review)."""
     source = "<template>\n  <p>\n    First line here\n    {{\n      count\n    }}\n    Third real line\n  </p>\n</template>\n"
     assert [(hit.line, hit.text) for hit in template_hits(source)] == [(3, "First line here"), (7, "Third real line")]
+
+
+def test_a_tag_that_only_starts_with_script_or_style_opens_no_block() -> None:
+    """`<script-runner />` is a component, not a script: `\\b` matches `-`, so it opened a block that a later real
+    `</script>` closed and blanked the template text between (#21797). Breaks the scan and the second derivation."""
+    source = (
+        "<template><script-runner /><style-preview /><p>Shown text here</p></template>\n"
+        '<script>alert("Real message")</script>\n'
+    )
+    assert [text for kind, text in literals_in(source) if kind == "template-text"] == ["Shown text here"]
+    assert script_literals(source) == ["Real message"]
+    assert ("template-text", "Shown text here") in regex_literals(source)

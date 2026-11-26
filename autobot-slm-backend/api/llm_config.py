@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.ollama_urls import ollama_tags_url
 from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.ssot_constants import model_config
 from models.database import Node, Setting
@@ -276,7 +277,7 @@ async def _test_ollama(endpoint: str) -> LLMTestResponse:
 
     import httpx
 
-    url = f"{endpoint}/api/tags"
+    url = ollama_tags_url(endpoint)
     try:
         t0 = time.monotonic()
         async with httpx.AsyncClient(timeout=10.0) as client:

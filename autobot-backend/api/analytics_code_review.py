@@ -49,6 +49,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.git_probe import start_git
 from autobot_shared.git_refs import is_safe_range
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.time_utils import parse_utc_iso
@@ -436,10 +437,7 @@ async def analyze_diff(
     Returns review findings with severity and suggestions.
     """
     # source_root and diff_content have no data dependency — parallelize the I/O.
-    source_root, diff_content = await asyncio.gather(
-        _resolve_source_root_or_404(source_id),
-        get_git_diff(commit_range),
-    )
+    source_root, diff_content = await asyncio.gather(_resolve_source_root_or_404(source_id), get_git_diff(commit_range))
 
     if not diff_content:
         # Issue #543: Return no-data response instead of demo data
@@ -555,7 +553,7 @@ async def review_file(
             else:
                 raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
         except Exception:
-            raise HTTPException(status_code=400, detail="Internal server error")
+            raise fixed_refusal(400)
 
     comments = analyze_code(content, file_path)
     score = calculate_review_score(comments)

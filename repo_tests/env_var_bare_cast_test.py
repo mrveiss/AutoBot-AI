@@ -245,7 +245,7 @@ def measurement() -> Measurement:
 #: Measured on main: comfortably above 1000 tracked, non-test .py files.
 #: Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in the
 #: bottom tenth of `growth`. Re-measured by the mechanism, not carried across (#15928).
-MIN_FILES_SCANNED = 3838  # mid-window: population 4038, window [3638, 4038] (the merge train)
+MIN_FILES_SCANNED = 4070  # mid-window: population 4270 (2026-11-23, #22106), window [3870, 4270]
 
 #: See `audio_extension_allowlist_test` for the derivation of `growth`.
 #:

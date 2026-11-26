@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from user_management.database import get_async_session
+from llc.deps import SESSION_DEP, log_unexpected
 from user_management.services import TenantContext
 
 from ..adapters import get_adapter_for_agent
@@ -62,7 +62,7 @@ async def list_runs(
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -83,7 +83,7 @@ async def list_org_heartbeat_runs(
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -100,7 +100,7 @@ async def list_org_heartbeat_runs(
 async def get_run(
     agent_id: str,
     run_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -139,7 +139,7 @@ def _cancel_release(current_user: dict) -> ReleaseWhy:
 async def cancel_run(
     agent_id: str,
     run_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -215,7 +215,7 @@ async def get_agent_diary(
     offset: int = Query(0, ge=0),
     date_from: Optional[str] = Query(None, description="ISO date filter start (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="ISO date filter end (YYYY-MM-DD)"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -238,10 +238,8 @@ async def get_agent_diary(
 
         diary = AgentDiaryService()
         entries = await diary.read(agent_name=agent_id, last_n=limit + offset)
-    except Exception:
-        import logging
-
-        logging.getLogger(__name__).warning("get_agent_diary: KB read failed for agent_id=%s", agent_id, exc_info=True)
+    except Exception as exc:
+        log_unexpected(logger, f"runs.get_agent_diary {agent_id}", exc)
         return []
 
     if date_from or date_to:

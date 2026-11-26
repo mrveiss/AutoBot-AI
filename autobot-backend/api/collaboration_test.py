@@ -29,6 +29,7 @@ from api.collaboration import (
     remove_collaborator,
     share_secret_with_session,
 )
+from autobot_shared.http_refusal import REFUSAL_TEXT
 from autobot_shared.status_enums import SecretType
 from models.collaboration_event import CollaborationEvent
 from models.secret import Secret, SecretScope
@@ -372,7 +373,7 @@ async def test_share_secret_not_owner(mock_db, session_id, owner_id, collaborato
             await share_secret_with_session(session_id, share, mock_db, current_user_editor)
 
         assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-        assert "only share secrets you own" in exc_info.value.detail
+        assert exc_info.value.detail == REFUSAL_TEXT[403]
 
 
 @pytest.mark.asyncio

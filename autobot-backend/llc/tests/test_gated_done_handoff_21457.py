@@ -54,6 +54,7 @@ def _real_handoff() -> HandoffService:
     svc._publish_a2h_notification = AsyncMock()
     svc._generate_and_update_brief_async = AsyncMock()
     svc._generate_brief = MagicMock(return_value={})
+    svc._assert_reviewer_holds_role = AsyncMock()  # the policy role has its own tests (#21588)
     return svc
 
 
@@ -66,7 +67,7 @@ def _gate() -> AsyncMock:
 async def _done(item: MagicMock, handoff: HandoffService, reviewer):
     item.reviewer_user_id = uuid.UUID(reviewer) if reviewer else None
     with (
-        patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)),
+        patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
         patch("llc.services.authz.membership_role", new=AsyncMock(return_value="member")),  # the reviewer is a member
     ):
         return await WorkItemService().transition_to_done(

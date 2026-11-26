@@ -25,7 +25,7 @@ from autobot_shared.status_enums import CommandRisk
 from command_run_policy import CommandRunPolicy
 from config import get_config_manager
 from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
-from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions
+from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions, grant_role
 from services.audit.audit import emit_security, query_filtered
 from services.audit.taxonomy import AuditCategory, AuditFilter
 from utils.command_utils import execute_shell_command
@@ -462,7 +462,7 @@ class SecurityLayer:
             # Unauthenticated requests must be rejected, not assigned permissions.
         }
 
-        return default_role_permissions.get(user_role, [])
+        return default_role_permissions.get(grant_role(user_role), [])
 
     # =========================================================================
     # Command Execution
@@ -585,9 +585,9 @@ class SecurityLayer:
         This used to append to a JSONL file and call it tamper-resistant; the
         only mechanism was append mode. The record now goes through
         ``services.audit.audit`` like every other audit event, so there is one
-        store and one tamper mechanism, not a second one here. Never raises: an
-        audit problem must not turn a correct 403 into a 500 (#14843), and a
-        record that could not even be scheduled is counted (#14750).
+        store and one tamper mechanism (the ``audit_logs`` hash chain, #17219), not a second one here. Never raises:
+        an audit problem must not turn a correct 403 into a 500 (#14843), and a record that could not even be
+        scheduled is counted (#14750).
         """
         scheduled = emit_security(
             action,

@@ -22,6 +22,7 @@ from api.secrets_defects_20557_test import _trail as _main_trail
 from api.secrets_delete_outcome import error_for
 from api.secrets_delete_outcome_21506_test import _EXPECTED, _KEYS, _LEAK, _failure, store  # noqa: F401 -- fixture
 from api.secrets_system_vault_17731_test import _SECRET_ID, client_and_vault  # noqa: F401 -- fixture
+from autobot_shared.http_refusal import REFUSAL_TEXT
 
 _STATUS = {
     "http-404": 404,
@@ -36,9 +37,9 @@ _STATUS = {
 _PASSTHROUGH = {"http-404", "http-409", "http-503"}
 #: The fixed body of the failure kinds ``error_for`` maps (one table: ``secrets_delete_outcome``).
 _BODY = {
-    "permission-error": "Not permitted to access this secret",
-    "access-error": "Not permitted to access this secret",
-    "not-found-error": "Secret not found",
+    "permission-error": REFUSAL_TEXT[403],
+    "access-error": REFUSAL_TEXT[403],
+    "not-found-error": REFUSAL_TEXT[404],
 }
 
 

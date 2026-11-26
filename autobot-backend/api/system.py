@@ -34,6 +34,7 @@ from api.system_startup_state import company_os_scheduling, resolve_startup_erro
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_embeddings_url, ollama_generate_url
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.model_constants import ModelConstants as ModelConsts
@@ -214,13 +215,10 @@ def _build_frontend_services_config(ollama_url: str, redis_config: dict) -> dict
     return {
         "ollama": {
             "url": ollama_url,
-            "endpoint": config.get(
-                "backend.llm.local.providers.ollama.endpoint",
-                f"{ollama_url}/api/generate",
-            ),
+            "endpoint": config.get("backend.llm.local.providers.ollama.endpoint", ollama_generate_url(ollama_url)),
             "embedding_endpoint": config.get(
                 "backend.llm.embedding.providers.ollama.endpoint",
-                f"{ollama_url}/api/embeddings",
+                ollama_embeddings_url(ollama_url),
             ),
         },
         "playwright": {

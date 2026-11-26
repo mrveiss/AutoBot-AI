@@ -6,6 +6,8 @@ target_node: slm
 deploy:
   source: autobot-monitoring/
   destination: /opt/autobot/autobot-monitoring/
+  sync: false   # #16025: provisioned, no repo code of its own to rsync
+  sync_target: ""   # #16025: what role_registry rsyncs INTO; nothing is synced (`sync: false`)
   shared: false
   infrastructure: true
 
@@ -44,6 +46,13 @@ health:
   timeout: "10s"
   retries: 3
   expected_status: 200
+
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  slm-monitoring:
+    checked: true
+    port: 9090
+    path: /-/healthy
 
 secrets:
   own:

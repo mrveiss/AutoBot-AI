@@ -4,7 +4,7 @@
     <div class="mb-8">
       <div class="flex items-center gap-3 mb-2">
         <div class="w-10 h-10 bg-autobot-primary rounded-lg flex items-center justify-center shrink-0">
-          <span class="text-white font-bold text-lg font-mono">AB</span>
+          <span class="text-autobot-text-on-primary font-bold text-lg font-mono">AB</span>
         </div>
         <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('views.about.title') }}</h1>
       </div>

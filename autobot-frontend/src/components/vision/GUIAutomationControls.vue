@@ -16,9 +16,9 @@
 
     <!-- Action Error -->
     <BaseAlert
-      v-if="actionError"
+      v-if="actionError || loadFailed"
       variant="error"
-      :message="actionError"
+      :message="actionError ?? t('vision.guiAutomation.loadFailed')"
       dismissible :dismiss-label="t('ui.alert.dismissAlert')"
       @dismiss="actionError = null"
     />
@@ -184,7 +184,7 @@ const { showToast } = useNotificationBus();
 // Props
 defineProps<{
   opportunities: AutomationOpportunity[];
-  loading: boolean;
+  loading: boolean; loadFailed?: boolean; // loadFailed: the last refresh failed, which is not "no opportunities"
 }>();
 
 // Emits

@@ -13,9 +13,8 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-
 from autobot_shared.approval_four_eyes import four_eyes_self_approval, requester_id
+from autobot_shared.user_management.last_platform_admin import lock_active_platform_admin_ids
 from services.approval_execution import verified_decider
 from user_management.models.user import User
 
@@ -38,9 +37,11 @@ def proposer_ids(approval: "Approval") -> list[uuid.UUID]:
 
 
 async def _platform_admin_ids(session: "AsyncSession") -> set[uuid.UUID]:
-    """The active platform admins, locked until the decision commits so none can leave after the check."""
-    query = select(User.id).filter_by(is_platform_admin=True, is_active=True, deleted_at=None).with_for_update()
-    return set((await session.execute(query)).scalars().all())
+    """The active platform admins, locked until the decision commits so none can leave after the check.
+
+    The lock is the last-admin guard's own (#21331): one helper, one id order, so the two cannot deadlock.
+    """
+    return await lock_active_platform_admin_ids(session, User)
 
 
 async def is_self_approval(approval: "Approval", session: "AsyncSession", *, what: str) -> bool:

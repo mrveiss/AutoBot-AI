@@ -183,7 +183,7 @@ class TestTheSectionIsNotTruncatedSilently:
     """A truncated criteria list reported as complete is this module's worst
     failure, and the first version had three ways to produce one (#17090).
 
-    Found by a code-reviewer pass on the MERGED code, reproduced before fixing:
+    Found by a review pass on the MERGED code, reproduced before fixing:
     a sub-heading inside the section dropped every criterion below it, and an
     indented `**Note:**` under a criterion ended the section one criterion in.
     Both reported what they had read as the whole list.

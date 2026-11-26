@@ -102,9 +102,9 @@ f4c5a0582ccf4f1ca21754117880d3fd17dcd149  # fix(config): clamp module-level env 
 # as one recurrence, and do not diagnose this one by checking git config -- that
 # was tried first and it comes back clean, because there is no override to find.
 #
-# `t <t@example.invalid>` is this repository's TEST-FIXTURE git identity. Ten
-# files carry it; eight run `git commit` while exercising hooks, branch guards
-# or changed-file logic, and two of those are in `repo_tests/` and so run under
+# `t <t@example.invalid>` is this repository's TEST-FIXTURE git identity. Eight
+# files carry it; all eight run `git commit` while exercising hooks, branch guards
+# or changed-file logic, and three of those are in `repo_tests/` and so run under
 # the pre-push hook. A test that commits with `-c user.name=t` while an ambient
 # `GIT_DIR` points at the real repository creates a real commit authored `t` on
 # the real branch -- #15353, test suites writing commits onto the working repo.
@@ -122,18 +122,18 @@ f4c5a0582ccf4f1ca21754117880d3fd17dcd149  # fix(config): clamp module-level env 
 # variable names instead -- `repo_tests/hooks_path_override_15961_test.py:450`
 # records learning this the hard way.
 #
-# THREE OF THE FIXTURE FILES MAKE IT WORSE THAN A PER-BRANCH LEAK. They write
+# TWO OF THE FIXTURE FILES MAKE IT WORSE THAN A PER-BRANCH LEAK. They write
 # the identity with `git config` rather than passing `-c` per invocation
 # (`scripts/lib/branch-guards_test.sh:117`,
-# `scripts/lib/session-handoffs_test.sh:88`,
 # `repo_tests/hooks_path_override_15961_test.py:479`). Worktrees share ONE
 # config through the common dir, so a single unscrubbed config write sets the
 # identity for every worktree at once -- which is the shape of five commits
 # across five branches in one afternoon.
 #
 # WHAT BOUNDS IT, HONESTLY. Every one of those sites currently scrubs: all eight
-# committing tests pass `scrubbed_git_env()` (`autobot_shared/paths.py`), and
-# all three config writers unset the ambient variables. Verified per file, not
+# committing tests run with the ambient git variables scrubbed (via
+# `scrubbed_git_env()` in `autobot_shared/paths.py`, `isolated_git_env()`,
+# `git_probe.run_git`, or an explicit `unset`), and both config writers unset the ambient variables. Verified per file, not
 # assumed from the helper's existence. So NO CURRENT TEST LEAKS.
 #
 # The open window is a NEW test that commits or writes config, run before its

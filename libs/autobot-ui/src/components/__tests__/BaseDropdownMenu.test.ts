@@ -64,6 +64,12 @@ describe('BaseDropdownMenu roles and aria', () => {
     expect(items().map((i) => i.textContent?.trim())).toEqual(['Rename', 'Copy', 'Move', 'Delete'])
   })
 
+  it('shows an item description as its native tooltip, and none when absent (#22200)', async () => {
+    await render({ items: [{ key: 'a', label: 'A', description: 'About A' }, { key: 'b', label: 'B' }] })
+    await openWithKey('Enter')
+    expect(items().map((i) => i.getAttribute('title'))).toEqual(['About A', null])
+  })
+
   it('marks a disabled item aria-disabled and renders a separator', async () => {
     await render()
     await openWithKey('Enter')

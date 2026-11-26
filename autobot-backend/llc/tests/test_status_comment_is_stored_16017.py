@@ -38,6 +38,7 @@ pytestmark = pytest.mark.asyncio
 
 _COMPANY = uuid.uuid4()
 _AGENT = "agent-16017"
+_NODE = uuid.uuid4()  # the agent's org node: an agent changes only an item it holds (#21586)
 
 
 @pytest_asyncio.fixture
@@ -68,6 +69,8 @@ async def _seed_item(factory) -> uuid.UUID:  # noqa: ANN001
                 identifier=f"T-{item_id.hex[:8]}",
                 title="a work item",
                 status=WorkItemStatus.READY,
+                assignee_agent_id=_NODE,
+                assignee_type="agent",
                 priority=WorkItemPriority.MEDIUM,
                 labels=[],
                 linked_pr_urls=[],
@@ -84,10 +87,9 @@ async def _transition(factory, item_id: uuid.UUID, comment: str | None):  # noqa
     """Call the handler directly. The FastAPI plumbing is patched, not the subject."""
     from llc.api.agent_api import StatusUpdate, update_work_item_status
 
-    author = uuid.uuid4()
     with (
         patch("llc.api.agent_api.agent_context", return_value=(_AGENT, str(_COMPANY))),
-        patch("llc.api.agent_api.agent_node_uuid", return_value=author),
+        patch("llc.api.agent_api.agent_node_uuid", return_value=_NODE),
         patch("user_management.database.get_async_session_factory", return_value=factory),
     ):
         return await update_work_item_status(

@@ -10,7 +10,7 @@ aliases:
 # Source Analysis: a self-hostable deployment control plane
 
 > Phase 1 of a two-phase research run. Source identity (vendor, repository, authors) is
-> deliberately absent from this file — see the anonymization rule in the `research` skill.
+> deliberately absent from this file — see the anonymization rule in `/autobot-dev-skills:lifecycle research`.
 > Everything below was read read-only over the hosting provider's contents API and raw
 > file endpoints; nothing was cloned or executed.
 

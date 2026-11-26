@@ -27,6 +27,8 @@ from typing import Any
 from agent_loop.types import ThinkCategory, ThinkResult
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from llm_shared.quality_judgment import clamp_score, judge_validated
+from llm_shared.validated_llm import schema_repr
 
 logger = get_logger(__name__)
 
@@ -152,6 +154,27 @@ Provide your causal reasoning and conclusion.
 }
 
 
+#: JSON Schema the self-reflection reply must satisfy (#16133).
+_REFLECTION_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "score": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "critique": {"type": "string"},
+    },
+    "required": ["score"],
+}
+
+#: Response-format footer for SELF_REFLECTION: JSON against the schema above (#16133).
+_REFLECTION_FORMAT = (
+    "Return ONLY a JSON object that conforms to this JSON Schema. `score` is "
+    "required (0.0-1.0); `critique` is a short paragraph on the deficiencies.\n\n"
+    f"{schema_repr(_REFLECTION_SCHEMA)}"
+)
+
+#: Risk recorded on a SELF_REFLECTION ThinkResult when the judge itself failed.
+REFLECTION_JUDGE_FAILED = "Self-reflection judge failed; no quality score was obtained"
+
+
 # =============================================================================
 # Think Tool Configuration
 # =============================================================================
@@ -232,20 +255,31 @@ class ThinkTool:
 
         # Build the full prompt
         base_prompt = THINK_PROMPTS.get(category, THINK_PROMPTS[ThinkCategory.GENERAL])
-        full_prompt = self._build_prompt(base_prompt, context, additional_prompt)
+        is_reflection = category is ThinkCategory.SELF_REFLECTION
+        full_prompt = self._build_prompt(
+            base_prompt,
+            context,
+            additional_prompt,
+            response_format=_REFLECTION_FORMAT if is_reflection else None,
+        )
 
         # Get reasoning from LLM
         try:
-            response = await self._get_llm_response(full_prompt)
-            result = self._parse_response(response, category, task_id)
+            if category is ThinkCategory.SELF_REFLECTION:
+                result = await self._reflect(full_prompt, task_id)
+            else:
+                response = await self._get_llm_response(full_prompt)
+                result = self._parse_response(response, category, task_id)
         except Exception as e:
             logger.error("Think Tool failed: %s", e)
+            # A failed judge is not a judgment: 0.0 + a named risk, never a score
+            # a caller could read as "judged 0.3" (#16133).
             result = ThinkResult(
                 category=category,
                 reasoning=f"Reasoning failed: {e}",
                 conclusion="Unable to complete reasoning - proceeding with caution",
-                confidence=0.3,
-                risks_identified=["Reasoning process failed"],
+                confidence=0.0 if is_reflection else 0.3,
+                risks_identified=[REFLECTION_JUDGE_FAILED if is_reflection else "Reasoning process failed"],
                 task_id=task_id,
             )
 
@@ -302,8 +336,12 @@ class ThinkTool:
         base_prompt: str,
         context: str,
         additional_prompt: str | None,
+        response_format: str | None = None,
     ) -> str:
-        """Build the full prompt for the LLM."""
+        """Build the full prompt for the LLM.
+
+        ``response_format`` replaces the default markdown-section footer.
+        """
         parts = [
             "# Reasoning Task",
             "",
@@ -316,6 +354,10 @@ class ThinkTool:
 
         if additional_prompt:
             parts.extend(["", "# Additional Instructions", "", additional_prompt])
+
+        if response_format is not None:
+            parts.extend(["", "# Response Format", "", response_format])
+            return "\n".join(parts)
 
         parts.extend(
             [
@@ -344,6 +386,30 @@ class ThinkTool:
         )
 
         return "\n".join(parts)
+
+    async def _reflect(self, prompt: str, task_id: str | None) -> ThinkResult:
+        """Judge response quality through the one quality seam (#16133)."""
+
+        async def _complete(system_prompt: str, user_prompt: str) -> str:
+            combined = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+            return await self._get_llm_response(combined)
+
+        data = await judge_validated(
+            "",
+            prompt,
+            _REFLECTION_SCHEMA,
+            completer=_complete,
+            label="agent_loop.think.self_reflection",
+        )
+        critique = str(data.get("critique") or "").strip()
+        score = clamp_score(data["score"])
+        return ThinkResult(
+            category=ThinkCategory.SELF_REFLECTION,
+            reasoning=critique,
+            conclusion=f"Quality score {score:.2f}",
+            confidence=score,
+            task_id=task_id,
+        )
 
     async def _get_llm_response(self, prompt: str) -> str:
         """Get a response from the LLM."""

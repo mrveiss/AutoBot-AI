@@ -25,12 +25,19 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from security.upload_filename_policy import require_safe_upload
 
 from ..deps import logged_server_error
 from ..services.work_item_own_task import InvalidTransition
-from ._common import agent_context, agent_node_uuid, assert_item_in_company, parse_work_item_id, refused_transition
+from ._common import (
+    agent_context,
+    agent_node_uuid,
+    assert_item_in_company,
+    parse_work_item_id,
+    refused_transition,
+)
 from ._peer_search import fetch_peer_rows
 
 logger = get_logger(__name__)
@@ -103,16 +110,15 @@ class StatusUpdate(BaseModel):
     comment: Optional[str] = None
 
 
-async def _status_gate(agent_id: str, company_id: str, new_status: Any, comment: Optional[str]) -> tuple:
-    """The review gate for this move and the agent's node, looked up only when a done or a comment needs it (#21503).
+async def _status_gate(agent_id: str, company_id: str) -> tuple:
+    """The review gate for this move and the agent's node (#21503, #21586).
 
-    The node UUID is the key the handoff names the agent by, and the comment's author.
+    The node UUID is the key the handoff names the agent by, the comment's author, and what the item's holder is
+    compared with: every move needs it, because an agent changes only an item it holds.
     """
-    from ..models.enums import WorkItemStatus
     from ..services.accessors import done_gate_for
 
-    wanted = new_status == WorkItemStatus.DONE or bool(comment and comment.strip())
-    node = await agent_node_uuid(agent_id, company_id) if wanted else None
+    node = await agent_node_uuid(agent_id, company_id)
     return done_gate_for(str(node) if node else None, is_agent=True), node
 
 
@@ -127,6 +133,8 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
     The company check is not incidental: ``transition_status`` takes
     ``company_id`` and this route is reached with an agent's context, so an
     item belonging to another company must 404 rather than transition.
+
+    Only an item the agent holds changes (404 as if missing, #21586); one waiting on its reviewer is 409.
     """
     item_id = str(parse_work_item_id(item_id))
     from user_management.database import get_async_session_factory
@@ -140,7 +148,7 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=f"Unknown work item status {body.status!r}") from exc
 
-    gate, author_uuid = await _status_gate(agent_id, company_id, new_status, body.comment)
+    gate, author_uuid = await _status_gate(agent_id, company_id)
     factory = get_async_session_factory()
     async with factory() as session:
         try:
@@ -150,7 +158,7 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
         except InvalidTransition as exc:  # a refused move, or a done the review gate cannot send to review
             raise refused_transition(exc) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise http_refusal(404, exc, scope="agent_api.update_work_item_status") from None
 
         # #16017: `comment` was declared and read nowhere -- accepted, answered
         # 200, discarded. Wired not removed: the store already exists unreached
@@ -225,11 +233,11 @@ async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]
             )
             await session.commit()
     except WorkItemNotInCompany as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise http_refusal(404, exc, scope="agent_api.ingest_cost_event") from None
     except BudgetExhausted as exc:
-        raise HTTPException(status_code=402, detail=str(exc)) from exc
+        raise http_refusal(402, exc, scope="agent_api.ingest_cost_event") from None
     except UnpricedModel as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="agent_api.ingest_cost_event") from None
 
     return {"recorded": True, "cost": str(cost)}
 
@@ -385,10 +393,7 @@ async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str,
     if body.work_item_id is not None:
         item_uuid = await assert_item_in_company(body.work_item_id, company_id)
 
-    values: Dict[str, Any] = {
-        "status": status.value,
-        "finished_at": datetime.now(tz=timezone.utc),
-    }
+    values: Dict[str, Any] = {"status": status.value, "finished_at": datetime.now(tz=timezone.utc)}
     if item_uuid is not None:
         values["work_item_id"] = item_uuid
 
@@ -450,8 +455,7 @@ async def agent_upload_attachment(
             "text_extracted": row.text_extracted,
         }
     except AttachmentTooLarge as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=413, detail="Internal server error")
+        raise http_refusal(413, exc, scope="agent_api.agent_upload_attachment") from None
 
 
 @router.get("/context/{item_id}")

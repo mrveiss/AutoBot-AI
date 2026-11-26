@@ -69,7 +69,6 @@ export interface CodeSuggestion {
   impact: string
 }
 
-/** Wire shape of POST /api/code-intelligence/scan-file (bare JSON, one file). */
 /** POST /api/code-intelligence/scan-file body (the generated contract; the handler sends it bare, #18744). */
 export type CodeScanFileResult = components['schemas']['CodeIntelScanFileResultResponse']
 

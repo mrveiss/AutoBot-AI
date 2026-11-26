@@ -29,7 +29,6 @@ host commands from untrusted config. It is therefore hardened three ways:
   backend's DB/LLC credentials are never inherited.
 """
 
-import json
 import os
 import shlex
 
@@ -41,6 +40,7 @@ from .subprocess_base import SIGTERM_GRACE_SECONDS
 from .subprocess_support import (
     inject_agent_credentials,
     probe_pid_identity,
+    serialize_invoke_context,
     spawn_create_time,
     spawn_detached,
     terminate_pid,
@@ -94,12 +94,15 @@ def _build_minimal_env(env_extra: dict, context: dict) -> dict:
     env: dict = {k: os.environ[k] for k in _SAFE_ENV_PASSTHROUGH if k in os.environ}
     env.update(env_extra or {})
     inject_agent_credentials(env, context)
-    env["LLC_INVOKE_CONTEXT"] = json.dumps(context, default=str)
+    env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
     return env
 
 
 class LLCProcessAdapter:
     """Adapter that manages agent runs as OS subprocesses."""
+
+    # The role's credentials may be put in this adapter's child env (#20533).
+    injects_role_credentials = True
 
     async def invoke(self, agent_config: dict, context: dict) -> str:
         if not _process_adapter_enabled():

@@ -14,52 +14,28 @@ import json
 from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.chat_model_context import interpretation_llm_options, note_chat_turn_model
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_history.rolling_summary import prompt_summary
-from constants.api_constants import PATH_OLLAMA_GENERATE
-from constants.model_constants import ModelConfig
+from chat_workflow import tiered_context_sources as tcs
 from dependencies import provide_config_manager
+from intent_classifier import apply_topic_guidance
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
 from middleware.manager import get_extension_manager
 from prompt_manager import get_language_instruction, get_prompt, resolve_language
 
+from .interpretation_guard import interpretation_never_fails_the_tool
 from .models import WorkflowSession
 from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
+from .prompt_drift import record_session_prefix
+from .system_prompt_hook import _emit_system_prompt_ready
+from .tool_timing import mark_tool_started, take_tool_elapsed, tool_outcome_fields
 
 logger = get_logger(__name__)
-
-
-async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
-    """Emit ON_SYSTEM_PROMPT_READY to registered extensions and return result.
-
-    Issue #3405: Fires after _get_system_prompt() so extensions can inspect or
-    rewrite the system prompt before it enters prompt assembly.  If no extension
-    is registered for this hook the function is a no-op and the original prompt
-    is returned unchanged.
-
-    Args:
-        system_prompt: The assembled system prompt string.
-        session: WorkflowSession instance (passed as data["session"]).
-
-    Returns:
-        Possibly modified system prompt string.
-    """
-    ctx = HookContext(
-        session_id=getattr(session, "session_id", ""),
-        data={"system_prompt": system_prompt, "session": session},
-    )
-    result = await get_extension_manager().invoke_with_transform(HookPoint.SYSTEM_PROMPT_READY, ctx, "system_prompt")
-    if isinstance(result, str) and result != system_prompt:
-        logger.debug(
-            "[#3405] SYSTEM_PROMPT_READY modified system prompt (%d -> %d chars)",
-            len(system_prompt),
-            len(result),
-        )
-        return result
-    return system_prompt
 
 
 async def _emit_full_prompt_ready(prompt: str, llm_params: Dict[str, Any], context: Dict[str, Any]) -> str:
@@ -250,29 +226,10 @@ async def _emit_before_tool_execute(
     tool_permission: str | None = None,
     user_role: str | None = None,
 ) -> bool:
-    """Emit BEFORE_TOOL_EXECUTE hook to registered extensions.
+    """Emit BEFORE_TOOL_EXECUTE (#4181); False means a hook cancelled the call.
 
-    Issue #4181: Fires before executing a tool so extensions can reject
-    or validate the execution.
-
-    Issue #14420: ``tool_permission``/``user_role`` feed
-    ``PermissionEnforcementExtension``. Callers that know the tool's
-    declared permission requirement (e.g. from the MCP registry) and the
-    caller's RBAC role should pass both. #14523: a caller that omits
-    ``tool_permission`` is no longer treated as a legacy tool waved through —
-    the extension refuses a missing declaration outright, so every call site
-    reaching this function must resolve a real permission.
-
-    Args:
-        tool_name: Name of tool to execute
-        tool_params: Tool parameters
-        session_id: Session identifier
-        tool_permission: The dot-style Permission value the tool requires,
-            or None if undeclared/unknown at this call site.
-        user_role: The caller's RBAC role, or None if unauthenticated.
-
-    Returns:
-        False to cancel tool execution, True otherwise
+    ``tool_permission``/``user_role`` feed ``PermissionEnforcementExtension`` (#14420); a caller that omits
+    the permission is refused outright (#14523), so every call site must resolve a real one.
     """
     ctx = HookContext(
         session_id=session_id,
@@ -284,23 +241,24 @@ async def _emit_before_tool_execute(
         },
     )
     results = await get_extension_manager().invoke_hook(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
-    return not any(result is False for result in results)
+    allowed = not any(result is False for result in results)
+    if allowed:
+        mark_tool_started(session_id, tool_name)  # #21879: the clock starts when the tool does
+    return allowed
 
 
-async def _emit_after_tool_execute(tool_name: str, tool_result: Any, session_id: str, context: Dict[str, Any]) -> Any:
-    """Emit AFTER_TOOL_EXECUTE hook to registered extensions.
+async def _emit_after_tool_execute(
+    tool_name: str,
+    tool_result: Any,
+    session_id: str,
+    context: Dict[str, Any],
+    *,
+    success: bool | None = None,
+) -> Any:
+    """Emit AFTER_TOOL_EXECUTE (#4181); returns the possibly modified result.
 
-    Issue #4181: Fires after tool execution so extensions can inspect
-    or modify the result.
-
-    Args:
-        tool_name: Name of executed tool
-        tool_result: Result returned by tool
-        session_id: Session identifier
-        context: Request-level context dict
-
-    Returns:
-        Possibly modified tool result
+    #21879: the hook data carries the measured ``execution_time`` and the call's ``success`` when known,
+    and omits a key it does not know (no default stands in for it). *success* is the site's outcome.
     """
     ctx = HookContext(
         session_id=session_id,
@@ -308,6 +266,7 @@ async def _emit_after_tool_execute(tool_name: str, tool_result: Any, session_id:
             "tool_name": tool_name,
             "tool_result": tool_result,
             "context": context,
+            **tool_outcome_fields(take_tool_elapsed(session_id, tool_name), success),
         },
     )
     result = await get_extension_manager().invoke_with_transform(HookPoint.AFTER_TOOL_EXECUTE, ctx, "tool_result")
@@ -326,6 +285,7 @@ async def _emit_tool_error(tool_name: str, error: Exception, session_id: str, co
         session_id: Session identifier
         context: Request-level context dict
     """
+    take_tool_elapsed(session_id, tool_name)  # the call ended in error: close its clock
     ctx = HookContext(
         session_id=session_id,
         data={
@@ -525,7 +485,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint_fallback(self) -> str:
         """Get Ollama endpoint from ssot_config as fallback (Issue #3829)."""
         # _ssot_config is already imported at module level
-        return _normalize_outbound_url(f"{_ssot_config.ollama_url}{PATH_OLLAMA_GENERATE}")
+        return _normalize_outbound_url(ollama_generate_url(_ssot_config.ollama_url))
 
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config with fallbacks.
@@ -536,10 +496,7 @@ class LLMHandlerMixin:
         try:
             endpoint = provide_config_manager().get_nested("backend.llm.ollama.endpoint", None)
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
-                # Ensure /api/generate path is included
-                if not endpoint.endswith(PATH_OLLAMA_GENERATE):
-                    endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
-                return _normalize_outbound_url(endpoint)
+                return _normalize_outbound_url(ollama_generate_url(endpoint))
             logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
@@ -555,9 +512,7 @@ class LLMHandlerMixin:
         try:
             base_url = provide_config_manager().get_ollama_endpoint_for_model(model_name)
             if base_url and base_url.startswith(_VALID_URL_SCHEMES):
-                if not base_url.endswith(PATH_OLLAMA_GENERATE):
-                    base_url = base_url.rstrip("/") + PATH_OLLAMA_GENERATE
-                return _normalize_outbound_url(base_url)
+                return _normalize_outbound_url(ollama_generate_url(base_url))
         except Exception as e:
             logger.warning("Model endpoint routing failed: %s", e)
         return self._get_ollama_endpoint()
@@ -714,6 +669,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         conversation_context: str,
         message: str,
         model_name: str | None,
+        system_prompt: str | None = None,
     ) -> tuple[str, str, str]:
         """Fit the prompt's competing sections into the model's window (#13640).
 
@@ -743,7 +699,13 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 ContextSection("trajectory", trajectory_context, priority=10, max_share=0.2),
             ]
             message_tokens = cwm.estimate_tokens(message)
-            budget = max(0, cwm.get_prompt_budget(model_name) - message_tokens)
+            from chat_workflow.prompt_window import measured_prompt_budget
+
+            budget = max(0, measured_prompt_budget(cwm, model_name, system_prompt) - message_tokens)
+            if budget == 0:  # surfaced to the user as ``over_window`` by attachment_context._window_notice
+                logger.warning(
+                    "[#22016] No prompt budget left for context sections: the system prompt and message fill it"
+                )
             result = cwm.allocate_sections(sections, budget_tokens=budget)
         except Exception as exc:
             logger.warning("[#13640] Prompt allocation failed, using untrimmed sections: %s", exc, exc_info=True)
@@ -770,6 +732,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         message: str,
         trajectory_context: str = "",
         model_name: str | None = None,
+        system_prompt: str | None = None,
     ) -> str:
         """Build full prompt with optional knowledge and trajectory context.
 
@@ -784,7 +747,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         content first, and what was shed is logged instead of vanishing.
         """
         knowledge_context, trajectory_context, conversation_context = self._allocate_prompt_sections(
-            knowledge_context, trajectory_context, conversation_context, message, model_name
+            knowledge_context, trajectory_context, conversation_context, message, model_name, system_prompt
         )
         prefix = ""
         if knowledge_context:
@@ -834,24 +797,23 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         )
         # Issue #1214: Try SLM service discovery first (fleet-managed endpoint),
         # then fall back to local config-based resolution (#1070 model routing).
+        note_chat_turn_model(selected_model)  # #22016: before any budgeting; side calls match this model's context
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
-            if not slm_base.endswith(PATH_OLLAMA_GENERATE):
-                slm_base = slm_base.rstrip("/") + PATH_OLLAMA_GENERATE
-            ollama_endpoint = slm_base
+            ollama_endpoint = ollama_generate_url(slm_base)
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
 
         # Issue #4265: Emit BEFORE_PROMPT_BUILD hook before building prompts
         await _emit_before_prompt_build(
-            session.session_id,
-            {"message": message, "use_knowledge": use_knowledge, "language": language},
+            session.session_id, {"message": message, "use_knowledge": use_knowledge, "language": language}
         )
 
-        system_prompt = self._get_system_prompt(
-            language=language,
-            company_id=(session.metadata.get("company_id") if session and session.metadata else None),
-        )
+        company_id = session.metadata.get("company_id") if session and session.metadata else None
+        system_prompt = self._get_system_prompt(language=language, company_id=company_id)
+        # #17278: the stable text (hook-rewritten, hashed for drift) leads; volatile memory follows it.
+        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
+        record_session_prefix(session, language, company_id, bool(self._get_compose_tool_prompt()), system_prompt)
         # Issue #5066: Tiered L0-L4 context wake-up.
         # #13689 turned this ON on 2026-08-08; #13866 reverted it to OFF on
         # 2026-08-10. The A/B's "all five layers render" was measured against
@@ -866,10 +828,8 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # When false the pre-existing unconditional EssentialStory path is used.
         # Issue MVA-1992: Skip memory graph lookup when lightweight_mode=True.
         if not lightweight_mode:
-            from chat_workflow import tiered_context_sources as tcs
-
-            system_prompt = await tcs.prepend_memory_context(system_prompt, session, message, selected_model)
-        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
+            system_prompt = await tcs.append_memory_context(system_prompt, session, message, selected_model)
+        system_prompt = apply_topic_guidance(system_prompt, message, session)  # volatile: after the stable prefix
         conversation_context = self._build_conversation_context(session, await prompt_summary(session))
 
         # Knowledge retrieval for RAG
@@ -904,7 +864,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             )
 
         full_prompt = self._build_full_prompt(
-            knowledge_context, conversation_context, message, trajectory_context, model_name=selected_model
+            knowledge_context, conversation_context, message, trajectory_context, selected_model, system_prompt
         )
 
         # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built
@@ -947,13 +907,9 @@ Return code: {return_code}
 Briefly explain what this output shows. Keep it concise (2-3 sentences max).
 Do NOT conclude the task or provide a final summary - just explain this specific result."""
 
-    def _get_interpretation_llm_options(self) -> Dict[str, Any]:
-        """Get LLM options for command interpretation."""
-        return {
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "num_ctx": ModelConfig.DEFAULT_NUM_CTX,
-        }
+    def _get_interpretation_llm_options(self, model: str | None = None) -> Dict[str, Any]:
+        """Get LLM options for command interpretation (#21878: the chat model keeps the chat's context)."""
+        return interpretation_llm_options(model)
 
     async def _interpret_non_streaming(
         self,
@@ -973,7 +929,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         http_client = get_http_client()
         response_data = await http_client.post_json(
-            f"{ollama_endpoint}/api/generate",
+            ollama_generate_url(ollama_endpoint),
             json_data={
                 "model": selected_model,
                 "prompt": interpretation_prompt,
@@ -1016,7 +972,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         full_response = ""
         try:
             async with await http_client.post(
-                f"{ollama_endpoint}/api/generate",
+                ollama_generate_url(ollama_endpoint),
                 json={
                     "model": selected_model,
                     "prompt": interpretation_prompt,
@@ -1056,6 +1012,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             if full_response:
                 full_response = await _emit_after_llm_response(full_response, llm_params, session_id)
 
+    @interpretation_never_fails_the_tool
     async def _interpret_command_results(
         self,
         command: str,
@@ -1084,25 +1041,17 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             WorkflowMessage chunks
         """
         interpretation_prompt = self._build_interpretation_prompt(command, stdout, stderr, return_code)
-        llm_options = self._get_interpretation_llm_options()
+        llm_options = self._get_interpretation_llm_options(selected_model)
 
         if not streaming:
             async for msg in self._interpret_non_streaming(
-                ollama_endpoint,
-                selected_model,
-                interpretation_prompt,
-                llm_options,
-                session_id,
+                ollama_endpoint, selected_model, interpretation_prompt, llm_options, session_id
             ):
                 yield msg
             return
 
         async for msg in self._interpret_streaming(
-            ollama_endpoint,
-            selected_model,
-            interpretation_prompt,
-            llm_options,
-            session_id,
+            ollama_endpoint, selected_model, interpretation_prompt, llm_options, session_id
         ):
             yield msg
 
@@ -1170,7 +1119,9 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             logger.warning(f"[interpret_terminal_command] Redis timeout getting session " f"data for {session_id}")
             return None
 
-    async def _persist_to_conversation_history(self, session_id: str, interpretation: str, model: str = "") -> None:
+    async def _persist_to_conversation_history(
+        self, session_id: str, interpretation: str, model: str = "", user_message: str | None = None
+    ) -> None:
         """
         Persist terminal interpretation to conversation history for LLM context.
 
@@ -1181,6 +1132,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             session_id: Chat session ID
             interpretation: Interpretation text to persist
             model: The model that produced it; the rolling-summary refresh folds with it (#20852)
+            user_message: The message the command answered, captured when it ran; else the latest one (#21938)
 
         Raises:
             Exception: If persistence fails (logged, not propagated)
@@ -1190,7 +1142,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             session = await self.get_or_create_session(session_id)
 
             # Get the last user message from chat:session (most recent context)
-            last_user_message = await self._get_last_user_message(session_id)
+            last_user_message = user_message or await self._get_last_user_message(session_id)
 
             if not last_user_message:
                 logger.warning(
@@ -1256,7 +1208,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         return interpretation
 
     async def interpret_terminal_command(
-        self, command: str, stdout: str, stderr: str, return_code: int, session_id: str
+        self, command: str, stdout: str, stderr: str, return_code: int, session_id: str, user_message: str | None = None
     ) -> str:
         """
         Public method to interpret terminal command results.
@@ -1274,7 +1226,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
             await self._save_to_chat_history(session_id, interpretation)
             model = provide_config_manager().get_selected_model()  # the rolling-summary refresh folds with it
-            await self._persist_to_conversation_history(session_id, interpretation, model)
+            await self._persist_to_conversation_history(session_id, interpretation, model, user_message)
 
             return interpretation
 

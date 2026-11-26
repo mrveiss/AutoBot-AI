@@ -518,8 +518,8 @@ def test_each_reader_selects_on_rc_and_a_failure_still_reaches_one(workflow: str
 
 
 def test_a_pull_request_sweep_reports_through_its_check_never_through_an_issue() -> None:
-    """The sweep also runs on pull_request, because a schedule runs the DEFAULT branch's
-    copy of a workflow and that copy does not carry this one (#16221). A PR run must
+    """The sweep also runs on pull_request, so a diff is judged before it merges; the
+    schedule and the push read main only after (#16221). A PR run must
     leave the issues alone -- they describe the base, not a diff that may never merge --
     and must still fail its own check on offenders.
     """

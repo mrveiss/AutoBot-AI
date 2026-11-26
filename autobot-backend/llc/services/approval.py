@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 from models.approval import Approval
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
 from .approval_hooks import (
     ApprovalHookError,
@@ -57,12 +58,18 @@ class ApprovalRequiredError(Exception):
         super().__init__(f"Approval of type '{gate_type.value}' required before this operation")
 
 
-class ApprovalNotFoundError(Exception):
+class ApprovalNotFoundError(PublicMessageMixin, Exception):
     """Raised when an approval record cannot be located."""
 
 
-class ApprovalStateError(Exception):
+class ApprovalStateError(PublicMessageMixin, Exception):
     """Raised when an approval is in an unexpected state for the requested action."""
+
+
+class ApprovalCompanyMismatch(ApprovalStateError):
+    """The approval belongs to another company. Its message names both company ids, so only a fixed text is public."""
+
+    public_detail = "Approval does not belong to this company"
 
 
 class ApprovalService(LLCServiceBase):
@@ -352,7 +359,7 @@ def requires_approval(gate_type: ApprovalType) -> Callable:
                 raise ApprovalStateError(f"Approval {approval_id} has status {approval.status!r}, must be APPROVED")
             target_company_id: Optional[uuid.UUID] = kwargs.get("company_id")
             if target_company_id is not None and approval.company_id != target_company_id:
-                raise ApprovalStateError(
+                raise ApprovalCompanyMismatch(
                     f"Approval {approval_id} belongs to company {approval.company_id!r}, " f"not {target_company_id!r}"
                 )
 

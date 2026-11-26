@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from autobot_shared.logging_manager import get_logger
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action
 from services.audit_logger import audit_log
@@ -27,6 +28,8 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from models.approval import Approval
+
+logger = get_logger(__name__)
 
 #: The ``context["action"]`` value a proposal names to route here.
 ACTION = "conversation_file_cleanup"
@@ -52,13 +55,19 @@ async def execute_conversation_file_cleanup(approval: "Approval", session: "Asyn
         body += f": {result['reason']}"
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
     await session.commit()
-    await audit_log(
+    written = await audit_log(
         "conversation_file.cleanup",
         result="success" if result["removed"] else "failed",
         user_id=approval.decided_by_user,
         resource=f"conversation_file:{file_id}",
         details={"approval_id": str(approval.id), "size": result["size"], "reason": result["reason"]},
+        durable=True,
     )
+    if not written:
+        logger.error("Audit entry for conversation file %s (approval %s) was NOT committed", file_id, approval.id)
+        note = "The audit entry for this cleanup could not be committed; the removal is not repeated."
+        session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=note))
+        await session.commit()
 
 
 def register_conversation_file_cleanup_action() -> None:

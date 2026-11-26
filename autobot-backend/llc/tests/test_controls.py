@@ -62,7 +62,7 @@ async def test_pause_agent_sets_status_and_logs():
     agent_id = str(uuid.uuid4())
     actor_id = str(uuid.uuid4())
 
-    session = _mock_session(rows=[("available", None, None)])
+    session = _mock_session(rows=[("available", uuid.uuid4())])
     log = _activity_log_mock()
     svc = ControlsService(activity_log=log)
 
@@ -88,7 +88,7 @@ async def test_resume_agent_clears_status_and_flag():
     agent_id = str(uuid.uuid4())
     actor_id = str(uuid.uuid4())
 
-    session = _mock_session(rows=[("paused", None, None)])
+    session = _mock_session(rows=[("paused", None, None, uuid.uuid4())])
     log = _activity_log_mock()
     svc = ControlsService(activity_log=log)
 
@@ -111,7 +111,7 @@ async def test_terminate_agent_is_permanent():
     agent_id = str(uuid.uuid4())
     actor_id = str(uuid.uuid4())
 
-    session = _mock_session(rows=[("available", None, None)])
+    session = _mock_session(rows=[("available", None, None, uuid.uuid4())])
     log = _activity_log_mock()
     svc = ControlsService(activity_log=log)
 
@@ -458,7 +458,7 @@ async def test_resume_agent_restores_pre_pause_status(initial_status):
     def make_session_for_status(pre_pause):
         session = AsyncMock()
         result_pre = MagicMock()
-        result_pre.fetchone.return_value = (LLCAgentStatus.PAUSED.value, pre_pause, None)
+        result_pre.fetchone.return_value = (LLCAgentStatus.PAUSED.value, pre_pause, None, uuid.uuid4())
         result_update = MagicMock()
         result_update.fetchone.return_value = None
 
@@ -527,7 +527,7 @@ async def test_a_failed_activity_write_changes_no_redis_flag_20150(control):
     log = _activity_log_mock()
     log.record = AsyncMock(side_effect=RuntimeError("activity write failed"))
     svc = ControlsService(activity_log=log)
-    session = _mock_session(rows=[("paused", "available", None)])
+    session = _mock_session(rows=[("paused", "available", None, uuid.uuid4())])
     redis = AsyncMock()
     with patch("llc.services.controls_service.get_async_redis_client", AsyncMock(return_value=redis)):
         with pytest.raises(RuntimeError):

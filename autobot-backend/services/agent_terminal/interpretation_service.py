@@ -10,9 +10,12 @@ polling chat turn and the worker that ran the command reach the same key.
 
 from __future__ import annotations
 
+import copy
 import uuid
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
+from type_defs.common import Metadata
 
 from .interpretation_turn import register_turn, release_turn, take_for_command, take_for_turn
 from .models import AgentTerminalSession
@@ -53,3 +56,48 @@ class InterpretationOwnershipMixin:
                 "Interpretation ownership of session %s unconfirmed, interpreting here: %s", session.session_id, exc
             )
             return True
+
+    def _interpret_in_background(self, session: AgentTerminalSession, command: str, result: Metadata) -> None:
+        """Interpret an approved command's result AFTER the approve request has answered (#19951).
+
+        The interpretation is an LLM call; awaiting it inside the approve request left the button looking dead for
+        seconds. The task works on a snapshot of the session: ownership of the interpretation is keyed by the
+        pending approval's decision id, which ``settle_pending`` clears moments after this is scheduled.
+        ``_interpret_approved_command`` logs its own failure, and ``fire_and_forget`` logs anything it misses.
+        """
+        fire_and_forget(
+            self._interpret_approved_command(copy.copy(session), command, result),
+            name=f"interpret-approved-{session.session_id}",
+        )
+
+    def _interpret_command_result(self, session: AgentTerminalSession, command: str, result: Metadata) -> None:
+        """Schedule the LLM interpretation of an auto-approved command; the tool result never waits on it (#21938).
+
+        The interpretation is auxiliary: a slow or failing model must not hold the command's result or fail the
+        turn. It runs as a background task like the approve path's (``_interpret_in_background``).
+        """
+        if session.has_conversation() and self.chat_workflow_manager:
+            fire_and_forget(
+                self._interpret_with_origin(session.conversation_id, command, result),
+                name=f"interpret-auto-{session.session_id}",
+            )
+
+    async def _interpret_with_origin(self, conversation_id: str, command: str, result: Metadata) -> None:
+        """Interpret one result against the user message it answers, read before the LLM call (#21938).
+
+        A failure is logged here and goes no further; a message arriving mid-interpretation is not the one the
+        interpretation is stored against.
+        """
+        try:
+            logger.info("[INTERPRETATION] Starting LLM interpretation for command: %s", command)
+            origin = await self.chat_workflow_manager._get_last_user_message(conversation_id)  # #21938
+            await self.chat_workflow_manager.interpret_terminal_command(
+                user_message=origin,
+                command=command,
+                stdout=result.get("stdout", ""),
+                stderr=result.get("stderr", ""),
+                return_code=result.get("return_code", 0),
+                session_id=conversation_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - auxiliary step; the command already succeeded
+            logger.error("[INTERPRETATION] Failed to interpret results: %s", exc)

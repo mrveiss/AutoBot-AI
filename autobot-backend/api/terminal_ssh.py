@@ -180,14 +180,14 @@ async def resolve_ssh_host_id(host_id: str) -> bool:
     #14958's audit explicitly rules out inventing a capability model here).
     Inventing that policy is not this function's job.
 
-    Fails closed: ``_load_secrets_hosts`` already swallows its own read
-    failures into ``[]`` (api/infrastructure.py), so an unreachable registry
-    and a genuinely empty one both deny here -- never a pass.
+    Shares its lookup with the chat Desktop (``get_secrets_host``,
+    api/infrastructure.py). Fails closed: an unreadable secrets store raises
+    ``SecretsStoreUnavailable`` (#14126), which propagates to the caller as a
+    refusal rather than being read as "no hosts"; an unknown id is False.
     """
-    from api.infrastructure import _load_secrets_hosts
+    from api.infrastructure import get_secrets_host
 
-    known_hosts = _load_secrets_hosts()
-    return any(host.get("id") == host_id for host in known_hosts)
+    return get_secrets_host(host_id) is not None
 
 
 async def _init_ssh_redis_client():

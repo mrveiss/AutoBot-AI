@@ -951,14 +951,21 @@ class BenchmarkSplit(str, enum.Enum):
     ALL = "all"
 
 
+def _split_hash(qid: str) -> str:
+    return hashlib.sha256(qid.encode("utf-8")).hexdigest()
+
+
+def is_dev_query(qid: str, dev_fraction: float) -> bool:
+    """Hash-only DEV membership: depends on *qid* alone, never on the other queries (#20949)."""
+    return int(_split_hash(qid), 16) % 100 < int(dev_fraction * 100)
+
+
 def _deterministic_dev_test_split(query_ids: List[str], dev_fraction: float = 0.8) -> Dict[str, Set[str]]:
     """Split *query_ids* into ``dev_ids`` and ``test_ids`` deterministically.
 
-    Uses SHA-256 of each query string modulo 100 as a sort key; a query ``q``
-    lands in DEV when ``int(sha256(q).hexdigest(), 16) % 100 < dev_fraction*100``.
-    This means:
-      - The same query always lands in the same split across runs (reproducible).
-      - Adding or removing queries doesn't reshuffle the existing assignments.
+    A query lands in DEV when :func:`is_dev_query` says so (SHA-256 mod 100), so it lands in the same split
+    on every run. Adding queries keeps assignments EXCEPT the empty-side fallback below, which depends on
+    the whole set; callers needing a stable split (the retrieval gate) use :func:`is_dev_query` directly.
 
     Args:
         query_ids:    List of query identifiers (query text works as the ID).
@@ -968,25 +975,17 @@ def _deterministic_dev_test_split(query_ids: List[str], dev_fraction: float = 0.
         ``{"dev_ids": set[str], "test_ids": set[str]}`` — disjoint and
         covering ``query_ids``.
     """
-    threshold = int(dev_fraction * 100)
-    dev_ids: Set[str] = set()
-    test_ids: Set[str] = set()
-    for qid in query_ids:
-        h = hashlib.sha256(qid.encode("utf-8")).hexdigest()
-        bucket = int(h, 16) % 100
-        if bucket < threshold:
-            dev_ids.add(qid)
-        else:
-            test_ids.add(qid)
+    dev_ids: Set[str] = {q for q in query_ids if is_dev_query(q, dev_fraction)}
+    test_ids: Set[str] = set(query_ids) - dev_ids
     # Guarantee both splits are non-empty for tiny datasets: if one side is
     # empty, move the deterministically-smallest-hash query from the other.
     if query_ids and (not dev_ids or not test_ids):
         if not test_ids:
-            move = sorted(dev_ids, key=lambda q: hashlib.sha256(q.encode()).hexdigest())[-1]
+            move = sorted(dev_ids, key=_split_hash)[-1]
             dev_ids.remove(move)
             test_ids.add(move)
         elif not dev_ids:
-            move = sorted(test_ids, key=lambda q: hashlib.sha256(q.encode()).hexdigest())[0]
+            move = sorted(test_ids, key=_split_hash)[0]
             test_ids.remove(move)
             dev_ids.add(move)
     return {"dev_ids": dev_ids, "test_ids": test_ids}

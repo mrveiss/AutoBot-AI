@@ -641,3 +641,69 @@ prefix). The SLM vhost templates are already among the files it reads and all ca
 
 **Review trigger:** reopen this if the route gains any non-internal caller, if the hash is read or
 logged anywhere beyond that one first-start link, or if the shared-users decision on #10200 changes.
+
+---
+
+## SLM API-Key Route Scoping — No Route Is Called With a User API Key
+
+**File:** `autobot-slm-backend/services/auth.py` (`get_api_key_user`, `require_key_permission`)
+**Diverges from:** the expectation that every dependency in the auth module has a production route behind it
+**Issue:** #20534, #16294
+
+**Reason:** maintainer decision (2026-11-17): no SLM route is called with a user API key, so none is
+scoped to one. Keys are created, stored, listed and revoked; they are not yet a way to call the SLM.
+`require_key_permission` is the mechanism, proved on a test route
+(`autobot-slm-backend/tests/api/test_api_key_route_scope_16040.py`). Which routes accept a key is
+the open product decision on #16294.
+
+**Baseline:** the two `declared:` entries (`get_api_key_user`, `require_key_permission`) in
+`repo_tests/unconnected_code_baseline.txt` stay as the record of this decision; the baseline is
+shrink-only and a declared entry is true only while its referencing files are exactly the live ones
+(`repo_tests/unconnected_code_gate_20512_test.py`, `test_declared_entries_describe_the_live_references`).
+
+**Review trigger:** when #16294 names a route that accepts a user API key, that route uses
+`require_key_permission` with a test, and both `declared:` baseline lines are deleted in the same PR.
+
+---
+
+## Collection Delete Lease — Residual Windows in `delete_if_empty`
+
+**File:** `autobot-backend/utils/leased_chroma.py` (`delete_if_empty`)
+**Issue:** #20992 (PR #21835)
+
+**Reason:** Chroma has no conditional delete, so "delete only if empty" is a count followed by
+`delete_collection`, guarded by a per-collection lease. Two windows stay open on purpose, and only
+empty collections are ever deleted:
+
+- Writers fail open when they cannot reach Redis, so a writer without a lease can race a delete that
+  holds the exclusive delete lease. This needs a Redis partition between the writer and the deleter.
+- A stall longer than `DELETE_LEASE_TTL_S` between the emptiness count and `delete_collection` lets
+  the lease lapse, so a write can land before the delete runs.
+
+Writers stay fail-open by design (#20992): a Redis outage must not stop ingestion. The owner
+accepted both windows on 2026-11-21.
+
+**Sync cadence:** None. Revisit only if Chroma gains a conditional delete or writers stop being
+fail-open.
+
+---
+
+## SLM API Timeout — `VITE_SLM_API_TIMEOUT_MS` Declared in Both Frontends
+
+**Files:** `autobot-frontend/src/utils/slmClient.ts` (`DEFAULT_TIMEOUT_MS`, line 35),
+`autobot-slm-frontend/src/utils/ApiClient.ts` (`DEFAULT_TIMEOUT_MS`, line 49)
+**Diverges from:** one shared declaration of the setting
+**Issue:** #21810
+
+**Reason:** ADR-012 (`docs/adr/012-slm-first-and-separate.md`) keeps the SLM a separate application,
+built and deployed on its own with no runtime config shared with the main app. Each frontend therefore
+reads `VITE_SLM_API_TIMEOUT_MS` through its own `getEnvPositiveInt` call, both defaulting to 30 s. Both
+requests go to the SLM API, so the two budgets are the same concept. Owner decision 2026-11-21: record
+the duplicate here rather than move it to a shared home.
+
+**Sync cadence:** continuous, enforced by test: both defaults stay equal. `repo_tests/slm_api_timeout_default_in_sync_21810_test.py`
+reads both files and fails when the two defaults differ or when either site stops reading the variable.
+
+**Review trigger:** ADR-012 changes so the two frontends share a build-time config package.
+
+**Grep check:** `git grep -n 'getEnvPositiveInt.*VITE_SLM_API_TIMEOUT_MS' -- '*.ts'` returns exactly the two read sites above.

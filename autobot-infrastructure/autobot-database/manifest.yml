@@ -6,6 +6,8 @@ target_node: database
 deploy:
   source: autobot-database/
   destination: /opt/autobot/autobot-database/
+  sync: false   # #16025: provisioned, no repo code of its own to rsync
+  sync_target: ""   # #16025: what role_registry rsyncs INTO; nothing is synced (`sync: false`)
   shared: false
   infrastructure: true
 
@@ -28,6 +30,7 @@ services:
     start_order: 2
     user: postgres
     slm_roles: [postgres]   # #16025: role_registry's separately-assignable "postgres" role
+    sync_target: /var/lib/postgresql   # #16025: the data directory the role detector probes
   - name: autobot-chromadb
     type: systemd
     unit_file: autobot-chromadb.service
@@ -63,6 +66,17 @@ health:
   timeout: "5s"
   retries: 3
   expected_status: 200
+
+# #22032: the health check of each SLM registry role this manifest serves; `checked: false` is an explicit none.
+role_health:
+  redis:
+    checked: false
+  postgres:
+    checked: false
+  chromadb:
+    checked: true
+    port: 8100
+    path: /api/v2/heartbeat
 
 secrets:
   own:

@@ -138,6 +138,10 @@
   --aui-tooltip-offset: 8px;
   --aui-tooltip-max: 280px;
 
+  /* ---- Card (BaseCard) ----------------------------------------------- */
+  /* Card inner padding; density scopes in the apps resize it (#17564). */
+  --aui-card-padding: var(--aui-space-5);
+
   /* ---- Table (BaseTable; spec 4.6) ------------------------------------ */
   --aui-table-font-size: 13px;
   --aui-table-row-h: 44px;

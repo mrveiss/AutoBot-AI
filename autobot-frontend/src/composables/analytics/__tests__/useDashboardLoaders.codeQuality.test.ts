@@ -45,19 +45,19 @@ describe('useDashboardLoaders.loadCodeQuality (#20498)', () => {
     await loaders.loadCodeQuality()
     expect(loaders.codeQuality.value).toEqual({
       overall_score: 72,
-      test_coverage: 61,
+      testability: 61,
       code_duplicates: 7,
       technical_debt: 123.5,
     })
   })
 
-  // Pre-fix: every field fell back to 0 (and test_coverage to 50).
+  // Pre-fix: every field fell back to 0 (and the testability figure to 50).
   it('every endpoint failing yields four nulls, not zeros', async () => {
     const loaders = make()
     await loaders.loadCodeQuality()
     expect(loaders.codeQuality.value).toEqual({
       overall_score: null,
-      test_coverage: null,
+      testability: null,
       code_duplicates: null,
       technical_debt: null,
     })

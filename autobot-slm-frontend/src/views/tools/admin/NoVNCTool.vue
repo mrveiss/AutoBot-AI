@@ -13,23 +13,25 @@ import { BaseAlert, createLogger } from '@autobot/ui'
 import { ref, computed, onMounted } from 'vue'
 import { VncViewer, VncToolbar } from '@autobot/vnc'
 import type { VncHost } from '@autobot/vnc'
-import { getVNCHosts, getSlmApiBase } from '@/config/ssot-config'
+import { useI18n } from 'vue-i18n'
+import { getSlmApiBase } from '@/config/ssot-config'
+import { probeVncWebsocket, vncClientUrlFromWebsocket } from '@/config/vnc-client'
 import { useSlmApi } from '@/composables/useSlmApi'
 
 const logger = createLogger('NoVNCTool')
 const api = useSlmApi()
+const { t } = useI18n()
 
 const loading = ref(false)
 const loadingEndpoints = ref(false)
 const error = ref<string | null>(null)
 const isConnected = ref(false)
+const discoveryFailed = ref(false)
 
-const staticHosts = getVNCHosts().map(h => ({ ...h, proxied: h.id === 'main', source: 'static' as const }))
+// Fleet hosts only (owner ruling 2026-11-23): the SLM tool reaches AutoBot's own infrastructure.
 const dynamicHosts = ref<VncHost[]>([])
-
-const hosts = computed<VncHost[]>(() => [...staticHosts, ...dynamicHosts.value])
-const selectedHostId = ref(staticHosts[0]?.id || '')
-const currentHost = computed(() => hosts.value.find(h => h.id === selectedHostId.value))
+const selectedHostId = ref('')
+const currentHost = computed(() => dynamicHosts.value.find(h => h.id === selectedHostId.value))
 
 async function fetchDynamicEndpoints(): Promise<void> {
   loadingEndpoints.value = true
@@ -40,21 +42,38 @@ async function fetchDynamicEndpoints(): Promise<void> {
       name: ep.name || `${ep.hostname} (${ep.vnc_type})`,
       host: ep.ip_address,
       port: ep.port,
-      description: `SLM-managed VNC on ${ep.hostname}`,
-      proxied: false,
+      description: t('tools.admin.noVNCTool.fleetEndpointDescription', { hostname: ep.hostname }),
+      url: vncClientUrlFromWebsocket(ep.websocket_url),
+      websocketUrl: ep.websocket_url,
+      embeddable: true,
     }))
+    if (!currentHost.value) selectedHostId.value = dynamicHosts.value[0]?.id ?? ''
+    if (discoveryFailed.value) error.value = null // recovery is visible: the discovery error clears on success
+    discoveryFailed.value = false
   } catch (e) {
     logger.warn('VNC endpoints API not available:', e)
+    discoveryFailed.value = true // a failed request must stay distinguishable from an empty fleet
+    error.value = t('tools.admin.noVNCTool.endpointsFailed')
   } finally {
     loadingEndpoints.value = false
   }
 }
 
-function connect(): void {
-  if (!currentHost.value) { error.value = 'Please select a host'; return }
+async function connect(): Promise<void> {
+  const host = currentHost.value
+  if (!host?.websocketUrl) { error.value = t('tools.admin.noVNCTool.selectHostError'); return }
   loading.value = true
   error.value = null
-  setTimeout(() => { isConnected.value = true; loading.value = false }, 1000)
+  try {
+    await probeVncWebsocket(host.websocketUrl)
+    if (currentHost.value?.id !== host.id) return // the selection moved during the probe: this success is not for it
+    isConnected.value = true
+  } catch (e) {
+    logger.warn('VNC endpoint connect failed:', e)
+    error.value = t('tools.admin.noVNCTool.connectFailed', { name: host.name })
+  } finally {
+    loading.value = false
+  }
 }
 
 function disconnect(): void { isConnected.value = false }
@@ -66,27 +85,22 @@ onMounted(() => fetchDynamicEndpoints())
 
 <template>
   <div class="p-6 h-full flex flex-col">
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 flex-1 flex flex-col overflow-hidden">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
-      <div class="bg-gray-100 border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+      <div class="bg-autobot-bg-tertiary border-b border-autobot-border px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-autobot-text-link" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            <span class="font-medium text-gray-900">{{ $t('tools.admin.noVNCTool.noVNCRemoteDesktop') }}</span>
+            <span class="font-medium text-autobot-text-primary">{{ $t('tools.admin.noVNCTool.noVNCRemoteDesktop') }}</span>
           </div>
 
           <select
             v-model="selectedHostId"
-            :disabled="isConnected || loadingEndpoints"
-            class="text-sm px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+            :disabled="isConnected || loadingEndpoints || loading"
+            class="text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
           >
-            <optgroup v-if="staticHosts.length > 0" :label="$t('tools.admin.noVNCTool.staticHosts')">
-              <option v-for="host in staticHosts" :key="host.id" :value="host.id">
-                {{ host.name }} ({{ host.host }}:{{ host.port }})
-              </option>
-            </optgroup>
             <optgroup v-if="dynamicHosts.length > 0" :label="$t('tools.admin.noVNCTool.sLMManaged')">
               <option v-for="host in dynamicHosts" :key="host.id" :value="host.id">
                 {{ host.name }} ({{ host.host }}:{{ host.port }})
@@ -96,8 +110,8 @@ onMounted(() => fetchDynamicEndpoints())
 
           <button
             @click="fetchDynamicEndpoints"
-            :disabled="loadingEndpoints || isConnected"
-            class="p-1.5 text-gray-500 hover:bg-gray-200 rounded-sm transition-colors disabled:opacity-50"
+            :disabled="loadingEndpoints || isConnected || loading"
+            class="p-1.5 text-autobot-text-tertiary hover:bg-autobot-bg-active rounded-sm transition-colors disabled:opacity-50"
             :title="$t('tools.admin.noVNCTool.refreshVNCEndpoints')"
           >
             <svg class="w-4 h-4" :class="{ 'animate-spin': loadingEndpoints }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,8 +120,8 @@ onMounted(() => fetchDynamicEndpoints())
           </button>
 
           <div class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-green-500' : 'bg-red-500'"></div>
-            <span class="text-xs text-gray-600">{{ isConnected ? $t('tools.admin.noVNCTool.connected') : $t('tools.admin.noVNCTool.disconnected') }}</span>
+            <div class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-autobot-dot-ok' : 'bg-autobot-dot-bad'"></div>
+            <span class="text-xs text-autobot-text-secondary">{{ isConnected ? $t('tools.admin.noVNCTool.connected') : $t('tools.admin.noVNCTool.disconnected') }}</span>
           </div>
         </div>
 
@@ -117,7 +131,7 @@ onMounted(() => fetchDynamicEndpoints())
             :disabled="loading || !selectedHostId"
             :class="[
               'px-4 py-1.5 text-sm font-medium rounded-lg transition-colors',
-              isConnected ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+              isConnected ? 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg hover:bg-autobot-pill-bad-bg' : 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg hover:bg-autobot-pill-ok-bg'
             ]"
           >
             <span v-if="loading">{{ $t('tools.admin.noVNCTool.connecting') }}</span>
@@ -133,20 +147,20 @@ onMounted(() => fetchDynamicEndpoints())
       </div>
     </div>
 
-    <div class="mt-4 p-4 bg-gray-100 rounded-lg">
-      <h3 class="text-sm font-medium text-gray-900 mb-2">{{ $t('tools.admin.noVNCTool.connectionInfo') }}</h3>
+    <div class="mt-4 p-4 bg-autobot-bg-tertiary rounded-lg">
+      <h3 class="text-sm font-medium text-autobot-text-primary mb-2">{{ $t('tools.admin.noVNCTool.connectionInfo') }}</h3>
       <div class="grid grid-cols-2 gap-4 text-sm">
         <div>
-          <span class="text-gray-500">{{ $t('tools.admin.noVNCTool.host') }}</span>
-          <span class="ml-2 text-gray-900 font-mono">{{ currentHost?.host || $t('tools.admin.noVNCTool.notSelected') }}</span>
+          <span class="text-autobot-text-tertiary">{{ $t('tools.admin.noVNCTool.host') }}</span>
+          <span class="ml-2 text-autobot-text-primary font-mono">{{ currentHost?.host || $t('tools.admin.noVNCTool.notSelected') }}</span>
         </div>
         <div>
-          <span class="text-gray-500">{{ $t('tools.admin.noVNCTool.port') }}</span>
-          <span class="ml-2 text-gray-900 font-mono">{{ currentHost?.port || '-' }}</span>
+          <span class="text-autobot-text-tertiary">{{ $t('tools.admin.noVNCTool.port') }}</span>
+          <span class="ml-2 text-autobot-text-primary font-mono">{{ currentHost?.port || '-' }}</span>
         </div>
         <div>
-          <span class="text-gray-500">{{ $t('tools.admin.noVNCTool.status') }}</span>
-          <span :class="isConnected ? 'text-green-600' : 'text-red-600'" class="ml-2">
+          <span class="text-autobot-text-tertiary">{{ $t('tools.admin.noVNCTool.status') }}</span>
+          <span :class="isConnected ? 'text-autobot-success' : 'text-autobot-error'" class="ml-2">
             {{ isConnected ? $t('tools.admin.noVNCTool.connected') : $t('tools.admin.noVNCTool.disconnected') }}
           </span>
         </div>
