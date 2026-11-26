@@ -75,7 +75,7 @@ def test_a_role_that_registers_no_credential_is_only_pending_by_status() -> None
     assert prp._needs_provisioning(_role("not_installed", name="other"), set()) is True
 
 
-@pytest.mark.parametrize("status", ["failed", "installing", "active", "installed"])
+@pytest.mark.parametrize("status", ["failed", "installing", "installed"])
 def test_a_recent_attempt_is_not_repeated_inside_the_cooldown(status) -> None:
     assert prp._needs_provisioning(_role(status, age=COOLDOWN / 2), set()) is False
     assert prp._needs_provisioning(_role(status, age=COOLDOWN + timedelta(minutes=1)), set()) is True
@@ -330,3 +330,29 @@ def test_every_update_path_goes_through_the_helper() -> None:
     assert _calls_to_update_all(path) == [], "a path bypasses run_update_all_nodes"
     assert path.read_text(encoding="utf-8").count("run_update_all_nodes(") == 4
     assert "await provision_pending_roles(node_id)" in path.read_text(encoding="utf-8")
+
+
+def test_a_held_never_provisioned_role_is_provisioned_despite_recent_detection_churn() -> None:
+    """#22262: a detector-written row (active, no credential) is not an attempt, whatever its updated_at."""
+    for status in ("active", "inactive"):
+        assert prp._needs_provisioning(_role(status, age=timedelta(seconds=1)), set()) is True
+
+
+def test_an_already_provisioned_role_is_not_provisioned_again() -> None:
+    for status in ("active", "installed"):
+        assert prp._needs_provisioning(_role(status, age=timedelta(seconds=1)), {"vnc"}) is False
+        assert prp._needs_provisioning(_role(status), {"vnc"}) is False
+
+
+def test_the_row_the_desktop_migration_creates_is_pending_for_the_updater() -> None:
+    from migrations import assign_vnc_role_to_desktop_node as mig
+
+    assert mig.ASSIGNED_STATUS == "not_installed"
+    assert prp._needs_provisioning(_role(mig.ASSIGNED_STATUS, age=timedelta(seconds=1)), set()) is True
+
+
+def test_a_held_unprovisioned_vnc_role_is_selected_by_the_pending_step(monkeypatch) -> None:
+    """run_update_all_nodes runs this step after update-all-nodes.yml; the vnc role then creates autobot-vnc."""
+    role = _role("active", age=timedelta(seconds=1))
+    db = _fake_db([role], creds=[])
+    assert asyncio.run(prp.pending_roles(db, "n1")) == [role]

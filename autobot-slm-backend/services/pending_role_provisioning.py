@@ -45,6 +45,9 @@ PENDING_STATUSES = (RoleStatus.NOT_INSTALLED.value, "failed")
 CREDENTIAL_REGISTERED_BY_ROLE = {"vnc": "vnc"}
 _INSTALLING = "installing"
 _FAILED = "failed"
+_INSTALLED = "installed"  # what api.nodes._execute_provision_playbook records on success
+#: Statuses only the provisioner writes: their ``updated_at`` is the time of the attempt.
+_PROVISIONER_STATUSES = (_FAILED, _INSTALLING, _INSTALLED)
 #: Hours before a role already attempted on a node is provisioned again (registered in env_registry_slm_rollback).
 RETRY_COOLDOWN_HOURS = env_int_clamped("SLM_ROLE_PROVISION_RETRY_COOLDOWN_HOURS", 6, min_v=1, max_v=720)
 
@@ -70,19 +73,23 @@ def _attempted_recently(role, now: datetime) -> bool:
 
 
 def _needs_provisioning(role, credential_types: set[str], now: datetime | None = None) -> bool:
-    """Whether the fleet update should provision this row now.
+    """Whether the fleet update should provision this row now: the ONE rule (#22211, #22262).
 
     * ``not_installed``: assigned, never attempted -> yes, at once.
-    * every other status is a row that was already attempted (or is mid-attempt, or was left at
-      ``installing`` by a crash): provision again only when it is failed or lacks its credential, and only
-      once the cooldown has passed.
+    * a row the PROVISIONER wrote (``failed``, ``installing``, ``installed``) is provisioned again when it is
+      failed/stuck or lacks its credential, and only once the cooldown has passed.
+    * a row the role DETECTOR wrote (``active``/``inactive``: held, never provisioned) lacking its credential is
+      provisioned at once. Its ``updated_at`` moves with every detection, so it is no sign of an attempt and
+      must not hold the cooldown (#22262).
     """
     if role.status == RoleStatus.NOT_INSTALLED.value:
         return True
-    if _attempted_recently(role, now or datetime.now(timezone.utc)):
-        return False
     wanted = CREDENTIAL_REGISTERED_BY_ROLE.get(role.role_name)
     missing_credential = wanted is not None and wanted not in credential_types
+    if role.status not in _PROVISIONER_STATUSES:
+        return missing_credential
+    if _attempted_recently(role, now or datetime.now(timezone.utc)):
+        return False
     return role.status in (_FAILED, _INSTALLING) or missing_credential
 
 
