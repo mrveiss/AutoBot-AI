@@ -992,7 +992,7 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
             # Allow extensions to inspect/modify the query
             user_query = await _emit_before_rag_query(
                 user_query,
-                state.get("session_id"),
+                state.get("session_id") or "",
                 {},
             )
         except Exception as hook_exc:  # noqa: BLE001
@@ -1070,7 +1070,7 @@ async def _emit_before_response_send_safe(combined_response: str, session_id: st
     from chat_workflow.llm_handler import _emit_before_response_send
 
     try:
-        return await _emit_before_response_send(combined_response, session_id, {})
+        return await _emit_before_response_send(combined_response, session_id or "", {})
     except Exception as hook_exc:  # noqa: BLE001
         logger.debug("BEFORE_RESPONSE_SEND hook failed (non-fatal): %s", hook_exc)
         return combined_response
@@ -1081,7 +1081,7 @@ async def _emit_after_response_send_safe(combined_response: str, session_id: str
     from chat_workflow.llm_handler import _emit_after_response_send
 
     try:
-        await _emit_after_response_send(combined_response, session_id, {})
+        await _emit_after_response_send(combined_response, session_id or "", {})
     except Exception as hook_exc:  # noqa: BLE001
         logger.debug("AFTER_RESPONSE_SEND hook failed (non-fatal): %s", hook_exc)
 

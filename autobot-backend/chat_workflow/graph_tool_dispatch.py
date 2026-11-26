@@ -4,7 +4,7 @@
 # Author: mrveiss
 """The dispatch and plugin-hook parts of graph.py's execute_tools node, moved unchanged (#19715)."""
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Mapping, Tuple
 
 from autobot_shared.ai_lines import DECLARED_CATEGORIES_KEY, declared_categories_of
 from autobot_shared.logging_manager import get_logger
@@ -76,7 +76,7 @@ def split_refused(tool_calls: List[Dict[str, Any]], decision: Dict[str, Any]) ->
 
 
 async def dispatch_approved_calls(
-    manager, exec_ctx, state: Dict[str, Any], tool_calls: list, iteration: int, messages: list, stream_cb
+    manager, exec_ctx, state: Mapping[str, Any], tool_calls: list, iteration: int, messages: list, stream_cb
 ) -> Tuple[List[Dict[str, Any]], bool]:
     """Run planned calls through the manager's dispatch; returns (execution_history, break_loop)."""
     # Execute via existing manager method

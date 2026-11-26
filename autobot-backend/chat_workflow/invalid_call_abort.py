@@ -12,7 +12,7 @@ the turn ends with ``INVALID_TOOL_ABORT_REPLY`` and the stop is written to the a
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, Dict
+from typing import TYPE_CHECKING
 
 from langchain_core.runnables import RunnableConfig
 
@@ -20,6 +20,9 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.logging_manager import get_logger
 from chat_workflow import limits
 from services.audit_logger import audit_log
+
+if TYPE_CHECKING:
+    from chat_workflow.graph import ChatState
 
 logger = get_logger(__name__)
 
@@ -59,7 +62,7 @@ async def abort_message(ctx, iteration: int) -> WorkflowMessage:
     return message
 
 
-async def abort_invalid_tools(state: Dict[str, Any], config: RunnableConfig) -> dict:
+async def abort_invalid_tools(state: ChatState, config: RunnableConfig) -> dict:
     """Graph node (#20848): the same stop as the streaming loop, for a turn the graph routed here.
 
     ``route_after_execution`` sends a turn here once ``should_abort`` holds for the state's

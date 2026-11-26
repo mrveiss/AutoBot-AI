@@ -19,6 +19,8 @@ from contextlib import aclosing
 from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
 
+import redis.asyncio as async_redis
+
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
@@ -299,7 +301,10 @@ class ChatWorkflowManager(
     async def _init_redis_client(self) -> None:
         """Initialize Redis client for conversation history."""
         try:
-            self.redis_client = await get_redis_manager(async_client=True, database="main")
+            client = get_redis_manager(async_client=True, database="main")
+            if isinstance(client, async_redis.Redis):  # an async client is connected by awaiting it
+                client = await client
+            self.redis_client = client
             logger.info("✅ Redis client initialized for conversation history")
         except Exception as redis_error:
             logger.warning(
@@ -1936,8 +1941,11 @@ before summarizing.
         if api_kwargs:
             payload.update(api_kwargs)
         supports_vision = vision_capable if vision_capable is not None else _model_supports_vision(selected_model)
-        vision_ready = image_b64 and supports_vision
-        if vision_ready and image_fits_budget(current_prompt, selected_model, VISION_IMAGE_TOKEN_ESTIMATE):
+        if (
+            image_b64
+            and supports_vision
+            and image_fits_budget(current_prompt, selected_model, VISION_IMAGE_TOKEN_ESTIMATE)
+        ):
             self._attach_vision_payload(payload, ollama_endpoint, current_prompt, image_b64)
         return payload
 
@@ -2283,7 +2291,7 @@ before summarizing.
         Yields:
             WorkflowMessage items, then (results, has_pending_approval, should_break, break_loop_requested)
         """
-        new_execution_results = []
+        new_execution_results: List[Dict[str, Any]] = []
         has_pending_approval = False
         break_loop_requested = False
 
@@ -2485,12 +2493,8 @@ before summarizing.
             len(tool_calls),
         )
 
-        new_results, has_pending_approval, should_break, break_loop_requested = (
-            [],
-            False,
-            False,
-            False,
-        )
+        new_results: List[Dict[str, Any]] = []
+        has_pending_approval, should_break, break_loop_requested = False, False, False
 
         async for item in self._process_tool_results(
             tool_calls,
@@ -2595,7 +2599,7 @@ before summarizing.
         Yields:
             WorkflowMessages, then should_continue boolean. Issue #620.
         """
-        new_results = []
+        new_results: List[Dict[str, Any]] = []
         has_pending_approval = False
         should_break = False
         break_loop_requested = False
@@ -2655,7 +2659,7 @@ before summarizing.
             return
 
         should_continue = False
-        async for item in self._yield_tool_results_and_decide(tool_calls, iteration, ctx):
+        async for item in self._yield_tool_results_and_decide(tool_calls or [], iteration, ctx):
             if isinstance(item, bool):
                 should_continue = item
             else:
@@ -2797,7 +2801,7 @@ before summarizing.
         Build continuation prompt and log debug info.
         """
         current_prompt = self._build_continuation_prompt(
-            ctx.message,
+            ctx.message or "",
             execution_history,
             ctx.consecutive_invalid_tool_calls,
         )
@@ -2841,8 +2845,8 @@ before summarizing.
         Yields messages, then (all_responses, history, error).
         """
         execution_history = ctx.execution_history
-        all_llm_responses = []
-        current_prompt = ctx.initial_prompt
+        all_llm_responses: List[str] = []
+        current_prompt = ctx.initial_prompt or ""
 
         self._log_iteration_start(ctx)
         plan = await open_for_ctx(self, ctx)  # #21023: the same plan_runner as the graph; NoPlan when off
@@ -3414,7 +3418,7 @@ before summarizing.
             llm_params, session_id, terminal_session_id, message, workflow_messages, context
         )
 
-        all_llm_responses = []
+        all_llm_responses: List[str] = []
         async for item in self._execute_llm_continuation_loop(ctx):
             if isinstance(item, tuple) and len(item) == 3:
                 all_llm_responses, _, error = item
@@ -3659,7 +3663,7 @@ before summarizing.
 
         Issue #620: Original implementation preserved as fallback.
         """
-        workflow_messages = []
+        workflow_messages: List[Any] = []
 
         try:
             (

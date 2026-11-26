@@ -485,6 +485,13 @@ async def _emit_prompt_hooks(
 class LLMHandlerMixin:
     """Mixin for LLM interaction handling."""
 
+    # Provided by the composed ChatWorkflowManager (its __init__ and the session mixin); declared so the mixin's own
+    # reads type-check. Annotation only: no attribute is created here.
+    knowledge_service: Any
+    redis_client: Any
+    get_or_create_session: Any
+    _persist_conversation: Any
+
     def _convert_conversation_history_format(self, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """
         Convert conversation history from storage format to classification format.

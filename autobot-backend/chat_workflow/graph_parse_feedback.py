@@ -12,7 +12,7 @@ raw markup is never persisted; the failure stays recorded as a ``tool_call_parse
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
 
 from chat_workflow import limits
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
@@ -22,7 +22,7 @@ from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step
 INITIAL_PARSE_STATE: Dict[str, Any] = {"parse_retries": 0, "parse_retry_pending": False}
 
 
-def _fallback(state: Dict[str, Any], update: Dict[str, Any], stream_cb) -> Dict[str, Any]:
+def _fallback(state: Mapping[str, Any], update: Dict[str, Any], stream_cb) -> Dict[str, Any]:
     message = {"type": "response", "content": NO_ANSWER_FALLBACK, "metadata": {"parse_fallback": True}}
     if stream_cb:
         stream_cb(message)
@@ -36,7 +36,7 @@ def _fallback(state: Dict[str, Any], update: Dict[str, Any], stream_cb) -> Dict[
     }
 
 
-def apply_parse_feedback(state: Dict[str, Any], update: Dict[str, Any], stream_cb=None) -> Dict[str, Any]:
+def apply_parse_feedback(state: Mapping[str, Any], update: Dict[str, Any], stream_cb=None) -> Dict[str, Any]:
     """*update* (one generation's state update) with the parse failure fed back, or the fallback once spent."""
     iteration = update.get("iteration_count", 0)
     step = (
