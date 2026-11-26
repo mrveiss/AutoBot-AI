@@ -5,7 +5,7 @@
 # Author: mrveiss
 """The one safe way to clone an external repository (#16488).
 
-The `/autobot-dev-skills:lifecycle research` and `adopt` workflows read other people's repositories, and planting
+The `/research-hub technical` and `adopt` workflows read other people's repositories, and planting
 a prompt injection in a README, a commit message, or `.git` itself is a known
 technique. This module is the **only** path either workflow takes when a clone is
 unavoidable (they prefer `gh api repos/{o}/{r}/contents/...` and raw files —

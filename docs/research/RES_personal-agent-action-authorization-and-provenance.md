@@ -47,8 +47,8 @@ Rule applied: anything adopted is rebuilt on AutoBot's own stack; the reference 
 | Learned skills delivered as untrusted data | Skills enter the system prompt as trusted text (`prompt_manager.py:337`) | delta on #18367 |
 
 ### Deferred
-- A restricted tool profile and matter-key dedup for event-triggered runs. Today's wake sources are internal only (`llc/models/enums.py:194-208`), so this waits for an external event source.
-- Capability evals against fake apps and lookalike sites, gated in CI. This is behind #16157 and CI capacity.
+- A restricted tool profile and matter-key dedup for event-triggered runs. Today's wake sources are internal only (`llc/models/enums.py:194-208`), so it waits for an external event source: #22323, blocked by #13716 (inbound mail into work items).
+- Capability evals against fake apps and lookalike sites, gated in CI. Delta posted on #16157; behind it and CI capacity.
 
 ### Deliberately not adopted
 - An LLM check on every step including reads; a hosted connection service; the reference work's agent runtime and desktop shell.
@@ -65,3 +65,5 @@ Rule applied: anything adopted is rebuilt on AutoBot's own stack; the reference 
 - #22290 Backend layer-import matrix and env-read confinement ratchet
 - #18367 Skill-proposal receiver (delta: learned skills as untrusted data)
 - #18075 Per-turn fact extraction calls a method no class defines (re-found)
+- #22323 Externally triggered runs: read-and-prepare tool profile and matter-key dedup
+- #16157 Trajectory gate cannot fail (delta: fixture-backed outcome evals)
