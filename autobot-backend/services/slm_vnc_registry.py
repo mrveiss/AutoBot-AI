@@ -93,8 +93,8 @@ async def _store_pin(node_id: str | None) -> None:
     global _pinned_node_id
     _pinned_node_id = node_id
     try:
-        client = await _pin_client()
-        await (client.set(PIN_REDIS_KEY, node_id) if node_id else client.delete(PIN_REDIS_KEY))
+        redis = await _pin_client()
+        await (redis.set(PIN_REDIS_KEY, node_id) if node_id else redis.delete(PIN_REDIS_KEY))
     except Exception as exc:
         logger.warning("VNC desktop pin not stored in Redis (%s)", type(exc).__name__)
 
