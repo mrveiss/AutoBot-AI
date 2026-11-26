@@ -284,6 +284,7 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
                         detail="Marketplace catalog exceeds 4MB",
                     )
     except aiohttp.ClientError as exc:
+        logger.error("Marketplace URL fetch failed for %s: %s", host, exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=safe_http_detail(exc, "Failed to reach marketplace URL"),

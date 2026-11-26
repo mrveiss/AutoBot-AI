@@ -59,7 +59,7 @@ from api.user_management.dependencies import require_org_context
 from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.error_utils import safe_http_detail
+from autobot_shared.error_utils import safe_http_detail, user_facing_detail
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
@@ -1130,7 +1130,7 @@ async def set_session_role(
     try:
         await SessionRoleService().set_role(session_id, role)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=safe_http_detail(exc, "Unknown agent role"))
+        raise HTTPException(status_code=400, detail=user_facing_detail(exc))
     return DataResponse(data={"session_id": session_id, "role": role})
 
 
@@ -1279,7 +1279,7 @@ async def set_session_approval_categories(
     try:
         await SessionRoleService().set_approval_categories(session_id, categories)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=safe_http_detail(exc, "Unknown approval category"))
+        raise HTTPException(status_code=400, detail=user_facing_detail(exc))
     return DataResponse(data={"session_id": session_id, "approval_categories": categories})
 
 
