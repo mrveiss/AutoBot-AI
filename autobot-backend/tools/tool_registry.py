@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from tools.code_interpreter import execute_code
 from tools.kb_read_tools import KnowledgeReadToolsMixin
 from tools.kb_write_tools import KnowledgeWriteToolsMixin
+from tools.system_read_tools import SystemReadToolsMixin
 
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
@@ -38,7 +39,7 @@ GET_PROCESS_INFO_VARIANTS = {"getprocessinfo", "systemgetprocessinfo"}
 TERMINATE_PROCESS_VARIANTS = {"terminateprocess", "systemterminateprocess"}
 
 
-class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin):
+class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SystemReadToolsMixin):
     """
     Unified tool registry that provides standardized tool implementations
     for both orchestrator types, eliminating code duplication.
@@ -53,7 +54,8 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin):
         Initialize the tool registry with required dependencies.
 
         Args:
-            worker_node: Worker node for task execution
+            worker_node: Worker node for task execution; optional - the read-only
+                system tools fall back to SystemIntegration without it (#22267)
             knowledge_base: Knowledge base for information retrieval
         """
         self.worker_node = worker_node
@@ -154,30 +156,6 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin):
             "tool_args": {"anchor": anchor, "offset": offset, "limit": limit},
             "result": window,
             "status": "success" if window.get("found") else "not_found",
-        }
-
-    async def query_system_information(self) -> Dict[str, Any]:
-        """Query system information."""
-        task = self._create_base_task("system_query_info")
-
-        result = await self._execute_worker_task(task)
-        return {
-            "tool_name": "query_system_information",
-            "tool_args": {},
-            "result": result.get("output", result.get("message", "System info retrieved")),
-            "status": result.get("status", "success"),
-        }
-
-    async def list_system_services(self) -> Dict[str, Any]:
-        """List system services."""
-        task = self._create_base_task("system_list_services")
-
-        result = await self._execute_worker_task(task)
-        return {
-            "tool_name": "list_system_services",
-            "tool_args": {},
-            "result": result.get("output", result.get("message", "Services listed")),
-            "status": result.get("status", "success"),
         }
 
     async def manage_service(self, service_name: str, action: str) -> Dict[str, Any]:

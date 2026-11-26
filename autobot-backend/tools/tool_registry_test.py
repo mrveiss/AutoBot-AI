@@ -148,3 +148,19 @@ async def test_agent_kb_tools_never_return_another_users_private_fact(call):
     assert "alice only" not in repr(await run("bob"))
     assert "alice only" not in repr(await run(None))
     assert "alice only" in repr(await run("alice"))
+
+
+@pytest.mark.asyncio
+async def test_system_read_tools_work_through_get_tool_registry_without_worker_node():
+    """#22267: both system tools return real data from the production singleton."""
+    from tools.tool_registry import get_tool_registry
+
+    registry = get_tool_registry()
+    assert registry.worker_node is None
+
+    info = await registry.query_system_information()
+    services = await registry.list_system_services()
+
+    assert info["status"] == "success"
+    assert "os_type" in info["result"]
+    assert services["result"] != "Worker node not available"
