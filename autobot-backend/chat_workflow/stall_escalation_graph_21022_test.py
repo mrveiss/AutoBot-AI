@@ -242,3 +242,39 @@ async def test_a_reload_restores_the_open_approval_card_once(monkeypatch):
     assert shown["metadata"]["requires_approval"] is True and shown["metadata"]["calls"]
     again = await stall_pending.with_pending_question(_request(MagicMock()), "s1", restored)
     assert again == restored
+
+
+async def test_reloading_mid_approval_interrupt_restores_the_card_and_the_resume_runs_the_calls(monkeypatch):
+    """#21237: pause the REAL graph at ``request_approval``, read the card back from the checkpoint as a reload does
+    (no ``read_pause`` stub), then resume with the decision that card posts: the held call is dispatched once."""
+    seen: dict = {}
+
+    async def generate(state, config: RunnableConfig):
+        return {"error": "end of test"}
+
+    async def execute(state, config: RunnableConfig):
+        seen["decision"] = state["approval_decision"]
+        return {"should_continue": False, "tool_calls": []}
+
+    async def persist(state, config: RunnableConfig):
+        return {}
+
+    monkeypatch.setattr(graph, "generate_response", generate)
+    monkeypatch.setattr(graph, "execute_tools", execute)
+    monkeypatch.setattr(graph, "persist_conversation", persist)
+    compiled = graph.build_chat_graph().compile(checkpointer=MemorySaver())
+    monkeypatch.setattr(graph, "get_compiled_graph", AsyncMock(return_value=compiled))
+    held = {"name": "execute_command", "params": {"command": "touch x"}, "needs_approval": True}
+    state = {"session_id": "s1", "terminal_session_id": "t1", "context": {}, "workflow_messages": []}
+    await compiled.aupdate_state(CFG, {**state, "tool_calls": [held]}, as_node="generate_response")
+    await compiled.ainvoke(None, CFG)  # pauses at request_approval; the live stream is now "lost"
+
+    reloaded = await stall_pending.with_pending_question(_request(MagicMock()), "s1", [{"id": "u1"}])
+    card = reloaded[-1]
+    assert card["type"] == "command_approval_request" and card["metadata"]["requires_approval"] is True
+    assert card["metadata"]["calls"][0]["tool"] == "execute_command" and card["metadata"]["session_id"] == "s1"
+    await stall_pending.check_resume_binding(MagicMock(), "s1", {"approved": True, "reason": ""})  # the route's gate
+
+    await compiled.ainvoke(Command(resume={"approved": True, "reason": ""}), CFG)
+    assert seen["decision"]["approved"] is True and len(seen["decision"]["bound"]) == 1
+    assert (await compiled.aget_state(CFG)).next == ()
