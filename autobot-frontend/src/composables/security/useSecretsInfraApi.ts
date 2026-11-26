@@ -11,6 +11,7 @@
  */
 
 import apiClient from '@/utils/ApiClient';
+import { secretsApiClient } from '@/utils/SecretsApiClient';
 
 export interface InfraHost {
   id: string;
@@ -60,6 +61,87 @@ export function infraHostToSecret(host: InfraHost) {
     },
     _isLegacyHost: true // Flag for legacy hosts that need different delete API
   };
+}
+
+/** The metadata key linking a host's VNC password secret to the host (read by api/vnc_host_target.py). */
+const VNC_COMPANION_HOST_KEY = 'vnc_host_id';
+
+type SecretLike = {
+  id: string; type?: string; scope?: string; chat_id?: string | null; metadata?: Record<string, unknown>
+};
+
+/** The companion must carry its host's scope: a general-scoped one is readable from every chat. */
+const inHostScope = (s: SecretLike, hostData: Record<string, unknown>): boolean =>
+  (s.scope ?? 'general') === (hostData.scope ?? 'general') && (s.chat_id ?? null) === (hostData.chat_id ?? null);
+
+/**
+ * #22145: a host's VNC password is its own secret, linked by host id, so the chat
+ * Desktop can authenticate to that host's VNC endpoint with it. Creates it, or replaces
+ * the value of the one already linked (so an EXISTING host can get or change its password).
+ * `adopt` is called with the host id as soon as it is known, before the refetch and the write.
+ * `created` is a create response (`{ data: { id } }`) or the same shape built from a known host id.
+ */
+/** The companion inputs of a host form, copied: the live reactive form is reset in place by Cancel. */
+export function snapshotVncCompanion(f: {
+  id: string; type: string; name: string; host: string; capabilities: string[]; vnc_password: string
+}) {
+  const { id, type, name, host, vnc_password } = f
+  return { hostId: id, form: { type, name, host, capabilities: [...f.capabilities], vnc_password } }
+}
+
+export async function createVncCompanion(
+  created: unknown,
+  form: { type: string; name: string; host: string; capabilities: string[]; vnc_password: string },
+  hostData: Record<string, unknown>,
+  t: (key: string, params?: Record<string, unknown>) => string,
+  adopt?: (hostId: string) => void
+): Promise<void> {
+  if (form.type !== 'infrastructure_host' || !form.capabilities.includes('vnc') || !form.vnc_password) return;
+  const hostId = (created as { data?: { id?: string } } | null)?.data?.id;
+  if (!hostId) throw new Error(t('security.secretsManager.vncCompanionNoHostId'));
+  // The host now exists: the caller turns its form into an edit of THIS host before anything can fail,
+  // so a retry updates it and never creates a second one.
+  adopt?.(hostId);
+  // Refetch first: a stale list could duplicate the secret. A failed refetch surfaces (the caller's write
+  // failure path); it never falls back to a list that may be stale.
+  // Scoped to the host's chat: the backend skips chat-scoped secrets otherwise, so the companion saved
+  // with that chat id would never be found and a second one would be created.
+  const fresh = (await secretsApiClient.getSecrets({
+    chatId: (hostData.chat_id as string | null | undefined) ?? undefined
+  })) as { secrets?: SecretLike[] }
+  const known = fresh.secrets ?? []
+  const linked = known.filter((s) => s.type === 'password' && s.metadata?.[VNC_COMPANION_HOST_KEY] === hostId);
+  const inScope = linked.find((s) => inHostScope(s, hostData));
+  // A companion in another scope (e.g. general, for a chat-scoped host) is never given the new password:
+  // the scoped one is created or updated first, then every mismatched one is removed as part of THIS save,
+  // also on a retry after a failed removal.
+  if (inScope) {
+    await secretsApiClient.updateSecret(inScope.id, { value: form.vnc_password } as never, {
+      chatId: hostData.chat_id as string | null | undefined
+    });
+  } else {
+    await createCompanionSecret(hostId, form, hostData, t);
+  }
+  for (const stale of linked.filter((s) => !inHostScope(s, hostData))) {
+    await secretsApiClient.deleteSecret(stale.id, { chatId: stale.chat_id });
+  }
+}
+
+async function createCompanionSecret(
+  hostId: string,
+  form: { name: string; host: string; vnc_password: string },
+  hostData: Record<string, unknown>,
+  t: (key: string, params?: Record<string, unknown>) => string
+): Promise<void> {
+  await secretsApiClient.createSecret({
+    name: t('security.secretsManager.vncCompanionName', { name: form.name }),
+    type: 'password',
+    scope: hostData.scope,
+    chat_id: hostData.chat_id,
+    value: form.vnc_password,
+    description: t('security.secretsManager.vncCompanionDescription', { host: form.host }),
+    metadata: { [VNC_COMPANION_HOST_KEY]: hostId }
+  } as unknown as Parameters<typeof secretsApiClient.createSecret>[0]);
 }
 
 export function useSecretsInfraApi() {

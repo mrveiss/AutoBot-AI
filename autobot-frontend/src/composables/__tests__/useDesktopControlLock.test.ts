@@ -12,15 +12,17 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { effectScope } from 'vue'
+import { effectScope, nextTick, ref } from 'vue'
+import { flushPromises } from '@vue/test-utils'
 
 const mockGet = vi.fn(async (..._args: unknown[]) => ({}))
 const mockPost = vi.fn(async (..._args: unknown[]) => ({}))
 
+// The composable uses the typed `call`; route each (method, contract path, options) to the two mocks.
 vi.mock('@/utils/ApiClient', () => ({
   default: {
-    get: (...args: unknown[]) => mockGet(...args),
-    post: (...args: unknown[]) => mockPost(...args)
+    call: (method: string, path: string, opts: unknown) =>
+      method === 'get' ? mockGet(path, opts) : mockPost(path, opts)
   }
 }))
 
@@ -30,7 +32,7 @@ import { useUserStore } from '@/stores/useUserStore'
 function fakeState(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     success: true,
-    session_id: 'default',
+    session_id: 'host-1',
     owner: null,
     human_active: false,
     message: 'Agent has control',
@@ -49,8 +51,105 @@ describe('useDesktopControlLock', () => {
     vi.restoreAllMocks()
   })
 
+  it('switching the host retargets the lock and resets the old host state (#22191)', async () => {
+    const host = ref('host-1')
+    mockGet.mockResolvedValue(fakeState({ owner: 'alice', human_active: true }))
+    const scope = effectScope()
+    const lock = scope.run(() => useDesktopControlLock(host))!
+    await lock.refreshStatus()
+    expect(lock.humanActive.value).toBe(true)
+    mockGet.mockResolvedValue(fakeState({ session_id: 'host-2' }))
+    host.value = 'host-2'
+    await nextTick()
+    await flushPromises()
+    expect(lock.humanActive.value).toBe(false)
+    expect(mockGet).toHaveBeenLastCalledWith('/api/vnc-proxy/{vnc_type}/control/status', {
+      path: { vnc_type: 'desktop' },
+      query: { session_id: 'host-2' }
+    })
+    mockPost.mockResolvedValue(fakeState({ owner: 'alice', human_active: true }))
+    await lock.takeControl()
+    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc-proxy/{vnc_type}/control/acquire', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-2' }
+    })
+    scope.stop()
+  })
+
+  it('releases the OLD host lock, with the old id, when the host switches (#22191)', async () => {
+    const host = ref('host-1')
+    const store = useUserStore()
+    store.currentUser = { username: 'alice' } as never
+    mockGet.mockResolvedValue(fakeState({ owner: 'alice', human_active: true }))
+    const scope = effectScope()
+    const lock = scope.run(() => useDesktopControlLock(host))!
+    await lock.refreshStatus()
+    expect(lock.isMine.value).toBe(true)
+    mockPost.mockResolvedValue(fakeState())
+    mockGet.mockResolvedValue(fakeState({ session_id: 'host-2' }))
+    host.value = 'host-2'
+    await nextTick()
+    await flushPromises()
+    expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/{vnc_type}/control/release', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-1' }
+    })
+    scope.stop()
+  })
+
+  it('releases an old-host acquisition that completes after the selection changed', async () => {
+    const host = ref('host-1')
+    const scope = effectScope()
+    const lock = scope.run(() => useDesktopControlLock(host))!
+    let grant: (v: unknown) => void = () => {}
+    mockPost.mockImplementationOnce(() => new Promise((resolve) => { grant = resolve }))
+    mockGet.mockResolvedValue(fakeState({ session_id: 'host-2' }))
+    const pending = lock.takeControl()
+    host.value = 'host-2'
+    await nextTick()
+    mockPost.mockResolvedValue(fakeState())
+    grant(fakeState({ owner: 'alice', human_active: true }))
+    expect(await pending).toBeNull()
+    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc-proxy/{vnc_type}/control/release', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-1' }
+    })
+    expect(lock.humanActive.value).toBe(false)
+    scope.stop()
+  })
+
+  it('ignores a status response from a previous selection, including A -> B -> A', async () => {
+    const host = ref('host-1')
+    const store = useUserStore()
+    store.currentUser = { username: 'alice' } as never
+    const scope = effectScope()
+    const lock = scope.run(() => useDesktopControlLock(host))!
+    let answer: (v: unknown) => void = () => {}
+    mockGet.mockImplementationOnce(() => new Promise((resolve) => { answer = resolve }))
+    const stale = lock.refreshStatus()
+    mockGet.mockResolvedValue(fakeState())
+    host.value = 'host-2'
+    await nextTick()
+    host.value = 'host-1'
+    await nextTick()
+    await flushPromises()
+    answer(fakeState({ owner: 'alice', human_active: true }))
+    expect(await stale).toBeNull()
+    expect(lock.humanActive.value).toBe(false)
+    expect(lock.error.value).toBeNull()
+    scope.stop()
+  })
+
+  it('makes no request without a selected host id (#22145)', async () => {
+    const { refreshStatus, takeControl } = useDesktopControlLock('')
+    expect(await refreshStatus()).toBeNull()
+    expect(await takeControl()).toBeNull()
+    expect(mockGet).not.toHaveBeenCalled()
+    expect(mockPost).not.toHaveBeenCalled()
+  })
+
   it('starts with no owner and human_active false', () => {
-    const { owner, humanActive, isMine } = useDesktopControlLock()
+    const { owner, humanActive, isMine } = useDesktopControlLock('host-1')
     expect(owner.value).toBeNull()
     expect(humanActive.value).toBe(false)
     expect(isMine.value).toBe(false)
@@ -61,14 +160,17 @@ describe('useDesktopControlLock', () => {
 
     const scope = effectScope()
     await scope.run(async () => {
-      const { owner, humanActive, refreshStatus } = useDesktopControlLock('desktop', 'default')
+      const { owner, humanActive, refreshStatus } = useDesktopControlLock('host-1')
       await refreshStatus()
       expect(owner.value).toBe('alice')
       expect(humanActive.value).toBe(true)
     })
     scope.stop()
 
-    expect(mockGet).toHaveBeenCalledWith('/vnc-proxy/desktop/control/status?session_id=default')
+    expect(mockGet).toHaveBeenCalledWith('/api/vnc-proxy/{vnc_type}/control/status', {
+      path: { vnc_type: 'desktop' },
+      query: { session_id: 'host-1' }
+    })
   })
 
   it('takeControl calls POST /control/acquire and sets isMine when owner matches current user', async () => {
@@ -86,7 +188,7 @@ describe('useDesktopControlLock', () => {
 
     const scope = effectScope()
     await scope.run(async () => {
-      const { takeControl, isMine, humanActive } = useDesktopControlLock('desktop', 'default')
+      const { takeControl, isMine, humanActive } = useDesktopControlLock('host-1')
       const result = await takeControl()
 
       expect(result?.success).toBe(true)
@@ -95,7 +197,10 @@ describe('useDesktopControlLock', () => {
     })
     scope.stop()
 
-    expect(mockPost).toHaveBeenCalledWith('/vnc-proxy/desktop/control/acquire', { session_id: 'default' })
+    expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/{vnc_type}/control/acquire', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-1' }
+    })
   })
 
   it('isMine is false when a different user holds the lock', async () => {
@@ -106,7 +211,7 @@ describe('useDesktopControlLock', () => {
 
     const scope = effectScope()
     await scope.run(async () => {
-      const { takeControl, isMine } = useDesktopControlLock('desktop', 'default')
+      const { takeControl, isMine } = useDesktopControlLock('host-1')
       await takeControl()
       expect(isMine.value).toBe(false)
     })
@@ -118,7 +223,7 @@ describe('useDesktopControlLock', () => {
 
     const scope = effectScope()
     await scope.run(async () => {
-      const { releaseControl, owner, humanActive } = useDesktopControlLock('desktop', 'default')
+      const { releaseControl, owner, humanActive } = useDesktopControlLock('host-1')
       const result = await releaseControl()
 
       expect(result?.success).toBe(true)
@@ -127,7 +232,10 @@ describe('useDesktopControlLock', () => {
     })
     scope.stop()
 
-    expect(mockPost).toHaveBeenCalledWith('/vnc-proxy/desktop/control/release', { session_id: 'default' })
+    expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/{vnc_type}/control/release', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-1' }
+    })
   })
 
   it('surfaces a denied release without throwing', async () => {
@@ -137,7 +245,7 @@ describe('useDesktopControlLock', () => {
 
     const scope = effectScope()
     await scope.run(async () => {
-      const { releaseControl, error } = useDesktopControlLock('desktop', 'default')
+      const { releaseControl, error } = useDesktopControlLock('host-1')
       const result = await releaseControl()
 
       expect(result?.success).toBe(false)
@@ -151,7 +259,7 @@ describe('useDesktopControlLock', () => {
 
     const scope = effectScope()
     await scope.run(async () => {
-      const { takeControl, error } = useDesktopControlLock('desktop', 'default')
+      const { takeControl, error } = useDesktopControlLock('host-1')
       const result = await takeControl()
 
       expect(result).toBeNull()
@@ -181,14 +289,17 @@ describe('useDesktopControlLock', () => {
 
       const scope = effectScope()
       await scope.run(async () => {
-        const { refreshStatus } = useDesktopControlLock('desktop', 'default')
+        const { refreshStatus } = useDesktopControlLock('host-1')
         await refreshStatus()
 
         expect(mockPost).not.toHaveBeenCalled()
 
         await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS)
 
-        expect(mockPost).toHaveBeenCalledWith('/vnc-proxy/desktop/control/acquire', { session_id: 'default' })
+        expect(mockPost).toHaveBeenCalledWith('/api/vnc-proxy/{vnc_type}/control/acquire', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-1' }
+    })
       })
       scope.stop()
     })
@@ -201,7 +312,7 @@ describe('useDesktopControlLock', () => {
 
       const scope = effectScope()
       await scope.run(async () => {
-        const { refreshStatus } = useDesktopControlLock('desktop', 'default')
+        const { refreshStatus } = useDesktopControlLock('host-1')
         await refreshStatus()
 
         await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS * 2)
@@ -226,7 +337,7 @@ describe('useDesktopControlLock', () => {
 
       const scope = effectScope()
       await scope.run(async () => {
-        const { refreshStatus, loading } = useDesktopControlLock('desktop', 'default')
+        const { refreshStatus, loading } = useDesktopControlLock('host-1')
         await refreshStatus()
 
         await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS)
@@ -250,7 +361,7 @@ describe('useDesktopControlLock', () => {
 
       const scope = effectScope()
       await scope.run(async () => {
-        const { refreshStatus } = useDesktopControlLock('desktop', 'default')
+        const { refreshStatus } = useDesktopControlLock('host-1')
         await refreshStatus()
       })
       scope.stop()
@@ -264,7 +375,7 @@ describe('useDesktopControlLock', () => {
 
       const scope = effectScope()
       await scope.run(async () => {
-        const { takeControl, loading } = useDesktopControlLock('desktop', 'default')
+        const { takeControl, loading } = useDesktopControlLock('host-1')
         const promise = takeControl()
         expect(loading.value).toBe(true)
         await promise

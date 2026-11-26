@@ -6347,7 +6347,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Username missing: set it in Secrets",
+      "desktopVm": "AutoBot desktop VM",
+      "desktopVmDesc": "AutoBot's own desktop",
+      "noDesktopVm": "No desktop VM is registered, so only your Secrets hosts are listed."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -7454,6 +7458,9 @@
       "hidePassword": "Hide password",
       "showPassword": "Show password",
       "vncPasswordPlaceholder": "VNC password (optional)",
+      "vncCompanionName": "{name} (VNC credential)",
+      "vncCompanionDescription": "VNC credential for {host}",
+      "vncCompanionNoHostId": "The host was saved but its id was not returned, so the VNC credential was not stored.",
       "osPlaceholder": "e.g., Ubuntu 22.04, CentOS 8",
       "hideValue": "Hide value",
       "showValue": "Show value",
@@ -7498,7 +7505,8 @@
         "slackDesc": "Slack bot token",
         "serverLabel": "Server Host",
         "serverDesc": "SSH/VNC server access"
-      }
+      },
+      "vncRetry": "The host was saved, but its VNC password was not. Save again to retry; the host will not be created twice."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -8490,12 +8498,19 @@
       "download": "Download",
       "cancel": "Cancel",
       "errorServiceTimeout": "Desktop service timed out. Please try again.",
+      "noHostSelected": "Select a host with VNC to use the desktop.",
       "errorServiceDisabled": "Desktop service is currently disabled.",
       "errorInitFailed": "Failed to initialize desktop connection.",
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "vncCredentialMissing": "No VNC password is stored for this host. Add it in Secrets.",
+      "hostNotFound": "This host is not one of your Secrets hosts.",
+      "hostFieldsMissing": "This host is missing a username or capabilities. Set them in Secrets.",
+      "hostVncUnavailable": "This host has no VNC capability or port in Secrets.",
+      "desktopVmUnavailable": "No VNC desktop is registered, so the desktop VM is not available.",
+      "registryUnavailable": "The desktop registry could not be read. Try again shortly."
     },
     "popoutBrowser": {
       "title": "Research Browser",

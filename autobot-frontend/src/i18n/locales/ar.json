@@ -5813,7 +5813,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "إغلاق"
+      "close": "إغلاق",
+      "usernameMissing": "اسم المستخدم مفقود: عيّنه في الأسرار",
+      "desktopVm": "جهاز AutoBot الافتراضي لسطح المكتب",
+      "desktopVmDesc": "سطح مكتب AutoBot الخاص",
+      "noDesktopVm": "لا يوجد جهاز افتراضي لسطح المكتب مسجّل، لذا تُعرض مضيفات الأسرار الخاصة بك فقط."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6858,7 +6862,11 @@
         "slackDesc": "رمز بوت Slack",
         "serverLabel": "مضيف الخادم",
         "serverDesc": "الوصول إلى خادم SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (بيانات اعتماد VNC)",
+      "vncCompanionDescription": "بيانات اعتماد VNC لـ {host}",
+      "vncCompanionNoHostId": "تم حفظ المضيف لكن لم يُرجع معرّفه، لذلك لم تُحفظ بيانات اعتماد VNC.",
+      "vncRetry": "تم حفظ المضيف لكن لم تُحفظ كلمة مرور VNC الخاصة به. احفظ مرة أخرى لإعادة المحاولة؛ لن يُنشأ المضيف مرتين."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7753,7 +7761,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "اختر مضيفًا يدعم VNC لاستخدام سطح المكتب.",
+      "vncCredentialMissing": "لا توجد كلمة مرور VNC محفوظة لهذا المضيف. أضفها في الأسرار.",
+      "hostNotFound": "هذا المضيف ليس من مضيفات الأسرار الخاصة بك.",
+      "hostFieldsMissing": "يفتقد هذا المضيف إلى اسم المستخدم أو القدرات. عيّنها في الأسرار.",
+      "hostVncUnavailable": "ليس لدى هذا المضيف قدرة VNC أو منفذ في الأسرار.",
+      "desktopVmUnavailable": "لا يوجد سطح مكتب VNC مسجّل، لذا فإن جهاز سطح المكتب الافتراضي غير متاح.",
+      "registryUnavailable": "تعذّرت قراءة سجل أسطح المكتب. حاول مرة أخرى بعد قليل."
     },
     "popoutBrowser": {
       "title": "Research Browser",

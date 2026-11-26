@@ -6,7 +6,7 @@
 Unit tests for api.vnc_manager's desktop control-lock gating (#12002, #11506 T1).
 
 Verifies that human-facing REST actuation entrypoints (click/type/key/scroll/
-drag) are muted (no xdotool dispatch) when a DIFFERENT human holds the
+drag) are muted (no dispatch to the host) when a DIFFERENT human holds the
 control-lock, execute normally when unheld OR when the caller IS the lock
 owner (owner-aware gating), and degrade safely (unconditional gating) when
 called without a resolvable current_user (e.g. macro playback's direct
@@ -36,6 +36,14 @@ from api.vnc_manager import (
 
 ALICE = {"username": "alice"}
 BOB = {"username": "bob"}
+HOST = "host-1"
+
+
+@pytest.fixture(autouse=True)
+def _host_resolves():
+    """The mute gate resolves the host first (#22191); these tests are about the gate, so it resolves."""
+    with patch("api.vnc_manager.resolve_host_id", return_value="host"):
+        yield
 
 
 def _muted(active: bool):
@@ -46,8 +54,10 @@ def _muted(active: bool):
 class TestMouseClickGating:
     @pytest.mark.asyncio
     async def test_muted_for_non_owner_while_held(self):
-        with _muted(True), patch("api.vnc_manager._run_xdotool_cmd") as mock_run:
-            result = await vnc_mouse_click(MouseClickRequest(x=10, y=20), admin_check=True, current_user=BOB)
+        with _muted(True), patch("api.vnc_manager.run_on_host", new=AsyncMock()) as mock_run:
+            result = await vnc_mouse_click(
+                MouseClickRequest(host_id=HOST, x=10, y=20), admin_check=True, current_user=BOB
+            )
 
         assert result["status"] == "muted"
         assert result["muted"] is True
@@ -58,10 +68,13 @@ class TestMouseClickGating:
         with (
             _muted(False),
             patch(
-                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+                "api.vnc_manager.run_on_host",
+                new=AsyncMock(return_value={"status": "success", "message": "Action completed"}),
             ) as mock_run,
         ):
-            result = await vnc_mouse_click(MouseClickRequest(x=10, y=20), admin_check=True, current_user=ALICE)
+            result = await vnc_mouse_click(
+                MouseClickRequest(host_id=HOST, x=10, y=20), admin_check=True, current_user=ALICE
+            )
 
         assert result["status"] == "success"
         mock_run.assert_called_once()
@@ -72,38 +85,42 @@ class TestMouseClickGating:
         with (
             patch("api.vnc_manager.is_actuation_muted", new=AsyncMock(return_value=False)) as mock_muted,
             patch(
-                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+                "api.vnc_manager.run_on_host",
+                new=AsyncMock(return_value={"status": "success", "message": "Action completed"}),
             ) as mock_run,
         ):
-            result = await vnc_mouse_click(MouseClickRequest(x=10, y=20), admin_check=True, current_user=ALICE)
+            result = await vnc_mouse_click(
+                MouseClickRequest(host_id=HOST, x=10, y=20), admin_check=True, current_user=ALICE
+            )
 
         assert result["status"] == "success"
         mock_run.assert_called_once()
-        mock_muted.assert_called_once_with("default", "alice")
+        mock_muted.assert_called_once_with(HOST, "alice")
 
 
 class TestKeyboardTypeGating:
     @pytest.mark.asyncio
     async def test_muted_for_non_owner_while_held(self):
-        with _muted(True), patch("api.vnc_manager._run_xdotool_cmd") as mock_run:
-            result = await vnc_keyboard_type(KeyboardTypeRequest(text="hello"), admin_check=True, current_user=BOB)
+        with _muted(True), patch("api.vnc_manager.run_on_host", new=AsyncMock()) as mock_run:
+            result = await vnc_keyboard_type(
+                KeyboardTypeRequest(host_id=HOST, text="hello"), admin_check=True, current_user=BOB
+            )
 
         assert result["status"] == "muted"
         mock_run.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_executes_when_unheld(self):
-        # should_add_human_pause() is stochastic (20% chance of a mid-typing
-        # pause that splits into 2 xdotool calls) -- pin it False so this
-        # test deterministically exercises the single-call path.
         with (
             _muted(False),
-            patch("api.vnc_manager.should_add_human_pause", return_value=False),
             patch(
-                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+                "api.vnc_manager.run_on_host",
+                new=AsyncMock(return_value={"status": "success", "message": "Action completed"}),
             ) as mock_run,
         ):
-            result = await vnc_keyboard_type(KeyboardTypeRequest(text="hello"), admin_check=True, current_user=ALICE)
+            result = await vnc_keyboard_type(
+                KeyboardTypeRequest(host_id=HOST, text="hello"), admin_check=True, current_user=ALICE
+            )
 
         assert result["status"] == "success"
         mock_run.assert_called_once()
@@ -112,8 +129,10 @@ class TestKeyboardTypeGating:
 class TestSpecialKeyGating:
     @pytest.mark.asyncio
     async def test_muted_for_non_owner_while_held(self):
-        with _muted(True), patch("api.vnc_manager._run_xdotool_cmd") as mock_run:
-            result = await vnc_special_key(SpecialKeyRequest(key="Return"), admin_check=True, current_user=BOB)
+        with _muted(True), patch("api.vnc_manager.run_on_host", new=AsyncMock()) as mock_run:
+            result = await vnc_special_key(
+                SpecialKeyRequest(host_id=HOST, key="Return"), admin_check=True, current_user=BOB
+            )
 
         assert result["status"] == "muted"
         mock_run.assert_not_called()
@@ -123,10 +142,13 @@ class TestSpecialKeyGating:
         with (
             _muted(False),
             patch(
-                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+                "api.vnc_manager.run_on_host",
+                new=AsyncMock(return_value={"status": "success", "message": "Action completed"}),
             ) as mock_run,
         ):
-            result = await vnc_special_key(SpecialKeyRequest(key="Return"), admin_check=True, current_user=ALICE)
+            result = await vnc_special_key(
+                SpecialKeyRequest(host_id=HOST, key="Return"), admin_check=True, current_user=ALICE
+            )
 
         assert result["status"] == "success"
         mock_run.assert_called_once()
@@ -135,8 +157,10 @@ class TestSpecialKeyGating:
 class TestMouseScrollGating:
     @pytest.mark.asyncio
     async def test_muted_for_non_owner_while_held(self):
-        with _muted(True), patch("api.vnc_manager._run_xdotool_cmd") as mock_run:
-            result = await vnc_mouse_scroll(MouseScrollRequest(direction="up"), admin_check=True, current_user=BOB)
+        with _muted(True), patch("api.vnc_manager.run_on_host", new=AsyncMock()) as mock_run:
+            result = await vnc_mouse_scroll(
+                MouseScrollRequest(host_id=HOST, direction="up"), admin_check=True, current_user=BOB
+            )
 
         assert result["status"] == "muted"
         mock_run.assert_not_called()
@@ -146,10 +170,13 @@ class TestMouseScrollGating:
         with (
             _muted(False),
             patch(
-                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+                "api.vnc_manager.run_on_host",
+                new=AsyncMock(return_value={"status": "success", "message": "Action completed"}),
             ) as mock_run,
         ):
-            result = await vnc_mouse_scroll(MouseScrollRequest(direction="up"), admin_check=True, current_user=ALICE)
+            result = await vnc_mouse_scroll(
+                MouseScrollRequest(host_id=HOST, direction="up"), admin_check=True, current_user=ALICE
+            )
 
         assert result["status"] == "success"
         mock_run.assert_called_once()
@@ -158,9 +185,9 @@ class TestMouseScrollGating:
 class TestMouseDragGating:
     @pytest.mark.asyncio
     async def test_muted_for_non_owner_while_held(self):
-        with _muted(True), patch("api.vnc_manager._run_xdotool_cmd") as mock_run:
+        with _muted(True), patch("api.vnc_manager.run_on_host", new=AsyncMock()) as mock_run:
             result = await vnc_mouse_drag(
-                MouseDragRequest(x1=0, y1=0, x2=10, y2=10), admin_check=True, current_user=BOB
+                MouseDragRequest(host_id=HOST, x1=0, y1=0, x2=10, y2=10), admin_check=True, current_user=BOB
             )
 
         assert result["status"] == "muted"
@@ -171,28 +198,26 @@ class TestMouseDragGating:
         with (
             _muted(False),
             patch(
-                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+                "api.vnc_manager.run_on_host",
+                new=AsyncMock(return_value={"status": "success", "message": "Action completed"}),
             ) as mock_run,
         ):
             result = await vnc_mouse_drag(
-                MouseDragRequest(x1=0, y1=0, x2=10, y2=10), admin_check=True, current_user=ALICE
+                MouseDragRequest(host_id=HOST, x1=0, y1=0, x2=10, y2=10), admin_check=True, current_user=ALICE
             )
 
         assert result["status"] == "success"
-        # mousedown + N mousemove points + mouseup
-        assert mock_run.call_count >= 2
+        mock_run.assert_awaited_once()
 
 
-class TestSessionIdThreading:
+class TestHostIdThreading:
     @pytest.mark.asyncio
-    async def test_gating_checks_the_requested_session_id(self):
-        """is_actuation_muted must be called with the request's session_id, not a default."""
+    async def test_gating_checks_the_requested_host_id(self):
+        """The lock is keyed by the selected host id, never a default session (#22145)."""
         with patch("api.vnc_manager.is_actuation_muted", new=AsyncMock(return_value=True)) as mock_muted:
-            await vnc_mouse_click(
-                MouseClickRequest(x=1, y=1, session_id="chat-42"), admin_check=True, current_user=ALICE
-            )
+            await vnc_mouse_click(MouseClickRequest(host_id="host-42", x=1, y=1), admin_check=True, current_user=ALICE)
 
-        mock_muted.assert_called_once_with("chat-42", "alice")
+        mock_muted.assert_called_once_with("host-42", "alice")
 
 
 class TestCallerUsernameExtraction:
@@ -220,10 +245,38 @@ class TestCallerUsernameExtraction:
         raise, and must fall back to unconditional gating (caller=None)."""
         with (
             patch("api.vnc_manager.is_actuation_muted", new=AsyncMock(return_value=True)) as mock_muted,
-            patch("api.vnc_manager._run_xdotool_cmd") as mock_run,
+            patch("api.vnc_manager.run_on_host", new=AsyncMock()) as mock_run,
         ):
-            result = await vnc_mouse_click(MouseClickRequest(x=1, y=1), admin_check=True)
+            result = await vnc_mouse_click(MouseClickRequest(host_id=HOST, x=1, y=1), admin_check=True)
 
         assert result["status"] == "muted"
         mock_run.assert_not_called()
-        mock_muted.assert_called_once_with("default", None)
+        mock_muted.assert_called_once_with(HOST, None)
+
+
+class TestClipboardAndHostFirst:
+    @pytest.mark.asyncio
+    async def test_clipboard_is_muted_like_the_other_controls(self):
+        from api.schemas_system import ClipboardSyncRequest
+        from api.vnc_manager import vnc_clipboard_sync
+
+        with _muted(True), patch("api.vnc_manager.run_on_host", new=AsyncMock()) as run:
+            result = await vnc_clipboard_sync(
+                ClipboardSyncRequest(host_id=HOST, content="x"), admin_check=True, current_user=BOB
+            )
+        assert result["status"] == "muted"
+        run.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_non_secrets_host_is_refused_before_the_mute_check(self):
+        from fastapi import HTTPException
+
+        with (
+            patch("api.vnc_manager.resolve_host_id", side_effect=HTTPException(status_code=404)),
+            patch("api.vnc_manager.is_actuation_muted", new=AsyncMock(return_value=False)) as muted,
+        ):
+            with pytest.raises(HTTPException):
+                await vnc_mouse_click(
+                    MouseClickRequest(host_id="fleet-1", x=1, y=1), admin_check=True, current_user=ALICE
+                )
+        muted.assert_not_called()
