@@ -105,14 +105,52 @@ class TestRoutingOverlayNonRegressive:
 class TestOneAgentRecord:
     """#22275: health and presence are attributes of one agent record, not separate registries."""
 
-    def test_record_joins_profile_health_and_presence(self) -> None:
-        from orchestration.agent_record import agent_records
+    async def test_record_joins_profile_health_and_presence(self, monkeypatch) -> None:
+        from orchestration import agent_record
 
-        records = agent_records()
+        async def no_stored() -> dict:
+            return {}
+
+        monkeypatch.setattr(agent_record, "_stored_agents", no_stored)
+        records = await agent_record.agent_records()
         assert {r["name"] for r in records} >= {p.agent_id for p in get_default_agents()}
         for r in records:
             assert r["kind"] == "agent" and r["serving_service"] == "backend"
             assert {"capabilities", "health", "presence", "forbidden_work"} <= set(r["fields"])
+
+    async def test_producers_write_attributes_and_stored_agents_join_by_id(self, monkeypatch) -> None:
+        """Health and presence reach the record through the one store; DB and Company OS agents join by id."""
+        from autobot_shared.agent_attributes import get_agent_attribute_store
+        from orchestration import agent_record
+
+        known = get_default_agents()[0]
+        store = get_agent_attribute_store()
+        store.set(known.agent_id, "presence", {"busy": True})
+        store.set(known.agent_type, "health", {"status": "healthy"})
+
+        async def stored() -> dict:
+            return {known.agent_id: {"registered": {"status": "active"}}, "hired-1": {"company_os": {"title": "QA"}}}
+
+        monkeypatch.setattr(agent_record, "_stored_agents", stored)
+        by_name = {r["name"]: r["fields"] for r in await agent_record.agent_records()}
+        assert by_name[known.agent_id]["presence"] == {"busy": True}
+        assert by_name[known.agent_id]["health"] == {"status": "healthy"}
+        assert by_name[known.agent_id]["registered"] == {"status": "active"}
+        assert by_name["hired-1"]["company_os"] == {"title": "QA"} and by_name["hired-1"]["health"] is None
+        store.clear(known.agent_id, "presence")
+        store.clear(known.agent_type, "health")
+
+    def test_presence_and_health_producers_write_the_store(self) -> None:
+        """The presence registry's report/deregister are the producers of the ``presence`` attribute."""
+        from autobot_shared.agent_attributes import get_agent_attribute_store
+        from protocols.agent_kind import AgentKind
+        from protocols.agent_presence import AgentPresenceRegistry
+
+        reg = AgentPresenceRegistry(ttl_seconds=60)
+        reg.report(kind=AgentKind.AI_STACK, tenant_id=None, name="gap-agent", instance_id="i1", busy=True)
+        assert get_agent_attribute_store().snapshot()["gap-agent"]["presence"]["busy"] is True
+        reg.deregister(kind=AgentKind.AI_STACK, tenant_id=None, name="gap-agent", instance_id="i1")
+        assert "gap-agent" not in get_agent_attribute_store().snapshot()
 
     def test_no_further_agent_registry_class(self) -> None:
         """A new live-status registry must be an attribute of the record, not a class of its own."""

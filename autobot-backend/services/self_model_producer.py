@@ -19,6 +19,7 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI
 
+from agents.agent_client import get_agent_client
 from api.self_capabilities import route_records
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.self_model_constants import CATALOGUE_SOURCE, HEALTH_SOURCE, MODEL_SOURCE, PUSH_INTERVAL_S
@@ -113,7 +114,8 @@ async def _announce_if_changed(result: Dict[str, Any]) -> None:
 
 async def push_catalogue(app: FastAPI) -> None:
     """Push the route, tool and agent catalogues (one batch: the services they are served by come with them)."""
-    records = [*await route_records(app), *tool_records(), *agent_records()]
+    await (await get_agent_client()).registry.refresh_all_health()  # the health attribute's producer, so it is not None
+    records = [*await route_records(app), *tool_records(), *await agent_records()]
     unique = {(r["kind"], r["name"]): r for r in records}  # a tool may be registered in two catalogues
     observations = apply_audit(
         [*_service_observations(records), *(_from_record(r) for r in unique.values())], build_audit_report()
