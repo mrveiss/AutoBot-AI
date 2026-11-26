@@ -127,4 +127,6 @@ class TestOneAgentRecord:
             text = path.read_text(encoding="utf-8", errors="ignore")
             found.update(re.findall(r"^class (Agent\w*Registry)\b", text, re.MULTILINE))
         known = {"AgentCapabilityRegistry", "AgentHealthRegistry", "AgentPresenceRegistry", "AgentRegistryService"}
-        assert found - known <= set(), f"#22275: new agent registry classes {sorted(found - known)}; add an attribute to the record"
+        assert (
+            found - known <= set()
+        ), f"#22275: new agent registry classes {sorted(found - known)}; add an attribute to the record"
