@@ -260,7 +260,7 @@ class ModelFallbackCoordinator:
         run = _FallbackRun(request)
         run.last_error = LLMResponse(content="", model=run.model, provider=run.provider or "", error=failure.message)
         if not await self._on_failure(run, failure, 0, max_attempts, mark=not held):
-            if run.trail.ended_on_size_skip:  # chain ended on size skips: leave the audit, keep the caller's error
+            if may_fail_over(failure):  # a caller's own credential surfaces silently; any other exhaustion is audited
                 await self._emit(run, exhausted=True)
             return None
         return await self._run_loop(run, registry, max_attempts, first_attempt=1)

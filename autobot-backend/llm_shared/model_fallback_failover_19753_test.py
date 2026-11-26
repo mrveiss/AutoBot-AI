@@ -498,3 +498,54 @@ async def test_a_size_skip_followed_by_a_dispatched_hop_that_fails_does_not_repo
     assert registry.asked == ["m-a", "m-c"]  # the small one skipped, the large one dispatched and failed
     assert result.provider_metadata["fallback_reason"] != "request_exceeds_window"
     assert [s["model"] for s in result.provider_metadata["size_skipped"]] == ["m-small"]  # still in the audit
+
+
+# --------------------------------------------------------------------------------------------------
+# Streaming fail-over audits every exhaustion, not only size skips (#22016)
+# --------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fail_over_audits_an_exhaustion_with_no_usable_hop_once():
+    registry = _registry(_ok())
+    mgr = _chains("m-a", ["m-b"], ["anthropic"])
+    with _env(mgr, _Store(degraded={("anthropic", "m-b")})) as (_, emitted):
+        result = await ModelFallbackCoordinator().fail_over(_request("m-a"), registry, UNAVAILABLE, acted=False)
+    assert result is None and registry.asked == []
+    assert emitted.await_count == 1
+    assert emitted.await_args.kwargs["exhausted"] is True
+    assert (
+        emitted.await_args.kwargs["reason"] == "rate_limit_429"
+    )  # no hop was taken: the trail's default, as in _run_loop
+
+
+@pytest.mark.asyncio
+async def test_fail_over_audits_a_locality_blocked_exhaustion_once():
+    registry = _registry(_ok("gpt-4o"))
+    mgr = _chains("llama3", ["gpt-4o"], ["openai"], primary_provider="ollama", operator=False)
+    with _env(mgr) as (_, emitted):
+        result = await ModelFallbackCoordinator().fail_over(
+            _request("llama3", "ollama"), registry, UNAVAILABLE, acted=False
+        )
+    assert result is None and registry.asked == []
+    assert emitted.await_count == 1
+    assert emitted.await_args.kwargs["exhausted"] is True
+    assert (
+        emitted.await_args.kwargs["reason"] == "rate_limit_429"
+    )  # no hop was taken: the trail's default, as in _run_loop
+
+
+@pytest.mark.asyncio
+async def test_fail_over_emits_nothing_when_the_failure_is_not_eligible():
+    permanent = ProviderFailure(ProviderErrorCategory.PERMANENT, "HTTP 400")
+    with _env(_chains("claude-opus-4", ["claude-sonnet-4"], ["anthropic"])) as (_, emitted):
+        assert await ModelFallbackCoordinator().fail_over(_request(), _registry(_ok()), permanent, acted=False) is None
+    assert emitted.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_fail_over_emits_nothing_for_a_callers_own_credential():
+    auth = ProviderFailure(ProviderErrorCategory.AUTHENTICATION, "HTTP 401")
+    with _env(_chains("claude-opus-4", ["gpt-4o"], ["openai"])) as (_, emitted), llm_principal_scope("u1", "o1"):
+        assert await ModelFallbackCoordinator().fail_over(_request(), _registry(_ok()), auth, acted=False) is None
+    assert emitted.await_count == 0
