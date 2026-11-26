@@ -185,3 +185,26 @@ class TestInventedWrapperTags:
         raw = "[TAG]Trying direct pings.[/TAG]"
         streamed = StreamingMessage(type="response").stream(raw).to_workflow_message().content
         assert streamed == clean_reply_text(raw) == "Trying direct pings."
+
+
+class TestInventedTagsLeaveProseAlone:
+    """Only a PAIRED same-name tag is unwrapped; links, log levels and acronyms stay (#22249)."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "see [README](https://example.com/readme) first",
+            "[ERROR] disk full",
+            "the [ABC] protocol and [OK] status",
+            "ref [NOTE]: see below",
+            "| file | link |\n|---|---|\n| a | [README](u) |\n| b | [API](v) |",
+        ],
+    )
+    def test_unpaired_links_and_references_stay(self, text: str) -> None:
+        assert unwrap_invented_tags(text) == text
+
+    def test_a_paired_tag_unwraps_next_to_a_link(self) -> None:
+        assert unwrap_invented_tags("[TAG]x[/TAG] [README](u)") == "x [README](u)"
+
+    def test_mismatched_names_are_not_a_pair(self) -> None:
+        assert unwrap_invented_tags("[ERROR] a [/OK]") == "[ERROR] a [/OK]"
