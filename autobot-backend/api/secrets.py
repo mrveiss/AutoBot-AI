@@ -30,6 +30,7 @@ from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
+from api.infrastructure_host_rules import refuse_incomplete_host
 from api.schemas_common import DataResponse
 from api.schemas_system import (
     ChatSecretScope,
@@ -292,10 +293,9 @@ class SecretsManager:
     def create_secret(self, request: SecretCreateRequest) -> SecretModel:
         """Create a new secret (Issue #372 - uses model methods)."""
         refuse_reserved_secret_name(request.name)  # #17850: at the store, so no caller can skip it
+        refuse_incomplete_host(request.type, request.metadata)  # #22145 E7
         secrets = self._load_secrets()
-
-        # Validate scope and chat_id consistency using model methods (Issue #372)
-        if request.requires_chat_id():
+        if request.requires_chat_id():  # scope/chat_id consistency (Issue #372)
             raise ValueError("Chat-scoped secrets must have a chat_id")
 
         # Create secret model using model method (Issue #372)

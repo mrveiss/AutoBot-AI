@@ -4560,7 +4560,14 @@
       "errorVncConnection": "VNC connection failed: {error}",
       "cancel": "Cancel",
       "connecting": "Connecting to desktop...",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "בחר מארח עם VNC כדי להשתמש בשולחן העבודה.",
+      "vncCredentialMissing": "לא נשמרה סיסמת VNC עבור מארח זה. הוסף אותה ב'סודות'.",
+      "hostNotFound": "מארח זה אינו אחד ממארחי 'הסודות' שלך.",
+      "hostFieldsMissing": "למארח זה חסרים שם משתמש או יכולות. הגדר אותם ב'סודות'.",
+      "hostVncUnavailable": "למארח זה אין יכולת VNC או יציאה ב'סודות'.",
+      "desktopVmUnavailable": "לא נרשם שולחן עבודה VNC, ולכן המכונה הווירטואלית של שולחן העבודה אינה זמינה.",
+      "registryUnavailable": "לא ניתן היה לקרוא את רישום שולחנות העבודה. נסה שוב בעוד רגע."
     },
     "contextPanel": {
       "pid": "PID {pid}",
@@ -4957,7 +4964,11 @@
       "close": "Close",
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
-      "commandToExecute": "Command to Execute"
+      "commandToExecute": "Command to Execute",
+      "usernameMissing": "שם משתמש חסר: הגדר אותו ב'סודות'",
+      "desktopVm": "מכונה וירטואלית של שולחן העבודה של AutoBot",
+      "desktopVmDesc": "שולחן העבודה של AutoBot עצמו",
+      "noDesktopVm": "לא נרשמה מכונה וירטואלית של שולחן עבודה, ולכן מוצגים רק מארחי 'הסודות' שלך."
     },
     "systemStatus": {
       "lastCheck": "Last Check:",
@@ -6063,7 +6074,11 @@
         "slackDesc": "אסימון בוט של Slack",
         "serverLabel": "מארח שרת",
         "serverDesc": "גישה לשרת SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (אישורי VNC)",
+      "vncCompanionDescription": "אישורי VNC עבור {host}",
+      "vncCompanionNoHostId": "המארח נשמר אך המזהה שלו לא הוחזר, ולכן אישורי ה-VNC לא נשמרו.",
+      "vncRetry": "המארח נשמר, אך סיסמת ה-VNC שלו לא. שמור שוב כדי לנסות שוב; המארח לא ייווצר פעמיים."
     },
     "threatDashboard": {
       "checking": "Checking...",

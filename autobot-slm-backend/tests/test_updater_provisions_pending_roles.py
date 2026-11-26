@@ -75,7 +75,7 @@ def test_a_role_that_registers_no_credential_is_only_pending_by_status() -> None
     assert prp._needs_provisioning(_role("not_installed", name="other"), set()) is True
 
 
-@pytest.mark.parametrize("status", ["failed", "installing", "active", "installed"])
+@pytest.mark.parametrize("status", ["failed", "installing", "installed"])
 def test_a_recent_attempt_is_not_repeated_inside_the_cooldown(status) -> None:
     assert prp._needs_provisioning(_role(status, age=COOLDOWN / 2), set()) is False
     assert prp._needs_provisioning(_role(status, age=COOLDOWN + timedelta(minutes=1)), set()) is True
@@ -330,3 +330,192 @@ def test_every_update_path_goes_through_the_helper() -> None:
     assert _calls_to_update_all(path) == [], "a path bypasses run_update_all_nodes"
     assert path.read_text(encoding="utf-8").count("run_update_all_nodes(") == 4
     assert "await provision_pending_roles(node_id)" in path.read_text(encoding="utf-8")
+
+
+def test_a_held_never_provisioned_role_is_provisioned_despite_recent_detection_churn() -> None:
+    """#22262: a detector-written row (active, no credential) is not an attempt, whatever its updated_at."""
+    for status in ("active", "inactive"):
+        assert prp._needs_provisioning(_role(status, age=timedelta(seconds=1)), set()) is True
+
+
+def test_an_already_provisioned_role_is_not_provisioned_again() -> None:
+    for status in ("active", "installed"):
+        assert prp._needs_provisioning(_role(status, age=timedelta(seconds=1)), {"vnc"}) is False
+        assert prp._needs_provisioning(_role(status), {"vnc"}) is False
+
+
+def test_the_row_the_desktop_migration_creates_is_pending_for_the_updater() -> None:
+    from migrations import assign_vnc_role_to_desktop_node as mig
+
+    assert mig.ASSIGNED_STATUS == "not_installed"
+    assert prp._needs_provisioning(_role(mig.ASSIGNED_STATUS, age=timedelta(seconds=1)), set()) is True
+
+
+def test_a_held_unprovisioned_vnc_role_is_selected_by_the_pending_step(monkeypatch) -> None:
+    """run_update_all_nodes runs this step after update-all-nodes.yml; the vnc role then creates autobot-vnc."""
+    role = _role("active", age=timedelta(seconds=1))
+    db = _fake_db([role], creds=[])
+    assert asyncio.run(prp.pending_roles(db, "n1")) == [role]
+
+
+# --------------------------------------------------------------------------
+# the detector and the health poll leave a provisioner-owned status alone (#22262)
+# --------------------------------------------------------------------------
+def _load_process_role_report(monkeypatch):
+    """`api.nodes._process_role_report` itself, compiled from source (api.nodes is stubbed by the conftest)."""
+    import ast
+
+    tree = ast.parse((_ROOT / "api" / "nodes.py").read_text(encoding="utf-8"))
+    fn = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "_process_role_report")
+    ns = {"select": lambda *a, **k: MagicMock(), "NodeRole": MagicMock()}
+    monkeypatch.setitem(sys.modules, "services.pending_role_provisioning", prp)
+    monkeypatch.setitem(
+        sys.modules, "models.schemas", types.SimpleNamespace(RoleReportItem=lambda **kw: SimpleNamespace(**kw))
+    )
+    exec(compile(ast.Module([fn], []), "nodes.py", "exec"), ns)
+    return ns["_process_role_report"]
+
+
+def _detect(monkeypatch, row, status: str = "active"):
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
+    db.flush = AsyncMock()
+    report = {row.role_name: {"status": status, "version": "1.2"}}
+    asyncio.run(_load_process_role_report(monkeypatch)(db, "n1", report))
+
+
+@pytest.mark.parametrize("held", ["failed", "installing"])
+def test_the_detector_keeps_a_provisioner_owned_status_so_the_cooldown_holds(monkeypatch, held) -> None:
+    row = _role(held, age=timedelta(minutes=5))
+    before = row.updated_at
+    row.current_version = "1.0"
+    _detect(monkeypatch, row)
+    assert row.status == held
+    assert row.current_version == "1.0"  # no write at all: any column write moves updated_at (the cooldown clock)
+    assert row.updated_at == before
+    assert prp._needs_provisioning(row, set()) is False  # still inside the cooldown: not re-provisioned
+
+
+@pytest.mark.parametrize("status", ["not_installed", "installed", "active", "inactive"])
+def test_the_detector_still_writes_every_other_status(monkeypatch, status) -> None:
+    row = _role(status)
+    _detect(monkeypatch, row, "inactive")
+    assert row.status == "inactive"
+    assert row.current_version == "1.2"
+
+
+def test_the_health_poll_skips_provisioner_owned_rows_and_uses_the_one_constant() -> None:
+    src = (_ROOT / "services" / "reconciler.py").read_text(encoding="utf-8")
+    assert "from services.pending_role_provisioning import provisioner_holds, set_role_status_if_unchanged" in src
+    assert "await provisioner_holds(db, node_role)" in src
+    assert "await set_role_status_if_unchanged(db, node_role, new_status)" in src
+    assert prp.PROVISIONER_HELD_STATUSES == ("failed", "installing")
+
+
+def test_the_health_poll_writes_after_the_checks_so_no_row_lock_spans_them() -> None:
+    src = (_ROOT / "services" / "reconciler.py").read_text(encoding="utf-8")
+    poll = src[src.index("async def _poll_manifest_health") : src.index("async def _build_node_ip_map")]
+    checks = poll.index("await self._http_health_check(url)")
+    writes = poll.index("await set_role_status_if_unchanged(db, node_role, new_status)")
+    assert checks < poll.index("for node_role, new_status in changed:") < writes < poll.index("await db.commit()")
+
+
+def _sync_record(monkeypatch, row):
+    """`SyncOrchestrator._update_node_role_record` itself, compiled from source, run against one NodeRole row."""
+    import ast
+
+    tree = ast.parse((_ROOT / "services" / "sync_orchestrator.py").read_text(encoding="utf-8"))
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "SyncOrchestrator")
+    fn = next(n for n in cls.body if getattr(n, "name", "") == "_update_node_role_record")
+    db = MagicMock(commit=AsyncMock())
+    db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=db)
+    session.__aexit__ = AsyncMock(return_value=False)
+    ns = {
+        "select": lambda *a, **k: MagicMock(),
+        "NodeRole": MagicMock(),
+        "RoleStatus": SimpleNamespace(ACTIVE=SimpleNamespace(value="active")),
+        "db_service": SimpleNamespace(session=lambda: session),
+        "datetime": datetime,
+        "timezone": timezone,
+        "provisioner_holds": prp.provisioner_holds,
+    }
+    exec(compile(ast.Module([fn], []), "sync_orchestrator.py", "exec"), ns)
+    asyncio.run(ns["_update_node_role_record"](None, "n1", "vnc", "abc123"))
+    return db
+
+
+@pytest.mark.parametrize("held", ["failed", "installing"])
+def test_a_role_file_sync_leaves_a_provisioner_held_row_untouched(monkeypatch, held) -> None:
+    row = SimpleNamespace(role_name="vnc", status=held, current_version="1.0", last_synced_at=None)
+    db = _sync_record(monkeypatch, row)
+    assert (row.status, row.current_version, row.last_synced_at) == (held, "1.0", None)
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.parametrize("status", ["not_installed", "installed", "inactive", "active"])
+def test_a_role_file_sync_still_activates_every_other_row(monkeypatch, status) -> None:
+    row = SimpleNamespace(role_name="vnc", status=status, current_version="1.0", last_synced_at=None)
+    _sync_record(monkeypatch, row)
+    assert (row.status, row.current_version) == ("active", "abc123")
+    assert row.last_synced_at is not None
+
+
+@pytest.mark.parametrize("held", ["failed", "installing"])
+def test_a_role_the_updater_does_not_retry_is_never_held(monkeypatch, held) -> None:
+    """Nothing but the updater's retry settles a held row, so only `UPDATER_PROVISIONED_ROLES` may be held."""
+    assert prp.is_provisioner_held(_role(held)) is True
+    assert prp.is_provisioner_held(_role(held, name="other")) is False
+    row = _role(held, name="other")
+    _detect(monkeypatch, row, "active")
+    assert (row.status, row.current_version) == ("active", "1.2")
+    sync_row = SimpleNamespace(role_name="other", status=held, current_version="1.0", last_synced_at=None)
+    _sync_record(monkeypatch, sync_row)
+    assert (sync_row.status, sync_row.current_version) == ("active", "abc123")
+
+
+# --------------------------------------------------------------------------
+# the cooldown survives detection, and the health poll never overwrites a provisioner write
+# --------------------------------------------------------------------------
+def _creds_db(creds: list[str]):
+    """A session answering only the credential-type query."""
+    res = MagicMock()
+    res.all.return_value = [(c,) for c in creds]
+    return SimpleNamespace(execute=AsyncMock(return_value=res))
+
+
+def test_an_installed_vnc_row_without_a_credential_is_held_inside_the_cooldown() -> None:
+    """Else detection rewrites it to active, and the detector-written row is re-provisioned at once."""
+    row = SimpleNamespace(role_name="vnc", node_id="n1", status="installed", updated_at=datetime.now(timezone.utc))
+    assert asyncio.run(prp.provisioner_holds(_creds_db([]), row)) is True
+
+
+def test_an_installed_vnc_row_with_its_credential_or_past_the_cooldown_is_not_held() -> None:
+    fresh = SimpleNamespace(role_name="vnc", node_id="n1", status="installed", updated_at=datetime.now(timezone.utc))
+    assert asyncio.run(prp.provisioner_holds(_creds_db(["vnc"]), fresh)) is False
+    old = SimpleNamespace(
+        role_name="vnc", node_id="n1", status="installed", updated_at=datetime.now(timezone.utc) - COOLDOWN * 2
+    )
+    assert asyncio.run(prp.provisioner_holds(_creds_db([]), old)) is False
+
+
+def test_the_status_write_is_conditional_on_the_observed_status(monkeypatch) -> None:
+    captured = {}
+
+    class _Stmt:
+        def where(self, *conds):
+            captured["where"] = [str(c) for c in conds]
+            return self
+
+        def values(self, **kw):
+            captured["values"] = kw
+            return self
+
+    monkeypatch.setattr(prp, "update", lambda model: _Stmt())
+    monkeypatch.setattr(prp, "NodeRole", SimpleNamespace(id=SimpleNamespace(), status=SimpleNamespace()))
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=SimpleNamespace(rowcount=0))
+    role = SimpleNamespace(id=7, status="healthy")
+    assert asyncio.run(prp.set_role_status_if_unchanged(db, role, "unhealthy")) is False  # provisioner won the race
+    assert captured["values"] == {"status": "unhealthy"} and len(captured["where"]) == 2

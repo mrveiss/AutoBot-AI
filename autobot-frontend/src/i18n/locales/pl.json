@@ -5815,7 +5815,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Brak nazwy użytkownika: ustaw ją w Sekretach",
+      "desktopVm": "Maszyna wirtualna pulpitu AutoBot",
+      "desktopVmDesc": "Własny pulpit AutoBot",
+      "noDesktopVm": "Nie zarejestrowano maszyny wirtualnej pulpitu, więc wyświetlane są tylko Twoje hosty z Sekretów."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6860,7 +6864,11 @@
         "slackDesc": "Token bota Slack",
         "serverLabel": "Host serwera",
         "serverDesc": "Dostęp do serwera SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (dane logowania VNC)",
+      "vncCompanionDescription": "Dane logowania VNC dla {host}",
+      "vncCompanionNoHostId": "Host został zapisany, ale jego identyfikator nie został zwrócony, więc danych logowania VNC nie zapisano.",
+      "vncRetry": "Host został zapisany, ale jego hasło VNC nie. Zapisz ponownie, aby spróbować jeszcze raz; host nie zostanie utworzony dwukrotnie."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7755,7 +7763,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Wybierz host z VNC, aby użyć pulpitu.",
+      "vncCredentialMissing": "Dla tego hosta nie zapisano hasła VNC. Dodaj je w Sekretach.",
+      "hostNotFound": "Ten host nie należy do Twoich hostów w Sekretach.",
+      "hostFieldsMissing": "Temu hostowi brakuje nazwy użytkownika lub możliwości. Ustaw je w Sekretach.",
+      "hostVncUnavailable": "Ten host nie ma w Sekretach możliwości VNC ani portu.",
+      "desktopVmUnavailable": "Nie zarejestrowano żadnego pulpitu VNC, więc maszyna wirtualna pulpitu jest niedostępna.",
+      "registryUnavailable": "Nie udało się odczytać rejestru pulpitów. Spróbuj ponownie za chwilę."
     },
     "popoutBrowser": {
       "title": "Research Browser",
