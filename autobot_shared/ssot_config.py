@@ -70,6 +70,7 @@ from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansib
 )
 from autobot_shared.ssot_ssh import SSHIdentitySettings
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
+from autobot_shared.ssot_tracing_settings import TracingSettings
 
 _Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
 # Determine project root for .env file location.
@@ -1355,7 +1356,7 @@ class PathConfig(RedactedSettings, SSHIdentitySettings):
         return Path(self.management_ssh_key_path)
 
 
-class MiscConfig(RedactedSettings, CodebaseIndexSettings):
+class MiscConfig(RedactedSettings, CodebaseIndexSettings, TracingSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
@@ -1782,7 +1783,6 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     tls_cert_path: str = Field(default="", alias="AUTOBOT_TLS_CERT_PATH")
     tls_key_path: str = Field(default="", alias="AUTOBOT_TLS_KEY_PATH")
     trace_console: str = Field(default="", alias="AUTOBOT_TRACE_CONSOLE")
-    trace_sample_rate: float = Field(default=1.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")  # #13264 batch 3
     tts_stream_probe_ttl: str = Field(
         default="",
         alias="AUTOBOT_TTS_STREAM_PROBE_TTL",

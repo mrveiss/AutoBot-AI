@@ -64,8 +64,8 @@ typing-extensions
 # --- OpenTelemetry tracing stack ------------------------------------------
 # Issue #57/#697: distributed tracing across AutoBot's role-based deployment. Several
 # production files DO import opentelemetry unconditionally at module scope
-# (middleware/tracing_middleware.py, llm_shared/observability/otel_observer.py,
-# pki/distributor.py, utils/traced_http_client.py, services/tracing_service.py)
+# (llm_shared/observability/otel_observer.py,
+# pki/distributor.py, utils/traced_http_client.py)
 # — but none of them is imported by anything else in the tree (verified by
 # grep), so no currently-collected test reaches that import. autobot_shared/
 # itself imports no opentelemetry module unconditionally (verified directly,
@@ -77,10 +77,10 @@ typing-extensions
 # imports them or not. Undeclared meant unconstrained, not absent, so CI took
 # 1.45.0 against production's ==1.44.0 and failed shard 1/12 on eight PRs.
 # They are now declared in requirements-ci/monitoring.txt at the production
-# pin. The three below stay: nothing in CI installs them at all.
+# pin. opentelemetry-instrumentation-fastapi joined them in requirements-ci/storage.txt (#21685), for the real-
+# instrumentor test. The ones below stay: nothing in CI installs them at all.
 opentelemetry-exporter-otlp
 opentelemetry-exporter-otlp-proto-http
-opentelemetry-instrumentation-fastapi
 opentelemetry-instrumentation-redis
 opentelemetry-instrumentation-aiohttp-client
 opentelemetry-propagator-b3
