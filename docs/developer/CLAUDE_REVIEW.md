@@ -306,13 +306,13 @@ After merging all PRs in a batch:
 
 ## Validation Gates Before Merging
 
-**Use `/autobot-dev-skills:review pre-merge-validate <PR>` before merging any code:**
+**Use `/autobot-dev-skills:review pre-merge-validate <PR>` before merging any code** (it reads CI's results for the head; no local runs, [OWNER_RULES.md](OWNER_RULES.md) row 32):
 
 0. Squash-Duplicate Detection (Gate 0)
 1. Syntax + Imports
 2. Call-Site Impact
 3. Function Signatures
-4. Targeted Tests (only changed files)
+4. Tests (CI results for the head)
 5. Type Check (TypeScript)
 6. Linting (errors only, not warnings)
 
