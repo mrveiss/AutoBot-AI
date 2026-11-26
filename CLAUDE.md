@@ -44,14 +44,14 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **PRs target `main`; `release` is the release branch.** `release`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
 - **Never work from a stale base.** `git fetch origin` and branch from current base before the first edit; answer "is this already done?" against current `origin/main` and the issue's ACs, **never an old branch** → `CLAUDE_GIT.md`.
 - **No commit trailers** — `mrveiss` is sole author; never add `Co-Authored-By` or tool trailers.
-- **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `--no-verify` — a PostToolUse hook auto-formats `.py`.
+- **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `git commit --no-verify` — pre-commit hooks stay on, and a PostToolUse hook auto-formats `.py`. Pushes use `git push --no-verify`: no local test or guard runs, CI is the gate ([`OWNER_RULES.md`](docs/developer/OWNER_RULES.md) row 32).
 - **Never hardcode.** Config via SSOT, TTLs via env-var-backed module constants, no IPs or ports in code.
 - **The codebase is the source of truth** — never edit `/opt/autobot/` or `/var/log/autobot/`.
 - **System updates (test AND prod) go through the builtin updater only** — the code-sync API / self-update path a user reaches in the maintenance UI. If the builtin cannot do it, fix that gap (issue + PR); never side-channel via ad-hoc ansible or shell.
 - **No agent cleans up data or credentials on its own.** Deleting, rewriting or rotating stored data or credentials is only *proposed* by an agent. A human approves it through an always-available review queue (the approval gates), it is never auto-approved, and it always leaves a durable paper trail — [#17038](https://github.com/mrveiss/AutoBot-AI/issues/17038).
 - **Security reviews are findings-first** — one-line verdict, then a severity/`file:line`/issue/fix table, within 3 tool calls. Verify *after*; never explore before the verdict lands. Skill: `secreview`.
 - **Nothing internal in outward artifacts** — no IPs, hostnames, secrets, tokens, or internal filesystem paths in issues, PRs, comments or logs. Redact to a generic role or node reference.
-- **No cap on open PRs** — finished local work is pushed, never held local-only ([#19397](https://github.com/mrveiss/AutoBot-AI/issues/19397)); landing throughput is governed by merge trains and the CI slots.
+- **No cap on open PRs** — finished local work is pushed, never held local-only ([#19397](https://github.com/mrveiss/AutoBot-AI/issues/19397)); landing belongs to the PR coordinator ([`OWNER_RULES.md`](docs/developer/OWNER_RULES.md) row 33).
 - **Every PR gets an `autobot-dev-skills:reviewer` pass before merge** (code-reviewer lens: `/autobot-dev-skills:review code-reviewer`).
 - **Same file ⇒ ONE PR, ONE agent** — check the open PRs touching a file before editing it; batching, append-before-open and the sweep point → [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md#pr-granularity).
 
@@ -81,9 +81,9 @@ Rules here accumulate; some pull against each other. **Precedence, highest first
 ### Pre-Push Checklist
 1. No file exceeds `MAX_LINES` (600, enforced by `check_python_file_size.py`) — split, don't
    raise the ceiling; see [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md).
-2. Run the repo's lint/type-check locally before pushing — don't rely on `/autobot-dev-skills:review pre-merge-validate`
-   at review time to catch it first.
-3. Never bypass pre-commit hooks via `core.hooksPath` (`--no-verify` is under **Never violate**).
+2. No local test, suite or guard runs — CI is the gate. Fix what reading the diff shows, then push once
+   ([`OWNER_RULES.md`](docs/developer/OWNER_RULES.md) row 32).
+3. Never bypass pre-commit hooks, via `core.hooksPath` or `git commit --no-verify`.
 
 ## Verification
 
@@ -121,5 +121,4 @@ not just the `- [ ]` checklist — full commands in [`CLAUDE_WORKFLOW.md`](docs/
 | Encoding | Always `encoding='utf-8'` explicitly |
 | Cache TTL | Never hard-code — module-level constant from an env var (see `chat_history/cache.py`) |
 | Store authority | Persisting a concept? `from autobot_shared.store_authority import system_of_record` — one store is durable, every other copy is a rebuildable projection |
-| LEDGER/EXECUTOR | Coordination tools complete instantly — do NOT wait; continue immediately with execution tools |
 | Copyright | `mrveiss` is sole owner and author |

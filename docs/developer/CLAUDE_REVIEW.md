@@ -156,7 +156,7 @@ After agents complete:
    - Syntax: `npm run lint` / `python -m black --check`
    - Imports: `python -c 'import <module>'` for each modified file
    - Call sites: grep for removed/renamed functions
-4. **Merge:** each PR to `main` (approved PRs land via a train, see "Merge trains") — only with every required check green (see "Red CI Never Merges")
+4. **Merge:** each PR to `main` (the PR coordinator lands each PR, OWNER_RULES row 33; trains apply only while a trainmaster runs, see "Merge trains") — only with every required check green (see "Red CI Never Merges")
 5. **Verify count:** PR count should be 0 after all merges
 
 ---
@@ -323,6 +323,8 @@ After merging all PRs in a batch:
 ---
 
 ## Merge trains
+
+*Applies only while a trainmaster session runs; otherwise the PR coordinator lands PRs individually ([`OWNER_RULES.md`](OWNER_RULES.md) row 33).*
 
 The trainmaster (PR-coordinator session) alone builds and lands trains: merge commits, never squash, two CI slots, two trains may run in CI, and only the one landing next is built and fixed. Authors send the PR number and head, then stop pushing to a queued head unless asked; a head moved only by merging main stays in line, and any other new commit needs a fresh look. CodeRabbit never blocks a first CI run; a relaunch answers open threads first. Full list: [`OWNER_RULES.md`](OWNER_RULES.md).
 
