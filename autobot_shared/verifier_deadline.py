@@ -8,7 +8,8 @@ A fixed deadline (``VERIFIER_TIMEOUT_S``) is right for a fast model and wrong fo
 makes a few tokens per second the verifier's reply cannot fit in it, so every pass times out and is skipped. The
 chat loop records each finished generation's measured rate (``[iteration_timing]``); the verifier's own deadline is
 the time its reply needs at that rate, with headroom, bounded below by the configured ``VERIFIER_TIMEOUT_S`` and
-above by the chat timeout (``AUTOBOT_CHAT_TIMEOUT``). A ``VERIFIER_TIMEOUT_S`` set in the environment is the
+above by ``AUTOBOT_VERIFIER_TIMEOUT_MAX_S`` (default 512 s: a 512-token reply at 2 tok/s is 256 s, times
+the headroom factor). A ``VERIFIER_TIMEOUT_S`` set in the environment is the
 operator's explicit value and always wins. With no measured rate the configured value stands.
 """
 
@@ -17,6 +18,8 @@ from __future__ import annotations
 import os
 import time
 from typing import Dict, Tuple
+
+from autobot_shared.env_utils import env_registered
 
 #: How long a measured rate stays usable: a model's speed changes with load, offload and thermal state.
 RATE_MAX_AGE_S = 900.0
@@ -61,15 +64,13 @@ def verifier_deadline_s(
 ) -> float:
     """Seconds the verifier call may take: the reply's size at the recent rate, within [*floor_s*, *ceiling_s*].
 
-    *ceiling_s* defaults to the chat timeout; *explicit* to whether ``VERIFIER_TIMEOUT_S`` is set in the
-    environment, in which case *floor_s* is returned as is.
+    *ceiling_s* defaults to ``AUTOBOT_VERIFIER_TIMEOUT_MAX_S``; *explicit* to whether ``VERIFIER_TIMEOUT_S`` is
+    set in the environment, in which case *floor_s* is returned as is.
     """
     if explicit is None:
         explicit = "VERIFIER_TIMEOUT_S" in os.environ
     if ceiling_s is None:
-        from autobot_shared.ssot_config import config
-
-        ceiling_s = float(config.chat_timeout)
+        ceiling_s = env_registered("AUTOBOT_VERIFIER_TIMEOUT_MAX_S", positive_finite=True)
     rate = None if explicit else recent_tokens_per_second(model)
     if rate is None:
         return floor_s

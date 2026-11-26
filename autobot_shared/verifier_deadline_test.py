@@ -58,3 +58,15 @@ def test_a_timeout_names_the_deadline_it_hit():
     observation = failure_observation(TimeoutError(), 51.2)
     assert observation.degradation is VerifierDegradation.TIMEOUT
     assert "51.2s" in observation.rationale
+
+
+def test_the_default_ceiling_fits_a_two_token_per_second_model(monkeypatch):
+    monkeypatch.delenv("AUTOBOT_VERIFIER_TIMEOUT_MAX_S", raising=False)
+    vd.note_generation_rate("m", 2.0)  # 512 tokens at 2 tok/s = 256 s; x2 headroom = 512 s
+    assert vd.verifier_deadline_s("m", 512, 10.0, explicit=False) == pytest.approx(512.0)
+
+
+def test_the_ceiling_env_var_bounds_the_scaled_deadline(monkeypatch):
+    monkeypatch.setenv("AUTOBOT_VERIFIER_TIMEOUT_MAX_S", "120")
+    vd.note_generation_rate("m", 2.0)
+    assert vd.verifier_deadline_s("m", 512, 10.0, explicit=False) == 120.0
