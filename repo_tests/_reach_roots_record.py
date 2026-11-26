@@ -476,7 +476,7 @@ REACH_ROOTS = {
         "autobot_shared",
         "scripts",
     ),
-    "repo_tests/service_version_literals_17821_test.py": (
+    "repo_tests/service_version_literals_test.py": (
         "autobot-backend/a2a/",
         "autobot-backend/api/",
         "autobot-backend/app_factory.py",
