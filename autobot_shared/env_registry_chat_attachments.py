@@ -140,3 +140,20 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE",
+        type=float,
+        default=0.25,
+        range=(0.05, 0.5),
+        description=(
+            "Share of the chat model's context window the prompt budget keeps free for the reply "
+            "(chat_workflow/prompt_window.py, #22016): 0.25 of the 8192-token window is 2048 tokens. It is a "
+            "budget reservation and also the reply cap: the chat request sends it as num_predict "
+            "(chat_request_options), so raising it lengthens the allowed reply and shrinks the prompt budget. "
+            "Between 0.05 and 0.5."
+        ),
+        component="backend",
+    )
+)

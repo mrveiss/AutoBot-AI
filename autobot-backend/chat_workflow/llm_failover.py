@@ -21,11 +21,20 @@ Images: the only image on this path is the last tool screenshot (``_extract_late
 read from ``execution_history``; a turn that has one has run a tool, so it is already "acted" and
 surfaces. ``LLMRequest`` has no image field, so an image could not be carried to a backup anyway.
 
-What the backup request carries: the system prompt, the prompt, and ``temperature`` / ``top_p`` as the
-primary's own payload sets them. Not carried: ``num_ctx`` (an Ollama option), ``api_kwargs`` (thinking
-budgets, ``betas`` and effort parameters are provider-specific payload fields, not ``LLMRequest`` fields),
-and the image. Neither path redacts the prompt (redaction is for logs and traces only), so the backup
-receives exactly the text the primary did.
+What the backup request carries: the system prompt, the prompt, and ``temperature`` / ``top_p`` / the reply cap
+(``num_predict`` as ``max_tokens``) as the primary's own payload sets them. Not carried: ``num_ctx`` (an Ollama
+option), ``api_kwargs`` (thinking budgets, ``betas`` and effort parameters are provider-specific payload
+fields, not ``LLMRequest`` fields), and the image.
+
+Thinking preferences are deliberately not carried (#20922): they are built by
+``build_reasoning_api_kwargs`` into ``api_kwargs`` only for a ``claude`` model on the primary's own payload,
+and the backup is a different model, often a different provider, whose thinking contract (adaptive versus a
+token budget, ``betas``) is not the primary's; replaying them could be rejected by it or silently
+mis-applied, so a backup answers without thinking. Neither path redacts the prompt (redaction is for
+logs and traces only), so the backup receives exactly the text the primary did.
+
+A hop whose known context window cannot hold the request (input plus the reply cap) is skipped by the
+coordinator before dispatch (#21864); the turn then surfaces the original error as for an empty chain.
 
 Default chains name only hosted model families (``claude-*``, ``gpt-*``), so an Ollama chat model has a
 chain only from an operator's ``AUTOBOT_FALLBACK_CHAIN_*`` variable; without one a failure is surfaced.
@@ -53,6 +62,7 @@ from llm_shared.provider_error_category import (
 )
 from llm_shared.types import LLMType
 
+from .attachment_context import NOTICE_TYPE, send_point_notices
 from .llm_provider import configured_provider
 from .models import LLMIterationContext
 
@@ -76,7 +86,8 @@ def turn_has_acted(ctx: LLMIterationContext, iteration: int) -> bool:
     """The not-acted guard, before this iteration streams anything (see the module docstring)."""
     if iteration > 1 or ctx.execution_history:
         return True
-    return any(getattr(m, "type", "") != "error" for m in ctx.workflow_messages)
+    # Errors and informational notices (attachment / over-window, #22016) are not the model acting.
+    return any(getattr(m, "type", "") not in ("error", NOTICE_TYPE) for m in ctx.workflow_messages)
 
 
 def _service_failure(item: Any) -> Optional[ProviderFailure]:
@@ -100,6 +111,7 @@ def _build_request(call: IterationCall) -> LLMRequest:
         model_name=ctx.selected_model,
         temperature=options["temperature"],
         top_p=options["top_p"],
+        max_tokens=options.get("num_predict"),  # the reply cap the budget reserved: also sizes the hop check (#21864)
         metadata={"conversation_id": ctx.session_id},
     )
 
@@ -137,6 +149,8 @@ async def _recovered_items(call: IterationCall, response: LLMResponse) -> AsyncI
     """The recovered answer as the chunk + ``(text, tool_calls)`` the streaming path would have produced."""
     manager, ctx = call.manager, call.ctx
     meta = response.provider_metadata or {}
+    for notice in await send_point_notices(call, response.model, hop=True):  # #22016: the hop sends no num_ctx
+        yield notice
     message = manager._init_streaming_message(
         "response", response.model or ctx.selected_model, ctx.terminal_session_id, ctx.used_knowledge, ctx.rag_citations
     )
@@ -184,6 +198,8 @@ async def stream_with_failover(call: IterationCall, open_stream: Callable[[], As
     *open_stream* is not called at all while the primary is held out. A failure after text was yielded,
     or on a turn that already ran a tool, is surfaced as before: the service-error message, or the re-raise.
     """
+    for notice in await send_point_notices(call):  # #22016: the send point, once per turn
+        yield notice
     held_items = await _held_primary_items(call)
     if held_items is not None:
         for item in held_items:
