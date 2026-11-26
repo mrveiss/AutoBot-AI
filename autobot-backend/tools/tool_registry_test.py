@@ -222,9 +222,9 @@ def test_no_second_tool_list():
 
 def test_every_registry_tool_declares_its_required_permission():
     from autobot_shared.auth.permissions import Permission
-    from tools.tool_records import REGISTRY_TOOLS, SPILL_READ_TOOL
+    from tools.tool_records import CHAT_SHELL_TOOL, REGISTRY_TOOLS, SPILL_READ_TOOL
 
-    for name, entry in {**REGISTRY_TOOLS, **dict([SPILL_READ_TOOL])}.items():
+    for name, entry in {**REGISTRY_TOOLS, **dict([SPILL_READ_TOOL, CHAT_SHELL_TOOL])}.items():
         assert len(entry) == 3, f"{name} must declare (category, location, required permission or None)"
         assert entry[2] is None or isinstance(entry[2], Permission), name
 
@@ -233,9 +233,7 @@ def test_catalogue_permissions_agree_with_the_mcp_permission_table():
     from autobot_shared.auth.mcp_tool_permissions import TOOL_PERMISSIONS
     from tools.tool_records import REGISTRY_TOOLS, required_permission_for
 
-    # search_knowledge_base is declared KNOWLEDGE_READ on the MCP path but the chat handler enforces no check
-    # for it (reported in #22278, not silently picked).
-    for name in set(REGISTRY_TOOLS) & set(TOOL_PERMISSIONS) - {"search_knowledge_base"}:
+    for name in set(REGISTRY_TOOLS) & set(TOOL_PERMISSIONS):
         assert required_permission_for(name) == TOOL_PERMISSIONS[name], name
 
 
@@ -246,7 +244,49 @@ def test_catalogue_declares_the_checks_the_handler_enforced():
     assert required_permission_for("web_search") == Permission.MCP_BROWSER_READ
     assert required_permission_for("crawl_site") == Permission.KNOWLEDGE_WRITE
     assert required_permission_for("scrape_url") == Permission.KNOWLEDGE_READ
-    assert required_permission_for("execute_system_command") is None
+    assert required_permission_for("execute_system_command") == Permission.SHELL_EXECUTE
+    assert required_permission_for("execute_command") == Permission.SHELL_EXECUTE
+    assert required_permission_for("search_knowledge_base") == Permission.KNOWLEDGE_READ
+    assert required_permission_for("get_fact") == Permission.KNOWLEDGE_READ
+
+
+def test_the_chat_shell_tool_is_a_record_with_its_permission_and_the_host_it_is_served_from():
+    from tools.tool_records import LOCATION_BACKEND, tool_records
+
+    shell = next(r for r in tool_records() if r["name"] == "execute_command")
+    assert shell["fields"]["required_permission"] == "allow_shell_execute"
+    assert shell["node_id"] and shell["serving_service"] == LOCATION_BACKEND
+
+
+def test_a_tool_served_from_a_placed_service_carries_its_host_and_one_not_placed_carries_none():
+    from tools.tool_records import LOCATION_WORKER, tool_records
+
+    by_name = {r["name"]: r for r in tool_records()}
+    assert by_name["web_fetch"]["node_id"]
+    assert by_name["type_text"]["serving_service"] == LOCATION_WORKER and by_name["type_text"]["node_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_execute_command_takes_its_permission_from_the_catalogue(monkeypatch):
+    from autobot_shared.auth.permissions import Permission
+    from chat_workflow import tool_handler
+    from tools import tool_records
+
+    seen = []
+
+    async def record(name, params, session_id, tool_permission=None, user_role=None):
+        seen.append(tool_permission)
+        return False
+
+    monkeypatch.setattr(tool_handler, "_emit_before_tool_execute", record)
+    monkeypatch.setattr(
+        tool_records, "_UNLISTED_TOOLS", {"execute_command": ("system", "x", Permission.WORKFLOW_CREATE)}
+    )
+    handler = tool_handler.ToolHandlerMixin()
+    gen = handler._dispatch_execute_command({"params": {"command": "ls"}}, "s", "t", "e", "m", [], [], role="user")
+    async for _ in gen:
+        pass
+    assert seen == [Permission.WORKFLOW_CREATE.value]
 
 
 @pytest.mark.asyncio

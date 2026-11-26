@@ -18,6 +18,7 @@ import aiohttp
 
 from autobot_shared.auth.permissions import role_has_permission
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.self_model_constants import ENTITY_KINDS
 from services.slm_self_model import SelfModelUnavailable, query_entities
 from tools.tool_records import SELF_MODEL_QUERY_TOOL_NAME
 from user_management.services.user_role import role_for_user_id
@@ -26,14 +27,21 @@ logger = get_logger(__name__)
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 100
-SLM_PAGE = 500  # the SLM's own ceiling: the whole graph is read so visibility is decided on all of it
+SLM_PAGE = 500  # the SLM's own page ceiling
+MAX_PAGES = 10  # pages read for one filter set; a larger set is reported as incomplete, never silently cut
 _HOST_KINDS = frozenset({"node", "command", "package"})
+_TOOL_KIND = "tool"
+_FILTERS = ("name", "node_id", "status")
 
 
 def _permitted(tool: Dict[str, Any], role: str | None) -> bool:
     """Whether *role* may use the tool entity: its declared ``required_permission`` (None: any caller)."""
     required = (tool.get("attrs") or {}).get("required_permission")
     return required is None or role_has_permission(role, required)
+
+
+def _requires(tool: Dict[str, Any]) -> List[str]:
+    return (tool.get("attrs") or {}).get("requires") or []
 
 
 def _depends_on(tool: Dict[str, Any], entity: Dict[str, Any]) -> bool:
@@ -45,34 +53,73 @@ def _depends_on(tool: Dict[str, Any], entity: Dict[str, Any]) -> bool:
         return False
     if entity["kind"] == "node":
         return node_id in (entity.get("node_id"), entity.get("name"))
-    needs = (tool.get("attrs") or {}).get("requires") or []
-    return entity.get("node_id") == node_id and entity.get("name") in needs
-
-
-def _entity_visible(entity: Dict[str, Any], allowed: List[Dict[str, Any]]) -> bool:
-    """A tool is visible when permitted (*allowed*); a host kind only as a dependency of one; others as ever."""
-    if entity["kind"] == "tool":
-        return any(entity is t for t in allowed)
-    if entity["kind"] in _HOST_KINDS:
-        return any(_depends_on(t, entity) for t in allowed)
-    return True
-
-
-def visible_entities(entities: List[Dict[str, Any]], role: str | None) -> List[Dict[str, Any]]:
-    """Entities *role* may see: tools it may use and what they depend on; no other node, command or package."""
-    allowed = [e for e in entities if e["kind"] == "tool" and _permitted(e, role)]
-    return [e for e in entities if _entity_visible(e, allowed)]
+    return entity.get("node_id") == node_id and entity.get("name") in _requires(tool)
 
 
 def _matches(entity: Dict[str, Any], args: Dict[str, Any]) -> bool:
-    """Whether *entity* satisfies the caller's kind, name, node_id and status filters."""
+    """Whether *entity* satisfies the caller's name, node_id and status filters (the SLM applied them too)."""
     name = (args.get("name") or "").lower()
     return (
-        (not args.get("kind") or entity["kind"] == args["kind"])
-        and (not name or name in entity["name"].lower())
+        (not name or name in entity["name"].lower())
         and (not args.get("node_id") or entity.get("node_id") == args["node_id"])
         and (not args.get("status") or entity["status"] == args["status"])
     )
+
+
+class _Read:
+    """What was read from the SLM, and whether any filter set held more rows than were read."""
+
+    def __init__(self) -> None:
+        self.rows: List[Dict[str, Any]] = []
+        self.incomplete = False
+
+    async def fetch(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Every row matching *filters*, paged; flags ``incomplete`` when the SLM's ``total`` exceeds what was read."""
+        got: List[Dict[str, Any]] = []
+        for _ in range(MAX_PAGES):
+            data = await query_entities({**filters, "limit": SLM_PAGE, "offset": len(got)})
+            page = data.get("entities", [])
+            got += page
+            if not page or len(got) >= data.get("total", len(got)):
+                return got
+        self.incomplete = True
+        return got
+
+
+def _call_filters(args: Dict[str, Any]) -> Dict[str, Any]:
+    return {key: args[key] for key in _FILTERS if args.get(key)}
+
+
+async def _dependencies(read: _Read, kind: str, allowed: List[Dict[str, Any]], args: Dict[str, Any]):
+    """Host-kind rows the permitted tools depend on: nodes by filter; commands and packages by node and name."""
+    if kind == "node":
+        return [
+            e
+            for e in await read.fetch({"kind": kind, **_call_filters(args)})
+            if any(_depends_on(t, e) for t in allowed)
+        ]
+    out: List[Dict[str, Any]] = []
+    wanted = {(t["node_id"], name) for t in allowed if t.get("node_id") for name in _requires(t)}
+    for node_id, name in sorted(wanted):
+        rows = await read.fetch({"kind": kind, **{**_call_filters(args), "node_id": node_id, "name": name}})
+        out += [e for e in rows if any(_depends_on(t, e) for t in allowed) and _matches(e, args)]
+    return out
+
+
+async def _gather(args: Dict[str, Any], role: str | None) -> tuple[List[Dict[str, Any]], bool]:
+    """The entities *role* may see that match *args*, and whether the read was incomplete."""
+    read = _Read()
+    tools = await read.fetch({"kind": _TOOL_KIND})  # visibility is decided on every tool, so none is filtered out
+    allowed = [t for t in tools if _permitted(t, role)]
+    found: List[Dict[str, Any]] = []
+    for kind in [args["kind"]] if args.get("kind") else ENTITY_KINDS:
+        if kind == _TOOL_KIND:
+            found += [t for t in allowed if _matches(t, args)]
+        elif kind in _HOST_KINDS:
+            found += await _dependencies(read, kind, allowed, args)
+        else:
+            found += await read.fetch({"kind": kind, **_call_filters(args)})
+    return found, read.incomplete
 
 
 def _clamped_limit(raw: Any) -> int:
@@ -95,11 +142,16 @@ def format_entity(entity: Dict[str, Any]) -> str:
 
 
 def format_result(data: Dict[str, Any]) -> str:
-    """The SLM's answer as text for the model."""
+    """The answer as text for the model; *total* counts the visible matches read, and a partial read says so."""
     entities: List[Dict[str, Any]] = data.get("entities", [])
+    note = (
+        " The SLM holds more matching rows than were read; narrow with kind, name or node_id."
+        if data.get("incomplete")
+        else ""
+    )
     if not entities:
-        return "No self-model entities match."
-    header = f"{len(entities)} of {data.get('total', len(entities))} matching entities:"
+        return "No self-model entities match." + note
+    header = f"{len(entities)} of {data['total']} visible matching entities:{note}"
     return "\n".join([header, *(format_entity(e) for e in entities)])
 
 
@@ -112,11 +164,6 @@ class SelfModelToolsMixin:
         if not user_id:
             logger.warning("self-model query with no user id; returning nothing")
             return {**envelope, "result": "No self-model entities are visible without a user.", "status": "error"}
-        try:
-            data = await query_entities({"limit": SLM_PAGE})
-        except (SelfModelUnavailable, aiohttp.ClientError) as exc:
-            logger.error("Self-model query failed: %s", exc)
-            return {**envelope, "result": f"The self-model is not reachable: {exc}", "status": "error"}
         role = await role_for_user_id(user_id)
         if role is None:
             return {
@@ -124,7 +171,10 @@ class SelfModelToolsMixin:
                 "result": "No self-model entities are visible to an unknown account.",
                 "status": "error",
             }
-        seen = visible_entities(data.get("entities", []), role)
-        found = [e for e in seen if _matches(e, args)]
-        shown = {"total": len(found), "entities": found[: _clamped_limit(args.get("limit"))]}
+        try:
+            found, incomplete = await _gather(args, role)
+        except (SelfModelUnavailable, aiohttp.ClientError) as exc:
+            logger.error("Self-model query failed: %s", exc)
+            return {**envelope, "result": f"The self-model is not reachable: {exc}", "status": "error"}
+        shown = {"total": len(found), "entities": found[: _clamped_limit(args.get("limit"))], "incomplete": incomplete}
         return {**envelope, "result": format_result(shown), "status": "success"}

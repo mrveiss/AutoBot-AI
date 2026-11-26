@@ -47,6 +47,7 @@ def _from_record(record: Dict[str, Any]) -> Dict[str, Any]:
         "name": record["name"][:_NAME_MAX],
         "status": "declared",
         "parent": {"kind": _SERVICE, "name": record["serving_service"]},
+        "node_id": record.get("node_id"),
         # default=str: presence and health fields carry datetimes, which the JSON body cannot.
         "attrs": json.loads(json.dumps(record["fields"], default=str)),
     }

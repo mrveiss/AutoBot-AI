@@ -14,11 +14,13 @@ def test_catalogue_records_are_declared_under_their_serving_service():
         "kind": "tool",
         "name": "web_fetch",
         "serving_service": "backend",
+        "node_id": "10.0.0.5",
         "fields": {"when": datetime.date(2026, 1, 1)},
     }
     obs = _from_record(record)
     assert (obs["status"], obs["parent"]) == ("declared", {"kind": "service", "name": "backend"})
     assert obs["attrs"] == {"when": "2026-01-01"}
+    assert obs["node_id"] == "10.0.0.5"  # the serving service's SSOT host, which the SLM maps to its node id
     assert _service_observations([record, record]) == [{"kind": "service", "name": "backend", "status": "declared"}]
 
 

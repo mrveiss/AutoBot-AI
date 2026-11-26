@@ -46,11 +46,11 @@ CATEGORY_WEB_RESEARCH = "web_research"
 #: The read-only chat tool over the SLM self-model (#22278); the self-awareness block points at it.
 SELF_MODEL_QUERY_TOOL_NAME = "query_self_model"
 
-#: name -> (category, execution location, required Permission or None). The permission is the one the chat
-#: handler enforces for the tool; None means the handler declares no check, so any authenticated caller may use it
-#: (#22278). Order is the order the model's prompt lists them.
+#: name -> (category, execution location, required Permission or None). The permission is the one every route
+#: enforces for the tool (``mcp_tool_permissions`` agrees); None means no route declares a check (#22278).
+#: Order is the order the model's prompt lists them.
 REGISTRY_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = {
-    "execute_system_command": ("system", LOCATION_WORKER, None),
+    "execute_system_command": ("system", LOCATION_WORKER, Permission.SHELL_EXECUTE),
     # These two fall back to the backend's SystemIntegration when no worker node is attached (#22267).
     "query_system_information": ("system", LOCATION_WORKER, None),
     "list_system_services": ("system", LOCATION_WORKER, None),
@@ -59,10 +59,10 @@ REGISTRY_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = {
     "terminate_process": ("system", LOCATION_WORKER, None),
     "web_fetch": ("web", LOCATION_BACKEND, None),
     "web_search": ("web", LOCATION_BACKEND, Permission.MCP_BROWSER_READ),
-    "search_knowledge_base": ("knowledge", LOCATION_BACKEND, None),
+    "search_knowledge_base": ("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
     "add_file_to_knowledge_base": ("knowledge", LOCATION_BACKEND, None),
     "store_fact": ("knowledge", LOCATION_BACKEND, None),
-    "get_fact": ("knowledge", LOCATION_BACKEND, None),
+    "get_fact": ("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
     SELF_MODEL_QUERY_TOOL_NAME: ("self_model", LOCATION_BACKEND, None),
     "type_text": ("gui", LOCATION_WORKER, None),
     "click_element": ("gui", LOCATION_WORKER, None),
@@ -83,6 +83,14 @@ REGISTRY_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = {
 SPILL_READ_TOOL = ("read_spilled_output", ("conversation", LOCATION_BACKEND, None))
 
 
+#: The chat shell tool: dispatched by ``_dispatch_execute_command``, not offered through the registry prompt list.
+#: The handler reads its permission from here, so the shell check has one definition (#22278).
+CHAT_SHELL_TOOL = ("execute_command", ("system", LOCATION_BACKEND, Permission.SHELL_EXECUTE))
+
+#: Tools outside the prompt list that still carry a catalogue entry.
+_UNLISTED_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = dict([SPILL_READ_TOOL, CHAT_SHELL_TOOL])
+
+
 def tool_names_in_category(category: str) -> List[str]:
     """Registry tool names of one category, in catalogue order."""
     return [name for name, (cat, _, _perm) in REGISTRY_TOOLS.items() if cat == category]
@@ -90,7 +98,7 @@ def tool_names_in_category(category: str) -> List[str]:
 
 def required_permission_for(tool_name: str) -> Optional[Permission]:
     """The Permission the chat handler requires for registry tool *tool_name*; None when it declares no check."""
-    return {**REGISTRY_TOOLS, **dict([SPILL_READ_TOOL])}.get(tool_name, (None, None, None))[2]
+    return {**REGISTRY_TOOLS, **_UNLISTED_TOOLS}.get(tool_name, (None, None, None))[2]
 
 
 def permission_value_for(tool_name: str) -> Optional[str]:
@@ -132,9 +140,20 @@ def _browser_permission(name: str) -> Optional[str]:
     return _value(_mcp_required_permission(name))
 
 
+def _location_host(location: str) -> Optional[str]:
+    """The SSOT host of the service serving *location*; None where the placement is not known from code."""
+    return next((d.host for d in SERVICE_DEFINITIONS.values() if d.name == location), None)
+
+
 def _record(name: str, location: str, **fields: Any) -> Dict[str, Any]:
-    """One tool as a plain record."""
-    return {"kind": TOOL_RECORD_KIND, "name": name, "serving_service": location, "fields": fields}
+    """One tool as a plain record; ``node_id`` is its serving service's SSOT host (None when not placed)."""
+    return {
+        "kind": TOOL_RECORD_KIND,
+        "name": name,
+        "serving_service": location,
+        "node_id": _location_host(location),
+        "fields": fields,
+    }
 
 
 def _sdk_records() -> List[Dict[str, Any]]:
@@ -161,7 +180,7 @@ def tool_records() -> List[Dict[str, Any]]:
     """Every tool as a plain record (kind, stable name, serving service, declared fields)."""
     registry = [
         _record(n, loc, source="tool_registry", category=cat, required_permission=_value(perm))
-        for n, (cat, loc, perm) in {**REGISTRY_TOOLS, **_spill_tools()}.items()
+        for n, (cat, loc, perm) in {**REGISTRY_TOOLS, **_spill_tools(), **dict([CHAT_SHELL_TOOL])}.items()
     ]
     browser = [
         _record(n, LOCATION_BROWSER, source="browser", category="browser", required_permission=_browser_permission(n))

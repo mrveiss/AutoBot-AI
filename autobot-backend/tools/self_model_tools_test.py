@@ -70,15 +70,42 @@ def role(monkeypatch):
     return state
 
 
+def _slm(graph):
+    """A fake SLM: applies the kind, name, node_id and status filters, then pages with limit and offset."""
+
+    async def fake(filters):
+        rows = [
+            e
+            for e in graph["entities"]
+            if all(
+                [
+                    not filters.get("kind") or e["kind"] == filters["kind"],
+                    not filters.get("name") or filters["name"].lower() in e["name"].lower(),
+                    not filters.get("node_id") or e.get("node_id") == filters["node_id"],
+                    not filters.get("status") or e["status"] == filters["status"],
+                ]
+            )
+        ]
+        start = int(filters.get("offset", 0))
+        return {
+            "revision": graph["revision"],
+            "total": len(rows),
+            "entities": rows[start : start + int(filters["limit"])],
+        }
+
+    return fake
+
+
 @pytest.fixture
 def seen(monkeypatch):
     calls = []
+    fake = _slm(GRAPH)
 
-    async def fake(filters):
+    async def recording(filters):
         calls.append(filters)
-        return GRAPH
+        return await fake(filters)
 
-    monkeypatch.setattr(self_model_tools, "query_entities", fake)
+    monkeypatch.setattr(self_model_tools, "query_entities", recording)
     return calls
 
 
@@ -148,3 +175,67 @@ async def test_limit_is_clamped_and_dispatch_reaches_the_tool(seen):
 
 def test_tool_is_in_the_catalogue():
     assert SELF_MODEL_QUERY_TOOL_NAME in REGISTRY_TOOLS
+
+
+@pytest.mark.asyncio
+async def test_filters_are_pushed_to_the_slm_not_applied_to_a_crowded_page(seen, role):
+    result = await ToolRegistry().query_self_model({"kind": "service", "name": "worker"}, "admin-1")
+    assert _names(result) == {"service worker-node"}
+    assert {"kind": "service", "name": "worker", "limit": self_model_tools.SLM_PAGE, "offset": 0} in seen
+
+
+@pytest.mark.asyncio
+async def test_a_set_larger_than_a_page_is_read_in_pages(monkeypatch, role):
+    many = {"revision": 1, "entities": [_entity("route", f"r{i}") for i in range(5)] + GRAPH["entities"]}
+    monkeypatch.setattr(self_model_tools, "query_entities", _slm(many))
+    monkeypatch.setattr(self_model_tools, "SLM_PAGE", 2)
+    names = _names(await ToolRegistry().query_self_model({"kind": "route", "limit": 100}, "admin-1"))
+    assert names == {f"route r{i}" for i in range(5)}
+
+
+@pytest.mark.asyncio
+async def test_a_set_the_read_could_not_finish_is_reported_as_incomplete(monkeypatch, role):
+    many = {"revision": 1, "entities": [_entity("route", f"r{i}") for i in range(6)]}
+    monkeypatch.setattr(self_model_tools, "query_entities", _slm(many))
+    monkeypatch.setattr(self_model_tools, "SLM_PAGE", 2)
+    monkeypatch.setattr(self_model_tools, "MAX_PAGES", 2)
+    text = (await ToolRegistry().query_self_model({"kind": "route"}, "admin-1"))["result"]
+    assert "4 of 4 visible" in text and "holds more matching rows than were read" in text
+
+
+@pytest.mark.asyncio
+async def test_the_header_counts_visible_matches_not_what_the_page_cut(seen, role):
+    text = (await ToolRegistry().query_self_model({"kind": "node", "limit": 1}, "admin-1"))["result"]
+    assert text.splitlines()[0].startswith("1 of 2 visible matching entities")
+
+
+@pytest.mark.asyncio
+async def test_real_tool_records_make_their_serving_node_visible(monkeypatch, role):
+    """End to end over ``tool_records()``: a permitted real tool reveals the node it is served from."""
+    from tools.tool_records import tool_records
+
+    role["is"] = "user"
+    records = [r for r in tool_records() if r["node_id"]]
+    host = records[0]["node_id"]
+    tools = [
+        _entity(
+            "tool", r["name"], node_id=r["node_id"], parent_key=f"service:{r['serving_service']}", attrs=r["fields"]
+        )
+        for r in records
+    ]
+    graph = {"revision": 1, "entities": [*tools, _entity("node", host, node_id=host), _entity("node", "stranger")]}
+    monkeypatch.setattr(self_model_tools, "query_entities", _slm(graph))
+    names = _names(await ToolRegistry().query_self_model({"kind": "node"}, "user-1"))
+    assert names == {f"node {host}"}
+
+
+@pytest.mark.asyncio
+async def test_the_shell_tool_is_hidden_from_a_role_without_shell_permission(monkeypatch, role):
+    from tools.tool_records import tool_records
+
+    role["is"] = "user"
+    shell = next(r for r in tool_records() if r["name"] == "execute_command")
+    graph = {"revision": 1, "entities": [_entity("tool", "execute_command", attrs=shell["fields"])]}
+    monkeypatch.setattr(self_model_tools, "query_entities", _slm(graph))
+    names = _names(await ToolRegistry().query_self_model({"kind": "tool"}, "user-1"))
+    assert "tool execute_command" not in names
