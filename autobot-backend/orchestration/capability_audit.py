@@ -118,31 +118,38 @@ def audit_registry(registry: AgentCapabilityRegistry) -> List[AuditFinding]:
     return audit_agent_manifests(list(registry.get_all().values()))
 
 
-def run_capability_audit() -> dict:
-    """Scan the default agent registry, log findings by severity, return a report.
+def build_audit_report() -> dict:
+    """Scan the default agent registry and return the report, without logging.
 
-    Callable from a scheduled job or an admin endpoint. Returns a report dict with
-    the finding list plus error/warning counts for monitoring.
+    The self-model producer reads this every push; ``run_capability_audit`` is the logging entry point.
     """
     profiles = get_default_agents()
     findings = audit_agent_manifests(profiles)
-    errors = [f for f in findings if f.severity == "error"]
-    warnings = [f for f in findings if f.severity == "warning"]
-    for finding in errors:
-        logger.error("Capability audit [%s] %s: %s", finding.agent_id, finding.code, finding.message)
-    for finding in warnings:
-        logger.warning("Capability audit [%s] %s: %s", finding.agent_id, finding.code, finding.message)
-    logger.info(
-        "Capability audit complete: %d agents, %d error(s), %d warning(s)",
-        len(profiles),
-        len(errors),
-        len(warnings),
-    )
     return {
         "agent_count": len(profiles),
-        "error_count": len(errors),
-        "warning_count": len(warnings),
+        "audited_agents": sorted(p.agent_id for p in profiles),
+        "error_count": sum(1 for f in findings if f.severity == "error"),
+        "warning_count": sum(1 for f in findings if f.severity == "warning"),
         "findings": [
             {"agent_id": f.agent_id, "severity": f.severity, "code": f.code, "message": f.message} for f in findings
         ],
     }
+
+
+def run_capability_audit() -> dict:
+    """Scan the default agent registry, log findings by severity, return a report.
+
+    Called by the admin endpoint (``api/capability_audit.py``) and the daily beat task. The self-model
+    producer pushes the same verdicts through ``build_audit_report`` (#22271).
+    """
+    report = build_audit_report()
+    for finding in report["findings"]:
+        log = logger.error if finding["severity"] == "error" else logger.warning
+        log("Capability audit [%s] %s: %s", finding["agent_id"], finding["code"], finding["message"])
+    logger.info(
+        "Capability audit complete: %d agents, %d error(s), %d warning(s)",
+        report["agent_count"],
+        report["error_count"],
+        report["warning_count"],
+    )
+    return report
