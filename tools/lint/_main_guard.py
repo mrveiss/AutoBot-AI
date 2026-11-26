@@ -27,3 +27,11 @@ def is_main_guard(node: ast.stmt) -> bool:
 def has_main_guard(tree: ast.Module) -> bool:
     """True when a top-level statement is the main guard (a docstring example is not)."""
     return any(is_main_guard(n) for n in tree.body)
+
+
+def source_has_main_guard(source: str) -> bool:
+    """``has_main_guard`` for source text; an unparsable file has no guard that could be read."""
+    try:
+        return has_main_guard(ast.parse(source))
+    except (SyntaxError, ValueError):
+        return False

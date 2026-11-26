@@ -37,7 +37,7 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # CI runs this as a bare ``python3 pipeline-scripts/...`` with only pytest installed and no PYTHONPATH,
@@ -346,56 +346,59 @@ def _is_production_caller_line(line: str, self_str: str) -> bool:
     return not _is_comment_line(path, rest.partition(":")[2])
 
 
-def scan() -> list[Finding]:
-    closed_set = fetch_closed_tracker_set()
-    registry_modules = load_router_registry_modules()
-    findings: list[Finding] = []
+def _is_exempt_from_scan(f: Path, registry_modules: set[str]) -> bool:
+    """True for a file whose zero import callers is by design, not unwired."""
+    # #7128b: entry-point scripts (run_*.py, /demos/, /scripts/, /bin/) are invoked from CLI.
+    if is_entry_point_script(f):
+        return True
+    # #6872b: TypeScript ambient declaration (.d.ts) files are wired via tsconfig.json include paths.
+    if is_ambient_type_declaration(f):
+        return True
+    # #7109: files registered via router_registry tuples are wired at runtime by dotted-path lookup,
+    # which the import-grep cannot detect.
+    module_path = derive_module_path(f)
+    if module_path and module_path in registry_modules:
+        return True
+    # #22199: launched modules (__main__.py, benchmarks, own `python -m`) are reached without imports.
+    return is_launched_module(f, derive_launcher_module_path(f))
+
+
+def _finding_for(f: Path, closed_set: set[int]) -> Optional[Finding]:
+    """The finding for an unwired file citing a closed tracker (the first one), else None."""
+    refs = extract_tracker_refs(f)
+    if not refs:
+        return None
+    if grep_count_production_callers(f.stem, f) != 0:  # -1 = ambiguous skip, >=1 = wired
+        return None
+    for ref in refs:
+        if ref in closed_set:
+            return Finding(
+                file=str(f.relative_to(REPO_ROOT)), tracker=ref, tracker_state="CLOSED", production_callers=0
+            )
+    return None
+
+
+def _scan_files() -> Iterator[Path]:
+    """Every candidate source file under ``SCAN_DIRS``, tests and skipped paths excluded."""
     for sd in SCAN_DIRS:
         base = REPO_ROOT / sd
         if not base.exists():
             continue
         for pattern in SOURCE_GLOBS:
             for f in base.rglob(pattern):
-                if should_skip_path(f) or is_test_path(f):
-                    continue
-                # #7128b: entry-point scripts (run_*.py, /demos/, /scripts/,
-                # /bin/) are designed to be invoked from CLI; 0 callers is
-                # by-design, not unwired.
-                if is_entry_point_script(f):
-                    continue
-                # #6872b: TypeScript ambient declaration (.d.ts) files are
-                # wired via tsconfig.json include paths, not via imports.
-                if is_ambient_type_declaration(f):
-                    continue
-                # #7109: skip files registered via router_registry tuples;
-                # they're wired at runtime via dotted-path lookup which the
-                # import-grep below cannot detect.
-                module_path = derive_module_path(f)
-                if module_path and module_path in registry_modules:
-                    continue
-                # #22199: launched modules (__main__.py, benchmarks, own `python -m`) are reached without imports.
-                if is_launched_module(f, derive_launcher_module_path(f)):
-                    continue
-                refs = extract_tracker_refs(f)
-                if not refs:
-                    continue
-                stem = f.stem
-                callers = grep_count_production_callers(stem, f)
-                if callers != 0:
-                    continue  # -1 = ambiguous skip, ≥1 = wired
-                for ref in refs:
-                    state = "CLOSED" if ref in closed_set else "OPEN_OR_UNKNOWN"
-                    if state != "CLOSED":
-                        continue
-                    findings.append(
-                        Finding(
-                            file=str(f.relative_to(REPO_ROOT)),
-                            tracker=ref,
-                            tracker_state=state,
-                            production_callers=0,
-                        )
-                    )
-                    break  # one finding per file, prefer first tracker
+                if not (should_skip_path(f) or is_test_path(f)):
+                    yield f
+
+
+def scan() -> list[Finding]:
+    closed_set = fetch_closed_tracker_set()
+    registry_modules = load_router_registry_modules()
+    findings: list[Finding] = []
+    for f in _scan_files():
+        if _is_exempt_from_scan(f, registry_modules):
+            continue
+        if (finding := _finding_for(f, closed_set)) is not None:
+            findings.append(finding)
     return findings
 
 
@@ -422,12 +425,15 @@ def render_json(findings: list[Finding]) -> str:
     return json.dumps([asdict(f) for f in findings], indent=2)
 
 
-def file_discovery_issue(finding: Finding) -> Optional[int]:
-    title = (
+def _issue_title(finding: Finding) -> str:
+    return (
         f"discovery(unwired-tracker): wire in {Path(finding.file).stem} "
         f"(tracker #{finding.tracker} closed prematurely)"
     )
-    body = f"""## Discovered by
+
+
+def _issue_body_evidence(finding: Finding) -> str:
+    return f"""## Discovered by
 
 `pipeline-scripts/audit_unwired_trackers.py` — automated tracker cross-reference (#6836 process gate).
 
@@ -445,7 +451,11 @@ grep -rn 'from .*\\b{Path(finding.file).stem}\\b' \\
 ```
 returns 0 production-caller hits.
 
-## Decision needed
+"""
+
+
+def _issue_body_decision(finding: Finding) -> str:
+    return f"""## Decision needed
 
 Per CLAUDE.md "Issue Closure Verification Gate" + #6836: closed feature trackers must have ≥1 production caller. Either:
 
@@ -464,19 +474,26 @@ this finding into a tracking-only note.
 
 P2 — closure-verification process gap, blocks credibility of "closed" tracker counts.
 """
-    cmd = [
+
+
+def _issue_create_cmd(finding: Finding) -> list[str]:
+    body = _issue_body_evidence(finding) + _issue_body_decision(finding)
+    return [
         "gh",
         "issue",
         "create",
         "--title",
-        title,
+        _issue_title(finding),
         "--label",
         "tech-debt,not-wired,architecture",
         "--body",
         body,
     ]
+
+
+def file_discovery_issue(finding: Finding) -> Optional[int]:
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True)
+        result = subprocess.run(_issue_create_cmd(finding), capture_output=True, text=True, timeout=60, check=True)
     except subprocess.SubprocessError as e:
         # flood_exempt: one line per failed finding (up to --max-issues per run); the flood guard would drop the 6th+.
         logger.warning("failed to file issue for %s: %s", finding.file, e, extra={"flood_exempt": True})
