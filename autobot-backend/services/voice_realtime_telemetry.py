@@ -24,6 +24,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.singleton_factory import lazy_singleton
@@ -58,6 +59,9 @@ _TOKEN_COST_PER_1M: dict[str, float] = {
 # Redis key prefix + TTL
 _KEY_PREFIX = "voice_realtime_session"
 _SESSION_TTL = config.misc.voice_realtime_session_ttl_days * 86400
+#: An in-memory session that never ended (dropped connection) is evicted after this long; the cap checks
+#: end a live one well before (#21678).
+_ABANDONED_SESSION_MAX_AGE_S = env_int_clamped("AUTOBOT_VOICE_REALTIME_ABANDONED_SESSION_SECONDS", 7200, 60, 604800)
 
 
 class DisconnectReason(str, Enum):
@@ -136,7 +140,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         )
 
         self._prom = PrometheusMetricsManager()
-        # Active (and, while telemetry is off, finished) sessions; cap checks read here
+        # Active sessions only (released when finished); cap checks read here
         self._in_memory_sessions: dict[str, RealtimeSessionRecord] = {}
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -339,8 +343,13 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
 
     async def _save_record(self, record: RealtimeSessionRecord) -> None:
         # Active state stays in memory whatever the consent: cap checks and session_end need it even after an
-        # opt-out/opt-in flips mid-session. Consent (#9035) only governs persistence to Redis.
-        self._in_memory_sessions[record.session_id] = record
+        # opt-out/opt-in flips mid-session. Consent (#9035) only governs persistence to Redis. A finished record is
+        # released on every path (Redis down, telemetry off, written), never held for the process lifetime.
+        self._evict_abandoned_sessions()
+        if record.ended_at:
+            self._in_memory_sessions.pop(record.session_id, None)
+        else:
+            self._in_memory_sessions[record.session_id] = record
         if not get_telemetry_settings()["enabled"]:
             return
 
@@ -349,8 +358,18 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
             return
         key = f"{_KEY_PREFIX}:{record.session_id}"
         await redis.set(key, json.dumps(record.to_dict()), ex=_SESSION_TTL)
-        if record.ended_at:  # persisted and final: Redis is the record now
-            self._in_memory_sessions.pop(record.session_id, None)
+
+    def _evict_abandoned_sessions(self) -> None:
+        """Drop in-memory sessions that never ended and are older than the max age (a dropped connection)."""
+        now = now_utc()
+        stale = [
+            sid
+            for sid, rec in self._in_memory_sessions.items()
+            if (now - _parse_iso(rec.started_at)).total_seconds() > _ABANDONED_SESSION_MAX_AGE_S
+        ]
+        for sid in stale:
+            del self._in_memory_sessions[sid]
+            logger.warning("voice_realtime: evicted abandoned session session_id=%s", sid)
 
     async def _load_record(self, session_id: str) -> RealtimeSessionRecord | None:
         # In-memory first: active sessions live there whatever the consent (#9035)

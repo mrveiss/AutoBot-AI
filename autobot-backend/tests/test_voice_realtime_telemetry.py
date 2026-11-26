@@ -421,3 +421,33 @@ class TestConsentChangesMidSession:
         self._consent(monkeypatch, False)
         await t._save_record(_make_record(session_id="off1"))
         redis.set.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_finished_record_is_released_when_redis_is_down(self, monkeypatch):
+        t = _bare_telemetry(None)
+        t._get_redis = AsyncMock(return_value=None)
+        self._consent(monkeypatch, True)
+        await t._save_record(_make_record(session_id="r1"))
+        assert "r1" in t._in_memory_sessions
+        await t._save_record(_make_record(session_id="r1", ended_at=datetime.now(timezone.utc).isoformat()))
+        assert "r1" not in t._in_memory_sessions
+
+    @pytest.mark.asyncio
+    async def test_a_finished_record_is_released_when_telemetry_is_off(self, monkeypatch):
+        t = _bare_telemetry(AsyncMock())
+        self._consent(monkeypatch, False)
+        await t._save_record(_make_record(session_id="r2"))
+        await t._save_record(_make_record(session_id="r2", ended_at=datetime.now(timezone.utc).isoformat()))
+        assert "r2" not in t._in_memory_sessions
+
+    @pytest.mark.asyncio
+    async def test_an_abandoned_session_older_than_the_max_age_is_evicted(self, monkeypatch):
+        from services import voice_realtime_telemetry as module
+
+        t = _bare_telemetry(AsyncMock())
+        self._consent(monkeypatch, False)
+        old = (datetime.now(timezone.utc) - timedelta(seconds=module._ABANDONED_SESSION_MAX_AGE_S + 60)).isoformat()
+        t._in_memory_sessions["gone"] = _make_record(session_id="gone", started_at=old)
+        await t._save_record(_make_record(session_id="fresh"))
+        assert "gone" not in t._in_memory_sessions
+        assert "fresh" in t._in_memory_sessions

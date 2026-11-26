@@ -210,3 +210,18 @@ register_env_var(
         range=(1, 1024),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_VOICE_REALTIME_ABANDONED_SESSION_SECONDS",
+        type=int,
+        default=7200,
+        description=(
+            "How long a realtime voice session that never ended (a dropped connection) stays in the in-memory "
+            "session map before it is evicted (voice_realtime_telemetry.py, #21678). Finished sessions are "
+            "released at once."
+        ),
+        component="voice",
+        range=(60, 604800),
+    )
+)
