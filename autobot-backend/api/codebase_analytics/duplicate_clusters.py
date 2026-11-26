@@ -220,24 +220,48 @@ def count_distinct_locations(clusters: Iterable[DuplicateCluster]) -> Tuple[int,
     two originals becomes a redundant copy), and starts a group of its own, less its original,
     when none of its places was counted.
     """
-    group_of: Dict = {}
+    groups = _PlaceGroups()
     redundant = 0
     for cluster in sorted(clusters, key=lambda c: _KIND_RANK.get(c.kind, len(_KIND_RANK))):
-        fresh = [loc for loc in cluster.locations if loc not in group_of]
-        joined = {group_of[loc] for loc in cluster.locations if loc in group_of}
+        fresh = [loc for loc in cluster.locations if loc not in groups]
+        joined = {groups.find(loc) for loc in cluster.locations if loc in groups}
         redundant += cluster.line_count * (len(fresh) + (len(joined) - 1 if joined else -1))
-        target = min(joined) if joined else _next_group(group_of)
-        for loc in fresh:
-            group_of[loc] = target
-        for loc, grp in group_of.items():
-            if grp in joined:
-                group_of[loc] = target
-    return len(group_of), redundant
+        groups.merge(cluster.locations)
+    return len(groups), redundant
 
 
-def _next_group(group_of: Dict) -> int:
-    """A group id no counted place uses."""
-    return max(group_of.values(), default=-1) + 1
+class _PlaceGroups:
+    """Union-find over counted places: places that share a cluster are one group (#22194).
+
+    Joining groups relinks one root, never every member, so counting stays near-linear in the places.
+    """
+
+    def __init__(self) -> None:
+        self._parent: Dict[Any, Any] = {}
+
+    def __contains__(self, place: Any) -> bool:
+        return place in self._parent
+
+    def __len__(self) -> int:
+        return len(self._parent)
+
+    def find(self, place: Any) -> Any:
+        """The root place of *place*'s group; the path to it is compressed."""
+        root = place
+        while self._parent[root] != root:
+            root = self._parent[root]
+        while self._parent[place] != root:
+            self._parent[place], place = root, self._parent[place]
+        return root
+
+    def merge(self, places: Sequence[Any]) -> None:
+        """Count *places* and join them, with every group they already belong to, into one group."""
+        for place in places:
+            self._parent.setdefault(place, place)
+        if places:
+            root = self.find(places[0])
+            for place in places[1:]:
+                self._parent[self.find(place)] = root
 
 
 def merge_adjacent_clusters(clusters: Iterable[DuplicateCluster]) -> List[DuplicateCluster]:

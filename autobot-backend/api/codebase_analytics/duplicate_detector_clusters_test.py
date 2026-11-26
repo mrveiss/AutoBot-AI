@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import textwrap
+import time
 from pathlib import Path
 
 from api.codebase_analytics import duplicate_detector as det
@@ -308,3 +309,18 @@ def test_two_exact_subgroups_bridged_by_a_structural_cluster_count_one_original(
     # contrast: without the structural bridge the two pairs are separate (one redundant copy each)
     assert count_distinct_locations([exact_a, exact_b]) == (4, 20)
     assert count_distinct_locations([structural]) == (4, 30)
+
+
+def test_a_long_chain_of_bridging_clusters_counts_in_near_linear_time():
+    """Each cluster joins the group the previous one built; relabelling every member per join was quadratic."""
+    count = 20_000
+    chain = [
+        DuplicateCluster(
+            KIND_EXACT, 1.0, 1, [DuplicateLocation(f"f{i}", 1, 1), DuplicateLocation(f"f{i + 1}", 1, 1)], ""
+        )
+        for i in range(count)
+    ]
+    started = time.perf_counter()
+    # one group of count + 1 places: one original, every other place one redundant line
+    assert count_distinct_locations(chain) == (count + 1, count)
+    assert time.perf_counter() - started < 2.0  # the relabelling loop: 2 * 10**8 steps
