@@ -44,9 +44,16 @@ behaviour matches what the seven call sites already relied on.
 from __future__ import annotations
 
 import re
+import sys
 from bisect import bisect_left
 from pathlib import Path
 from typing import Iterable, Iterator, NamedTuple, Sequence
+
+# Run as a bare script by pre-commit and CI, where the repo root is not on sys.path; the lexer lives in autobot_shared.
+if str(Path(__file__).resolve().parents[2]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from autobot_shared.js_lexer import BLOCK_COMMENT, LINE_COMMENT, blank_block_comment, lex_js  # noqa: E402
 
 #: Comment markers by file suffix. Selected by file type rather than assumed,
 #: because the whole point is that the caller's file may not be Python.
@@ -133,148 +140,33 @@ def strip_trailing_comment(line: str, markers: Sequence[str], *, escapes: bool =
     return line
 
 
-#: A `/` after one of these (or after nothing, or a newline) begins a regex literal, not a division. `<` and `>`
-#: are left out: `</tag>` and `<br/>` are everywhere in `.vue`, `a < /re/` is not (`=>` is handled apart, as are
-#: `++`/`--` and a postfix `!`). `of` and `in` are left out of the words: `of` is an ordinary identifier, and a regex
-#: literal is neither iterable nor a sensible right operand of `in`.
-_REGEX_AFTER = frozenset("(,=:[!&|?{};+-*%~^")
-_REGEX_AFTER_WORDS = frozenset({"return", "typeof", "case", "void", "delete", "throw"})
-_TRAILING_WORD = re.compile(r"[A-Za-z0-9_$]+$")
-
-
-def _ends_with_regex_word(before: str) -> bool:
-    """Whether *before* ends in a keyword after which an expression, and so a regex, may start."""
-    word = _TRAILING_WORD.search(before)
-    return word is not None and word.group() in _REGEX_AFTER_WORDS
-
-
-def _prefix_position(prior: str) -> bool:
-    """Whether a `!` that follows *prior* negates (so a regex may follow it) rather than asserts non-null (`x!`)."""
-    if not prior or prior[-1] not in ")]" and _TRAILING_WORD.search(prior) is None:
-        return True
-    return _ends_with_regex_word(prior)
-
-
 class _BlockScan:
-    """Position and string/comment state of one `strip_block_comments` pass; each method consumes one construct."""
+    """One `strip_block_comments` pass, read off the shared JS-family lexer (``autobot_shared.js_lexer``, #22194).
+
+    The lexer decides strings, template nesting, regex literals and comments; this keeps its own output contract:
+    each `/* */` comment becomes the blanks of its body (newlines kept), a `//` comment stays and its output offset is
+    recorded in ``cuts``, and ``unterminated`` names what the text ended inside.
+    """
 
     def __init__(self, text: str, line_comments: bool) -> None:
         self.text = text
         self.line_comments = line_comments
-        self.out: list[str] = []
-        self.recent = ""  # the last few emitted characters, runs of blanks collapsed to one
-        self.size = 0  # characters emitted so far
         self.cuts: list[int] = []  # output offsets where a `//` comment starts: the one source for "where it begins"
-        self.quote: str | None = None
-        self.in_block = False
-        self.i = 0
-
-    @property
-    def unterminated(self) -> str | None:
-        """What the pass ended inside, ``"block comment"`` or ``"quote"``; ``None`` when it ended in code."""
-        if self.in_block:
-            return "block comment"
-        return "quote" if self.quote is not None else None
+        self.unterminated: str | None = None  # ``"block comment"`` or ``"quote"`` once run() ended inside one
 
     def run(self) -> str:
-        while self.i < len(self.text):
-            if self.in_block:
-                self._in_block()
-            elif self.quote is not None:
-                self._in_string()
-            else:
-                self._in_code()
-        return "".join(self.out)
-
-    def _emit(self, piece: str) -> None:
-        self.out.append(piece)
-        self.size += len(piece)
-        if piece.strip(" \t"):
-            self.recent = (self.recent + piece)[-16:]
-        elif not self.recent.endswith(" "):
-            self.recent += " "
-
-    def _in_block(self) -> None:
-        """Inside `/* ... */`: blank everything but newlines, leave at the closing `*/`."""
-        if self.text.startswith("*/", self.i):
-            self.in_block = False
-            self.i += 2
-            return
-        self._emit("\n" if self.text[self.i] == "\n" else " ")
-        self.i += 1
-
-    def _in_string(self) -> None:
-        """Inside a string literal: keep it, honour a backslash escape, leave at the matching quote."""
-        char = self.text[self.i]
-        if char == "\\":
-            size = 3 if self.text.startswith("\r\n", self.i + 1) else 2  # a CRLF continuation is one escape
-            self._emit(self.text[self.i : self.i + size])
-            self.i += size
-            return
-        if char == self.quote or (char == "\n" and self.quote != "`"):
-            self.quote = None  # only a template literal runs past a newline; an apostrophe in prose must not (#21571)
-        self._emit(char)
-        self.i += 1
-
-    def _in_code(self) -> None:
-        """Outside any string or block: open a string, a block, step over a `//` comment or a regex; else keep."""
-        char = self.text[self.i]
-        if char in ("'", '"', "`"):
-            self.quote = char
-        elif self.text.startswith("/*", self.i):
-            self.in_block = True
-            self.i += 2
-            return
-        elif self.line_comments and self.text.startswith("//", self.i):
-            self.cuts.append(self.size)
-            self._keep_to(self._line_end())
-            return
-        elif self.line_comments and char == "/" and self._regex_allowed() and self._regex_end():
-            self._keep_to(self._regex_end())
-            return
-        self._emit(char)
-        self.i += 1
-
-    def _keep_to(self, end: int) -> None:
-        self._emit(self.text[self.i : end])
-        self.i = end
-
-    def _line_end(self) -> int:
-        end = self.text.find("\n", self.i)
-        return len(self.text) if end < 0 else end
-
-    def _regex_allowed(self) -> bool:
-        """Whether a `/` here opens a regex literal: at a line start, or after an operator or a keyword."""
-        before = self.recent.rstrip(" \t")
-        if before[-2:] in ("++", "--"):
-            return False  # a postfix increment ends an operand, so the slash divides
-        if before[-2:] == "=>":
-            return True  # an arrow function's body
-        if before[-1:] == "!":
-            return _prefix_position(before[:-1].rstrip(" \t"))
-        if not before or before[-1] == "\n" or before[-1] in _REGEX_AFTER:
-            return True
-        return _ends_with_regex_word(before)
-
-    def _regex_end(self) -> int:
-        """Index after the closing `/` of the regex literal opening here, 0 when there is none to accept.
-
-        0 when it does not close on this line, or when the close is followed by `/` or `*`: that is a division
-        whose operand is followed by a comment opener, and the comment rules must see it.
-        """
-        in_class, j = False, self.i + 1
-        while j < len(self.text) and self.text[j] != "\n":
-            char = self.text[j]
-            if char == "\\":
-                j += 1
-            elif char == "[":
-                in_class = True
-            elif char == "]":
-                in_class = False
-            elif char == "/" and not in_class:
-                return 0 if self.text[j + 1 : j + 2] in ("/", "*") else j + 1
-            j += 1
-        return 0
+        lexed = lex_js(self.text, line_comments=self.line_comments)
+        self.unterminated = lexed.unterminated
+        out: list[str] = []
+        size = 0
+        for kind, piece in lexed.pieces:
+            if kind == BLOCK_COMMENT:
+                piece = blank_block_comment(piece)
+            elif kind == LINE_COMMENT:
+                self.cuts.append(size)
+            out.append(piece)
+            size += len(piece)
+        return "".join(out)
 
 
 def strip_block_comments(text: str, *, line_comments: bool = False) -> str:

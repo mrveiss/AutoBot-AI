@@ -15,10 +15,10 @@ reported as one another's 100% duplicates.
 
 import re
 from dataclasses import dataclass, field
-from typing import Optional, Set
+from typing import Callable, Optional, Set
 
-from api.codebase_analytics.duplicate_js_scan import CODE, COMMENT, STRING, map_js
 from autobot_shared.content_digest import content_digest
+from autobot_shared.js_lexer import CODE, COMMENT_KINDS, STRING, lex_js
 from utils.file_categorization import JS_EXTENSIONS, TS_EXTENSIONS, VUE_EXTENSIONS
 
 # Minimum lines for a code block to be considered for duplicate detection
@@ -31,8 +31,8 @@ MIN_DUPLICATE_CHARS = 80
 JS_FAMILY_SUFFIXES = tuple(sorted(JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS))
 
 # A quoted string is matched first, in the same pass as the comment, so a comment marker inside
-# one is not a comment. Python also has triple-quoted strings. The JS family is lexed by
-# ``duplicate_js_scan`` (nested templates, regex literals).
+# one is not a comment. Python also has triple-quoted strings. The JS family is lexed by the
+# shared ``autobot_shared.js_lexer`` (nested templates, regex literals), the guards' lexer too.
 _DQ = r'"(?:\\.|[^"\\\n])*"'
 _SQ = r"'(?:\\.|[^'\\\n])*'"
 _PY_STRING = r'(?P<string>""".*?"""' + r"|'''.*?'''" + "|" + _DQ + "|" + _SQ + ")"
@@ -60,11 +60,17 @@ class CodeBlock:
     exact_hash: str = ""
 
 
+def _map_js(content: str, on_piece: Callable[[str, str], str]) -> str:
+    """*content* with each lexed ``(kind, piece)`` replaced by ``on_piece(kind, piece)``, joined once."""
+    return "".join([on_piece(kind, piece) for kind, piece in lex_js(content).pieces])
+
+
 def _strip_comments(content: str, js_family: bool, string_as: Optional[str] = None) -> str:
     """*content* without comments, by the file's own syntax; strings kept verbatim, or replaced by *string_as*."""
     if js_family:
-        return map_js(
-            content, lambda kind, piece: "" if kind == COMMENT else (string_as or piece) if kind == STRING else piece
+        return _map_js(
+            content,
+            lambda kind, piece: "" if kind in COMMENT_KINDS else (string_as or piece) if kind == STRING else piece,
         )
     pattern = _PY_COMMENT_RE
     return pattern.sub(lambda m: (string_as or m.group("string")) if m.group("string") else "", content)
@@ -89,7 +95,7 @@ def normalize_exact(content: str, js_family: bool = False) -> str:
     """
     content = _strip_comments(content, js_family)
     if js_family:
-        return map_js(content, lambda kind, piece: re.sub(r"\s+", " ", piece) if kind == CODE else piece).strip()
+        return _map_js(content, lambda kind, piece: re.sub(r"\s+", " ", piece) if kind == CODE else piece).strip()
     return _PY_SPACE_RE.sub(lambda m: m.group("string") or " ", content).strip()
 
 
