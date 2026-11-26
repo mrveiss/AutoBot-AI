@@ -19,6 +19,8 @@ import asyncio
 import time
 from dataclasses import dataclass
 
+from autobot_shared import node_proxy
+from autobot_shared.egress_allowlist import invalidate_internal_origin_cache, register_internal_origin_provider
 from autobot_shared.env_utils import env_int
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
@@ -59,12 +61,46 @@ class DesktopVmEndpoint:
 
 
 _cache: tuple[float, DesktopVmEndpoint | None] | None = None
+_pinned_node_id: str | None = (
+    None  # the node last chosen: kept while it stays eligible, so a viewer and its controls agree
+)
+_ORIGIN_SCHEMES = ("http", "https", "ws", "wss")
+INTERNAL_KEY_HEADER = "X-Internal-API-Key"
 _cache_lock = asyncio.Lock()  # one in-flight registry read; concurrent callers share its result
 
 
 def reset_cache() -> None:
-    global _cache
+    global _cache, _pinned_node_id
     _cache = None
+    _pinned_node_id = None
+    invalidate_internal_origin_cache()
+
+
+def _registry_headers() -> dict[str, str]:
+    """The machine caller's credential: the SLM's registry routes accept the internal service key, which
+    the general service JWT (no admin claim) must never be widened to replace."""
+    key = node_proxy.internal_api_key()
+    return {INTERNAL_KEY_HEADER: key} if key else {}
+
+
+def _desktop_origins() -> list[str]:
+    """Origins of the registered desktop node's noVNC/websockify port: what the proxy and probes call.
+
+    Reads the resolved endpoint only (never fetches): the fetch itself passes the egress check, so a fetch
+    from here would wait on its own lock.
+    """
+    if _cache is None or time.monotonic() - _cache[0] >= REGISTRY_TTL_SECONDS or _cache[1] is None:
+        return []
+    host = _cache[1].host
+    host = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    return [f"{scheme}://{host}:{_cache[1].web_port}" for scheme in _ORIGIN_SCHEMES]
+
+
+async def _registered_desktop_origins() -> list[str]:
+    return _desktop_origins()
+
+
+register_internal_origin_provider(_registered_desktop_origins)
 
 
 async def _request(method: str, path: str, params: dict | None = None) -> dict:
@@ -77,14 +113,16 @@ async def _request(method: str, path: str, params: dict | None = None) -> dict:
     url = client._rest_url(path)
     await assert_egress_policy(url)
     try:
-        async with session.request(method, url, params=params, allow_redirects=False) as response:
+        async with session.request(
+            method, url, params=params, headers=_registry_headers(), allow_redirects=False
+        ) as response:
             response.raise_for_status()
             return await response.json()
     except Exception as exc:  # aiohttp raises several types; all mean "registry unreadable"
         raise SlmRegistryUnavailable(f"SLM registry request failed: {type(exc).__name__}") from exc
 
 
-def _pick_desktop(endpoints: list[dict], vnc_node_ids: frozenset[str]) -> dict | None:
+def _pick_desktop(endpoints: list[dict], vnc_node_ids: frozenset[str], pinned: str | None = None) -> dict | None:
     """The first live desktop endpoint on a node that CURRENTLY has the `vnc` role, in a stable
     (hostname, node_id) order. A credential left on a node without the role is stale and never used."""
     # The registry lists only active credentials (`include_inactive` defaults to false), so no re-check here.
@@ -95,7 +133,8 @@ def _pick_desktop(endpoints: list[dict], vnc_node_ids: frozenset[str]) -> dict |
         logger.warning("Ignoring VNC desktop endpoint(s) on node(s) without the '%s' role: %s", VNC_ROLE, stale)
     if not usable:
         return None
-    picked = sorted(usable, key=lambda e: (str(e.get("hostname", "")), str(e.get("node_id", ""))))[0]
+    kept = [e for e in usable if e.get("node_id") == pinned]  # a second registration never moves the desktop
+    picked = (kept or sorted(usable, key=lambda e: (str(e.get("hostname", "")), str(e.get("node_id", "")))))[0]
     if len(usable) > 1:
         logger.warning("%d VNC desktop nodes are registered; using node %s", len(usable), picked.get("node_id"))
     return picked
@@ -125,8 +164,10 @@ async def _rfb_port(node_id: str, credential_id: str) -> int | None:
 
 
 async def _fetch_endpoint() -> DesktopVmEndpoint | None:
+    global _pinned_node_id
     body = await _request("GET", ENDPOINTS_PATH)
-    picked = _pick_desktop(body.get("endpoints", []), await _vnc_role_node_ids())
+    picked = _pick_desktop(body.get("endpoints", []), await _vnc_role_node_ids(), _pinned_node_id)
+    _pinned_node_id = picked["node_id"] if picked else None
     if picked is None:
         return None
     return DesktopVmEndpoint(
@@ -152,6 +193,7 @@ async def desktop_vnc_endpoint(*, force_refresh: bool = False) -> DesktopVmEndpo
         if endpoint is not None:
             logger.info("Desktop VM is registered node %s", endpoint.node_id)
         _cache = (time.monotonic(), endpoint)  # stamped after the fetch, so the TTL counts from the answer
+        invalidate_internal_origin_cache()  # the egress policy must see the endpoint just resolved
         return endpoint
 
 

@@ -101,7 +101,7 @@ class VncRfbSession:
 
     async def _handshake(self) -> None:
         s = self._stream
-        await authenticate_as_client(s, s, self._password)
+        await authenticate_as_client(s, s, self._password, max_reason_bytes=VNC_MAX_TEXT_BYTES)
         await s.write(b"\x01")  # ClientInit: shared
         self.width, self.height = struct.unpack("!HH", await s.read_exactly(4))
         await s.read_exactly(16)  # server pixel format, superseded below

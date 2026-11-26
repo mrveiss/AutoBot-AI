@@ -243,3 +243,29 @@ def test_reverse_bits_is_its_own_inverse_and_matches_reference_across_all_256_va
     for b in range(256):
         assert _reverse_bits(_reverse_bits(b)) == b
         assert _reverse_bits(b) == _reference_reverse_bits(bytes([b]))[0]
+
+
+async def _hostile_server(pipe: _Pipe, *, zero_types: bool) -> None:
+    """Advertises a 4 GiB failure reason it never sends: the client must refuse on the length alone."""
+    await pipe.write(RFB_VERSION)
+    await pipe.read_exactly(12)
+    if zero_types:
+        await pipe.write(b"\x00" + (0xFFFFFFFF).to_bytes(4, "big"))
+        return
+    await pipe.write(b"\x01\x02" + bytes(16))
+    await pipe.read_exactly(1 + 16)
+    await pipe.write((1).to_bytes(4, "big") + (0xFFFFFFFF).to_bytes(4, "big"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("zero_types", [True, False])
+async def test_client_refuses_an_oversized_failure_reason_before_reading_it(zero_types: bool) -> None:
+    client_side, server_side = _make_pair()
+    with pytest.raises(VncAuthError, match="exceeds the 1024-byte cap"):
+        await asyncio.wait_for(
+            asyncio.gather(
+                authenticate_as_client(client_side, client_side, b"pw", max_reason_bytes=1024),
+                _hostile_server(server_side, zero_types=zero_types),
+            ),
+            timeout=5,
+        )

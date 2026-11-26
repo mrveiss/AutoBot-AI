@@ -37,6 +37,12 @@ from typing import Protocol
 from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 
+from autobot_shared.env_utils import env_int
+
+# Default cap on a server-supplied failure-reason string; callers with a wider text
+# allowance (the RFB client's VNC_MAX_TEXT_BYTES) pass their own via max_reason_bytes.
+DEFAULT_MAX_REASON_BYTES = env_int("AUTOBOT_VNC_AUTH_MAX_REASON_BYTES", 64 * 1024)
+
 RFB_VERSION = b"RFB 003.008\n"
 
 SECURITY_TYPE_NONE = 1
@@ -95,7 +101,21 @@ def _parse_version(raw: bytes) -> tuple[int, int]:
     return major, minor
 
 
-async def authenticate_as_client(reader: ByteReader, writer: ByteWriter, password: bytes) -> None:
+async def _read_reason(reader: ByteReader, max_reason_bytes: int) -> bytes:
+    """Read a server-supplied reason string, refusing a length above the cap BEFORE reading it."""
+    reason_len = int.from_bytes(await reader.read_exactly(4), "big")
+    if reason_len > max_reason_bytes:
+        raise VncAuthError(f"server failure reason ({reason_len} bytes) exceeds the {max_reason_bytes}-byte cap")
+    return await reader.read_exactly(reason_len) if reason_len else b""
+
+
+async def authenticate_as_client(
+    reader: ByteReader,
+    writer: ByteWriter,
+    password: bytes,
+    *,
+    max_reason_bytes: int = DEFAULT_MAX_REASON_BYTES,
+) -> None:
     """Perform the RFB client-side handshake against the REAL VNC server.
 
     Requires the server to offer VNC Authentication (security type 2) --
@@ -125,9 +145,7 @@ async def authenticate_as_client(reader: ByteReader, writer: ByteWriter, passwor
     count = count_raw[0]
     if count == 0:
         # RFB 3.7+: a zero count is followed by a reason string, then close.
-        reason_len_raw = await reader.read_exactly(4)
-        reason_len = int.from_bytes(reason_len_raw, "big")
-        reason = await reader.read_exactly(reason_len) if reason_len else b""
+        reason = await _read_reason(reader, max_reason_bytes)
         raise VncAuthError(f"server offered no security types: {reason!r}")
     types = await reader.read_exactly(count)
     if SECURITY_TYPE_VNC_AUTH not in types:
@@ -143,9 +161,7 @@ async def authenticate_as_client(reader: ByteReader, writer: ByteWriter, passwor
     result = int.from_bytes(result_raw, "big")
     if result != 0:
         if minor >= 8:
-            reason_len_raw = await reader.read_exactly(4)
-            reason_len = int.from_bytes(reason_len_raw, "big")
-            reason = await reader.read_exactly(reason_len) if reason_len else b""
+            reason = await _read_reason(reader, max_reason_bytes)
             raise VncAuthError(f"VNC authentication rejected by server: {reason!r}")
         raise VncAuthError("VNC authentication rejected by server")
 

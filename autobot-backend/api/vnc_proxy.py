@@ -33,7 +33,7 @@ from api.schemas_system import (
     VncProxyStatusResponse,
 )
 from api.vnc_handshake_bridge import authenticate_both_legs, get_vnc_password
-from api.vnc_host_target import desktop_vm_password, find_desktop_vm, resolve_desktop_vm, resolve_host_id
+from api.vnc_host_target import DesktopVm, desktop_vm_password, find_desktop_vm, resolve_desktop_vm, resolve_host_id
 from api.ws_security import enforce_ws_desktop_auth, enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
@@ -57,7 +57,6 @@ VNC_WS_SCHEMES = {"https": "wss", "http": "ws"}
 VNC_OBSERVATION_TIMEOUT_S = env_int("AUTOBOT_VNC_OBSERVATION_TIMEOUT_S", 1)
 VNC_STATUS_PROBE_TIMEOUT_S = env_int("AUTOBOT_VNC_STATUS_PROBE_TIMEOUT_S", 5)
 
-
 REGISTRY_VNC_TYPES = frozenset({"desktop"})  # the desktop VM is the SLM's registered node (find_desktop_vm)
 
 
@@ -70,18 +69,18 @@ def _require_known_type(vnc_type: str) -> None:
         raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
 
 
-async def _upstream_endpoint(vnc_type: str) -> str:
-    """The upstream noVNC base URL: the registered desktop node for "desktop", else the static entry."""
+async def _upstream_endpoint(vnc_type: str, vm: DesktopVm | None = None) -> str:
+    """The upstream noVNC base URL: the registered desktop node for "desktop" (*vm* when already resolved)."""
     if vnc_type in REGISTRY_VNC_TYPES:
-        vm = await resolve_desktop_vm()
+        vm = vm or await resolve_desktop_vm()
         return f"{VNC_UPSTREAM_SCHEME}://{vm.host}:{vm.web_port}"
     return VNC_ENDPOINTS[vnc_type]
 
 
-async def _proxy_password(vnc_type: str) -> bytes:
-    """The password the proxy answers the VNC server with: the registry node's for the desktop VM."""
+async def _proxy_password(vnc_type: str, vm: DesktopVm | None = None) -> bytes:
+    """The password the proxy answers the VNC server with: the connected node's for the desktop VM."""
     if vnc_type in REGISTRY_VNC_TYPES:
-        return await desktop_vm_password(await resolve_desktop_vm())
+        return await desktop_vm_password(vm or await resolve_desktop_vm())
     return await get_vnc_password(vnc_type)
 
 
@@ -155,7 +154,7 @@ async def _forward_client_to_vnc(websocket: WebSocket, vnc_ws, vnc_type: str) ->
         logger.error("[%s] Error forwarding to VNC: %s", vnc_type, e)
 
 
-async def _authenticate_then_relay(websocket: WebSocket, vnc_ws, vnc_type: str) -> None:
+async def _authenticate_then_relay(websocket: WebSocket, vnc_ws, vnc_type: str, vm: DesktopVm | None = None) -> None:
     """Answer the real VNC server's password challenge server-side, offer the
     browser security-type "None", then hand off to the plain byte relay
     (#16299 -- closes the VITE_*_VNC_PASSWORD leak: the browser's noVNC
@@ -165,7 +164,7 @@ async def _authenticate_then_relay(websocket: WebSocket, vnc_ws, vnc_type: str) 
     never falls back to an unauthenticated or partially-authenticated
     connection.
     """
-    password = await _proxy_password(vnc_type)
+    password = await _proxy_password(vnc_type, vm)
     vnc_leftover, browser_leftover = await authenticate_both_legs(vnc_ws, websocket, password)
     # Bytes already read past the handshake boundary on either leg belong to
     # the framebuffer protocol the plain relay is about to take over -- send
@@ -552,7 +551,8 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         return
 
     try:
-        endpoint = await _upstream_endpoint(vnc_type)
+        vm = await resolve_desktop_vm() if vnc_type in REGISTRY_VNC_TYPES else None  # once per connection
+        endpoint = await _upstream_endpoint(vnc_type, vm)
     except HTTPException as exc:  # no desktop VM registered, or the registry is unreadable
         await websocket.close(code=1011, reason=_close_reason(exc))
         return
@@ -580,7 +580,7 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         # concurrent pool resize defers recreation instead of closing it mid-stream.
         async with http_client.tracked_session() as session:
             async with session.ws_connect(ws_url) as vnc_ws:
-                await _authenticate_then_relay(websocket, vnc_ws, vnc_type)
+                await _authenticate_then_relay(websocket, vnc_ws, vnc_type, vm)
 
     except aiohttp.ClientError as e:
         logger.error("[%s] Failed to connect to VNC WebSocket: %s", vnc_type, e)

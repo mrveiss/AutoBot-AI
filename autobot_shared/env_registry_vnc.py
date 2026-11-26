@@ -134,3 +134,17 @@ register_env_var(
         range=(1, 3600),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_VNC_AUTH_MAX_REASON_BYTES",
+        type=int,
+        default=65536,
+        description=(
+            "Largest failure-reason string, in bytes, an upstream VNC server may send during the RFB security "
+            "handshake before the proxy refuses it unread (security/vnc_rfb_auth.py)."
+        ),
+        component="desktop",
+        range=(1, 1048576),
+    )
+)

@@ -348,6 +348,26 @@ async def require_service_management_or_internal(
     return await _permission_gate.enforce(request, current_user, (Permission.SERVICE_MANAGEMENT,))
 
 
+async def get_current_user_or_registry_service(
+    x_internal_api_key: str | None = Header(None, alias="X-Internal-API-Key"),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_optional_security),
+) -> dict:
+    """Session gate for the few read/redeem routes the main backend's VNC registry client calls (#22144).
+
+    The internal service key authenticates that machine caller; every other caller goes through
+    :func:`get_current_user` unchanged (admin session required). The general service JWT is NOT widened.
+    """
+    if verify_internal_api_key(x_internal_api_key):
+        return {"internal_service": True, "role": "service"}
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return await get_current_user(credentials)
+
+
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     """FastAPI dependency requiring admin privileges (legacy binary check).
 

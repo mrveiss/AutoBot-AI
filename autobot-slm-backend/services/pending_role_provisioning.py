@@ -24,7 +24,7 @@ crash left at ``installing`` becomes eligible again once it is older than the co
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
@@ -101,6 +101,33 @@ def _needs_provisioning(role, credential_types: set[str], now: datetime | None =
     if _attempted_recently(role, now or datetime.now(timezone.utc)):
         return False
     return role.status in (_FAILED, _INSTALLING) or missing_credential
+
+
+async def provisioner_holds(db, role) -> bool:
+    """Whether the role detector, health poll and code sync must leave this row alone (#22262).
+
+    :func:`is_provisioner_held`, plus an ``installed`` row whose credential is still missing inside the
+    cooldown: letting detection rewrite it to ``active`` would make ``updated_at`` (the attempt's clock)
+    look like a detection and re-provision it at once.
+    """
+    if is_provisioner_held(role):
+        return True
+    wanted = CREDENTIAL_REGISTERED_BY_ROLE.get(role.role_name)
+    if wanted is None or role.status != _INSTALLED or not _attempted_recently(role, datetime.now(timezone.utc)):
+        return False
+    return wanted not in await _credential_types(db, role.node_id)
+
+
+async def set_role_status_if_unchanged(db, role, new_status: str) -> bool:
+    """Write *new_status* only while the row still has the status the caller observed (conditional UPDATE).
+
+    A provisioner that committed ``installing``/``failed`` after the caller loaded the row wins; the caller's
+    stale result is dropped. Returns whether the row was updated.
+    """
+    result = await db.execute(
+        update(NodeRole).where(NodeRole.id == role.id, NodeRole.status == role.status).values(status=new_status)
+    )
+    return result.rowcount > 0
 
 
 async def pending_roles(db, node_id: str) -> list:

@@ -211,3 +211,42 @@ async def test_concurrent_callers_share_one_registry_read(monkeypatch):
     monkeypatch.setattr(reg, "_fetch_endpoint", slow_fetch)
     results = await asyncio.gather(*(reg.desktop_vnc_endpoint() for _ in range(5)))
     assert len(reads) == 1 and all(r.host == "203.0.113.5" for r in results)
+
+
+def test_a_second_registration_never_moves_the_pinned_desktop():
+    """The viewer and its later controls must resolve one node: a new node sorting first does not take over."""
+    two = [
+        {"node_id": "n-a", "hostname": "a", "vnc_type": "desktop"},
+        {"node_id": "n-z", "hostname": "z", "vnc_type": "desktop"},
+    ]
+    ids = frozenset({"n-a", "n-z"})
+    assert reg._pick_desktop(two, ids)["node_id"] == "n-a"
+    assert reg._pick_desktop(two, ids, pinned="n-z")["node_id"] == "n-z"
+    assert reg._pick_desktop(two, frozenset({"n-a"}), pinned="n-z")["node_id"] == "n-a"  # lost its role: released
+
+
+@pytest.mark.asyncio
+async def test_the_registered_desktop_origin_passes_the_egress_policy_and_others_do_not(monkeypatch):
+    from autobot_shared.egress_allowlist import is_internal_origin
+
+    request, _ = _fake(
+        {
+            ("GET", reg.ENDPOINTS_PATH): ENDPOINTS,
+            ("GET", NODES_PATH): _nodes(("n-d", ["vnc"])),
+            ("GET", reg.NODE_CREDENTIALS_PATH.format(node_id="n-d")): {"credentials": []},
+        }
+    )
+    monkeypatch.setattr(reg, "_request", request)
+    assert not await is_internal_origin("https://203.0.113.3:6090/websockify")  # not registered yet
+    await reg.desktop_vnc_endpoint()
+    assert await is_internal_origin("https://203.0.113.3:6090/vnc.html")
+    assert await is_internal_origin("wss://203.0.113.3:6090/websockify")
+    assert not await is_internal_origin("https://203.0.113.3:6091/vnc.html")  # another port
+    assert not await is_internal_origin("https://203.0.113.9:6090/vnc.html")  # another host
+
+
+def test_registry_calls_carry_the_internal_service_key_only_when_configured(monkeypatch):
+    monkeypatch.setattr(reg.node_proxy, "internal_api_key", lambda: "k")
+    assert reg._registry_headers() == {"X-Internal-API-Key": "k"}
+    monkeypatch.setattr(reg.node_proxy, "internal_api_key", lambda: "")
+    assert reg._registry_headers() == {}

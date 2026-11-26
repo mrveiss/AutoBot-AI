@@ -77,7 +77,7 @@ from models.schemas import (
     UpdatePolicyResponse,
 )
 from services.ansible_utils import summarize_playbook_failure
-from services.auth import get_current_user
+from services.auth import get_current_user, get_current_user_or_registry_service
 from services.code_status import derive_code_status as _derive_code_status
 from services.code_status import get_latest_code_version as _get_latest_code_version
 from services.code_status import reported_code_status as _reported_code_status
@@ -111,7 +111,7 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
     Updates NodeRole entries based on detected roles.
     """
     from models.schemas import RoleReportItem
-    from services.pending_role_provisioning import is_provisioner_held
+    from services.pending_role_provisioning import provisioner_holds
 
     for role_name, report_data in role_report.items():
         if isinstance(report_data, dict):
@@ -124,7 +124,7 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
         # cooldown's clock (#22262).
         result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id, NodeRole.role_name == role_name))
         node_role = result.scalar_one_or_none()
-        if not node_role or is_provisioner_held(node_role):
+        if not node_role or await provisioner_holds(db, node_role):
             continue
         node_role.status = report.status
         node_role.current_version = report.version
@@ -431,7 +431,7 @@ async def _query_nodes_page(db: AsyncSession, status_filter: str | None, page: i
 @router.get("", response_model=NodeListResponse)
 async def list_nodes(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
+    _: Annotated[dict, Depends(get_current_user_or_registry_service)],
     status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),

@@ -12,13 +12,13 @@ from typing import Dict, List
 from api.vnc_host_target import resolve_vnc_target
 from api.vnc_humanization import simulate_mouse_curve
 from api.vnc_rfb_client import VncAuthError, VncProtocolError, VncRfbSession, frame_to_png
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 # Pause between synthesised input events, so a remote server applies them in order.
-VNC_INPUT_STEP_DELAY_S = env_float("AUTOBOT_VNC_INPUT_STEP_DELAY_S", 0.02)
+VNC_INPUT_STEP_DELAY_S = env_float_clamped("AUTOBOT_VNC_INPUT_STEP_DELAY_S", 0.02, 0.0, 5.0, positive_finite=True)
 
 _BUTTON_MASK = {"left": 1, "middle": 2, "right": 4}
 _WHEEL_MASK = {"up": 8, "down": 16}
@@ -29,6 +29,8 @@ _KEYSYMS = {
     "insert": 0xFF63, "space": 0x20, "ctrl": 0xFFE3, "control": 0xFFE3, "shift": 0xFFE1,
     "alt": 0xFFE9, "super": 0xFFEB, "meta": 0xFFE7,
 }  # fmt: skip
+# Control characters in typed text map to their named keys: the raw 0x09 / 0x0A codes are not RFB keysyms.
+_TEXT_CONTROL_KEYS = {"\n": "Return", "\t": "Tab"}
 _KEYSYM_F1 = 0xFFBE
 _KEYSYM_UNICODE = 0x01000000
 
@@ -79,7 +81,7 @@ async def _scroll(session: VncRfbSession, direction: str, amount: int) -> None:
 
 async def _type(session: VncRfbSession, text: str) -> None:
     for char in text:
-        keysym = keysym_for("Return" if char == "\n" else char)
+        keysym = keysym_for(_TEXT_CONTROL_KEYS.get(char, char))
         await _tap_keys(session, [keysym])
 
 

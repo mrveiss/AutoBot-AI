@@ -406,8 +406,9 @@ def test_the_detector_still_writes_every_other_status(monkeypatch, status) -> No
 
 def test_the_health_poll_skips_provisioner_owned_rows_and_uses_the_one_constant() -> None:
     src = (_ROOT / "services" / "reconciler.py").read_text(encoding="utf-8")
-    assert "from services.pending_role_provisioning import is_provisioner_held" in src
-    assert "is_provisioner_held(node_role)" in src
+    assert "from services.pending_role_provisioning import provisioner_holds, set_role_status_if_unchanged" in src
+    assert "await provisioner_holds(db, node_role)" in src
+    assert "await set_role_status_if_unchanged(db, node_role, new_status)" in src
     assert prp.PROVISIONER_HELD_STATUSES == ("failed", "installing")
 
 
@@ -430,7 +431,7 @@ def _sync_record(monkeypatch, row):
         "db_service": SimpleNamespace(session=lambda: session),
         "datetime": datetime,
         "timezone": timezone,
-        "is_provisioner_held": prp.is_provisioner_held,
+        "provisioner_holds": prp.provisioner_holds,
     }
     exec(compile(ast.Module([fn], []), "sync_orchestrator.py", "exec"), ns)
     asyncio.run(ns["_update_node_role_record"](None, "n1", "vnc", "abc123"))
@@ -464,3 +465,49 @@ def test_a_role_the_updater_does_not_retry_is_never_held(monkeypatch, held) -> N
     sync_row = SimpleNamespace(role_name="other", status=held, current_version="1.0", last_synced_at=None)
     _sync_record(monkeypatch, sync_row)
     assert (sync_row.status, sync_row.current_version) == ("active", "abc123")
+
+
+# --------------------------------------------------------------------------
+# the cooldown survives detection, and the health poll never overwrites a provisioner write
+# --------------------------------------------------------------------------
+def _creds_db(creds: list[str]):
+    """A session answering only the credential-type query."""
+    res = MagicMock()
+    res.all.return_value = [(c,) for c in creds]
+    return SimpleNamespace(execute=AsyncMock(return_value=res))
+
+
+def test_an_installed_vnc_row_without_a_credential_is_held_inside_the_cooldown() -> None:
+    """Else detection rewrites it to active, and the detector-written row is re-provisioned at once."""
+    row = SimpleNamespace(role_name="vnc", node_id="n1", status="installed", updated_at=datetime.now(timezone.utc))
+    assert asyncio.run(prp.provisioner_holds(_creds_db([]), row)) is True
+
+
+def test_an_installed_vnc_row_with_its_credential_or_past_the_cooldown_is_not_held() -> None:
+    fresh = SimpleNamespace(role_name="vnc", node_id="n1", status="installed", updated_at=datetime.now(timezone.utc))
+    assert asyncio.run(prp.provisioner_holds(_creds_db(["vnc"]), fresh)) is False
+    old = SimpleNamespace(
+        role_name="vnc", node_id="n1", status="installed", updated_at=datetime.now(timezone.utc) - COOLDOWN * 2
+    )
+    assert asyncio.run(prp.provisioner_holds(_creds_db([]), old)) is False
+
+
+def test_the_status_write_is_conditional_on_the_observed_status(monkeypatch) -> None:
+    captured = {}
+
+    class _Stmt:
+        def where(self, *conds):
+            captured["where"] = [str(c) for c in conds]
+            return self
+
+        def values(self, **kw):
+            captured["values"] = kw
+            return self
+
+    monkeypatch.setattr(prp, "update", lambda model: _Stmt())
+    monkeypatch.setattr(prp, "NodeRole", SimpleNamespace(id=SimpleNamespace(), status=SimpleNamespace()))
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=SimpleNamespace(rowcount=0))
+    role = SimpleNamespace(id=7, status="healthy")
+    assert asyncio.run(prp.set_role_status_if_unchanged(db, role, "unhealthy")) is False  # provisioner won the race
+    assert captured["values"] == {"status": "unhealthy"} and len(captured["where"]) == 2

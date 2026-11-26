@@ -13,8 +13,15 @@ from api import infrastructure as infra
 from api import vnc_proxy
 
 
-def test_upstream_endpoints_use_the_ssl_only_scheme():
-    assert all(url.startswith("https://") for url in vnc_proxy.VNC_ENDPOINTS.values())
+def test_upstream_endpoints_use_the_configured_scheme():
+    assert all(url.startswith(f"{vnc_proxy.VNC_UPSTREAM_SCHEME}://") for url in vnc_proxy.VNC_ENDPOINTS.values())
+
+
+def test_the_upstream_scheme_defaults_to_the_ssl_only_https(monkeypatch):
+    import importlib
+
+    monkeypatch.delenv("AUTOBOT_VNC_UPSTREAM_SCHEME", raising=False)
+    assert importlib.reload(vnc_proxy).VNC_UPSTREAM_SCHEME == "https"
 
 
 @pytest.mark.parametrize(
@@ -106,3 +113,21 @@ def test_the_desktop_vm_is_a_registry_type_with_no_static_main_machine_entry():
     assert vnc_proxy.REGISTRY_VNC_TYPES == {"desktop"}
     assert vnc_proxy._known_type("desktop") and vnc_proxy._known_type("browser")
     assert not vnc_proxy._known_type("fleet-node-7")
+
+
+@pytest.mark.asyncio
+async def test_the_password_comes_from_the_node_the_connection_resolved():
+    """A registry refresh between connect and handshake must not fetch another node's password."""
+    from unittest.mock import AsyncMock
+
+    vm = vnc_proxy.DesktopVm("desk.example.test", 6090, 5907, endpoint=None)
+    with (
+        patch("api.vnc_proxy.resolve_desktop_vm", new=AsyncMock(side_effect=AssertionError("resolved twice"))),
+        patch("api.vnc_proxy.desktop_vm_password", new=AsyncMock(return_value=b"pw")) as fetch,
+    ):
+        assert await vnc_proxy._proxy_password("desktop", vm) == b"pw"
+        assert (
+            await vnc_proxy._upstream_endpoint("desktop", vm)
+            == f"{vnc_proxy.VNC_UPSTREAM_SCHEME}://desk.example.test:6090"
+        )
+    fetch.assert_awaited_once_with(vm)
