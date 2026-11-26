@@ -88,7 +88,7 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `AUTOBOT_BACKEND_BIND_HOST` | backend | str | `'127.0.0.1'` | Address the backend listens on (0.0.0.0 for all interfaces); not a client host (#18810). |
 | `AUTOBOT_BACKEND_HOST` | backend | str | `'127.0.0.1'` | Address clients dial to reach the backend; never a bind-all address (#18810). |
 | `AUTOBOT_BACKEND_PORT` | backend | str | `'8001'` | TCP port of the AutoBot backend service. |
-| `AUTOBOT_BACKEND_URL` | backend | str | `'http://10.255.255.254:8001'` | Full base URL of the AutoBot backend service (overrides HOST+PORT). |
+| `AUTOBOT_BACKEND_URL` | backend | str | `""` | Full base URL of the AutoBot backend service (overrides HOST+PORT; unset: built from those two). |
 | `AUTOBOT_BATCH_LOAD_CONCURRENCY` | backend | int | `5` | How many sub-requests of one POST /api/batch-jobs/load call run at once (api/batch_dispatch.py, #18765). The batch as a whole is bounded by ceil(max_requests / concurrency) * per-sub-request timeout. Clamped to 1..20. Range: 1–20. |
 | `AUTOBOT_BATCH_LOAD_MAX_REQUESTS` | backend | int | `20` | Most sub-requests one POST /api/batch-jobs/load call may carry (api/batch_dispatch.py, #18765). A larger batch is refused with 400 before any sub-request is dispatched. Clamped to 1..100. Range: 1–100. |
 | `AUTOBOT_BATCH_LOAD_TIMEOUT_SECONDS` | backend | float | `15.0` | Per-sub-request timeout for POST /api/batch-jobs/load (api/batch_dispatch.py, #18765). A sub-request that exceeds it reports 504 in its own result slot; the rest of the batch is unaffected. Clamped to 1..120. Range: 1.0–120.0. |
@@ -210,7 +210,7 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `AUTOBOT_DEV_LOOP_BUDGET_TTL_SECONDS` | ai | int | `86400` | Seconds the dev loop's cumulative token counter survives in Redis. Refreshed on every recorded action, so it is a floor on how long spend is remembered. |
 | `AUTOBOT_DEV_LOOP_RATE_PER_HOUR` | ai | int | `0` | Dev-loop actions allowed per fixed UTC hour window (#17091). Zero disables the rate gate. Checked before every action, never after. |
 | `AUTOBOT_DEV_LOOP_TOKEN_BUDGET` | ai | int | `0` | Cumulative token ceiling for AutoBot's own dev-loop participation (#17091). Zero disables the spend gate, which is the shipped default; the rate ceiling below is independent of it. |
-| `AUTOBOT_DOCKER_MGMT_POOL` | slm | str | `'10.128.0.0/9'` | Private IPv4 block (/24 or larger) that docker/pick_mgmt_prefix.py draws the compose management /24 from, skipping any range a host route or Docker network uses (#16833). |
+| `AUTOBOT_DOCKER_MGMT_POOL` | slm | str | `""` | Private IPv4 block (/24 or larger) that docker/pick_mgmt_prefix.py draws the compose management /24 from, skipping any range a host route or Docker network uses; unset: the script's built-in private block (#16833). |
 | `AUTOBOT_DOCKER_MGMT_PREFIX` | slm | str | `""` | First three octets of the compose autobot-mgmt /24 (e.g. 10.77.3). No default: docker/generate-secrets.sh picks a free private range per host, docker-compose.yml refuses to start without it, and compose_fleet.py builds node IPs from it (#16833). |
 | `AUTOBOT_DOCKER_POOL_SIZE` | execution | int | `3` | Number of warm containers kept when AUTOBOT_DOCKER_USE_POOL is on. Ignored entirely when pooling is off. |
 | `AUTOBOT_DOCKER_PROXY_TOKEN` | slm | str | *(none)* | What the SLM presents to the limited Docker proxy, from docker/generate-secrets.sh (#20629). |
@@ -441,7 +441,7 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `AUTOBOT_OTEL_ENDPOINT` | otel | str | *(none)* | OTLP collector endpoint URL (e.g. http://otel-collector:4317). |
 | `AUTOBOT_OTEL_PROTOCOL` | otel | str | `'grpc'` | OTLP export protocol: 'grpc' or 'http/protobuf'. |
 | `AUTOBOT_OTEL_SAMPLE_RATE` | otel | float | `0.1` | Fraction of traces to sample (0.0–1.0). Range: 0.0–1.0. |
-| `AUTOBOT_OTEL_SERVICE_VERSION` | otel | str | `'1.5.0'` | Service version tag attached to all OTel spans. |
+| `AUTOBOT_OTEL_SERVICE_VERSION` | otel | str | `""` | Service version tag attached to all OTel spans; unset omits `service.version` (#17821). |
 | `AUTOBOT_OVERSEER_COMMAND_TIMEOUT_S` | agents | int | `60` | Seconds an overseer step command may run in the user's terminal before it is interrupted and reported as timed out (#17078). A step that finishes sooner returns as soon as its exit code appears (agents/overseer/step_executor_agent.py). Range: 1–3600. |
 | `AUTOBOT_OWNERSHIP_BLAME_TIMEOUT_SECONDS` | backend | float | `10.0` | Seconds a single `git blame` may take during ownership analysis. Must stay below the whole-analysis budget, which a previous 30s value exceeded (#13602). |
 | `AUTOBOT_OWNERSHIP_BUDGET_SECONDS` | backend | float | `20.0` | Total seconds ownership analysis may spend blaming files before it returns what it has (#13602). |
@@ -486,7 +486,7 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS` | pricing | int | `24` | Hours between automatic pricing refreshes: the Celery beat cadence, and the floor under the Redis TTL so stored prices can never expire before the next scheduled refresh (#16231). |
 | `AUTOBOT_PROMETHEUS_PORT` | monitoring | str | `'9090'` | TCP port of the Prometheus instance. Also declared in ssot_config.py. |
 | `AUTOBOT_PROMETHEUS_SCRAPE_TOKEN` | security | str | `""` | Read-only bearer token Prometheus presents to /api/metrics/prometheus (#16375). Seeded by the SLM into its secret store and rendered by the deploy roles into backend.env and Prometheus' bearer_token_file. Unset refuses every scrape. |
-| `AUTOBOT_PROMETHEUS_URL` | monitoring | str | `'http://10.0.0.4:9090'` | Base URL of the Prometheus metrics server. |
+| `AUTOBOT_PROMETHEUS_URL` | monitoring | str | `""` | Base URL of the Prometheus metrics server (unset: the SSOT monitoring node). |
 | `AUTOBOT_PROOF_SCAN_MAX_CHARS` | chat_workflow | int | `200000` | Most characters of one tool step's output (or of an answer) that the answer-proof check reads for quotable values (#21976). More is read up to this size and the proof is marked partial. |
 | `AUTOBOT_PROVIDER_DEGRADATION_TTL_SECONDS` | ai | int | `300` | Seconds a provider stays marked degraded after a failure before traffic is offered to it again. |
 | `AUTOBOT_PROVIDER_KEY_HYDRATION_TIMEOUT_S` | security | int | `30` | Seconds a process waits for its one-time provider-key vault hydration before treating the vault as unreachable (#18094). On timeout every vault-resolved key is refused (fail closed); a hydration that finishes later still swaps its result in. |
