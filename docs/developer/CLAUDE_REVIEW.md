@@ -88,7 +88,7 @@ About half the PRs handed over on 2026-10-22/23 needed a fix-first round for one
 Check each before sending the PR# and head:
 
 1. **Every guard or test the body claims exists and runs.** Name it by file and test, and
-   confirm it ran in your pre-push or local run (#19257 claimed a smoke-credential guard that
+   confirm it ran in CI for this head (#19257 claimed a smoke-credential guard that
    did not exist).
 2. **Ceilings are met by splitting, never by trimming.** A file over its size ceiling gets a
    module or helper extracted; shortening comments, docstrings or log text to fit is a finding
@@ -96,14 +96,12 @@ Check each before sending the PR# and head:
 3. **Every cited owner decision is quoted on its issue,** with the date, before the PR cites it
    (#19216, #19259).
 4. **The whole-tree guards pass on the branch:** symbol forks, isolated-git, file size, reach.
-   Machine-checked: pre-push runs them on every push (`ALWAYS_RUN` in
-   `tools/lint/prepush_selection.py`, #18808), so a green pre-push covers item 4. A new
+   Machine-checked: CI's preboard guard lane runs them on every head (`ALWAYS_RUN` in
+   `tools/lint/prepush_selection.py`, #18808); a green lane covers item 4. A new
    symbol that reuses an existing name (#19205, #19215) is what the symbol-fork ratchet catches.
 
-5. **Local runs respect the shared machine (owner rule, 2026-10-23).** Only the test you changed
-   (owner, 2026-11-02), run under the `machine:heavy-run` lock with a hold of at most 20
-   minutes; never a full local `repo_tests` suite (CI is the full gate). Train pushes go first,
-   and a hold whose reason says "train push waiting" is released at the next test boundary.
+5. **No local test or guard runs** ([`OWNER_RULES.md`](OWNER_RULES.md) row 32): CI is the gate.
+   Fix what reading the diff shows, push once, and CI returns failures as one batch.
 
 Items 1 and 3 need a reader; 2 is caught when a reviewer diffs the comments; 4 is automatic.
 

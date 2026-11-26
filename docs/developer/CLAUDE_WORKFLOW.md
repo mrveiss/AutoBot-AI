@@ -313,6 +313,8 @@ Run these gates before creating a PR or merging any branch. Gates are ordered by
 
 **No preflight by hand (owner rule 2026-10-25, [OWNER_RULES.md](OWNER_RULES.md) rule 23).** Push and let CI run; run only the test you changed. The commands below are reference for what the checks do, not a per-push step; the commit and pre-push hooks still run.
 
+*Local runs of these checks are superseded by [`OWNER_RULES.md`](OWNER_RULES.md) row 32 (2026-11-27): CI runs them; the commands stay as a reference for what CI checks.*
+
 ```bash
 scripts/pr-preflight.sh --issue N [--body pr.md] [--message msg.txt]
 scripts/pr-preflight.sh --issue N --full   # also run the checks a path filter would otherwise skip
@@ -444,7 +446,7 @@ grep -r "oldFunctionName" --include="*.ts" --include="*.vue" autobot-frontend/sr
 Run tests only for changed files to keep validation fast:
 
 ```bash
-python -m pytest <the changed test file> -x -q   # a file, never a directory or the full suite
+# superseded by OWNER_RULES.md row 32 (2026-11-27): no local test runs; CI is the gate
 ```
 
 ### Gate 4: Linting

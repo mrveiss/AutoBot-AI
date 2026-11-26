@@ -44,7 +44,7 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **PRs target `main`; `release` is the release branch.** `release`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
 - **Never work from a stale base.** `git fetch origin` and branch from current base before the first edit; answer "is this already done?" against current `origin/main` and the issue's ACs, **never an old branch** → `CLAUDE_GIT.md`.
 - **No commit trailers** — `mrveiss` is sole author; never add `Co-Authored-By` or tool trailers.
-- **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `git commit --no-verify` — pre-commit hooks stay on, and a PostToolUse hook auto-formats `.py`. Pushes use `git push --no-verify`: no local test or guard runs, CI is the gate ([`OWNER_RULES.md`](docs/developer/OWNER_RULES.md) row 32).
+- **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `git commit --no-verify` — pre-commit hooks stay on, and a PostToolUse hook auto-formats `.py`. A push may skip the pre-push hook (`git push --no-verify`); there are no local test or guard runs, and CI is the gate ([`OWNER_RULES.md`](docs/developer/OWNER_RULES.md) row 32).
 - **Never hardcode.** Config via SSOT, TTLs via env-var-backed module constants, no IPs or ports in code.
 - **The codebase is the source of truth** — never edit `/opt/autobot/` or `/var/log/autobot/`.
 - **System updates (test AND prod) go through the builtin updater only** — the code-sync API / self-update path a user reaches in the maintenance UI. If the builtin cannot do it, fix that gap (issue + PR); never side-channel via ad-hoc ansible or shell.
@@ -74,7 +74,7 @@ Rules here accumulate; some pull against each other. **Precedence, highest first
 
 **PR-granularity conflicts** (same file vs same scope vs append) → [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md#pr-granularity).
 
-**Known conflict, by design:** *finish everything* vs *CI is a shared resource*. The CI slot count and how many trains run at once are set in [`OWNER_RULES.md`](docs/developer/OWNER_RULES.md). The completion goal is *nothing mergeable left unmerged, nothing merged left uncleaned*, checkable at any instant; "no work in flight" has no reachable end state with running CI.
+**Known conflict, by design:** *finish everything* vs *CI is a shared resource*. The CI slot count and the landing model are set in [`OWNER_RULES.md`](docs/developer/OWNER_RULES.md) row 33. The completion goal is *nothing mergeable left unmerged, nothing merged left uncleaned*, checkable at any instant; "no work in flight" has no reachable end state with running CI.
 
 ## Git/PR Workflow
 
