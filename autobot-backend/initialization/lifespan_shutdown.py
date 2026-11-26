@@ -115,6 +115,17 @@ async def stop_connector_and_skill_schedulers(app: FastAPI, report: "_ShutdownRe
     except Exception as _sd_err:
         report.failed("Skill distillation scheduler shutdown", _sd_err)
 
+    # #22277: cancel and await the self-model producer loop started by _init_self_model_producer.
+    producer_task = getattr(app.state, "self_model_producer_task", None)
+    if producer_task is not None and not producer_task.done():
+        producer_task.cancel()
+        try:
+            await producer_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as _sm_err:
+            report.failed("Self-model producer task drain", _sm_err)
+
 
 async def stop_vector_store_workers(app: FastAPI, report: "_ShutdownReport") -> None:
     """Stop the vector write buffer (flushing it) and the collection tier reaper."""
