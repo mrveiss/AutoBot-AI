@@ -766,7 +766,7 @@ import { useDebounce } from '@/composables/useDebounce';
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger';
 import { useVirtualList } from '@/composables/useVirtualList';
 import { useSecretsInfraApi } from '@/composables/security/useSecretsInfraApi';
-import { createVncCompanion, infraHostToSecret, type InfraHostsResponse } from '@/composables/security/useSecretsInfraApi';
+import { createVncCompanion, infraHostToSecret, snapshotVncCompanion, type InfraHostsResponse } from '@/composables/security/useSecretsInfraApi';
 import { useSecretWrites } from '@/composables/security/useSecretWrites';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
@@ -1397,8 +1397,8 @@ const confirmTransfer = async () => {
 
 const saveSecret = async () => {
   if (!isFormValid.value) return;
-
   saving.value = true;
+  const companion = snapshotVncCompanion(secretForm); // before the first await: Cancel resets secretForm in place
   // On failure the form stays open with its input, and the list is reloaded (#20732).
   const outcome = await runWrite('save', async () => {
     const chatStore = useChatStore();
@@ -1439,14 +1439,14 @@ const saveSecret = async () => {
     }
 
     if (showEditModal.value) {
-      await secretsApiClient.updateSecret(secretForm.id, secretData, { chatId: secretData.chat_id as string | null | undefined });
-      await createVncCompanion({ data: { id: secretForm.id } }, secretForm, secretData, t);
+      await secretsApiClient.updateSecret(companion.hostId, secretData, { chatId: secretData.chat_id as string | null | undefined });
+      await createVncCompanion({ data: { id: companion.hostId } }, companion.form, secretData, t);
     } else {
       if (secretForm.type !== 'infrastructure_host') {
         secretData.value = secretForm.value;
       }
       const created = await secretsApiClient.createSecret(secretData as unknown as Parameters<typeof secretsApiClient.createSecret>[0]);
-      await createVncCompanion(created, secretForm, secretData, t, (id) => { showEditModal.value = true; secretForm.id = id; });
+      await createVncCompanion(created, companion.form, secretData, t, (id) => { showEditModal.value = true; secretForm.id = id; });
     }
   });
   saving.value = false;

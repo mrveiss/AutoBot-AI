@@ -75,6 +75,14 @@ type SecretLike = { id: string; type?: string; metadata?: Record<string, unknown
  * `adopt` is called with the host id as soon as it is known, before the refetch and the write.
  * `created` is a create response (`{ data: { id } }`) or the same shape built from a known host id.
  */
+/** The companion inputs of a host form, copied: the live reactive form is reset in place by Cancel. */
+export function snapshotVncCompanion(f: {
+  id: string; type: string; name: string; host: string; capabilities: string[]; vnc_password: string
+}) {
+  const { id, type, name, host, vnc_password } = f
+  return { hostId: id, form: { type, name, host, capabilities: [...f.capabilities], vnc_password } }
+}
+
 export async function createVncCompanion(
   created: unknown,
   form: { type: string; name: string; host: string; capabilities: string[]; vnc_password: string },
@@ -90,7 +98,11 @@ export async function createVncCompanion(
   adopt?.(hostId);
   // Refetch first: a stale list could duplicate the secret. A failed refetch surfaces (the caller's write
   // failure path); it never falls back to a list that may be stale.
-  const fresh = (await secretsApiClient.getSecrets({})) as { secrets?: SecretLike[] }
+  // Scoped to the host's chat: the backend skips chat-scoped secrets otherwise, so the companion saved
+  // with that chat id would never be found and a second one would be created.
+  const fresh = (await secretsApiClient.getSecrets({
+    chatId: (hostData.chat_id as string | null | undefined) ?? undefined
+  })) as { secrets?: SecretLike[] }
   const known = fresh.secrets ?? []
   const linked = known.find((s) => s.type === 'password' && s.metadata?.[VNC_COMPANION_HOST_KEY] === hostId);
   if (linked) {

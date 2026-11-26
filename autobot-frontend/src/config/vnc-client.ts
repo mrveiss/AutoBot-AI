@@ -53,9 +53,14 @@ export function getVncClientPort(h: VncClientHost): number {
   return h.vnc_port || getConfig().vnc.desktop.port
 }
 
+/** A URL authority needs an IPv6 literal in brackets; hostnames, IPv4 and already-bracketed literals pass through. */
+function urlHost(host: string): string {
+  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+}
+
 /** Base URL (scheme, host, port) of a host's noVNC server. */
 export function buildVncBaseUrl(h: VncClientHost): string {
-  return `${VNC_CLIENT_SCHEME}://${h.host}:${getVncClientPort(h)}`
+  return `${VNC_CLIENT_SCHEME}://${urlHost(h.host)}:${getVncClientPort(h)}`
 }
 
 /** Full noVNC client URL for a host, autoconnecting. */

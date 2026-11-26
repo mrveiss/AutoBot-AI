@@ -4152,6 +4152,7 @@
         "disconnect": "قطع الاتصال",
         "disconnected": "منقطع",
         "download": "💾 Download",
+        "endpointsFailed": "Could not read the VNC endpoints from the SLM.",
         "fleetEndpointDescription": "SLM-managed VNC on {hostname}",
         "host": "Host:",
         "noVNCRemoteDesktop": "noVNC Remote Desktop",

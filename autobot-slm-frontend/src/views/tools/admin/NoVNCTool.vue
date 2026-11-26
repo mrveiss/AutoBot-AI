@@ -26,6 +26,7 @@ const loading = ref(false)
 const loadingEndpoints = ref(false)
 const error = ref<string | null>(null)
 const isConnected = ref(false)
+const discoveryFailed = ref(false)
 
 // Fleet hosts only (owner ruling 2026-11-23): the SLM tool reaches AutoBot's own infrastructure.
 const dynamicHosts = ref<VncHost[]>([])
@@ -47,8 +48,12 @@ async function fetchDynamicEndpoints(): Promise<void> {
       embeddable: true,
     }))
     if (!currentHost.value) selectedHostId.value = dynamicHosts.value[0]?.id ?? ''
+    if (discoveryFailed.value) error.value = null // recovery is visible: the discovery error clears on success
+    discoveryFailed.value = false
   } catch (e) {
     logger.warn('VNC endpoints API not available:', e)
+    discoveryFailed.value = true // a failed request must stay distinguishable from an empty fleet
+    error.value = t('tools.admin.noVNCTool.endpointsFailed')
   } finally {
     loadingEndpoints.value = false
   }
@@ -61,6 +66,7 @@ async function connect(): Promise<void> {
   error.value = null
   try {
     await probeVncWebsocket(host.websocketUrl)
+    if (currentHost.value?.id !== host.id) return // the selection moved during the probe: this success is not for it
     isConnected.value = true
   } catch (e) {
     logger.warn('VNC endpoint connect failed:', e)
@@ -92,7 +98,7 @@ onMounted(() => fetchDynamicEndpoints())
 
           <select
             v-model="selectedHostId"
-            :disabled="isConnected || loadingEndpoints"
+            :disabled="isConnected || loadingEndpoints || loading"
             class="text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
           >
             <optgroup v-if="dynamicHosts.length > 0" :label="$t('tools.admin.noVNCTool.sLMManaged')">
@@ -104,7 +110,7 @@ onMounted(() => fetchDynamicEndpoints())
 
           <button
             @click="fetchDynamicEndpoints"
-            :disabled="loadingEndpoints || isConnected"
+            :disabled="loadingEndpoints || isConnected || loading"
             class="p-1.5 text-autobot-text-tertiary hover:bg-autobot-bg-active rounded-sm transition-colors disabled:opacity-50"
             :title="$t('tools.admin.noVNCTool.refreshVNCEndpoints')"
           >

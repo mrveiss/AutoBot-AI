@@ -97,6 +97,49 @@ describe('useDesktopControlLock', () => {
     scope.stop()
   })
 
+  it('releases an old-host acquisition that completes after the selection changed', async () => {
+    const host = ref('host-1')
+    const scope = effectScope()
+    const lock = scope.run(() => useDesktopControlLock(host))!
+    let grant: (v: unknown) => void = () => {}
+    mockPost.mockImplementationOnce(() => new Promise((resolve) => { grant = resolve }))
+    mockGet.mockResolvedValue(fakeState({ session_id: 'host-2' }))
+    const pending = lock.takeControl()
+    host.value = 'host-2'
+    await nextTick()
+    mockPost.mockResolvedValue(fakeState())
+    grant(fakeState({ owner: 'alice', human_active: true }))
+    expect(await pending).toBeNull()
+    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc-proxy/{vnc_type}/control/release', {
+      path: { vnc_type: 'desktop' },
+      body: { session_id: 'host-1' }
+    })
+    expect(lock.humanActive.value).toBe(false)
+    scope.stop()
+  })
+
+  it('ignores a status response from a previous selection, including A -> B -> A', async () => {
+    const host = ref('host-1')
+    const store = useUserStore()
+    store.currentUser = { username: 'alice' } as never
+    const scope = effectScope()
+    const lock = scope.run(() => useDesktopControlLock(host))!
+    let answer: (v: unknown) => void = () => {}
+    mockGet.mockImplementationOnce(() => new Promise((resolve) => { answer = resolve }))
+    const stale = lock.refreshStatus()
+    mockGet.mockResolvedValue(fakeState())
+    host.value = 'host-2'
+    await nextTick()
+    host.value = 'host-1'
+    await nextTick()
+    await flushPromises()
+    answer(fakeState({ owner: 'alice', human_active: true }))
+    expect(await stale).toBeNull()
+    expect(lock.humanActive.value).toBe(false)
+    expect(lock.error.value).toBeNull()
+    scope.stop()
+  })
+
   it('makes no request without a selected host id (#22145)', async () => {
     const { refreshStatus, takeControl } = useDesktopControlLock('')
     expect(await refreshStatus()).toBeNull()

@@ -60,6 +60,11 @@ describe('createVncCompanion', () => {
     expect(createSecret).not.toHaveBeenCalled()
   })
 
+  it('looks the companion up in the host\'s chat scope, so a chat-scoped one is found, not duplicated', async () => {
+    await createVncCompanion({ data: { id: 'h1' } }, form, { scope: 'chat', chat_id: 'c1' }, t)
+    expect(getSecrets).toHaveBeenCalledWith({ chatId: 'c1' })
+  })
+
   it.each([
     ['no password typed', { ...form, vnc_password: '' }], // pragma: allowlist secret
     ['no vnc capability', { ...form, capabilities: ['ssh'] }],

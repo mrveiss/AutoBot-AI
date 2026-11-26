@@ -25,6 +25,15 @@ describe('vnc-client URL derivation', () => {
     expect(buildVncBaseUrl({ host: 'box.example.test', vnc_port: 6081 })).toBe('https://box.example.test:6081')
   })
 
+  it.each([
+    ['2001:db8::1', 'https://[2001:db8::1]:6081'],
+    ['[2001:db8::1]', 'https://[2001:db8::1]:6081'],
+    ['192.0.2.5', 'https://192.0.2.5:6081'],
+    ['box.example.test', 'https://box.example.test:6081'],
+  ])('brackets an IPv6 literal only: %s', (host, expected) => {
+    expect(buildVncBaseUrl({ host, vnc_port: 6081 })).toBe(expected)
+  })
+
   it('falls back to the SSOT desktop port, not a literal', () => {
     expect(getVncClientPort({ host: 'box.example.test' })).toBe(getConfig().vnc.desktop.port)
     expect(getVncClientPort({ host: 'box.example.test', vnc_port: null })).toBe(getConfig().vnc.desktop.port)

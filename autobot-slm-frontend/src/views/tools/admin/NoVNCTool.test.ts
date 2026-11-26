@@ -83,6 +83,34 @@ describe('NoVNCTool (SLM)', () => {
   })
 })
 
+describe('NoVNCTool (SLM) review fixes', () => {
+  beforeEach(() => {
+    FakeSocket.instances = []
+    FakeSocket.outcome = 'open'
+    vi.stubGlobal('WebSocket', FakeSocket)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('a failed endpoint discovery shows an error, and a successful refresh clears it', async () => {
+    getVncEndpoints.mockReset().mockRejectedValueOnce(new Error('down')).mockResolvedValue(endpointsResponse())
+    const wrapper = await mountTool()
+    expect(wrapper.text()).toContain('Could not read the VNC endpoints from the SLM.')
+    await wrapper.find('button[title]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Could not read the VNC endpoints')
+    expect(wrapper.findAll('select option')).toHaveLength(1)
+  })
+
+  it('the selector and Refresh are disabled while a probe is in flight', async () => {
+    getVncEndpoints.mockReset().mockResolvedValue(endpointsResponse())
+    const wrapper = await mountTool()
+    await wrapper.find('button.px-4').trigger('click') // probe starts; the fake socket opens on a microtask
+    expect(wrapper.find('select').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('button[title]').attributes('disabled')).toBeDefined()
+    await flushPromises()
+  })
+})
+
 describe('vnc-client helpers', () => {
   it('derives the client link scheme and authority from the endpoint websocket_url', () => {
     expect(vncClientUrlFromWebsocket('wss://h:6080/websockify')).toMatch(/^https:\/\/h:6080\/vnc\.html\?/)

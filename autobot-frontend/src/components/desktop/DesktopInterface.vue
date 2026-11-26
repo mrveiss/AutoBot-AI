@@ -324,7 +324,7 @@ const loadVncUrlFn = async () => {
   // Issue #4977: when a host prop is supplied, derive URL directly — no AppConfig call needed
   if (!props.host) throw new Error(t('desktop.interface.noHostSelected'))
   const blocked = props.host.id === DESKTOP_VM_HOST_ID ? await desktopVmBlockedKey() : null
-  if (blocked) return handleDesktopError(new Error(t(blocked)))  // the localised desktop-VM state, not an iframe
+  if (blocked) { vncUrl.value = ''; return handleDesktopError(new Error(t(blocked))) }  // localised state, no iframe; blocked until a lookup succeeds
   vncUrl.value = buildHostVncUrl(props.host)
   // Clear any previous errors and update status
   error.value = null;
@@ -400,10 +400,12 @@ const toggleFullscreen = () => {
   }
 }
 
-const reconnect = () => {
+const reconnect = async () => {
   error.value = null
   loading.value = true
   connectionStatus.value = 'Connecting...'
+  await loadVncUrl() // repeats the URL initialisation and the blocked check: a registry down at mount may be back
+  if (!vncUrl.value || error.value) return
 
   // Reload the VNC iframe with cache-bust to force refresh
   if (vncFrame.value) {
@@ -427,6 +429,7 @@ const checkConnectionFn = async () => {
   });
   clearTimeout(timeoutId);
 
+  if (!vncUrl.value) return // a reachable server must not hide a blocked or unloaded viewer
   if (response.ok || response.type === 'opaque') {
     connectionStatus.value = 'Connected'
     loading.value = false
