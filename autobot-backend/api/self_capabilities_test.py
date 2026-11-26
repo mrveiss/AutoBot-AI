@@ -265,3 +265,34 @@ async def test_discover_endpoints_refreshes_on_route_count_change():
         await sc.discover_endpoints(app)
 
     assert call_count == 2, "Schema must refresh when route count changes"
+
+
+# ---------------------------------------------------------------------------
+# One route registry, each route naming its serving service (#22274)
+# ---------------------------------------------------------------------------
+
+
+def test_every_endpoint_entry_names_its_serving_service():
+    entry = sc._build_endpoint_entry("/api/items", "get", {})
+    assert entry["serving_service"] == sc.SERVING_SERVICE == "backend"
+
+
+@pytest.mark.asyncio
+async def test_route_records_are_plain_records_with_a_serving_service():
+    sc._cache = None
+    sc._cache_ts = 0.0
+    sc._cache_schema_hash = ""
+    with patch.object(sc, "_openapi_paths", _fake_openapi_paths):
+        records = await sc.route_records(_stub_app(route_count=3))
+    names = {r["name"] for r in records}
+    assert "GET /api/items" in names
+    assert all(r["kind"] == "route" and r["serving_service"] == "backend" for r in records)
+
+
+def test_developer_endpoint_view_derives_from_the_canonical_crawl():
+    """#22274: ``RuntimeEndpointRegistry`` (never populated) is retired; developer.py reads the crawl."""
+    import pathlib
+
+    src = (pathlib.Path(__file__).parent / "developer.py").read_text(encoding="utf-8")
+    assert "RuntimeEndpointRegistry" not in src
+    assert "discover_endpoints" in src
