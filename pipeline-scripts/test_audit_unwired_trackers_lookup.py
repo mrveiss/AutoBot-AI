@@ -199,12 +199,26 @@ def test_a_longer_heading_that_starts_with_the_marker_is_not_a_deferral() -> Non
 
 
 @pytest.mark.parametrize(
-    "heading", ["## Wire-in deferred", "###### Wire-in deferred", "###\nWire-in deferred", "#Wire-in deferred"]
+    "heading",
+    [
+        "## Wire-in deferred",
+        "###### Wire-in deferred",
+        "###\nWire-in deferred",
+        "#Wire-in deferred",
+        "a\r\n## Wire-in deferred\r\nx",
+    ],
 )
 def test_only_the_exact_level_three_single_line_heading_is_a_deferral(heading: str) -> None:
     """Contrast: other heading levels and a heading split across lines are not the deferral note (#22199)."""
     other = _issue(2, "foo", 5, "x/foo.py", stateReason="COMPLETED", comments=[{"body": heading}])
     assert _filed_files([], [other], [_finding("x/foo.py", 5)]) == ["x/foo.py"]
+
+
+def test_a_crlf_body_with_the_exact_heading_is_a_deferral() -> None:
+    """GitHub returns CRLF bodies; the exact heading must still count (#22199)."""
+    note = {"body": "a\r\n### Wire-in deferred\r\nscaffold"}
+    crlf = _issue(2, "foo", 5, "x/foo.py", stateReason="COMPLETED", comments=[note])
+    assert _filed_files([], [crlf], [_finding("x/foo.py", 5)]) == []
 
 
 def test_completed_closed_issue_that_is_still_unwired_is_refiled() -> None:

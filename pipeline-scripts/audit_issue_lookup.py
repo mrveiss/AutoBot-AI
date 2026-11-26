@@ -77,9 +77,9 @@ def fetch_closed_tracker_set() -> set[int]:
 _TRACKER_RE = re.compile(r"tracker #(\d+) closed prematurely")
 _TITLE_STEM_RE = re.compile(r"wire in (\S+) \(tracker #")
 _BODY_PATH_RE = re.compile(r"\[`([^`]+)`\]\(")
-# A real deferral note is exactly the ``###`` heading line (horizontal whitespace only, one line); the issue
+# A real deferral note is exactly the ``###`` heading line (horizontal whitespace only, one line, LF or CRLF); the issue
 # template only mentions it inline in backticks.
-_DEFERRAL_RE = re.compile(r"^### Wire-in deferred[ \t]*$", re.MULTILINE)
+_DEFERRAL_RE = re.compile(r"^### Wire-in deferred[ \t]*\r?$", re.MULTILINE)
 
 
 def _audit_issue_key(item: dict) -> Optional[tuple[str, int]]:
