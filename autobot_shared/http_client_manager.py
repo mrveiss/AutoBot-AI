@@ -25,6 +25,7 @@ from typing import Any, AsyncIterator, Dict
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
+from multidict import CIMultiDict
 
 # #15522: a launch whose handle is discarded can be collected before it runs —
 # the loop holds only a weak reference. ``fire_and_forget`` retains the task
@@ -38,8 +39,28 @@ from autobot_shared.http_egress_guard import _EgressPolicy, apply_egress_guard
 # pure re-export of ssot_constants — so autobot_shared depended on the backend
 # to reach its own constants, and could not be imported standalone.
 from autobot_shared.ssot_constants import TimingConstants
+from autobot_shared.tracing import get_trace_context
 
 logger = logging.getLogger(__name__)
+
+
+_W3C_TRACE_HEADERS = frozenset({"traceparent", "tracestate"})
+
+
+def _with_trace_headers(headers) -> CIMultiDict:
+    """A copy of *headers* (repeated values kept) plus the active trace context the caller did not set.
+
+    ``traceparent`` and ``tracestate`` travel as a unit: a caller-set ``traceparent`` keeps the caller's
+    ``tracestate`` and the active span's is not mixed in (#21685).
+    """
+    merged = CIMultiDict(headers or ())
+    present = {name.lower() for name in merged}
+    if "traceparent" in present:
+        present |= _W3C_TRACE_HEADERS
+    for name, value in get_trace_context().items():
+        if name.lower() not in present:
+            merged[name] = value
+    return merged
 
 
 class HTTPClientManager:
@@ -285,15 +306,7 @@ class HTTPClientManager:
 
         # Issue #697: Inject W3C trace context into outgoing headers
         try:
-            from opentelemetry.propagate import inject
-
-            headers = kwargs.pop("headers", {}) or {}
-            inject(headers)
-            kwargs["headers"] = headers
-        except ImportError:
-            pass  # OTel not installed, skip propagation
-
-        try:
+            kwargs["headers"] = _with_trace_headers(kwargs.pop("headers", None))
             response = await session.request(method, url, **kwargs)
             return response
         except Exception as e:
