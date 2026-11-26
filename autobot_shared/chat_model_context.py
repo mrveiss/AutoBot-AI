@@ -27,6 +27,15 @@ def note_chat_turn_model(model: str | None) -> None:
     _last_turn_model = model or None
 
 
+def sent_num_ctx() -> int:
+    """The ``num_ctx`` every chat request sends to Ollama, whichever model it names (#22016).
+
+    The chat payload (``chat_workflow.prompt_window.chat_request_options``) and the prompt budget both read this,
+    so the window the budget counts is the window the request carries.
+    """
+    return ModelConfig.CHAT_NUM_CTX
+
+
 def is_chat_model(model: str | None) -> bool:
     """Whether *model* is the configured chat model or the one the last chat turn ran with (bare name = ``:latest``)."""
     from autobot_shared.ssot_config import config

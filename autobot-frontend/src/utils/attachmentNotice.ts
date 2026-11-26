@@ -20,7 +20,9 @@ export const ATTACHMENT_NOTICE_CODES = [
   'unreadable',
   'empty',
   'truncated',
+  'truncated_legacy',
   'over_budget',
+  'over_window',
 ] as const
 
 export type AttachmentNoticeCode = (typeof ATTACHMENT_NOTICE_CODES)[number]
@@ -29,13 +31,19 @@ export interface AttachmentNoticeMetadata {
   code?: string
   filename?: string
   limit?: number
+  used?: number
+  total?: number
 }
 
 export function attachmentNoticeText(metadata: AttachmentNoticeMetadata | undefined): string {
   const known = ATTACHMENT_NOTICE_CODES.find((code) => code === metadata?.code)
-  return i18n.global.t(`chat.attachmentNotice.${known ?? 'unreadable'}`, {
+  // A notice stored before #22016 carries no counts: it keeps its old wording rather than "first  of  characters".
+  const legacy = known === 'truncated' && (metadata?.used == null || metadata?.total == null)
+  return i18n.global.t(`chat.attachmentNotice.${legacy ? 'truncated_legacy' : (known ?? 'unreadable')}`, {
     filename: metadata?.filename ?? '',
     limit: metadata?.limit ?? '',
+    used: metadata?.used ?? '',
+    total: metadata?.total ?? '',
   })
 }
 
