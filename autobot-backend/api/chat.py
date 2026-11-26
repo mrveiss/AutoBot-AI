@@ -764,6 +764,29 @@ def _context_warning(overflow_status: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+async def _apply_context_overflow(chat_history_manager, session_id, model_name, llm_response, chat_context) -> Dict:
+    """Run overflow protection for a finished turn and persist the summary it created (Issue #9043)."""
+    overflow_status = await handle_message_completion(
+        session_id=session_id,
+        # #19760: the model that answered, else the configured one — never a vendor name that is not in use.
+        model_name=model_name or getattr(llm_response, "model", "") or provide_config_manager().get_selected_model(),
+        llm_response=llm_response,
+        messages=chat_context,  # Full history for summarization
+    )
+    if overflow_status.get("summary_created"):
+        summary_msg = await create_summary_message(overflow_status["summary_text"])
+        if hasattr(chat_history_manager, "add_messages_batch"):
+            await chat_history_manager.add_messages_batch(
+                session_id, [_to_persisted_message(summary_msg, "context_summary")]
+            )
+        logger.info(
+            "Context overflow: auto-summarized session %s (%d%% full)",
+            session_id,
+            int(overflow_status.get("current_fill_percentage", 0) * 100),
+        )
+    return overflow_status
+
+
 async def process_chat_message(
     message: ChatMessage,
     chat_history_manager,
@@ -814,25 +837,9 @@ async def process_chat_message(
     ai_message_id = await _store_and_log_ai_response(ai_response, session_id, request_id, chat_history_manager)
 
     # Issue #9043: Check for context overflow and handle auto-summarization
-    overflow_status = await handle_message_completion(
-        session_id=session_id,
-        model_name=model_name or "gpt-4",  # Fallback to default if not specified
-        llm_response=llm_response,
-        messages=chat_context,  # Full history for summarization
+    overflow_status = await _apply_context_overflow(
+        chat_history_manager, session_id, model_name, llm_response, chat_context
     )
-
-    # Handle context overflow summary injection
-    if overflow_status.get("summary_created"):
-        summary_msg = await create_summary_message(overflow_status["summary_text"])
-        if hasattr(chat_history_manager, "add_messages_batch"):
-            await chat_history_manager.add_messages_batch(
-                session_id, [_to_persisted_message(summary_msg, "context_summary")]
-            )
-        logger.info(
-            "Context overflow: auto-summarized session %s (%d%% full)",
-            session_id,
-            int(overflow_status.get("current_fill_percentage", 0) * 100),
-        )
 
     # Add overflow warning to metadata if triggered
     metadata = ai_response.get("metadata", {})
@@ -844,23 +851,13 @@ async def process_chat_message(
 
     grounding = GroundingStatus(grounded=bool(citations), strategy="rag" if citations else None)
     # Surface citations in metadata so CitationsDisplay.vue can consume them
-    # (MessageItem.vue reads message.metadata.citations).
+    # (ChatMessageContent.vue reads message.metadata.citations).
     if citations:
         metadata = {**(metadata or {}), "citations": [c.model_dump() for c in citations]}
 
-    # MVA-3090: Extract thinking metadata from LLM response
-    thinking_metadata = None
-    if llm_response and llm_response.usage:
-        # Check for thinking_tokens in usage dict (Anthropic extended thinking)
-        thinking_tokens = llm_response.usage.get("thinking_tokens") or llm_response.usage.get("cache_read_input_tokens")
-        if thinking_tokens and thinking_tokens > 0:
-            from api.schemas_chat import ThinkingMetadata
+    from api.chat_response_metadata import thinking_metadata_of
 
-            thinking_metadata = ThinkingMetadata(used=True, tokens_used=thinking_tokens)
-        else:
-            from api.schemas_chat import ThinkingMetadata
-
-            thinking_metadata = ThinkingMetadata(used=False, tokens_used=None)
+    thinking_metadata = thinking_metadata_of(llm_response)  # MVA-3090
 
     return ChatMessageData(
         content=ai_response.get("content", ""),
