@@ -22,10 +22,11 @@ from fastapi import FastAPI
 from api.self_capabilities import route_records
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.self_model_constants import CATALOGUE_SOURCE, HEALTH_SOURCE, MODEL_SOURCE, PUSH_INTERVAL_S
-from events.bus import PersistStrategy, publish_event
+from events.bus import PersistStrategy, get_event_bus, publish_event
 from events.event_types import SELF_MODEL_CHANGED
 from orchestration.agent_record import agent_records
 from orchestration.capability_audit import build_audit_report
+from services.man_page_self_model import on_self_model_changed
 from services.self_model_models import MODEL_KIND, model_observations
 from services.service_health_probe import read_service_health_snapshot
 from services.slm_self_model import push_observations
@@ -149,5 +150,9 @@ async def _run_forever(app: FastAPI) -> None:
 
 
 def start_self_model_producer(app: FastAPI) -> "asyncio.Task[None]":
-    """Start the periodic push; the caller keeps the task on ``app.state`` so shutdown can cancel it."""
+    """Start the periodic push; the caller keeps the task on ``app.state`` so shutdown can cancel it.
+
+    Also subscribes the man-page staleness listener to ``self_model.changed`` (#22299).
+    """
+    get_event_bus().subscribe(SELF_MODEL_CHANGED, on_self_model_changed)
     return asyncio.create_task(_run_forever(app), name="self-model-producer")
