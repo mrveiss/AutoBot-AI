@@ -58,12 +58,16 @@ VNC_OBSERVATION_TIMEOUT_S = env_int("AUTOBOT_VNC_OBSERVATION_TIMEOUT_S", 1)
 VNC_STATUS_PROBE_TIMEOUT_S = env_int("AUTOBOT_VNC_STATUS_PROBE_TIMEOUT_S", 5)
 
 
-# The desktop VM is not a fixed entry: it is the SLM's registered VNC desktop node (find_desktop_vm).
-REGISTRY_VNC_TYPES = frozenset({"desktop"})
+REGISTRY_VNC_TYPES = frozenset({"desktop"})  # the desktop VM is the SLM's registered node (find_desktop_vm)
 
 
 def _known_type(vnc_type: str) -> bool:
     return vnc_type in VNC_ENDPOINTS or vnc_type in REGISTRY_VNC_TYPES
+
+
+def _require_known_type(vnc_type: str) -> None:
+    if not _known_type(vnc_type):
+        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
 
 
 async def _upstream_endpoint(vnc_type: str) -> str:
@@ -284,6 +288,7 @@ async def acquire_desktop_control(
     Muting the agent's actuation calls (api.vnc_manager / api.vnc_mcp) until
     this is released or its idle-TTL expires.
     """
+    _require_known_type(vnc_type)
     resolve_host_id(request.session_id)  # the lock key is the selected /secrets host (#22145)
 
     owner = current_user.get("username") or "unknown"
@@ -315,6 +320,7 @@ async def release_desktop_control(
 
     The agent resumes actuation immediately once released.
     """
+    _require_known_type(vnc_type)
     resolve_host_id(request.session_id)  # the lock key is the selected /secrets host (#22145)
 
     owner = current_user.get("username") or "unknown"
@@ -342,6 +348,7 @@ async def get_desktop_control_status(
     current_user: dict = Depends(get_current_user),
 ):
     """Get current desktop control-lock owner/state (#12002, #11506 T1)."""
+    _require_known_type(vnc_type)
     resolve_host_id(session_id)  # the lock key is the selected /secrets host (#22145)
 
     lock_state = await get_control_lock_state(session_id)
@@ -382,8 +389,7 @@ async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current
     Args:
         vnc_type: 'desktop' or 'browser'
     """
-    if not _known_type(vnc_type):
-        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+    _require_known_type(vnc_type)
 
     endpoint = await _upstream_endpoint(vnc_type)
 
@@ -426,8 +432,7 @@ async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current
     Args:
         vnc_type: 'desktop' or 'browser'
     """
-    if not _known_type(vnc_type):
-        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+    _require_known_type(vnc_type)
 
     endpoint = await _upstream_endpoint(vnc_type)
 
@@ -471,8 +476,7 @@ async def proxy_vnc_assets(vnc_type: str, path: str, current_user: dict = Depend
         vnc_type: 'desktop' or 'browser'
         path: Asset path (e.g., 'core/rfb.js', 'app/ui.js')
     """
-    if not _known_type(vnc_type):
-        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+    _require_known_type(vnc_type)
 
     endpoint = await _upstream_endpoint(vnc_type)
 
