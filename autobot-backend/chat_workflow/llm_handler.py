@@ -14,7 +14,7 @@ import json
 from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
-from autobot_shared.chat_model_context import interpretation_llm_options, session_thinking
+from autobot_shared.chat_model_context import interpretation_llm_options, note_chat_turn_model, session_thinking
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_generate_url
@@ -29,40 +29,12 @@ from prompt_manager import get_language_instruction, get_prompt, resolve_languag
 from .interpretation_guard import INTERPRETATION_TIMEOUT_SECONDS, interpretation_never_fails_the_tool
 from .models import WorkflowSession
 from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
+from .prompt_drift import record_session_prefix
 from .reasoning_kwargs import ollama_think_kwargs
+from .system_prompt_hook import _emit_system_prompt_ready
 from .tool_timing import mark_tool_started, take_tool_elapsed, tool_outcome_fields
 
 logger = get_logger(__name__)
-
-
-async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
-    """Emit ON_SYSTEM_PROMPT_READY to registered extensions and return result.
-
-    Issue #3405: Fires after _get_system_prompt() so extensions can inspect or
-    rewrite the system prompt before it enters prompt assembly.  If no extension
-    is registered for this hook the function is a no-op and the original prompt
-    is returned unchanged.
-
-    Args:
-        system_prompt: The assembled system prompt string.
-        session: WorkflowSession instance (passed as data["session"]).
-
-    Returns:
-        Possibly modified system prompt string.
-    """
-    ctx = HookContext(
-        session_id=getattr(session, "session_id", ""),
-        data={"system_prompt": system_prompt, "session": session},
-    )
-    result = await get_extension_manager().invoke_with_transform(HookPoint.SYSTEM_PROMPT_READY, ctx, "system_prompt")
-    if isinstance(result, str) and result != system_prompt:
-        logger.debug(
-            "[#3405] SYSTEM_PROMPT_READY modified system prompt (%d -> %d chars)",
-            len(system_prompt),
-            len(result),
-        )
-        return result
-    return system_prompt
 
 
 async def _emit_full_prompt_ready(prompt: str, llm_params: Dict[str, Any], context: Dict[str, Any]) -> str:
@@ -696,6 +668,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         conversation_context: str,
         message: str,
         model_name: str | None,
+        system_prompt: str | None = None,
     ) -> tuple[str, str, str]:
         """Fit the prompt's competing sections into the model's window (#13640).
 
@@ -725,7 +698,13 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 ContextSection("trajectory", trajectory_context, priority=10, max_share=0.2),
             ]
             message_tokens = cwm.estimate_tokens(message)
-            budget = max(0, cwm.get_prompt_budget(model_name) - message_tokens)
+            from chat_workflow.prompt_window import measured_prompt_budget
+
+            budget = max(0, measured_prompt_budget(cwm, model_name, system_prompt) - message_tokens)
+            if budget == 0:  # surfaced to the user as ``over_window`` by attachment_context._window_notice
+                logger.warning(
+                    "[#22016] No prompt budget left for context sections: the system prompt and message fill it"
+                )
             result = cwm.allocate_sections(sections, budget_tokens=budget)
         except Exception as exc:
             logger.warning("[#13640] Prompt allocation failed, using untrimmed sections: %s", exc, exc_info=True)
@@ -752,6 +731,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         message: str,
         trajectory_context: str = "",
         model_name: str | None = None,
+        system_prompt: str | None = None,
     ) -> str:
         """Build full prompt with optional knowledge and trajectory context.
 
@@ -766,7 +746,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         content first, and what was shed is logged instead of vanishing.
         """
         knowledge_context, trajectory_context, conversation_context = self._allocate_prompt_sections(
-            knowledge_context, trajectory_context, conversation_context, message, model_name
+            knowledge_context, trajectory_context, conversation_context, message, model_name, system_prompt
         )
         prefix = ""
         if knowledge_context:
@@ -816,6 +796,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         )
         # Issue #1214: Try SLM service discovery first (fleet-managed endpoint),
         # then fall back to local config-based resolution (#1070 model routing).
+        note_chat_turn_model(selected_model)  # #22016: before any budgeting; side calls match this model's context
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
             ollama_endpoint = ollama_generate_url(slm_base)
@@ -828,10 +809,11 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             {"message": message, "use_knowledge": use_knowledge, "language": language},
         )
 
-        system_prompt = self._get_system_prompt(
-            language=language,
-            company_id=(session.metadata.get("company_id") if session and session.metadata else None),
-        )
+        company_id = session.metadata.get("company_id") if session and session.metadata else None
+        system_prompt = self._get_system_prompt(language=language, company_id=company_id)
+        # #17278: the stable text (hook-rewritten, hashed for drift) leads; volatile memory follows it.
+        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
+        record_session_prefix(session, language, company_id, bool(self._get_compose_tool_prompt()), system_prompt)
         # Issue #5066: Tiered L0-L4 context wake-up.
         # #13689 turned this ON on 2026-08-08; #13866 reverted it to OFF on
         # 2026-08-10. The A/B's "all five layers render" was measured against
@@ -848,8 +830,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         if not lightweight_mode:
             from chat_workflow import tiered_context_sources as tcs
 
-            system_prompt = await tcs.prepend_memory_context(system_prompt, session, message, selected_model)
-        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
+            system_prompt = await tcs.append_memory_context(system_prompt, session, message, selected_model)
         conversation_context = self._build_conversation_context(session, await prompt_summary(session))
 
         # Knowledge retrieval for RAG
@@ -884,7 +865,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             )
 
         full_prompt = self._build_full_prompt(
-            knowledge_context, conversation_context, message, trajectory_context, model_name=selected_model
+            knowledge_context, conversation_context, message, trajectory_context, selected_model, system_prompt
         )
 
         # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built

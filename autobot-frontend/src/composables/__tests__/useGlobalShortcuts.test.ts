@@ -7,11 +7,12 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { useGlobalShortcuts } from '../useGlobalShortcuts'
 
-function makeKeyEvent(key: string, opts: { ctrlKey?: boolean; metaKey?: boolean } = {}): KeyboardEvent {
+function makeKeyEvent(key: string, opts: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean } = {}): KeyboardEvent {
   return new KeyboardEvent('keydown', {
     key,
     ctrlKey: opts.ctrlKey ?? false,
     metaKey: opts.metaKey ?? false,
+    shiftKey: opts.shiftKey ?? false,
     bubbles: true,
     cancelable: true
   })
@@ -98,6 +99,33 @@ describe('useGlobalShortcuts', () => {
 
     expect(createSpy).toHaveBeenCalledTimes(1)
     expect(pushSpy).toHaveBeenCalledWith('/chat')
+  })
+
+  it.each([
+    ['Ctrl+Shift+O', { ctrlKey: true, shiftKey: true }],
+    ['Cmd+Shift+O', { metaKey: true, shiftKey: true }],
+  ])('%s creates a new session from inside the composer (#18243)', async (_name, mods) => {
+    const commandPaletteRef = ref<{ open: () => void } | null>(null)
+    const { useChatStore } = await import('@/stores/useChatStore')
+    const TestComp = defineComponent({
+      setup() {
+        useGlobalShortcuts({ commandPaletteRef })
+        return {}
+      },
+      template: '<textarea />'
+    })
+    const wrapper = mount(TestComp, { global: { plugins: [router] }, attachTo: document.body })
+    await nextTick()
+
+    const createSpy = vi.spyOn(useChatStore(), 'createNewSession')
+    const pushSpy = vi.spyOn(router, 'push')
+
+    // the event comes from a text field: the shortcut is allowed there, unlike Ctrl+N
+    wrapper.element.dispatchEvent(makeKeyEvent('O', mods))
+
+    expect(createSpy).toHaveBeenCalledTimes(1)
+    expect(pushSpy).toHaveBeenCalledWith('/chat')
+    wrapper.unmount()
   })
 
   it('Ctrl+1 switches to first session and navigates to /chat', async () => {

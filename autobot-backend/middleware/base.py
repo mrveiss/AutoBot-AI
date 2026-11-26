@@ -563,9 +563,10 @@ class Extension:
         """
         Called after the system prompt is built.
 
-        Receives the assembled system prompt in ctx.data["system_prompt"] and
-        ctx.data["session"] for session metadata.  Return a non-None str to
-        replace the system prompt; return None to leave it unchanged.
+        Receives the STABLE system text in ctx.data["system_prompt"] (per-turn memory
+        is appended after the hook runs) and ctx.data["session"] for session metadata.
+        Return a non-None str to replace it; the rewrite becomes part of the hashed
+        prompt prefix, so it must be deterministic. Return None to leave it unchanged.
 
         Args:
             ctx: Hook context with data["system_prompt"] and data["session"]

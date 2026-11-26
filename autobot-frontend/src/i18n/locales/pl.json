@@ -799,8 +799,10 @@
       "unsupported": "\"{filename}\" nie jest plikiem tekstowym, który asystent potrafi odczytać, więc nie został użyty.",
       "unreadable": "Nie udało się odczytać pliku \"{filename}\", więc nie został użyty.",
       "empty": "Plik \"{filename}\" nie zawiera czytelnego tekstu, więc nie został użyty.",
-      "truncated": "Plik \"{filename}\" jest długi, więc użyto tylko jego początku.",
-      "over_budget": "Załączone pliki osiągnęły limit rozmiaru, więc plik \"{filename}\" nie został użyty."
+      "truncated": "Plik \"{filename}\" jest długi, więc użyto tylko pierwszych {used} z {total} znaków.",
+      "truncated_legacy": "Plik \"{filename}\" jest długi, więc użyto tylko jego początku.",
+      "over_budget": "Załączone pliki osiągnęły limit rozmiaru, więc plik \"{filename}\" nie został użyty.",
+      "over_window": "Rozmowa jest dłuższa niż okno modelu, więc część wcześniejszego tekstu może do niego nie dotrzeć."
     }
   },
   "settings": {
@@ -8575,7 +8577,6 @@
       "attachRoleLabel": "Rola",
       "attachRolePlaceholder": "Wybierz rolę…",
       "attachWorkflowLabel": "ID przepływu",
-      "attachWorkflowPlaceholder": "ID przepływu",
       "attachError": "Nie udało się dołączyć tego przepływu.",
       "detachError": "Nie udało się odłączyć tego przepływu.",
       "processDetach": "Odłącz {workflow} od {role}",
@@ -9817,7 +9818,6 @@
     "endTenure": "Zakończ przypisanie",
     "holderIdPlaceholder": "ID pełniącego",
     "permissionPlaceholder": "np. knowledge.read",
-    "workflowPlaceholder": "ID przepływu",
     "toolPlaceholder": "Nazwa narzędzia",
     "credentialPlaceholder": "ID poświadczenia",
     "errorAssign": "Nie udało się przypisać.",

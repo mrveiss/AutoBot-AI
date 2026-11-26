@@ -5845,8 +5845,10 @@
       "unsupported": "\"{filename}\" אינו קובץ טקסט שהעוזר יכול לקרוא, ולכן לא נעשה בו שימוש.",
       "unreadable": "לא ניתן היה לקרוא את \"{filename}\", ולכן לא נעשה בו שימוש.",
       "empty": "ב-\"{filename}\" אין טקסט קריא, ולכן לא נעשה בו שימוש.",
-      "truncated": "\"{filename}\" ארוך, ולכן נעשה שימוש רק בתחילתו.",
-      "over_budget": "הקבצים המצורפים הגיעו למגבלת הגודל, ולכן לא נעשה שימוש ב-\"{filename}\"."
+      "truncated": "\"{filename}\" ארוך, ולכן נעשה שימוש רק ב-{used} התווים הראשונים מתוך {total}.",
+      "truncated_legacy": "\"{filename}\" ארוך, ולכן נעשה שימוש רק בתחילתו.",
+      "over_budget": "הקבצים המצורפים הגיעו למגבלת הגודל, ולכן לא נעשה שימוש ב-\"{filename}\".",
+      "over_window": "השיחה ארוכה מחלון המודל, ולכן ייתכן שחלק מהטקסט הקודם לא יגיע אליו."
     }
   },
   "serviceMessages": {
@@ -8575,7 +8577,6 @@
       "attachRoleLabel": "תפקיד",
       "attachRolePlaceholder": "בחר תפקיד…",
       "attachWorkflowLabel": "מזהה תהליך",
-      "attachWorkflowPlaceholder": "מזהה תהליך",
       "attachError": "לא ניתן היה לצרף תהליך זה.",
       "detachError": "לא ניתן היה להסיר תהליך זה.",
       "processDetach": "הסר את {workflow} מ-{role}",
@@ -9817,7 +9818,6 @@
     "endTenure": "סיים כהונה",
     "holderIdPlaceholder": "מזהה ממלא התפקיד",
     "permissionPlaceholder": "למשל knowledge.read",
-    "workflowPlaceholder": "מזהה תהליך",
     "toolPlaceholder": "שם כלי",
     "credentialPlaceholder": "מזהה סוד",
     "errorAssign": "לא ניתן לשבץ.",

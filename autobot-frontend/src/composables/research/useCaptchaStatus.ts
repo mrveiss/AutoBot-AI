@@ -7,7 +7,7 @@
  * countdown timer, and API mutations (resolve/skip) for CaptchaNotification.
  */
 
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onScopeDispose } from 'vue'
 // GH#9062: migrated from useGlobalWebSocket — captcha events flow through the
 // LiveEventManager (global channel), so useEventBus is the correct subscriber.
 import { useEventBus } from '@/composables/useEventBus'
@@ -15,8 +15,19 @@ import apiClient from '@/utils/ApiClient'
 import { getApiBase, getServiceUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDuration } from '@/utils/formatHelpers'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('useCaptchaStatus')
+
+/** Backend shape of `GET /captcha/pending` (source of truth: generated api.ts). */
+type CaptchaPendingData = components['schemas']['CaptchaPendingData']
+
+/**
+ * The countdown a restored CAPTCHA starts from. `GET /captcha/pending` reports only each id and its
+ * status, not the deadline, so this mirrors the backend's default wait (`CaptchaHumanLoop`, 120 s); the
+ * backend's own timeout still decides when the wait ends (#22215).
+ */
+const RESTORED_CAPTCHA_TIMEOUT_SECONDS = 120
 
 // ============================================================================
 // Types
@@ -58,7 +69,14 @@ export function useCaptchaStatus() {
   const activeCaptcha = ref<CaptchaEvent | null>(null)
   const timeRemaining = ref(0)
   const isSubmitting = ref(false)
+  // True when the mount-time restore failed, so "could not check" never reads as "nothing pending" (#22215).
+  const pendingLoadFailed = ref(false)
+  // Ids whose terminal event arrived; a snapshot from `/captcha/pending` may predate it, so they are never
+  // restored. Lives and dies with the composable (one id per CAPTCHA, a handful per session).
+  const endedCaptchaIds = new Set<string>()
   let timerInterval: ReturnType<typeof setInterval> | null = null
+  // Set when the owning scope (the component) is gone: a reply arriving later must start no countdown.
+  let disposed = false
 
   // --------------------------------------------------------------------------
   // Timer
@@ -96,6 +114,7 @@ export function useCaptchaStatus() {
 
   function handleCaptchaTimeout(data: { captcha_id: string } | { payload: { captcha_id: string } }) {
     const eventData = 'payload' in data ? data.payload : data
+    endedCaptchaIds.add(eventData.captcha_id)
     if (activeCaptcha.value?.captcha_id === eventData.captcha_id) {
       activeCaptcha.value = null
       stopTimer()
@@ -104,6 +123,7 @@ export function useCaptchaStatus() {
 
   function handleCaptchaResolved(data: { captcha_id: string } | { payload: { captcha_id: string } }) {
     const eventData = 'payload' in data ? data.payload : data
+    endedCaptchaIds.add(eventData.captcha_id)
     if (activeCaptcha.value?.captcha_id === eventData.captcha_id) {
       activeCaptcha.value = null
       stopTimer()
@@ -178,6 +198,41 @@ export function useCaptchaStatus() {
     window.open(vncUrl, '_blank', 'noopener,noreferrer')
   }
 
+  /**
+   * Show a CAPTCHA that was already waiting when this view mounted (#22215).
+   *
+   * Events only announce a CAPTCHA once, so a reload would lose one still awaiting a human. The pending
+   * route lists `{captcha_id: {status}}`; the first still-pending one is shown unless an event already
+   * put one on screen. The route carries no URL or screenshot, so the card shows what it has.
+   */
+  async function loadPendingCaptchas() {
+    pendingLoadFailed.value = false
+    try {
+      // The route returns `CaptchaPendingData` flat (a JSONResponse), while its response_model wraps it in
+      // `DataResponse`; read either so a later switch to the wrapped body does not blank the card.
+      const reply = (await apiClient.call('get', '/api/captcha/pending')) as unknown as
+        | CaptchaPendingData
+        | { data?: CaptchaPendingData | null }
+      if (disposed) return
+      const data = ('data' in reply && reply.data ? reply.data : reply) as CaptchaPendingData
+      const pending = (data?.pending_captchas ?? {}) as Record<string, { status?: string }>
+      const id = Object.keys(pending).find((key) => pending[key]?.status === 'pending' && !endedCaptchaIds.has(key))
+      if (!id || activeCaptcha.value) return
+      handleCaptchaDetected({
+        captcha_id: id,
+        url: '',
+        captcha_type: 'unknown',
+        timeout_seconds: RESTORED_CAPTCHA_TIMEOUT_SECONDS,
+        timestamp: data.timestamp ?? '',
+        message: '',
+      })
+    } catch (error) {
+      if (disposed) return
+      pendingLoadFailed.value = true
+      logger.error('Failed to load pending CAPTCHAs:', error)
+    }
+  }
+
   // --------------------------------------------------------------------------
   // Mutations
   // --------------------------------------------------------------------------
@@ -222,7 +277,9 @@ export function useCaptchaStatus() {
     }
   })
 
-  onUnmounted(() => {
+  // onScopeDispose, not onUnmounted: a component's setup runs in its scope, so it fires on unmount too.
+  onScopeDispose(() => {
+    disposed = true
     stopTimer()
   })
 
@@ -234,11 +291,13 @@ export function useCaptchaStatus() {
     activeCaptcha,
     timeRemaining,
     isSubmitting,
+    pendingLoadFailed,
     captchaTypeLabelKey,
     truncatedUrl,
     progressPercentage,
     formatTime: formatClock,
     openVnc,
+    loadPendingCaptchas,
     markSolved,
     skipCaptcha,
   }

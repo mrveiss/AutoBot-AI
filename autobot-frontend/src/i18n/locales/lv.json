@@ -799,8 +799,10 @@
       "unsupported": "\"{filename}\" nav teksta fails, ko asistents var nolasīt, tāpēc tas netika izmantots.",
       "unreadable": "Failu \"{filename}\" neizdevās nolasīt, tāpēc tas netika izmantots.",
       "empty": "Failā \"{filename}\" nav nolasāma teksta, tāpēc tas netika izmantots.",
-      "truncated": "Fails \"{filename}\" ir garš, tāpēc tika izmantots tikai tā sākums.",
-      "over_budget": "Pievienotie faili sasniedza izmēra ierobežojumu, tāpēc \"{filename}\" netika izmantots."
+      "truncated": "Fails \"{filename}\" ir garš, tāpēc tika izmantotas tikai pirmās {used} no {total} rakstzīmēm.",
+      "truncated_legacy": "Fails \"{filename}\" ir garš, tāpēc tika izmantots tikai tā sākums.",
+      "over_budget": "Pievienotie faili sasniedza izmēra ierobežojumu, tāpēc \"{filename}\" netika izmantots.",
+      "over_window": "Saruna ir garāka par modeļa logu, tāpēc daļa iepriekšējā teksta var tam nenonākt."
     }
   },
   "settings": {
@@ -8575,7 +8577,6 @@
       "attachRoleLabel": "Loma",
       "attachRolePlaceholder": "Izvēlieties lomu…",
       "attachWorkflowLabel": "Darbplūsmas ID",
-      "attachWorkflowPlaceholder": "Darbplūsmas ID",
       "attachError": "Neizdevās pievienot šo darbplūsmu.",
       "detachError": "Neizdevās noņemt šo darbplūsmu.",
       "processDetach": "Noņemt {workflow} no {role}",
@@ -9817,7 +9818,6 @@
     "endTenure": "Beigt pilnvaras",
     "holderIdPlaceholder": "Izpildītāja ID",
     "permissionPlaceholder": "piem., knowledge.read",
-    "workflowPlaceholder": "Darbplūsmas ID",
     "toolPlaceholder": "Rīka nosaukums",
     "credentialPlaceholder": "Noslēpuma ID",
     "errorAssign": "Neizdevās piešķirt izpildītāju.",

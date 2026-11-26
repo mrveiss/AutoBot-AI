@@ -403,3 +403,26 @@ async def test_a_callers_rejected_credential_surfaces_on_the_chat_path():
         items = await _run(http, _ctx())
     assert _texts(items) == ["LLM service error: 401"]
     assert registry.asked == [] and world.store.marks == []
+
+
+def test_an_informational_notice_is_not_turn_activity_but_model_output_is():
+    from chat_workflow.attachment_context import NOTICE_TYPE
+    from chat_workflow.llm_failover import turn_has_acted
+
+    notice, text = SimpleNamespace(type=NOTICE_TYPE), SimpleNamespace(type="response")
+    assert not turn_has_acted(SimpleNamespace(execution_history=[], workflow_messages=[notice]), 1)
+    assert turn_has_acted(SimpleNamespace(execution_history=[], workflow_messages=[notice, text]), 1)
+
+
+def test_the_backup_request_carries_the_reply_cap_as_max_tokens_and_no_thinking_kwargs():
+    """#21864 sizes the hop check with the cap; #20922: api_kwargs (thinking) are documented as not carried."""
+    from chat_workflow.llm_failover import IterationCall, _build_request
+
+    class _Mgr:
+        def _get_llm_request_payload(self, model, prompt, system):
+            return {"options": {"temperature": 0.7, "top_p": 0.9, "num_predict": 2048}, "think": True}
+
+    ctx = SimpleNamespace(selected_model="m", system_prompt="sys", session_id="s")
+    request = _build_request(IterationCall(manager=_Mgr(), ctx=ctx, iteration=1, prompt="hi"))
+    assert request.max_tokens == 2048
+    assert "think" not in request.metadata and "api_kwargs" not in request.metadata

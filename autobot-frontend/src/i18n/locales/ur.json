@@ -5845,8 +5845,10 @@
       "unsupported": "\"{filename}\" ایسی متنی فائل نہیں جسے اسسٹنٹ پڑھ سکے، اس لیے استعمال نہیں کی گئی۔",
       "unreadable": "\"{filename}\" نہیں پڑھی جا سکی، اس لیے استعمال نہیں کی گئی۔",
       "empty": "\"{filename}\" میں پڑھنے کے قابل متن نہیں ہے، اس لیے استعمال نہیں کی گئی۔",
-      "truncated": "\"{filename}\" لمبی ہے، اس لیے صرف اس کا آغاز استعمال کیا گیا۔",
-      "over_budget": "منسلک فائلیں سائز کی حد تک پہنچ گئیں، اس لیے \"{filename}\" استعمال نہیں کی گئی۔"
+      "truncated": "\"{filename}\" لمبی ہے، اس لیے {total} میں سے صرف پہلے {used} حروف استعمال ہوئے۔",
+      "truncated_legacy": "\"{filename}\" لمبی ہے، اس لیے صرف اس کا آغاز استعمال کیا گیا۔",
+      "over_budget": "منسلک فائلیں سائز کی حد تک پہنچ گئیں، اس لیے \"{filename}\" استعمال نہیں کی گئی۔",
+      "over_window": "گفتگو ماڈل کی ونڈو سے لمبی ہے، اس لیے پچھلی تحریر کا کچھ حصہ اس تک نہ پہنچے۔"
     }
   },
   "serviceMessages": {
@@ -8575,7 +8577,6 @@
       "attachRoleLabel": "کردار",
       "attachRolePlaceholder": "ایک کردار منتخب کریں…",
       "attachWorkflowLabel": "ورک فلو شناخت",
-      "attachWorkflowPlaceholder": "ورک فلو شناخت",
       "attachError": "یہ ورک فلو منسلک نہیں ہو سکا۔",
       "detachError": "یہ ورک فلو الگ نہیں ہو سکا۔",
       "processDetach": "{workflow} کو {role} سے الگ کریں",
@@ -9817,7 +9818,6 @@
     "endTenure": "مدت ختم کریں",
     "holderIdPlaceholder": "حامل کی شناخت",
     "permissionPlaceholder": "مثلاً knowledge.read",
-    "workflowPlaceholder": "ورک فلو شناخت",
     "toolPlaceholder": "اوزار کا نام",
     "credentialPlaceholder": "راز کی شناخت",
     "errorAssign": "حامل تفویض نہیں ہو سکا۔",
