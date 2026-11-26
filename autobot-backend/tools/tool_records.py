@@ -90,7 +90,9 @@ def _spill_tools() -> Dict[str, Tuple[str, str]]:
     except Exception:  # pragma: no cover - never break prompt building
         from autobot_shared.logging_manager import get_logger  # noqa: PLC0415
 
-        get_logger(__name__).warning("Could not resolve the tool-output spill flag; omitting its read tool", exc_info=True)
+        get_logger(__name__).warning(
+            "Could not resolve the tool-output spill flag; omitting its read tool", exc_info=True
+        )
         return {}
 
 
