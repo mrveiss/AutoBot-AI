@@ -324,3 +324,15 @@ def test_both_registries_consume_the_core(rel: str) -> None:
     }
     needed = {"SERVICE_DEFINITIONS", "DeploymentMode", "join_service_path"}
     assert needed <= imported, f"{rel} imports {sorted(imported)}"
+
+
+def test_tls_ports_come_from_the_core_not_a_second_source() -> None:
+    """#22273: the SLM backend/frontend entries take their TLS port from the shared spec."""
+    from autobot_shared.service_registry_core import SERVICE_DEFINITIONS, shared_endpoint
+    from autobot_shared.ssot_config import config
+
+    assert SERVICE_DEFINITIONS["backend"].tls_port == config.tls.backend_tls_port
+    assert SERVICE_DEFINITIONS["frontend"].tls_port == config.tls.frontend_tls_port
+    assert shared_endpoint("backend", tls=True)["default_port"] == config.tls.backend_tls_port
+    source = _read(_SLM_ORCHESTRATOR)
+    assert "config.tls." not in source, f"#22273: {_SLM_ORCHESTRATOR} reads a TLS port from ssot_config again"

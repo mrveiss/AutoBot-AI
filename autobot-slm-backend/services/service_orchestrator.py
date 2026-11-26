@@ -89,13 +89,12 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_BACKEND_HOST",
         default_port_env="AUTOBOT_BACKEND_PORT",
         default_host=os.environ.get("AUTOBOT_BACKEND_HOST", ""),  # noqa: ssot-fallback
-        default_port=config.tls.backend_tls_port,  # Issue #858/#861: HTTPS port
+        **_shared_endpoint("backend", tls=True),  # #858/#861: HTTPS port, from the core (#22273)
         start_command=(
             f"cd {FLEET_INSTALL_ROOT}/autobot-backend && "
             "source venv/bin/activate && nohup python backend/main.py > logs/backend.log 2>&1 &"
         ),
         stop_command="pkill -f 'python.*backend/main.py'",
-        health_check_path="/api/health",
         health_check_type="https",  # Backend requires HTTPS on port 8443 (#915)
         systemd_service="autobot-backend",  # #13915: was unnamed, so no query could find it
         requires_sudo=False,
@@ -109,14 +108,13 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_FRONTEND_HOST",
         default_port_env="AUTOBOT_FRONTEND_TLS_PORT",  # nginx HTTPS; AUTOBOT_FRONTEND_PORT is Vite (#19326)
         default_host=os.environ.get("AUTOBOT_FRONTEND_HOST", ""),  # noqa: ssot-fallback
-        default_port=config.tls.frontend_tls_port,
+        **_shared_endpoint("frontend", tls=True),
         systemd_service="nginx",  # Production uses nginx
         start_command=(
             f"cd {FLEET_INSTALL_ROOT}/autobot-slm-frontend && "
             f"nohup npm run dev -- --host 0.0.0.0 --port {config.port.frontend} > /tmp/vite.log 2>&1 &"
         ),
         stop_command=f"pkill -f 'npm.*dev' || pkill -f 'vite.*{config.port.frontend}'",
-        health_check_path="/",
         health_check_type="https",  # Production nginx serves HTTPS
         requires_sudo=False,
         working_dir=f"{FLEET_INSTALL_ROOT}/autobot-slm-frontend",

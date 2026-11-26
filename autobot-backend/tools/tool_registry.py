@@ -21,6 +21,7 @@ from tools.code_interpreter import execute_code
 from tools.kb_read_tools import KnowledgeReadToolsMixin
 from tools.kb_write_tools import KnowledgeWriteToolsMixin
 from tools.system_read_tools import SystemReadToolsMixin
+from tools.tool_records import prompt_tool_names
 
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
@@ -721,65 +722,11 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SystemRead
     def get_available_tools(self) -> List[str]:
         """Get list of available tool names.
 
-        Browser tool names are derived from BROWSER_TOOL_NAMES in
-        chat_workflow.tool_handler (Issue #2609) so both layers share a single
-        source of truth. Issue #2594: also includes web_search (Issue #2306).
+        Derived from the one tool catalogue, ``tools.tool_records`` (#22276): registry
+        tools (each with its execution location), the spill read tool when its flag is
+        on, and the browser tools from BROWSER_TOOL_NAMES (Issue #2609).
         """
-        # Registry-owned tools (system, knowledge-base, GUI, conversation)
-        registry_tools = [
-            "execute_system_command",
-            "query_system_information",
-            "list_system_services",
-            "manage_service",
-            "get_process_info",
-            "terminate_process",
-            "web_fetch",
-            "web_search",
-            "search_knowledge_base",
-            "add_file_to_knowledge_base",
-            "store_fact",
-            "get_fact",
-            "type_text",
-            "click_element",
-            "bring_window_to_front",
-            # Issue #12070: previously had handlers but no task-creation wiring
-            "read_text_from_region",
-            "move_mouse",
-            "ask_user_for_manual",
-            "respond_conversationally",
-            "code_interpreter",
-            # Issue #7509: Web research tools
-            "scrape_url",
-            "crawl_site",
-            "map_site",
-            "extract_structured_data",
-            # #10932: Unified content_reach gateway
-            "content_reach",
-        ]
-        # #13754: the spill excerpt names this tool, so the model must be
-        # offered it. Gated on the spill flag (#13865): this list reaches the
-        # system prompt of every modality agent via llm_service.chat_optimized,
-        # and an off-by-default feature must not change live prompt content.
-        #
-        # Guarded: importing the leaf module pulls in the whole `agent_loop`
-        # package (its __init__ imports AgentLoop). This method is on the
-        # prompt-building path, where it could not previously fail, so an
-        # import error must not propagate out of it.
-        try:
-            from agent_loop.tool_output_spill import SPILL_ENABLED
-
-            if SPILL_ENABLED:
-                registry_tools.append("read_spilled_output")
-        except Exception:  # pragma: no cover - never break prompt building
-            logger.warning("Could not resolve the tool-output spill flag; omitting its read tool", exc_info=True)
-        # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
-        # and imported here so the two lists cannot drift independently.
-        # Lazy import breaks the circular dependency:
-        #   chat_workflow -> tool_handler -> tools -> tool_registry -> chat_workflow
-        # (#4557)
-        from chat_workflow.tool_handler import BROWSER_TOOL_NAMES  # noqa: PLC0415
-
-        return registry_tools + sorted(BROWSER_TOOL_NAMES)
+        return prompt_tool_names()
 
 
 from autobot_shared.singleton_factory import lazy_singleton  # noqa: E402

@@ -109,11 +109,19 @@ class ServiceEndpointSpec:
     host_attr: str  # attribute of ssot_config.vm
     health_path: str
     scheme: str = "http"
+    tls_port_attr: str = ""  # attribute of ssot_config.tls, for a service nginx/uvicorn serves over TLS (#22273)
 
     @property
     def port(self) -> int:
         """The SSOT port for this service."""
         return int(getattr(ssot_config.port, self.port_attr))
+
+    @property
+    def tls_port(self) -> int:
+        """The SSOT TLS port; ``KeyError`` for a service that declares none, never a guess."""
+        if not self.tls_port_attr:
+            raise KeyError(f"service {self.name!r} declares no TLS port")
+        return int(getattr(ssot_config.tls, self.tls_port_attr))
 
     @property
     def host(self) -> str:
@@ -135,22 +143,25 @@ SERVICE_DEFINITIONS: Dict[str, ServiceEndpointSpec] = {
         ServiceEndpointSpec("redis", "redis", "redis", _ROOT_PATH, scheme="redis"),
         ServiceEndpointSpec("ai-stack", "aistack", "aistack", PATH_HEALTH),
         ServiceEndpointSpec("npu-worker", "npu", "npu", PATH_HEALTH),
-        ServiceEndpointSpec("backend", "backend", "main", PATH_API_HEALTH),
-        ServiceEndpointSpec("frontend", "frontend", "frontend", _ROOT_PATH),
+        ServiceEndpointSpec("backend", "backend", "main", PATH_API_HEALTH, tls_port_attr="backend_tls_port"),
+        ServiceEndpointSpec("frontend", "frontend", "frontend", _ROOT_PATH, tls_port_attr="frontend_tls_port"),
         ServiceEndpointSpec("playwright-vnc", "browser", "browser", PATH_HEALTH),
         ServiceEndpointSpec("ollama", "ollama", "ollama", PATH_OLLAMA_TAGS),
     )
 }
 
 
-def shared_endpoint(name: str, *, health_path: bool = True) -> Dict[str, Any]:
+def shared_endpoint(name: str, *, health_path: bool = True, tls: bool = False) -> Dict[str, Any]:
     """Port (and health path) of a service, from the one definition (#22273).
+
+    ``tls=True`` returns the TLS port (``backend_tls_port`` / ``frontend_tls_port``) as the
+    port, for a consumer that probes the service over HTTPS.
 
     A consumer that adds its own facts (the SLM orchestrator: how to start, stop and probe a
     unit) spreads this into its entry instead of restating the port or the health path.
     """
     spec = SERVICE_DEFINITIONS[name]
-    fields: Dict[str, Any] = {"default_port": spec.port}
+    fields: Dict[str, Any] = {"default_port": spec.tls_port if tls else spec.port}
     if health_path:
         fields["health_check_path"] = spec.health_path
     return fields

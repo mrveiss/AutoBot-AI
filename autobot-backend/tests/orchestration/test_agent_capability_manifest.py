@@ -100,3 +100,31 @@ class TestRoutingOverlayNonRegressive:
         assert set(agent_capabilities) == before_keys
         # ... and the overlapping agent's capabilities are unchanged (single source).
         assert set(agent_capabilities["research_agent"]) == before_research
+
+
+class TestOneAgentRecord:
+    """#22275: health and presence are attributes of one agent record, not separate registries."""
+
+    def test_record_joins_profile_health_and_presence(self) -> None:
+        from orchestration.agent_record import agent_records
+
+        records = agent_records()
+        assert {r["name"] for r in records} >= {p.agent_id for p in get_default_agents()}
+        for r in records:
+            assert r["kind"] == "agent" and r["serving_service"] == "backend"
+            assert {"capabilities", "health", "presence", "forbidden_work"} <= set(r["fields"])
+
+    def test_no_further_agent_registry_class(self) -> None:
+        """A new live-status registry must be an attribute of the record, not a class of its own."""
+        import pathlib
+        import re
+
+        root = pathlib.Path(__file__).resolve().parents[2]
+        found = set()
+        for path in root.rglob("*.py"):
+            if "tests" in path.parts or path.name.endswith("_test.py") or "venv" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            found.update(re.findall(r"^class (Agent\w*Registry)\b", text, re.MULTILINE))
+        known = {"AgentCapabilityRegistry", "AgentHealthRegistry", "AgentPresenceRegistry", "AgentRegistryService"}
+        assert found - known <= set(), f"#22275: new agent registry classes {sorted(found - known)}; add an attribute to the record"

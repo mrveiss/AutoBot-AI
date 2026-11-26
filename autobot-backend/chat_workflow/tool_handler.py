@@ -80,6 +80,7 @@ from chat_workflow.tool_permission_gate import caller_identity, permission_denia
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from services.remote_approval_sender import mirror_approval_request
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
+from tools.tool_records import CATEGORY_WEB_RESEARCH, tool_names_in_category
 from utils.errors import RepairableException
 from web_search_schema import WEB_SEARCH_SCHEMA  # noqa: F401  (re-exported: the schema lives in one module, #21877)
 
@@ -633,7 +634,7 @@ def _validate_builtin_tool_arguments(tool_name: str, tool_call: dict[str, Any]) 
 BROWSER_TOOL_NAMES: frozenset[str] = frozenset(BROWSER_TOOLS)
 
 # Issue #7509: web research tools — direct internal dispatch via web_fetch.
-WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset({"scrape_url", "crawl_site", "map_site", "extract_structured_data"})
+WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset(tool_names_in_category(CATEGORY_WEB_RESEARCH))  # #22276
 
 # Issue #11540: goal-directed extraction from the browser session's *current*
 # page — reads whatever the live DOM already shows, never re-fetches a URL.

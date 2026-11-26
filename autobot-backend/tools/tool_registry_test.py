@@ -164,3 +164,52 @@ async def test_system_read_tools_work_through_get_tool_registry_without_worker_n
     assert info["status"] == "success"
     assert "os_type" in info["result"]
     assert services["result"] != "Worker node not available"
+
+
+# ---------------------------------------------------------------------------
+# One tool catalogue, each tool recording where it runs (#22276)
+# ---------------------------------------------------------------------------
+
+
+def test_available_tools_derive_from_the_catalogue():
+    """#22276: ``get_available_tools`` is the catalogue's prompt list, not a literal."""
+    from tools.tool_records import REGISTRY_TOOLS, prompt_tool_names
+    from tools.tool_registry import ToolRegistry
+
+    names = ToolRegistry().get_available_tools()
+    assert names == prompt_tool_names()
+    assert set(REGISTRY_TOOLS) <= set(names)
+
+
+def test_every_tool_record_names_where_it_runs():
+    from tools.tool_records import tool_records
+
+    records = tool_records()
+    assert records and all(r["kind"] == "tool" and r["serving_service"] for r in records)
+    assert {r["fields"]["source"] for r in records} >= {"tool_registry", "browser"}
+
+
+def test_no_second_tool_list():
+    """#22276: a list/set literal restating five or more catalogue tool names is a second list."""
+    import ast
+    import pathlib
+
+    from tools.tool_records import REGISTRY_TOOLS
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    names = set(REGISTRY_TOOLS)
+    offenders = []
+    for path in root.rglob("*.py"):
+        skip = {"tests", "venv", "node_modules"} & set(path.parts)
+        if skip or path.name.endswith("_test.py") or path.name == "tool_records.py":
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+                hits = sum(1 for e in node.elts if isinstance(e, ast.Constant) and e.value in names)
+                if hits >= 5:
+                    offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert not offenders, f"#22276: second tool-name list in {offenders}; derive from tools.tool_records"

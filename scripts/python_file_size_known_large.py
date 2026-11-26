@@ -387,7 +387,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/tests/unit/chat_workflow/test_code_exec.py": 1093,
     "autobot-backend/tests/unit/knowledge/connectors/test_web_crawler.py": 655,
     "autobot-backend/tests/utils/gpu_optimization/test_gpu_detection.py": 718,
-    "autobot-backend/tools/tool_registry.py": 809,
+    "autobot-backend/tools/tool_registry.py": 734,
     "autobot-backend/utils/advanced_cache_manager.py": 1213,
     "autobot-backend/utils/claude_api_integration.py": 917,
     "autobot-backend/utils/error_catalog.py": 774,
