@@ -147,6 +147,27 @@ describe('RoleWorkflowsPanel (#21241)', () => {
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 
+  it('renders the detach control as the kit button, enabled at rest, with its accessible name', async () => {
+    const wrapper = await mountPanel(['wf-a'])
+    const detach = wrapper.get('[data-testid="role-workflow-detach-wf-a"]')
+
+    expect(detach.classes()).toContain('aui-btn')
+    expect(detach.attributes('disabled')).toBeUndefined()
+    expect(detach.attributes('aria-label')).toContain('wf-a')
+    expect(detach.find('svg').exists()).toBe(true)
+  })
+
+  it('disables the detach control while the page reports a write in flight', async () => {
+    const wrapper = await mountPanel(['wf-a'])
+    await wrapper.setProps({ busy: true })
+
+    const detach = wrapper.get('[data-testid="role-workflow-detach-wf-a"]')
+    expect(detach.attributes('disabled')).toBeDefined()
+    await detach.trigger('click')
+    await flushPromises()
+    expect(del).not.toHaveBeenCalled()
+  })
+
   it('hides every mutation control from a viewer who may not manage the company', async () => {
     server.canManage = false
     const wrapper = await mountPanel(['wf-a'])

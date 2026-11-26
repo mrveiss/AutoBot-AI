@@ -17,13 +17,20 @@
       </div>
     </template>
     <template #title>{{ currentSessionTitle }}</template>
-    <!-- Above the title, as in the mockup. Knowledge on/off has no shared source (it is a local ref in ChatInput), so it is not shown. -->
+    <!-- Above the title, as in the mockup: Overseer on/off and Knowledge on/off (useChatKnowledge, shared with the composer chip). -->
     <template #eyebrow>
       <BaseTooltip :text="$t('chat.header.overseerTip')" placement="bottom">
         <template #default="{ describedby }">
           <span tabindex="0" :aria-describedby="describedby">{{ overseerEnabled ? $t('chat.header.overseerOn') : $t('chat.header.overseerOff') }}</span>
         </template>
       </BaseTooltip>
+      ·
+      <BaseTooltip :text="$t('chat.header.knowledgeTip')" placement="bottom">
+        <template #default="{ describedby }">
+          <span tabindex="0" :aria-describedby="describedby" data-testid="header-knowledge">{{ knowledgeEnabled ? $t('chat.header.knowledgeOn') : $t('chat.header.knowledgeOff') }}</span>
+        </template>
+      </BaseTooltip>
+      <template v-if="currentSessionId && startedAt"> · <span class="font-mono" data-testid="header-session-id">{{ $t('chat.header.sessionId', { id: currentSessionId }) }}</span></template>
       <template v-if="startedAt"> · <i18n-t keypath="chat.header.startedAt" tag="span"><template #time><span class="font-mono">{{ startedTime }}</span></template></i18n-t></template>
       <template v-else> · {{ sessionInfo }}</template>
     </template>
@@ -106,6 +113,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatLocalTime } from '@/utils/formatHelpers'
 import { useUiMode, useUiModeAnnouncer } from '@/composables/useUiMode'
+import { useChatKnowledge } from '@/composables/chat/useChatKnowledge'
 
 interface ContextWindowProps {
   tokensUsed: number
@@ -144,6 +152,7 @@ const emit = defineEmits<Emits>()
 
 const { t } = useI18n()
 const { setMode } = useUiMode()
+const { enabled: knowledgeEnabled } = useChatKnowledge()
 const announceMode = useUiModeAnnouncer()
 
 function showAllFeatures(): void {
