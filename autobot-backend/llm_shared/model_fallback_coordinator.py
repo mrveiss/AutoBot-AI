@@ -86,7 +86,7 @@ class _FallbackTrail:
 
     @property
     def reason(self) -> str:
-        """The reason of the most recent hop (reactive 429 until a hop says otherwise)."""
+        """The reason of the most recent hop, or of the failure that ended the chain (429 before any failure)."""
         return self.reasons[-1] if self.reasons else REASON_RATE_LIMIT
 
     @property
@@ -259,9 +259,10 @@ class ModelFallbackCoordinator:
             return None
         run = _FallbackRun(request)
         run.last_error = LLMResponse(content="", model=run.model, provider=run.provider or "", error=failure.message)
+        if not may_fail_over(failure):  # a caller's own credential surfaces silently
+            return None
         if not await self._on_failure(run, failure, 0, max_attempts, mark=not held):
-            if may_fail_over(failure):  # a caller's own credential surfaces silently; any other exhaustion is audited
-                await self._emit(run, exhausted=True)
+            await self._emit(run, exhausted=True)  # every other exhaustion is audited, as _run_loop does
             return None
         return await self._run_loop(run, registry, max_attempts, first_attempt=1)
 
@@ -280,7 +281,8 @@ class ModelFallbackCoordinator:
                 run.trail.note_preempt(hop, run.model)
                 run.switch_to(hop.next_model, hop.next_provider, hop.operator_configured)
             except (RateLimitError, _ProviderFailureError, ProviderAuthError) as exc:
-                if not await self._on_failure(run, self._record_failure(run, exc), attempt, max_attempts):
+                failure = self._record_failure(run, exc)
+                if not may_fail_over(failure) or not await self._on_failure(run, failure, attempt, max_attempts):
                     break
 
         # All fallbacks exhausted.
@@ -331,21 +333,21 @@ class ModelFallbackCoordinator:
     ) -> bool:
         """Hold the failed model out where that is fair to everyone, then pick the next usable one.
 
-        Returns True when the loop should retry on the fallback, False when the chain is exhausted or
-        the failure is not one to fail over on (a caller's own credential, see ``may_fail_over``).
+        Returns True when the loop should retry on the fallback, False when the chain is exhausted. The
+        caller has already checked ``may_fail_over``. An exhaustion names the failure that ended the chain.
         """
-        if not may_fail_over(failure):
-            return False
         if mark:
             await self._mark_failed(run, failure)
         if attempt >= max_attempts:
             logger.warning(
                 "quota-fallback: all %d fallback attempts exhausted for model=%r", max_attempts, run.primary_model
             )
+            run.trail.reasons.append(_reason_for(failure.category))
             return False
         hop = await self._next_usable_hop(run)
         if hop is None:
             logger.warning("quota-fallback: no usable fallback for model=%r provider=%r", run.model, run.provider)
+            run.trail.reasons.append(_reason_for(failure.category))
             if run.trail.ended_on_size_skip:  # the chain ended because its remaining hops could not hold the request
                 run.trail.reasons.append(REASON_REQUEST_TOO_LARGE)
             return False

@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from llm_shared.failover_policy import may_fail_over
 from llm_shared.fallback_chain import FallbackChain, FallbackChainManager
 from llm_shared.model_fallback_coordinator import ModelFallbackCoordinator
 from llm_shared.models import LLMRequest, LLMResponse, ProviderType
@@ -514,9 +515,7 @@ async def test_fail_over_audits_an_exhaustion_with_no_usable_hop_once():
     assert result is None and registry.asked == []
     assert emitted.await_count == 1
     assert emitted.await_args.kwargs["exhausted"] is True
-    assert (
-        emitted.await_args.kwargs["reason"] == "rate_limit_429"
-    )  # no hop was taken: the trail's default, as in _run_loop
+    assert emitted.await_args.kwargs["reason"] == "provider_unavailable"  # the failure that ended the chain
 
 
 @pytest.mark.asyncio
@@ -530,9 +529,7 @@ async def test_fail_over_audits_a_locality_blocked_exhaustion_once():
     assert result is None and registry.asked == []
     assert emitted.await_count == 1
     assert emitted.await_args.kwargs["exhausted"] is True
-    assert (
-        emitted.await_args.kwargs["reason"] == "rate_limit_429"
-    )  # no hop was taken: the trail's default, as in _run_loop
+    assert emitted.await_args.kwargs["reason"] == "provider_unavailable"  # the failure that ended the chain
 
 
 @pytest.mark.asyncio
@@ -549,3 +546,21 @@ async def test_fail_over_emits_nothing_for_a_callers_own_credential():
     with _env(_chains("claude-opus-4", ["gpt-4o"], ["openai"])) as (_, emitted), llm_principal_scope("u1", "o1"):
         assert await ModelFallbackCoordinator().fail_over(_request(), _registry(_ok()), auth, acted=False) is None
     assert emitted.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_a_chain_exhausted_with_no_usable_hop_names_the_failure_in_both_entry_points():
+    mgr = _chains("m-a", ["m-b"], ["anthropic"])
+    with _env(mgr, _Store(degraded={("anthropic", "m-b")})) as (_, emitted):
+        result = await ModelFallbackCoordinator().execute_with_fallback(_request("m-a"), _registry(_error("HTTP 503")))
+    assert result.provider_metadata["fallback_reason"] == "provider_unavailable"
+    assert emitted.await_count == 1 and emitted.await_args.kwargs["reason"] == "provider_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_fail_over_checks_eligibility_once_on_the_credential_path():
+    auth = ProviderFailure(ProviderErrorCategory.AUTHENTICATION, "HTTP 401")
+    with _env(_chains("claude-opus-4", ["gpt-4o"], ["openai"])), llm_principal_scope("u1", "o1"):
+        with patch(f"{MODULE}.may_fail_over", wraps=may_fail_over) as check:
+            await ModelFallbackCoordinator().fail_over(_request(), _registry(_ok()), auth, acted=False)
+    assert check.call_count == 1
