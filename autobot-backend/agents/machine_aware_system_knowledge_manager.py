@@ -3,10 +3,9 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Machine-Aware System Knowledge Manager for AutoBot
-Extends SystemKnowledgeManager with machine-specific adaptation
-
-Issue #379: Optimized sequential awaits with asyncio.gather for concurrent operations.
+Machine-Aware System Knowledge Manager (extends SystemKnowledgeManager; unwired, #379 gather). Verdict #22272: the
+self-model's per-node ``command`` entities cover its available_tools/capabilities; NOT covered, so this stays: OS
+type, distro, package manager, architecture, is_wsl, is_root (the inventory sends only commands and packages).
 """
 
 import asyncio

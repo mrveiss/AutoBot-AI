@@ -3,8 +3,8 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Man Page Knowledge Integrator for AutoBot
-Scrapes, parses, and integrates Linux man pages into machine-aware knowledge system
+Man Page Knowledge Integrator: parses man pages (options, examples, see-also) into per-command YAML. Verdict #22272:
+NOT covered by services/man_page_ingestion.py (raw text + description) or the self-model; this stays until those do.
 """
 
 import asyncio
