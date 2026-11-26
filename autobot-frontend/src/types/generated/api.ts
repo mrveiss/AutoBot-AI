@@ -55889,7 +55889,7 @@ export interface paths {
         put?: never;
         /**
          * End Realtime Session
-         * @description Finalise telemetry for a Realtime session.
+         * @description Finalise telemetry for a Realtime session; a telemetry failure is logged, never a 500.
          */
         post: operations["end_realtime_session_api_voice_realtime_session__session_id__end_post"];
         delete?: never;
@@ -55909,7 +55909,7 @@ export interface paths {
         put?: never;
         /**
          * Ingest Response Done
-         * @description Ingest a response.done payload and enforce soft-caps.
+         * @description Ingest a response.done payload and enforce soft-caps, even when the usage write fails.
          */
         post: operations["ingest_response_done_api_voice_realtime_session__session_id__response_done_post"];
         delete?: never;

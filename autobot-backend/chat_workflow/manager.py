@@ -47,14 +47,13 @@ from chat_workflow.tool_call_grammar import (
 )
 from chat_workflow.tool_call_loop import framed_tool_output
 from constants.api_constants import PATH_OLLAMA_GENERATE
-from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
 from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
 from .answer_sources import answer_target, attach_answer_proof, kb_source, proof_message
-from .attachment_context import apply_attachments, take_notices
+from .attachment_context import NOTICE_TYPE, apply_attachments, take_notices
 from .budget_refusal import budget_refusal_message
 from .conversation import ConversationHandlerMixin
 from .kb_sources import _kb_sources_from_citations
@@ -69,6 +68,7 @@ from .models import (
     filter_internal_prompts,
 )
 from .plan_runner import open_for_ctx
+from .prompt_window import chat_request_options, note_prompt_eval
 from .reasoning_kwargs import build_reasoning_api_kwargs
 from .session_handler import SessionHandlerMixin
 from .session_role import resolve_auth_role, stamp_verified_identity
@@ -1673,6 +1673,7 @@ class ChatWorkflowManager(
             chunk_data = self._parse_stream_chunk(line)
             if not chunk_data:
                 continue
+            note_prompt_eval(chunk_data, selected_model)  # #22016: the final chunk says how much input was kept
             params = self._build_chunk_iteration_params(
                 chunk_data,
                 llm_response,
@@ -1910,11 +1911,7 @@ before summarizing.
             "model": selected_model,
             "prompt": current_prompt,
             "stream": True,
-            "options": {
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "num_ctx": ModelConfig.CHAT_NUM_CTX,
-            },
+            "options": chat_request_options(selected_model),  # #22016: num_ctx and num_predict from one module
         }
         if system_prompt:
             payload["system"] = system_prompt
@@ -2938,8 +2935,9 @@ before summarizing.
         """
         batch = []
         for wf_msg in workflow_messages:
-            # Skip segment_complete markers: internal stream control, empty content (Issue #1141).
-            if wf_msg.type == "segment_complete":
+            # Skip segment_complete markers: internal stream control, empty content (Issue #1141). Skip notices
+            # too: ``persist_notices`` stored them once as system entries; this copy is the live display only (#22016).
+            if wf_msg.type in ("segment_complete", NOTICE_TYPE):
                 continue
 
             sender = "system" if wf_msg.type == "terminal_output" else "assistant"

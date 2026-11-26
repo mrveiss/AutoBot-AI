@@ -62,7 +62,6 @@ Refs #12979, #12992, #13625, #17970.
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 from pathlib import Path
 from typing import Iterator
@@ -73,6 +72,7 @@ from repo_tests._raw_aiohttp_session import Site, client_session_sites, scan_pat
 
 from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
+from tools.lint._main_guard import has_main_guard
 from tools.lint._scan_helpers import tracked_paths
 
 #: Owners allowed to construct a session: the pooled client itself, and the
@@ -251,27 +251,6 @@ def test_no_raw_session_outside_the_recorded_inventory() -> None:
     )
 
 
-def _module_has_main_guard(tree: ast.Module) -> bool:
-    """True when the module has a top-level ``if __name__ == "__main__":``."""
-    for node in tree.body:
-        if not isinstance(node, ast.If) or not isinstance(node.test, ast.Compare):
-            continue
-        if _is_name_eq_main(node.test):
-            return True
-    return False
-
-
-def _is_name_eq_main(test: ast.Compare) -> bool:
-    """True only for ``__name__ == "__main__"`` -- not ``!=``, not another constant."""
-    left = test.left
-    if not (isinstance(left, ast.Name) and left.id == "__name__"):
-        return False
-    if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq):
-        return False
-    comparator = test.comparators[0]
-    return isinstance(comparator, ast.Constant) and comparator.value == "__main__"
-
-
 @pytest.mark.parametrize(
     "source,expected",
     [
@@ -285,7 +264,7 @@ def _is_name_eq_main(test: ast.Compare) -> bool:
 )
 def test_main_guard_requires_eq_and_the_main_constant(source: str, expected: bool) -> None:
     """Contrast fixtures: a lookalike comparison must not satisfy the ``entrypoint`` category."""
-    assert _module_has_main_guard(parse_cache.parse(source)) is expected
+    assert has_main_guard(parse_cache.parse(source)) is expected
 
 
 def _category_holds(path: str, category: str, source: str, sites: tuple[Site, ...]) -> bool:
@@ -300,7 +279,7 @@ def _category_holds(path: str, category: str, source: str, sites: tuple[Site, ..
         # stored session outlives the request it was opened for.
         return bool(sites) and all(site.bound for site in sites)
     if category == "entrypoint":
-        return _module_has_main_guard(parse_cache.parse(source))
+        return has_main_guard(parse_cache.parse(source))
     return False
 
 

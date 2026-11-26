@@ -16,7 +16,7 @@ Usage:
 
     pipeline-scripts/audit_unwired_trackers.py --file-issues
         File a GitHub discovery issue for each finding (deduped against
-        existing open issues by tracker number).
+        open issues and deliberately-closed ones, by module and tracker).
 
 Exit codes:
     0  no findings
@@ -37,12 +37,21 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # CI runs this as a bare ``python3 pipeline-scripts/...`` with only pytest installed and no PYTHONPATH,
 # so the repo root is added the way the sibling pipeline scripts do (pr_conflict_gate.py, generate_env_docs.py).
 sys.path.insert(0, str(REPO_ROOT))
+
+from audit_entry_points import CALLER_ONLY_DIRS, is_launched_module  # noqa: E402
+from audit_issue_lookup import (  # noqa: E402
+    TrackerLookupError,
+    already_filed,
+    ambiguous_stem_keys,
+    existing_audit_issue_keys,
+    fetch_closed_tracker_set,
+)
 
 from autobot_shared.logging_manager import get_logger  # noqa: E402
 
@@ -63,6 +72,8 @@ SCAN_DIRS = [
     "autobot-infrastructure",
     "autobot-npu-worker",
 ]
+# Searched for callers but never scanned for findings: repo-root launcher scripts import backend modules (#22199).
+CALLER_SEARCH_DIRS = [*SCAN_DIRS, *CALLER_ONLY_DIRS]
 SOURCE_GLOBS = ("*.py", "*.ts", "*.vue")
 
 # Module stems too common to grep reliably. Skip — false-positive risk too high.
@@ -238,6 +249,21 @@ def derive_module_path(file_path: Path) -> Optional[str]:
     return ".".join(inner)
 
 
+def derive_launcher_module_path(file_path: Path) -> Optional[str]:
+    """The ``python -m`` name of a module: ``derive_module_path`` for backend roots, full path for ``autobot_shared``.
+
+    Backend source roots (``autobot-backend``) are not importable names, so they are stripped; a root that
+    is itself a package (``autobot_shared``) is part of the launch name and is kept.
+    """
+    try:
+        parts = file_path.relative_to(REPO_ROOT).parts
+    except ValueError:
+        return None
+    if parts and parts[0].isidentifier() and len(parts) >= 2 and parts[-1].endswith(".py"):
+        return ".".join((*parts[:-1], parts[-1][:-3]))
+    return derive_module_path(file_path)
+
+
 def extract_tracker_refs(file_path: Path) -> list[int]:
     """Return list of Issue #N numbers from the first DOCSTRING_HEAD_LINES."""
     try:
@@ -252,6 +278,43 @@ def extract_tracker_refs(file_path: Path) -> list[int]:
         if n:
             refs.append(int(n))
     return list(dict.fromkeys(refs))  # dedupe, preserve order
+
+
+def _caller_pattern(stem: str) -> str:
+    """The six-alternative ``grep -E`` pattern for a static or dynamic reference to ``stem``."""
+    return (
+        rf"from .*\b{stem}\b"  # py static `from X import …`
+        rf"|import .*\b{stem}\b"  # py/ts static `import X` (note: requires space)
+        rf"|import\([^)]*\b{stem}\b"  # ts/js dynamic `import('…/X')`
+        rf"|require\([^)]*\b{stem}\b"  # ts/js cjs `require('./X')`
+        rf"|importlib\.[a-z_]+\([^)]*\b{stem}\b"  # py `importlib.import_module(…)`
+        rf"|__import__\([^)]*\b{stem}\b"  # py `__import__(…)`
+    )
+
+
+def _caller_grep_cmd(pattern: str) -> list[str]:
+    """The recursive ``grep`` over the existing ``CALLER_SEARCH_DIRS``, limited to py/ts/vue files."""
+    return [
+        "grep",
+        "-rn",
+        "-E",
+        pattern,
+        *(str(REPO_ROOT / d) for d in CALLER_SEARCH_DIRS if (REPO_ROOT / d).exists()),
+        "--include=*.py",
+        "--include=*.ts",
+        "--include=*.vue",
+    ]
+
+
+def _run_caller_grep(stem: str, cmd: list[str]) -> str:
+    """Run the caller grep and return its stdout; a timeout or an exit above 1 is a lookup error."""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
+    except subprocess.TimeoutExpired as e:
+        raise TrackerLookupError(f"caller grep for {stem!r} timed out ({e})") from e
+    if result.returncode > 1:  # 0 = matches, 1 = no matches, >1 = error
+        raise TrackerLookupError(f"caller grep for {stem!r} failed (exit {result.returncode})")
+    return result.stdout
 
 
 def grep_count_production_callers(stem: str, self_path: Path) -> int:
@@ -272,163 +335,84 @@ def grep_count_production_callers(stem: str, self_path: Path) -> int:
     """
     if stem in AMBIGUOUS_STEMS:
         return -1  # skip
-    pattern = (
-        rf"from .*\b{stem}\b"  # py static `from X import …`
-        rf"|import .*\b{stem}\b"  # py/ts static `import X` (note: requires space)
-        rf"|import\([^)]*\b{stem}\b"  # ts/js dynamic `import('…/X')`
-        rf"|require\([^)]*\b{stem}\b"  # ts/js cjs `require('./X')`
-        rf"|importlib\.[a-z_]+\([^)]*\b{stem}\b"  # py `importlib.import_module(…)`
-        rf"|__import__\([^)]*\b{stem}\b"  # py `__import__(…)`
-    )
-    cmd = [
-        "grep",
-        "-rn",
-        "-E",
-        pattern,
-        *(str(REPO_ROOT / d) for d in SCAN_DIRS if (REPO_ROOT / d).exists()),
-        "--include=*.py",
-        "--include=*.ts",
-        "--include=*.vue",
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
-    except subprocess.TimeoutExpired as e:
-        raise TrackerLookupError(f"caller grep for {stem!r} timed out ({e})") from e
-    if result.returncode > 1:  # 0 = matches, 1 = no matches, >1 = error
-        raise TrackerLookupError(f"caller grep for {stem!r} failed (exit {result.returncode})")
     self_str = str(self_path)
-    count = 0
-    for line in result.stdout.splitlines():
-        if not line:
-            continue
-        if "/__pycache__/" in line:
-            continue
-        if any(frag in line for frag in TEST_PATH_FRAGMENTS):
-            continue
-        # Strip "path:lineno:" prefix to compare against self_path
-        head = line.split(":", 1)[0]
-        if head == self_str:
-            continue
-        count += 1
-    return count
+    output = _run_caller_grep(stem, _caller_grep_cmd(_caller_pattern(stem)))
+    return sum(1 for line in output.splitlines() if _is_production_caller_line(line, self_str))
 
 
-class TrackerLookupError(RuntimeError):
-    """The closed-tracker lookup failed or was unreadable (#21582).
-
-    An empty closed set makes ``scan`` skip every file (state != CLOSED), so a failed lookup would
-    render as a clean audit. "Could not look" must not read as "found nothing".
-    """
+COMMENT_PREFIXES = {".py": ("#",), ".ts": ("//", "/*", "*"), ".vue": ("//", "/*", "*", "<!--")}
 
 
-#: ``gh issue list --limit`` for closed issues. A result of exactly this size may be truncated, so it fails.
-CLOSED_ISSUE_LIMIT = 10000
-_CLOSED_ISSUES_CMD = [
-    "gh",
-    "issue",
-    "list",
-    "--state",
-    "closed",
-    "--limit",
-    str(CLOSED_ISSUE_LIMIT),
-    "--json",
-    "number",
-]
-_OPEN_AUDIT_CMD = [
-    *("gh", "issue", "list", "--state", "open", "--search", "discovery(unwired-tracker)"),
-    *("--limit", "1000", "--json", "number,title"),
-]
+def _is_comment_line(path: str, code: str) -> bool:
+    """True when the matched source line is only a comment (``# from x import y``), not a real import (#22199)."""
+    return code.lstrip().startswith(COMMENT_PREFIXES.get(Path(path).suffix, ()))
 
 
-def _gh_json(cmd: list[str], timeout: int, what: str) -> list[dict]:
-    """Run a ``gh ... --json`` listing; raise ``TrackerLookupError`` unless it yields a JSON list of objects."""
-    try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=True).stdout
-        data = json.loads(out)
-    except (subprocess.SubprocessError, FileNotFoundError, json.JSONDecodeError) as e:
-        raise TrackerLookupError(f"{what} failed or was unreadable ({e!r})") from e
-    if not isinstance(data, list) or not all(isinstance(i, dict) for i in data):
-        raise TrackerLookupError(f"{what} was not a list of objects")
-    return data
+def _is_production_caller_line(line: str, self_str: str) -> bool:
+    """One ``path:lineno:code`` grep hit: a caller unless pycache, a test, the module itself, or a comment."""
+    if not line or "/__pycache__/" in line:
+        return False
+    path, _, rest = line.partition(":")
+    if is_test_path(Path(path)):
+        return False
+    if path == self_str:
+        return False
+    return not _is_comment_line(path, rest.partition(":")[2])
 
 
-def fetch_closed_tracker_set() -> set[int]:
-    """One-shot fetch of all CLOSED issues so per-finding lookups are O(1).
-
-    Raises ``TrackerLookupError`` when ``gh`` fails, its output is unusable, or it hit the limit.
-    """
-    data = _gh_json(_CLOSED_ISSUES_CMD, 120, "closed issue list")
-    if len(data) >= CLOSED_ISSUE_LIMIT:
-        raise TrackerLookupError(f"closed issue list hit its {CLOSED_ISSUE_LIMIT}-issue limit; older trackers unseen")
-    try:
-        return {item["number"] for item in data}
-    except KeyError as e:
-        raise TrackerLookupError(f"closed issue list item without a number ({e!r})") from e
-
-
-def existing_audit_issues_by_tracker() -> set[int]:
-    """Return the set of trackers that already have an open audit-discovery issue.
-
-    Convention: audit-discovery issues are titled
-    `discovery(unwired-tracker): wire in <module> (tracker #NNNN closed prematurely)`.
-    We search by the exact title prefix to avoid filing duplicates. A failed lookup raises (#21582).
-    """
-    out: set[int] = set()
-    pat = re.compile(r"tracker #(\d+) closed prematurely")
-    for item in _gh_json(_OPEN_AUDIT_CMD, 60, "open audit issue list"):
-        m = pat.search(item.get("title", ""))
-        if m:
-            out.add(int(m.group(1)))
-    return out
+def _is_exempt_from_scan(f: Path, registry_modules: set[str]) -> bool:
+    """True for a file whose zero import callers is by design, not unwired."""
+    # #7128b: entry-point scripts (run_*.py, /demos/, /scripts/, /bin/) are invoked from CLI.
+    if is_entry_point_script(f):
+        return True
+    # #6872b: TypeScript ambient declaration (.d.ts) files are wired via tsconfig.json include paths.
+    if is_ambient_type_declaration(f):
+        return True
+    # #7109: files registered via router_registry tuples are wired at runtime by dotted-path lookup,
+    # which the import-grep cannot detect.
+    module_path = derive_module_path(f)
+    if module_path and module_path in registry_modules:
+        return True
+    # #22199: launched modules (__main__.py, benchmarks, own `python -m`) are reached without imports.
+    return is_launched_module(f, derive_launcher_module_path(f), REPO_ROOT)
 
 
-def scan() -> list[Finding]:
-    closed_set = fetch_closed_tracker_set()
-    registry_modules = load_router_registry_modules()
-    findings: list[Finding] = []
+def _finding_for(f: Path, closed_set: set[int]) -> Optional[Finding]:
+    """The finding for an unwired file citing a closed tracker (the first one), else None."""
+    refs = extract_tracker_refs(f)
+    if not refs:
+        return None
+    if grep_count_production_callers(f.stem, f) != 0:  # -1 = ambiguous skip, >=1 = wired
+        return None
+    for ref in refs:
+        if ref in closed_set:
+            return Finding(
+                file=str(f.relative_to(REPO_ROOT)), tracker=ref, tracker_state="CLOSED", production_callers=0
+            )
+    return None
+
+
+def _scan_files() -> Iterator[Path]:
+    """Every candidate source file under ``SCAN_DIRS``, tests and skipped paths excluded."""
     for sd in SCAN_DIRS:
         base = REPO_ROOT / sd
         if not base.exists():
             continue
         for pattern in SOURCE_GLOBS:
             for f in base.rglob(pattern):
-                if should_skip_path(f) or is_test_path(f):
-                    continue
-                # #7128b: entry-point scripts (run_*.py, /demos/, /scripts/,
-                # /bin/) are designed to be invoked from CLI; 0 callers is
-                # by-design, not unwired.
-                if is_entry_point_script(f):
-                    continue
-                # #6872b: TypeScript ambient declaration (.d.ts) files are
-                # wired via tsconfig.json include paths, not via imports.
-                if is_ambient_type_declaration(f):
-                    continue
-                # #7109: skip files registered via router_registry tuples;
-                # they're wired at runtime via dotted-path lookup which the
-                # import-grep below cannot detect.
-                module_path = derive_module_path(f)
-                if module_path and module_path in registry_modules:
-                    continue
-                refs = extract_tracker_refs(f)
-                if not refs:
-                    continue
-                stem = f.stem
-                callers = grep_count_production_callers(stem, f)
-                if callers != 0:
-                    continue  # -1 = ambiguous skip, ≥1 = wired
-                for ref in refs:
-                    state = "CLOSED" if ref in closed_set else "OPEN_OR_UNKNOWN"
-                    if state != "CLOSED":
-                        continue
-                    findings.append(
-                        Finding(
-                            file=str(f.relative_to(REPO_ROOT)),
-                            tracker=ref,
-                            tracker_state=state,
-                            production_callers=0,
-                        )
-                    )
-                    break  # one finding per file, prefer first tracker
+                if not (should_skip_path(f) or is_test_path(f)):
+                    yield f
+
+
+def scan() -> list[Finding]:
+    closed_set = fetch_closed_tracker_set()
+    registry_modules = load_router_registry_modules()
+    findings: list[Finding] = []
+    for f in _scan_files():
+        if _is_exempt_from_scan(f, registry_modules):
+            continue
+        if (finding := _finding_for(f, closed_set)) is not None:
+            findings.append(finding)
     return findings
 
 
@@ -455,12 +439,15 @@ def render_json(findings: list[Finding]) -> str:
     return json.dumps([asdict(f) for f in findings], indent=2)
 
 
-def file_discovery_issue(finding: Finding) -> Optional[int]:
-    title = (
+def _issue_title(finding: Finding) -> str:
+    return (
         f"discovery(unwired-tracker): wire in {Path(finding.file).stem} "
         f"(tracker #{finding.tracker} closed prematurely)"
     )
-    body = f"""## Discovered by
+
+
+def _issue_body_evidence(finding: Finding) -> str:
+    return f"""## Discovered by
 
 `pipeline-scripts/audit_unwired_trackers.py` — automated tracker cross-reference (#6836 process gate).
 
@@ -478,7 +465,11 @@ grep -rn 'from .*\\b{Path(finding.file).stem}\\b' \\
 ```
 returns 0 production-caller hits.
 
-## Decision needed
+"""
+
+
+def _issue_body_decision(finding: Finding) -> str:
+    return f"""## Decision needed
 
 Per CLAUDE.md "Issue Closure Verification Gate" + #6836: closed feature trackers must have ≥1 production caller. Either:
 
@@ -497,19 +488,26 @@ this finding into a tracking-only note.
 
 P2 — closure-verification process gap, blocks credibility of "closed" tracker counts.
 """
-    cmd = [
+
+
+def _issue_create_cmd(finding: Finding) -> list[str]:
+    body = _issue_body_evidence(finding) + _issue_body_decision(finding)
+    return [
         "gh",
         "issue",
         "create",
         "--title",
-        title,
+        _issue_title(finding),
         "--label",
         "tech-debt,not-wired,architecture",
         "--body",
         body,
     ]
+
+
+def file_discovery_issue(finding: Finding) -> Optional[int]:
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True)
+        result = subprocess.run(_issue_create_cmd(finding), capture_output=True, text=True, timeout=60, check=True)
     except subprocess.SubprocessError as e:
         # flood_exempt: one line per failed finding (up to --max-issues per run); the flood guard would drop the 6th+.
         logger.warning("failed to file issue for %s: %s", finding.file, e, extra={"flood_exempt": True})
@@ -538,8 +536,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _file_new_issues(findings: list[Finding], max_issues: int) -> None:
     """File discovery issues for findings not already filed, capped at *max_issues*."""
-    already_filed = existing_audit_issues_by_tracker()
-    new = [f for f in findings if f.tracker not in already_filed]
+    filed_keys = existing_audit_issue_keys()
+    ambiguous = ambiguous_stem_keys([(f.file, f.tracker) for f in findings])
+    for stem, tracker in sorted(ambiguous & filed_keys):
+        logger.warning(
+            "legacy issue for %r (tracker #%d) names no path and matches several modules; filing each", stem, tracker
+        )
+    new = [f for f in findings if not already_filed(f.file, f.tracker, filed_keys, ambiguous)]
     capped = new[:max_issues]
     # WARNING, not INFO: INFO goes to stdout, which carries the report; WARNING goes to stderr.
     logger.warning(

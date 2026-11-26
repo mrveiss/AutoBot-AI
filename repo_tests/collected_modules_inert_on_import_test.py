@@ -45,6 +45,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from tools.lint import _parse_cache as parse_cache
+from tools.lint._main_guard import is_main_guard
 
 _REPO_ROOT = repo_root()
 _PYTEST_INI = _REPO_ROOT / "pytest.ini"
@@ -130,13 +131,6 @@ def _parse_module(path: Path) -> ast.Module:
         ) from exc
 
 
-def _is_main_guard(node: ast.AST) -> bool:
-    if not isinstance(node, ast.If):
-        return False
-    source = ast.unparse(node.test)
-    return "__name__" in source and "__main__" in source
-
-
 def _exit_calls(tree: ast.Module, *, guarded: bool) -> list[tuple[str, int]]:
     """Interpreter-killing statements reachable at import time.
 
@@ -145,12 +139,12 @@ def _exit_calls(tree: ast.Module, *, guarded: bool) -> list[tuple[str, int]]:
     live rather than merely written down.
     """
     found: list[tuple[str, int]] = []
-    stack: list[ast.AST] = [node for node in tree.body if _is_main_guard(node) is guarded]
+    stack: list[ast.AST] = [node for node in tree.body if is_main_guard(node) is guarded]
     while stack:
         node = stack.pop()
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
             continue
-        if not guarded and _is_main_guard(node):
+        if not guarded and is_main_guard(node):
             continue
         if isinstance(node, ast.Raise):
             raised = node.exc.func if isinstance(node.exc, ast.Call) else node.exc

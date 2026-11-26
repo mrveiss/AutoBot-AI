@@ -267,6 +267,46 @@ async def test_tracked_request_decrements_on_caller_exception():
         assert client._active_requests == baseline
 
 
+@pytest.mark.asyncio
+async def test_a_malformed_header_pair_still_releases_the_active_slot():
+    """Header preparation sits inside the cleanup handler: a bad pair must not leak a slot (#21685)."""
+    client = HTTPClientManager()
+    fake_session = AsyncMock()
+    with (
+        patch.object(client, "get_session", AsyncMock(return_value=fake_session)),
+        patch.object(client, "_adjust_pool_size", AsyncMock(return_value=None)),
+        patch("autobot_shared.http_client_manager.get_trace_context", return_value={}),
+    ):
+        baseline = client._active_requests
+        with pytest.raises(Exception):
+            await client.request("GET", "http://svc/x", headers=[("X-Test",)], suppress_error_log=True)
+        assert client._active_requests == baseline
+
+
+def test_trace_headers_keep_repeated_values_and_do_not_mutate_the_caller():
+    from autobot_shared.http_client_manager import _with_trace_headers
+
+    caller = [("Accept", "application/json"), ("Accept", "text/plain")]
+    with patch("autobot_shared.http_client_manager.get_trace_context", return_value={"traceparent": "00-b-b-01"}):
+        merged = _with_trace_headers(caller)
+    assert merged.getall("Accept") == ["application/json", "text/plain"]
+    assert merged["traceparent"] == "00-b-b-01"
+    assert caller == [("Accept", "application/json"), ("Accept", "text/plain")]
+
+
+def test_a_caller_traceparent_keeps_its_own_tracestate_as_a_unit():
+    from autobot_shared.http_client_manager import _with_trace_headers
+
+    active = {"traceparent": "00-bbbb-bb-01", "tracestate": "vendor=b"}
+    with patch("autobot_shared.http_client_manager.get_trace_context", return_value=active):
+        merged = _with_trace_headers({"traceparent": "00-aaaa-aa-01"})
+        with_state = _with_trace_headers({"traceparent": "00-aaaa-aa-01", "tracestate": "vendor=a"})
+        injected = _with_trace_headers({})
+    assert merged["traceparent"] == "00-aaaa-aa-01" and "tracestate" not in merged  # B's state is not grafted onto A
+    assert with_state["tracestate"] == "vendor=a"
+    assert injected["traceparent"] == "00-bbbb-bb-01" and injected["tracestate"] == "vendor=b"
+
+
 # ---------------------------------------------------------------------------
 # #13625: opt-in egress guard
 # ---------------------------------------------------------------------------

@@ -163,7 +163,6 @@ User Message
 FastAPI HTTP Layer
   |-- LLMAwarenessMiddleware  (injects system context into POST body)
   |-- AnalyticsMiddleware     (tracks API call timing and patterns)
-  |-- TracingMiddleware       (OpenTelemetry distributed tracing spans)
   |-- ServiceAuthEnforcement  (validates Bearer tokens)
   |
   v

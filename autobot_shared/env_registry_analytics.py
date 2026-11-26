@@ -185,6 +185,20 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_API_CALL_PATTERNS_MAX",
+        type=int,
+        default=10000,
+        description=(
+            "Most recent API calls the in-process analytics state keeps (analytics_controller.py). Older calls drop "
+            "off; the persisted copy in Redis is trimmed to the same count (#21684)."
+        ),
+        component="analytics",
+        range=(100, 1000000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_BUG_PREDICTION_MAX_PATTERN_LENGTH",
         type=int,
         default=128,
@@ -194,5 +208,20 @@ register_env_var(
         ),
         component="analytics",
         range=(1, 1024),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_VOICE_REALTIME_ABANDONED_SESSION_SECONDS",
+        type=int,
+        default=7200,
+        description=(
+            "How long a realtime voice session that never ended (a dropped connection) stays in the in-memory "
+            "session map before it is evicted (voice_realtime_telemetry.py, #21678). Never effective below "
+            "AUTOBOT_VOICE_REALTIME_MAX_SECONDS plus a 300 s margin. Finished sessions are released at once."
+        ),
+        component="voice",
+        range=(60, 604800),
     )
 )
