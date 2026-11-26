@@ -34,6 +34,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.store_authority import system_of_record
 from autobot_shared.time_utils import now_utc
 from services.telemetry_settings import get_telemetry_settings
+from services.voice_realtime_usage import UsageDelta
 
 logger = get_logger(__name__)
 
@@ -152,6 +153,8 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         self._prom = PrometheusMetricsManager()
         # Active sessions only (released when finished); cap checks read here
         self._in_memory_sessions: dict[str, RealtimeSessionRecord] = {}
+        # Usage not yet committed to Redis (it was down, telemetry off, or a write failed), added on the next commit
+        self._pending: dict[str, UsageDelta] = {}
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -182,7 +185,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         reason: DisconnectReason = DisconnectReason.NORMAL,
     ) -> RealtimeSessionRecord | None:
         """Finalise the session record and flush Prometheus counters."""
-        record = await self._update_record(session_id, lambda r: _apply_end(r, reason))
+        record = await self._apply_update(session_id, UsageDelta(), lambda r: _apply_end(r, reason))
         if record is None:
             logger.warning("voice_realtime session_end: unknown session_id=%s", session_id)
             return None
@@ -214,14 +217,8 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         seconds: float,
     ) -> None:
         """Accumulate audio seconds (direction: 'input' | 'output')."""
-
-        def apply(record: RealtimeSessionRecord) -> None:
-            if direction == "input":
-                record.audio_in_s += seconds
-            else:
-                record.audio_out_s += seconds
-
-        if await self._update_record(session_id, apply) is None:
+        delta = UsageDelta(audio_in_s=seconds) if direction == "input" else UsageDelta(audio_out_s=seconds)
+        if await self._apply_update(session_id, delta) is None:
             return
         self._prom._voice_realtime.audio_seconds_total.labels(direction=direction).inc(seconds)
 
@@ -235,15 +232,8 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         audio_out_s: float = 0.0,
     ) -> None:
         """Handle a response.done event — update token counts and audio."""
-
-        def apply(record: RealtimeSessionRecord) -> None:
-            record.input_tokens += input_tokens
-            record.output_tokens += output_tokens
-            record.cached_input_tokens += cached_input_tokens
-            record.audio_in_s += audio_in_s
-            record.audio_out_s += audio_out_s
-
-        if await self._update_record(session_id, apply) is None:
+        delta = UsageDelta(input_tokens, output_tokens, cached_input_tokens, audio_in_s, audio_out_s)
+        if await self._apply_update(session_id, delta) is None:
             return
 
         m = self._prom._voice_realtime
@@ -266,11 +256,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         outcome: str = "success",
     ) -> None:
         """Record a single tool-call event."""
-
-        def apply(record: RealtimeSessionRecord) -> None:
-            record.tool_calls += 1
-
-        await self._update_record(session_id, apply)
+        await self._apply_update(session_id, UsageDelta(tool_calls=1))
 
         m = self._prom._voice_realtime
         m.tool_calls_total.labels(tool=tool, outcome=outcome).inc()
@@ -362,46 +348,48 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
             return
         await redis.set(_session_key(record.session_id), json.dumps(record.to_dict()), ex=_SESSION_TTL)
 
-    async def _update_record(
-        self, session_id: str, mutate: Callable[[RealtimeSessionRecord], None]
+    async def _apply_update(
+        self,
+        session_id: str,
+        delta: UsageDelta,
+        finish: Callable[[RealtimeSessionRecord], None] | None = None,
     ) -> RealtimeSessionRecord | None:
-        """Apply *mutate* to the session atomically across workers; None when the session is unknown."""
-        redis = await self._authoritative_redis()
-        if redis is not None:
-            record = await self._update_in_redis(redis, session_id, mutate)
-            if record is not None:
-                if record.ended_at or session_id in self._in_memory_sessions:
-                    self._hold_locally(record)
-                return record
-        local = self._in_memory_sessions.get(session_id)  # started while Redis was off or down
+        """Add *delta* (plus any pending usage) to the session; None when the session is unknown.
+
+        Committed to Redis under WATCH/MULTI when it is readable; otherwise (or when the commit fails) the usage is
+        kept pending and counted by every cap check until a later commit flushes it with that update.
+        """
+        total = self._pending.pop(session_id, UsageDelta()).merged(delta)  # taken whole, so no one else re-adds it
+        record = await self._commit_to_redis(session_id, total, finish)
+        if record is not None:
+            if record.ended_at or session_id in self._in_memory_sessions:
+                self._hold_locally(record)
+            return record
+        local = self._in_memory_sessions.get(session_id)  # Redis off, down, or the commit failed
         if local is None:
             return None
-        mutate(local)
-        await self._save_record(local)
-        return local
+        view = _usage_view(local, total, finish)
+        if view.ended_at:
+            self._hold_locally(view)
+        else:
+            self._pending[session_id] = self._pending.get(session_id, UsageDelta()).merged(total)
+        return view
 
-    @staticmethod
-    async def _update_in_redis(
-        redis: Any, session_id: str, mutate: Callable[[RealtimeSessionRecord], None]
+    async def _commit_to_redis(
+        self, session_id: str, total: UsageDelta, finish: Callable[[RealtimeSessionRecord], None] | None
     ) -> RealtimeSessionRecord | None:
-        """Read-modify-write under WATCH/MULTI so another worker's concurrent update is never overwritten."""
-        key = _session_key(session_id)
-        for _ in range(_UPDATE_MAX_ATTEMPTS):
-            async with redis.pipeline(transaction=True) as pipe:
-                try:
-                    await pipe.watch(key)
-                    record = _parse_record(await pipe.get(key), session_id)
-                    if record is None:
-                        await pipe.unwatch()
-                        return None
-                    mutate(record)
-                    pipe.multi()
-                    pipe.set(key, json.dumps(record.to_dict()), ex=_SESSION_TTL)
-                    await pipe.execute()
-                    return record
-                except WatchError:
-                    continue  # another worker wrote first: re-read its state and apply ours on top
-        raise RuntimeError(f"voice_realtime: session {session_id} contended for {_UPDATE_MAX_ATTEMPTS} attempts")
+        """The committed record, or None when Redis is off, the session unknown, or the commit failed (logged)."""
+        try:
+            redis = await self._authoritative_redis()
+            if redis is None:
+                return None
+            base = self._in_memory_sessions.get(session_id)
+            return await _update_in_redis(redis, session_id, total, finish, base)
+        except Exception as exc:
+            # An EXEC that raised after sending may have applied: the delta is still counted pending, i.e. it may be
+            # counted twice. Over-counting toward a cap is the safe side; under-counting would disable it.
+            logger.warning("voice_realtime: redis commit failed session_id=%s, usage kept pending: %s", session_id, exc)
+            return None
 
     def _evict_abandoned_sessions(self) -> None:
         """Drop in-memory sessions that never ended and are older than the max age (a dropped connection)."""
@@ -414,13 +402,18 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         ]
         for sid in stale:
             del self._in_memory_sessions[sid]
+            self._pending.pop(sid, None)
             logger.warning("voice_realtime: evicted abandoned session session_id=%s", sid)
 
     async def _load_record(self, session_id: str) -> RealtimeSessionRecord | None:
         # Redis first when it is the system of record: another worker's updates land there, so a local copy
-        # may be stale. The local map answers only when Redis is off, down, or never saw the session.
+        # may be stale. The local map answers only when Redis is off, down, or never saw the session. Usage still
+        # pending (never committed) is added on top, so a cap check always sees every known unit of usage.
         record = await self._read_redis_record(session_id)
-        return record if record is not None else self._in_memory_sessions.get(session_id)
+        record = record if record is not None else self._in_memory_sessions.get(session_id)
+        if record is None:
+            return None
+        return _usage_view(record, self._pending.get(session_id, UsageDelta()), None)
 
     async def _read_redis_record(self, session_id: str) -> RealtimeSessionRecord | None:
         """The Redis copy, or None when absent or unreadable (logged, so the caller falls back to the local one)."""
@@ -456,6 +449,46 @@ def _parse_record(raw: str | bytes | None, session_id: str) -> RealtimeSessionRe
     except Exception as exc:
         logger.warning("voice_realtime: failed to parse record session_id=%s: %s", session_id, exc)
         return None
+
+
+def _usage_view(
+    record: RealtimeSessionRecord, delta: UsageDelta, finish: Callable[[RealtimeSessionRecord], None] | None
+) -> RealtimeSessionRecord:
+    """A copy of *record* with *delta* (and the optional finish) applied; the stored record is not touched."""
+    view = RealtimeSessionRecord.from_dict(record.to_dict())
+    delta.apply_to(view)
+    if finish is not None:
+        finish(view)
+    return view
+
+
+async def _update_in_redis(
+    redis: Any,
+    session_id: str,
+    total: UsageDelta,
+    finish: Callable[[RealtimeSessionRecord], None] | None,
+    base: RealtimeSessionRecord | None,
+) -> RealtimeSessionRecord | None:
+    """Re-read, add *total*, SET under WATCH/MULTI; a conflicting write (another worker, or a concurrent create of a
+    missing key) re-reads and re-applies. A missing key is created from *base* only while it is still absent."""
+    key = _session_key(session_id)
+    for _ in range(_UPDATE_MAX_ATTEMPTS):
+        async with redis.pipeline(transaction=True) as pipe:
+            try:
+                await pipe.watch(key)
+                raw = await pipe.get(key)
+                current = _parse_record(raw, session_id) if raw is not None else base
+                if current is None:
+                    await pipe.unwatch()
+                    return None
+                record = _usage_view(current, total, finish)
+                pipe.multi()
+                pipe.set(key, json.dumps(record.to_dict()), ex=_SESSION_TTL)
+                await pipe.execute()
+                return record
+            except WatchError:
+                continue  # another write landed first: re-read its state and apply ours on top
+    raise RuntimeError(f"voice_realtime: session {session_id} contended for {_UPDATE_MAX_ATTEMPTS} attempts")
 
 
 def _apply_end(record: RealtimeSessionRecord, reason: DisconnectReason) -> None:
