@@ -82,6 +82,35 @@ def _identity_pairs(scope: "dict | None") -> tuple:
     )
 
 
+#: Request-body keys that name an identity. Readers (trajectory capture, the user's reasoning preference) take
+#: these from ``context``; the body's own value is a client claim, so the overlay replaces it (#16692).
+_BODY_USER_KEYS = ("user_id",)
+_BODY_COMPANY_KEYS = ("tenant_id", "org_id")
+
+
+def _drop_body_identity(context: dict, scope: "dict | None") -> dict:
+    """Replace the body's own ``user_id`` / ``tenant_id`` / ``org_id`` with the verified ones, or drop them (#16692).
+
+    A body value that disagrees with the authenticated principal is ignored and logged; none ever reaches a reader.
+    """
+    verified = {
+        **dict.fromkeys(_BODY_USER_KEYS, (scope or {}).get("user_id")),
+        **dict.fromkeys(_BODY_COMPANY_KEYS, (scope or {}).get("org_id")),
+    }
+    for key, mine in verified.items():
+        if key not in context:
+            continue
+        claimed = context.pop(key)
+        if claimed and str(claimed) != str(mine or ""):
+            logger.warning(
+                "Ignored request-body context.%s that disagrees with the authenticated principal",
+                key,
+            )
+        if mine:
+            context[key] = str(mine)
+    return context
+
+
 def overlay_verified_identity(context: "dict | None", scope: "dict | None") -> dict:
     """Return *context* with the verified principal REPLACED by *scope*'s (#18430, #20709).
 
@@ -89,7 +118,7 @@ def overlay_verified_identity(context: "dict | None", scope: "dict | None") -> d
     present value overwrites the old one, an absent value removes the key, so a previous or client-supplied
     identity never survives into the tool seam and the audit row falls to ``system``, never to another user.
     """
-    merged = {**(context or {})}
+    merged = _drop_body_identity({**(context or {})}, scope)
     for key, value in _identity_pairs(scope):
         if value:
             merged[key] = str(value)
@@ -218,7 +247,9 @@ class SessionRoleService(AsyncRedisClientMixin):
             raise ValueError(f"unknown approval categories: {unknown} (valid: {sorted(valid)})")
         redis = await self._get_redis()
         await redis.set(
-            _APPROVAL_KEY.format(session_id=session_id), json.dumps(list(categories)), ex=SESSION_ROLE_TTL_SECONDS
+            _APPROVAL_KEY.format(session_id=session_id),
+            json.dumps(list(categories)),
+            ex=SESSION_ROLE_TTL_SECONDS,
         )
         logger.info("session_role.set_approval session=%s categories=%s", session_id, categories)
 
@@ -245,7 +276,10 @@ class SessionRoleService(AsyncRedisClientMixin):
 
 
 async def apply_session_governance(
-    session_id: str, context: "dict | None", auth_role: Optional[str] = None, scope: "dict | None" = None
+    session_id: str,
+    context: "dict | None",
+    auth_role: Optional[str] = None,
+    scope: "dict | None" = None,
 ) -> "dict | None":
     """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202/#20195).
 
@@ -254,7 +288,10 @@ async def apply_session_governance(
     baseline and the session's approval categories are overlaid as ``requires_approval_before``. #20195: the
     attachment floor (this chat used a file; an admin may waive it) is written from server state, never the client.
     """
-    from chat_workflow.approval_baseline import stamp_declared_categories, with_baseline_categories
+    from chat_workflow.approval_baseline import (
+        stamp_declared_categories,
+        with_baseline_categories,
+    )
     from chat_workflow.attachment_floor import stamp_attachment_floor
     from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
 
@@ -271,7 +308,9 @@ async def apply_session_governance(
             session_categories = await svc.read_approval_categories(session_id)
         except Exception as exc:  # noqa: BLE001 - fail closed (#19957): an unread declaration must not lift a gate
             logger.error(
-                "Session approval categories unreadable for %s (%s); every category stays gated", session_id, exc
+                "Session approval categories unreadable for %s (%s); every category stays gated",
+                session_id,
+                exc,
             )
             session_categories = None
     # #19957: stamped before the overlay mixes the baseline in; None (unreadable) stamps every category as declared.
