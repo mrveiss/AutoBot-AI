@@ -412,6 +412,14 @@ def test_the_health_poll_skips_provisioner_owned_rows_and_uses_the_one_constant(
     assert prp.PROVISIONER_HELD_STATUSES == ("failed", "installing")
 
 
+def test_the_health_poll_writes_after_the_checks_so_no_row_lock_spans_them() -> None:
+    src = (_ROOT / "services" / "reconciler.py").read_text(encoding="utf-8")
+    poll = src[src.index("async def _poll_manifest_health") : src.index("async def _build_node_ip_map")]
+    checks = poll.index("await self._http_health_check(url)")
+    writes = poll.index("await set_role_status_if_unchanged(db, node_role, new_status)")
+    assert checks < poll.index("for node_role, new_status in changed:") < writes < poll.index("await db.commit()")
+
+
 def _sync_record(monkeypatch, row):
     """`SyncOrchestrator._update_node_role_record` itself, compiled from source, run against one NodeRole row."""
     import ast

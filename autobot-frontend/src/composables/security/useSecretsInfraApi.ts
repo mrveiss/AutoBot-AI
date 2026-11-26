@@ -66,7 +66,13 @@ export function infraHostToSecret(host: InfraHost) {
 /** The metadata key linking a host's VNC password secret to the host (read by api/vnc_host_target.py). */
 const VNC_COMPANION_HOST_KEY = 'vnc_host_id';
 
-type SecretLike = { id: string; type?: string; metadata?: Record<string, unknown> };
+type SecretLike = {
+  id: string; type?: string; scope?: string; chat_id?: string | null; metadata?: Record<string, unknown>
+};
+
+/** The companion must carry its host's scope: a general-scoped one is readable from every chat. */
+const inHostScope = (s: SecretLike, hostData: Record<string, unknown>): boolean =>
+  (s.scope ?? 'general') === (hostData.scope ?? 'general') && (s.chat_id ?? null) === (hostData.chat_id ?? null);
 
 /**
  * #22145: a host's VNC password is its own secret, linked by host id, so the chat
@@ -104,13 +110,26 @@ export async function createVncCompanion(
     chatId: (hostData.chat_id as string | null | undefined) ?? undefined
   })) as { secrets?: SecretLike[] }
   const known = fresh.secrets ?? []
-  const linked = known.find((s) => s.type === 'password' && s.metadata?.[VNC_COMPANION_HOST_KEY] === hostId);
-  if (linked) {
-    await secretsApiClient.updateSecret(linked.id, { value: form.vnc_password } as never, {
+  const linked = known.filter((s) => s.type === 'password' && s.metadata?.[VNC_COMPANION_HOST_KEY] === hostId);
+  const inScope = linked.find((s) => inHostScope(s, hostData));
+  if (inScope) {
+    await secretsApiClient.updateSecret(inScope.id, { value: form.vnc_password } as never, {
       chatId: hostData.chat_id as string | null | undefined
     });
     return;
   }
+  // A companion in another scope (e.g. general, for a chat-scoped host) is never given the new password:
+  // the correctly scoped one is created first, then the mismatched one is removed as part of THIS save.
+  await createCompanionSecret(hostId, form, hostData, t);
+  for (const stale of linked) await secretsApiClient.deleteSecret(stale.id, { chatId: stale.chat_id });
+}
+
+async function createCompanionSecret(
+  hostId: string,
+  form: { name: string; host: string; vnc_password: string },
+  hostData: Record<string, unknown>,
+  t: (key: string, params?: Record<string, unknown>) => string
+): Promise<void> {
   await secretsApiClient.createSecret({
     name: t('security.secretsManager.vncCompanionName', { name: form.name }),
     type: 'password',

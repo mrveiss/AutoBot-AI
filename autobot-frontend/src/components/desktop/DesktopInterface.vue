@@ -319,11 +319,13 @@ const chatStore = useChatStore()
 const buildHostVncUrl = (h: SelectorHost): string =>
   chatStore.currentSessionId ? chatStore.getDesktopUrl(chatStore.currentSessionId, h) : buildVncClientUrl(h)
 
-// Load dynamic VNC URL on component mount
+let loadGeneration = 0 // bumped per load: a blocked check from a superseded load is stale (#22144, as useDesktopControlLock)
 const loadVncUrlFn = async () => {
   // Issue #4977: when a host prop is supplied, derive URL directly — no AppConfig call needed
   if (!props.host) throw new Error(t('desktop.interface.noHostSelected'))
+  const startedIn = ++loadGeneration
   const blocked = props.host.id === DESKTOP_VM_HOST_ID ? await desktopVmBlockedKey() : null
+  if (startedIn !== loadGeneration) return // the selection changed while the check was in flight
   if (blocked) { vncUrl.value = ''; return handleDesktopError(new Error(t(blocked))) }  // localised state, no iframe; blocked until a lookup succeeds
   vncUrl.value = buildHostVncUrl(props.host)
   // Clear any previous errors and update status

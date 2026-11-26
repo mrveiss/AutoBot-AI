@@ -40,6 +40,32 @@ def _nodes(*pairs):
     return {"nodes": [{"node_id": n, "roles": r} for n, r in pairs], "total": len(pairs)}
 
 
+class _FakeRedis:
+    def __init__(self, store):
+        self.store = store
+
+    async def get(self, key):
+        return self.store.get(key)
+
+    async def set(self, key, value):
+        self.store[key] = value.encode("utf-8")
+
+    async def delete(self, key):
+        self.store.pop(key, None)
+
+
+@pytest.fixture(autouse=True)
+def _shared_pin(monkeypatch):
+    """One Redis shared by every simulated worker (#22144); never the real one."""
+    store: dict = {}
+
+    async def client():
+        return _FakeRedis(store)
+
+    monkeypatch.setattr(reg, "_pin_client", client)
+    return store
+
+
 @pytest.fixture(autouse=True)
 def _fresh():
     reg.reset_cache()
@@ -250,3 +276,24 @@ def test_registry_calls_carry_the_internal_service_key_only_when_configured(monk
     assert reg._registry_headers() == {"X-Internal-API-Key": "k"}
     monkeypatch.setattr(reg.node_proxy, "internal_api_key", lambda: "")
     assert reg._registry_headers() == {}
+
+
+@pytest.mark.asyncio
+async def test_a_second_worker_keeps_the_pin_the_first_worker_stored(_shared_pin):
+    """Worker B has no process pin of its own, yet keeps the node worker A chose (#22144)."""
+    await reg._store_pin("n-z")
+    reg._pinned_node_id = None  # worker B: fresh process, same Redis
+    assert await reg._load_pin() == "n-z"
+    assert _shared_pin[reg.PIN_REDIS_KEY] == b"n-z"
+    await reg._store_pin(None)
+    assert await reg._load_pin() is None
+
+
+@pytest.mark.asyncio
+async def test_redis_down_falls_back_to_this_workers_pin(monkeypatch):
+    async def broken():
+        raise ConnectionError("down")
+
+    monkeypatch.setattr(reg, "_pin_client", broken)
+    await reg._store_pin("n-a")
+    assert await reg._load_pin() == "n-a"

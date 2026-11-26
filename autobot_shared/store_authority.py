@@ -367,6 +367,16 @@ STORE_AUTHORITY: dict[str, Concept] = {
         note="Deliberate exception. The challenge is single-use and TTL'd; the credential it "
         "issues is device_credentials, which is durable in Postgres.",
     ),
+    "vnc_desktop_pin": Concept(
+        name="vnc_desktop_pin",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/slm_vnc_registry.py",),
+        rebuilt_by="Losing the pin re-picks the desktop node deterministically from the SLM registry "
+        "(slm_vnc_registry._pick_desktop: hostname, then node id).",
+        note="Deliberate exception. The pin is a preference for the last chosen desktop node, shared by "
+        "every worker so a viewer and its controls agree; the nodes themselves are the SLM registry's.",
+    ),
     "agent_work_claims": Concept(
         name="agent_work_claims",
         system_of_record=Store.REDIS,

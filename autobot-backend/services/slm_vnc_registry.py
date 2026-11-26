@@ -25,6 +25,7 @@ from autobot_shared.env_utils import env_int
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_MINUTE
+from autobot_shared.store_authority import system_of_record
 
 logger = get_logger(__name__)
 
@@ -61,12 +62,41 @@ class DesktopVmEndpoint:
 
 
 _cache: tuple[float, DesktopVmEndpoint | None] | None = None
-_pinned_node_id: str | None = (
-    None  # the node last chosen: kept while it stays eligible, so a viewer and its controls agree
-)
+# The node last chosen is kept while it stays eligible, so a viewer and its controls agree. It lives in
+# Redis (system_of_record("vnc_desktop_pin")) so every uvicorn worker keeps the SAME node; this process
+# copy is only the fallback while Redis is unreachable.
+_pinned_node_id: str | None = None
+PIN_REDIS_KEY = "autobot:vnc:desktop_pin"
+SYSTEM_OF_RECORD = system_of_record("vnc_desktop_pin")
 _ORIGIN_SCHEMES = ("http", "https", "ws", "wss")
 INTERNAL_KEY_HEADER = "X-Internal-API-Key"
 _cache_lock = asyncio.Lock()  # one in-flight registry read; concurrent callers share its result
+
+
+async def _pin_client():
+    from autobot_shared.redis_client import get_redis_client
+
+    return await get_redis_client(async_client=True, database="main")
+
+
+async def _load_pin() -> str | None:
+    """The pinned node id shared by every worker; this process's copy when Redis cannot answer."""
+    try:
+        raw = await (await _pin_client()).get(PIN_REDIS_KEY)
+    except Exception as exc:  # Redis down must not take the desktop down: fall back to the local pin
+        logger.warning("VNC desktop pin unreadable in Redis (%s); using this worker's copy", type(exc).__name__)
+        return _pinned_node_id
+    return (raw.decode("utf-8") if isinstance(raw, bytes) else raw) or None
+
+
+async def _store_pin(node_id: str | None) -> None:
+    global _pinned_node_id
+    _pinned_node_id = node_id
+    try:
+        client = await _pin_client()
+        await (client.set(PIN_REDIS_KEY, node_id) if node_id else client.delete(PIN_REDIS_KEY))
+    except Exception as exc:
+        logger.warning("VNC desktop pin not stored in Redis (%s)", type(exc).__name__)
 
 
 def reset_cache() -> None:
@@ -164,10 +194,9 @@ async def _rfb_port(node_id: str, credential_id: str) -> int | None:
 
 
 async def _fetch_endpoint() -> DesktopVmEndpoint | None:
-    global _pinned_node_id
     body = await _request("GET", ENDPOINTS_PATH)
-    picked = _pick_desktop(body.get("endpoints", []), await _vnc_role_node_ids(), _pinned_node_id)
-    _pinned_node_id = picked["node_id"] if picked else None
+    picked = _pick_desktop(body.get("endpoints", []), await _vnc_role_node_ids(), await _load_pin())
+    await _store_pin(picked["node_id"] if picked else None)
     if picked is None:
         return None
     return DesktopVmEndpoint(

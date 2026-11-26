@@ -39,11 +39,33 @@ describe('DesktopInterface blocked desktop VM', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('a reachable probe does not turn a blocked desktop VM into Connected', async () => {
+    vi.useFakeTimers()
     blockedKey.mockResolvedValue('desktop.interface.desktopVmUnavailable')
     const wrapper = mountIt()
+    try {
+      await flushPromises()
+      await wrapper.vm.$.setupState.checkConnection() // the probe really runs and reaches the server
+      expect(fetch).toHaveBeenCalled()
+      expect(wrapper.vm.$.setupState.vncUrl).toBe('')
+      expect(wrapper.vm.$.setupState.connectionStatus).not.toBe('Connected')
+    } finally {
+      wrapper.unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('a blocked result from a superseded load never overwrites the newer one', async () => {
+    let releaseFirst!: (v: string | null) => void
+    blockedKey.mockImplementationOnce(() => new Promise(res => { releaseFirst = res })).mockResolvedValue(null)
+    const wrapper = mountIt()
     await flushPromises()
-    expect(wrapper.vm.$.setupState.vncUrl).toBe('')
-    expect(wrapper.vm.$.setupState.connectionStatus).not.toBe('Connected')
+    await wrapper.vm.$.setupState.reconnect() // newer load: not blocked, viewer URL set
+    await flushPromises()
+    expect(wrapper.vm.$.setupState.vncUrl).toContain('desk.example.test')
+    releaseFirst('desktop.interface.desktopVmUnavailable') // the older load answers late
+    await flushPromises()
+    expect(wrapper.vm.$.setupState.vncUrl).toContain('desk.example.test')
+    wrapper.unmount()
   })
 
   it('Reconnect repeats the initialisation and loads the viewer once the registry recovers', async () => {
