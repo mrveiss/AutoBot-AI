@@ -11,6 +11,11 @@ the turn ends with ``INVALID_TOOL_ABORT_REPLY`` and the stop is written to the a
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from typing import Any, Dict
+
+from langchain_core.runnables import RunnableConfig
+
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.logging_manager import get_logger
 from chat_workflow import limits
@@ -52,3 +57,22 @@ async def abort_message(ctx, iteration: int) -> WorkflowMessage:
     )
     ctx.workflow_messages.append(message)
     return message
+
+
+async def abort_invalid_tools(state: Dict[str, Any], config: RunnableConfig) -> dict:
+    """Graph node (#20848): the same stop as the streaming loop, for a turn the graph routed here.
+
+    ``route_after_execution`` sends a turn here once ``should_abort`` holds for the state's
+    ``consecutive_invalid_tool_calls``; the counter is the one ``unknown_tool_error`` raises on the iteration context.
+    """
+    iteration = state.get("iteration_count", 0)
+    ctx = SimpleNamespace(
+        session_id=state.get("session_id"),
+        consecutive_invalid_tool_calls=state.get("consecutive_invalid_tool_calls", 0),
+        workflow_messages=[],
+    )
+    message = (await abort_message(ctx, iteration)).to_dict()
+    stream_cb = config["configurable"].get("stream_callback")
+    if stream_cb:
+        stream_cb(message)
+    return {"workflow_messages": [*state.get("workflow_messages", []), message], "should_continue": False}

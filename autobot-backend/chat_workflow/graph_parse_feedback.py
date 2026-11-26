@@ -71,4 +71,5 @@ def inline_update(ctx, llm_response, should_continue, iteration, all_responses, 
         "execution_history": list(ctx.execution_history),  # #19715: the next prompt is built from this
         "workflow_messages": messages,
         "tool_loop_warning": "",  # reset so a loop warning is only active for one cycle (#3254)
+        "consecutive_invalid_tool_calls": ctx.consecutive_invalid_tool_calls,  # #20848
     }

@@ -50,6 +50,7 @@ from chat_workflow.graph_tool_dispatch import (
     send_denied_message,
     split_refused,
 )
+from chat_workflow.invalid_call_abort import abort_invalid_tools, should_abort
 from chat_workflow.reflection_gate import (
     evaluate_with_one_retry,
     reflection_update,
@@ -158,6 +159,7 @@ class ChatState(TypedDict, total=False):
     tool_call_fingerprints: List[str]
     tool_loop_count: int
     tool_loop_warning: str
+    consecutive_invalid_tool_calls: int  # #20848: unknown-tool calls in a row; the streaming loop's ctx counter
 
     stall_question: Dict[str, Any] | None  # #21022: the pending human question; None when nothing is asked
 
@@ -414,6 +416,7 @@ def _build_llm_iteration_context(state: ChatState):
     # #18430: a person's yes covers exactly the calls request_approval bound it to; line 3 never is.
     decision = state.get("approval_decision") or {}
     ctx.approved_fingerprints = frozenset(decision.get("bound") or ()) if decision.get("approved") else frozenset()
+    ctx.consecutive_invalid_tool_calls = state.get("consecutive_invalid_tool_calls", 0)  # #20848
     return ctx
 
 
@@ -897,8 +900,9 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
 
     await emit_tool_call_hook(state.get("session_id"), tool_calls)
 
+    exec_ctx = _build_llm_iteration_context(state)
     exec_history, break_loop = await dispatch_approved_calls(
-        manager, _build_llm_iteration_context(state), state, tool_calls, iteration, messages, stream_cb
+        manager, exec_ctx, state, tool_calls, iteration, messages, stream_cb
     )
 
     # Issue #3254: tell the user why the assistant stopped.
@@ -924,6 +928,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         "workflow_messages": messages,
         "tool_calls": [],  # Clear after execution
         "approval_decision": None,  # #19957: a yes covers its batch only
+        "consecutive_invalid_tool_calls": exec_ctx.consecutive_invalid_tool_calls,  # #20848
         **loop_state,
         **plan_update,
     }
@@ -1232,6 +1237,8 @@ def route_after_execution(state: ChatState) -> str:
         return "announce_stall" if stall_mode(state) == "ask" else "persist_conversation"  # #21022
 
     if state.get("should_continue"):
+        if should_abort(state.get("consecutive_invalid_tool_calls", 0)):  # #20848: the streaming loop's rule
+            return "abort_invalid_tools"
         if state.get("iteration_count", 0) < limits.MAX_CONTINUATION_ITERATIONS:
             return "generate_response"
         return "force_final_answer"  # #19715: the transcript must not end on a tool's output
@@ -1280,6 +1287,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("execute_tools", execute_tools)
     add_stall_nodes(builder)  # Issue #21022
     builder.add_node("force_final_answer", force_final_answer)
+    builder.add_node("abort_invalid_tools", abort_invalid_tools)  # Issue #20848
     builder.add_node("persist_conversation", persist_conversation)
 
     # Wire edges
@@ -1295,6 +1303,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_edge("request_approval", "execute_tools")
     builder.add_conditional_edges("execute_tools", route_after_execution)
     builder.add_edge("force_final_answer", "persist_conversation")
+    builder.add_edge("abort_invalid_tools", "persist_conversation")
     builder.add_edge("persist_conversation", END)
 
     return builder
