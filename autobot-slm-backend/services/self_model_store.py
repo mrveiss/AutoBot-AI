@@ -93,7 +93,7 @@ async def revision(db: AsyncSession) -> int:
     return int((await db.execute(select(func.coalesce(func.max(history.c.id), 0)))).scalar_one())
 
 
-async def _node_ids_by_host(db: AsyncSession, hosts: set) -> Dict[str, str]:
+async def node_ids_by_host(db: AsyncSession, hosts: set) -> Dict[str, str]:
     """The SLM node id of each of *hosts* (addresses) that is a managed node."""
     if not hosts:
         return {}
@@ -115,7 +115,7 @@ async def apply_observations(
 ) -> InventoryPlan:
     """Fold one producer's complete batch into the model and persist the result."""
     kinds = tuple(scope_kinds)
-    observed = rename_hosts(observed, await _node_ids_by_host(db, {o.node_id for o in observed if o.node_id}))
+    observed = rename_hosts(observed, await node_ids_by_host(db, {o.node_id for o in observed if o.node_id}))
     # Rows of the removal scope, plus a row for every observed key: a declaration outside the scope must still
     # meet the probed row it would otherwise overwrite.
     keys = [o.key for o in observed]

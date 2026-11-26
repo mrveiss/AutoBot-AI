@@ -161,3 +161,20 @@ def test_a_cancelled_wait_kills_and_reaps_the_man_child_then_propagates():
         asyncio.run(ingest._communicate(process, 5))
     process.kill.assert_called_once()
     process.wait.assert_awaited_once()
+
+
+def test_a_fact_records_the_self_model_command_entity_it_describes():
+    """#22272: the key is the SLM's, under the node id the host address maps to."""
+    from autobot_shared.self_model_keys import entity_key
+
+    kb = MagicMock(store_fact=AsyncMock(return_value={"status": "success"}))
+    with (
+        patch.object(ingest, "_get_man_content", AsyncMock(return_value="NAME ls")),
+        patch.object(ingest, "_get_man_page_description", AsyncMock(return_value="list")),
+        patch.object(ingest, "host_node_id", AsyncMock(return_value="node-redis")) as lookup,
+    ):
+        asyncio.run(ingest.index_command_batch(kb, [("ls", "1")], _ctx("redis")))
+    lookup.assert_awaited_once_with("10.0.0.1")
+    metadata = kb.store_fact.await_args.kwargs["metadata"]
+    assert metadata["self_model_node_id"] == "node-redis"
+    assert metadata["self_model_entity_key"] == entity_key("command", "ls", entity_key("node", "node-redis"))

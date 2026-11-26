@@ -14,12 +14,12 @@ erases another producer's entity.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from autobot_shared.self_model_constants import ENTITY_KINDS
+from autobot_shared.self_model_keys import entity_key
 
 KINDS = ENTITY_KINDS
 
@@ -33,21 +33,6 @@ STATUSES = (DECLARED, PROBED_OK, PROBED_FAILED, ABSENT, STALE)
 OBSERVED_STATUSES = (DECLARED, PROBED_OK, PROBED_FAILED)
 _PROBED = (PROBED_OK, PROBED_FAILED)
 _UNAVAILABLE = (ABSENT, STALE)
-
-_WHITESPACE = re.compile(r"\s+")
-
-
-def _normal(text: str) -> str:
-    """Canonical form of a name: trimmed, whitespace collapsed, case-folded."""
-    return _WHITESPACE.sub(" ", text.strip()).casefold()
-
-
-def entity_key(kind: str, name: str, parent_key: Optional[str] = None) -> str:
-    """The stable identity of an entity, from its kind, normalised name and parent key."""
-    if kind not in KINDS:
-        raise ValueError(f"unknown self-model kind {kind!r}")
-    base = f"{kind}:{_normal(name)}"
-    return f"{parent_key}/{base}" if parent_key else base
 
 
 @dataclass(frozen=True)
