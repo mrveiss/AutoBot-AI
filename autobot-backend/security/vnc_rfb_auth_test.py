@@ -269,3 +269,17 @@ async def test_client_refuses_an_oversized_failure_reason_before_reading_it(zero
             ),
             timeout=5,
         )
+
+
+def test_an_oversized_reason_cap_env_value_is_clamped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An env value past the registered range cannot disable the cap (#22144)."""
+    import importlib
+
+    import security.vnc_rfb_auth as mod
+
+    monkeypatch.setenv("AUTOBOT_VNC_AUTH_MAX_REASON_BYTES", "999999999999")
+    try:
+        assert importlib.reload(mod).DEFAULT_MAX_REASON_BYTES == 1048576
+    finally:
+        monkeypatch.delenv("AUTOBOT_VNC_AUTH_MAX_REASON_BYTES")
+        importlib.reload(mod)

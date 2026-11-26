@@ -18,13 +18,14 @@ import io
 import struct
 from dataclasses import dataclass
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_int, env_int_clamped
 from security.vnc_rfb_auth import VncAuthError, authenticate_as_client
 
 VNC_CONNECT_TIMEOUT_S = env_int("AUTOBOT_VNC_CLIENT_CONNECT_TIMEOUT_S", 10)
 VNC_FRAME_TIMEOUT_S = env_int("AUTOBOT_VNC_CLIENT_FRAME_TIMEOUT_S", 15)
 VNC_MAX_FRAMEBUFFER_BYTES = env_int("AUTOBOT_VNC_CLIENT_MAX_FRAMEBUFFER_BYTES", 64 * 1024 * 1024)
-VNC_MAX_TEXT_BYTES = env_int("AUTOBOT_VNC_CLIENT_MAX_TEXT_BYTES", 1024 * 1024)  # desktop name, server cut text
+# Desktop name and server cut text cap.
+VNC_MAX_TEXT_BYTES = env_int_clamped("AUTOBOT_VNC_CLIENT_MAX_TEXT_BYTES", 1024 * 1024, min_v=1024, max_v=67108864)
 
 # VNC_MAX_FRAMEBUFFER_BYTES caps each buffer in that buffer's OWN unit: the RGB canvas we keep
 # (3 bytes per pixel) and the raw bytes one update carries on the wire (4 bytes per pixel, 32bpp).

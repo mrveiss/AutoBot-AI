@@ -37,11 +37,11 @@ from typing import Protocol
 from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_int_clamped
 
 # Default cap on a server-supplied failure-reason string; callers with a wider text
 # allowance (the RFB client's VNC_MAX_TEXT_BYTES) pass their own via max_reason_bytes.
-DEFAULT_MAX_REASON_BYTES = env_int("AUTOBOT_VNC_AUTH_MAX_REASON_BYTES", 64 * 1024)
+DEFAULT_MAX_REASON_BYTES = env_int_clamped("AUTOBOT_VNC_AUTH_MAX_REASON_BYTES", 64 * 1024, min_v=1, max_v=1048576)
 
 RFB_VERSION = b"RFB 003.008\n"
 

@@ -23,7 +23,8 @@ _KEY = "k" * 32
 
 def _gate():
     src = (_ROOT / "services" / "auth.py").read_text(encoding="utf-8")
-    fn = next(n for n in ast.parse(src).body if getattr(n, "name", "") == "get_current_user_or_registry_service")
+    wanted = ("_internal_key_or_user", "get_current_user_or_registry_service")
+    fns = [n for n in ast.parse(src).body if getattr(n, "name", "") in wanted]
     seen = {}
 
     async def get_current_user(credentials):
@@ -44,7 +45,7 @@ def _gate():
         "Depends": lambda *a, **k: None,
         "_optional_security": None,
     }
-    exec(compile(ast.Module([fn], []), "auth.py", "exec"), ns)
+    exec(compile(ast.Module(fns, []), "auth.py", "exec"), ns)
     return ns["get_current_user_or_registry_service"], seen
 
 
