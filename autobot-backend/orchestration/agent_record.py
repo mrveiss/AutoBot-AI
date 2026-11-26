@@ -4,42 +4,35 @@
 # Author: mrveiss
 """One agent record: identity and capability, with health and presence as attributes (#22275).
 
-Agents were described by parallel registries: ``AgentCapabilityRegistry`` (identity and
-capability profile), ``AgentHealthRegistry`` (is it alive), ``AgentPresenceRegistry`` (is it
-busy). Each stays the *store* of its own facts; this module is the one *record* that joins
-them on the agent id, so a reader (the self-model, an API) asks one question and gets one
-plain dict per agent. ``AgentRegistryService`` (the durable DB rows) and the Company OS KB
-index (``llc.kb.capability_indexer``) are persistence/index projections of the same
-identity, not live registries, and are intentionally not read here (async, per-company).
+``agent_records`` is the one place an agent is described. Its sources, joined on the unified agent
+id (#11251):
 
-#11251 already unified the agent-id namespace (routing ids are profile ids); this joins the
-live-status stores onto those ids.
+- the declared profile (``AgentCapabilityRegistry``: capabilities, work boundary);
+- live attributes written by their producers into ``autobot_shared.agent_attributes``: ``health``
+  (``AgentHealthRegistry`` after each check) and ``presence`` (``AgentPresenceRegistry`` on each
+  heartbeat). Both registries keep their own behaviour (the check throttle, the TTL, squat and tenant
+  rules) and are producers of an attribute, not a second place to read an agent from;
+- the DB-backed agents table (``AgentRegistryService``) as ``registered``;
+- the Company OS org nodes (the rows ``llc.kb.capability_indexer`` indexes) as ``company_os``.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping
+from typing import Any, Dict, List
 
+from sqlalchemy import select
+
+from autobot_shared.agent_attributes import HEALTH_ATTR, PRESENCE_ATTR, get_agent_attribute_store
+from autobot_shared.db_session import async_session_scope
 from autobot_shared.service_registry_core import SERVICE_DEFINITIONS
+from models.agent_org import AgentOrgNode
 from orchestration.agent_registry import get_default_capability_registry
 from orchestration.types import AgentProfile
-from protocols.agent_presence import PresenceEntry, get_presence_registry
+from services.agent_registry_service import AgentRegistryService
+from user_management.database import get_async_session_factory
 
 AGENT_RECORD_KIND = "agent"
 _SERVING_SERVICE = SERVICE_DEFINITIONS["backend"].name
-
-
-def _presence_attr(entry: PresenceEntry | None) -> Dict[str, Any] | None:
-    """A presence entry as the record's ``presence`` attribute (None when not live)."""
-    if entry is None:
-        return None
-    return {
-        "busy": entry.busy,
-        "instance_id": entry.instance_id,
-        "last_seen": entry.last_seen,
-        "detail": entry.detail,
-        "task": {"id": entry.task.id, "title": entry.task.title} if entry.task else None,
-    }
 
 
 def _profile_fields(profile: AgentProfile) -> Dict[str, Any]:
@@ -55,29 +48,65 @@ def _profile_fields(profile: AgentProfile) -> Dict[str, Any]:
     }
 
 
-def _record(profile: AgentProfile, health: Mapping[str, Any], presence: Mapping[str, PresenceEntry]) -> Dict[str, Any]:
-    """Join one profile with its health and presence attributes."""
-    attrs = {
-        "health": health[profile.agent_type].to_dict() if profile.agent_type in health else None,
-        "presence": _presence_attr(presence.get(profile.agent_id)),
-    }
+def _live_attrs(profile: AgentProfile, live: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """The health and presence attributes of one profile (None when its producer has not written one)."""
+    own, by_type = live.get(profile.agent_id, {}), live.get(profile.agent_type, {})
     return {
-        "kind": AGENT_RECORD_KIND,
-        "name": profile.agent_id,
-        "serving_service": _SERVING_SERVICE,
-        "fields": {**_profile_fields(profile), **attrs},
+        HEALTH_ATTR: own.get(HEALTH_ATTR, by_type.get(HEALTH_ATTR)),
+        PRESENCE_ATTR: own.get(PRESENCE_ATTR),
     }
 
 
-def agent_records(health_registry: Any | None = None) -> List[Dict[str, Any]]:
+def _record(name: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    """One agent as a catalogue record."""
+    return {"kind": AGENT_RECORD_KIND, "name": name, "serving_service": _SERVING_SERVICE, "fields": fields}
+
+
+def _registered_attr(agent: Any) -> Dict[str, Any]:
+    """An agents-table row as the ``registered`` attribute."""
+    return {
+        "name": agent.name,
+        "description": agent.description,
+        "agent_type": agent.agent_type,
+        "status": agent.status,
+    }
+
+
+def _company_os_attr(node: AgentOrgNode) -> Dict[str, Any]:
+    """A Company OS org node as the ``company_os`` attribute."""
+    return {
+        "company_id": str(node.company_id) if node.company_id else None,
+        "title": node.title,
+        "org_role": node.org_role,
+        "reports_to": node.reports_to,
+        "capabilities": node.capabilities,
+        "status": node.status,
+    }
+
+
+async def _stored_agents() -> Dict[str, Dict[str, Any]]:
+    """``agent id -> {registered, company_os}`` from the agents table and the Company OS org nodes."""
+    stored: Dict[str, Dict[str, Any]] = {}
+    async with async_session_scope(get_async_session_factory()) as session:
+        for agent in await AgentRegistryService(session).list_agents(limit=1000):
+            stored.setdefault(agent.agent_id, {})["registered"] = _registered_attr(agent)
+        for node in (await session.execute(select(AgentOrgNode))).scalars().all():
+            stored.setdefault(node.agent_id, {})["company_os"] = _company_os_attr(node)
+    return stored
+
+
+async def agent_records() -> List[Dict[str, Any]]:
     """Every agent as one plain record (kind, stable name, serving service, declared fields).
 
-    ``health_registry`` is the running ``AgentHealthRegistry`` (it lives on the ``AgentClient``
-    instance, so the caller passes it); without one, ``health`` is None for every agent.
-    Presence is read from the process presence registry (shared and unscoped by tenant here
-    only for the install-wide projection, as ``snapshot_for_projection`` documents).
+    The union of the declared profiles, the agents table and the Company OS org nodes, one record per
+    unified agent id. A stored agent with no declared profile carries only its stored and live attributes.
     """
-    health = health_registry.agent_health if health_registry is not None else {}
-    presence = {e.name: e for e in get_presence_registry().snapshot_for_projection()}
+    live = get_agent_attribute_store().snapshot()
+    stored = await _stored_agents()
     profiles = get_default_capability_registry().get_all()
-    return [_record(p, health, presence) for _, p in sorted(profiles.items())]
+    records = {
+        aid: {**_profile_fields(p), **_live_attrs(p, live), **stored.get(aid, {})} for aid, p in profiles.items()
+    }
+    for aid, attrs in stored.items():
+        records.setdefault(aid, {PRESENCE_ATTR: live.get(aid, {}).get(PRESENCE_ATTR), HEALTH_ATTR: None, **attrs})
+    return [_record(aid, fields) for aid, fields in sorted(records.items())]
