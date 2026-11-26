@@ -344,6 +344,34 @@ class TestSessionOwnerIsTheAuthenticatedPrincipal:
         assert not manager._fire_pre_compact_hook.call_args.kwargs["user_id"]
 
 
+class TestSessionCompanyComesFromTheVerifiedScope:
+    """#16692: ``session.metadata["company_id"]`` is the verified company, never the request body's own."""
+
+    @staticmethod
+    async def _turn(context: dict) -> dict:
+        from chat_workflow.manager import ChatWorkflowManager
+
+        manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
+        manager._register_user_message_in_history = MagicMock()
+        manager._prepare_llm_request_params = AsyncMock(return_value={"prompt": "p", "model": "m"})
+        manager._fire_pre_compact_hook = AsyncMock()
+        session = SimpleNamespace(session_id="s1", metadata={}, conversation_history=[])
+        await manager._prepare_llm_workflow_params(session, "hello", context)
+        return session.metadata
+
+    @pytest.mark.asyncio
+    async def test_a_body_company_id_never_becomes_the_session_company(self):
+        context = apply_auth_role(
+            {"company_id": "someone-elses", "org_id": "evil"}, "user", {"user_id": ALICE_ID, "org_id": "org-1"}
+        )
+        assert (await self._turn(context))["company_id"] == "org-1"
+
+    @pytest.mark.asyncio
+    async def test_an_unverified_turn_has_no_company(self):
+        context = apply_auth_role({"company_id": "someone-elses"}, None, None)
+        assert (await self._turn(context))["company_id"] == ""
+
+
 class TestShortestPathSkipsVisitedBeforeTheHopRead:
     @pytest.mark.asyncio
     async def test_hop_allowed_is_called_once_per_node_not_once_per_edge(self):

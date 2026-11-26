@@ -22,6 +22,7 @@ from typing import Any, Dict, FrozenSet, List
 import redis.asyncio as async_redis
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
@@ -3256,9 +3257,9 @@ before summarizing.
         stamp_verified_identity(session.metadata, context)
         if context:
             session.metadata["tenant_id"] = context.get("tenant_id") or context.get("org_id") or ""
-            # #11501 T2: CEO-chat path carries company_id — used to append the
-            # board-tool teaching to the system prompt for this turn only.
-            session.metadata["company_id"] = context.get("company_id") or ""
+            # #11501 T2: the board-tool teaching is appended for this turn only. The company is the VERIFIED one, never
+            # the request body's own ``company_id`` (#16692).
+            session.metadata["company_id"] = context.get(VERIFIED_COMPANY_KEY) or ""
             # #11585: per-request model override — persisted on the session so
             # later messages in this conversation inherit the choice.
             if context.get("model"):
