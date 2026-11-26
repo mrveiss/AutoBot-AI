@@ -83,6 +83,9 @@ _MARKERS: dict[str, tuple[str, ...]] = {
 #: name. Hash is the only sane default and is what every such file here uses.
 _DEFAULT_MARKERS: tuple[str, ...] = ("#",)
 
+#: A Jinja template: `{# ... #}` comments are removed on top of the host format's line marker (#22099).
+JINJA_SUFFIX = ".j2"
+
 #: Suffixes whose quoting rules include a backslash escape outside quotes.
 #: In shell `echo \# x` prints a literal `#`; in Python it does not.
 _BACKSLASH_ESCAPES = frozenset({".sh", ".bash", ""})
@@ -267,8 +270,57 @@ def _scan_file(text: str, suffix: str) -> _FileScan | None:
     return _FileScan(out, scan.cuts, scan.unterminated)
 
 
+#: Jinja's delimiters: a comment, and the two constructs whose body is Jinja code (strings live only there).
+_JINJA_COMMENT = ("{#", "#}")
+_JINJA_CODE = {"{{": "}}", "{%": "%}"}
+
+
+def _jinja_code_end(text: str, i: int, close: str) -> int:
+    """The offset just past the *close* of the Jinja expression whose body starts at *i*; quoted text is skipped."""
+    quote = None
+    while i < len(text):
+        char = text[i]
+        if quote is not None and char == "\\":
+            i += 1  # the escaped character is data
+        elif quote is not None:
+            quote = None if char == quote else quote
+        elif char in ("'", '"'):
+            quote = char
+        elif text.startswith(close, i):
+            return i + len(close)
+        i += 1
+    return len(text)
+
+
+def blank_jinja_comments(text: str) -> str:
+    """*text* with each Jinja `{# ... #}` comment (single- or multi-line) blanked, newlines kept (#22099).
+
+    Text outside `{{ }}` / `{% %}` has no quotes in Jinja, so a `{#` there opens a comment whatever surrounds it; in
+    an expression a quoted `"{#"` is a string and is data. An unclosed `{#` blanks to the end of the text.
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        opener = next((o for o in (*_JINJA_CODE, _JINJA_COMMENT[0]) if text.startswith(o, i)), None)
+        if opener is None:
+            out.append(text[i])
+            i += 1
+            continue
+        if opener in _JINJA_CODE:
+            end = _jinja_code_end(text, i + 2, _JINJA_CODE[opener])
+            out.append(text[i:end])
+        else:
+            found = text.find(_JINJA_COMMENT[1], i + 2)
+            end = len(text) if found < 0 else found + 2
+            out.append(_blank(text[i:end]))
+        i = end
+    return "".join(out)
+
+
 def _scan_block_syntax(text: str, suffix: str) -> tuple[str, list[int] | None]:
     """*text* with block comments blanked, and the offsets where `//` comments start; `None` for other syntaxes."""
+    if suffix == JINJA_SUFFIX:
+        return blank_jinja_comments(text), None
     scanned = _scan_file(text, suffix)
     return (text, None) if scanned is None else (scanned.text, scanned.cuts)
 
