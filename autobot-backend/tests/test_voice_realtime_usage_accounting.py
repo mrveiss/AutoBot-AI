@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
@@ -287,3 +288,60 @@ class TestSessionEndedDuringAnOutage:
         assert t._ended_unflushed == {}
         assert json.loads(server.stored["voice_realtime_session:o1"])["input_tokens"] == 500
         assert json.loads(server.stored["voice_realtime_session:o2"])["input_tokens"] == 7
+
+
+class TestConcurrentFinalisation:
+    """Updates and ends of one session serialise; an end never discards usage (#21678)."""
+
+    @staticmethod
+    def _setup(monkeypatch):
+        monkeypatch.setattr("services.voice_realtime_telemetry.get_telemetry_settings", lambda: {"enabled": True})
+        server = _FakeRedis()
+        a, b = _bare_telemetry(server), _bare_telemetry(server)
+        a._prom = b._prom = MagicMock()
+        return server, a, b
+
+    @pytest.mark.asyncio
+    async def test_a_concurrent_update_and_end_whose_commits_fail_lose_no_usage_and_land_once(self, monkeypatch):
+        from services import voice_realtime_telemetry as module
+
+        server, t, _ = self._setup(monkeypatch)
+        await t.session_start("f1")
+        real = module.update_in_redis
+
+        async def failing_after_yielding(*args, **kwargs):
+            await asyncio.sleep(0)  # both commits are in flight together, then both fail
+            raise ConnectionError("down")
+
+        monkeypatch.setattr(module, "update_in_redis", failing_after_yielding)
+        await asyncio.gather(t.record_response_done("f1", input_tokens=50), t.session_end("f1"))
+        assert "f1" in t._ended_unflushed and t._locks._locks == {}
+        monkeypatch.setattr(module, "update_in_redis", real)
+        await t.session_start("other")  # Redis is back: the queued end flushes
+        stored = json.loads(server.stored["voice_realtime_session:f1"])
+        assert stored["input_tokens"] == 50 and stored["ended_at"]
+        await t.record_audio("other", "input", 1.0)
+        assert json.loads(server.stored["voice_realtime_session:f1"])["input_tokens"] == 50
+
+    @pytest.mark.asyncio
+    async def test_an_end_by_another_worker_keeps_its_stamp_and_this_workers_pending_usage_lands_once(
+        self, monkeypatch
+    ):
+        server, a, b = self._setup(monkeypatch)
+        await a.session_start("f2")
+        a_redis = a._get_redis
+        a._get_redis = AsyncMock(return_value=None)  # A cannot reach Redis
+        await a.record_response_done("f2", input_tokens=30)
+        assert a._pending["f2"].input_tokens == 30
+        ended_by_b = await b.session_end("f2")
+        a._get_redis = a_redis
+        record = await a.session_end("f2")
+        stored = json.loads(server.stored["voice_realtime_session:f2"])
+        assert stored["input_tokens"] == 30 and stored["ended_at"] == ended_by_b.ended_at
+        assert stored["end_token"] == ended_by_b.end_token and record.input_tokens == 30
+        assert a._pending == {} and a._ended_unflushed == {}
+
+    @pytest.mark.asyncio
+    async def test_different_sessions_do_not_share_a_lock(self, monkeypatch):
+        _, a, _ = self._setup(monkeypatch)
+        assert a._locks.get("x") is not a._locks.get("y") and a._locks.get("x") is a._locks.get("x")

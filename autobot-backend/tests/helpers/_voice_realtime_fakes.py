@@ -10,6 +10,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from autobot_shared.time_utils import utc_timestamp
+from services.voice_realtime_usage import SessionLocks
 from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 
@@ -58,6 +59,7 @@ def bare_telemetry(fake_redis, prom=None, max_seconds=1800, max_cost=5.0):
     t._in_memory_sessions = {}
     t._pending = {}
     t._cap_only = {}
+    t._locks = SessionLocks()
     t._ended_unflushed = {}
     return t
 

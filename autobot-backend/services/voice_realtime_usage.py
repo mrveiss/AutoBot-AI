@@ -11,6 +11,7 @@ consent flip or missing-key race can replace a larger total with a smaller one.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass, fields
 from typing import Any, Callable
@@ -37,6 +38,36 @@ class UsageDelta:
         """Add this delta onto *record* in place."""
         for f in fields(self):
             setattr(record, f.name, getattr(record, f.name) + getattr(self, f.name))
+
+
+@dataclass
+class EndStep:
+    """One ``session_end`` attempt: its unique *token*, the end *stamp*, and *refresh* (re-derive cost after usage).
+
+    Called as the finish step on the first end. The token is stored in the record as ``end_token``, so a retried end
+    (its EXEC raised after applying) recognises itself, while an end by another worker is told apart from it.
+    """
+
+    token: str
+    stamp: Callable[[Any], None]
+    refresh: Callable[[Any], None]
+
+    def __call__(self, record: Any) -> None:
+        self.stamp(record)
+        record.end_token = self.token
+
+
+class SessionLocks:
+    """Lazily created per-session locks: updates and ends of ONE session serialise, different sessions never wait."""
+
+    def __init__(self) -> None:
+        self._locks: dict[str, asyncio.Lock] = {}
+
+    def get(self, session_id: str) -> asyncio.Lock:
+        return self._locks.setdefault(session_id, asyncio.Lock())
+
+    def drop(self, session_id: str) -> None:
+        self._locks.pop(session_id, None)
 
 
 @dataclass
@@ -74,7 +105,8 @@ async def update_in_redis(
 ) -> Any | None:
     """Re-read, add *total*, SET under WATCH/MULTI; a conflicting write (another worker, or a concurrent create of a
     missing key) re-reads and re-applies. A missing key is created from *base* only while it is still absent. A record
-    already ended is returned unchanged when *finish* is given, so a retried end never adds usage twice."""
+    already ended by this very attempt (same end token) is returned unchanged; one ended by another worker keeps that
+    worker's stamp and gets this usage added."""
     for _ in range(attempts):
         async with redis.pipeline(transaction=True) as pipe:
             try:
@@ -88,9 +120,14 @@ async def _attempt(pipe: Any, key: str, ttl: int, parse: Any, total: UsageDelta,
     await pipe.watch(key)
     raw = await pipe.get(key)
     current = parse(raw) if raw is not None else base
-    if current is None or (finish is not None and current.ended_at):
+    if current is None:
         await pipe.unwatch()
-        return current
+        return None
+    if finish is not None and current.ended_at:
+        if getattr(current, "end_token", None) == getattr(finish, "token", None):  # our own retried end
+            await pipe.unwatch()
+            return current
+        finish = getattr(finish, "refresh", None)  # another worker ended it: keep its stamp, add our usage
     record = usage_view(current, total, finish)
     pipe.multi()
     pipe.set(key, json.dumps(record.to_dict()), ex=ttl)
