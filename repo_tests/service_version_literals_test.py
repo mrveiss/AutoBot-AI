@@ -28,13 +28,14 @@ _ROOTS = (
     "autobot-backend/llm_self_awareness.py",
     "autobot-backend/services/tracing_service.py",
     "autobot_shared/tracing.py",
+    "autobot_shared/ssot_tracing_settings.py",
 )
 _TEST = re.compile(r"(_test\.py$|/test_[^/]*\.py$|/tests/)")
 _NUM = r"[\"']\d+(?:\.\d+)+[\"']"
 #: Each shape that states a version: a dict key, a keyword argument or default, a ``.get`` fallback, a constant.
 _SITE = re.compile(
     rf"[\"']version[\"']\s*:\s*{_NUM}"
-    rf"|\bversion\s*(?::\s*str\s*)?=\s*{_NUM}"
+    rf"|\b\w*version\w*\s*(?::\s*str\s*)?=\s*(?:Field\(\s*default\s*=\s*)?{_NUM}"
     rf"|\.get\(\s*[\"']version[\"']\s*,\s*{_NUM}"
     rf"|\b(?:AUTOBOT|SERVICE|APP|PRODUCT)_VERSION\s*=\s*{_NUM}"
 )
@@ -90,6 +91,9 @@ def test_no_service_reports_an_invented_version() -> None:
         '    value = cfg.get("version", "1.0.0")',
         '    SERVICE_VERSION = "2.0.0"',
         '    "version": "1.0",  # a release number nobody declared',
+        '    otel_service_version: str = Field(default="1.5.0", alias="AUTOBOT_OTEL_SERVICE_VERSION")',
+        '    service_version = Field(default="2.0.0")',
+        '    otel_service_version = "1.5.0"',
     ],
 )
 def test_each_invented_shape_is_caught(line: str) -> None:
@@ -104,6 +108,7 @@ def test_each_invented_shape_is_caught(line: str) -> None:
         '    "version": "1.0.0",  # catalog version: the plugin\'s own',
         '    version = os.environ["VERSION"]',
         '    "protocolVersion": "2024-11-05",',
+        '    otel_service_version: str = Field(default="", alias="AUTOBOT_OTEL_SERVICE_VERSION")',
     ],
 )
 def test_declared_unknown_and_commented_literals_pass(line: str) -> None:

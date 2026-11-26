@@ -287,6 +287,7 @@ DECLARED_SCOPES = {
         "autobot-backend/llm_self_awareness.py",
         "autobot-backend/services/tracing_service.py",
         "autobot_shared/tracing.py",
+        "autobot_shared/ssot_tracing_settings.py",
     ),
     "node-major-literals": (
         ".github",
