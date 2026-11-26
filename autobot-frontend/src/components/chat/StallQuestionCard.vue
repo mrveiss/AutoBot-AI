@@ -1,15 +1,24 @@
+<!--
+  Copyright 2025-2026 mrveiss
+  SPDX-License-Identifier: Apache-2.0
+
+  StallQuestionCard -- the question a stalled chat turn asks its person (#21022), as a warn-tinted card of the
+  Refined approval family (#18243): kit button and input, tokens only.
+-->
 <template>
-  <div class="flex flex-col gap-2 rounded-lg border border-autobot-warning px-4 py-3" :class="{ 'opacity-80': answered }" role="group" :aria-label="$t('chat.stallQuestion.title')">
+  <div
+    class="flex flex-col gap-2 rounded-[var(--aui-radius-lg)] border border-[var(--aui-color-warning)] bg-[color-mix(in_srgb,var(--aui-color-warning)_8%,var(--aui-color-surface))] px-4 py-3 text-[var(--aui-color-text)]"
+    :class="{ 'opacity-80': answered }" role="group" :aria-label="$t('chat.stallQuestion.title')">
     <div class="flex items-center gap-2 font-semibold">
       <Icon name="question-circle" />
       <span>{{ $t('chat.stallQuestion.title') }}</span>
     </div>
-    <p>{{ message.content }}</p>
-    <p v-if="answered">
+    <p class="m-0">{{ message.content }}</p>
+    <p v-if="answered" class="m-0">
       {{ answerText ? $t('chat.stallQuestion.answered', { answer: answerText }) : $t('chat.stallQuestion.stopped') }}
     </p>
     <form v-else @submit.prevent="send(draft.trim())">
-      <p v-if="failure" class="text-autobot-error" role="alert">{{ $t(FAILURE_KEYS[failure]) }}</p>
+      <p v-if="failure" class="m-0 text-[var(--aui-color-error)]" role="alert">{{ $t(FAILURE_KEYS[failure]) }}</p>
       <BaseInput v-model="draft" :label="$t('chat.stallQuestion.answerLabel')" :placeholder="$t('chat.stallQuestion.placeholder')" />
       <div class="mt-2 flex gap-2">
         <BaseButton type="submit" variant="primary" size="sm" :disabled="submitting || !draft.trim()">

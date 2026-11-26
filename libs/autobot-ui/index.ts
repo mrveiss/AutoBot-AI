@@ -30,6 +30,10 @@ export type { ButtonVariant, ButtonSize } from './src/components/BaseButton.vue'
 export { default as BaseInput } from './src/components/BaseInput.vue'
 export type { InputSize, InputType } from './src/components/BaseInput.vue'
 
+// The toggle chip (#21995): aria-pressed, controlled, no text.
+export { default as BaseChip } from './src/components/BaseChip.vue'
+export type { ChipSize } from './src/components/BaseChip.vue'
+
 export { default as BaseBadge } from './src/components/BaseBadge.vue'
 export type { BadgeVariant, BadgeSize, BadgeTone } from './src/components/BaseBadge.vue'
 // The one risk-tier badge (#13422): RiskTier is the backend's ladder, sent as risk_tier.
