@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.http_refusal import fixed_refusal
 from models.database import Node
 from models.schemas import (
     VNCConnectionInfo,
@@ -25,7 +26,7 @@ from models.schemas import (
     VNCCredentialUpdate,
     VNCEndpointsResponse,
 )
-from services.auth import get_current_user
+from services.auth import get_current_user, get_current_user_or_registry_service
 from services.database import get_db
 from services.vnc_credentials import vnc_credential_service
 
@@ -65,10 +66,7 @@ async def create_vnc_credential(
         return vnc_credential_service.to_response(credential, node)
 
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error("Failed to create VNC credential: %s", e)
         raise HTTPException(
@@ -84,7 +82,7 @@ async def create_vnc_credential(
 async def list_node_vnc_credentials(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
+    _: Annotated[dict, Depends(get_current_user_or_registry_service)],
     include_inactive: bool = Query(False),
 ) -> VNCCredentialListResponse:
     """List VNC credentials for a node."""
@@ -189,7 +187,7 @@ async def delete_vnc_credential(
 async def get_vnc_connection_info(
     credential_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
+    _: Annotated[dict, Depends(get_current_user_or_registry_service)],
 ) -> VNCConnectionInfo:
     """Get VNC connection info with a short-lived token for password retrieval."""
     connection_info = await vnc_credential_service.get_connection_info(db, credential_id, generate_token=True)
@@ -206,7 +204,7 @@ async def get_vnc_connection_info(
 async def exchange_connection_token(
     token: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
+    _: Annotated[dict, Depends(get_current_user_or_registry_service)],
 ) -> dict:
     """Exchange a connection token for the VNC password (one-time use)."""
     password = await vnc_credential_service.get_password_by_token(db, token)
@@ -227,7 +225,7 @@ async def exchange_connection_token(
 @vnc_router.get("/endpoints", response_model=VNCEndpointsResponse)
 async def list_vnc_endpoints(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
+    _: Annotated[dict, Depends(get_current_user_or_registry_service)],
     include_inactive: bool = Query(False),
 ) -> VNCEndpointsResponse:
     """List all VNC endpoints across the fleet."""

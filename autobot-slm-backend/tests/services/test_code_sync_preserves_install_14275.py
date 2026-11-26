@@ -25,6 +25,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _ORCHESTRATOR = _REPO_ROOT / "autobot-slm-backend" / "services" / "sync_orchestrator.py"
 _REGISTRY = _REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py"
 
+_MANIFESTS: dict | None = None  # loaded once: the manifests are read from the checkout, not per entry
+
 _RELATIVE_INCLUDE = re.compile(r"^\s*-(c|r)\s+(\.\./)+", re.MULTILINE)
 
 
@@ -194,7 +196,7 @@ def _registry_entries() -> list[dict]:
         if not isinstance(node, ast.Dict):
             continue
         keys = {k.value for k in node.keys if isinstance(k, ast.Constant)}
-        if {"name", "source_paths"} <= keys:
+        if {"name", "display_name"} <= keys:
             entry = {}
             for key, value in zip(node.keys, node.values):
                 if not isinstance(key, ast.Constant):
@@ -214,8 +216,33 @@ def _registry_entries() -> list[dict]:
                         entry[key.value] = ast.unparse(value)
                 else:
                     entry[key.value] = ast.unparse(value)
-            entries.append(entry)
+            entries.append(_with_manifest_shape(entry))
     return entries
+
+
+def _with_manifest_shape(entry: dict) -> dict:
+    """The entry as DEFAULT_ROLES holds it: `source_paths`/`target_path` come from the manifests (#16025).
+
+    The registry no longer declares them for the roles a manifest resolves to, so a scan of its
+    source alone sees no `source_paths` and (before this) found 3 roles of 13. The manifests are
+    read from the checkout and run through the same `apply_manifest_shape` the registry itself uses,
+    so this checks what the code-sync actually receives, placeholders included.
+    """
+    from services.manifest_loader import ManifestLoader
+    from services.role_manifest_shape import apply_manifest_shape
+
+    global _MANIFESTS
+    if _MANIFESTS is None:
+        _MANIFESTS = ManifestLoader(infra_base=_REPO_ROOT / "autobot-infrastructure").load_all()
+    shaped = apply_manifest_shape(dict(entry), _MANIFESTS, {"base_dir": "<BASE>", "agent_dir": "<AGENTDIR>"})
+    # The sync fields and the units move; the rest stays as the registry source declares it. The registry no
+    # longer restates a manifest-backed role's units (#16025 AC1), so the shaped list is the only place they are.
+    return {
+        **entry,
+        "source_paths": shaped["source_paths"],
+        "target_path": shaped["target_path"],
+        "systemd_service": shaped.get("systemd_service") or [],
+    }
 
 
 def test_the_registry_scan_found_roles():
@@ -326,6 +353,15 @@ def _unit_runs_from_a_venv(service: str) -> bool | None:
     return None
 
 
+def _entry_runs_from_a_venv(entry: dict) -> bool | None:
+    """`_unit_runs_from_a_venv` for the first of the role's units that has a template, None when none has."""
+    for unit in entry.get("systemd_service") or []:
+        answer = _unit_runs_from_a_venv(unit)
+        if answer is not None:
+            return answer
+    return None
+
+
 def test_a_post_sync_pip_targets_the_same_interpreter_the_service_runs():
     """A bare `pip` installs into whatever the SSH session's PATH resolves.
 
@@ -343,10 +379,7 @@ def test_a_post_sync_pip_targets_the_same_interpreter_the_service_runs():
         command = entry.get("post_sync_cmd") or ""
         if "pip install" not in command:
             continue
-        service = entry.get("systemd_service")
-        if not service:
-            continue
-        needs_venv = _unit_runs_from_a_venv(service)
+        needs_venv = _entry_runs_from_a_venv(entry)
         if needs_venv is None:
             continue
         for match in re.finditer(r"(?:^|&&\s*|;\s*)([\w./-]*pip) install", command):
@@ -362,8 +395,7 @@ def test_the_venv_rule_examined_something():
     checked = [
         entry.get("name")
         for entry in _registry_entries()
-        if "pip install" in (entry.get("post_sync_cmd") or "")
-        and _unit_runs_from_a_venv(entry.get("systemd_service") or "") is not None
+        if "pip install" in (entry.get("post_sync_cmd") or "") and _entry_runs_from_a_venv(entry) is not None
     ]
 
     assert len(checked) >= 4, f"only {checked} were actually examined"

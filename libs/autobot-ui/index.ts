@@ -30,6 +30,10 @@ export type { ButtonVariant, ButtonSize } from './src/components/BaseButton.vue'
 export { default as BaseInput } from './src/components/BaseInput.vue'
 export type { InputSize, InputType } from './src/components/BaseInput.vue'
 
+// The toggle chip (#21995): aria-pressed, controlled, no text.
+export { default as BaseChip } from './src/components/BaseChip.vue'
+export type { ChipSize } from './src/components/BaseChip.vue'
+
 export { default as BaseBadge } from './src/components/BaseBadge.vue'
 export type { BadgeVariant, BadgeSize, BadgeTone } from './src/components/BaseBadge.vue'
 // The one risk-tier badge (#13422): RiskTier is the backend's ladder, sent as risk_tier.
@@ -40,6 +44,9 @@ export type { RiskTier } from './src/types/riskTier'
 // The one inline alert/banner for both apps (#18819).
 export { default as BaseAlert } from './src/components/BaseAlert.vue'
 export type { AlertVariant, AlertSize, BaseAlertProps } from './src/components/BaseAlert.vue'
+
+export { default as BaseProgress } from './src/components/BaseProgress.vue'
+export type { ProgressVariant, ProgressSize } from './src/components/BaseProgress.vue'
 
 export { default as BaseCard } from './src/components/BaseCard.vue'
 
@@ -83,6 +90,10 @@ export { default as PageHeader } from './src/components/PageHeader.vue'
 export { default as Breadcrumb } from './src/components/Breadcrumb.vue'
 export type { BreadcrumbItem } from './src/components/Breadcrumb.vue'
 
+// The section sub-navigation (the Refined UI `.sub` sidebar, #18241); Knowledge is its first consumer.
+export { default as SectionNav } from './src/components/SectionNav.vue'
+export type { SectionNavItem, SectionNavSection } from './src/components/SectionNav.vue'
+
 export { default as BrandMark } from './src/components/BrandMark.vue'
 
 export { default as BaseTooltip } from './src/components/BaseTooltip.vue'
@@ -91,6 +102,13 @@ export type { TooltipPlacement } from './src/components/BaseTooltip.vue'
 // Screen-reader announcer (#18240) — promoted from the SLM useAccessibility.
 export { useAnnounce, LIVE_REGION_ID } from './src/composables/useAnnounce'
 export type { AnnouncePriority } from './src/composables/useAnnounce'
+
+// Theme names, storage and `data-theme` application shared by both apps (#18239).
+export {
+  EFFECTIVE_THEMES, THEMES, THEME_STORAGE_KEY, colorSchemeFor, resolveTheme,
+  applyThemeToDocument, readStoredTheme, writeStoredTheme,
+} from './src/composables/themeScheme'
+export type { EffectiveTheme, Theme } from './src/composables/themeScheme'
 
 // Dialog-a11y composables — the focus-trap / scroll-lock / focus-restore /
 // initial-focus primitives shared by every dialog and modal consumer.

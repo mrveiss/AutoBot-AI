@@ -40,7 +40,8 @@ async def test_finished_subscription_run_over_token_limit_is_recorded_not_failed
     session, ingest = FakeAsyncSession(), AsyncMock(side_effect=BudgetExhausted("agent-abc", 12.0, 10.0))
     await _dispatch(LLCRunStatus.COMPLETED, BILLING_SUBSCRIPTION, session, ingest)  # must not raise
     assert ingest.await_args.args[3:6] == (1000, 200, "m")
-    assert ingest.await_args.kwargs == {"bill_dollars": False}
+    # The adapter's run id ("9/s") dedupes a retried ingest of the same run (#21332).
+    assert ingest.await_args.kwargs == {"bill_dollars": False, "idempotency_key": "9/s"}
     assert session.commits == 1
 
 
@@ -51,7 +52,7 @@ async def test_finished_api_run_over_budget_still_raises_budget_exhausted() -> N
         with pytest.raises(BudgetExhausted):
             await _dispatch(LLCRunStatus.COMPLETED, billing, session, ingest)
         assert session.commits == 0
-        assert ingest.await_args.kwargs == {"bill_dollars": True}
+        assert ingest.await_args.kwargs == {"bill_dollars": True, "idempotency_key": "9/s"}
 
 
 @pytest.mark.asyncio

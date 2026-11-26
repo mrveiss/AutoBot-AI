@@ -25,15 +25,22 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from redis.exceptions import ResponseError
-from sqlalchemy import select, text
+from sqlalchemy import text
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
 from knowledge.index_scope import kb_index_names
-from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
+from models.approval import Approval, ApprovalComment, ApprovalType
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import AuditResult, audit_log
+from services.kb_approved_delete import (
+    pending_approval,
+    refuse_more_than_approved,
+    require_approved,
+    run_audited_delete,
+    write_audit,
+)
 from services.kb_wipe_action import CHANNEL_OPERATOR, decision_details, refresh_pending_plan, review_kb_proposal
 from services.kb_wipe_redis import SCAN_BATCH, ClientFactory, default_client
 
@@ -101,12 +108,7 @@ async def plan_claude_md_reindex(client_factory: ClientFactory = default_client)
 
 
 async def _pending_proposal(session: "AsyncSession") -> "Approval | None":
-    query = (
-        select(Approval)
-        .where(Approval.status == ApprovalStatus.PENDING.value, Approval.context["action"].astext == ACTION)
-        .with_for_update()
-    )
-    return (await session.execute(query)).scalars().first()
+    return await pending_approval(session, ACTION)
 
 
 async def propose_claude_md_reindex(session: "AsyncSession", requested_by: str, plan: dict) -> "Approval":
@@ -144,8 +146,7 @@ async def _review(approval: "Approval", session: "AsyncSession") -> bool:
 
 
 def _require_approved(approval: "Approval") -> None:
-    if (approval.context or {}).get("action") != ACTION or approval.status != ApprovalStatus.APPROVED.value:
-        raise ValueError(f"approval {approval.id} is not an approved {ACTION} proposal; the deletion is refused")
+    require_approved(approval, ACTION, "the deletion")
 
 
 def _check_scope(approval: "Approval") -> None:
@@ -159,14 +160,8 @@ def _check_scope(approval: "Approval") -> None:
 
 async def _audit(approval: "Approval", result: AuditResult, self_approval: bool, **extra: object) -> bool:
     """Whether the durable entry was committed."""
-    return await audit_log(
-        AuditAction.KNOWLEDGE_CLAUDE_MD_REINDEX.value,
-        result=result,
-        user_id=approval.decided_by_user,
-        resource="knowledge_base",
-        durable=True,
-        details=decision_details(approval, self_approval, selector=_selector(), **extra),
-    )
+    details = decision_details(approval, self_approval, selector=_selector(), **extra)
+    return await write_audit(audit_log, AuditAction.KNOWLEDGE_CLAUDE_MD_REINDEX, approval, result, details)
 
 
 def _delete_chunks(client, keys: list[str], deleted: list[int]) -> None:
@@ -177,35 +172,35 @@ def _delete_chunks(client, keys: list[str], deleted: list[int]) -> None:
         deleted[0] += len(batch)
 
 
-async def _delete_and_audit(approval: "Approval", keys: list[str], self_approval: bool) -> int:
-    deleted = [0]
-    try:
-        await asyncio.to_thread(_delete_chunks, default_client(DATABASE), keys, deleted)
-    except Exception as exc:
-        await _audit_failure(approval, self_approval, deleted[0], exc)
-        raise
+async def _delete_all(keys: list[str], deleted: list[int]) -> int:
+    await asyncio.to_thread(_delete_chunks, default_client(DATABASE), keys, deleted)
     return deleted[0]
 
 
-async def _audit_failure(approval: "Approval", self_approval: bool, deleted: int, exc: BaseException) -> None:
-    """Record the failed outcome; never raises, so the deletion's own error stays the one that propagates."""
-    try:
-        if await _audit(approval, "failed", self_approval, phase="failure", deleted=deleted, error=type(exc).__name__):
-            return
-    except Exception:  # noqa: BLE001 -- logged below; it must not replace the original error
-        logger.exception("CLAUDE.md chunk deletion: the failure audit for approval %s raised", approval.id)
-        return
-    logger.error("CLAUDE.md chunk deletion: the failure audit for approval %s was not written", approval.id)
+async def _refuse_then_delete(approval: "Approval", self_approval: bool, keys: list[str]) -> int:
+    """Refuse a count above the approved one, then the audited delete; returns the number of chunks deleted."""
 
+    async def audit(result: AuditResult, details: dict) -> bool:
+        return await _audit(approval, result, self_approval, **details)
 
-async def _refuse_more_than_approved(approval: "Approval", self_approval: bool, found: int) -> None:
-    """Delete nothing when more chunks match now than the approver saw; fewer is fine (some may be gone already)."""
-    approved = ((approval.context or {}).get("plan") or {}).get("chunks")
-    if isinstance(approved, int) and not isinstance(approved, bool) and found <= approved:
-        return
-    await _audit(approval, "failed", self_approval, phase="refused", approved_chunks=approved, found_chunks=found)
-    raise ValueError(
-        f"approval {approval.id} approved {approved} chunks but {found} match now; nothing was deleted. Re-propose."
+    await refuse_more_than_approved(
+        audit,
+        approval,
+        len(keys),
+        count_key="chunks",
+        unit="chunks",
+        refused_details=lambda approved, found: {"approved_chunks": approved, "found_chunks": found},
+    )
+    deleted = [0]  # the running count, readable if a batch fails
+    return await run_audited_delete(
+        approval,
+        audit,
+        what="the deletion",
+        intent={"chunks": len(keys)},
+        delete=lambda: _delete_all(keys, deleted),
+        failure=lambda exc: {"deleted": deleted[0], "error": type(exc).__name__},
+        completion=lambda count: {"deleted": count},
+        log=logger,
     )
 
 
@@ -217,13 +212,9 @@ async def execute_claude_md_reindex_action(approval: "Approval", session: "Async
     self_approval = await _review(approval, session)
     _check_scope(approval)
     keys = await asyncio.to_thread(lambda: matching_chunk_keys(default_client(DATABASE)))
-    await _refuse_more_than_approved(approval, self_approval, len(keys))
-    if not await _audit(approval, "attempted", self_approval, phase="intent", chunks=len(keys)):
-        raise RuntimeError(f"the audit entry for approval {approval.id} could not be written; nothing was deleted")
-    deleted = await _delete_and_audit(approval, keys, self_approval)
-    if not await _audit(approval, "success", self_approval, phase="completion", deleted=deleted):
-        raise RuntimeError(f"the deletion for approval {approval.id} ran but its audit record could not be written")
-    body = f"Deleted {deleted} CLAUDE.md chunks" + (" (self-approved by the only admin)." if self_approval else ".")
+    deleted = await _refuse_then_delete(approval, self_approval, keys)
+    suffix = " (self-approved by the only admin)." if self_approval else "."
+    body = f"Deleted {deleted} CLAUDE.md chunks{suffix}"
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
     await session.commit()
 

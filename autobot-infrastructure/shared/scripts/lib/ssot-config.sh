@@ -234,7 +234,7 @@ autobot_redis_db() {
 # the operator's own key, generated under $HOME by
 # utilities/setup-ssh-keys.sh; ssh_key_path is the service account's key
 # under /etc/autobot, deployed by Ansible. Deliberately NOT the same default
-# -- see the field comment in ssot_config.py for the evidence.
+# -- see the field comment in ssot_ssh.py for the evidence.
 : "${AUTOBOT_SSH_KEY:=${HOME}/.ssh/autobot_key}"
 
 # PathConfig.ssh_user

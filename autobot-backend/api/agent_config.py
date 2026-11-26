@@ -59,7 +59,7 @@ INSTRUCTION_TIER_MODEL = config.instruction_model
 # System/uncensored tier — system commands, security tasks
 SYSTEM_TIER_MODEL = config.system_model
 # Quality tier — user-facing chat, research, code analysis
-QUALITY_TIER_MODEL = config.misc.default_llm_model or config.default_agent_model or config.llm.default_model
+QUALITY_TIER_MODEL = config.llm.default_model_override or config.default_agent_model or config.llm.default_model
 
 router = APIRouter()
 

@@ -86,3 +86,40 @@ def test_a_missing_outcome_and_duration_say_so(caplog):
     line = _log_line(caplog, HookContext(session_id=SESSION, data={"tool_name": "t"}))
     assert "UNKNOWN (duration unknown)" in line
     assert "SUCCESS" not in line and "0.00s" not in line
+
+
+class _LoggingManager(_RecordingManager):
+    """An extension manager that runs the real LoggingExtension on the AFTER hook, as the registered one does."""
+
+    async def invoke_with_transform(self, _point, ctx, _key):
+        await LoggingExtension().on_after_tool_execute(ctx)
+        return None
+
+
+@pytest.fixture
+def logging_manager(monkeypatch):
+    fake = _LoggingManager()
+    monkeypatch.setattr(llm_handler, "get_extension_manager", lambda: fake)
+    return fake
+
+
+def _tool_line(caplog) -> str:
+    return next(r.getMessage() for r in caplog.records if "Tool web_search:" in r.getMessage())
+
+
+@pytest.mark.asyncio
+async def test_end_to_end_a_tool_with_a_known_duration_logs_a_non_zero_duration(logging_manager, caplog):
+    with caplog.at_level(logging.INFO):
+        await _run_tool(logging_manager, seconds=0.12, success=True)
+    line = _tool_line(caplog)
+    duration = float(line.rsplit("(", 1)[1].rstrip("s)"))
+    assert "SUCCESS" in line and duration >= 0.12
+
+
+@pytest.mark.asyncio
+async def test_end_to_end_a_failing_tool_is_logged_as_failed(logging_manager, caplog):
+    with caplog.at_level(logging.INFO):
+        await _run_tool(logging_manager, seconds=0.02, success=False)
+    line = _tool_line(caplog)
+    duration = float(line.rsplit("(", 1)[1].rstrip("s)"))
+    assert "FAILED" in line and "SUCCESS" not in line and duration > 0

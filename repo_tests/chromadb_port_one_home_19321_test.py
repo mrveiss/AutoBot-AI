@@ -52,8 +52,9 @@ PINNED: dict[str, tuple[str, int]] = {
     "autobot-infrastructure/autobot-database/templates/db-start.sh": (r"(?:ChromaDB \(|127\.0\.0\.1:)(\d+)", 2),
     "autobot-infrastructure/autobot-database/templates/db-status.sh": (r"(?:ChromaDB \(|127\.0\.0\.1:)(\d+)", 2),
     "autobot-infrastructure/autobot-database/manifest.yml": (
-        r'(?:- port: (\d+)\n(?:.*\n){3}\s*description: "ChromaDB|localhost:(\d+)/api/v2|ChromaDB on :(\d+))',
-        3,
+        r'(?:- port: (\d+)\n(?:.*\n){3}\s*description: "ChromaDB|localhost:(\d+)/api/v2|ChromaDB on :(\d+)'
+        r"|^  chromadb:\n    checked: true\n    port: (\d+))",  # #22032: the role_health entry
+        4,
     ),
     "autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml": (r"^chromadb_port: (\d+)", 1),
     "autobot-slm-backend/ansible/roles/redis/defaults/main.yml": (r"^chromadb_port: (\d+)", 1),
@@ -188,12 +189,13 @@ def test_no_unrecorded_chromadb_port_definition() -> None:
 
 
 #: Python readers that restated the port before #19321; each now derives from ``port.chromadb``.
+#: ``services/role_registry.py`` is no longer one (#16025): its health port comes from the database manifest, whose
+#: port and heartbeat endpoint are pinned to the SSOT in ``PINNED`` above.
 PYTHON_READERS = (
     "autobot-backend/api/monitoring.py",
     "autobot-backend/api/service_monitor.py",
     "autobot-slm-backend/api/infrastructure.py",
     "autobot-slm-backend/api/setup_wizard.py",
-    "autobot-slm-backend/services/role_registry.py",
     "autobot-slm-backend/services/security_posture_auditor.py",
     "autobot-slm-backend/services/service_orchestrator.py",
 )

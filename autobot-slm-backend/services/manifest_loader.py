@@ -46,6 +46,19 @@ from models.manifest import RoleManifest, UpdatePolicy
 logger = logging.getLogger(__name__)
 
 INFRA_DIR_NAME = "autobot-infrastructure"
+CODE_SOURCE_DIR_NAME = "code_source"
+
+
+def _infra_candidates(code_source: Path, base_dir: Path) -> tuple[Path, Path]:
+    """The two ``autobot-infrastructure`` directories, canonical first (#22067).
+
+    The canonical copy is the git code source's -- the tree the code-sync updates. An install whose unit
+    does not set ``AUTOBOT_CODE_SOURCE`` resolves it to ``base_dir`` itself, whose own copy is never
+    refreshed by an update; there the git code source is the ``code_source`` directory beside it.
+    """
+    if code_source == base_dir and (base_dir / CODE_SOURCE_DIR_NAME).is_dir():
+        code_source = base_dir / CODE_SOURCE_DIR_NAME
+    return code_source / INFRA_DIR_NAME, base_dir / INFRA_DIR_NAME
 
 
 def resolve_infra_base(
@@ -62,7 +75,7 @@ def resolve_infra_base(
         return Path(override)
     code_source = code_source if code_source is not None else ssot_config.path.code_source_path
     base_dir = base_dir if base_dir is not None else Path(ssot_config.path.base_dir)
-    candidates = (code_source / INFRA_DIR_NAME, base_dir / INFRA_DIR_NAME)
+    candidates = _infra_candidates(code_source, base_dir)
     for candidate in candidates:
         if candidate.is_dir():
             return candidate
@@ -89,8 +102,8 @@ def candidate_infra_roots(
         return [Path(override)]
     code_source = code_source if code_source is not None else ssot_config.path.code_source_path
     base_dir = base_dir if base_dir is not None else Path(ssot_config.path.base_dir)
-    existing = [c for c in (code_source / INFRA_DIR_NAME, base_dir / INFRA_DIR_NAME) if c.is_dir()]
-    return existing or [code_source / INFRA_DIR_NAME]
+    candidates = _infra_candidates(code_source, base_dir)
+    return [c for c in candidates if c.is_dir()] or [candidates[0]]
 
 
 _INFRA_BASE = resolve_infra_base()

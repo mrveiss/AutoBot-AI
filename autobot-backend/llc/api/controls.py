@@ -32,10 +32,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user
 from autobot_shared.http_refusal import http_refusal
 from autobot_shared.singleton_factory import lazy_singleton
-from llc.deps import get_session, require_board_role
+from llc.deps import SESSION_DEP, require_board_role
 
-from ..models.enums import MembershipRole
 from ..scheduler.schedule_entry import schedule_heartbeat
+from ..services.authz import GRANTING_ROLES
 from ..services.company import CompanyNotFoundError
 from ..services.controls_service import (
     AgentNotFoundError,
@@ -52,7 +52,7 @@ router = APIRouter(tags=["llc-controls"])
 _get_controls = lazy_singleton(ControlsService)
 _get_membership = lazy_singleton(MembershipService)
 
-_ALLOWED_ROLES = {MembershipRole.OWNER, MembershipRole.ADMIN}
+_ALLOWED_ROLES = GRANTING_ROLES  # the one owner/admin set (#21588)
 
 
 def _controls_svc() -> ControlsService:
@@ -111,7 +111,7 @@ async def pause_agent(
     company_id: uuid.UUID,
     agent_id: str,
     body: PauseRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
@@ -131,7 +131,7 @@ async def pause_agent(
 async def resume_agent(
     company_id: uuid.UUID,
     agent_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
@@ -148,7 +148,7 @@ async def terminate_agent(
     company_id: uuid.UUID,
     agent_id: str,
     body: TerminateRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
@@ -167,7 +167,7 @@ async def set_agent_heartbeat(
     company_id: uuid.UUID,
     agent_id: str,
     body: HeartbeatToggleRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Switch one agent's periodic heartbeat on or off (#15907).
@@ -185,6 +185,8 @@ async def set_agent_heartbeat(
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
     except AgentNotSchedulableError as exc:
         raise http_refusal(409, exc, scope="controls.set_agent_heartbeat") from None
+    except CompanyNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Company {company_id} not found")
     await session.commit()
     # After the commit: the poll loop re-reads the row, and must see it enabled.
     result["scheduled"] = bool(body.heartbeat_enabled) and await schedule_heartbeat(agent_id, result["heartbeat_cron"])
@@ -201,7 +203,7 @@ async def pause_sprint(
     company_id: uuid.UUID,
     sprint_id: uuid.UUID,
     body: PauseRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
@@ -219,7 +221,7 @@ async def pause_sprint(
 async def resume_sprint(
     company_id: uuid.UUID,
     sprint_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
@@ -240,7 +242,7 @@ async def resume_sprint(
 async def pause_all(
     company_id: uuid.UUID,
     body: PauseRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)
@@ -255,7 +257,7 @@ async def pause_all(
 @router.post("/companies/{company_id}/controls/resume-all")
 async def resume_all(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     actor_id = await _require_board_role(company_id, current_user, _membership_svc(), session)

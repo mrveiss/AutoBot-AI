@@ -60,6 +60,14 @@ def service():
     return HandoffService()
 
 
+@pytest.fixture(autouse=True)
+def no_reviewer_role():
+    """These tests pass a mocked session; the policy's reviewer role (#21588) has its own tests."""
+    gate = MagicMock(missing_reviewer_role=AsyncMock(return_value=None))
+    with patch("llc.services.handoff.get_review_gate_service", return_value=gate):
+        yield gate
+
+
 @pytest.fixture
 def mock_session():
     session = AsyncMock()
@@ -349,8 +357,6 @@ class TestApprove:
 
         assert item.status == WorkItemStatus.DONE
         assert item.completed_at is not None
-        assert item.assignee_user_id is None
-        assert item.assignee_agent_id is None
 
 
 # ---------------------------------------------------------------------------

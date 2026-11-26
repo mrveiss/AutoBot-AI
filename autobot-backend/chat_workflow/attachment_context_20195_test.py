@@ -255,6 +255,7 @@ def test_the_graph_node_streams_the_notice_and_the_attachment_reaches_its_prompt
         initial_prompt=params["prompt"],
         used_knowledge=False,
         rag_citations=[],
+        execution_history=[],
     )
     state = {
         "session_id": _ALICE,
@@ -332,6 +333,7 @@ def test_the_graph_node_stores_the_notice_with_the_turn_so_a_reload_reads_it_bac
         initial_prompt="p",
         used_knowledge=False,
         rag_citations=[],
+        execution_history=[],
     )
     state = {
         "session_id": _ALICE,
@@ -395,7 +397,7 @@ def test_the_legacy_flow_stores_and_yields_the_notice_once(world):
     chat = world.chat
     chat.knowledge_service = None
     chat._create_llm_iteration_context = lambda params, *a, **k: SimpleNamespace(
-        selected_model="m", rag_citations=[], used_knowledge=False
+        selected_model="m", rag_citations=[], used_knowledge=False, execution_history=[]
     )
 
     async def _loop(ctx):
@@ -404,7 +406,7 @@ def test_the_legacy_flow_stores_and_yields_the_notice_once(world):
 
     chat._execute_llm_continuation_loop = _loop
     chat._persist_conversation = AsyncMock()
-    chat._persist_workflow_messages = AsyncMock()
+    chat._persist_workflow_messages = AsyncMock(return_value=None)
     chat._fire_stop_hook = AsyncMock()
     context = {"attachments": ["no-such-id"], VERIFIED_USER_KEY: "alice", VERIFIED_ATTACHMENT_ACCESS_KEY: True}
     session = SimpleNamespace(session_id=_ALICE, metadata={}, conversation_history=[])

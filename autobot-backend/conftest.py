@@ -1093,8 +1093,7 @@ if "models" not in sys.modules:
     # Create a lightweight 'models' namespace package to hold the sub-module,
     # then real-load infrastructure.py onto it (#11661: canonical helper; it
     # also performs the parent bind this block previously did by hand).
-    _models_pkg = _make_pkg_stub("models")
-    _models_pkg.__path__ = [str(backend_root / "models")]
+    _models_pkg = _make_pkg_stub("models", real_dir=backend_root / "models")
     _real_load_and_bind("models.infrastructure", backend_root / "models" / "infrastructure.py")
 
 

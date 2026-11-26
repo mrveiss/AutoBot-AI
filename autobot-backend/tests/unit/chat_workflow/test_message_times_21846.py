@@ -107,3 +107,10 @@ def test_a_repost_with_the_original_timestamps_keys_to_the_same_messages_as_the_
     assert [m["timestamp"] for m in batch] != [m["timestamp"] for m in reposted]
     assert message_keys(batch) == message_keys(reposted)
     assert all(key[0] == "id" for key in message_keys(batch))
+
+
+def test_steps_less_than_a_millisecond_apart_are_spread_to_a_millisecond_a_browser_date_can_order():
+    batch = [_entry("a", EARLY), _entry("b", EARLY + 0.0001), _entry("c", EARLY + 0.0002)]
+    distinct_ordered_times(batch)
+    millis = [int(datetime.fromisoformat(m["timestamp"]).timestamp() * 1000) for m in batch]
+    assert millis == sorted(set(millis)) and len(set(millis)) == 3

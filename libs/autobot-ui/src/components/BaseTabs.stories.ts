@@ -42,3 +42,23 @@ export const Small: Story = { args: { size: 'sm' }, render }
 export const Vertical: Story = { args: { orientation: 'vertical' }, render }
 export const ManualActivation: Story = { args: { activationMode: 'manual' }, render }
 export const RightToLeft: Story = { args: { dir: 'rtl' }, render }
+
+export const WithIcons: Story = {
+  render: (args: Record<string, unknown>) => ({
+    components: { BaseTabs },
+    setup: () => ({ args, items, current: ref('overview') }),
+    template: `<BaseTabs v-model="current" v-bind="args" :items="items" label="Project sections">
+      <template #icon="{ item }"><span aria-hidden="true">●</span></template>
+      <template #panel-overview>Overview panel</template>
+    </BaseTabs>`,
+  }),
+}
+
+export const ListOnly: Story = {
+  args: { listOnly: true },
+  render: (args: Record<string, unknown>) => ({
+    components: { BaseTabs },
+    setup: () => ({ args, items, current: ref('overview') }),
+    template: `<BaseTabs v-model="current" v-bind="args" :items="items" label="Project sections" />`,
+  }),
+}

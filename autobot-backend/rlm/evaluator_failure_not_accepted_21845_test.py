@@ -11,7 +11,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from chat_workflow.graph import route_after_reflection
-from chat_workflow.reflection_gate import evaluate_with_one_retry, reflection_update, wants_another_pass
+from chat_workflow.reflection_gate import (
+    ALTERNATIVE_APPROACH_HINT,
+    evaluate_with_one_retry,
+    reflection_update,
+    regeneration_hint,
+    wants_another_pass,
+)
 from rlm.evaluator import EVALUATOR_FAILED_HINT, ResponseQualityEvaluator
 from rlm.types import ReflectionResult, ReflectionVerdict, RLMConfig
 
@@ -73,3 +79,44 @@ async def test_a_recovered_evaluator_reading_is_used():
     evaluator = AsyncMock()
     evaluator.evaluate.side_effect = [_failed(), good]
     assert await evaluate_with_one_retry(evaluator, query="q", response="r") is good
+
+
+# --- the alternative-approach instruction rides the regeneration that already happens (#22166) ---
+
+
+def _update_hint(result: ReflectionResult) -> str:
+    return reflection_update({"reflection_count": 0}, result, [result.to_dict()], MAX)["rlm_refinement_hint"]
+
+
+def test_a_scored_refine_tells_the_next_pass_to_try_a_different_approach():
+    refine = ReflectionResult(ReflectionVerdict.REFINE, 0.3, "thin", "Cover the edge cases.")
+    hint = _update_hint(refine)
+    assert hint.startswith("Cover the edge cases.")
+    assert ALTERNATIVE_APPROACH_HINT in hint
+
+
+def test_a_scored_refine_without_an_evaluator_hint_still_carries_the_instruction():
+    assert _update_hint(ReflectionResult(ReflectionVerdict.REFINE, 0.3)) == ALTERNATIVE_APPROACH_HINT
+
+
+def test_a_pass_carries_no_alternative_approach_instruction():
+    accepted = ReflectionResult(ReflectionVerdict.ACCEPT, 0.9, "", "Fine as is.")
+    assert _update_hint(accepted) == "Fine as is."
+    assert ALTERNATIVE_APPROACH_HINT not in regeneration_hint(ReflectionResult(ReflectionVerdict.ACCEPT, 0.9))
+
+
+def test_an_evaluator_failure_carries_the_evaluator_hint_and_no_alternative_approach():
+    assert _update_hint(_failed()) == EVALUATOR_FAILED_HINT
+
+
+def test_an_unscored_indeterminate_carries_no_alternative_approach():
+    assert ALTERNATIVE_APPROACH_HINT not in regeneration_hint(ReflectionResult(ReflectionVerdict.INDETERMINATE, 0.5))
+
+
+@pytest.mark.asyncio
+async def test_the_alternative_approach_costs_no_extra_evaluation():
+    evaluator = AsyncMock()
+    evaluator.evaluate.return_value = ReflectionResult(ReflectionVerdict.REFINE, 0.3)
+    result = await evaluate_with_one_retry(evaluator, query="q", response="r")
+    regeneration_hint(result)
+    assert evaluator.evaluate.await_count == 1

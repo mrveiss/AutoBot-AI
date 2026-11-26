@@ -14,10 +14,13 @@ FILTERED BY (the person asked to review, the actor a listing is filtered to), wi
 
 Vocabulary limit, stated beside the baseline: "EMPTY" means empty in the detector's vocabulary only -- a field
 whose NAME says who acted (``actor``, ``*_by``, ``author_*``, ``reviewer_*``). It does not cover the whole class.
-A plain ``agent_id`` / ``user_id`` is not scanned by name, and these known instances are out of vocabulary and
-NOT fixed here (they need an owner decision, tracked on #20521): ``CheckoutRequest.agent_id`` and
-``ReleaseRequest.agent_id`` (``llc/api/work_items.py``), and the requester of ``api/approval_gates.py``
-(outside the scanned package).
+A plain ``agent_id`` / ``user_id`` is not scanned by name. ``CheckoutRequest.agent_id`` and
+``ReleaseRequest.agent_id`` (``llc/api/work_items.py``) are out of vocabulary and settled by the owner decision of
+2026-11-21 instead: a named agent is accepted only from an owner/admin of the agent's company
+(``llc/api/_named_agent.py``, ``test_named_agent_checkout_20521.py``). The requester of ``api/approval_gates.py``
+(outside the scanned package) is stamped from the verified caller (``api/approval_gates_requester.py``,
+``approval_gates_requester_20521_test.py``); named assignee targets are checked as company members
+(``test_named_targets_are_members_20521.py``).
 
 Boundary, stated where it is read: route modules under ``autobot-backend/llc/api``; request models are
 resolved by class name across that package; a model defined elsewhere, a handler registered without a

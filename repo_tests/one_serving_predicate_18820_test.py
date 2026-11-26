@@ -18,7 +18,7 @@ WHAT MATCHES (syntax tree only, so a comment or string naming these is not a sit
     READ        a LOAD of `.valid_to` / `.valid_until` / `.valid_from` / `.is_active` /
                 `.verification_status`, or of `x["<field>"]`, or `x.get("<field>")`.
 BOUNDARY
-    Scanned: tracked non-test `.py` under `SCAN_ROOTS`. Exempt by path: `serving.py`.
+    Scanned: tracked non-test `.py` under `SCAN_ROOTS`. Exempt by path: `serving.py` and `models/secret.py`.
     NOT a match: code that SETS the fields (assignment, keyword argument, dict literal with a plain
     value, column declaration) -- the legitimate writers.
     NOT seen: `getattr(x, "valid_to")`, a field name held in a variable, SQL text, and the SLM
@@ -46,6 +46,11 @@ from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 CANONICAL = "autobot-backend/knowledge/serving.py"
+#: Owner decision 2026-11-22 (#17850): the secret-row model owns `Secret.is_live`, the one "is this secret row
+#: active" rule. Its `is_active` is a credential-store column, not a knowledge fact's validity, so the model is
+#: exempt by path exactly like `serving.py`.
+CREDENTIAL_ROW_MODEL = "autobot-backend/models/secret.py"
+EXEMPT = frozenset({CANONICAL, CREDENTIAL_ROW_MODEL})
 SCAN_ROOTS = ("autobot-backend", "autobot_shared", "plugins", "libs")
 _READ_FIELDS = frozenset({"valid_to", "valid_until", "valid_from", "is_active", "verification_status"})
 _TRUST_FIELD = "verification_status"
@@ -55,7 +60,7 @@ MODULE_SCOPE = "<module>"
 
 def _is_scanned(rel: str) -> bool:
     name = rel.rsplit("/", 1)[-1]
-    if not rel.endswith(".py") or rel == CANONICAL:
+    if not rel.endswith(".py") or rel in EXEMPT:
         return False
     return not (name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py" or "/tests/" in rel)
 
@@ -235,6 +240,11 @@ def test_a_decision_is_keyed_by_its_enclosing_function_so_a_second_one_in_the_fi
 
 def test_the_canonical_module_is_exempt_and_nothing_else_is() -> None:
     assert not _is_scanned(CANONICAL)
+    assert not _is_scanned(CREDENTIAL_ROW_MODEL)
+    assert _is_scanned("autobot-backend/services/credential_write.py")
+    fact_read = "def f(fact):\n    return fact.is_active\n"
+    assert _is_scanned("autobot-backend/knowledge/other.py")
+    assert {(f, k) for _, f, k in serving_decisions(fact_read)} == {("is_active", "READ")}
     assert _is_scanned("autobot-backend/knowledge/facts.py")
     assert not _is_scanned("autobot-backend/knowledge/serving_18820_test.py")
     assert not _is_scanned("autobot-backend/tests/x/test_serving.py")

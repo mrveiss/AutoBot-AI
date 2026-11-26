@@ -11,6 +11,7 @@
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useAppStore } from '@/stores/useAppStore'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
+import { DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE } from '@/models/repositories/knowledgeFactMapping'
 import type {
   SearchKnowledgeRequest,
   AddTextRequest,
@@ -20,6 +21,8 @@ import type {
 import type { KnowledgeDocument, SearchResult, SearchFilters } from '@/stores/useKnowledgeStore'
 import { generateCategoryId, generateDocumentId } from '@/utils/ChatIdGenerator'
 import { createLogger } from '@/utils/debugUtils'
+import i18n from '@/i18n'
+import { proposeSelectedDelete } from './selectedDelete'
 
 // Create scoped logger for KnowledgeController
 const logger = createLogger('KnowledgeController')
@@ -102,12 +105,11 @@ export class KnowledgeController {
     accessOptions?: { access_level?: string; visibility?: string }
   ): Promise<string> {
     try {
-
       // Build request with proper typing (Issue #685: hierarchical access)
       const request: AddTextRequest = {
         content,
         title: title || this.generateTitleFromContent(content),
-        category: category || 'General',
+        category: category || DEFAULT_FACT_CATEGORY,
         tags: tags || [],
         access_level: accessOptions?.access_level || 'user',
         visibility: accessOptions?.visibility || 'private'
@@ -120,8 +122,8 @@ export class KnowledgeController {
         title: request.title || this.generateTitleFromContent(content),
         content,
         source: 'Manual Entry',
-        type: 'document',
-        category: request.category || 'General',
+        type: DEFAULT_FACT_TYPE,
+        category: request.category || DEFAULT_FACT_CATEGORY,
         tags: request.tags || []
       })
 
@@ -237,20 +239,16 @@ export class KnowledgeController {
     }
   }
 
+  /** #21886, #21383: propose deleting exactly the selected documents; the rows stay until a human approves. */
   async bulkDeleteDocuments(documentIds: string[]): Promise<void> {
-    try {
-
-      await knowledgeRepository.bulkDeleteDocuments(documentIds)
-      this.knowledgeStore.bulkDeleteDocuments(documentIds)
-
-      await this.refreshStats()
-
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      this.appStore.setGlobalError(`Failed to delete documents: ${errorMessage}`)
-      throw error
-    } finally {
-    }
+    await proposeSelectedDelete(documentIds, {
+      notify: message => this.appStore.addSystemNotification({
+        title: i18n.global.t('knowledge.entries.deleteTitle'), message, severity: 'info' }),
+      fail: message => this.appStore.setGlobalError(message),
+      dropRows: ids => this.knowledgeStore.bulkDeleteDocuments(ids),
+      resync: async () => { await this.loadAllDocuments(); await this.refreshStats() },
+      stillListed: ids => this.knowledgeStore.documents.some(doc => ids.includes(doc.id)),
+    })
   }
 
   // Issue #747: Bulk update operations
@@ -434,7 +432,7 @@ export class KnowledgeController {
             source: (metadata.source as string) || (metadata.url as string) || 'Unknown',
             type: this.determineDocumentType(metadata),
             tags: (metadata.tags as string[]) || [],
-            category: (metadata.category as string) || 'General',
+            category: (metadata.category as string) || DEFAULT_FACT_CATEGORY,
             createdAt: metadata.created_at ? new Date(metadata.created_at as string) : new Date(entry.created_at || Date.now()),
             updatedAt: metadata.updated_at ? new Date(metadata.updated_at as string) : new Date(entry.updated_at || Date.now()),
             metadata: {
@@ -472,7 +470,7 @@ export class KnowledgeController {
     if (typeof metadata.source === 'string' && metadata.source.toLowerCase().includes('api')) {
       return 'api'
     }
-    return 'document'
+    return DEFAULT_FACT_TYPE
   }
 
   async getDetailedStats(): Promise<unknown> {

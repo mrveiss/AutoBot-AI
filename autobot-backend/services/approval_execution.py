@@ -122,6 +122,10 @@ def verified_decider(approval: "Approval") -> "uuid.UUID | None":
 #: a registered action is what a human reviewed and is frozen: resubmitting after a revision request may not change
 #: it, or the human would approve something other than what they looked at (#17349).
 _FREE_TEXT_KEYS: dict[str, frozenset[str]] = {}
+#: The context key a body-supplied requester is kept under (#20521): display only, so a resubmit never changes
+#: the reviewed meaning by adding, dropping or editing it.
+REQUESTED_LABEL_KEY = "requested_label"
+_DISPLAY_ONLY_KEYS = frozenset({REQUESTED_LABEL_KEY})
 
 
 def context_change_violation(old: "dict | None", new: "dict | None") -> str | None:
@@ -135,7 +139,7 @@ def context_change_violation(old: "dict | None", new: "dict | None") -> str | No
     if old.get("action") not in _REGISTRY:
         return None
     free = _FREE_TEXT_KEYS.get(old["action"], frozenset())
-    for key in sorted((set(old) | set(new)) - free):
+    for key in sorted((set(old) | set(new)) - free - _DISPLAY_ONLY_KEYS):
         if old.get(key) != new.get(key):
             return f"context.{key}"
     return None

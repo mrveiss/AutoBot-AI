@@ -14,9 +14,9 @@ from fastapi.testclient import TestClient
 from api.knowledge_grounding import router as grounding_router
 from auth_middleware import get_current_user
 from knowledge.ownership import KnowledgeOwnership
-from knowledge.read_path_fakes_16665 import QuarantineGatedKB, quarantined_fact
 from services.grounded_agent import GroundedAgent
 from services.knowledge_grounding_models import Claim, ClaimStatus
+from testkit.read_path_fakes_16665 import QuarantineGatedKB, quarantined_fact
 
 
 @pytest.fixture
@@ -149,9 +149,20 @@ def _ground_response_as(user: dict, kb):
         return TestClient(app).post("/ground-response", json={"query": "latency?", "agent_response": "latency up"})
 
 
-def test_verify_claim_route_grounds_an_admin_on_another_users_private_fact():
+def test_verify_claim_route_does_not_ground_an_admin_on_another_users_private_fact():
+    """Owner 2026-11-21: /verify-claim feeds grounding, so an admin gets no cross-user path (scoped_reader)."""
     with patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)):
         response = _verify_claim_as(ADMIN, _alices_private_kb())
+
+    assert response.status_code == 200 and response.json()["kb_status"] == "unknown"
+    assert "alices" not in response.text and "fact-a" not in response.text
+
+
+def test_verify_claim_route_grounds_an_admin_on_their_own_private_fact():
+    """The no-bypass reader is still the caller's own view: an admin owner is grounded on their own fact."""
+    owner = {"user_id": "alice", "role": "admin"}
+    with patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)):
+        response = _verify_claim_as(owner, _alices_private_kb())
 
     assert response.status_code == 200 and response.json()["kb_status"] == "in_kb"
 

@@ -1753,6 +1753,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "ارتقا کا ڈیٹا لوڈ کرنے میں ناکامی",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -4559,7 +4560,14 @@
       "errorVncConnection": "VNC connection failed: {error}",
       "cancel": "Cancel",
       "connecting": "Connecting to desktop...",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "ڈیسک ٹاپ استعمال کرنے کے لیے VNC والا میزبان منتخب کریں۔",
+      "vncCredentialMissing": "اس میزبان کے لیے کوئی VNC پاس ورڈ محفوظ نہیں ہے۔ اسے رازوں میں شامل کریں۔",
+      "hostNotFound": "یہ میزبان آپ کے رازوں کے میزبانوں میں سے نہیں ہے۔",
+      "hostFieldsMissing": "اس میزبان کا صارف نام یا صلاحیتیں موجود نہیں ہیں۔ انہیں رازوں میں مقرر کریں۔",
+      "hostVncUnavailable": "اس میزبان کے پاس رازوں میں VNC کی صلاحیت یا پورٹ نہیں ہے۔",
+      "desktopVmUnavailable": "کوئی VNC ڈیسک ٹاپ رجسٹر نہیں ہے، اس لیے ڈیسک ٹاپ VM دستیاب نہیں۔",
+      "registryUnavailable": "ڈیسک ٹاپ رجسٹری پڑھی نہ جا سکی۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔"
     },
     "contextPanel": {
       "pid": "PID {pid}",
@@ -4956,7 +4964,11 @@
       "close": "Close",
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
-      "commandToExecute": "Command to Execute"
+      "commandToExecute": "Command to Execute",
+      "usernameMissing": "صارف نام موجود نہیں: اسے رازوں میں مقرر کریں",
+      "desktopVm": "AutoBot ڈیسک ٹاپ VM",
+      "desktopVmDesc": "AutoBot کا اپنا ڈیسک ٹاپ",
+      "noDesktopVm": "کوئی ڈیسک ٹاپ VM رجسٹر نہیں ہے، اس لیے صرف آپ کے رازوں کے میزبان درج ہیں۔"
     },
     "systemStatus": {
       "lastCheck": "Last Check:",
@@ -5119,16 +5131,6 @@
       "roleViewerDesc": "Can view but not modify the session",
       "selectUserError": "Please select a user to invite",
       "sendFailed": "Failed to send invitation"
-    },
-    "presence": {
-      "participants": "Participants",
-      "you": "You",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status",
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "noParticipants": "No participants"
     },
     "participants": {
       "invite": "Invite",
@@ -5359,6 +5361,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "دیکھنے کے لیے لاگ ان ضروری ہے",
       "requireLoginHint": "صرف لاگ ان صارفین ہی یہ لنک کھول سکتے ہیں",
@@ -5847,8 +5856,10 @@
       "unsupported": "\"{filename}\" ایسی متنی فائل نہیں جسے اسسٹنٹ پڑھ سکے، اس لیے استعمال نہیں کی گئی۔",
       "unreadable": "\"{filename}\" نہیں پڑھی جا سکی، اس لیے استعمال نہیں کی گئی۔",
       "empty": "\"{filename}\" میں پڑھنے کے قابل متن نہیں ہے، اس لیے استعمال نہیں کی گئی۔",
-      "truncated": "\"{filename}\" لمبی ہے، اس لیے صرف اس کا آغاز استعمال کیا گیا۔",
-      "over_budget": "منسلک فائلیں سائز کی حد تک پہنچ گئیں، اس لیے \"{filename}\" استعمال نہیں کی گئی۔"
+      "truncated": "\"{filename}\" لمبی ہے، اس لیے {total} میں سے صرف پہلے {used} حروف استعمال ہوئے۔",
+      "truncated_legacy": "\"{filename}\" لمبی ہے، اس لیے صرف اس کا آغاز استعمال کیا گیا۔",
+      "over_budget": "منسلک فائلیں سائز کی حد تک پہنچ گئیں، اس لیے \"{filename}\" استعمال نہیں کی گئی۔",
+      "over_window": "گفتگو ماڈل کی ونڈو سے لمبی ہے، اس لیے پچھلی تحریر کا کچھ حصہ اس تک نہ پہنچے۔"
     }
   },
   "serviceMessages": {
@@ -6063,7 +6074,11 @@
         "slackDesc": "Slack بوٹ ٹوکن",
         "serverLabel": "سرور میزبان",
         "serverDesc": "SSH/VNC سرور تک رسائی"
-      }
+      },
+      "vncCompanionName": "{name} (VNC اسناد)",
+      "vncCompanionDescription": "{host} کے لیے VNC اسناد",
+      "vncCompanionNoHostId": "میزبان محفوظ ہو گیا لیکن اس کی شناخت واپس نہیں آئی، اس لیے VNC اسناد محفوظ نہیں ہوئیں۔",
+      "vncRetry": "میزبان محفوظ ہو گیا لیکن اس کا VNC پاس ورڈ محفوظ نہیں ہوا۔ دوبارہ کوشش کے لیے پھر محفوظ کریں؛ میزبان دو بار نہیں بنے گا۔"
     },
     "threatDashboard": {
       "checking": "Checking...",
@@ -7280,7 +7295,8 @@
       "refreshAriaLabel": "Refresh files",
       "errorRenamingFile": "Error renaming file",
       "errorLoadingContents": "Error loading contents",
-      "uploadFailedHint": "براہ کرم فائل کے سائز کی حدود اور فارمیٹ کی ضروریات چیک کریں"
+      "uploadFailedHint": "براہ کرم فائل کے سائز کی حدود اور فارمیٹ کی ضروریات چیک کریں",
+      "uploadAlreadyExists": "A file with this name already exists"
     },
     "fileTypes": {
       "shell": "Shell Script",
@@ -8576,7 +8592,6 @@
       "attachRoleLabel": "کردار",
       "attachRolePlaceholder": "ایک کردار منتخب کریں…",
       "attachWorkflowLabel": "ورک فلو شناخت",
-      "attachWorkflowPlaceholder": "ورک فلو شناخت",
       "attachError": "یہ ورک فلو منسلک نہیں ہو سکا۔",
       "detachError": "یہ ورک فلو الگ نہیں ہو سکا۔",
       "processDetach": "{workflow} کو {role} سے الگ کریں",
@@ -9818,7 +9833,6 @@
     "endTenure": "مدت ختم کریں",
     "holderIdPlaceholder": "حامل کی شناخت",
     "permissionPlaceholder": "مثلاً knowledge.read",
-    "workflowPlaceholder": "ورک فلو شناخت",
     "toolPlaceholder": "اوزار کا نام",
     "credentialPlaceholder": "راز کی شناخت",
     "errorAssign": "حامل تفویض نہیں ہو سکا۔",
@@ -10017,5 +10031,40 @@
     "invalid_generic": "یہ شیڈول درست نہیں ہے۔",
     "conflicting_fields": "شیڈول یا تو cron کے طور پر محفوظ ہوتا ہے یا کیلنڈر اصول یا ایک بار کی کارروائی کے طور پر، دونوں نہیں۔",
     "gatedNote": "آخری دن، مہینے میں ہفتے کا دن، 29 تا 31 تاریخیں اور ایک بار کی کارروائیاں شیڈیولر کی اپ ڈیٹ کے بعد دستیاب ہوں گی۔"
+  },
+  "driftPrune": {
+    "batch": "{total} میں سے {count} فائل(وں) کا بیچ؛ اس بیچ کو ہٹانے کے لیے تصدیق کریں، اس کے بعد اگلا دکھایا جائے گا",
+    "cancel": "منسوخ کریں",
+    "confirm": "{count} فائل(وں) کو ہٹانے کی تصدیق کریں",
+    "intro": "Git ثابت کرتا ہے کہ یہ فائلیں سورس سے حذف ہو چکی ہیں اور اب بھی تعینات ہیں۔ صرف یہی فائلیں ہٹائی جاتی ہیں۔ ہوسٹ کی حالت، بلڈ بنڈلز اور تبدیل شدہ فائلوں کو کبھی نہیں چھیڑا جاتا۔",
+    "nothingToRemove": "ہٹانے کے لیے کچھ نہیں: اب کوئی تعینات فائل سورس سے حذف شدہ ثابت نہیں ہے۔ ڈرفٹ چیک دوبارہ چلائیں۔",
+    "previewAction": "ہٹانے کا پیش منظر دیکھیں",
+    "previewing": "پیش منظر لوڈ ہو رہا ہے…",
+    "removing": "ہٹایا جا رہا ہے…",
+    "requestFailed": "ڈرفٹ صفائی کی درخواست ناکام ہو گئی",
+    "result": "{removed} فائل(یں) ہٹا دی گئیں؛ {left} اپنی جگہ پر چھوڑ دی گئیں",
+    "title": "{component} سے {count} فائل(یں) ہٹائی جائیں گی"
+  },
+  "slmAgentsTool": {
+    "globalControls": "یہ کنٹرولز تمام ایجنٹس کو روکتے یا دوبارہ شروع کرتے ہیں، کسی ایک کو نہیں",
+    "loadFailed": "ایجنٹس لوڈ کرنے میں ناکامی",
+    "noLastActivity": "کوئی سرگرمی رپورٹ نہیں ہوئی",
+    "notReported": "رپورٹ نہیں کیا گیا",
+    "pauseAll": "تمام ایجنٹس کو روکیں",
+    "pauseFailed": "ایجنٹس کو روکنے میں ناکامی",
+    "resumeAll": "تمام ایجنٹس دوبارہ شروع کریں",
+    "resumeFailed": "ایجنٹس کو دوبارہ شروع کرنے میں ناکامی",
+    "successRate": "کامیابی کی شرح",
+    "tasksCompleted": "مکمل شدہ کام"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "ایک مکمل ویب ایڈریس درج کریں جو http:// یا https:// سے شروع ہو",
+    "recognitionUnsupported": "اس براؤزر میں تقریر کی شناخت معاون نہیں ہے",
+    "recognitionError": "تقریر کی شناخت میں خرابی: {error}",
+    "speakFailed": "متن بولا نہیں جا سکا",
+    "playbackFailed": "آڈیو چلانا ناکام رہا",
+    "spoken": "بولا گیا:",
+    "speakToInteractWith": "بولیں اور اسے پڑھ کر سنا جانا سنیں",
+    "voiceId": "آواز کی شناخت"
   }
 }

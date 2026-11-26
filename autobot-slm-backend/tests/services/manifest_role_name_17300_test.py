@@ -110,6 +110,7 @@ description: a manifest planted outside the infra base
 deploy:
   source: pwned/
   destination: /opt/autobot/pwned/
+  sync: false
 """
 
 

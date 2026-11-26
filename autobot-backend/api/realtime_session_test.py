@@ -428,3 +428,49 @@ class TestToolCallIsTheOneScopedHandler:
         assert (kwargs["session_id"], kwargs["user_id"]) == ("sess-1", "test-user")
         assert kwargs["company_id"] == "test-org"
         bridge.list_realtime_tools.assert_awaited_once_with(user_id="test-user", role="user")
+
+
+class TestTelemetryWriteFailureDegrades:
+    """A failed telemetry write is logged and degrades; it never 500s and never skips the cost cap (#21678)."""
+
+    _ERRORS = [RuntimeError("contended"), ConnectionError("redis down")]
+
+    @staticmethod
+    def _telemetry(write_error, breach=None):
+        from services.voice_realtime_telemetry import CapBreachError, DisconnectReason
+
+        t = MagicMock()
+        t.record_response_done = AsyncMock(side_effect=write_error)
+        t.session_end = AsyncMock(side_effect=write_error)
+        exc = CapBreachError(DisconnectReason.COST_CAP, "session ended: cost limit reached") if breach else None
+        t.check_caps = AsyncMock(side_effect=exc)
+        return t
+
+    @staticmethod
+    def _post(client: TestClient, telemetry, path: str, body: dict):
+        with patch("services.voice_realtime_telemetry.get_voice_realtime_telemetry", return_value=telemetry):
+            return client.post(f"/api/voice/realtime/session/s1/{path}", json=body)
+
+    @pytest.mark.parametrize("error", _ERRORS)
+    def test_response_done_still_checks_the_caps_when_the_usage_write_fails(self, client, error, caplog):
+        t = self._telemetry(error)
+        response = self._post(client, t, "response_done", {})
+        assert response.status_code == 200 and response.json() == {"status": "ok"}
+        t.check_caps.assert_awaited_once_with("s1")
+        assert "session_id=s1" in caplog.text
+
+    @pytest.mark.parametrize("error", _ERRORS)
+    def test_response_done_cap_breach_still_ends_the_session_when_the_write_fails(self, client, error):
+        t = self._telemetry(error, breach=True)
+        response = self._post(client, t, "response_done", {})
+        assert response.status_code == 200 and response.json()["status"] == "cap_breach"
+        t.check_caps.assert_awaited_once_with("s1")
+        t.session_end.assert_awaited_once()  # attempted even though it fails too
+
+    @pytest.mark.parametrize("error", _ERRORS)
+    def test_end_returns_cleanly_when_the_telemetry_write_fails(self, client, error, caplog):
+        t = self._telemetry(error)
+        response = self._post(client, t, "end", {"reason": "normal"})
+        assert response.status_code == 200 and response.json()["session_id"] == "s1"
+        t.session_end.assert_awaited_once()
+        assert "session_id=s1" in caplog.text

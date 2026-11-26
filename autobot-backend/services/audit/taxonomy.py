@@ -61,7 +61,10 @@ class AuditAction(str, Enum):
     SESSION_CREATE = "session.create"
     SESSION_DELETE = "session.delete"
     SESSION_EXPORT = "session.export"
+    SESSION_SHARE = "session.share"  # #18890: an owner shared a chat with participants
+    SESSION_UNSHARE = "session.unshare"  # #18890: an owner removed a participant
     SESSION_OWNER_ASSIGN = "session.owner_assign"
+    SESSION_COMPANY_ASSIGN = "session.company_assign"  # #21997: a person assigned an Unassigned chat to a company
     SESSION_REASSIGN = "session.reassign"  # #20029: a removed user's chat session handed to a successor
     KNOWLEDGE_ADD = "knowledge.add"
     KNOWLEDGE_REMOVE = "knowledge.remove"
@@ -74,6 +77,10 @@ class AuditAction(str, Enum):
     KNOWLEDGE_WIPE_REFRESH = "knowledge.wipe.refresh"  # #21048: a pending wipe plan re-proposed; nothing deleted
     KNOWLEDGE_CLAUDE_MD_REINDEX_REFRESH = "knowledge.claude_md_reindex.refresh"  # #21383: a pending plan re-proposed
     KNOWLEDGE_CLAUDE_MD_REINDEX = "knowledge.claude_md_reindex"  # #21383: CLAUDE.md chunks deleted after an approval
+    KNOWLEDGE_COLLECTION_DELETE = "knowledge.collection.delete"  # #21383: a collection deleted after an approval
+    KNOWLEDGE_COLLECTION_DELETE_REFRESH = "knowledge.collection.delete.refresh"  # #21383: pending plan re-proposed
+    KNOWLEDGE_COLLECTION_BULK_DELETE = "knowledge.collection.bulk_delete"  # #21383: a collection's facts deleted
+    KNOWLEDGE_COLLECTION_BULK_DELETE_REFRESH = "knowledge.collection.bulk_delete.refresh"  # #21383: plan re-proposed
     API_KEY_CREATE = "api_key.create"  # pragma: allowlist secret -- an action name, not a key
     API_KEY_REVOKE = "api_key.revoke"  # pragma: allowlist secret -- an action name, not a key
     USER_CREATE = "user.create"
@@ -143,16 +150,24 @@ class AuditAction(str, Enum):
         "node.ssh_password.delete"  # nosec B105  # pragma: allowlist secret -- #20046: an action name
     )
     CLEANUP_ENV_COPIES = "cleanup.env_copies"  # #20567: old .env.*~ copies removed after approval
+    CLEANUP_PROPOSAL_LOST_RACE = "cleanup.proposal_lost_race"  # #20992: a creation row whose insert lost to the winner
     APPROVAL_APPROVE = "approval.approve"  # #20046: a non-admin refused on an admin-only approval
+    PLUGIN_ENABLE = "plugin.enable"  # #17421: an admin lets a plugin run in the backend process
+    PLUGIN_DISABLE = "plugin.disable"  # #17421: an admin stops a plugin running; it stays off after restart
+    PLUGIN_GRANDFATHER = "plugin.grandfather"  # #17421: a plugin running before the gate is recorded as enabled
     ROLE_CREATE = "role.create"
     ROLE_UPDATE = "role.update"
     ROLE_DELETE = "role.delete"
     API_KEY_USE = "api_key.use"  # pragma: allowlist secret -- an action name, not a key
     SECURITY_SUSPICIOUS_ACTIVITY = "security.suspicious_activity"
     CODE_ROLLBACK = "code.rollback"  # #20214: the SLM updater deploys an earlier commit the operator chose
+    CODE_DRIFT_PRUNE = "code.drift_prune"  # #22082: an admin removed git-proven removed_from_source files
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
     CODE_SOURCE_RUN_RECORD_CLEANUP = "code_source.run_record_cleanup"  # #21417: approved run-record removal
+    SECRET_DUPLICATE_CLEANUP = (
+        "secret.duplicate_cleanup"  # nosec B105  # pragma: allowlist secret -- an action name (#17850)
+    )
     BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
     LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
     # #21136: heartbeat control routes record the verified principal who paused, resumed or terminated an agent.
@@ -161,6 +176,7 @@ class AuditAction(str, Enum):
     AGENT_TERMINATE = "agent.terminate"
     # #16333: the internal service key was admitted on a route that names its caller (service_opt_in).
     SERVICE_KEY_ADMITTED = "auth.service_key_admitted"  # pragma: allowlist secret -- an action name, not a key
+    REDIS_SERVICE_REFUSED = "redis.service.refused"  # #16346: the SLM refused or could not resolve a Redis operation
     # #20750: re-aligning the backend's AUTOBOT_INTERNAL_API_KEY to the SLM's, one record per step.
     INTERNAL_KEY_REALIGN_PROPOSED = "credential.internal_key.realign_proposed"  # pragma: allowlist secret
     INTERNAL_KEY_REALIGN_CLAIMED = "credential.internal_key.realign_claimed"  # pragma: allowlist secret

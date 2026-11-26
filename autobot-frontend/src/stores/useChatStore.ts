@@ -3,10 +3,10 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
-import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
 import { visibleMessages } from '@/utils/internalMessage'
 import type { ChatMessage } from '@/types/api'
+import { buildVncClientUrl, type VncClientHost } from '@/config/vnc-client'
 import apiClient from '@/utils/ApiClient'
 import type { SecretType } from '@/types/secretKind'
 import { usePendingApproval } from './chatPendingApproval'
@@ -65,8 +65,8 @@ export interface ChatSession {
   sessionSecrets?: SessionSecret[]
   // GH#8987: folder assignment (folder_id from useFolderStore)
   folderId?: string | null
-  // Desktop automation context
-  // DORMANT: vncUrl preserved for future VNC re-integration (#1130 → #5136)
+  unassigned?: boolean // #21997: no company yet; listed in the Unassigned group until a person assigns one
+  // Desktop automation context. DORMANT: vncUrl preserved for future VNC re-integration (#1130 → #5136)
   desktopSession?: {
     id?: string
     vncUrl?: string
@@ -739,48 +739,33 @@ export const useChatStore = defineStore('chat', () => {
     return desktopSessionId
   }
 
-  // DORMANT: getDesktopUrl generates VNC URLs; VNC path replaced by screenshot panel (#1130). Preserved for #5136.
-  function getDesktopUrl(sessionId: string): string {
+  /**
+   * noVNC URL for the host selected in the chat Desktop picker: AutoBot's desktop VM or one of the
+   * user's /secrets hosts. The address, scheme, port and path come from the one URL builder
+   * (config/vnc-client.ts); this adds the chat-session context. No host, no URL.
+   */
+  function getDesktopUrl(sessionId: string, host: VncClientHost | null | undefined): string {
+    if (!host) return ''
     let session = sessions.value.find(s => s.id === sessionId)
     if (!session?.desktopSession) {
-      // Create desktop session if it doesn't exist
       createDesktopSession(sessionId)
-      // Re-fetch session after creation
       session = sessions.value.find(s => s.id === sessionId)
     }
-
-    // Guard: If session still doesn't exist, return default URL
-    if (!session) {
-      const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_DESKTOP_PORT}/vnc.html`
-      return baseUrl
-    }
-
-    // Generate per-chat desktop URL with session context
-    const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_DESKTOP_PORT}/vnc.html`
-    // #16299: no password here -- the backend now authenticates to the real
-    // VNC server itself and offers this browser security-type "None"
-    // (api/vnc_handshake_bridge.py), so the client never needs one.
+    // #16299: no password here -- the backend authenticates to the VNC server itself.
     const params = new URLSearchParams({
-      autoconnect: 'true',
       resize: 'remote',
       reconnect: 'true',
       quality: '9',
       compression: '9',
-      // Add chat session context for future automation
       chatSession: sessionId,
-      desktopSession: session.desktopSession?.sessionId || '',
-      // Enable automation tracking
+      desktopSession: session?.desktopSession?.sessionId || '',
       automationMode: 'true'
     })
-
-    const desktopUrl = `${baseUrl}?${params.toString()}`
-
-    // Cache the URL in session
-    if (session.desktopSession) {
+    const desktopUrl = `${buildVncClientUrl(host)}&${params.toString()}`
+    if (session?.desktopSession) {
       session.desktopSession.vncUrl = desktopUrl
       session.desktopSession.lastActivity = new Date()
     }
-
     return desktopUrl
   }
 

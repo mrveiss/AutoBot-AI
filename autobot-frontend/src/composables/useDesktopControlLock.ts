@@ -17,7 +17,7 @@
  * than muting the agent forever.
  */
 
-import { computed, getCurrentScope, onScopeDispose, ref } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
@@ -34,12 +34,17 @@ const HEARTBEAT_INTERVAL_MS = 30000
 export interface DesktopControlLockState {
   success: boolean
   session_id: string
-  owner: string | null
+  owner?: string | null
   human_active: boolean
   message: string
 }
 
-export function useDesktopControlLock(vncType: string = 'desktop', sessionId: string = 'default') {
+/**
+ * @param hostId the selected /secrets host id; it is the lock key (#22145).
+ */
+export function useDesktopControlLock(hostId: MaybeRefOrGetter<string | null | undefined>, vncType: string = 'desktop') {
+  // Read on every call: switching the host retargets the lock (the state below is reset on a switch).
+  const currentHostId = () => toValue(hostId) ?? ''
   const userStore = useUserStore()
 
   const owner = ref<string | null>(null)
@@ -52,9 +57,13 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
     return humanActive.value && !!username && owner.value === username
   })
 
-  const basePath = `/vnc-proxy/${vncType}/control`
+  // Typed contract keys: ApiClient.call applies the configured API base (getApiBase) itself.
+  const path = { vnc_type: vncType }
 
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  // Bumped on every host switch: a response that began under an older generation (even for the same host,
+  // A -> B -> A) is stale and must not write state, start a heartbeat or leave a lock held.
+  let generation = 0
 
   function stopHeartbeat(): void {
     if (heartbeatTimer !== null) {
@@ -81,12 +90,41 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
     onScopeDispose(stopHeartbeat)
   }
 
-  async function refreshStatus(): Promise<DesktopControlLockState | null> {
+  // A different host is a different lock: drop the old host's state and heartbeat, then read the new one.
+  // If the user held the OLD host's lock, hand it back to the agent there (using the old id) first.
+  watch(currentHostId, async (_next, previous) => {
+    generation += 1
+    const heldOld = !!previous && isMine.value
+    stopHeartbeat()
+    owner.value = null
+    humanActive.value = false
+    if (heldOld) await releaseHost(previous)
+    void refreshStatus()
+  })
+
+  async function releaseHost(hostId: string): Promise<void> {
     try {
-      const result = await ApiClient.get<DesktopControlLockState>(
-        `${basePath}/status?session_id=${encodeURIComponent(sessionId)}`
+      await ApiClient.call('post', '/api/vnc-proxy/{vnc_type}/control/release', {
+        path,
+        body: { session_id: hostId }
+      })
+    } catch (err: unknown) {
+      logger.warn('Could not release the previous host control lock:', err)
+    }
+  }
+
+  async function refreshStatus(): Promise<DesktopControlLockState | null> {
+    const host = currentHostId()
+    if (!host) return null
+    const startedIn = generation
+    try {
+      const result: DesktopControlLockState = await ApiClient.call(
+        'get',
+        '/api/vnc-proxy/{vnc_type}/control/status',
+        { path, query: { session_id: host } }
       )
-      owner.value = result.owner
+      if (startedIn !== generation) return null // the selection changed while this was in flight
+      owner.value = result.owner ?? null
       humanActive.value = result.human_active
       // Resume the heartbeat if we discover (e.g. after a page reload/remount)
       // that we already hold the lock -- otherwise its idle-TTL silently
@@ -99,6 +137,7 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
       return result
     } catch (err: unknown) {
       logger.error('Failed to fetch control-lock status:', err)
+      if (startedIn !== generation) return null
       error.value = extractErrorMessage(err, 'Failed to fetch control status')
       return null
     }
@@ -107,14 +146,24 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
   async function acquire(options: { silent?: boolean } = {}): Promise<DesktopControlLockState | null> {
     const { silent = false } = options
     error.value = null
+    const host = currentHostId()
+    if (!host) return null
+    const startedIn = generation
     if (!silent) {
       loading.value = true
     }
     try {
-      const result = await ApiClient.post<DesktopControlLockState>(`${basePath}/acquire`, {
-        session_id: sessionId
-      })
-      owner.value = result.owner
+      const result: DesktopControlLockState = await ApiClient.call(
+        'post',
+        '/api/vnc-proxy/{vnc_type}/control/acquire',
+        { path, body: { session_id: host } }
+      )
+      if (startedIn !== generation) {
+        // The server granted a lock the user has since navigated away from: hand it back on THAT host.
+        if (result.success) await releaseHost(host)
+        return null
+      }
+      owner.value = result.owner ?? null
       humanActive.value = result.human_active
       if (!result.success) {
         error.value = result.message
@@ -126,6 +175,7 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
       } else {
         logger.error('Failed to acquire desktop control:', err)
       }
+      if (startedIn !== generation) return null
       error.value = extractErrorMessage(err, 'Failed to take control')
       return null
     } finally {
@@ -145,13 +195,19 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
 
   async function releaseControl(): Promise<DesktopControlLockState | null> {
     error.value = null
+    const host = currentHostId()
+    if (!host) return null
+    const startedIn = generation
     loading.value = true
     stopHeartbeat()
     try {
-      const result = await ApiClient.post<DesktopControlLockState>(`${basePath}/release`, {
-        session_id: sessionId
-      })
-      owner.value = result.owner
+      const result: DesktopControlLockState = await ApiClient.call(
+        'post',
+        '/api/vnc-proxy/{vnc_type}/control/release',
+        { path, body: { session_id: host } }
+      )
+      if (startedIn !== generation) return null
+      owner.value = result.owner ?? null
       humanActive.value = result.human_active
       if (!result.success) {
         error.value = result.message
@@ -159,6 +215,7 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
       return result
     } catch (err: unknown) {
       logger.error('Failed to release desktop control:', err)
+      if (startedIn !== generation) return null
       error.value = extractErrorMessage(err, 'Failed to release control')
       return null
     } finally {

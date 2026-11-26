@@ -97,7 +97,10 @@ def _anchors() -> list[tuple[str, str, int]]:
 #: MOVE THIS ONLY FOR A NEW BOUNDARY, and state the arithmetic when you do.
 #: Prose growth inside the existing sections must still hit this wall -- that is
 #: the property being kept, and raising the number for prose retires it.
-_MAX_LINES = 160
+#:
+#: 160 -> 162 (#21998): +2 lines for one new boundary, what text the error boundary
+#: may return to a client (Cross-cutting, "Error boundary text"). No prose elsewhere grew.
+_MAX_LINES = 162
 
 
 def test_document_exists_and_is_short_enough_to_read_every_review():

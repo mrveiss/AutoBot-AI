@@ -577,6 +577,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "يتطلب تسجيل الدخول للعرض",
       "requireLoginHint": "يمكن للمستخدمين المسجلين فقط فتح هذا الرابط",
@@ -792,8 +799,10 @@
       "unsupported": "\"{filename}\" ليس ملفًا نصيًا يستطيع المساعد قراءته، لذلك لم يُستخدم.",
       "unreadable": "تعذّرت قراءة \"{filename}\"، لذلك لم يُستخدم.",
       "empty": "لا يحتوي \"{filename}\" على نص قابل للقراءة، لذلك لم يُستخدم.",
-      "truncated": "\"{filename}\" طويل، لذلك استُخدمت بدايته فقط.",
-      "over_budget": "بلغت الملفات المرفقة حدّ الحجم، لذلك لم يُستخدم \"{filename}\"."
+      "truncated": "\"{filename}\" طويل، لذلك استُخدم فقط أول {used} من {total} حرفًا.",
+      "truncated_legacy": "\"{filename}\" طويل، لذلك استُخدمت بدايته فقط.",
+      "over_budget": "بلغت الملفات المرفقة حدّ الحجم، لذلك لم يُستخدم \"{filename}\".",
+      "over_window": "المحادثة أطول من نافذة النموذج، لذلك قد لا يصله بعض النص السابق."
     }
   },
   "settings": {
@@ -2386,6 +2395,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "فشل تحميل بيانات التطور",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -5805,7 +5815,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "إغلاق"
+      "close": "إغلاق",
+      "usernameMissing": "اسم المستخدم مفقود: عيّنه في الأسرار",
+      "desktopVm": "جهاز AutoBot الافتراضي لسطح المكتب",
+      "desktopVmDesc": "سطح مكتب AutoBot الخاص",
+      "noDesktopVm": "لا يوجد جهاز افتراضي لسطح المكتب مسجّل، لذا تُعرض مضيفات الأسرار الخاصة بك فقط."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6491,16 +6505,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "noParticipants": "No participants",
-      "participants": "Participants",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "التعاون",
       "invite": "دعوة",
@@ -6860,7 +6864,11 @@
         "slackDesc": "رمز بوت Slack",
         "serverLabel": "مضيف الخادم",
         "serverDesc": "الوصول إلى خادم SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (بيانات اعتماد VNC)",
+      "vncCompanionDescription": "بيانات اعتماد VNC لـ {host}",
+      "vncCompanionNoHostId": "تم حفظ المضيف لكن لم يُرجع معرّفه، لذلك لم تُحفظ بيانات اعتماد VNC.",
+      "vncRetry": "تم حفظ المضيف لكن لم تُحفظ كلمة مرور VNC الخاصة به. احفظ مرة أخرى لإعادة المحاولة؛ لن يُنشأ المضيف مرتين."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7372,7 +7380,8 @@
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
       "toggleViewAriaLabel": "Toggle view mode",
-      "uploadFailedHint": "يرجى التحقق من حدود حجم الملف ومتطلبات التنسيق"
+      "uploadFailedHint": "يرجى التحقق من حدود حجم الملف ومتطلبات التنسيق",
+      "uploadAlreadyExists": "A file with this name already exists"
     },
     "header": {
       "title": "File Browser",
@@ -7754,7 +7763,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "اختر مضيفًا يدعم VNC لاستخدام سطح المكتب.",
+      "vncCredentialMissing": "لا توجد كلمة مرور VNC محفوظة لهذا المضيف. أضفها في الأسرار.",
+      "hostNotFound": "هذا المضيف ليس من مضيفات الأسرار الخاصة بك.",
+      "hostFieldsMissing": "يفتقد هذا المضيف إلى اسم المستخدم أو القدرات. عيّنها في الأسرار.",
+      "hostVncUnavailable": "ليس لدى هذا المضيف قدرة VNC أو منفذ في الأسرار.",
+      "desktopVmUnavailable": "لا يوجد سطح مكتب VNC مسجّل، لذا فإن جهاز سطح المكتب الافتراضي غير متاح.",
+      "registryUnavailable": "تعذّرت قراءة سجل أسطح المكتب. حاول مرة أخرى بعد قليل."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -8576,7 +8592,6 @@
       "attachRoleLabel": "الدور",
       "attachRolePlaceholder": "اختر دورًا…",
       "attachWorkflowLabel": "معرّف سير العمل",
-      "attachWorkflowPlaceholder": "معرّف سير العمل",
       "attachError": "تعذّر إرفاق سير العمل هذا.",
       "detachError": "تعذّرت إزالة سير العمل هذا.",
       "processDetach": "إزالة {workflow} من {role}",
@@ -9818,7 +9833,6 @@
     "endTenure": "إنهاء التعيين",
     "holderIdPlaceholder": "معرّف الشاغل",
     "permissionPlaceholder": "مثل knowledge.read",
-    "workflowPlaceholder": "معرّف سير العمل",
     "toolPlaceholder": "اسم الأداة",
     "credentialPlaceholder": "معرّف السر",
     "errorAssign": "تعذّر تعيين الشاغل.",
@@ -10017,5 +10031,40 @@
     "invalid_generic": "هذه الجدولة غير صالحة.",
     "conflicting_fields": "تُحفظ الجدولة إما بصيغة cron أو كقاعدة تقويم أو تشغيل لمرة واحدة، وليس كليهما.",
     "gatedNote": "سيتوفر اليوم الأخير ويوم الأسبوع من الشهر والأيام من 29 إلى 31 والتشغيل لمرة واحدة بعد تحديث المجدول."
+  },
+  "driftPrune": {
+    "batch": "دفعة من {count} من أصل {total} ملف(ات)؛ أكّد لإزالة هذه الدفعة، وستظهر الدفعة التالية بعد ذلك",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد إزالة {count} ملف(ات)",
+    "intro": "يثبت Git أن هذه الملفات حُذفت من المصدر وما زالت منشورة. تُزال هذه الملفات فقط. لا تُمس حالة المضيف وحزم البناء والملفات المعدّلة أبدًا.",
+    "nothingToRemove": "لا شيء للإزالة: لم يعد أي ملف منشور مؤكدًا على أنه حُذف من المصدر. أعد تشغيل فحص الانحراف.",
+    "previewAction": "معاينة الإزالة",
+    "previewing": "جارٍ تحميل المعاينة…",
+    "removing": "جارٍ الإزالة…",
+    "requestFailed": "فشل طلب تنظيف الانحراف",
+    "result": "تمت إزالة {removed} ملف(ات)؛ وتُرك {left} في مكانه",
+    "title": "سيتم إزالة {count} ملف(ات) من {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "تؤدي عناصر التحكم هذه إلى إيقاف جميع الوكلاء مؤقتًا أو استئنافهم، وليس وكيلًا واحدًا",
+    "loadFailed": "فشل تحميل الوكلاء",
+    "noLastActivity": "لا يوجد نشاط مُبلَّغ عنه",
+    "notReported": "غير مُبلَّغ",
+    "pauseAll": "إيقاف جميع الوكلاء مؤقتًا",
+    "pauseFailed": "فشل إيقاف الوكلاء مؤقتًا",
+    "resumeAll": "استئناف جميع الوكلاء",
+    "resumeFailed": "فشل استئناف الوكلاء",
+    "successRate": "معدل النجاح",
+    "tasksCompleted": "المهام المكتملة"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "أدخل عنوان ويب كاملاً يبدأ بـ http:// أو https://",
+    "recognitionUnsupported": "التعرف على الكلام غير مدعوم في هذا المتصفح",
+    "recognitionError": "خطأ في التعرف على الكلام: {error}",
+    "speakFailed": "تعذّر نطق النص",
+    "playbackFailed": "فشل تشغيل الصوت",
+    "spoken": "تم نطقه:",
+    "speakToInteractWith": "تحدّث واستمع إلى القراءة بصوت عالٍ",
+    "voiceId": "معرّف الصوت"
   }
 }

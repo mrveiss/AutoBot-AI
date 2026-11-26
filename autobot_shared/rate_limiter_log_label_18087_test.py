@@ -54,3 +54,18 @@ async def test_label_allowed_request_is_silent(caplog):
     with caplog.at_level(logging.DEBUG):
         assert await _limiter(True, log_label="lbl").acquire_window(CALLER_ID, 5, 60) is True
     assert _warnings(caplog) == []
+
+
+@pytest.mark.asyncio
+async def test_local_outage_warns_once_and_refusals_stay_silent(caplog):
+    from unittest.mock import AsyncMock, patch
+
+    from autobot_shared.rate_limiter_window import WindowFailurePolicy
+
+    lim = RateLimiter("scope-x", window_failure_policy=WindowFailurePolicy.LOCAL)
+    with patch("autobot_shared.rate_limiter.get_async_redis_client", AsyncMock(return_value=None)):
+        with caplog.at_level(logging.WARNING):
+            results = [await lim.acquire_window(CALLER_ID, 1, 60) for _ in range(4)]
+    assert results == [True, False, False, False]
+    assert len(_warnings(caplog)) == 1 and "policy=local" in _warnings(caplog)[0]
+    assert CALLER_ID not in caplog.text

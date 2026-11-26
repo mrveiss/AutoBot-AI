@@ -30,6 +30,7 @@ import re
 import yaml
 from repo_tests._paths import repo_root
 
+from autobot_shared.regex_whitespace import NOT_WS, WS
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_text
 
@@ -42,7 +43,7 @@ _RETIRED = (
 )
 
 # `git rebase` as a command, not the substring.
-_REBASE = re.compile(r"\bgit\s+(?:-\S+\s+)*rebase\b")
+_REBASE = re.compile(rf"\bgit{WS}+(?:-{NOT_WS}+{WS}+)*rebase\b")
 _FORCE_PUSH = re.compile(r"\bgit\s+push\b[^\n]*?(?:--force\b|--force-with-lease\b|\s-f\b|\s\+)")
 _EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", re.S)
 _SECRET = re.compile(r"\bsecrets\.([A-Za-z_][A-Za-z0-9_]*)")

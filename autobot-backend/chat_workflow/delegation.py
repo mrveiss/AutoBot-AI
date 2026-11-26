@@ -55,6 +55,7 @@ Check all items before flipping ``AUTOBOT_DELEGATION_ENABLED=true`` in productio
       per-turn limit fires after MAX delegations in a single turn.
 """
 
+import time
 from typing import Any, Awaitable, Callable, Dict, List
 
 from autobot_shared import tool_catalogue as _tc
@@ -259,7 +260,10 @@ async def run_delegated_subtask(
     from orchestration.agent_registry import is_unbounded_agent_id
 
     if depth >= MAX_DELEGATION_DEPTH:
-        raise ValueError(f"max delegation depth {MAX_DELEGATION_DEPTH} reached (depth={depth})")
+        raise ValueError(
+            f"max delegation depth {MAX_DELEGATION_DEPTH} reached (depth={depth}); "
+            "complete this task directly instead of delegating further"
+        )
     # GH#13588: ``agent_type`` reaches here straight from the model's tool call, so a
     # delegating agent could name a designated executor and obtain a subagent with no
     # boundary — an escalation the parent's own manifest cannot express, since
@@ -284,4 +288,9 @@ async def run_delegated_subtask(
         depth,
         task,
     )
-    return await runner(task, agent_type, depth, auth_role, inherited)
+    started = time.monotonic()
+    result = await runner(task, agent_type, depth, auth_role, inherited)
+    logger.info(
+        "[GH#11266] delegation done: child=%s depth=%d elapsed=%.2fs", agent_type, depth, time.monotonic() - started
+    )
+    return result

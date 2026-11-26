@@ -216,3 +216,31 @@ register_env_var(
         range=(1, 10000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PLUGIN_GATE_RETRY_INITIAL_S",
+        type=int,
+        default=5,
+        description=(
+            "Seconds before the first background retry when the plugin enable gate could not answer at boot "
+            "(#17421). No plugin loads until it does; each failed retry doubles the wait up to the maximum."
+        ),
+        component="backend",
+        range=(1, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PLUGIN_GATE_RETRY_MAX_S",
+        type=int,
+        default=300,
+        description=(
+            "Longest wait in seconds between background retries of the plugin enable gate after a boot "
+            "failure (#17421)."
+        ),
+        component="backend",
+        range=(1, 86400),
+    )
+)

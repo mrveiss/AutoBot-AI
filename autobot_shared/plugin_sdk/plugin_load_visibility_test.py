@@ -217,14 +217,8 @@ class TestLoadedNOfM:
 
         assert "no plugins discovered" in caplog.text
         assert "loaded 0 of" not in caplog.text
-        assert manager.get_load_report() == {
-            "discovered": 0,
-            "loaded": 0,
-            "failed": [],
-            "conflicts": [],
-            "started": True,
-            "completed": True,
-        }
+        report = dict(discovered=0, loaded=0, failed=[], conflicts=[], gated=[], started=True, completed=True)
+        assert manager.get_load_report() == report
 
     @pytest.mark.asyncio
     async def test_a_plugin_that_returns_none_is_reported(self, tmp_path, caplog):

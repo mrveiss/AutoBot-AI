@@ -16,6 +16,8 @@ slm_base_dir: "{{ autobot.base_dir }}"
 # They equal roles/backend/defaults/main.yml; tests/test_secrets_backup_18281.py pins the code default to it.
 slm_backend_data_dir_fallback: /var/lib/autobot
 slm_backend_user_fallback: autobot
+# #22067: same expression the backend env template renders for AUTOBOT_CODE_SOURCE.
+slm_code_source_dir: "{{ code_source_dir | default(slm_base_dir ~ '/code_source') }}"
 slm_backend_dir: "{{ slm_base_dir }}/autobot-slm-backend"
 # #19051: the backend env on the SLM host -- the root-key back-fill reuses a key
 # found here rather than generating one over it.

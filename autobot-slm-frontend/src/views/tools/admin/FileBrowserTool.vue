@@ -164,14 +164,14 @@ onMounted(() => {
   <div class="p-6 h-full flex flex-col">
     <div class="flex gap-6 flex-1 overflow-hidden">
       <!-- File Browser Panel -->
-      <div class="flex-1 bg-white rounded-lg shadow-xs border border-gray-200 flex flex-col overflow-hidden">
+      <div class="flex-1 bg-white rounded-lg shadow-xs border border-autobot-border flex flex-col overflow-hidden">
         <!-- Toolbar -->
-        <div class="bg-gray-50 border-b border-gray-200 px-4 py-3 flex items-center gap-4">
+        <div class="bg-autobot-bg-secondary border-b border-autobot-border px-4 py-3 flex items-center gap-4">
           <!-- Navigation buttons -->
           <button
             @click="goUp"
             :disabled="currentPath === '/'"
-            class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            class="p-2 text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-active rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :title="$t('tools.admin.fileBrowserTool.goUp')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -185,7 +185,7 @@ onMounted(() => {
               v-model="pathInput"
               @keydown.enter="goToPath"
               type="text"
-              class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-mono"
+              class="flex-1 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm font-mono"
               :placeholder="$t('tools.admin.fileBrowserTool.pathToDirectory')"
             />
             <button
@@ -200,7 +200,7 @@ onMounted(() => {
           <button
             @click="loadDirectory(currentPath)"
             :disabled="loading"
-            class="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"
+            class="p-2 text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-active rounded-lg transition-colors"
             :title="$t('tools.admin.fileBrowserTool.refresh')"
           >
             <svg class="w-5 h-5" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,15 +210,15 @@ onMounted(() => {
         </div>
 
         <!-- Breadcrumbs -->
-        <div class="bg-gray-50 border-b border-gray-200 px-4 py-2 flex items-center gap-1 text-sm overflow-x-auto">
+        <div class="bg-autobot-bg-secondary border-b border-autobot-border px-4 py-2 flex items-center gap-1 text-sm overflow-x-auto">
           <button
             v-for="(crumb, index) in breadcrumbs"
             :key="crumb.path"
             @click="navigateTo(crumb.path)"
             class="flex items-center gap-1 hover:text-primary-600 transition-colors"
           >
-            <span v-if="index > 0" class="text-gray-400">/</span>
-            <span :class="index === breadcrumbs.length - 1 ? 'font-medium text-primary-600' : 'text-gray-600'">
+            <span v-if="index > 0" class="text-autobot-text-tertiary">/</span>
+            <span :class="index === breadcrumbs.length - 1 ? 'font-medium text-primary-600' : 'text-autobot-text-secondary'">
               {{ crumb.name }}
             </span>
           </button>
@@ -238,40 +238,40 @@ onMounted(() => {
         <!-- File List -->
         <div v-else class="flex-1 overflow-auto">
           <table class="w-full">
-            <thead class="bg-gray-50 sticky top-0">
+            <thead class="bg-autobot-bg-secondary sticky top-0">
               <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('tools.admin.fileBrowserTool.name') }}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('tools.admin.fileBrowserTool.size') }}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('tools.admin.fileBrowserTool.modified') }}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('tools.admin.fileBrowserTool.permissions') }}</th>
-                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('tools.admin.fileBrowserTool.actions') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">{{ $t('tools.admin.fileBrowserTool.name') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">{{ $t('tools.admin.fileBrowserTool.size') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">{{ $t('tools.admin.fileBrowserTool.modified') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">{{ $t('tools.admin.fileBrowserTool.permissions') }}</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">{{ $t('tools.admin.fileBrowserTool.actions') }}</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-gray-200">
+            <tbody class="divide-y divide-autobot-border">
               <tr
                 v-for="entry in files"
                 :key="entry.name"
                 @dblclick="openEntry(entry)"
                 :class="[
-                  'hover:bg-gray-50 cursor-pointer transition-colors',
+                  'hover:bg-autobot-bg-hover cursor-pointer transition-colors',
                   selectedFile?.name === entry.name ? 'bg-primary-50' : ''
                 ]"
               >
                 <td class="px-4 py-3 whitespace-nowrap">
                   <div class="flex items-center gap-3">
-                    <svg class="w-5 h-5" :class="entry.type === 'directory' ? 'text-yellow-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5" :class="entry.type === 'directory' ? 'text-autobot-warning' : 'text-autobot-text-tertiary'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getFileIcon(entry)" />
                     </svg>
-                    <span class="text-sm font-medium text-gray-900">{{ entry.name }}</span>
+                    <span class="text-sm font-medium text-autobot-text-primary">{{ entry.name }}</span>
                   </div>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-autobot-text-tertiary">
                   {{ entry.type === 'directory' ? '-' : formatFileSize(entry.size, SIZE_OPTIONS) }}
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-autobot-text-tertiary">
                   {{ formatFleetDateTime(entry.modified) }}
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-autobot-text-tertiary font-mono">
                   {{ entry.permissions }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-right">
@@ -279,7 +279,7 @@ onMounted(() => {
                     <button
                       v-if="entry.type === 'file'"
                       @click.stop="downloadFile(entry)"
-                      class="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                      class="p-1.5 text-autobot-text-tertiary hover:text-autobot-text-secondary transition-colors"
                       :title="$t('tools.admin.fileBrowserTool.download')"
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -288,7 +288,7 @@ onMounted(() => {
                     </button>
                     <button
                       @click.stop="openEntry(entry)"
-                      class="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                      class="p-1.5 text-autobot-text-tertiary hover:text-autobot-text-secondary transition-colors"
                       :title="entry.type === 'directory' ? 'Open' : 'View'"
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -302,8 +302,8 @@ onMounted(() => {
             </tbody>
           </table>
 
-          <div v-if="files.length === 0 && !loading" class="p-8 text-center text-gray-500">
-            <svg class="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div v-if="files.length === 0 && !loading" class="p-8 text-center text-autobot-text-tertiary">
+            <svg class="w-12 h-12 mx-auto text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
             </svg>
             <p class="mt-4">{{ $t('tools.admin.fileBrowserTool.emptyDirectory') }}</p>
@@ -312,18 +312,18 @@ onMounted(() => {
       </div>
 
       <!-- File Viewer/Editor Panel -->
-      <div v-if="showEditor" class="w-1/2 bg-white rounded-lg shadow-xs border border-gray-200 flex flex-col overflow-hidden">
+      <div v-if="showEditor" class="w-1/2 bg-white rounded-lg shadow-xs border border-autobot-border flex flex-col overflow-hidden">
         <!-- Header -->
-        <div class="bg-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <div class="bg-autobot-bg-secondary border-b border-autobot-border px-4 py-3 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
             </svg>
-            <span class="font-medium text-gray-900">{{ selectedFile?.name }}</span>
+            <span class="font-medium text-autobot-text-primary">{{ selectedFile?.name }}</span>
           </div>
           <button
             @click="closeEditor"
-            class="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+            class="p-1.5 text-autobot-text-tertiary hover:text-autobot-text-secondary transition-colors"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -333,7 +333,7 @@ onMounted(() => {
 
         <!-- Content -->
         <div class="flex-1 overflow-auto">
-          <pre class="p-4 text-sm font-mono text-gray-800 whitespace-pre-wrap">{{ fileContent }}</pre>
+          <pre class="p-4 text-sm font-mono text-autobot-text-primary whitespace-pre-wrap">{{ fileContent }}</pre>
         </div>
       </div>
     </div>

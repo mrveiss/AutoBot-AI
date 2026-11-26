@@ -112,6 +112,13 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Non-test modules of both backends and autobot_shared, against all tracked .py under them; "
         "the test-file share drifts.",
     ),
+    "client-error-4xx-calls-21943": (ABSOLUTE, "NOT_PATHS", "4xx call sites parsed as 'path:line', not files."),
+    "client-error-detail-sweep-21943": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test modules of both backends and autobot_shared, against all tracked .py under them; "
+        "the test-file share drifts.",
+    ),
     "generated-type-redeclarations": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -186,6 +193,16 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test knowledge_*.py route modules are a subset of tracked api files; the test-file share drifts.",
+    ),
+    "extraction-registry-sweep": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under six roots, tests included; the test-file share drifts.",
+    ),
+    "one-rate-limiter-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Production Python under three trees, against all tracked Python.",
     ),
     "fact-read-authorization-scan": (
         ABSOLUTE,

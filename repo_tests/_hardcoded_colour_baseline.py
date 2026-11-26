@@ -56,7 +56,7 @@ EXEMPT_BASENAMES: frozenset[str] = frozenset({"ThemePresetPicker.vue", "Componen
 HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#000000": 1,
     "#007bff": 1,
-    "#10b981": 2,
+    "#10b981": 1,
     "#1a1b26": 1,
     "#1e1e1e": 2,
     "#264f78": 1,
@@ -64,7 +64,7 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#313244": 1,
     "#3498db": 1,
     "#3760bf": 1,
-    "#3b82f6": 5,
+    "#3b82f6": 3,  # #18243: -1, merged with main (4)
     "#6366f1": 2,
     "#667eea": 1,
     "#6b7280": 3,
@@ -81,7 +81,7 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#e5e7eb": 1,
     "#e67e22": 1,
     "#ef4444": 2,
-    "#f59e0b": 2,
+    "#f59e0b": 1,
     "#fecaca": 1,
     "#fef2f2": 1,
     "#ffeaa7": 1,
@@ -130,7 +130,7 @@ SLM_HARDCODED_COLOUR_LITERALS: dict[str, int] = {}
 IMPORTANT_DECLARATIONS: dict[str, int] = {
     "components/audit/AuditLogTable.vue": 1,
     "components/charts/FunctionCallGraph.vue": 12,
-    "components/chat/ChatInterface.vue": 5,
+    "components/chat/ChatInterface.vue": 2,
     "components/knowledge/KnowledgeGraph.vue": 10,
     "components/knowledge/pipeline/PipelineRunner.vue": 1,
     "components/operations/OperationsList.vue": 1,

@@ -14,7 +14,7 @@ SSOT Migration (Issue #639):
 from typing import Any, Dict
 
 from autobot_shared import deployment_profile
-from autobot_shared.ollama_urls import ollama_api_url, ollama_generate_url
+from autobot_shared.ollama_urls import ollama_api_url, ollama_base_url, ollama_generate_url
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import PATH_OLLAMA_EMBEDDINGS
 from config.registry import ConfigRegistry
@@ -33,7 +33,7 @@ def _get_backend_config(llm_host: str, llm_port: int, bind_host: str, backend_po
     from constants.model_constants import ModelConstants
 
     # Build provider-agnostic LLM config (default provider is Ollama)
-    llm_base_url = f"http://{llm_host}:{llm_port}"
+    llm_base_url = ollama_base_url(f"http://{llm_host}:{llm_port}")
 
     return {
         "llm": {

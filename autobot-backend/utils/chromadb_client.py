@@ -36,6 +36,7 @@ from utils.async_chromadb_client import (
 )
 from utils.chromadb_auth import chroma_client_auth_kwargs
 from utils.chromadb_store_repairs import prepare_local_store
+from utils.leased_chroma import lease_client
 
 if TYPE_CHECKING:
     import chromadb  # noqa: F401
@@ -100,6 +101,7 @@ def _open_local_client(cache_key: tuple, chroma_path: Path, allow_reset: bool, t
             settings=ChromaSettings(allow_reset=allow_reset, anonymized_telemetry=telemetry),
         )
         logger.info("ChromaDB persistent client at: %s", chroma_path)
+        client = lease_client(client)
         _sync_client_cache[cache_key] = client
         return client
 
@@ -154,6 +156,7 @@ def get_chromadb_client(
                 _CHROMADB_HOST,
                 _CHROMADB_PORT,
             )
+            client = lease_client(client)
             _sync_client_cache[cache_key] = client
             return client
 

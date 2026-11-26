@@ -48,6 +48,8 @@ import re
 
 from repo_tests._unconnected_common import Tree
 
+from tools.lint._main_guard import source_has_main_guard
+
 #: Trees whose modules are candidates. The first two are not packages (dashed names), so their
 #: dotted names are relative to the directory; ``autobot_shared`` is a package and keeps its name.
 BACKEND_ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
@@ -70,7 +72,6 @@ _LAUNCHER_SUFFIXES = (
 
 _FROM_RE = re.compile(r"from[ \t]+(\.*)([\w.]*)[ \t]+import[ \t]+(.*)", re.DOTALL)
 _DOTTED_STR_RE = re.compile(r"""["']([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)["']""")
-_MAIN_GUARD_RE = re.compile(r"""^if\s+__name__\s*==\s*["']__main__["']""", re.MULTILINE)
 _TOKEN_RE = re.compile(r"[\w./\-]+")
 
 
@@ -140,7 +141,7 @@ def candidates(tree: Tree) -> list[str]:
     return [
         rel
         for rel in tree.select(".py", under=BACKEND_ROOTS)
-        if not rel.endswith("/__init__.py") and "/migrations/" not in rel and not _MAIN_GUARD_RE.search(tree.text(rel))
+        if not rel.endswith("/__init__.py") and "/migrations/" not in rel and not source_has_main_guard(tree.text(rel))
     ]
 
 

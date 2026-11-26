@@ -2,9 +2,11 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# Pre-board fast lane (#21359, AC4 of #18499). Dispatch it on a member PR's head to learn, in
-# minutes and with EVERY failure listed, whether the head would fail a mechanical guard -- instead
-# of finding one guard per merge-train cycle inside the full suite.
+# Pre-board fast lane (#21359, AC4 of #18499). Dispatch it on a member PR's head to learn, with EVERY
+# failure listed, whether the head would fail a mechanical guard -- instead of finding one guard per
+# merge-train cycle inside the full suite. Measured wall time (#22147, run 45220495425): 22 minutes
+# (16:50 -> 17:12Z); each guard shard ran 7-14 minutes, and shards started up to 12 minutes after the
+# pin job because runners were queued -- the lane is faster than a train, not "minutes".
 #
 #   gh workflow run dispatch-preboard-guards.yml --ref <member branch> [-f base=main]
 #   gh run download <run id> -n preboard-guards-result
@@ -26,9 +28,11 @@
 #           base tests nothing and the lane is red.
 #   guards  Every test the python suite collects from the guard roots (all of pytest.ini's
 #           testpaths except the product trees), with the suite's own interpreter setup, env,
-#           marker selection and shard plugin, and AUTOBOT_REACH_AUDIT=1 (the reach-floor
-#           staleness band, which the suite enables on train heads). The roots, the floor and the
-#           verdict come from pipeline-scripts/preboard_guard_lane.py; this file names none.
+#           marker selection and shard plugin, and the reach-floor staleness
+#           audit exactly where PR CI enables it (pipeline-scripts/reach_audit_scope.py, the one rule
+#           ci.yml calls too: a `train-*` ref, a merge group, main; a plain member head only warns).
+#           The roots, the floor and the verdict come from pipeline-scripts/preboard_guard_lane.py;
+#           this file names none.
 #           Split in the matrix below by the suite's stable module sharding, balanced over the
 #           lane's own recorded durations. Not fail-fast, no stop-on-first-failure option: one
 #           complete list per run.
@@ -47,7 +51,7 @@
 #           package being the directory that holds the config. A spec-looking file inside a package that the package's
 #           own `exclude` skips, or outside every package, is a notice; one inside a package that its `include` does not
 #           match (nothing runs it) is an `::error::` and red. An empty selection is green and installs nothing ("no changed frontend specs"). Otherwise Node is set up and
-#           each package installed as the frontend test job does (setup-node on .nvmrc, `npm ci`, or `npm install` where no lock is
+#           each package installed by the shared setup action (.github/actions/setup-frontend: setup-node on .nvmrc, `npm ci`, or `npm install` where no lock is
 #           committed), and `vitest run` is given just the selected files, with no coverage gate. A failing spec, or a selected
 #           file Vitest collects nothing from, is red. Not covered: the rest of the frontend suite, lint, type-check, build.
 #   added-headers  Every file the head ADDS (or renames or copies into place) in the license-header check's scope must carry the
@@ -201,13 +205,17 @@ jobs:
 
       - uses: ./.github/actions/setup-python-suite
 
+      # Same rule, same entry as ci.yml (#22147): the staleness band is enforced only where PR CI enforces it,
+      # i.e. on a dispatched `train-*` ref -- a plain member head warns here exactly as it does in PR CI.
+      - name: Apply the reach-floor audit where PR CI applies it
+        if: steps.base.outputs.merged == 'true'
+        run: python3 pipeline-scripts/reach_audit_scope.py
+
       - name: Run the guard tests of this shard
         if: steps.base.outputs.merged == 'true'
         env:
           # A pull request's merge ref has the base tip as its first parent; this commit does not.
           AUTOBOT_RATCHET_BASE_SHA: ${{ steps.base.outputs.base_sha }}
-          # The suite sets it for train heads: the reach-floor staleness band.
-          AUTOBOT_REACH_AUDIT: "1"
           MERGED: ${{ steps.base.outputs.merged }}
           BASE_SHA: ${{ steps.base.outputs.base_sha }}
           BEHIND_BASE: ${{ steps.base.outputs.behind_base }}
@@ -361,8 +369,7 @@ jobs:
     timeout-minutes: 30
     env:
       PINNED_BASE_SHA: ${{ needs.pin.outputs.base_sha }}
-      # The frontend test job's own settings: no Cypress download (no CI job runs Cypress), room for the compiler.
-      CYPRESS_INSTALL_BINARY: '0'
+      # The frontend test job's own setting: room for the compiler. (No Cypress download: the setup action sets that.)
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - name: Checkout the dispatched branch
@@ -394,20 +401,28 @@ jobs:
           python3 pipeline-scripts/preboard_guard_lane.py changed-specs \
             --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" --out-dir "$RUNNER_TEMP/own-specs" >> "$GITHUB_OUTPUT"
 
-      # The frontend test job's setup (ci.yml frontend-tests): the Node major from .nvmrc and the npm cache. Skipped for an empty selection.
-      - name: Setup Node.js
+      # The packages that hold a selected spec, as one whitespace-separated list for the setup action.
+      - name: List the packages to install
+        id: packages
         if: steps.select.outputs.total != '0'
-        uses: actions/setup-node@v7
+        env:
+          SPECS_DIR: ${{ runner.temp }}/own-specs
+        run: echo "dirs=$(tr '\n' ' ' < "$SPECS_DIR/packages.txt")" >> "$GITHUB_OUTPUT"
+
+      # The one frontend setup (.github/actions/setup-frontend, #22114), as ci.yml frontend-tests uses it: the Node major from
+      # .nvmrc, the npm cache, `npm ci` per package, or `npm install` where no lock is committed. Skipped for an empty selection.
+      - name: Set up the frontend toolchain
+        if: steps.select.outputs.total != '0'
+        uses: ./.github/actions/setup-frontend
         with:
-          node-version-file: .nvmrc
-          cache: 'npm'
+          package-dirs: ${{ steps.packages.outputs.dirs }}
+          allow-install-fallback: 'true'
           cache-dependency-path: |
             autobot-frontend/package-lock.json
             autobot-slm-frontend/package-lock.json
 
-      # Per package: install as its own CI job does (`npm ci` with a committed lock, `npm install` for the kit that has none),
-      # then `vitest run` on just the selected files (relative to the package) from the array: no word-splitting. Every package
-      # runs even after one fails, so the run lists every failing spec; the package list is not left on the installer's stdin.
+      # Per package: `vitest run` on just the selected files (relative to the package) from the array: no word-splitting. Every
+      # package runs even after one fails, so the run lists every failing spec; the package list is not left on the runner's stdin.
       - name: Run the changed specs
         if: steps.select.outputs.total != '0'
         env:
@@ -419,7 +434,6 @@ jobs:
             echo "::group::$pkg: ${#FILES[@]} spec file(s)"
             (
               cd "$pkg" || exit 1
-              if [ -f package-lock.json ]; then npm ci || exit 1; else npm install || exit 1; fi
               npx --no-install vitest run "${FILES[@]}"
             ) < /dev/null || { echo "::error::the changed specs of $pkg failed"; rc=1; }
             echo "::endgroup::"

@@ -30,20 +30,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session
+from llc.deps import SESSION_DEP
 from user_management.services import TenantContext
 
 from ..deps import require_board_role
-from ..models.enums import LLCRunStatus, MembershipRole
+from ..models.enums import LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..scheduler.dispatch_gate import BUDGET_EXHAUSTED, dispatch_block_reason
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
+from ..services.authz import GRANTING_ROLES
 from ..services.membership_service import MembershipService
 from ..services.replay_service import ReplayLogNotFoundError, RunReplayService
 
 router = APIRouter(prefix="/agents", tags=["llc-replay"])
 
-_ALLOWED_ROLES = {MembershipRole.OWNER, MembershipRole.ADMIN}
+_ALLOWED_ROLES = GRANTING_ROLES  # the one owner/admin set (#21588)
 
 _get_membership = lazy_singleton(MembershipService)
 _get_replay_svc = lazy_singleton(RunReplayService)
@@ -164,7 +165,7 @@ async def _dispatch_replay_run(
 async def trigger_replay(
     agent_id: str,
     run_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -236,7 +237,7 @@ async def get_replay_log(
     agent_id: str,
     run_id: str,
     redact_pii: bool = Query(False, description="Redact credentials/PII from the returned payload"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -274,7 +275,7 @@ async def diff_runs(
     agent_id: str,
     run_id: str,
     other_run_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -300,7 +301,7 @@ async def diff_runs(
 async def export_fixture(
     agent_id: str,
     run_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:

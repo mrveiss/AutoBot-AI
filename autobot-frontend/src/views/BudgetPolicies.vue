@@ -140,7 +140,7 @@
         </div>
         <div v-if="agentStatus.is_paused" class="status-row">
           <span class="status-label">{{ t('budgetPolicies.labelReason') }}</span>
-          <span>{{ agentStatus.paused_reason || '—' }}</span>
+          <span>{{ reasonLabel(agentStatus.paused_reason) }}</span>
         </div>
         <div v-if="agentStatus.is_paused && agentStatus.paused_at" class="status-row">
           <span class="status-label">{{ t('budgetPolicies.labelSince') }}</span>
@@ -291,8 +291,10 @@ import { useUserStore } from '@/stores/useUserStore'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal, HttpError, BaseButton, formatISOString } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
+import { useHeartbeatReasons } from '@/composables/useHeartbeatReasons'
 
 const { t } = useI18n()
+const { reasonLabel } = useHeartbeatReasons()
 const logger = createLogger('BudgetPolicies')
 
 // --- Types ---
@@ -312,17 +314,7 @@ interface BudgetPolicyResponse {
   updated_at: string
 }
 
-interface BudgetPolicyForm {
-  scope: string
-  scope_id: string
-  period: string
-  threshold_usd: number
-  warning_pct: number
-  action: string
-  enabled: boolean
-  name: string
-  description: string
-}
+type BudgetPolicyForm = Omit<BudgetPolicyResponse, 'id' | 'created_at' | 'updated_at'>
 
 interface PauseStatusResponse {
   agent_id: string

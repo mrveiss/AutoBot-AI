@@ -83,13 +83,13 @@ function openInGrafana() {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.grafanaDashboards.grafanaDashboards') }}</h2>
-        <p class="text-sm text-gray-500 mt-1">{{ currentDashboard.name }} - {{ currentDashboard.description }}</p>
+        <h2 class="text-xl font-bold text-autobot-text-primary">{{ $t('monitoring.grafanaDashboards.grafanaDashboards') }}</h2>
+        <p class="text-sm text-autobot-text-tertiary mt-1">{{ currentDashboard.name }} - {{ currentDashboard.description }}</p>
       </div>
       <div class="flex items-center gap-2">
         <button
           @click="toggleFullscreen"
-          class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+          class="px-3 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover flex items-center gap-2"
         >
           <svg v-if="!isFullscreen" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
@@ -114,13 +114,13 @@ function openInGrafana() {
     <div :class="[isFullscreen ? 'flex gap-4 h-[calc(100vh-100px)]' : 'flex flex-col lg:flex-row gap-4']">
       <!-- Dashboard Selector Panel -->
       <div :class="[isFullscreen ? 'w-64 shrink-0 overflow-y-auto' : 'lg:w-64']">
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
           <!-- Category Filter -->
           <div class="mb-4">
-            <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">{{ $t('monitoring.grafanaDashboards.category') }}</label>
+            <label class="text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">{{ $t('monitoring.grafanaDashboards.category') }}</label>
             <select
               v-model="selectedCategory"
-              class="mt-1 w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="mt-1 w-full px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             >
               <option v-for="cat in categories" :key="cat" :value="cat">
                 {{ cat === 'all' ? $t('monitoring.grafanaDashboards.allCategories') : cat }}
@@ -138,7 +138,7 @@ function openInGrafana() {
                 'w-full px-3 py-2 text-left rounded-lg transition-colors flex items-start gap-3',
                 selectedDashboard === dash.id
                   ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                  : 'hover:bg-gray-50 text-gray-700'
+                  : 'hover:bg-autobot-bg-hover text-autobot-text-secondary'
               ]"
             >
               <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -146,7 +146,7 @@ function openInGrafana() {
               </svg>
               <div>
                 <p class="text-sm font-medium">{{ dash.name }}</p>
-                <p class="text-xs text-gray-500">{{ dash.description }}</p>
+                <p class="text-xs text-autobot-text-tertiary">{{ dash.description }}</p>
               </div>
             </button>
           </div>
@@ -155,7 +155,7 @@ function openInGrafana() {
 
       <!-- Dashboard Viewer -->
       <div :class="[isFullscreen ? 'flex-1' : 'flex-1 min-h-[600px]']">
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden h-full">
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border overflow-hidden h-full">
           <GrafanaDashboard
             :dashboard="(selectedDashboard as 'overview' | 'system' | 'performance' | 'nodes' | 'redis' | 'api-health')"
             :height="isFullscreen ? 'calc(100vh - 150px)' : 600"

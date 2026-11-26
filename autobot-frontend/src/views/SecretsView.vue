@@ -19,8 +19,8 @@
         <router-link
           :to="{ name: 'secrets-manager' }"
           class="secrets-tab"
-          active-class="secrets-tab--active"
-          exact-active-class="secrets-tab--active"
+          :active-class="onDuplicates ? '' : 'secrets-tab--active'"
+          :exact-active-class="onDuplicates ? '' : 'secrets-tab--active'"
         >
           {{ $t('nav.secrets') }}
         </router-link>
@@ -42,10 +42,21 @@
         >
           {{ $t('secrets.auditLog.title') }}
         </router-link>
+        <!-- #17850: duplicated stored credentials, a section of this page (/secrets?view=duplicates); its
+             endpoints are admin-only like the tabs above. -->
+        <router-link
+          v-if="userStore.isAdmin"
+          :to="{ name: 'secrets-manager', query: { view: DUPLICATES_VIEW } }"
+          class="secrets-tab"
+          :class="{ 'secrets-tab--active': onDuplicates }"
+        >
+          {{ $t('admin.cleanup.secretDuplicates.title') }}
+        </router-link>
       </nav>
 
       <!-- Child views (secrets manager / LLM API keys) -->
-      <router-view />
+      <DuplicateSecrets v-if="onDuplicates" />
+      <router-view v-else />
     </div>
   </div>
 </template>
@@ -54,6 +65,9 @@
 // View-level component for secrets management layout
 // Issue #753: Design token usage instead of Tailwind utilities
 // Issue #10488: Sub-navigation hosts Secrets Manager + LLM API Keys
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import DuplicateSecrets from '@/components/secrets/DuplicateSecrets.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useUserStore } from '@/stores/useUserStore'
 
@@ -61,6 +75,11 @@ import { useUserStore } from '@/stores/useUserStore'
 // admin-gated) — only show that tab to admins so non-admins don't see a tab
 // that redirects. (#10488)
 const userStore = useUserStore()
+
+// #17850: /secrets?view=duplicates shows the duplicated-credentials section in place of the manager (admin only).
+const DUPLICATES_VIEW = 'duplicates'
+const route = useRoute()
+const onDuplicates = computed(() => userStore.isAdmin && route.query.view === DUPLICATES_VIEW)
 </script>
 
 <style scoped>

@@ -330,7 +330,7 @@ class VectorIndexRepair:
         blocking = [row for row in rows if row.collides_with_fact_id]
         orphans = [row for row in rows if not row.collides_with_fact_id]
 
-        deleted = self._delete_rows(fact_id, blocking)
+        deleted = await asyncio.to_thread(self._delete_rows, fact_id, blocking)
 
         failure = await self._rewrite_vector(fact_id)
         if failure:
@@ -343,7 +343,7 @@ class VectorIndexRepair:
             await self._store.mark_for_retry(fact_id)
             return FactOutcome(fact_id, VERIFY_FAILED, reason, row_ids, deleted)
 
-        deleted += self._delete_rows(fact_id, orphans)
+        deleted += await asyncio.to_thread(self._delete_rows, fact_id, orphans)
         logger.info("Repaired fact %s — removed %d empty row(s)", fact_id, len(deleted))
         return FactOutcome(fact_id, REPAIRED, "", row_ids, deleted)
 

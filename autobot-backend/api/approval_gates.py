@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.approval_gates_approver import require_action_approver_role
+from api.approval_gates_requester import stamped_requester, with_requested_label
 from api.schemas_approvals import (
     ApprovalAddCommentRequest,
     ApprovalCommentResponse,
@@ -30,6 +31,7 @@ from api.user_management.human_decider import classify_author_type, require_inte
 from auth_middleware import get_current_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.risk_tier import RiskTier
@@ -39,6 +41,7 @@ from services.approval_execution import context_change_violation, is_registered_
 from services.approval_gate_service import ApprovalGateService
 from services.claude_md_reindex_action import register_claude_md_reindex_action
 from services.conversation_file_cleanup_action import register_conversation_file_cleanup_action
+from services.kb_collection_delete_action import register_collection_delete_actions
 from services.knowledge.collection_space_stamp_action import register_stamp_action
 from services.project_backfill_action import register_project_backfill_action
 from services.source_run_record_cleanup_action import register_source_run_record_cleanup_action
@@ -52,6 +55,7 @@ register_project_backfill_action()  # #18978: a person's approval is what back-f
 register_conversation_file_cleanup_action()  # approving a pending file cleanup after a restart needs its handler
 register_source_run_record_cleanup_action()  # same, for a deleted source's run record (#21417)
 register_claude_md_reindex_action()  # #21383: approving the CLAUDE.md chunk deletion after a restart needs its handler
+register_collection_delete_actions()  # #21383: approving a collection delete after a restart needs its handlers
 register_workflow_step_resume()  # #20917: a person's approval is what releases a waiting workflow step
 
 
@@ -150,9 +154,7 @@ def _reject_unregistered_action(context: dict | None) -> None:
             status_code=status.HTTP_403_FORBIDDEN, detail="this action can be proposed only by the server"
         )
     if not isinstance(action, str) or not is_registered_action(action):
-        # Deliberately does not echo the value back or list what IS
-        # registered: the caller supplied it, and the set of live actions is
-        # not theirs to enumerate.
+        # Does not echo the value or list what IS registered: the set of live actions is not theirs to enumerate.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="context.action names no registered post-approval handler",
@@ -229,10 +231,10 @@ async def create_approval(
         title=body.title,
         approval_type=body.approval_type.value,
         description=body.description,
-        requested_by_agent=body.requested_by_agent,
+        requested_by_agent=stamped_requester(current_user),  # never the body: it decides who may resubmit (#20521)
         workflow_id=body.workflow_id,
         workflow_step=body.workflow_step,
-        context=body.context,
+        context=with_requested_label(body.context, body.requested_by_agent),
         task_ids=body.task_ids,
     )
     return _to_response(approval)
@@ -361,10 +363,7 @@ async def approve(
             decider_id=_user_uuid(current_user),
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
     return _to_response(approval)
 
 
@@ -396,10 +395,7 @@ async def reject(
             author_type=classify_author_type(current_user),
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
     return _to_response(approval)
 
 
@@ -431,10 +427,7 @@ async def request_revision(
             author_type=classify_author_type(current_user),
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
     return _to_response(approval)
 
 
@@ -464,10 +457,7 @@ async def resubmit(
             body.context,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
     return _to_response(approval)
 
 
@@ -505,10 +495,7 @@ async def add_comment(
             author_type=classify_author_type(current_user),
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     return ApprovalCommentResponse(
         id=str(comment.id),
         approval_id=str(comment.approval_id),
@@ -545,10 +532,7 @@ async def link_task(
             body.task_type,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     return TaskApprovalLinkResponse(
         id=str(link.id),
         approval_id=str(link.approval_id),
@@ -579,10 +563,7 @@ async def unlink_task(
     try:
         removed = await svc.unlink_task(approval_id, task_id)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     if not removed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

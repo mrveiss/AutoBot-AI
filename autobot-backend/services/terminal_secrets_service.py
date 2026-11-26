@@ -161,7 +161,7 @@ class TerminalSecretsService:
                     session_state.session_id,
                 )
             except Exception as e:
-                logger.error("Failed to prepare key '%s': %s", key_data["name"], e)
+                logger.error("Failed to prepare a session key: %s", type(e).__name__)
                 result["errors"].append(f"Failed to prepare key '{key_data['name']}'")
 
     async def setup_ssh_keys(
@@ -402,11 +402,11 @@ class TerminalSecretsService:
         key_info = self._find_key_by_name(session_state, key_name)
 
         if not key_info:
-            logger.warning("Key '%s' not found in session %s", key_name, session_id)
+            logger.warning("Key not found in session %s", session_id)
             return False
 
         if key_info.added_to_agent:
-            logger.debug("Key '%s' already added to agent", key_name)
+            logger.debug("Key already added to agent (session %s)", session_state.session_id)
             return True
 
         try:
@@ -435,10 +435,14 @@ class TerminalSecretsService:
 
             if result.returncode == 0:
                 key_info.added_to_agent = True
-                logger.info("Added key '%s' to ssh-agent", key_name)
+                logger.info("Added key to ssh-agent (session %s)", session_state.session_id)
                 return True
             else:
-                logger.error("Failed to add key '%s' to agent: %s", key_name, result.stderr)
+                logger.error(
+                    "Failed to add key to agent (session %s): ssh-add exit %s",
+                    session_state.session_id,
+                    result.returncode,
+                )
                 return False
 
         except Exception as e:

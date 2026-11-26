@@ -5,21 +5,21 @@
 """
 Concurrency guard tests for async global mutations (Issue #10786).
 
-These tests validate that the asyncio.Lock patterns used in:
-  - api/database_mcp.py  (query_counter under _rate_limit_lock)
-  - api/http_client_mcp.py (request_counter under _rate_limit_lock)
+These tests validate that the asyncio.Lock pattern used in:
   - api/monitoring.py (_alertmanager_cache under _alertmanager_cache_lock)
 
-…actually prevent lost updates under concurrent asyncio coroutines.
+actually prevents lost updates under concurrent asyncio coroutines.
 
-The modules themselves cannot be imported in the CI test environment
+The module itself cannot be imported in the CI test environment
 (transitive deps require a running Redis / compiled C extensions).
-Instead each test replicates the exact lock + counter / cache pattern
-verbatim, which is sufficient to prove the pattern is race-free.
+Instead the test replicates the exact lock + cache pattern verbatim, which is
+sufficient to prove the pattern is race-free.
 
-Pattern used in database_mcp.py / http_client_mcp.py:
-    async with _rate_limit_lock:
-        counter["count"] += 1
+The ``database_mcp`` / ``http_client_mcp`` rate-limit counters this file used
+to replicate no longer exist: they were folded into the canonical
+``autobot_shared.rate_limiter.RateLimiter`` (#18087), and their concurrency
+behaviour is pinned against the real implementation in
+``autobot_shared/rate_limiter_window_18087_test.py``.
 
 Pattern added to monitoring.py (Issue #10786):
     async with _alertmanager_cache_lock:
@@ -29,117 +29,6 @@ Pattern added to monitoring.py (Issue #10786):
 import asyncio
 import time
 from typing import Any, Dict
-
-# ---------------------------------------------------------------------------
-# Helpers: replicate the exact module-level patterns
-# ---------------------------------------------------------------------------
-
-
-def _make_counter(limit: int) -> tuple[dict, asyncio.Lock]:
-    """Return (counter_dict, lock) as used in database_mcp / http_client_mcp."""
-    counter: Dict[str, Any] = {"count": 0, "reset_time": time.monotonic()}
-    lock = asyncio.Lock()
-    return counter, lock
-
-
-async def _check_rate_limit(counter: dict, lock: asyncio.Lock, limit: int) -> bool:
-    """Exact replica of check_rate_limit() from database_mcp / http_client_mcp."""
-    async with lock:
-        now = time.monotonic()
-        elapsed = now - counter["reset_time"]
-        if elapsed >= 60:
-            counter["count"] = 0
-            counter["reset_time"] = now
-        if counter["count"] >= limit:
-            return False
-        counter["count"] += 1
-        return True
-
-
-# ---------------------------------------------------------------------------
-# database_mcp: query_counter concurrency test
-# ---------------------------------------------------------------------------
-
-
-async def test_database_mcp_counter_no_lost_updates() -> None:
-    """
-    Concurrent calls to check_rate_limit (database_mcp pattern) must produce
-    an exact count — no lost updates, no double-increments.
-
-    We call N times concurrently (N < MAX_QUERIES_PER_MINUTE=60) and assert
-    counter["count"] == N afterwards.
-    """
-    N = 40  # well below MAX_QUERIES_PER_MINUTE=60
-    limit = 60
-    counter, lock = _make_counter(limit)
-
-    results = await asyncio.gather(*[_check_rate_limit(counter, lock, limit) for _ in range(N)])
-
-    assert all(results), "All calls should be allowed (N < limit)"
-    assert counter["count"] == N, (
-        f"Expected counter['count'] == {N}, got {counter['count']}. "
-        "Lost updates indicate the lock is not guarding the RMW correctly."
-    )
-
-
-async def test_database_mcp_counter_enforces_limit() -> None:
-    """
-    After MAX_QUERIES_PER_MINUTE concurrent calls, further calls must be rejected.
-    """
-    limit = 60
-    counter, lock = _make_counter(limit)
-
-    # Fill up to the limit exactly
-    first_batch = await asyncio.gather(*[_check_rate_limit(counter, lock, limit) for _ in range(limit)])
-    assert all(first_batch), "First batch (==limit) should all be allowed"
-    assert counter["count"] == limit
-
-    # One more should be rejected
-    over = await _check_rate_limit(counter, lock, limit)
-    assert not over, "Call beyond limit should be rejected"
-    assert counter["count"] == limit, "Rejected call must not increment the counter"
-
-
-# ---------------------------------------------------------------------------
-# http_client_mcp: request_counter concurrency test
-# ---------------------------------------------------------------------------
-
-
-async def test_http_client_mcp_counter_no_lost_updates() -> None:
-    """
-    Concurrent calls to check_rate_limit (http_client_mcp pattern) must
-    produce an exact count — no lost updates.
-
-    N < MAX_REQUESTS_PER_MINUTE=120.
-    """
-    N = 80  # well below MAX_REQUESTS_PER_MINUTE=120
-    limit = 120
-    counter, lock = _make_counter(limit)
-
-    results = await asyncio.gather(*[_check_rate_limit(counter, lock, limit) for _ in range(N)])
-
-    assert all(results), "All calls should be allowed (N < limit)"
-    assert counter["count"] == N, (
-        f"Expected counter['count'] == {N}, got {counter['count']}. "
-        "Lost updates indicate the lock is not guarding the RMW correctly."
-    )
-
-
-async def test_http_client_mcp_counter_enforces_limit() -> None:
-    """
-    After MAX_REQUESTS_PER_MINUTE concurrent calls, further calls must be rejected.
-    """
-    limit = 120
-    counter, lock = _make_counter(limit)
-
-    first_batch = await asyncio.gather(*[_check_rate_limit(counter, lock, limit) for _ in range(limit)])
-    assert all(first_batch), "First batch (==limit) should all be allowed"
-    assert counter["count"] == limit
-
-    over = await _check_rate_limit(counter, lock, limit)
-    assert not over, "Call beyond limit should be rejected"
-    assert counter["count"] == limit, "Rejected call must not increment the counter"
-
 
 # ---------------------------------------------------------------------------
 # monitoring.py: _alertmanager_cache concurrency test (Issue #10786 fix)

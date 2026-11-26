@@ -40,6 +40,7 @@ def _post_execution_service(interpret) -> AgentTerminalService:
     service.approval_handler = AsyncMock()
     service.session_manager = AsyncMock()
     service.chat_workflow_manager = MagicMock()
+    service.chat_workflow_manager._get_last_user_message = AsyncMock(return_value="the question")
     service.chat_workflow_manager.interpret_terminal_command = interpret
     return service
 

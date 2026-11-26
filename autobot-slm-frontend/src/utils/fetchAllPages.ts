@@ -11,6 +11,8 @@
  * caller of the node list goes through.
  */
 
+import { errorText } from './errorText'
+
 /** The backend's per-page ceiling for node listing (`le=100`): the largest single request allowed. */
 export const MAX_PAGE_SIZE = 100
 
@@ -33,7 +35,7 @@ export class PartialListError<T> extends Error {
   readonly reason: string
 
   constructor(items: T[], total: number | null, cause: unknown) {
-    const reason = cause instanceof Error ? cause.message : String(cause)
+    const reason = errorText(cause)
     super(`Loaded ${items.length} of ${total ?? 'an unknown number'}: ${reason}`)
     this.name = 'PartialListError'
     this.items = items

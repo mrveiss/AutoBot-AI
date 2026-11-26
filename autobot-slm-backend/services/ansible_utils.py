@@ -12,6 +12,7 @@ import shutil
 from pathlib import Path
 
 from autobot_shared.env_utils import env_int
+from autobot_shared.regex_whitespace import HSPACE, NOT_WS, WS
 from autobot_shared.ssot_config import config
 from services.ansible_extra_vars import port_vars
 from services.process_group import kill_process_group
@@ -55,7 +56,12 @@ _NO_HOSTS_MARKERS = (
 
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
-_RECAP_LINE_RE = re.compile(r"^\s*(\S+)\s*:\s*ok=(\d+)\s+changed=\d+\s+unreachable=(\d+)\s+failed=(\d+)", re.MULTILINE)
+# #21987: leading indent is horizontal only. ``^\s*`` also ate newlines, so a run of blank lines was rescanned
+# from every line start (quadratic); a recap line after blank lines still matches at its own line start.
+_RECAP_LINE_RE = re.compile(
+    rf"^{HSPACE}*({NOT_WS}+){WS}*:{WS}*ok=(\d+){WS}+changed=\d+{WS}+unreachable=(\d+){WS}+failed=(\d+)",
+    re.MULTILINE,
+)
 
 
 def ansible_config_env(ansible_dir) -> dict:

@@ -42,7 +42,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.user_management.models.user import resolve_display_name
-from llc.deps import assert_company_access, get_session, log_unexpected, service_dep
+from llc.deps import SESSION_DEP, assert_company_access, log_unexpected, service_dep
 from models.agent_org import AgentOrgNode
 from security.upload_filename_policy import require_safe_upload
 from user_management.models.user import User
@@ -73,6 +73,7 @@ from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
 from ._common import moving_as, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
+from ._named_agent import require_may_act_as, require_member_targets
 from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
@@ -369,13 +370,14 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
 @router.post("", status_code=201)
 async def create_work_item(
     body: WorkItemCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     # Tenant guard (#14168): reject cross-tenant creation before touching the DB —
     # body.company_id is client-controlled and must match the caller's authenticated org.
     assert_company_access(ctx, body.company_id)
+    await require_member_targets(session, body.company_id, body.assignee_user_id, body.assignee_agent_id)
     try:
         item = await _service().create(
             session,
@@ -424,16 +426,12 @@ async def list_work_items(
     label_ids: Optional[List[str]] = Query(None),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
-    # Tenant guard (#14168): the ``company_id`` query param is client-controlled;
-    # require_org_context already membership-checks it when it is the sole org
-    # source, but a caller can still supply a different, still-valid
-    # ``X-Organization-Id`` header alongside a foreign ``company_id`` query
-    # value (header wins in get_tenant_context's precedence). Reject any
-    # mismatch explicitly rather than relying on precedence order.
+    # Tenant guard (#14168): the client-controlled ``company_id`` query param may differ from a still-valid
+    # ``X-Organization-Id`` header (header wins in get_tenant_context): reject any mismatch explicitly.
     assert_company_access(ctx, company_id)
     items = await _service().list_by_project(
         session,
@@ -459,7 +457,7 @@ async def list_work_items(
 @router.get("/{work_item_id}")
 async def get_work_item(
     work_item_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -473,7 +471,7 @@ async def get_work_item(
 async def update_work_item(
     work_item_id: str,
     body: WorkItemUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -482,6 +480,7 @@ async def update_work_item(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
+    await require_member_targets(session, existing.company_id, body.assignee_user_id, body.assignee_agent_id)
     try:
         item = await _service().update(session, work_item_id, **fields)
     except ValueError as exc:  # hierarchy breach -> 422; else 400, e.g. unknown approval category (GH#11206)
@@ -495,7 +494,7 @@ async def update_work_item(
 @router.delete("/{work_item_id}", status_code=204)
 async def delete_work_item(
     work_item_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -524,7 +523,7 @@ async def _drop_kb_collection(work_item_id: str) -> None:
 async def checkout_work_item(
     work_item_id: str,
     body: CheckoutRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -532,6 +531,7 @@ async def checkout_work_item(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_may_act_as(session, ctx, existing, body.agent_id)
     try:
         item = await _service().checkout(
             session,
@@ -543,11 +543,7 @@ async def checkout_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        # #12740 (same defect class, found alongside): the status code was
-        # already correct, but the useful reason ("Work item X already checked
-        # out by agent Y") was still replaced with a generic string, so a caller
-        # could not tell WHO holds the checkout. Domain-level message, safe to
-        # surface.
+        # #12740: the reason ("Work item X already checked out by agent Y") is domain-level and safe to surface.
         logger.info("Rejected work-item checkout conflict: %s", safe_log_text(repr(exc)))
         raise http_refusal(409, exc, scope="work_items.checkout_work_item") from None
     except ValueError as exc:
@@ -558,16 +554,17 @@ async def checkout_work_item(
 async def release_work_item(
     work_item_id: str,
     body: ReleaseRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
-    """Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
-    person is refused (409). Not enforced: that the caller IS that agent (open, #20521)."""
+    """Enforced: ``agent_id`` is an agent UUID of this company named by its owner or admin (403 otherwise, #20521),
+    equal to the stored assignee when there is one; an item held by a person is refused (409)."""
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_may_act_as(session, ctx, existing, body.agent_id)
     try:
         item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id, run_id=body.run_id)
         await session.commit()
@@ -582,7 +579,7 @@ async def release_work_item(
 async def transition_work_item(
     work_item_id: str,
     body: TransitionRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -606,7 +603,7 @@ async def transition_work_item(
 async def link_pr(
     work_item_id: str,
     body: LinkPrRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -643,7 +640,7 @@ async def link_pr(
 async def claim_work_item(
     work_item_id: str,
     body: HumanClaimRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -672,7 +669,7 @@ async def claim_work_item(
 async def unclaim_work_item(
     work_item_id: str,
     body: HumanUnclaimRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -697,7 +694,7 @@ async def unclaim_work_item(
 async def set_coworker(
     work_item_id: str,
     body: CoworkerRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -730,6 +727,7 @@ async def set_coworker(
     try:
         caller_role = await resolve_actor_role(session, actor_id, company_id)
         if body.co_worker_type:
+            await require_member_targets(session, company_id, body.co_worker_user_id, body.co_worker_agent_id)
             item = await _service().enable_coworking(
                 session,
                 work_item_id=work_item_id,
@@ -765,7 +763,7 @@ async def set_coworker(
 async def add_comment(
     work_item_id: str,
     body: CommentCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -790,7 +788,7 @@ async def add_comment(
 async def handoff_to_agent(
     work_item_id: str,
     body: HandoffToAgentRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -799,6 +797,7 @@ async def handoff_to_agent(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_member_targets(session, existing.company_id, None, body.target_agent_id)
     atts = [
         HandoffAttachment(
             attachment_id=a.attachment_id,
@@ -841,7 +840,7 @@ async def handoff_to_agent(
 async def handoff_to_human(
     work_item_id: str,
     body: HandoffToHumanRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -869,7 +868,7 @@ async def handoff_to_human(
 @router.post("/{work_item_id}/review/approve")
 async def review_approve(
     work_item_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -899,7 +898,7 @@ async def review_approve(
 async def review_request_changes(
     work_item_id: str,
     body: ReviewChangesRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -908,6 +907,7 @@ async def review_request_changes(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_member_targets(session, existing.company_id, None, body.return_to_agent_id)
     try:
         item = await _handoff_service().request_changes(
             session,
@@ -928,7 +928,7 @@ async def review_request_changes(
 @router.get("/{work_item_id}/handoff-brief")
 async def get_handoff_brief(
     work_item_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -948,7 +948,7 @@ async def list_work_products(
     work_item_id: str,
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -987,7 +987,7 @@ async def list_work_item_activity(
     work_item_id: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ActivityLogResponse:
@@ -1064,7 +1064,7 @@ class SuggestAcResponse(BaseModel):
 @router.post("/suggest-ac", response_model=SuggestAcResponse)
 async def suggest_acceptance_criteria(
     body: SuggestAcRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> SuggestAcResponse:
@@ -1133,7 +1133,7 @@ async def upload_attachment(
     work_item_id: str,
     company_id: str = Query(...),
     file: UploadFile = File(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -1162,7 +1162,7 @@ async def upload_attachment(
 async def list_attachments(
     work_item_id: str,
     company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -1179,7 +1179,7 @@ async def download_attachment(
     work_item_id: str,
     attachment_id: str,
     company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Response:
@@ -1208,7 +1208,7 @@ async def get_attachment_text(
     work_item_id: str,
     attachment_id: str,
     company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -1234,7 +1234,7 @@ async def delete_attachment(
     work_item_id: str,
     attachment_id: str,
     company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

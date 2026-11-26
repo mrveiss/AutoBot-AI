@@ -41,4 +41,18 @@ def resolve_principal_id(current_user: Optional[Dict[str, Any]]) -> Optional[str
     return None
 
 
-__all__ = ["resolve_principal_id"]
+def require_principal_id(current_user: Optional[Dict[str, Any]]) -> str:
+    """Return the principal's owner id, or raise a 401 when it has no user identity.
+
+    For user-facing routes that scope data by owner: an identity-less caller must
+    never fall back to a shared scope such as ``""`` or ``None`` (#21655).
+    """
+    owner = resolve_principal_id(current_user)
+    if not owner:
+        from fastapi import HTTPException  # lazy: keep this module import-free (see the module docstring)
+
+        raise HTTPException(status_code=401, detail="User identity required")
+    return owner
+
+
+__all__ = ["require_principal_id", "resolve_principal_id"]

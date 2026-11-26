@@ -28,6 +28,8 @@ _ROUTES = [
     ("GET", "/knowledge/chroma/collections/docs", None),
     ("GET", "/knowledge/chroma/collections/docs/documents", None),
     ("POST", "/knowledge/chroma/collections/docs/search", {"query": "q"}),
+    ("GET", "/knowledge/chroma/empty-collections", None),
+    ("POST", "/knowledge/chroma/empty-collections/cleanup-requests", {"collection": "docs"}),
 ]
 
 
@@ -50,11 +52,40 @@ def test_a_non_admin_is_refused_on_every_explorer_route(method, path, body):
     assert response.status_code == 403
 
 
+def _served_explorer_routes() -> list:
+    """The routes as the app serves them, with included routers' dependencies merged in.
+
+    Newer FastAPI keeps an ``_IncludedRouter`` entry (no ``dependant``) in ``app.routes`` and builds each
+    route's effective dependant lazily; ``iter_route_contexts`` yields those. Older FastAPI flattens into
+    ``APIRoute`` entries directly.
+    """
+    from fastapi.routing import APIRoute
+
+    from api import knowledge_chroma
+
+    app = FastAPI()
+    app.include_router(knowledge_chroma.router)
+    try:
+        from fastapi.routing import iter_route_contexts
+
+        candidates = list(iter_route_contexts(app.routes))
+    except ImportError:
+        candidates = [route for route in app.routes if isinstance(route, APIRoute)]
+    return [
+        route
+        for route in candidates
+        if isinstance(getattr(route, "original_route", route), APIRoute) and route.path.startswith("/knowledge/chroma")
+    ]
+
+
 def test_every_explorer_route_carries_the_admin_gate():
     """A route left on a sign-in-only gate would be missing from the admin gate's dependants."""
     from api import knowledge_chroma
 
-    for route in knowledge_chroma.router.routes:
+    routes = _served_explorer_routes()
+    paths = {route.path for route in routes}
+    assert "/knowledge/chroma/empty-collections" in paths, "the empty-collections routes must be served"
+    for route in routes:
         calls = {dependency.call for dependency in route.dependant.dependencies}
         assert knowledge_chroma.check_admin_permission in calls, route.path
 

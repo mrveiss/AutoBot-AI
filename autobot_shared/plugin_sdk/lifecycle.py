@@ -4,18 +4,21 @@
 # Author: mrveiss
 """Host-side reversal of what a plugin registered (#19302).
 
-The host removes a plugin's hooks and capability grants itself on unload, so
-cleanup never depends on the plugin's own ``shutdown()``. Tools are not yet
-tracked per plugin; see #19302.
+The host removes a plugin's hooks, tools and capability grants itself on
+unload, so cleanup never depends on the plugin's own ``shutdown()``. Tools are
+attributed to the plugin that registered them by ``registering_for_plugin``.
 """
 
 import importlib
 import logging
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
-from .base import BasePlugin, PluginStatus
+from autobot_shared.plugin_attribution import registering_for_plugin
+from autobot_shared.tool_sdk.registry import get_tool_registry
+
+from .base import BasePlugin, PluginRegistry, PluginStatus
 from .capabilities import CapabilityChecker
 from .hooks import HookRegistry
 
@@ -26,9 +29,45 @@ logger = logging.getLogger(__name__)
 
 
 def reverse_registrations(plugin_name: str) -> None:
-    """Remove every hook and capability grant recorded against *plugin_name*."""
+    """Remove every hook, tool and capability grant recorded against *plugin_name*."""
     HookRegistry().unregister_plugin(plugin_name)
+    get_tool_registry().unregister_plugin(plugin_name)
     CapabilityChecker().revoke_capabilities(plugin_name)
+
+
+def rollback_failed_load(
+    plugins: "PluginRegistry", unified: Callable[[], Any], name: str, registered: bool, manifest_registered: bool
+) -> None:
+    """Leave nothing half-registered after a failed load; never raises (#19302).
+
+    Skipped when a live plugin of that name exists that this attempt did not register. The unified manifest
+    registry is touched only when this attempt registered the manifest.
+    """
+    if not (registered or not plugins.get_plugin(name)):
+        return
+    try:
+        reverse_registrations(name)  # what a raising initialize() registered
+    except Exception:  # noqa: BLE001 -- the registries below must still be cleared
+        logger.error("Could not reverse the registrations of failed plugin %s", name, exc_info=True)
+    if registered:
+        plugins.unregister(name)
+    if manifest_registered:
+        try:
+            unified().unregister(name)
+        except Exception:  # noqa: BLE001 -- a failing cleanup must not turn a failed load into a raise
+            logger.error("Could not remove manifest %s from the unified registry", name, exc_info=True)
+
+
+async def initialize_attributed(plugin: BasePlugin) -> None:
+    """Run ``plugin.initialize()`` with its tool registrations attributed to the plugin (#19302)."""
+    with registering_for_plugin(plugin.manifest.name):
+        await plugin.initialize()
+
+
+async def enable_attributed(plugin: BasePlugin) -> None:
+    """Run ``plugin.enable()`` with the tools it registers attributed to the plugin (#19302)."""
+    with registering_for_plugin(plugin.manifest.name):
+        await plugin.enable()
 
 
 def _own_modules(entry_point: str) -> list[str]:
@@ -72,5 +111,5 @@ async def reload_with_fresh_code(loader: "PluginLoader", plugin: BasePlugin) -> 
     if grants:
         CapabilityChecker().grant_capabilities(manifest.name, grants)
     if was_enabled:
-        await reloaded.enable()
+        await enable_attributed(reloaded)
     return True

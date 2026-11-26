@@ -60,7 +60,7 @@ async def test_an_unreadable_vault_row_is_refused_even_with_env_present(monkeypa
         with pytest.raises(pkv.VaultKeyUnavailableError):
             pkv.resolve_image_provider_key(_NAME)
     assert "vault unavailable" in str(exc.value) and _NAME in str(exc.value)
-    assert "vault unreadable: refusing" in caplog.text
+    assert "vault unreadable: refusing" in caplog.text and _NAME not in caplog.text
     assert "vault has no key" not in caplog.text
     assert _ENV_VALUE not in caplog.text and _ENV_VALUE not in str(exc.value)
 
@@ -110,7 +110,7 @@ def test_registration_refusal_contains_only_the_refusal(caplog) -> None:
     with caplog.at_level(logging.ERROR):
         with pkv.registration_refusal("Flux provider"):
             pkv.resolve_provider_key(_NAME, _ENV_VALUE)
-    assert "Flux provider not registered -- vault unavailable" in caplog.text
+    assert "Flux provider not registered" in caplog.text and _NAME not in caplog.text
     with pytest.raises(ValueError):
         with pkv.registration_refusal("other"):
             raise ValueError("not a refusal")

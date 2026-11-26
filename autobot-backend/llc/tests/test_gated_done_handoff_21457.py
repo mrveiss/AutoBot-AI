@@ -54,6 +54,7 @@ def _real_handoff() -> HandoffService:
     svc._publish_a2h_notification = AsyncMock()
     svc._generate_and_update_brief_async = AsyncMock()
     svc._generate_brief = MagicMock(return_value={})
+    svc._assert_reviewer_holds_role = AsyncMock()  # the policy role has its own tests (#21588)
     return svc
 
 

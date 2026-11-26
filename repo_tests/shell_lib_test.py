@@ -26,9 +26,9 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
 
 import pytest
+from repo_tests._hang_guard import run_guarded
 
 from autobot_shared.paths import project_root
 from tools.lint._scan_helpers import tracked_paths
@@ -57,15 +57,10 @@ def test_shell_suite_passes(suite: str) -> None:
     script = project_root() / suite
     assert script.exists(), f"missing shell suite: {suite}"
 
-    result = subprocess.run(
-        [bash, str(script)],
-        capture_output=True,
-        text=True,
-        # The hook suite runs ~65 cases, each spawning bash, jq and python3. The
-        # preflight suite runs the preflight once per case, each scoped by --only.
-        timeout=300,
-        cwd=str(project_root()),
-    )
+    # The hook suite runs ~65 cases, each spawning bash, jq and python3; the preflight suite runs
+    # the preflight once per case. Both are CPU-bound, so the hang guard watches CPU progress
+    # rather than a wall-clock budget that a loaded host overruns (#21862).
+    result = run_guarded([bash, str(script)], cwd=str(project_root()))
 
     assert result.returncode == 0, (
         f"{suite} failed (exit {result.returncode})\n"

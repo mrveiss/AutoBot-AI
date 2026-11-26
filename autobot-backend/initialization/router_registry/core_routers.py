@@ -29,6 +29,7 @@ from api.admin_ownerless_chat_sessions import router as admin_ownerless_chat_ses
 from api.admin_person_links import router as admin_person_links_router  # #10200
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
+from api.admin_secret_duplicates import router as admin_secret_duplicates_router  # #17850
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
 from api.agent_org import router as agent_org_router  # #1405
@@ -548,6 +549,7 @@ def _get_credential_admin_routers() -> list:
         (admin_org_tier_column_router, "", ["admin", "org-tier-column"], "admin_org_tier_column"),
         (internal_slm_credential_proposals_router, "", ["internal", "slm"], "internal_slm_credential_proposals"),
         (admin_cleanup_proposals_router, "", ["admin", "cleanup-proposals"], "admin_cleanup_proposals"),
+        (admin_secret_duplicates_router, "", ["admin", "secret-duplicates"], "admin_secret_duplicates"),  # #17850
         (
             admin_ownerless_chat_sessions_router,
             "",

@@ -18,8 +18,8 @@ from agents.kb_librarian_agent import KBLibrarianAgent
 from api import agent_diary, kb_librarian, knowledge_suggestions
 from auth_middleware import get_current_user
 from knowledge.ownership import KnowledgeOwnership
-from knowledge.read_path_fakes_16665 import PRIVATE_A, RESEARCH, FakeKB, QuarantineGatedKB, all_facts, quarantined_fact
 from knowledge.suggestions import SuggestionsMixin
+from testkit.read_path_fakes_16665 import PRIVATE_A, RESEARCH, FakeKB, QuarantineGatedKB, all_facts, quarantined_fact
 
 ALICE, BOB, NOBODY = {"user_id": "alice"}, {"user_id": "bob"}, {"role": "user"}
 ADMIN = {"user_id": "root", "role": "admin"}
@@ -115,11 +115,15 @@ def test_suggestions_deny_a_caller_with_no_user_id(route, body):
     assert _suggest(route, NOBODY, body).status_code == 401
 
 
-def _librarian(user):
+def _librarian(user, kb=None):
     agent = object.__new__(KBLibrarianAgent)
-    agent.knowledge_base, agent.enabled = FakeKB(), True
+    agent.knowledge_base, agent.enabled = kb or FakeKB(), True
     agent.max_results, agent.similarity_threshold, agent.auto_summarize = 5, 0.0, False
-    with patch.object(kb_librarian, "get_kb_librarian", return_value=agent):
+    # An admin's read is the audited admin read (#19860); it is withheld when the audit cannot record it.
+    with (
+        patch.object(kb_librarian, "get_kb_librarian", return_value=agent),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
+    ):
         return _client(kb_librarian.router, user).post("/query", json={"query": "anything"})
 
 
@@ -129,6 +133,23 @@ def test_librarian_route_never_returns_another_users_private_fact():
     assert for_bob.status_code == 200 and PRIVATE_A not in for_bob.text
     assert PRIVATE_A in for_alice.text
     assert _librarian(NOBODY).status_code == 401
+
+
+@pytest.mark.parametrize("user", [ALICE, BOB, ADMIN])
+def test_librarian_query_route_never_returns_a_quarantined_research_fact(user):
+    """/query through the real router and agent, over a KB that holds a quarantined fact (#16665 AC3)."""
+    response = _librarian(user, QuarantineGatedKB())
+
+    assert response.status_code == 200 and RESEARCH not in response.text
+    assert "platform wide fact" in response.text  # the route did answer, so the absence is the gate's
+
+
+def test_the_librarian_quarantine_test_is_sensitive_to_a_leak():
+    class _Leaky(FakeKB):
+        async def search(self, *args, **kwargs):
+            return [quarantined_fact()]
+
+    assert RESEARCH in _librarian(ALICE, _Leaky()).text
 
 
 @pytest.mark.parametrize("route", ["/agent_a/entries", "/agent_a/search?q=x", "/summary"])

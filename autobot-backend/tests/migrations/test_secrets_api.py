@@ -262,10 +262,10 @@ async def service_client(fresh_db_url):
     await engine.dispose()
 
 
-async def _svc_create(client, vault="system", value="fleet-secret"):
+async def _svc_create(client, vault="system", value="fleet-secret", name="fleet-sso"):
     return await client.post(
         f"{_P}/system",
-        json={"owner_vault": vault, "name": "fleet-sso", "secret_type": "token", "value": value},
+        json={"owner_vault": vault, "name": name, "secret_type": "token", "value": value},
     )
 
 
@@ -279,8 +279,9 @@ async def test_service_create_and_read_system_vault(service_client):
 
 
 async def test_service_list_system_vault(service_client):
-    await _svc_create(service_client, value="s1")
-    await _svc_create(service_client, value="s2")
+    # (owner_vault, name) is unique (#17850): two secrets in one vault need two names.
+    await _svc_create(service_client, value="s1", name="fleet-sso-1")
+    await _svc_create(service_client, value="s2", name="fleet-sso-2")
     lst = await service_client.get(f"{_P}/system")
     assert lst.status_code == 200
     assert len(lst.json()) >= 2

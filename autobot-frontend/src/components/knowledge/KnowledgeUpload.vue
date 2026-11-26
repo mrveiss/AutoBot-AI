@@ -598,7 +598,7 @@ async function addTextEntry(): Promise<void> {
     await controller.addTextDocument(
       textEntry.content,
       textEntry.title,
-      textEntry.category || 'General',
+      textEntry.category, // the controller applies DEFAULT_FACT_CATEGORY (#21921)
       tags,
       {
         access_level: textEntry.accessLevel,

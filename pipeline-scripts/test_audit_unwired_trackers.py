@@ -277,7 +277,7 @@ def test_fetch_closed_tracker_set_invalid_json() -> None:
 
 
 # ---------------------------------------------------------------------------
-# existing_audit_issues_by_tracker — title-prefix dedup
+# existing_audit_issue_keys — title-prefix dedup
 # ---------------------------------------------------------------------------
 
 
@@ -301,14 +301,14 @@ def test_existing_audit_issues_extracts_tracker_numbers() -> None:
         stderr="",
     )
     with patch.object(audit.subprocess, "run", return_value=fake_run):
-        assert audit.existing_audit_issues_by_tracker() == {1234, 5678}
+        assert audit.existing_audit_issue_keys() == {("foo", 1234), ("bar", 5678)}
 
 
 def test_existing_audit_issues_gh_failure() -> None:
     """gh failures must raise: an empty set would make --file-issues file duplicates (#21582)."""
     with patch.object(audit.subprocess, "run", side_effect=FileNotFoundError("gh")):
         with pytest.raises(audit.TrackerLookupError):
-            audit.existing_audit_issues_by_tracker()
+            audit.existing_audit_issue_keys()
 
 
 # ---------------------------------------------------------------------------
@@ -578,7 +578,7 @@ def test_main_file_issues_caps_dedupes_and_keeps_stdout_order(capsys: pytest.Cap
 
     with (
         patch.object(audit, "scan", return_value=findings),
-        patch.object(audit, "existing_audit_issues_by_tracker", return_value={1}),
+        patch.object(audit, "existing_audit_issue_keys", return_value={("autobot-backend/m1.py", 1)}),
         patch.object(audit, "file_discovery_issue", side_effect=fake_file),
         patch.object(sys, "argv", ["audit", "--file-issues", "--json", "--max-issues", "2"]),
     ):

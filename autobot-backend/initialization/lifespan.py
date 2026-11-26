@@ -20,6 +20,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from autobot_shared.env_drift_detector import raise_if_refused
 from autobot_shared.env_utils import env_raw, truthy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
@@ -254,24 +255,17 @@ async def _init_chat_workflow_manager(app: FastAPI) -> None:
 async def _check_env_drift() -> None:
     """Run .env drift check against SSOT config definitions (Issue #2650).
 
-    Non-critical: a failed or drifted check is logged as a warning and never
-    prevents startup.  This runs before other init steps so operators see drift
-    warnings at the very top of the startup log.
+    Non-critical: a failed or drifted check only warns, except unknown keys once
+    the refuse date has passed (#17419), raised after the try so the broad
+    ``except`` cannot swallow it.  Runs first so drift shows at the top of the log.
     """
+    report = None
     try:
         from autobot_shared.env_drift_detector import check_env_drift
 
-        # #12782: pass this backend's OWN .env rather than letting the detector
-        # guess. Its generic resolver walks up from autobot_shared/ looking for
-        # a sibling .env, which works in the repo but not in the deployed
-        # layout: autobot_shared lives at <root>/autobot_shared while the env
-        # lives at <root>/autobot-backend/.env. The walk found nothing, fell
-        # back to <root>/.env (absent), and reported every SSOT key as drifted —
-        # "194 drifted, (194 SSOT keys, 0 .env keys)" against a file that in
-        # fact held 93 keys. The `0 .env keys` was the tell.
-        #
-        # parents[1] is the backend root in BOTH layouts, since this module is
-        # always <backend-root>/initialization/lifespan.py.
+        # #12782: pass this backend's OWN .env; the detector's walk-up guess misses it in the
+        # deployed layout (<root>/autobot-backend/.env) and reports every SSOT key drifted.
+        # parents[1] is the backend root in BOTH layouts (<backend-root>/initialization/lifespan.py).
         backend_env = Path(__file__).resolve().parents[1] / ".env"
         report = check_env_drift(str(backend_env))
         if report.error:
@@ -288,6 +282,8 @@ async def _check_env_drift() -> None:
             )
     except Exception as exc:
         logger.warning("env drift check failed (non-critical): %s", exc)
+    if report is not None:
+        raise_if_refused(report)
 
 
 async def _init_config(app: FastAPI) -> None:
@@ -1919,19 +1915,17 @@ async def _init_plugin_manager(app: FastAPI) -> None:
     Non-critical: failures are logged and do not block startup.
     """
     try:
-        from autobot_shared.plugin_sdk import PluginManager
-        from plugin_paths import plugin_search_dirs, trusted_plugin_roots
-        from services.provider_key_vault import plugin_credential_resolvers
+        from plugin_enable_gate import build_plugin_manager, start_plugin_manager
 
-        # #18094: the instance that actually runs the plugins gets the origin-bound resolvers too.
-        plugin_manager = PluginManager(plugin_search_dirs(), plugin_credential_resolvers(), trusted_plugin_roots())
+        # #18094 origin-bound resolvers and #17421 the enable gate are wired in by the builder.
+        plugin_manager = build_plugin_manager()
         # #13677: stored BEFORE startup. `completed=False` distinguishes exactly
         # one thing — a crashed discovery from an empty tree — and on a crash the
         # manager was discarded before it ever reached app.state, so the only
         # state that key exists to report was unobservable in production. A
         # signal nobody can read is the defect this whole issue is about.
         app.state.plugin_manager = plugin_manager
-        await plugin_manager.startup()
+        await start_plugin_manager(plugin_manager)  # #17421: a gate failure retries in the background
         # #13677: the load tally, not just per-plugin statuses. A status map
         # nobody totals is why 0-of-7 read the same as "no plugins installed".
         logger.info(

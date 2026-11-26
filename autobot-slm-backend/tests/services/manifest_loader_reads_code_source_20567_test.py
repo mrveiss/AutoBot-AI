@@ -15,6 +15,7 @@ description: {description}
 deploy:
   source: autobot-example/
   destination: /srv/example/
+  sync: false
 """
 
 

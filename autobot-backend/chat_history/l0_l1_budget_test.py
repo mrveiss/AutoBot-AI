@@ -17,13 +17,19 @@ from unittest.mock import patch
 import pytest
 
 from chat_history.layers import TieredContextBuilder
-from context_window_manager import get_context_window_manager
+from context_window_manager import ContextWindowManager, get_context_window_manager
 
 CHARS_PER_TOKEN = 4
 
 
 def _text(tokens: int, ch: str = "x") -> str:
     return ch * (tokens * CHARS_PER_TOKEN)
+
+
+@pytest.fixture(autouse=True)
+def declared_window(monkeypatch):
+    """Pin the declared window above the sent 8,192: the host's default model must not decide these tests."""
+    monkeypatch.setattr(ContextWindowManager, "get_adaptive_context_length", lambda self, model_name=None: 32768)
 
 
 @pytest.fixture
@@ -192,3 +198,27 @@ class TestNoSecondBudgetingConcept:
         allocate.assert_called_once()
         names = [sec.name for sec in allocate.call_args.args[0]]
         assert names == ["identity", "essential_story"]
+
+
+class TestBudgetAtTheSentWindow:
+    """#22016: the budget is measured against the 8,192 window the chat request sends, not the declared 32,768."""
+
+    @pytest.mark.asyncio
+    async def test_l0_l1_still_fit_their_targets_at_8192(self, builder, monkeypatch):
+        from autobot_shared import chat_model_context
+        from autobot_shared.ssot_constants import ModelConfig
+        from chat_workflow import prompt_window
+
+        model = "l0-l1-chat-model"
+        monkeypatch.setattr(chat_model_context, "_last_turn_model", model)
+        cwm = get_context_window_manager()
+        assert prompt_window.request_window_tokens(cwm, model) == ModelConfig.CHAT_NUM_CTX
+        l0_target, l1_target = await _targets()
+        ceiling = int(cwm.get_prompt_budget(model) * TieredContextBuilder._L0_L1_BUDGET_SHARE)
+        assert (
+            ceiling == 1206 and ceiling >= l0_target + l1_target
+        )  # was 7043 at the declared window; targets still bind
+
+        l0, l1 = await builder._fit_l0_l1(_text(5_000, "i"), _text(5_000, "s"), model)
+
+        assert cwm.estimate_tokens(l0) + cwm.estimate_tokens(l1) <= l0_target + l1_target

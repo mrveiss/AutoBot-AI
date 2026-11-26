@@ -47,11 +47,40 @@ _MIXIN_MODULES = {
     "metadata": "MetadataMixin",
     "relations": "RelationsMixin",
     "search": "SearchMixin",
+    "selected_delete": "SelectedFactsDeleteMixin",
     "stats": "StatsMixin",
     "suggestions": "SuggestionsMixin",
     "tags": "TagsMixin",
     "versioning": "VersioningMixin",
 }
+#: `knowledge.*` modules `_composed` imports that are real on purpose (not mixins).
+_REAL_IMPORTS = {"retrieval_invalidation"}
+
+
+def _knowledge_submodules_imported(source: str) -> set[str]:
+    """Names of `knowledge.X` modules imported at top level, in all three import forms."""
+    found: set[str] = set()
+    for node in parse_cache.parse(source).body:
+        if isinstance(node, ast.Import):
+            found |= {a.name.split(".")[1] for a in node.names if a.name.startswith("knowledge.")}
+        elif isinstance(node, ast.ImportFrom) and node.module == "knowledge":
+            found |= {a.name for a in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("knowledge."):
+            found.add(node.module.split(".")[1])
+    return found
+
+
+def test_every_composed_mixin_import_is_stubbed() -> None:
+    """A new knowledge submodule import in `_composed` must be stubbed here, or the real module is imported."""
+    imported = _knowledge_submodules_imported((repo_root() / COMPOSED).read_text(encoding="utf-8"))
+    assert imported - _REAL_IMPORTS - set(_MIXIN_MODULES) == set()
+
+
+@pytest.mark.parametrize("line", ["import knowledge.foo", "from knowledge import foo", "from knowledge.foo import Bar"])
+def test_the_import_detector_flags_every_import_form(line) -> None:
+    """Contrast: each injected form is named, so the guard above is not blind to it."""
+    source = (repo_root() / COMPOSED).read_text(encoding="utf-8") + f"\n{line}\n"
+    assert _knowledge_submodules_imported(source) - _REAL_IMPORTS - set(_MIXIN_MODULES) == {"foo"}
 
 
 async def _stub_write(self, *args, **kwargs) -> None:

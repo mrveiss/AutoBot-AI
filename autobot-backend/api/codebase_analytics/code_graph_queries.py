@@ -62,6 +62,19 @@ async def load_provenance(collection: Any) -> "GraphProvenance | None":
     return await load_graph_provenance(collection)
 
 
+async def provenance_root_dir() -> str | None:
+    """The full path of the tree the persistent code graph was built from (its provenance root), or None.
+
+    ``provenance_fields`` exposes only the directory's name; matching a registered source to the index
+    needs the whole path (#20945). None means no graph, or a graph built before provenance existed.
+    """
+    collection, _ = await open_graph({})
+    if collection is None:
+        return None
+    provenance = await load_provenance(collection)
+    return (provenance.root_dir or None) if provenance else None
+
+
 async def open_graph(extra: dict[str, Any]) -> tuple[Any, dict[str, Any] | None]:
     """The graph collection, or ``(None, not-indexed answer)`` when it is missing or empty.
 

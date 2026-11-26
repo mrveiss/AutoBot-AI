@@ -1115,7 +1115,7 @@
 - name: "SLM | Allow HTTPS"
   community.general.ufw:
     rule: allow
-    port: "443"
+    port: "{{ slm_nginx_tls_port }}"
     proto: tcp
     comment: "HTTPS - AutoBot SLM"
   when: _slm_ufw_check.rc == 0
@@ -1302,7 +1302,7 @@
       - "=== SLM Manager Deployment Complete ==="
       - "Backend: {{ slm_backend_host }}:{{ slm_backend_port }}"
       - "Frontend: {{ slm_frontend_dir }}/current -> {{ slm_frontend_dir }}/dist-<build id>"
-      - "Nginx: HTTPS on port 443"
+      - "Nginx: HTTPS on port {{ slm_nginx_tls_port }}"
       - "TLS cert: {{ slm_tls_cert }}"
       - "Logs: {{ slm_log_dir }}/"
   tags: ['slm', 'report']

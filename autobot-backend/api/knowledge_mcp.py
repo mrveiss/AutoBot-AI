@@ -44,7 +44,7 @@ from knowledge.schemas.mcp import (
     McpToolsResponse,
     McpVectorSimilarityResponse,
 )
-from knowledge.search_filters import caller_principal, filter_for_caller
+from knowledge.search_filters import caller_principal, filter_for_caller, filter_for_user_id, scoped_reader
 from knowledge.write_scope import add_document_as
 from knowledge_base import KnowledgeBase
 from services.kb_wipe_request import request_vector_flush
@@ -565,7 +565,7 @@ async def mcp_summarize_knowledge_topic(
         # Search for relevant documents
         # Issue #13009: exclude quarantined research facts (#12622).
         results = await kb.search(query=topic, top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
-        results = await filter_for_caller(results, kb, current_user)  # #16665
+        results = await filter_for_user_id(results, kb, scoped_reader(current_user))  # #16665 no bypass
 
         if not results:
             return {
@@ -680,7 +680,7 @@ async def mcp_langchain_qa_chain(
         # First get relevant documents
         # Issue #13009: exclude quarantined research facts (#12622).
         search_results = await kb.search(question, context_size, filters=RESEARCH_QUARANTINE_FILTER)
-        search_results = await filter_for_caller(search_results, kb, current_user)  # #16665
+        search_results = await filter_for_user_id(search_results, kb, scoped_reader(current_user))  # #16665 no bypass
 
         if not search_results:
             return {

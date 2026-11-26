@@ -27,8 +27,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from autobot_shared.http_refusal import http_refusal
-from llc.deps import assert_company_access
+from autobot_shared.http_refusal import fixed_refusal, http_refusal
+from llc.deps import SESSION_DEP, assert_company_access
 from llc.models.template import (
     LLCTemplateSearchResponse,
     TemplateCategory,
@@ -48,13 +48,12 @@ from llc.services.template import (
     TemplateSecretPlaceholderError,
     TemplateService,
 )
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 router = APIRouter(prefix="/templates", tags=["llc-templates"])
 
 
-def _get_service(session: AsyncSession = Depends(get_async_session)) -> TemplateService:
+def _get_service(session: AsyncSession = SESSION_DEP) -> TemplateService:
     """DI factory — injects TemplateService with session."""
     return TemplateService(session=session)
 
@@ -84,7 +83,7 @@ async def publish_template(
         await svc.session.commit()
         return result
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise fixed_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
 @router.get("/search", response_model=LLCTemplateSearchResponse)

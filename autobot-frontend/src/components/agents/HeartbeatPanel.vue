@@ -38,7 +38,7 @@
             </div>
             <div class="config-row">
               <span class="label">Reason</span>
-              <span class="value">{{ config.paused_reason || '—' }}</span>
+              <span class="value">{{ reasonLabel(config.paused_reason) }}</span>
             </div>
           </template>
           <div class="config-row">
@@ -123,7 +123,7 @@
           <tbody>
             <tr v-for="req in pendingWakeups" :key="req.id">
               <td>{{ req.priority }}</td>
-              <td>{{ req.reason || '—' }}</td>
+              <td>{{ reasonLabel(req.reason) }}</td>
               <td class="mono">{{ formatTime(req.created_at) }}</td>
             </tr>
           </tbody>
@@ -196,7 +196,9 @@ import { useExpansion } from '@/composables/useExpansion'
 import type { LiveEvent } from '@/services/LiveEventService'
 import { createDateFormatter } from '@/utils/formatHelpers'
 import { actorLabel } from '@/utils/displayName'
+import { MANUAL_PAUSE_BODY, MANUAL_WAKEUP_BODY, useHeartbeatReasons } from '@/composables/useHeartbeatReasons'
 const logger = createLogger('HeartbeatPanel')
+const { reasonLabel } = useHeartbeatReasons()
 const { subscribe, unsubscribe } = useEventBus()
 interface HeartbeatConfig {
   agent_id: string
@@ -395,10 +397,7 @@ async function queueWakeup(): Promise<void> {
   queueing.value = true
   error.value = null
   try {
-    await apiFetch(`/${agentId.value}/wakeup`, {
-      method: 'POST',
-      body: { priority: 0, reason: 'Manual wakeup from UI' },
-    })
+    await apiFetch(`/${agentId.value}/wakeup`, { method: 'POST', body: MANUAL_WAKEUP_BODY })
     const wakeupsRes = await apiFetch(`/${agentId.value}/wakeup`)
     pendingWakeups.value = wakeupsRes as WakeupRequest[]
   } catch (err) {
@@ -413,10 +412,7 @@ async function pauseAgent(): Promise<void> {
   pausing.value = true
   error.value = null
   try {
-    const updated = await apiFetch(`/${agentId.value}/pause`, {
-      method: 'POST',
-      body: { reason: 'Manual pause from UI' },
-    })
+    const updated = await apiFetch(`/${agentId.value}/pause`, { method: 'POST', body: MANUAL_PAUSE_BODY })
     config.value = updated as HeartbeatConfig
   } catch (err) {
     error.value = String(err)

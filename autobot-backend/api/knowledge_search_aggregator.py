@@ -42,7 +42,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 from knowledge.graph_limits import GRAPH_MAX_OFFSET
-from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER, is_quarantined_hash
 from knowledge.relations import relations_by_direction
 from knowledge.root_read import admin_read_audit
 from knowledge.search_filters import (
@@ -121,8 +121,8 @@ async def _related_fact_is_accessible(
     is_admin: bool,
 ) -> bool:
     """#16665: a related fact reached via the relation graph is filtered the
-    same as a direct search result -- a relation is not an access grant."""
-    if not related_fact:
+    same as a direct search result -- a relation is not an access grant; a quarantined one is withheld."""
+    if not related_fact or is_quarantined_hash(related_fact):
         return False
     filtered = await filter_search_results_by_permission(
         [{"id": related_fact.get("id"), "metadata": _decode_fact_metadata(related_fact)}],

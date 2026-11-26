@@ -138,3 +138,35 @@ register_env_var(
         range=(100, 60000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SECRET_DUPLICATE_MAX_GROUPS_PER_REQUEST",
+        type=int,
+        default=5,
+        description=(
+            "Most duplicated secret groups one POST /api/admin/secret-duplicates/requests verifies and proposes; "
+            "each copy is probed against its target in turn, so the request stays short. The response reports how "
+            "many groups remain; the admin calls again (services/secret_duplicate_proposals.py, #17850). "
+            "Raising it makes one request slower; lowering it means more calls."
+        ),
+        component="postgres",
+        range=(1, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SECRET_UNIQUE_LOCK_TIMEOUT_MS",
+        type=int,
+        default=5000,
+        description=(
+            "Milliseconds the ALTER TABLE that adds the secrets (owner_vault, name) uniqueness constraint waits for "
+            "its ACCESS EXCLUSIVE lock before giving up (migrations/secret_unique.py, #17850). A timeout is logged by "
+            "type and the next startup retries. Raising it waits longer behind a long-running query while every other "
+            "query on secrets queues behind the ALTER."
+        ),
+        component="postgres",
+        range=(100, 60000),
+    )
+)

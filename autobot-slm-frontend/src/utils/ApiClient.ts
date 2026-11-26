@@ -45,6 +45,7 @@ export { SERVICE_UNAVAILABLE_STATUS, parseRetryAfterMs, withQuery }
 
 // Default request timeout. Module-level constant sourced from an env var so it
 // is never hard-coded at a call site (falls back to 30s when unset).
+// Deliberate duplicate across the two apps: ARCHITECTURE_EXCEPTIONS.md, "SLM API Timeout" (#21810).
 const DEFAULT_TIMEOUT_MS = getEnvPositiveInt(import.meta.env, 'VITE_SLM_API_TIMEOUT_MS', 30_000)
 
 // The kit owns the options type; callers keep importing it from here under its old name.

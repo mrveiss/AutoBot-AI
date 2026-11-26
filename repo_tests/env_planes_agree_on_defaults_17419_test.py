@@ -4,14 +4,19 @@
 # Author: mrveiss
 """A variable declared in both the env registry and the SSOT models has one default (#17419).
 
+Also: one ``alias="AUTOBOT_*"`` binds one field. A name bound by two fields is set by one
+environment variable yet read through two differently-typed or differently-defaulted attributes.
+
 Compares the planes as loaded, so a value spelled through a constant is compared by what it is.
 ``None`` and ``""`` both mean unset, and ``"8001"`` and ``8001`` differ only in the declared type.
 """
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, Iterator
 
+from pydantic import AliasChoices, Field
 from pydantic.fields import PydanticUndefined
 from pydantic_settings import BaseSettings
 
@@ -20,6 +25,8 @@ from autobot_shared.env_registry import REGISTRY
 
 #: Names in both planes on main when this guard landed, less a margin for removals.
 MIN_NAMES_COMPARED = 20
+#: Names bound across the SSOT classes on main when this guard landed (~430), less a wide margin.
+MIN_ALIASES_SCANNED = 300
 
 
 def _normalized(value: Any) -> str:
@@ -64,3 +71,72 @@ def test_a_different_value_is_caught_and_a_different_spelling_is_not() -> None:
     ssot = {"AUTOBOT_A": {"127.0.0.1"}, "AUTOBOT_B": {""}, "AUTOBOT_C": {"8001"}, "AUTOBOT_D": {"x"}}
     registry = {"AUTOBOT_A": "localhost", "AUTOBOT_B": None, "AUTOBOT_C": 8001}
     assert disagreements(registry, ssot) == {"AUTOBOT_A": ("localhost", {"127.0.0.1"})}
+
+
+def _env_names(field: Any) -> set[str]:
+    """The distinct ``AUTOBOT_*`` names ONE field binds: ``alias``, a string or an ``AliasChoices`` ``validation_alias``.
+
+    Pydantic mirrors ``alias`` into ``validation_alias``, so the names are a set: a field is never a double of itself.
+    """
+    validation = field.validation_alias
+    choices = validation.choices if isinstance(validation, AliasChoices) else [validation]
+    return {name for name in (field.alias, *choices) if isinstance(name, str) and name.startswith("AUTOBOT_")}
+
+
+def _own_aliases(cls: type[BaseSettings]) -> Iterator[str]:
+    """Names of the fields *cls* itself declares, so an inherited field is not counted per subclass."""
+    for name in inspect.get_annotations(cls):
+        field = cls.model_fields.get(name)
+        if field is not None:
+            yield from _env_names(field)
+
+
+def double_bindings(classes: Iterator[type[BaseSettings]]) -> set[str]:
+    seen: set[str] = set()
+    twice: set[str] = set()
+    for cls in classes:
+        for alias in _own_aliases(cls):
+            (twice if alias in seen else seen).add(alias)
+    return twice
+
+
+def test_every_alias_binds_one_field() -> None:
+    scanned = sum(1 for cls in _settings_classes() for _ in _own_aliases(cls))
+    assert scanned >= MIN_ALIASES_SCANNED, f"scanned only {scanned} aliases"
+    assert double_bindings(_settings_classes()) == set()
+
+
+def test_a_second_binding_is_caught_and_an_inherited_field_is_not() -> None:
+    class Base(BaseSettings):
+        shared: int = Field(default=1, alias="AUTOBOT_X_SHARED")
+
+    class Left(Base):
+        own: int = Field(default=1, alias="AUTOBOT_X_OWN")
+
+    class Right(Base):
+        again: float = Field(default=1.0, alias="AUTOBOT_X_OWN")
+
+    assert double_bindings(iter([Base, Left, Right])) == {"AUTOBOT_X_OWN"}
+
+
+def test_a_double_through_alias_choices_is_caught_and_a_distinct_choice_is_not() -> None:
+    class Plain(BaseSettings):
+        one: int = Field(default=1, alias="AUTOBOT_Y_ONE")
+
+    class Choice(BaseSettings):
+        two: int = Field(default=1, validation_alias=AliasChoices("AUTOBOT_Y_TWO", "AUTOBOT_Y_ONE", "LEGACY_Y"))
+
+    class Distinct(BaseSettings):
+        three: int = Field(default=1, validation_alias=AliasChoices("AUTOBOT_Y_THREE", "LEGACY_Y"))
+        four: int = Field(default=1, validation_alias="AUTOBOT_Y_FOUR")
+
+    assert double_bindings(iter([Plain, Choice])) == {"AUTOBOT_Y_ONE"}
+    assert double_bindings(iter([Plain, Choice, Distinct])) == {"AUTOBOT_Y_ONE"}
+
+
+def test_a_plain_alias_that_pydantic_mirrors_is_not_a_double_of_itself() -> None:
+    class Mirrored(BaseSettings):
+        only: int = Field(default=1, alias="AUTOBOT_Z_ONLY")
+
+    assert _env_names(Mirrored.model_fields["only"]) == {"AUTOBOT_Z_ONLY"}
+    assert double_bindings(iter([Mirrored])) == set()

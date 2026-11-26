@@ -27,6 +27,24 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+NOT_FOUND = "not_found"  # stable marker of the not-found answer: callers match it, not the text (#21383)
+
+
+def _not_found(collection_id: str) -> Dict[str, Any]:
+    return {"success": False, "code": NOT_FOUND, "message": f"Collection not found: {collection_id}"}
+
+
+def _unapproved(approved: dict | None, collection: Dict[str, Any], found: int, deletes_facts: bool = True):
+    """The refusal of a delete that is not the approved one (#21383): another collection, or more facts; else None."""
+    if approved is None:
+        return None
+    if collection.get("created_at") != approved.get("created_at"):
+        return {"success": False, "message": "the collection changed since it was approved; nothing deleted"}
+    if deletes_facts and found > (approved.get("facts") or 0):
+        return {"success": False, "message": f"{found} facts exceed the approved count; nothing deleted"}
+    return None
+
+
 class CollectionsMixin:
     """
     Collection management mixin for knowledge base (Issue #412).
@@ -132,10 +150,7 @@ class CollectionsMixin:
         try:
             data = await self._get_collection_data(collection_id)
             if not data:
-                return {
-                    "success": False,
-                    "message": f"Collection not found: {collection_id}",
-                }
+                return _not_found(collection_id)
 
             return {"success": True, "collection": data}
 
@@ -228,10 +243,7 @@ class CollectionsMixin:
         try:
             current = await self._get_collection_data(collection_id)
             if not current:
-                return {
-                    "success": False,
-                    "message": f"Collection not found: {collection_id}",
-                }
+                return _not_found(collection_id)
 
             updates = self._build_collection_updates(name, description, icon, color, metadata)
             await self.redis().hset(f"collection:{collection_id}", mapping=updates)
@@ -266,21 +278,22 @@ class CollectionsMixin:
         await self.redis().delete(f"collection:facts:{collection_id}")
         await self.redis().srem("collection:all", collection_id)
 
-    async def delete_collection(self, collection_id: str, delete_facts: bool = False) -> Dict[str, Any]:
-        """Delete a collection (Issue #398: refactored)."""
+    async def delete_collection(
+        self, collection_id: str, delete_facts: bool = False, approved: dict | None = None
+    ) -> Dict[str, Any]:
+        """Delete a collection (Issue #398); ``approved`` {facts, created_at} (#21383) refuses any other one."""
         if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
             collection = await self._get_collection_data(collection_id)
             if not collection:
-                return {
-                    "success": False,
-                    "message": f"Collection not found: {collection_id}",
-                }
+                return _not_found(collection_id)
 
             fact_ids = await self.redis().smembers(f"collection:facts:{collection_id}")
             facts_count = len(fact_ids)
+            if refused := _unapproved(approved, collection, facts_count, delete_facts):
+                return refused
             facts_deleted = await self._remove_facts_from_deleted_collection(collection_id, fact_ids, delete_facts)
             await self._delete_collection_records(collection_id)
 
@@ -343,10 +356,7 @@ class CollectionsMixin:
         try:
             collection = await self._get_collection_data(collection_id)
             if not collection:
-                return {
-                    "success": False,
-                    "message": f"Collection not found: {collection_id}",
-                }
+                return _not_found(collection_id)
 
             (
                 added_count,
@@ -401,10 +411,7 @@ class CollectionsMixin:
         try:
             collection = await self._get_collection_data(collection_id)
             if not collection:
-                return {
-                    "success": False,
-                    "message": f"Collection not found: {collection_id}",
-                }
+                return _not_found(collection_id)
 
             removed_count, not_in_collection = await self._process_facts_for_remove(collection_id, fact_ids)
             new_count = await self._update_collection_fact_count(collection_id)
@@ -460,10 +467,7 @@ class CollectionsMixin:
         try:
             collection = await self._get_collection_data(collection_id)
             if not collection:
-                return {
-                    "success": False,
-                    "message": f"Collection not found: {collection_id}",
-                }
+                return _not_found(collection_id)
 
             fact_ids = await self.redis().smembers(f"collection:facts:{collection_id}")
             total_count = len(fact_ids)
@@ -590,10 +594,7 @@ class CollectionsMixin:
         try:
             collection = await self._get_collection_data(collection_id)
             if not collection:
-                return {
-                    "success": False,
-                    "message": f"Collection not found: {collection_id}",
-                }
+                return _not_found(collection_id)
 
             fact_ids = await self.redis().smembers(f"collection:facts:{collection_id}")
 
@@ -625,10 +626,7 @@ class CollectionsMixin:
         """Get preview of bulk delete operation (Issue #398: extracted)."""
         collection = await self._get_collection_data(collection_id)
         if not collection:
-            return {
-                "success": False,
-                "message": f"Collection not found: {collection_id}",
-            }
+            return _not_found(collection_id)
 
         fact_count = await self.redis().scard(f"collection:facts:{collection_id}")
         return {
@@ -651,8 +649,10 @@ class CollectionsMixin:
         await self.redis().delete(f"fact:{fid}")
         await self.redis().delete(f"fact:collections:{fid}")
 
-    async def bulk_delete_collection_facts(self, collection_id: str, confirm: bool = False) -> Dict[str, Any]:
-        """Delete all facts in a collection (Issue #398: refactored)."""
+    async def bulk_delete_collection_facts(
+        self, collection_id: str, confirm: bool = False, approved: dict | None = None
+    ) -> Dict[str, Any]:
+        """Delete all facts in a collection (Issue #398); ``approved`` {facts, created_at} (#21383) refuses others."""
         if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
@@ -662,12 +662,11 @@ class CollectionsMixin:
         try:
             collection = await self._get_collection_data(collection_id)
             if not collection:
-                return {
-                    "success": False,
-                    "message": f"Collection not found: {collection_id}",
-                }
+                return _not_found(collection_id)
 
             fact_ids = await self.redis().smembers(f"collection:facts:{collection_id}")
+            if refused := _unapproved(approved, collection, len(fact_ids)):
+                return refused
             deleted_count = 0
             for fid in fact_ids:
                 await self._delete_fact_completely(fid)

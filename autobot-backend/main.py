@@ -54,7 +54,7 @@ if __name__ == "__main__":
     logger.info("🌟 Starting AutoBot Backend in standalone mode...")
 
     # Get configuration from environment with intelligent defaults
-    host = config.vm.main  # Bind to all interfaces for network access
+    host = config.vm.main_bind  # listen address; vm.main is the address clients dial (#18810)
     port = config.port.backend
 
     # Determine if we're in development mode

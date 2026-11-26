@@ -59,14 +59,18 @@ from autobot_shared.ssot_chat_graph_settings import ChatGraphSettings
 from autobot_shared.ssot_codebase_index import CodebaseIndexSettings
 from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
+from autobot_shared.ssot_reachable_host import HostOrDefault
 from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
+    NOVNC_PATH_DEFAULT,
     SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
     SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT,
     SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
     SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
     SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT,
 )
+from autobot_shared.ssot_ssh import SSHIdentitySettings
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
+from autobot_shared.ssot_tracing_settings import TracingSettings
 
 _Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
 # Determine project root for .env file location.
@@ -106,7 +110,7 @@ QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
 # Truthy env-var values — shared by every boolean flag below.
 _TRUE_VALUES = {"1", "true", "yes"}
-
+MIN_LLM_TIMEOUT_SECONDS = 1  # the int views of TimeoutConfig.llm (#17419) never round a sub-second value to 0
 # Best-of-N plan selection (#10583)
 # AUTOBOT_PLAN_BEST_OF_N_ENABLED=true  → opt-in path (default: off)
 # AUTOBOT_PLAN_BEST_OF_N_COUNT=3       → number of candidate plans (default: 3, max: 5)
@@ -169,7 +173,8 @@ class VMConfig(RedactedSettings):
 
     # Issue #2953: Defaults changed to 127.0.0.1 for single-host installs.
     # Distributed installs override these via AUTOBOT_*_HOST env vars in .env.
-    main: str = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_HOST")
+    main: HostOrDefault = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_HOST")
+    main_bind: HostOrDefault = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_BIND_HOST")  # listen address (#18810)
     frontend: str = Field(default="127.0.0.1", alias="AUTOBOT_FRONTEND_HOST")
     npu: str = Field(default="127.0.0.1", alias="AUTOBOT_NPU_WORKER_HOST")
     redis: str = Field(default="127.0.0.1", alias="AUTOBOT_REDIS_HOST")
@@ -196,6 +201,7 @@ class PortConfig(RedactedSettings):
     # roles/vnc/defaults/main.yml computes 5900 + vnc_display (default 1 -> 5901),
     # as does status-all-vms.sh. network-config.sh's old 5902 was the outlier.
     vnc_server: int = Field(default=5901, alias="AUTOBOT_VNC_SERVER_PORT")
+    vnc_base: int = Field(default=5900, alias="AUTOBOT_VNC_BASE_PORT")  # RFB port 5900 + display (#22146)
     browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")  # Issue #4052: 9001; 3000 is Grafana
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
     chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
@@ -247,9 +253,6 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
     research_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_RESEARCH_MODEL")
     analysis_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_ANALYSIS_MODEL")
     planning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_PLANNING_MODEL")
-
-    # Timeout (seconds)
-    timeout: int = Field(default=30, alias="AUTOBOT_LLM_TIMEOUT")
 
     # Default provider for all models (can be overridden per-model)
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
@@ -491,7 +494,7 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
             "endpoint": self.get_endpoint_for_agent(agent_id),
             "model": self.get_model_for_agent(agent_id),
             "api_key": self._get_api_key_for_provider(provider),
-            "timeout": self.timeout,
+            "timeout": max(MIN_LLM_TIMEOUT_SECONDS, int(config.timeout.llm)),
         }
 
     def _get_api_key_for_provider(self, provider: str) -> str:
@@ -521,6 +524,11 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
             "lmstudio": self.lmstudio_host,
         }
         return endpoints.get(provider.lower(), self.ollama_endpoint)
+
+    @property
+    def default_model_override(self) -> str:
+        """AUTOBOT_DEFAULT_LLM_MODEL only when set; "" when ``default_model`` is its default (#17419)."""
+        return self.default_model if "default_model" in self.model_fields_set else ""
 
     # Backward compatibility aliases
     def get_provider_for_model(self, model_type: str) -> str:
@@ -1217,7 +1225,7 @@ class DatabasePoolConfig(RedactedSettings):
     )
 
 
-class PathConfig(RedactedSettings):
+class PathConfig(RedactedSettings, SSHIdentitySettings):
     """File-system path configuration.
 
     Provides a single source of truth for well-known AutoBot directories so
@@ -1268,16 +1276,9 @@ class PathConfig(RedactedSettings):
     # operational identity — this default follows that account.
     vnc_passwd_file: str = Field(default="/home/autobot-vnc/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
 
-    # noVNC web root — absolute path, not relative to base_dir.
-    #
-    # #13069: pinned to /opt/novnc, NOT the distro /usr/share/novnc package.
-    # roles/vnc removes that package (state: absent) and installs a checksummed
-    # upstream release at this path instead, because the distro build
-    # (novnc 1:1.0.0-5 on Ubuntu 22.04) predates VeNCrypt support and was the
-    # cause of the handshake failure in #13060. Keep in sync with
-    # autobot-slm-backend/ansible/roles/vnc/defaults/main.yml novnc_path.
-    # Override via AUTOBOT_NOVNC_PATH env var.
-    novnc_path: str = Field(default="/opt/novnc", alias="AUTOBOT_NOVNC_PATH")
+    # noVNC web root (#13069, #22146): roles/vnc installs it and writes AUTOBOT_NOVNC_PATH.
+    novnc_path: str = Field(default=NOVNC_PATH_DEFAULT, alias="AUTOBOT_NOVNC_PATH")
+    websockify_search_path: str = Field(default="/usr/bin:/usr/local/bin", alias="AUTOBOT_WEBSOCKIFY_SEARCH_PATH")
 
     # Canonical inter-node SSH private key (#12429). SINGLE source of truth for
     # every consumer that SSHes to fleet nodes (SLM -> fleet, deploy, code-sync,
@@ -1288,31 +1289,6 @@ class PathConfig(RedactedSettings):
         default="/etc/autobot/ssh/autobot_key",
         validation_alias=AliasChoices("AUTOBOT_SSH_KEY_PATH", "SLM_SSH_KEY"),
     )
-
-    # Management-plane SSH key (#14173) — DISTINCT from ssh_key_path above, not
-    # an alias of it. autobot-infrastructure/shared/scripts/utilities/setup-ssh-keys.sh
-    # generates and deploys THIS key under the operator's own $HOME the first
-    # time a human runs the vm-management/utilities scripts from their own
-    # workstation; ssh_key_path is the service account's key, deployed by
-    # Ansible to /etc/autobot/ssh for automated fleet orchestration (SLM
-    # backend, code-sync agents). The two are provably different files with
-    # different owners and different consumers — #14173's audit found ~24
-    # scripts reading AUTOBOT_SSH_KEY with a $HOME-relative fallback and
-    # confirmed collapsing it onto ssh_key_path's /etc default would silently
-    # break the human-operator flow, so this stays a second field rather than
-    # a rename or an alias.
-    management_ssh_key_path: str = Field(
-        default_factory=lambda: str(Path.home() / ".ssh" / "autobot_key"),
-        alias="AUTOBOT_SSH_KEY",
-    )
-
-    # SSH user for inter-node connections from management scripts (#14173).
-    # Not a path, but belongs beside the two SSH key fields above — same
-    # feature (fleet SSH identity). Matches the 'autobot' operational account
-    # (autobot-slm-backend/ansible/ansible.cfg remote_user,
-    # inventory/*.yml ansible_user, inventory/group_vars/all.yml
-    # autobot_ssh_key_path's owning account).
-    ssh_user: str = Field(default="autobot", alias="AUTOBOT_SSH_USER")
 
     # Override for the `claude` CLI binary (LLC claude_code adapter, GH#12478); empty =
     # PATH, then per-user install locations (set it when ~/.local/bin is off the service PATH).
@@ -1380,7 +1356,7 @@ class PathConfig(RedactedSettings):
         return Path(self.management_ssh_key_path)
 
 
-class MiscConfig(RedactedSettings, CodebaseIndexSettings):
+class MiscConfig(RedactedSettings, CodebaseIndexSettings, TracingSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
@@ -1542,7 +1518,6 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     default_command: str = Field(default="", alias="AUTOBOT_DEFAULT_COMMAND")
     default_continue: str = Field(default="", alias="AUTOBOT_DEFAULT_CONTINUE")
     default_host: str = Field(default="", alias="AUTOBOT_DEFAULT_HOST")
-    default_llm_model: str = Field(default="", alias="AUTOBOT_DEFAULT_LLM_MODEL")
     default_port: str = Field(default="", alias="AUTOBOT_DEFAULT_PORT")
     default_scan_network: str = Field(default="", alias="AUTOBOT_DEFAULT_SCAN_NETWORK")
     default_yes_no: str = Field(default="", alias="AUTOBOT_DEFAULT_YES_NO")
@@ -1808,7 +1783,6 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     tls_cert_path: str = Field(default="", alias="AUTOBOT_TLS_CERT_PATH")
     tls_key_path: str = Field(default="", alias="AUTOBOT_TLS_KEY_PATH")
     trace_console: str = Field(default="", alias="AUTOBOT_TRACE_CONSOLE")
-    trace_sample_rate: float = Field(default=1.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")  # #13264 batch 3
     tts_stream_probe_ttl: str = Field(
         default="",
         alias="AUTOBOT_TTS_STREAM_PROBE_TTL",
@@ -1826,6 +1800,7 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     vllm_multi_step: str = Field(default="", alias="AUTOBOT_VLLM_MULTI_STEP")
     vllm_prefix_caching: str = Field(default="true", alias="AUTOBOT_VLLM_PREFIX_CACHING")
     vnc_host: str = Field(default="", alias="AUTOBOT_VNC_HOST")
+    novnc_bind_host: str = Field(default="127.0.0.1", alias="AUTOBOT_NOVNC_BIND_HOST")  # per-session websockify
     vosk_model_path: str = Field(default="", alias="AUTOBOT_VOSK_MODEL_PATH")
     weak_cache_size: int = Field(default=128, alias="AUTOBOT_WEAK_CACHE_SIZE")
     web_fetch_cache_ttl: str = Field(default="", alias="AUTOBOT_WEB_FETCH_CACHE_TTL")
@@ -1902,6 +1877,7 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     mcp_isolation_mode: str = Field(default="inprocess", alias="MCP_ISOLATION_MODE")
     mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
     mcp_registry_cache_ttl: str = Field(default="60", alias="MCP_REGISTRY_CACHE_TTL")
+    mcp_bridge_probe_timeout_s: float = Field(default=3.0, alias="AUTOBOT_MCP_BRIDGE_PROBE_TIMEOUT_S")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
     # #13265: run-JWT signing secret as an SSOT field, read by
     # mcp_isolated_runtime._resolve_run_jwt_secret() when provisioning an
@@ -2069,7 +2045,6 @@ class FeatureConfig(RedactedSettings, CompanyOsFeatureFlags):
     semantic_chunking: bool = Field(default=True, alias="AUTOBOT_SEMANTIC_CHUNKING")
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
-    permission_system_v2: bool = Field(default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2")
 
     # #13625: permit connector egress to RFC-1918/ULA addresses, for deployments
     # whose Confluence/GitLab/Nextcloud instance is genuinely self-hosted on a
@@ -2745,8 +2720,8 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def llm_timeout(self) -> int:
-        """Backward-compat: config.llm_timeout → config.llm.timeout."""
-        return self.llm.timeout
+        """Backward-compat: config.llm_timeout → config.timeout.llm."""
+        return max(MIN_LLM_TIMEOUT_SECONDS, int(self.timeout.llm))
 
     @property
     def llm_temperature(self) -> float:
@@ -2958,7 +2933,7 @@ def get_agent_llm_config_explicit(agent_id: str) -> dict:
         "endpoint": endpoint,
         "model": model,
         "api_key": api_key,
-        "timeout": cfg.llm.timeout,
+        "timeout": max(MIN_LLM_TIMEOUT_SECONDS, int(cfg.timeout.llm)),
     }
 
 

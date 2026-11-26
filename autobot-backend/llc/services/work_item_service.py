@@ -8,8 +8,7 @@ Checkout strategy:
   3. Write ``checkout_run_id`` / ``checkout_locked_at`` + bump ``version``.
 
 Status transitions:
-  Only the edges defined in _ALLOWED_TRANSITIONS are accepted. Any other
-  transition raises ``InvalidTransition``.
+  Only the edges in _ALLOWED_TRANSITIONS are accepted; any other transition raises ``InvalidTransition``.
 
 Identifier generation:
   UPDATE … RETURNING on ``organizations.issue_counter`` (the row lock enforces
@@ -80,12 +79,12 @@ from .work_item_own_task import (
     stamp_and_release,
 )
 from .work_item_relations import WorkItemRelationService
+from .work_item_reopen import record_reopen
 
 logger = logging.getLogger(__name__)
 
-# Module-level set that holds references to fire-and-forget background tasks
-# so the GC cannot collect them before they complete.  Each task removes itself
-# via add_done_callback.  (GH#9532)
+# References to fire-and-forget background tasks so the GC cannot collect them before they complete;
+# each task removes itself via add_done_callback.  (GH#9532)
 _bg_tasks: set = set()
 
 _CHECKOUT_TTL = 1800  # seconds
@@ -108,7 +107,7 @@ _ALLOWED_TRANSITIONS: Dict[WorkItemStatus, set] = {
         WorkItemStatus.CANCELLED,
     },
     WorkItemStatus.BLOCKED: {WorkItemStatus.READY, WorkItemStatus.IN_PROGRESS, WorkItemStatus.CANCELLED},
-    WorkItemStatus.DONE: set(),
+    WorkItemStatus.DONE: {WorkItemStatus.READY, WorkItemStatus.IN_PROGRESS},  # the reopen edge (#20508)
     WorkItemStatus.CANCELLED: set(),
 }
 
@@ -809,6 +808,7 @@ class WorkItemService(LLCServiceBase):
         stamp_and_release(session, item, new_status, datetime.now(timezone.utc), own=own)
         item.version += 1
         await session.flush()
+        await record_reopen(self.activity_log, session, item, current, acting_user)
         if new_status == WorkItemStatus.CANCELLED:  # MVA-1152: the per-task workspace goes with a terminal status
             await release_workspace_for_task(work_item_id, session)
         return item

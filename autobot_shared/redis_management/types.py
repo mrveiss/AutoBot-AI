@@ -9,7 +9,7 @@ Database numbers are loaded from redis-databases.yaml at import time.
 If the YAML is not found, a hardcoded fallback (kept in sync with the YAML
 via tests/test_redis_db_ssot.py) is used. ``AUTOBOT_REDIS_DB_<NAME>`` overrides
 are applied on top (#19232), so this module holds the ONE name -> number table;
-``redis_db_single_table_19232_test.py`` fails on a second one.
+``redis_db_single_table_test.py`` fails on a second one.
 
 Contains:
 - RedisDatabase: Type-safe database enumeration

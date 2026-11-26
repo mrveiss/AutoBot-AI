@@ -36,11 +36,12 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_file_present, base_table, raised_entries
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import strip_html_comments
+
 _FRONTEND_SRC = "autobot-frontend/src"
 _TEMPLATE = re.compile(r"<template>(.*)</template>", re.S)
 _HAS_I_ELEMENT = re.compile(r"<i[\s>/]")
 # A commented-out `<i>` renders nothing, so it must not exempt the file.
-_HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
 _STYLE = re.compile(r"<style[^>]*>(.*?)</style>", re.S)
 _COMMENT = re.compile(r"/\*.*?\*/", re.S)
 _RULE = re.compile(r"([^{}]+)\{")
@@ -54,8 +55,6 @@ _FUNCTIONAL_PSEUDO = re.compile(r":(?:not|is|where|has)\([^)]*\)")
 PINS = {
     "components/knowledge/EntityExtractor.vue :: .error-notification i.fa-exclamation-circle": 1,
     "components/knowledge/GraphRAGQuery.vue :: .error-notification i.fa-exclamation-circle": 1,
-    "components/knowledge/KnowledgeBrowser.vue :: .active-filter-badge i.fa-filter": 1,
-    "components/knowledge/KnowledgeBrowser.vue :: .search-bar i.fa-search": 1,
     "components/knowledge/KnowledgeGraph.vue :: .error-notification i.fa-exclamation-circle": 1,
     "components/knowledge/modals/CategoryEditModal.vue :: .delete-warning i.fa-exclamation-triangle": 1,
     "components/visualizations/AgentActivityVisualization.vue :: .active-count i.pulse": 1,
@@ -82,7 +81,7 @@ def dead_icon_rules(root: Path) -> dict[str, int]:
     for path in vue_files(root):
         source = path.read_text(encoding="utf-8")
         template = _TEMPLATE.search(source)
-        if template is None or _HAS_I_ELEMENT.search(_HTML_COMMENT.sub("", template.group(1))):
+        if template is None or _HAS_I_ELEMENT.search(strip_html_comments(template.group(1))):
             continue
         for css in _STYLE.findall(source):
             for selector in _RULE.findall(_COMMENT.sub("", css)):

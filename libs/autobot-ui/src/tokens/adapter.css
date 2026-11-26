@@ -111,6 +111,9 @@
   --aui-tooltip-offset: var(--tooltip-offset);
   --aui-tooltip-max: var(--tooltip-max);
 
+  /* ---- Card (both apps define --card-padding; density scopes resize it, #17564) ---- */
+  --aui-card-padding: var(--card-padding);
+
   /* ---- Table (both apps define --tbl-*; the SLM in slm-scheme.css) ---- */
   --aui-table-font-size: var(--tbl-font-size);
   --aui-table-row-h: var(--tbl-row-h);

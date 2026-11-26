@@ -270,9 +270,17 @@ jobs:
           --title "Frontend dependency audit (npm audit)" \
           --fail-on high
 
+        # The shared UI kit is blocking too (#18890): clean under its overrides.
+        python3 pipeline-scripts/security_scan_gate.py \
+          --format npm-audit \
+          --report libs/autobot-ui/npm-audit.json \
+          --title "Shared UI kit dependency audit (npm audit)" \
+          --fail-on high
+
         while IFS= read -r -d '' lock; do
           ws="$(dirname "$lock")"
           [ "$ws" = "autobot-frontend" ] && continue
+          [ "$ws" = "libs/autobot-ui" ] && continue
           [ -f "$ws/npm-audit.json" ] || continue
           echo "::group::npm audit — $ws (reporting only, not yet triaged)"
           # `if !` rather than `|| true`: the gate is BLOCKED from being neutralised

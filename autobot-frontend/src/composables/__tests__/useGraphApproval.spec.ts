@@ -34,6 +34,9 @@ vi.mock('@/models/controllers', () => ({
   useChatController: () => ({ handleStreamingResponse, withActiveStream: (_id: string, run: () => Promise<unknown>) => run() }),
 }))
 vi.mock('@/utils/debugUtils', () => ({ createLogger: () => ({ error: vi.fn(), warn: vi.fn(), debug: vi.fn() }) }))
+const showToast = vi.fn()
+vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast }) }))
+vi.mock('@/i18n', () => ({ default: { global: { t: (key: string) => key } } }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => fakeStore }))
 
 import {
@@ -123,10 +126,48 @@ describe('graph-interrupt approval cards', () => {
 
   it('gives the approval controls back when the resume is refused (#21022)', async () => {
     const { store, id } = seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }], approval_status: 'pending' })
-    fetchWithAuth.mockResolvedValue({ ok: false, status: 409 })
+    fetchWithAuth.mockResolvedValue({ ok: false, status: 400 })
     await expect(useApprovalRouting(vi.fn())('term-1', true, 'go')).rejects.toBeInstanceOf(ResumeRejectedError)
     expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('pending')
     expect(store.setPendingApproval.mock.calls).toEqual([[false, 'chat-1'], [true, 'chat-1']])
+  })
+
+  it('a 409 (nothing to resume) is shown as already handled, not as an error (#21939)', async () => {
+    const { store, id } = seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }], approval_status: 'pending' })
+    showToast.mockClear()
+    fetchWithAuth.mockResolvedValue({ ok: false, status: 409, json: async () => ({ detail: { code: 'nothing_to_resume' } }) })
+    await expect(useApprovalRouting(vi.fn())('term-1', true, 'go')).resolves.toBeUndefined()
+    expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('handled')
+    expect(showToast).toHaveBeenCalledWith('chat.interface.approvalAlreadyHandled', 'info', 3000)
+    expect(store.setPendingApproval.mock.calls).toEqual([[false, 'chat-1']])
+  })
+})
+
+describe('other 409s of the resume route are not "already handled" (#21939)', () => {
+  it('restores the card and rejects when the 409 is not the nothing-to-resume code', async () => {
+    const { store, id } = seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }], approval_status: 'pending' })
+    showToast.mockClear()
+    fetchWithAuth.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ detail: 'The request does not answer the pending question' }),
+    })
+    await expect(useApprovalRouting(vi.fn())('term-1', true, 'go')).rejects.toBeInstanceOf(ResumeRejectedError)
+    expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('pending')
+    expect(showToast).not.toHaveBeenCalled()
+  })
+})
+
+describe('an unreadable refusal body (#21939)', () => {
+  it('keeps the status and the parse failure as cause, and restores the card', async () => {
+    const { store, id } = seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }], approval_status: 'pending' })
+    const parseFailure = new SyntaxError('Unexpected end of JSON input')
+    fetchWithAuth.mockResolvedValue({ ok: false, status: 409, json: async () => Promise.reject(parseFailure) })
+    const failure = await useApprovalRouting(vi.fn())('term-1', true, 'go').catch((e: unknown) => e)
+    expect(failure).toBeInstanceOf(ResumeRejectedError)
+    expect(failure).toMatchObject({ status: 409, code: undefined })
+    expect((failure as Error).cause).toBe(parseFailure)
+    expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('pending')
   })
 })
 

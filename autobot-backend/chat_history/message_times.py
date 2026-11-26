@@ -18,8 +18,8 @@ from typing import Any, Dict, List
 
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 
-#: The gap that separates two messages persisted at the same instant (one microsecond: the stored resolution).
-TIE_BREAK = timedelta(microseconds=1)
+#: The least gap between two messages persisted together: one millisecond, the resolution of a browser ``Date``.
+TIE_BREAK = timedelta(milliseconds=1)
 
 
 def message_timestamp(created_at: float | None = None) -> str:
@@ -48,20 +48,22 @@ def timestamp_sort_key(message: Dict[str, Any]) -> float:
 
 
 def distinct_ordered_times(messages: List[Dict[str, Any]]) -> None:
-    """Give messages that share an instant distinct times, in list order (in place).
+    """Give messages persisted within one millisecond of each other distinct times, in list order (in place).
 
     A batch persisted at one instant (every entry built from the same clock reading) would otherwise store equal
-    timestamps, so a reload could not order the steps. Only a tie is moved, one microsecond past the one before it;
-    a message with its own earlier or later real time keeps it.
+    timestamps, so a reload could not order the steps. A browser ``Date`` holds milliseconds, so a gap under a
+    millisecond is a tie to the frontend readers too: a message that is not at least ``TIE_BREAK`` after the one
+    before it (and not earlier than it) is moved to exactly that gap. A message with an earlier or a clearly
+    later real time keeps it.
     """
-    run_start: datetime | None = None  # the shared instant of the run of ties being spread
-    last_given: datetime | None = None  # the latest time handed out inside that run
+    last: datetime | None = None  # the time the previous message ended up with
+    previous_own: datetime | None = None  # the time the previous message was built with
     for message in messages:
-        parsed = parse_message_timestamp(message.get("timestamp"))
-        if parsed is None:
+        own = parse_message_timestamp(message.get("timestamp"))
+        if own is None:
             continue
-        if run_start is not None and parsed == run_start and last_given is not None:
-            last_given = last_given + TIE_BREAK
-            message["timestamp"] = last_given.astimezone(timezone.utc).isoformat()
-        else:
-            run_start = last_given = parsed
+        parsed = own
+        if last is not None and previous_own is not None and previous_own <= own < last + TIE_BREAK:
+            parsed = last + TIE_BREAK
+            message["timestamp"] = parsed.astimezone(timezone.utc).isoformat()
+        last, previous_own = parsed, own

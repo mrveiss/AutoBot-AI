@@ -16,6 +16,7 @@ const logger = createLogger('BrowserTool')
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { autobotApiErrorMessage, useAutobotApi } from '@/composables/useAutobotApi'
+import { parseBrowseUrl } from '@/utils/browseUrl'
 import {
   readBrowserVmStatus,
   readFleetMembershipSource,
@@ -28,9 +29,9 @@ const { t } = useI18n()
 // State
 const loading = ref(false)
 const error = ref<string | null>(null)
-// Relative default: the guard admits loopback and any node the SLM registry
-// lists, so an internal target needs no special casing here (#15228).
-const url = ref('/')
+// Empty by default: the backend admits only an absolute http(s) URL, so there is no
+// default that could be submitted as-is (#22142).
+const url = ref('')
 const screenshot = ref<string | null>(null)
 const browserStatus = ref<BrowserUiStatus>('unknown')
 
@@ -56,12 +57,17 @@ async function checkStatus(): Promise<void> {
 }
 
 async function startBrowser(): Promise<void> {
+  const target = parseBrowseUrl(url.value)
+  if (target === null) {
+    error.value = t('tools.admin.browserTool.invalidUrl')
+    return
+  }
   loading.value = true
   error.value = null
   browserStatus.value = 'connecting'
 
   try {
-    await api.browserNavigate(url.value)
+    await api.browserNavigate(target)
     isConnected.value = true
     browserStatus.value = 'connected'
     await takeScreenshot()
@@ -81,13 +87,18 @@ function closeBrowser(): void {
 }
 
 async function navigate(): Promise<void> {
-  if (!isConnected.value || !url.value) return
+  if (!isConnected.value) return
+  const target = parseBrowseUrl(url.value)
+  if (target === null) {
+    error.value = t('tools.admin.browserTool.invalidUrl')
+    return
+  }
 
   loading.value = true
   error.value = null
 
   try {
-    await api.browserNavigate(url.value)
+    await api.browserNavigate(target)
     await takeScreenshot()
   } catch (e: unknown) {
     error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.navigateFailed'))
@@ -110,7 +121,7 @@ async function takeScreenshot(): Promise<void> {
 async function goBack(): Promise<void> {
   if (!isConnected.value) return
   try {
-    await api.browserGoBack('')
+    await api.browserGoBack()
     await takeScreenshot()
   } catch (e) {
     error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.backFailed'))
@@ -120,7 +131,7 @@ async function goBack(): Promise<void> {
 async function goForward(): Promise<void> {
   if (!isConnected.value) return
   try {
-    await api.browserGoForward('')
+    await api.browserGoForward()
     await takeScreenshot()
   } catch (e) {
     error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.forwardFailed'))
@@ -130,7 +141,7 @@ async function goForward(): Promise<void> {
 async function refresh(): Promise<void> {
   if (!isConnected.value) return
   try {
-    await api.browserRefresh('')
+    await api.browserRefresh()
     await takeScreenshot()
   } catch (e) {
     error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.refreshFailed'))
@@ -151,24 +162,24 @@ onMounted(() => {
 <template>
   <div class="p-6 h-full flex flex-col">
     <!-- Browser Container -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 flex-1 flex flex-col overflow-hidden">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border flex-1 flex flex-col overflow-hidden">
       <!-- Browser Chrome -->
-      <div class="bg-gray-100 border-b border-gray-200 px-4 py-2">
+      <div class="bg-autobot-bg-tertiary border-b border-autobot-border px-4 py-2">
         <!-- Status Bar -->
         <div class="flex items-center gap-4 mb-2">
           <div class="flex items-center gap-2">
             <div
               class="w-2 h-2 rounded-full"
               :class="{
-                'bg-green-500': browserStatus === 'connected',
-                'bg-yellow-500 animate-pulse': browserStatus === 'connecting',
-                'bg-amber-500': browserStatus === 'degraded',
-                'bg-gray-400': browserStatus === 'unknown',
-                'bg-red-500': browserStatus === 'disconnected'
+                'bg-autobot-dot-ok': browserStatus === 'connected',
+                'bg-autobot-dot-warn animate-pulse': browserStatus === 'connecting',
+                'bg-autobot-dot-warn': browserStatus === 'degraded',
+                'bg-autobot-dot-idle': browserStatus === 'unknown',
+                'bg-autobot-dot-bad': browserStatus === 'disconnected'
               }"
             ></div>
-            <span class="text-xs text-gray-600">{{ $t(`tools.admin.browserTool.status.${browserStatus}`) }}</span>
-            <span v-if="fleetDegraded" class="text-xs text-amber-700">
+            <span class="text-xs text-autobot-text-secondary">{{ $t(`tools.admin.browserTool.status.${browserStatus}`) }}</span>
+            <span v-if="fleetDegraded" class="bg-autobot-pill-warn-bg px-2 rounded-sm w-fit text-xs text-autobot-pill-warn-fg">
               {{ $t('tools.admin.browserTool.fleetDegraded') }}
             </span>
           </div>
@@ -176,8 +187,8 @@ onMounted(() => {
           <button
             v-if="!isConnected"
             @click="startBrowser"
-            :disabled="loading"
-            class="px-3 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors disabled:opacity-50"
+            :disabled="loading || !url.trim()"
+            class="px-3 py-1 text-xs bg-autobot-success text-(--text-on-success) rounded-sm hover:bg-autobot-success-hover transition-colors disabled:opacity-50"
           >
             {{ $t('tools.admin.browserTool.startBrowser') }}
           </button>
@@ -185,7 +196,7 @@ onMounted(() => {
             v-else
             @click="closeBrowser"
             :disabled="loading"
-            class="px-3 py-1 text-xs bg-red-600 text-white rounded-sm hover:bg-red-700 transition-colors disabled:opacity-50"
+            class="px-3 py-1 text-xs bg-autobot-error-solid text-(--text-on-error) rounded-sm hover:bg-(--color-error-solid-hover) transition-colors disabled:opacity-50"
           >
             {{ $t('tools.admin.browserTool.closeBrowser') }}
           </button>
@@ -198,7 +209,7 @@ onMounted(() => {
             <button
               @click="goBack"
               :disabled="!isConnected || loading"
-              class="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              class="p-2 text-autobot-text-secondary hover:bg-autobot-bg-active rounded-lg transition-colors disabled:opacity-50"
               :title="$t('tools.admin.browserTool.back')"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,7 +219,7 @@ onMounted(() => {
             <button
               @click="goForward"
               :disabled="!isConnected || loading"
-              class="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              class="p-2 text-autobot-text-secondary hover:bg-autobot-bg-active rounded-lg transition-colors disabled:opacity-50"
               :title="$t('tools.admin.browserTool.forward')"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -218,7 +229,7 @@ onMounted(() => {
             <button
               @click="refresh"
               :disabled="!isConnected || loading"
-              class="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              class="p-2 text-autobot-text-secondary hover:bg-autobot-bg-active rounded-lg transition-colors disabled:opacity-50"
               :title="$t('tools.admin.browserTool.refresh')"
             >
               <svg class="w-4 h-4" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -230,14 +241,14 @@ onMounted(() => {
           <!-- URL Bar -->
           <div class="flex-1 flex items-center gap-2">
             <div class="relative flex-1">
-              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
               </svg>
               <input
                 v-model="url"
                 @keydown="handleKeydown"
                 type="text"
-                class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                class="w-full pl-10 pr-4 py-2 border border-autobot-border-strong rounded-full focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
                 :placeholder="$t('tools.admin.browserTool.enterURL')"
               />
             </div>
@@ -254,7 +265,7 @@ onMounted(() => {
           <button
             @click="takeScreenshot"
             :disabled="!isConnected || loading"
-            class="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+            class="p-2 text-autobot-text-secondary hover:bg-autobot-bg-active rounded-lg transition-colors disabled:opacity-50"
             :title="$t('tools.admin.browserTool.takeScreenshot')"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -269,21 +280,21 @@ onMounted(() => {
       <BaseAlert v-if="error" variant="error" class="m-4" :message="error" />
 
       <!-- Browser Viewport -->
-      <div class="flex-1 bg-gray-900 overflow-auto flex items-center justify-center">
+      <div class="flex-1 bg-autobot-bg-tertiary overflow-auto flex items-center justify-center">
         <div v-if="loading && !screenshot" class="text-center">
           <svg class="animate-spin w-8 h-8 mx-auto text-white" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <p class="mt-4 text-gray-400">{{ $t('tools.admin.browserTool.loading') }}</p>
+          <p class="mt-4 text-autobot-text-tertiary">{{ $t('tools.admin.browserTool.loading') }}</p>
         </div>
 
         <div v-else-if="!isConnected" class="text-center p-8">
-          <svg class="w-16 h-16 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-16 h-16 mx-auto text-autobot-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
           </svg>
-          <h3 class="mt-4 text-lg font-medium text-gray-300">{{ $t('tools.admin.browserTool.browserAutomation') }}</h3>
-          <p class="mt-2 text-gray-500">{{ $t('tools.admin.browserTool.clickStartBrowserTo') }}</p>
+          <h3 class="mt-4 text-lg font-medium text-autobot-text-tertiary">{{ $t('tools.admin.browserTool.browserAutomation') }}</h3>
+          <p class="mt-2 text-autobot-text-tertiary">{{ $t('tools.admin.browserTool.clickStartBrowserTo') }}</p>
         </div>
 
         <img
@@ -294,7 +305,7 @@ onMounted(() => {
         />
 
         <div v-else class="text-center p-8">
-          <p class="text-gray-400">{{ $t('tools.admin.browserTool.noScreenshotAvailable') }}</p>
+          <p class="text-autobot-text-tertiary">{{ $t('tools.admin.browserTool.noScreenshotAvailable') }}</p>
           <button
             @click="takeScreenshot"
             class="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"

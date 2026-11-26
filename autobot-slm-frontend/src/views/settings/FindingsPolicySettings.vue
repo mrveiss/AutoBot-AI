@@ -81,9 +81,9 @@ onMounted(load)
 
 <template>
   <div class="p-6">
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('settings.findingsPolicySettings.findingsPolicy') }}</h2>
-      <p class="text-sm text-gray-500 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+      <h2 class="text-lg font-semibold text-autobot-text-primary mb-2">{{ $t('settings.findingsPolicySettings.findingsPolicy') }}</h2>
+      <p class="text-sm text-autobot-text-tertiary mb-6">
         {{ $t('settings.findingsPolicySettings.controlsHowCompanyOS') }}
       </p>
 
@@ -92,10 +92,10 @@ onMounted(load)
 
       <div class="space-y-6">
         <!-- Enabled -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
           <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.enableFindingsPolicy') }}</label>
-            <p class="text-xs text-gray-500 mt-1">
+            <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.findingsPolicySettings.enableFindingsPolicy') }}</label>
+            <p class="text-xs text-autobot-text-tertiary mt-1">
               {{ $t('settings.findingsPolicySettings.whenDisabledNoFindings') }}
             </p>
           </div>
@@ -103,16 +103,16 @@ onMounted(load)
         </div>
 
         <!-- Minimum severity -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
           <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.minimumSeverity') }}</label>
-            <p class="text-xs text-gray-500 mt-1">
+            <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.findingsPolicySettings.minimumSeverity') }}</label>
+            <p class="text-xs text-autobot-text-tertiary mt-1">
               {{ $t('settings.findingsPolicySettings.onlyFindingsAtOr') }}
             </p>
           </div>
           <select
             v-model="policy.min_severity"
-            class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             data-test="select-min-severity"
           >
             <option value="high">{{ $t('settings.findingsPolicySettings.high') }}</option>
@@ -122,10 +122,10 @@ onMounted(load)
         </div>
 
         <!-- Require approval to promote -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
           <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.requireApprovalToPromote') }}</label>
-            <p class="text-xs text-gray-500 mt-1">
+            <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.findingsPolicySettings.requireApprovalToPromote') }}</label>
+            <p class="text-xs text-autobot-text-tertiary mt-1">
               {{ $t('settings.findingsPolicySettings.whenEnabledFindingsRequire') }}
             </p>
           </div>
@@ -133,10 +133,10 @@ onMounted(load)
         </div>
 
         <!-- Run on index -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
           <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.runOnIndex') }}</label>
-            <p class="text-xs text-gray-500 mt-1">
+            <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.findingsPolicySettings.runOnIndex') }}</label>
+            <p class="text-xs text-autobot-text-tertiary mt-1">
               {{ $t('settings.findingsPolicySettings.automaticallyTriggerFindings') }}
             </p>
           </div>
@@ -146,8 +146,8 @@ onMounted(load)
         <!-- Verify batch size -->
         <div class="flex items-center justify-between">
           <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.verifyBatchSize') }}</label>
-            <p class="text-xs text-gray-500 mt-1">
+            <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.findingsPolicySettings.verifyBatchSize') }}</label>
+            <p class="text-xs text-autobot-text-tertiary mt-1">
               {{ $t('settings.findingsPolicySettings.numberOfFindingsProcessed') }}
             </p>
           </div>
@@ -155,14 +155,14 @@ onMounted(load)
             v-model.number="policy.verify_batch_size"
             type="number"
             min="1"
-            class="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             data-test="input-verify-batch-size"
           />
         </div>
       </div>
 
       <!-- Save Button -->
-      <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end">
+      <div class="mt-8 pt-6 border-t border-autobot-border flex justify-end">
         <button
           data-test="save-policy"
           :disabled="saving"

@@ -6,26 +6,26 @@
 
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
-from autobot_shared.db_session import commit_and_run_post_commit
 from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from llc.config import DEFAULT_BUDGET_LIMIT
-from llc.deps import assert_company_access, load_authorized
+from llc.deps import SESSION_DEP, assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget, token_limit_blocks
 from llc.services.accessors import get_budget_service
 from llc.services.approval import ApprovalService
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.budget import BudgetService
+from llc.services.budget_idempotency import IngestInFlight
 from llc.services.budget_raise import (
     BudgetRaisePending,
     company_requires_budget_approval,
@@ -34,7 +34,6 @@ from llc.services.budget_raise import (
     raises_limit,
 )
 from models.agent_org import AgentOrgNode
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 logger = get_logger(__name__)
@@ -181,7 +180,7 @@ async def provision_budget(
     agent_id: str,
     body: ProvisionBudgetRequest,
     response: Response,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
 ) -> Union[BudgetResponse, BudgetRaisePending]:
@@ -213,8 +212,8 @@ async def provision_budget(
         response.status_code = status.HTTP_202_ACCEPTED
         return await _file_raise(session, row, {"budget_limit": body.budget_limit}, ctx)
 
-    # Every write route commits before it answers: the dependency's own commit runs after the response (#21332).
-    await commit_and_run_post_commit(session)
+    # Commit here so a direct call (no dependency) persists too; SESSION_DEP also commits before the response (#21332).
+    await session.commit()
     remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
 
@@ -222,7 +221,7 @@ async def provision_budget(
 @router.get("", response_model=List[Dict[str, Any]])
 async def list_budgets(
     company_id: str = Query(..., description="Filter by company UUID"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -254,7 +253,7 @@ async def list_budgets(
 @router.get("/{agent_id}", response_model=BudgetResponse)
 async def get_budget(
     agent_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
 ) -> BudgetResponse:
@@ -274,17 +273,39 @@ async def get_budget(
     return _build_response(row, remaining, is_over, alert)
 
 
+async def _ingest_or_refuse(
+    session: AsyncSession, agent_id: str, company_id: str, body: IngestRequest, key: Optional[str]
+) -> Decimal:
+    """Charge one cost event; each service refusal becomes its HTTP answer (402, 409, 422)."""
+    try:
+        return await get_budget_service().ingest_cost_event(
+            session, agent_id, company_id, body.tokens_in, body.tokens_out, body.model, idempotency_key=key
+        )
+    except IngestInFlight as exc:  # same key still being charged (#21332): retry later, nothing double-charges
+        raise HTTPException(
+            status_code=409, detail="A cost event with this Idempotency-Key is still in flight"
+        ) from exc
+    except BudgetExhausted as exc:
+        # A budget the caller exhausted is client-actionable: 402, not "Internal server error".
+        logger.warning("Budget exhausted for agent %s: %s", agent_id, safe_log_text(repr(exc)))
+        raise http_refusal(402, exc, scope="budget.ingest_cost") from None
+    except UnpricedModel as exc:
+        # #15860: the same condition is 422 from POST /agent/cost-events; the two routes must agree.
+        logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, safe_log_text(repr(exc)))
+        raise http_refusal(422, exc, scope="budget.ingest_cost") from None
+
+
 @router.post("/{agent_id}/ingest", response_model=IngestResponse)
 async def ingest_cost(
     agent_id: str,
     body: IngestRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
+    idempotency_key: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
 ) -> IngestResponse:
-    # The row the tenant check already loaded carries the company this slug belongs
-    # to; the result was previously discarded. Binding it avoids a second lookup and
-    # supplies the company the ingest now requires (#15812).
+    # A repeat of an Idempotency-Key answers 200 with the first cost; the service layer is the authority.
+    # The loaded row carries the company the slug belongs to (#15812), so no second lookup.
     row = await load_authorized(
         session,
         LLCAgentBudget,
@@ -293,28 +314,9 @@ async def ingest_cost(
         id_attr="agent_id",
         not_found_detail=f"No budget row for agent {agent_id}",
     )
-    svc = get_budget_service()
-    try:
-        cost = await svc.ingest_cost_event(
-            session, agent_id, row.company_id, body.tokens_in, body.tokens_out, body.model
-        )
-    except BudgetExhausted as exc:
-        # 402 is right; the detail was not. It said "Internal server error" for a
-        # budget the caller had exhausted, which is a client-actionable condition
-        # reported as a server fault.
-        logger.warning("Budget exhausted for agent %s: %s", agent_id, safe_log_text(repr(exc)))
-        raise http_refusal(402, exc, scope="budget.ingest_cost") from None
-    except UnpricedModel as exc:
-        # #15860 gave `ingest_cost_event` a second failure mode, and this route
-        # is its other caller. Without this the same condition that returns 422
-        # from POST /agent/cost-events returns 500 here -- two routes disagreeing
-        # about one service call from the day the condition was introduced.
-        logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, safe_log_text(repr(exc)))
-        raise http_refusal(422, exc, scope="budget.ingest_cost") from None
-    # `get_async_session` commits in its teardown, which FastAPI (>=0.118) runs AFTER the response has been
-    # sent: the caller can read a 200 before the charge is visible to another session, read the old
-    # remainder and charge it again (#21332). The 200 says "recorded", so commit before producing it.
-    await commit_and_run_post_commit(session)
+    cost = await _ingest_or_refuse(session, agent_id, row.company_id, body, idempotency_key)
+    # Commit here so the direct-call regression test sees the write; SESSION_DEP commits before the response (#21332).
+    await session.commit()
     return IngestResponse(cost=cost)
 
 
@@ -375,7 +377,7 @@ async def update_limit(
     agent_id: str,
     body: UpdateLimitRequest,
     response: Response,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
 ) -> Union[BudgetResponse, BudgetRaisePending]:
@@ -414,9 +416,9 @@ async def update_limit(
         )
         .values(**values)
     )
-    # Commit before the cache is dropped and before the response: the dependency's own commit runs after the
-    # response is sent, so a reader that re-populated the cache (or a caller reading back) saw the old limit (#21332).
-    await commit_and_run_post_commit(session)
+    # Commit before the cache is dropped: a reader that re-populated the cache between the drop and a later
+    # commit would see the old limit again (#21332).
+    await session.commit()
     await session.refresh(row)
 
     # Drop the tracker cache so readers (watchdog, check_budget) see the new
@@ -436,7 +438,7 @@ async def update_limit(
 async def list_cost_events(
     company_id: str = Query(..., description="Filter by company UUID"),
     limit: int = Query(100, ge=1, le=500),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -541,7 +543,7 @@ class AgentModelCostRow(BaseModel):
 )
 async def costs_by_agent_model(
     company_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = SESSION_DEP,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentModelCostRow]:

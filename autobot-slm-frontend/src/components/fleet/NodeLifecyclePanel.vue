@@ -209,24 +209,24 @@ function getSeverityClasses(severity: SeverityLevel): {
 } {
   const classes: Record<SeverityLevel, { bg: string; text: string; icon: string }> = {
     info: {
-      bg: 'bg-blue-50',
-      text: 'text-blue-600',
-      icon: 'text-blue-500',
+      bg: 'bg-autobot-info-bg',
+      text: 'text-autobot-text-link',
+      icon: 'text-autobot-text-link',
     },
     warning: {
-      bg: 'bg-yellow-50',
-      text: 'text-yellow-700',
-      icon: 'text-yellow-500',
+      bg: 'bg-autobot-pill-warn-bg',
+      text: 'text-autobot-pill-warn-fg',
+      icon: 'text-autobot-warning',
     },
     error: {
-      bg: 'bg-red-50',
-      text: 'text-red-600',
-      icon: 'text-red-500',
+      bg: 'bg-autobot-error-bg',
+      text: 'text-autobot-error',
+      icon: 'text-autobot-error',
     },
     critical: {
-      bg: 'bg-red-100',
-      text: 'text-red-800',
-      icon: 'text-red-600',
+      bg: 'bg-autobot-pill-bad-bg',
+      text: 'text-autobot-pill-bad-fg',
+      icon: 'text-autobot-error',
     },
   }
   return classes[severity] || classes.info
@@ -294,10 +294,10 @@ function formatDetailKey(key: string): string {
 
 function getUpdateSeverityClass(severity: string): string {
   const classes: Record<string, string> = {
-    low: 'bg-gray-100 text-gray-700',
-    medium: 'bg-blue-100 text-blue-700',
-    high: 'bg-yellow-100 text-yellow-700',
-    critical: 'bg-red-100 text-red-700',
+    low: 'bg-autobot-bg-tertiary text-autobot-text-secondary',
+    medium: 'bg-autobot-pill-info-bg text-autobot-pill-info-fg',
+    high: 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg',
+    critical: 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg',
   }
   return classes[severity] || classes.low
 }
@@ -584,7 +584,7 @@ onUnmounted(() => {
   <div class="flex flex-col h-full">
     <PollingPausedAlert :poller="eventsPoller" :message="$t('common.polling.paused')" :retry-label="$t('common.polling.retry')" @retry="restartEvents" />
     <!-- Operation status indicator (shown when an operation is in progress) -->
-    <div v-if="currentOperation" class="flex items-center gap-2 text-sm text-primary-600 px-4 py-2 border-b border-gray-200 bg-primary-50">
+    <div v-if="currentOperation" class="flex items-center gap-2 text-sm text-primary-600 px-4 py-2 border-b border-autobot-border bg-primary-50">
       <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -593,7 +593,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Updates Section -->
-    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+    <div class="px-4 py-3 bg-autobot-bg-secondary border-b border-autobot-border">
       <div class="flex items-center justify-between">
         <!-- Update Status -->
         <div class="flex items-center gap-3">
@@ -605,8 +605,8 @@ onUnmounted(() => {
               <span v-if="updatesSummary.count > 0" class="font-medium">{{ $t('fleet.nodeLifecyclePanel.value0UpdatePluralAvailable', { value0: updatesSummary.count, plural: updatesSummary.count === 1 ? '' : 's' }) }}</span>
               <span v-if="updatesSummary.codeUpdateAvailable" class="font-medium">{{ $t('fleet.nodeLifecyclePanel.codeUpdateAvailable') }}</span>
             </div>
-            <span v-if="updatesSummary.security > 0" class="text-sm text-red-600">{{ $t('fleet.nodeLifecyclePanel.value0Security', { value0: updatesSummary.security }) }}</span>
-            <span v-if="updatesSummary.critical > 0" class="text-sm font-medium text-red-700">{{ $t('fleet.nodeLifecyclePanel.value0Critical', { value0: updatesSummary.critical }) }}</span>
+            <span v-if="updatesSummary.security > 0" class="text-sm text-autobot-error">{{ $t('fleet.nodeLifecyclePanel.value0Security', { value0: updatesSummary.security }) }}</span>
+            <span v-if="updatesSummary.critical > 0" class="bg-autobot-pill-bad-bg px-2 rounded-sm w-fit text-sm font-medium text-autobot-pill-bad-fg">{{ $t('fleet.nodeLifecyclePanel.value0Critical', { value0: updatesSummary.critical }) }}</span>
           </template>
           <template v-else-if="availableUpdates">
             <div class="flex items-center gap-2 text-success-600">
@@ -617,7 +617,7 @@ onUnmounted(() => {
             </div>
           </template>
           <template v-else>
-            <span class="text-sm text-gray-500">{{ $t('fleet.nodeLifecyclePanel.clickCheckForUpdatesToScan') }}</span>
+            <span class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nodeLifecyclePanel.clickCheckForUpdatesToScan') }}</span>
           </template>
         </div>
 
@@ -626,7 +626,7 @@ onUnmounted(() => {
           <button
             @click="checkForUpdates"
             :disabled="isCheckingUpdates"
-            class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <svg
               :class="['w-4 h-4', isCheckingUpdates ? 'animate-spin' : '']"
@@ -687,13 +687,13 @@ onUnmounted(() => {
       <!-- Progress Bar -->
       <div v-if="isInstallingUpdates" class="mt-3">
         <div class="flex items-center gap-3">
-          <div class="flex-1 bg-gray-200 rounded-full h-2">
+          <div class="flex-1 bg-autobot-bg-active rounded-full h-2">
             <div
               class="bg-primary-600 h-2 rounded-full transition-all duration-300"
               :style="{ width: `${updateProgress}%` }"
             ></div>
           </div>
-          <span class="text-sm text-gray-600 w-12 text-right">{{ updateProgress }}%</span>
+          <span class="text-sm text-autobot-text-secondary w-12 text-right">{{ updateProgress }}%</span>
         </div>
       </div>
 
@@ -703,16 +703,16 @@ onUnmounted(() => {
         class="mt-3 space-y-2"
       >
         <div class="flex items-center justify-between text-sm">
-          <span class="font-medium text-gray-700">{{ $t('fleet.nodeLifecyclePanel.availableUpdates') }}</span>
+          <span class="font-medium text-autobot-text-secondary">{{ $t('fleet.nodeLifecyclePanel.availableUpdates') }}</span>
           <div class="flex gap-2">
             <button
               @click="selectAllUpdates"
               class="text-primary-600 hover:text-primary-700"
             >{{ $t('fleet.nodeLifecyclePanel.selectAll') }}</button>
-            <span class="text-gray-300">|</span>
+            <span class="text-autobot-text-tertiary">|</span>
             <button
               @click="deselectAllUpdates"
-              class="text-gray-500 hover:text-gray-700"
+              class="text-autobot-text-tertiary hover:text-autobot-text-secondary"
             >{{ $t('fleet.nodeLifecyclePanel.clear') }}</button>
           </div>
         </div>
@@ -720,22 +720,22 @@ onUnmounted(() => {
           <label
             v-for="update in availableUpdates.updates"
             :key="update.id"
-            class="flex items-center gap-3 p-2 rounded-md hover:bg-gray-100 cursor-pointer"
+            class="flex items-center gap-3 p-2 rounded-md hover:bg-autobot-bg-hover cursor-pointer"
           >
             <input
               type="checkbox"
               :checked="selectedUpdateIds.includes(update.id)"
               @change="toggleUpdateSelection(update.id)"
-              class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
+              class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
-                <span class="font-medium text-gray-900">v{{ update.version }}</span>
+                <span class="font-medium text-autobot-text-primary">v{{ update.version }}</span>
                 <span :class="['px-2 py-0.5 text-xs font-medium rounded-sm', getUpdateSeverityClass(update.severity)]">
                   {{ update.severity }}
                 </span>
               </div>
-              <p class="text-sm text-gray-600 truncate">{{ update.description }}</p>
+              <p class="text-sm text-autobot-text-secondary truncate">{{ update.description }}</p>
             </div>
           </label>
         </div>
@@ -743,12 +743,12 @@ onUnmounted(() => {
     </div>
 
     <!-- Filter Bar -->
-    <div class="flex items-center gap-4 px-4 py-2 bg-gray-100 border-b border-gray-200">
+    <div class="flex items-center gap-4 px-4 py-2 bg-autobot-bg-tertiary border-b border-autobot-border">
       <div class="flex items-center gap-2">
-        <label class="text-sm text-gray-600">{{ $t('fleet.nodeLifecyclePanel.type') }}</label>
+        <label class="text-sm text-autobot-text-secondary">{{ $t('fleet.nodeLifecyclePanel.type') }}</label>
         <select
           v-model="eventTypeFilter"
-          class="text-sm border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+          class="text-sm border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
         >
           <option v-for="option in eventTypeOptions" :key="option.value" :value="option.value">
             {{ option.label }}
@@ -757,10 +757,10 @@ onUnmounted(() => {
       </div>
 
       <div class="flex items-center gap-2">
-        <label class="text-sm text-gray-600">{{ $t('fleet.nodeLifecyclePanel.severity') }}</label>
+        <label class="text-sm text-autobot-text-secondary">{{ $t('fleet.nodeLifecyclePanel.severity') }}</label>
         <select
           v-model="severityFilter"
-          class="text-sm border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+          class="text-sm border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
         >
           <option v-for="option in severityOptions" :key="option.value" :value="option.value">
             {{ option.label }}
@@ -768,13 +768,13 @@ onUnmounted(() => {
         </select>
       </div>
 
-      <div class="ml-auto text-sm text-gray-500">
-        <span class="font-medium text-gray-700">{{ filteredEvents.length }}</span>{{ $t('fleet.nodeLifecyclePanel.eventPlural', { plural: filteredEvents.length === 1 ? '' : 's' }) }}<span v-if="totalEvents > events.length" class="text-gray-400">{{ $t('fleet.nodeLifecyclePanel.showingCountOfValue1', { count: events.length, value1: totalEvents }) }}</span>
+      <div class="ml-auto text-sm text-autobot-text-tertiary">
+        <span class="font-medium text-autobot-text-secondary">{{ filteredEvents.length }}</span>{{ $t('fleet.nodeLifecyclePanel.eventPlural', { plural: filteredEvents.length === 1 ? '' : 's' }) }}<span v-if="totalEvents > events.length" class="text-autobot-text-tertiary">{{ $t('fleet.nodeLifecyclePanel.showingCountOfValue1', { count: events.length, value1: totalEvents }) }}</span>
       </div>
     </div>
 
     <!-- Loading State -->
-    <div v-if="isLoading" class="flex-1 flex flex-col items-center justify-center py-12 text-gray-400">
+    <div v-if="isLoading" class="flex-1 flex flex-col items-center justify-center py-12 text-autobot-text-tertiary">
       <svg class="w-8 h-8 animate-spin mb-3" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -796,7 +796,7 @@ onUnmounted(() => {
     <!-- Empty State -->
     <div
       v-else-if="filteredEvents.length === 0"
-      class="flex-1 flex flex-col items-center justify-center py-12 text-gray-400"
+      class="flex-1 flex flex-col items-center justify-center py-12 text-autobot-text-tertiary"
     >
       <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -810,23 +810,23 @@ onUnmounted(() => {
     <!-- Events Table -->
     <div v-else class="flex-1 overflow-y-auto">
       <table class="w-full">
-        <thead class="bg-gray-50 sticky top-0">
+        <thead class="bg-autobot-bg-secondary sticky top-0">
           <tr>
-            <th class="w-10 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"></th>
-            <th class="w-40 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ $t('fleet.nodeLifecyclePanel.time') }}</th>
-            <th class="w-44 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ $t('fleet.nodeLifecyclePanel.type2') }}</th>
-            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ $t('fleet.nodeLifecyclePanel.message') }}</th>
-            <th class="w-24 px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ $t('fleet.nodeLifecyclePanel.duration') }}</th>
+            <th class="w-10 px-4 py-2 text-left text-xs font-semibold text-autobot-text-tertiary uppercase tracking-wider"></th>
+            <th class="w-40 px-4 py-2 text-left text-xs font-semibold text-autobot-text-tertiary uppercase tracking-wider">{{ $t('fleet.nodeLifecyclePanel.time') }}</th>
+            <th class="w-44 px-4 py-2 text-left text-xs font-semibold text-autobot-text-tertiary uppercase tracking-wider">{{ $t('fleet.nodeLifecyclePanel.type2') }}</th>
+            <th class="px-4 py-2 text-left text-xs font-semibold text-autobot-text-tertiary uppercase tracking-wider">{{ $t('fleet.nodeLifecyclePanel.message') }}</th>
+            <th class="w-24 px-4 py-2 text-left text-xs font-semibold text-autobot-text-tertiary uppercase tracking-wider">{{ $t('fleet.nodeLifecyclePanel.duration') }}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-autobot-border-subtle">
           <tr
             v-for="event in filteredEvents"
             :key="event.id"
             :class="[
-              'hover:bg-gray-50 transition-colors',
-              event.severity === 'error' || event.severity === 'critical' ? 'bg-red-50/50' : '',
-              event.severity === 'warning' ? 'bg-yellow-50/50' : '',
+              'hover:bg-autobot-bg-hover transition-colors',
+              event.severity === 'error' || event.severity === 'critical' ? 'bg-autobot-error-bg' : '',
+              event.severity === 'warning' ? 'bg-autobot-warning-bg' : '',
             ]"
           >
             <!-- Severity Icon -->
@@ -855,14 +855,14 @@ onUnmounted(() => {
 
             <!-- Time -->
             <td class="px-4 py-3">
-              <div class="text-sm text-gray-900">{{ formatFullTime(event.timestamp) }}</div>
-              <div class="text-xs text-gray-500">{{ formatCompactRelativeTime(event.timestamp) }}</div>
+              <div class="text-sm text-autobot-text-primary">{{ formatFullTime(event.timestamp) }}</div>
+              <div class="text-xs text-autobot-text-tertiary">{{ formatCompactRelativeTime(event.timestamp) }}</div>
             </td>
 
             <!-- Event Type -->
             <td class="px-4 py-3">
-              <div class="inline-flex items-center gap-2 px-2 py-1 bg-gray-100 rounded-sm text-sm font-medium text-gray-700">
-                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="inline-flex items-center gap-2 px-2 py-1 bg-autobot-bg-tertiary rounded-sm text-sm font-medium text-autobot-text-secondary">
+                <svg class="w-4 h-4 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getEventIcon(event.event_type)" />
                 </svg>
                 {{ formatEventType(event.event_type) }}
@@ -871,7 +871,7 @@ onUnmounted(() => {
 
             <!-- Message -->
             <td class="px-4 py-3">
-              <div class="text-sm text-gray-900">{{ event.message }}</div>
+              <div class="text-sm text-autobot-text-primary">{{ event.message }}</div>
               <div
                 v-if="event.details && Object.keys(event.details).length > 0"
                 class="flex flex-wrap gap-1 mt-1"
@@ -879,7 +879,7 @@ onUnmounted(() => {
                 <span
                   v-for="(value, key) in event.details"
                   :key="key"
-                  class="inline-flex px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
+                  class="inline-flex px-1.5 py-0.5 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm"
                 >
                   {{ formatDetailKey(String(key)) }}: {{ value }}
                 </span>
@@ -888,17 +888,17 @@ onUnmounted(() => {
 
             <!-- Duration -->
             <td class="px-4 py-3">
-              <span v-if="event.duration_ms" class="text-sm font-mono text-gray-600">
+              <span v-if="event.duration_ms" class="text-sm font-mono text-autobot-text-secondary">
                 {{ formatDuration(event.duration_ms, DURATION_OPTIONS) }}
               </span>
-              <span v-else class="text-gray-400">-</span>
+              <span v-else class="text-autobot-text-tertiary">-</span>
             </td>
           </tr>
         </tbody>
       </table>
 
       <!-- Load More Button -->
-      <div v-if="hasMore" class="flex justify-center py-3 border-t border-gray-100">
+      <div v-if="hasMore" class="flex justify-center py-3 border-t border-autobot-border-subtle">
         <button
           @click="loadMoreEvents"
           :disabled="isLoadingMore"
@@ -919,14 +919,14 @@ onUnmounted(() => {
     </div>
 
     <!-- Footer -->
-    <div class="flex items-center justify-between px-4 py-2 bg-gray-50 border-t border-gray-200">
-      <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+    <div class="flex items-center justify-between px-4 py-2 bg-autobot-bg-secondary border-t border-autobot-border">
+      <label class="flex items-center gap-2 text-sm text-autobot-text-secondary cursor-pointer">
         <input
           type="checkbox"
           v-model="autoRefresh"
-          class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
+          class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
         />{{ $t('fleet.nodeLifecyclePanel.autoRefreshEveryValue0S', { value0: Math.round(autoRefreshInterval / 1000) }) }}</label>
-      <span v-if="lastRefresh" class="text-xs text-gray-400">{{ $t('fleet.nodeLifecyclePanel.lastUpdatedValue0', { value0: formatCompactRelativeTime(lastRefresh) }) }}</span>
+      <span v-if="lastRefresh" class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nodeLifecyclePanel.lastUpdatedValue0', { value0: formatCompactRelativeTime(lastRefresh) }) }}</span>
     </div>
   </div>
 </template>

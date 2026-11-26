@@ -14,7 +14,7 @@ import pytest
 
 from api import ai_stack_integration, knowledge_ai_stack
 from api.schemas_knowledge import AIStackRAGQueryRequest, ChatRequest, RAGQueryRequest
-from knowledge.read_path_fakes_16665 import PRIVATE_A, RESEARCH, SHARED, FakeKB, QuarantineGatedKB, text_of
+from testkit.read_path_fakes_16665 import PRIVATE_A, RESEARCH, SHARED, FakeKB, QuarantineGatedKB, text_of
 
 ALICE = {"user_id": "alice", "role": "user"}
 BOB = {"user_id": "bob", "role": "user"}

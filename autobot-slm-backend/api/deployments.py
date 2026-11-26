@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.http_refusal import fixed_refusal
 from models.schemas import (
     DeploymentCreate,
     DeploymentListResponse,
@@ -27,6 +28,7 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.deployment import deployment_service
+from services.role_manifest_errors import manifest_errors
 from services.role_registry import DEFAULT_ROLES
 
 logger = logging.getLogger(__name__)
@@ -213,6 +215,9 @@ async def create_deployment(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> DeploymentResponse:
     """Create a new deployment."""
+    broken = {r: why for r, why in manifest_errors().items() if r in deployment_data.roles}
+    if broken:  # #22067: the role's manifest did not load; deploying it would guess its paths and units
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Role manifest unavailable: {broken}")
     role_names = {r.name for r in AVAILABLE_ROLES}
     invalid_roles = set(deployment_data.roles) - role_names
 
@@ -244,10 +249,7 @@ async def create_deployment(
         )
         return deployment
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
 
 
 @router.get("/{deployment_id}", response_model=DeploymentResponse)
@@ -288,10 +290,7 @@ async def cancel_deployment(
         return deployment
 
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
 
 
 @router.post("/{deployment_id}/rollback", response_model=DeploymentResponse)
@@ -314,10 +313,7 @@ async def rollback_deployment(
         return deployment
 
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
 
 
 @router.post("/{deployment_id}/retry", response_model=DeploymentResponse)
@@ -342,7 +338,4 @@ async def retry_deployment(
         return deployment
 
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)

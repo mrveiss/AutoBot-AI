@@ -577,6 +577,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "Connexion requise pour consulter",
       "requireLoginHint": "Seuls les utilisateurs connectés peuvent ouvrir ce lien",
@@ -792,8 +799,10 @@
       "unsupported": "\"{filename}\" n'est pas un fichier texte que l'assistant peut lire ; il n'a pas été utilisé.",
       "unreadable": "\"{filename}\" n'a pas pu être lu et n'a pas été utilisé.",
       "empty": "\"{filename}\" ne contient aucun texte lisible et n'a pas été utilisé.",
-      "truncated": "\"{filename}\" est long ; seul son début a été utilisé.",
-      "over_budget": "Les fichiers joints ont atteint la limite de taille ; \"{filename}\" n'a pas été utilisé."
+      "truncated": "\"{filename}\" est long ; seuls les {used} premiers caractères sur {total} ont été utilisés.",
+      "truncated_legacy": "\"{filename}\" est long ; seul son début a été utilisé.",
+      "over_budget": "Les fichiers joints ont atteint la limite de taille ; \"{filename}\" n'a pas été utilisé.",
+      "over_window": "La conversation dépasse la fenêtre du modèle ; une partie du texte précédent peut ne pas lui parvenir."
     }
   },
   "settings": {
@@ -2386,6 +2395,7 @@
       "demoDataWarning": "Using demo data - Redis unavailable",
       "exportSuccess": "Data exported successfully",
       "exportFailed": "Export failed",
+      "loadFailed": "Échec du chargement des données d'évolution",
       "noTrendData": "No trend data",
       "stable": "Stable",
       "sinceStart": "{change} since start"
@@ -5805,7 +5815,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Nom d'utilisateur manquant : définissez-le dans Secrets",
+      "desktopVm": "VM de bureau AutoBot",
+      "desktopVmDesc": "Le bureau propre d'AutoBot",
+      "noDesktopVm": "Aucune VM de bureau n'est enregistrée ; seuls vos hôtes Secrets sont listés."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6491,16 +6505,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "noParticipants": "No participants",
-      "participants": "Participants",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "Espace collaboratif",
       "invite": "Inviter",
@@ -6860,7 +6864,11 @@
         "slackDesc": "Jeton du bot Slack",
         "serverLabel": "Hôte serveur",
         "serverDesc": "Accès serveur SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (identifiants VNC)",
+      "vncCompanionDescription": "Identifiants VNC pour {host}",
+      "vncCompanionNoHostId": "L'hôte a été enregistré mais son identifiant n'a pas été renvoyé ; les identifiants VNC n'ont donc pas été enregistrés.",
+      "vncRetry": "L'hôte a été enregistré, mais pas son mot de passe VNC. Enregistrez à nouveau pour réessayer ; l'hôte ne sera pas créé deux fois."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7372,7 +7380,8 @@
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
       "toggleViewAriaLabel": "Toggle view mode",
-      "uploadFailedHint": "Veuillez vérifier les limites de taille de fichier et les exigences de format"
+      "uploadFailedHint": "Veuillez vérifier les limites de taille de fichier et les exigences de format",
+      "uploadAlreadyExists": "A file with this name already exists"
     },
     "header": {
       "title": "File Browser",
@@ -7754,7 +7763,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Sélectionnez un hôte avec VNC pour utiliser le bureau.",
+      "vncCredentialMissing": "Aucun mot de passe VNC n'est enregistré pour cet hôte. Ajoutez-le dans Secrets.",
+      "hostNotFound": "Cet hôte ne fait pas partie de vos hôtes Secrets.",
+      "hostFieldsMissing": "Il manque à cet hôte un nom d'utilisateur ou des capacités. Définissez-les dans Secrets.",
+      "hostVncUnavailable": "Cet hôte n'a ni capacité VNC ni port dans Secrets.",
+      "desktopVmUnavailable": "Aucun bureau VNC n'est enregistré, la VM de bureau n'est donc pas disponible.",
+      "registryUnavailable": "Le registre des bureaux n'a pas pu être lu. Réessayez dans un instant."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -8576,7 +8592,6 @@
       "attachRoleLabel": "Rôle",
       "attachRolePlaceholder": "Choisir un rôle…",
       "attachWorkflowLabel": "ID du workflow",
-      "attachWorkflowPlaceholder": "ID du workflow",
       "attachError": "Impossible d'associer ce workflow.",
       "detachError": "Impossible de détacher ce workflow.",
       "processDetach": "Détacher {workflow} de {role}",
@@ -9818,7 +9833,6 @@
     "endTenure": "Terminer l'affectation",
     "holderIdPlaceholder": "ID du titulaire",
     "permissionPlaceholder": "ex. knowledge.read",
-    "workflowPlaceholder": "ID du workflow",
     "toolPlaceholder": "Nom de l'outil",
     "credentialPlaceholder": "ID du secret",
     "errorAssign": "Impossible d'affecter ce titulaire.",
@@ -10017,5 +10031,40 @@
     "invalid_generic": "Cette planification n'est pas valide.",
     "conflicting_fields": "Une planification est enregistrée soit en cron, soit en règle de calendrier ou exécution unique, jamais les deux.",
     "gatedNote": "Le dernier jour, le jour de la semaine du mois, les jours 29 à 31 et les exécutions uniques seront disponibles une fois le planificateur mis à jour."
+  },
+  "driftPrune": {
+    "batch": "Lot de {count} sur {total} fichier(s) ; confirmez pour supprimer ce lot, le suivant s'affichera ensuite",
+    "cancel": "Annuler",
+    "confirm": "Confirmer la suppression de {count} fichier(s)",
+    "intro": "Git prouve que ces fichiers ont été supprimés de la source et qu'ils sont toujours déployés. Seuls ces fichiers sont supprimés. L'état de l'hôte, les bundles de build et les fichiers modifiés ne sont jamais touchés.",
+    "nothingToRemove": "Rien à supprimer : aucun fichier déployé n'est plus confirmé comme supprimé de la source. Relancez la vérification des écarts.",
+    "previewAction": "Prévisualiser la suppression",
+    "previewing": "Chargement de l'aperçu…",
+    "removing": "Suppression…",
+    "requestFailed": "Échec de la requête de nettoyage des écarts",
+    "result": "{removed} fichier(s) supprimé(s) ; {left} laissé(s) en place",
+    "title": "{count} fichier(s) seraient supprimés de {component}"
+  },
+  "slmAgentsTool": {
+    "globalControls": "Ces commandes mettent en pause ou reprennent tous les agents, pas un seul",
+    "loadFailed": "Échec du chargement des agents",
+    "noLastActivity": "Aucune activité communiquée",
+    "notReported": "Non communiqué",
+    "pauseAll": "Mettre tous les agents en pause",
+    "pauseFailed": "Échec de la mise en pause des agents",
+    "resumeAll": "Reprendre tous les agents",
+    "resumeFailed": "Échec de la reprise des agents",
+    "successRate": "Taux de réussite",
+    "tasksCompleted": "Tâches terminées"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Saisissez une adresse web complète commençant par http:// ou https://",
+    "recognitionUnsupported": "La reconnaissance vocale n'est pas prise en charge par ce navigateur",
+    "recognitionError": "Erreur de reconnaissance vocale : {error}",
+    "speakFailed": "Impossible de prononcer le texte",
+    "playbackFailed": "Échec de la lecture audio",
+    "spoken": "Prononcé :",
+    "speakToInteractWith": "Parlez et écoutez la lecture à voix haute",
+    "voiceId": "ID de voix"
   }
 }

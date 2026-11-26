@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from api import knowledge_graph_routes
 from auth_middleware import get_current_user
 from autobot_shared.ssot_config import config
-from knowledge.read_path_fakes_16665 import FakeKB
+from testkit.read_path_fakes_16665 import FakeKB
 
 DOC_A, DOC_S, DOC_Q = (f"{n}{n}{n}{n}{n}{n}{n}{n}-0000-4000-8000-000000000000" for n in "123")
 ORPHAN = "99999999-0000-4000-8000-000000000000"

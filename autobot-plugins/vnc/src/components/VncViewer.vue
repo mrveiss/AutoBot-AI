@@ -55,16 +55,10 @@ const props = defineProps<{
 
 defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
-/** URL to load in the iframe. Proxied main host uses relative path; others use direct URL. */
-const vncUrl = computed(() => {
-  if (!props.host) return ''
-  if (props.host.proxied ?? props.host.id === 'main') {
-    return `/tools/novnc/vnc.html?autoconnect=true&resize=scale`
-  }
-  return `http://${props.host.host}:${props.host.port}/vnc.html?autoconnect=true&resize=scale`
-})
+/** URL to load: derived by the host app from its config or the endpoint the API returned (#22144). */
+const vncUrl = computed(() => props.host?.url ?? '')
 
-const canEmbed = computed(() => props.host?.proxied ?? props.host?.id === 'main')
+const canEmbed = computed(() => !!props.host?.embeddable)
 
 const onIframeLoad = () => {
   // iframe loaded successfully — nothing needed

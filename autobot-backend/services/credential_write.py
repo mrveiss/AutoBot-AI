@@ -21,8 +21,18 @@ logger = logging.getLogger(__name__)
 
 _MARKER = "imported_from_sqlite"
 
+#: The envelope-store name prefix reserved for connector credentials (#17850); the one definition. Only this
+#: module's writer creates or rotates such names -- user-facing create/rename refuse it (``services.secret_names``).
+CONNECTOR_NAME_PREFIX = "connector:"
 
-async def _find_by_marker(session, sqlite_id: str, owner_uuid):
+
+def connector_secret_name(connector_id: str) -> str:
+    """The envelope-store name of *connector_id*'s credential."""
+    return f"{CONNECTOR_NAME_PREFIX}{connector_id}:auth"
+
+
+async def _find_by_marker(session, sqlite_id: str, owner_vault: str):
+    """The active envelope copy marked for *sqlite_id* in *owner_vault* (the owning vault, not the creator)."""
     from sqlalchemy import select
 
     from models.secret import Secret
@@ -32,7 +42,9 @@ async def _find_by_marker(session, sqlite_id: str, owner_uuid):
         (
             await session.execute(
                 select(Secret).where(
-                    marker == str(sqlite_id), Secret.owner_id == owner_uuid, Secret.is_active.is_(True)
+                    marker == str(sqlite_id),
+                    Secret.owner_vault == owner_vault,
+                    Secret.is_active.is_(True),
                 )
             )
         )
@@ -42,13 +54,33 @@ async def _find_by_marker(session, sqlite_id: str, owner_uuid):
 
 
 async def mirror_in_session(
-    session, sqlite_id: str, owner_id: str, value: str, root_key: bytes, *, name=None, secret_type=None
+    session,
+    sqlite_id: str,
+    owner_id: str,
+    value: str,
+    root_key: bytes,
+    *,
+    name=None,
+    secret_type=None,
 ) -> None:
     """Testable core: upsert the envelope copy within *session* (caller commits).
 
-    Rotates an existing copy (matched by marker + owner); creates one when absent and
+    Rotates an existing copy (matched by marker + owning vault); creates one when absent and
     ``name``/``secret_type`` are supplied (the create paths). Owner not a uuid → no-op.
     """
+    ctx = _mirror_context(owner_id, root_key)
+    if ctx is None:
+        return  # owner isn't a uuid → cannot key an envelope row
+    owner_uuid, vault, svc = ctx
+    row = await _find_by_marker(session, sqlite_id, vault.to_str())
+    if row is None and name and secret_type:
+        await _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, name, secret_type)
+    else:
+        await _rotate_or_skip(session, svc, vault, row, sqlite_id, value)
+
+
+def _mirror_context(owner_id: str, root_key: bytes):
+    """``(owner_uuid, vault, service)`` for *owner_id*, or None when it is not a uuid."""
     import uuid
 
     from autobot_shared.secrets_vault import VaultKind, VaultRef
@@ -57,42 +89,86 @@ async def mirror_in_session(
     try:
         owner_uuid = uuid.UUID(str(owner_id))
     except ValueError:
-        return  # owner isn't a uuid → cannot key an envelope row
+        return None
+    return owner_uuid, VaultRef(VaultKind.USER, str(owner_id)), EnvelopeSecretsService(root_key=root_key)
 
-    vault = VaultRef(VaultKind.USER, str(owner_id))
-    svc = EnvelopeSecretsService(root_key=root_key)
-    row = await _find_by_marker(session, sqlite_id, owner_uuid)
-    if row is not None:
-        await svc.rotate_value(session, secret_id=row.id, new_plaintext=value.encode("utf-8"), actor_vaults={vault})
-    elif name and secret_type:
-        created = await svc.create(
-            session,
-            owner_vault=vault,
-            name=name,
-            secret_type=secret_type,
-            plaintext=value.encode("utf-8"),
-            created_by=owner_uuid,
+
+async def _rotate_or_skip(session, svc, vault, row, sqlite_id: str, value: str) -> None:
+    """Rotate the marked envelope copy *row*; with no copy and nothing to create one from, skip."""
+    if row is None:
+        logger.debug("No envelope copy for the credential and no name/type to create one — skipping mirror")
+        return
+    await svc.rotate_value(
+        session,
+        secret_id=row.id,
+        new_plaintext=value.encode("utf-8"),
+        actor_vaults={vault},
+    )
+
+
+async def _adoptable(session, svc, existing, secret_type, sqlite_id) -> str | None:
+    """None when *existing* is safe to adopt as this credential's mirror, else the failed condition."""
+    if not existing.is_live:
+        return "inactive"
+    if existing.type != secret_type:
+        return "type_differs"
+    marker = (existing.extra_data or {}).get(_MARKER)
+    if marker is not None and marker != str(sqlite_id):
+        return "marked_for_another_credential"
+    if await svc.grantees(session, existing.id) - {existing.owner_vault}:
+        return "granted_to_another_vault"  # a rotation re-wraps for every grantee
+    return None
+
+
+async def _stamp_marker(session, target, sqlite_id: str) -> None:
+    """Mark *target* as the envelope copy of credential *sqlite_id* (the key the read path resolves)."""
+    target.extra_data = {**(target.extra_data or {}), _MARKER: str(sqlite_id)}
+    await session.flush()
+
+
+async def _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, name, secret_type) -> None:
+    """No marker row: adopt a same-name row of THIS vault only when safe, else create; never overwrite blindly.
+
+    ``find_by_name`` is scoped to the vault; several rows raise ``AmbiguousSecretError`` (nothing written). A
+    same-name row is rotated and marked only when active, of this secret type, and unmarked (or marked for this
+    credential); otherwise nothing is written (a deactivated row is never revived). Names and values are not logged.
+    """
+    plaintext = value.encode("utf-8")
+    existing = await svc.find_by_name(session, owner_vault=vault.to_str(), name=name)
+    if existing is None:
+        target = await svc.create(
+            session, owner_vault=vault, name=name, secret_type=secret_type, plaintext=plaintext, created_by=owner_uuid
         )
-        created.extra_data = {_MARKER: str(sqlite_id)}
-        await session.flush()
     else:
-        logger.debug("No envelope copy for credential %s and no name/type to create one — skipping mirror", sqlite_id)
+        target = existing
+    # An existing row, or one a concurrent create returned, is adopted only when safe; a fresh row always is.
+    reused = target is existing or getattr(target, "already_existed", False)
+    if reused and not await _may_adopt(session, svc, target, secret_type, sqlite_id):
+        return
+    if reused:  # rotated under the row lock taken in _may_adopt, so the stamped row holds the requested value
+        await svc.rotate_value(session, secret_id=target.id, new_plaintext=plaintext, actor_vaults={vault})
+    await _stamp_marker(session, target, sqlite_id)
+
+
+async def _may_adopt(session, svc, target, secret_type, sqlite_id) -> bool:
+    """True when *target* may be adopted; otherwise the fixed refusal condition is logged (no ids, no names)."""
+    await session.refresh(target, with_for_update=True)  # lock + re-read: the grant check and marker stamp are atomic
+    refusal = await _adoptable(session, svc, target, secret_type, sqlite_id)
+    if refusal is not None:
+        logger.warning("Envelope mirror skipped: same-name row not adoptable (%s)", refusal)
+    return refusal is None
 
 
 async def delete_in_session(session, sqlite_id: str, owner_id: str, root_key: bytes) -> None:
     """Testable core: delete the envelope copy within *session* by marker (caller commits)."""
-    import uuid
-
-    from services.envelope_secrets_service import EnvelopeSecretsService
-
-    try:
-        owner_uuid = uuid.UUID(str(owner_id))
-    except ValueError:
+    ctx = _mirror_context(owner_id, root_key)
+    if ctx is None:
         return
-    row = await _find_by_marker(session, sqlite_id, owner_uuid)
+    _owner_uuid, vault, svc = ctx
+    row = await _find_by_marker(session, sqlite_id, vault.to_str())
     if row is None:
         return
-    await EnvelopeSecretsService(root_key=root_key).delete(session, secret_id=row.id)
+    await svc.delete(session, secret_id=row.id)
 
 
 def _root_key_or_none():
@@ -113,7 +189,15 @@ async def mirror_credential_to_vault(sqlite_id: str, owner_id: str, value: str, 
         from user_management.database import get_async_session_factory
 
         async with get_async_session_factory()() as session:
-            await mirror_in_session(session, sqlite_id, owner_id, value, root_key, name=name, secret_type=secret_type)
+            await mirror_in_session(
+                session,
+                sqlite_id,
+                owner_id,
+                value,
+                root_key,
+                name=name,
+                secret_type=secret_type,
+            )
             await session.commit()
     except Exception as exc:  # dual-write must never break the canonical SQLite write
         # Neither the exception text (it can echo the value being written) nor the credential's
@@ -138,4 +222,6 @@ async def delete_credential_from_vault(sqlite_id: str, owner_id: str) -> None:
             await delete_in_session(session, sqlite_id, owner_id, root_key)
             await session.commit()
     except Exception as exc:  # never break the canonical revoke; surface loudly for reconciliation
-        logger.error("Envelope delete failed for credential %s (owner %s): %s", sqlite_id, owner_id, exc)
+        # Class only, no identifiers or exception text (same convention as the mirror failure above). The stale
+        # copy stays findable for reconciliation by its ``imported_from_sqlite`` marker with no SQLite row.
+        logger.error("Envelope delete failed for one credential (stale envelope copy remains): %s", type(exc).__name__)

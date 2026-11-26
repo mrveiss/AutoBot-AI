@@ -56,7 +56,9 @@ from chat_workflow.reflection_gate import (
     reflection_update,
     wants_another_pass,
 )
+from chat_workflow.session_init_guard import missing_turn_state
 from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
+from chat_workflow.state_messages import workflow_message_from_state
 from chat_workflow.tool_call_loop import (
     _LOOP_ABORT_THRESHOLD,
     FINAL_ANSWER_INSTRUCTION,
@@ -118,6 +120,7 @@ class ChatState(TypedDict, total=False):
     iteration_count: int
     execution_history: List[Dict[str, Any]]
     all_llm_responses: List[str]
+    turn_id: str  # #21904
 
     # Knowledge / RAG
     used_knowledge: bool
@@ -175,6 +178,8 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
     """Initialize chat session, load history, detect exit intent."""
     manager = config["configurable"]["manager"]
     stream_cb = config["configurable"].get("stream_callback")
+    if (incomplete := missing_turn_state(state, stream_cb)) is not None:  # #21939
+        return incomplete
 
     try:
         (
@@ -199,6 +204,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
         return {
             "terminal_session_id": terminal_session_id,
             "user_wants_exit": user_wants_exit,
+            "turn_id": str(uuid.uuid4()),  # #21904: scopes the stored reply ids to this turn; survives a resume
             "iteration_count": 0,
             "all_llm_responses": [],
             "execution_history": [],
@@ -221,10 +227,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
         }
     except Exception as exc:
         logger.error("initialize_session failed: %s", exc, exc_info=True)
-        error_msg = {
-            "type": "error",
-            "content": "Session initialization failed",
-        }
+        error_msg = {"type": "error", "content": "Session initialization failed"}
         if stream_cb:
             stream_cb(error_msg)
         return {"error": "Session initialization failed", "workflow_messages": [error_msg]}
@@ -1033,11 +1036,7 @@ async def _persist_error_turn(manager, state: ChatState) -> None:
 
     session_id = state.get("session_id", "")
     wf_messages = [
-        WorkflowMessage(
-            type=m.get("type", "response"),
-            content=m.get("content", ""),
-            metadata=m.get("metadata", {}),
-        )
+        workflow_message_from_state(m)
         for m in state.get("workflow_messages", [])
         if m.get("content")  # skip empty stream-control markers
     ]
@@ -1089,16 +1088,7 @@ def _build_workflow_messages_from_state(state: ChatState) -> List[Any]:
 
     Extracted from ``persist_conversation`` (#13303 review).
     """
-    from async_chat_workflow import WorkflowMessage
-
-    return [
-        WorkflowMessage(
-            type=msg_dict.get("type", "response"),
-            content=msg_dict.get("content", ""),
-            metadata=msg_dict.get("metadata", {}),
-        )
-        for msg_dict in state.get("workflow_messages", [])
-    ]
+    return [workflow_message_from_state(msg_dict) for msg_dict in state.get("workflow_messages", [])]
 
 
 async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict:
@@ -1114,35 +1104,33 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
     manager = config["configurable"]["manager"]
     session_id = state.get("session_id", "")
     all_llm_responses = state.get("all_llm_responses", [])
-    # Review B3 makes ``all_llm_responses`` carry "" for an iteration with no
-    # prose, so the blanks must be dropped here or a leading/interior "\n\n"
-    # reaches conversation_history — which feeds the NEXT turn's LLM context —
-    # plus the transcript file and the LOOP_COMPLETE/BEFORE_RESPONSE_SEND hooks.
+    # Review B3: ``all_llm_responses`` carries "" for an iteration with no prose; drop the blanks here or a stray
+    # "\n\n" reaches conversation_history (the NEXT turn's LLM context), the transcript and the response hooks.
     combined_response = "\n\n".join(r for r in all_llm_responses if r)
 
     # Emit LOOP_COMPLETE hook to notify extensions
     await _emit_loop_complete(state.get("iteration_count", 0), combined_response, session_id)
 
+    proof = None
     try:
         session = await manager.get_or_create_session(session_id)
-        # Issue #4263: allow extensions to inspect/modify response before sending.
-        # Issue #13295: the (rare, default no-op) hook output feeds the combined
-        # session-level view below; it is intentionally NOT threaded into
-        # all_llm_responses, since a single edited string cannot be split back
-        # into the per-iteration entries _persist_workflow_messages now needs
-        # to interleave with tool output.
+        # #4263: extensions may edit the response. #13295: that edit feeds only the combined view below, not
+        # all_llm_responses: one edited string cannot be split back into per-iteration entries.
         combined_response = await _emit_before_response_send_safe(combined_response, session_id)
         model = (state.get("llm_params") or {}).get("selected_model")  # the rolling-summary refresh folds with it
         await manager._persist_conversation(session_id, session, state["user_message"], combined_response, model)
 
         wf_messages = _build_workflow_messages_from_state(state)
-        await manager._persist_workflow_messages(
+        proof = await manager._persist_workflow_messages(
             session_id,
             wf_messages,
             all_llm_responses,
             selected_model=(state.get("llm_params") or {}).get("selected_model", ""),
             rag_citations=state.get("rag_citations", []),
             used_knowledge=state.get("used_knowledge", False),
+            turn_id=state.get("turn_id", ""),
+            history=state.get("execution_history", []),
+            user_message=state.get("user_message", ""),
         )
 
         logger.info(
@@ -1157,6 +1145,8 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
     except Exception as exc:
         logger.error("Failed to persist conversation: %s", exc, exc_info=True)
 
+    if proof is not None and (stream_cb := config["configurable"].get("stream_callback")):
+        stream_cb(proof)  # #21976: sources and proof, live as stored; outside the try: not a persist failure
     return {}
 
 
