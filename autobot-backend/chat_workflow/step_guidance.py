@@ -73,6 +73,11 @@ def _manual_manager():
     return CommandManualManager(db_path=str(PathsManager.get_knowledge_base_db()))
 
 
+def has_manual(name: str) -> bool:
+    """Whether the manual store holds an entry for *name* (#22253)."""
+    return _manual_manager().get_manual(name) is not None
+
+
 def manual_synopsis(name: str) -> str:
     """A bounded synopsis of *name*'s stored manual, or a line saying there is none."""
     try:

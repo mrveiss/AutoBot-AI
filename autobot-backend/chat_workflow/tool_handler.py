@@ -56,6 +56,7 @@ from chat_workflow.compose_tool_handler import (
     reject_delegated_compose,
 )
 from chat_workflow.interpretation_turn_mixin import InterpretationTurnMixin
+from chat_workflow.manual_lookup import COMMAND_MANUAL_SCHEMA, handle_command_manual
 from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
 from chat_workflow.step_evidence import begin_step
 from chat_workflow.step_outcome import exit_code_field
@@ -533,6 +534,7 @@ BROWSER_STATE_SCHEMA: dict = {
 _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "execute_command": EXECUTE_COMMAND_SCHEMA,
     "read_spilled_output": READ_SPILLED_OUTPUT_SCHEMA,
+    "command_manual": COMMAND_MANUAL_SCHEMA,  # #22253
     "web_search": WEB_SEARCH_SCHEMA,
     "navigate": NAVIGATE_SCHEMA,
     "click": CLICK_SCHEMA,
@@ -658,7 +660,7 @@ _UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
     # membership set, which would make routing depend on import-time env state
     # and is a worse trade than one extra name in an error hint. With the flag
     # off nothing spills, so following the hint reports not-found.
-    | frozenset({"web_search", "execute_command", "read_spilled_output"})
+    | frozenset({"web_search", "execute_command", "read_spilled_output", "command_manual"})
 )
 
 # GH#11160: maps a declared approval category (a work item's
@@ -3293,6 +3295,8 @@ class ToolHandlerMixin(InterpretationTurnMixin):
             return self._handle_extract_content_tool(tool_call, execution_results, session_id, role=role)
         if tool_name == "read_spilled_output":  # #13919: the excerpt's note names this
             return self._handle_read_spilled_output(tool_call, execution_results)
+        if tool_name == "command_manual":  # #22253: read-only, ungated like read_spilled_output
+            return handle_command_manual(tool_call, execution_results)
         if tool_name == "execute_command":
             return self._dispatch_execute_command(
                 tool_call,

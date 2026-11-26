@@ -51,6 +51,7 @@ from chat_workflow.graph_tool_dispatch import (
     split_refused,
 )
 from chat_workflow.invalid_call_abort import abort_invalid_tools, should_abort
+from chat_workflow.manual_lookup import with_command_manuals
 from chat_workflow.reflection_gate import (
     evaluate_with_one_retry,
     reflection_update,
@@ -380,6 +381,7 @@ def _build_llm_iteration_context(state: ChatState):
         initial_prompt = _inject_mid_conversation_warning(loop_warning, initial_prompt)
 
     initial_prompt = with_plan_step(initial_prompt, state)  # #21023: the current plan step, if the turn has a plan
+    initial_prompt = with_command_manuals(initial_prompt, state)  # #22253: manuals of the commands it names
 
     # GH#11159/#11160: carry governed identity from the request context bag.
     agent_context, work_item_id, approval_cats = build_governed_identity(
@@ -599,7 +601,7 @@ def _carry_tool_results_into_prompt(manager, ctx, state: ChatState) -> None:
     for warning in (state.get("rlm_refinement_hint", ""), state.get("tool_loop_warning", "")):
         if warning:
             prompt = _inject_mid_conversation_warning(warning, prompt)
-    ctx.initial_prompt = with_plan_step(prompt, state)  # #21023
+    ctx.initial_prompt = with_command_manuals(with_plan_step(prompt, state), state, ctx.execution_history)  # #22253
 
 
 async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
