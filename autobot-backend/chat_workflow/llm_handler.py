@@ -25,7 +25,9 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_history.rolling_summary import prompt_summary
+from chat_workflow import tiered_context_sources as tcs
 from dependencies import provide_config_manager
+from intent_classifier import apply_topic_guidance
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
 from middleware.manager import get_extension_manager
@@ -692,8 +694,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         await note_chat_turn_endpoint(ollama_endpoint)  # local or remote decides num_gpu (#22257)
         # Issue #4265: Emit BEFORE_PROMPT_BUILD hook before building prompts
         await _emit_before_prompt_build(
-            session.session_id,
-            {"message": message, "use_knowledge": use_knowledge, "language": language},
+            session.session_id, {"message": message, "use_knowledge": use_knowledge, "language": language}
         )
         system_prompt = await self._build_system_prompt(session, message, language, selected_model, lightweight_mode)
         conversation_context = self._build_conversation_context(session, await prompt_summary(session))
@@ -757,6 +758,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             from chat_workflow import tiered_context_sources as tcs
 
             system_prompt = await tcs.append_memory_context(system_prompt, session, message, selected_model)
+        system_prompt = apply_topic_guidance(system_prompt, message, session)  # volatile: after the stable prefix
         return system_prompt
 
     async def _retrieve_prompt_knowledge(

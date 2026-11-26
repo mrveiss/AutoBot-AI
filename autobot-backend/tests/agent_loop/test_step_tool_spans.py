@@ -16,7 +16,6 @@ Uses an in-memory InMemorySpanExporter so no OTLP collector is needed.
 
 from __future__ import annotations
 
-import os
 import sys
 from unittest.mock import patch
 
@@ -52,7 +51,7 @@ class TestToolSpanEnabled:
     @pytest.fixture(autouse=True)
     def _enable_otel(self):
         """Tracing helpers no-op unless AUTOBOT_OTEL_ENABLED=true (hot-path guard)."""
-        with patch.dict(os.environ, {"AUTOBOT_OTEL_ENABLED": "true"}):
+        with patch("autobot_shared.tracing._is_otel_enabled", return_value=True):
             yield
 
     def test_tool_span_emits_span_name(self):
@@ -161,7 +160,7 @@ class TestStepSpanEnabled:
     @pytest.fixture(autouse=True)
     def _enable_otel(self):
         """Tracing helpers no-op unless AUTOBOT_OTEL_ENABLED=true (hot-path guard)."""
-        with patch.dict(os.environ, {"AUTOBOT_OTEL_ENABLED": "true"}):
+        with patch("autobot_shared.tracing._is_otel_enabled", return_value=True):
             yield
 
     def test_step_span_emits_span_name(self):
@@ -250,7 +249,7 @@ class TestSpanHelpersDisabled:
         from opentelemetry import trace
 
         provider, exporter = _make_in_memory_provider()
-        with patch.dict(os.environ, {"AUTOBOT_OTEL_ENABLED": "false"}):
+        with patch("autobot_shared.tracing._is_otel_enabled", return_value=False):
             with patch.object(trace, "get_tracer", wraps=provider.get_tracer):
                 from autobot_shared.tracing import step_span, tool_span
 

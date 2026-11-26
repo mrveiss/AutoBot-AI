@@ -25,7 +25,8 @@ Usage:
 
 Configuration via environment variables:
     AUTOBOT_OTEL_ENABLED=true              # Enable/disable tracing
-    AUTOBOT_OTEL_ENDPOINT=localhost:4317   # OTLP collector endpoint
+    AUTOBOT_OTEL_ENDPOINT=localhost:4317   # OTLP collector endpoint (falls back to AUTOBOT_JAEGER_ENDPOINT)
+    AUTOBOT_TRACE_CONSOLE=true            # Also print spans to the console
     AUTOBOT_OTEL_PROTOCOL=grpc            # Export protocol (grpc|http)
     AUTOBOT_OTEL_SAMPLE_RATE=0.1          # Sampling rate (0.0-1.0)
     AUTOBOT_OTEL_SERVICE_VERSION=<release> # Service version tag; unset omits service.version
@@ -33,8 +34,10 @@ Configuration via environment variables:
 
 import logging
 import os
+import re
 
 from autobot_shared.deployment_profile import environment_name
+from autobot_shared.ssot_constants import PATH_API_HEALTH, PATH_HEALTH
 
 logger = logging.getLogger(__name__)
 
@@ -47,17 +50,102 @@ _NOOP_TRACER = None
 
 
 def _is_otel_enabled() -> bool:
-    """Check if OpenTelemetry tracing is enabled via environment."""
-    return os.getenv("AUTOBOT_OTEL_ENABLED", "false").lower() == "true"
+    """Whether ``AUTOBOT_OTEL_ENABLED`` is true (env or ``.env``, through the SSOT settings)."""
+    from autobot_shared.ssot_config import config
+
+    return config.misc.otel_enabled.lower() == "true"
+
+
+def _url_pattern(path: str) -> str:
+    """A regex for *path* and what is under it, anchored so ``/health`` does not also match ``/api/healthcheck``.
+
+    FastAPIInstrumentor matches these with ``re.search`` against the request URL, which may carry its scheme and
+    host, so the pattern accepts either form.
+    """
+    return rf"^(?:[a-z]+://[^/]*)?{re.escape(path)}(?:[/?]|$)"
+
+
+# URLs FastAPIInstrumentor leaves untraced (comma-separated regexes). Health probes, scrapes and static assets
+# would otherwise dominate the trace volume.
+_EXCLUDED_URLS = ",".join(
+    _url_pattern(path) for path in (PATH_HEALTH, PATH_API_HEALTH, "/metrics", "/api/metrics", "/favicon.ico", "/static")
+)
+
+
+_DEFAULT_SAMPLE_RATE = 0.1
+#: A client-supplied ``X-Request-ID`` is cut to this many characters before it becomes a span attribute.
+_MAX_REQUEST_ID_CHARS = 128
 
 
 def _get_sample_rate() -> float:
-    """Get configured sampling rate."""
+    """Sampling rate: ``AUTOBOT_OTEL_SAMPLE_RATE``, or the deprecated ``AUTOBOT_TRACE_SAMPLE_RATE`` when unset."""
+    from autobot_shared.ssot_config import config
+
+    misc = config.misc
+    raw = misc.otel_sample_rate
+    if "otel_sample_rate" not in misc.model_fields_set and misc.trace_sample_rate is not None:
+        logger.warning("AUTOBOT_TRACE_SAMPLE_RATE is deprecated; set AUTOBOT_OTEL_SAMPLE_RATE instead")
+        raw = misc.trace_sample_rate
     try:
-        rate = float(os.getenv("AUTOBOT_OTEL_SAMPLE_RATE", "0.1"))
-        return max(0.0, min(1.0, rate))
+        return max(0.0, min(1.0, float(raw)))
     except ValueError:
-        return 0.1
+        return _DEFAULT_SAMPLE_RATE
+
+
+def _add_console_exporter(provider) -> None:
+    """Also print spans to the console when ``AUTOBOT_TRACE_CONSOLE=true`` (debugging)."""
+    from autobot_shared.ssot_config import config
+
+    if config.trace_console.lower() != "true":
+        return
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+
+    provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+    logger.info("Console span exporter enabled for debugging")
+
+
+def _install_propagators() -> None:
+    """Propagate W3C TraceContext, plus B3 when ``opentelemetry-propagator-b3`` is installed.
+
+    Roles on other hosts may speak either format, so a trace survives the hop between them.
+    """
+    from opentelemetry.propagate import set_global_textmap
+    from opentelemetry.propagators.composite import CompositePropagator
+    from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+
+    propagators = [TraceContextTextMapPropagator()]
+    try:
+        from opentelemetry.propagators.b3 import B3MultiFormat
+
+        propagators.append(B3MultiFormat())
+    except ImportError:
+        logger.warning("opentelemetry-propagator-b3 not installed; propagating W3C TraceContext only")
+    set_global_textmap(CompositePropagator(propagators))
+
+
+def get_trace_context() -> dict:
+    """Headers carrying the current trace context, for calls to other services."""
+    try:
+        from opentelemetry.propagate import inject
+    except ImportError:
+        return {}
+    headers: dict = {}
+    inject(headers)
+    return headers
+
+
+def _sampler_for(rate: float):
+    """The sampler for *rate*: 0 samples nothing and 1 everything, whatever an inbound ``traceparent`` says.
+
+    ``ParentBasedTraceIdRatio`` follows a sampled parent, so at rate 0 an upstream caller could still force export.
+    """
+    from opentelemetry.sdk.trace.sampling import ALWAYS_OFF, ALWAYS_ON, ParentBasedTraceIdRatio
+
+    if rate <= 0.0:
+        return ALWAYS_OFF
+    if rate >= 1.0:
+        return ALWAYS_ON
+    return ParentBasedTraceIdRatio(rate)
 
 
 def _create_tracer_provider(service_name: str, service_version: str | None):
@@ -76,26 +164,28 @@ def _create_tracer_provider(service_name: str, service_version: str | None):
     from opentelemetry.sdk.resources import Resource
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.sdk.trace.sampling import ParentBasedTraceIdRatio
 
-    # Unset omits the attribute: no invented release (#17821; the repo declares no version, the tag is the release).
-    version = service_version or os.getenv("AUTOBOT_OTEL_SERVICE_VERSION", "")
-    attributes = {
-        "service.name": service_name,
-        "deployment.environment": environment_name(),  # #19315: the one environment setting
-    }
-    if version:
-        attributes["service.version"] = version
-    resource = Resource.create(attributes)
+    from autobot_shared.ssot_config import config
+
+    version = service_version or config.misc.otel_service_version
+    resource = Resource.create(
+        {
+            "service.name": service_name,
+            "service.version": version,  # type: ignore[dict-item]  # GH#7105: OTel stubs expect int|float|Sequence; str valid at runtime  # noqa: E501
+            "deployment.environment": environment_name(),  # #19315: the one environment setting
+            "service.namespace": "autobot",
+        }
+    )
 
     sample_rate = _get_sample_rate()
-    sampler = ParentBasedTraceIdRatio(sample_rate)
+    sampler = _sampler_for(sample_rate)
 
     provider = TracerProvider(resource=resource, sampler=sampler)
 
     exporter = _create_exporter()
     if exporter:
         provider.add_span_processor(BatchSpanProcessor(exporter))
+    _add_console_exporter(provider)
 
     logger.info(
         "OpenTelemetry tracing initialized: service=%s, " "sample_rate=%.1f%%, exporter=%s",
@@ -145,6 +235,7 @@ def init_tracing(
     try:
         _tracer_provider = _create_tracer_provider(service_name, service_version)
         trace.set_tracer_provider(_tracer_provider)
+        _install_propagators()
         return True
     except Exception as e:
         logger.error("Failed to initialize OpenTelemetry tracing: %s", e)
@@ -159,7 +250,12 @@ def _create_exporter():
     Returns:
         SpanExporter instance or None if configuration is missing
     """
-    endpoint = os.getenv("AUTOBOT_OTEL_ENDPOINT")
+    from autobot_shared.ssot_config import config
+
+    endpoint = config.misc.otel_endpoint
+    if not endpoint and config.misc.jaeger_endpoint:
+        logger.warning("AUTOBOT_JAEGER_ENDPOINT is deprecated; set AUTOBOT_OTEL_ENDPOINT instead")
+        endpoint = config.misc.jaeger_endpoint
     if not endpoint:
         logger.info("No AUTOBOT_OTEL_ENDPOINT configured, traces will not be exported")
         return None
@@ -251,6 +347,39 @@ class _NoopTracer:
         return _NoopSpan()
 
 
+def _server_request_hook(span, scope) -> None:
+    """Add AutoBot's request attributes to the server span FastAPIInstrumentor opened (#21685).
+
+    ``autobot.request_id`` correlates a span with the logs and the client's ``X-Request-ID``;
+    ``http.client_ip`` is the real client behind a trusted proxy (the instrumentation records
+    only the TCP peer). Everything else the retired tracing middleware captured (method, URL,
+    status, user agent, duration, exceptions) is already recorded by the instrumentation.
+    A tracing fault never reaches the request.
+    """
+    if span is None or not span.is_recording() or scope.get("type") != "http":
+        return
+    try:
+        from starlette.requests import Request
+
+        from autobot_shared.proxy_utils import get_client_ip
+
+        request = Request(scope)
+        if request_id := request.headers.get("x-request-id"):
+            span.set_attribute("autobot.request_id", request_id[:_MAX_REQUEST_ID_CHARS])
+        if client_ip := get_client_ip(request):
+            span.set_attribute("http.client_ip", client_ip)
+    except Exception as e:
+        logger.debug("Request span attributes not recorded: %s", e)
+
+
+def fastapi_instrumentation_kwargs() -> dict:
+    """The ``FastAPIInstrumentor.instrument_app`` options every AutoBot entry point shares."""
+    return {
+        "excluded_urls": _EXCLUDED_URLS,
+        "server_request_hook": _server_request_hook,
+    }
+
+
 def instrument_fastapi(app) -> bool:
     """
     Apply OpenTelemetry auto-instrumentation to a FastAPI app.
@@ -267,7 +396,7 @@ def instrument_fastapi(app) -> bool:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-        FastAPIInstrumentor.instrument_app(app)
+        FastAPIInstrumentor.instrument_app(app, **fastapi_instrumentation_kwargs())
         logger.info("FastAPI auto-instrumentation applied")
         return True
     except ImportError:

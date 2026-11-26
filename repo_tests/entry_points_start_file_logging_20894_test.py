@@ -44,6 +44,7 @@ from repo_tests.service_units_set_logs_dir_20894_test import _python_units
 from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._file_size_guard import count_lines
+from tools.lint._main_guard import is_main_guard
 from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
@@ -175,16 +176,6 @@ def _parse(root: Path, path: str) -> ast.Module | None:
         return None
 
 
-def _is_main_guard(node: ast.stmt) -> bool:
-    test = node.test if isinstance(node, ast.If) else None
-    return (
-        isinstance(test, ast.Compare)
-        and isinstance(test.left, ast.Name)
-        and test.left.id == "__name__"
-        and any(isinstance(c, ast.Constant) and c.value == "__main__" for c in test.comparators)
-    )
-
-
 def _builds_app(node: ast.stmt) -> bool:
     value = node.value if isinstance(node, (ast.Assign, ast.AnnAssign)) else None
     if not isinstance(value, ast.Call):
@@ -239,7 +230,7 @@ def _walk_no_defs(nodes: list[ast.stmt]) -> list[ast.AST]:
 
 def _startup_statements(tree: ast.Module) -> list[ast.stmt]:
     """Module-level statements, with the ``if __name__ == "__main__":`` body included (not its def)."""
-    return list(tree.body) + [s for n in tree.body if _is_main_guard(n) for s in n.body]  # type: ignore[attr-defined]
+    return list(tree.body) + [s for n in tree.body if is_main_guard(n) for s in n.body]  # type: ignore[attr-defined]
 
 
 def _is_handler(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -333,7 +324,7 @@ def _is_launched_script(root: Path, path: str) -> bool:
     if not path.startswith(SCRIPT_DIRS):
         return False
     tree = _parse(root, path)
-    return tree is not None and any(_is_main_guard(n) for n in tree.body) and _imports_manager(tree)
+    return tree is not None and any(is_main_guard(n) for n in tree.body) and _imports_manager(tree)
 
 
 def entry_points(

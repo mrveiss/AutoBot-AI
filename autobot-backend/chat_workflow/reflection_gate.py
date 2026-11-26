@@ -9,6 +9,11 @@ and if it is still broken a readable plain-text reply is kept as an answer that 
 never regenerated for it (a deterministic evaluator failure would cost a generation and an evaluation per pass and
 replace a good answer). Raw TOOL_CALL markup never reaches this point: ``graph_parse_feedback`` re-asks the model or
 ends on ``NO_ANSWER_FALLBACK`` first.
+
+A reply the evaluator *scored* below the bar is regenerated with the evaluator's hint plus an instruction to try a
+different approach rather than repeat the one that fell short (#22166, folded in from the retired
+``TaskRetryStrategy``). That costs no extra LLM call: the regeneration already happens. A pass and an evaluator
+failure carry no such instruction.
 """
 
 from __future__ import annotations
@@ -21,6 +26,26 @@ logger = get_logger(__name__)
 
 #: The reply when no usable final answer was produced (also the fallback of ``force_final_answer``, #19715).
 NO_ANSWER_FALLBACK = "I ran out of steps before finishing and could not write a final answer. Please try again."
+
+
+#: Added to the regeneration hint of a scored REFINE, so the next pass changes approach instead of rephrasing (#22166).
+ALTERNATIVE_APPROACH_HINT = (
+    "Your previous answer fell short of the quality bar. Do not repeat the same approach: "
+    "try a different angle, for example by working through the task step by step."
+)
+
+
+def regeneration_hint(result: Any) -> str:
+    """The hint the next generation pass receives for *result*.
+
+    A scored REFINE gets the evaluator's hint plus ``ALTERNATIVE_APPROACH_HINT``. Any other result (a pass, or
+    an evaluator that could not give a reading) keeps the evaluator's own hint unchanged.
+    """
+    hint = result.refinement_hint
+    verdict = getattr(result.verdict, "name", result.verdict)
+    if verdict != "REFINE" or getattr(result, "evaluator_failed", False):
+        return hint
+    return f"{hint} {ALTERNATIVE_APPROACH_HINT}".strip()
 
 
 def wants_another_pass(latest: Dict[str, Any], reflection_count: int, max_reflections: int) -> bool:
@@ -62,6 +87,6 @@ def reflection_update(state: Mapping[str, Any], result: Any, history: list, max_
     return {
         "reflection_count": state.get("reflection_count", 0) + 1,
         "reflection_history": history,
-        "rlm_refinement_hint": result.refinement_hint,
+        "rlm_refinement_hint": regeneration_hint(result),
         "reflection_max": max_reflections,
     }

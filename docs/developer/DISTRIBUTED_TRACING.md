@@ -51,7 +51,7 @@ AUTOBOT_JAEGER_ENDPOINT=http://<database-ip>:4317
 # Trace sampling rate (0.0-1.0)
 # 1.0 = trace everything (development)
 # 0.1 = trace 10% of requests (production)
-AUTOBOT_TRACE_SAMPLE_RATE=1.0
+AUTOBOT_OTEL_SAMPLE_RATE=1.0
 
 # Enable console span export for debugging
 AUTOBOT_TRACE_CONSOLE=false
@@ -59,10 +59,12 @@ AUTOBOT_TRACE_CONSOLE=false
 
 ### Sampling Strategy
 
-The sampling strategy uses `ParentBasedTraceIdRatio`:
-- **Respects parent decisions** - If a parent span is sampled, all children are too
+The sampling strategy depends on `AUTOBOT_OTEL_SAMPLE_RATE` (`_sampler_for` in `autobot_shared/tracing.py`):
+- **Rate 0 or less** - Nothing is sampled, even when an inbound `traceparent` is sampled
+- **Rate 1.0 or more** - Everything is sampled, even when an inbound parent is not sampled
+- **Rate between 0 and 1** - `ParentBasedTraceIdRatio`: a sampled parent keeps its children sampled
 - **Probabilistic sampling** - Samples based on trace ID hash for consistent decisions
-- **Configurable rate** - Set via `AUTOBOT_TRACE_SAMPLE_RATE`
+- **Configurable rate** - Set via `AUTOBOT_OTEL_SAMPLE_RATE`
 
 | Environment | Recommended Rate |
 |-------------|------------------|
@@ -182,21 +184,19 @@ async def my_operation(data):
             raise
 ```
 
-### Using TracingService
+### Using the tracing module
 
 ```python
-from backend.services.tracing_service import get_tracing_service
+from autobot_shared.tracing import get_trace_context, get_tracer
 
-tracing = get_tracing_service()
+tracer = get_tracer(__name__)
 
-# Context manager for spans
-with tracing.span("my_operation", attributes={"key": "value"}) as span:
-    # Your code here
-    tracing.add_event("checkpoint_reached")
-    tracing.set_attribute("result_count", 42)
+with tracer.start_as_current_span("my_operation") as span:
+    span.set_attribute("key", "value")
+    span.add_event("checkpoint_reached")
 
 # Get trace context for propagation
-headers = tracing.get_trace_context()
+headers = get_trace_context()
 # headers contains: traceparent, tracestate, b3, etc.
 ```
 
@@ -238,18 +238,11 @@ async with TracedHttpClient() as client:
 
 ## Initialization
 
-Tracing is automatically initialized during backend startup in `backend/initialization/background_tasks.py`:
+Tracing is initialized during backend startup in `app_factory.py`:
 
 ```python
-async def _init_distributed_tracing(app: FastAPI, update_status_fn):
-    tracing = get_tracing_service()
-    success = tracing.initialize(
-        service_name="autobot-backend",
-        service_version="2.0.0",
-    )
-    if success:
-        # Instruments FastAPI, Redis, and aiohttp
-        results = tracing.instrument_all(app)
+init_tracing(service_name="autobot-backend")
+instrument_fastapi(app)
 ```
 
 ## Troubleshooting
@@ -268,7 +261,7 @@ async def _init_distributed_tracing(app: FastAPI, update_status_fn):
 
 3. **Check sampling rate:**
    ```bash
-   AUTOBOT_TRACE_SAMPLE_RATE=1.0  # Trace everything
+   AUTOBOT_OTEL_SAMPLE_RATE=1.0  # Trace everything
    ```
 
 ### Missing Spans
@@ -297,8 +290,7 @@ opentelemetry-propagator-b3>=1.34.0
 
 ## Related Files
 
-- `backend/services/tracing_service.py` - Core tracing service
-- `backend/middleware/tracing_middleware.py` - Request tracing middleware
+- `autobot_shared/tracing.py` - FastAPI instrumentation options and request-span attributes
 - `backend/initialization/background_tasks.py` - Tracing initialization
 - `src/utils/traced_http_client.py` - HTTP client with trace propagation
 - `autobot-backend/llm_interface_pkg/providers/ollama.py` - LLM tracing spans

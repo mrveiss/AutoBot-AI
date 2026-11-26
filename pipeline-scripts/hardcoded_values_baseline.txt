@@ -82,8 +82,6 @@
 1|other|autobot-backend/agents/system_command_agent.py|"system"
 1|other|autobot-backend/agents/task_pattern_learner.py|"system"
 1|other|autobot-backend/agents/task_pattern_learner.py|"user"
-1|other|autobot-backend/agents/task_retry_strategy.py|"system"
-1|other|autobot-backend/agents/task_retry_strategy.py|"user"
 1|other|autobot-backend/agents/web_researcher.py|120
 2|other|autobot-backend/agents/web_researcher.py|5
 1|other|autobot-backend/agents/web_researcher.py|http://2captcha.com/in.php
@@ -498,7 +496,6 @@
 1|other|autobot-backend/services/telegram_bot_service.py|https://api.telegram.org/bot{bot_token}
 1|other|autobot-backend/services/telegram_bot_service.py|https://api.telegram.org/file/bot{self.bot_token}/{file_path}
 1|other|autobot-backend/services/temporal_invalidation_service.py|10
-1|other|autobot-backend/services/tracing_service.py|http://host:4317
 1|other|autobot-backend/services/user_behavior_analytics.py|100
 1|other|autobot-backend/services/whatsapp_service.py|https://graph.facebook.com/v18.0
 1|other|autobot-backend/services/workflow_automation/models.py|https://10.
