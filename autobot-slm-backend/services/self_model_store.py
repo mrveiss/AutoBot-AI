@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.self_model_constants import STALE_AFTER
+from models.database import Node
 from models.self_model import self_model_entities as entities
 from models.self_model import self_model_history as history
 from services.node_capability import apply_capability_profile
@@ -32,6 +33,7 @@ from services.self_model_reconcile import (
     entity_key,
     mark_stale,
     reconcile,
+    rename_hosts,
     touch,
 )
 
@@ -67,11 +69,20 @@ async def revision(db: AsyncSession) -> int:
     return int((await db.execute(select(func.coalesce(func.max(history.c.id), 0)))).scalar_one())
 
 
+async def _node_ids_by_host(db: AsyncSession, hosts: set) -> Dict[str, str]:
+    """The SLM node id of each of *hosts* (addresses) that is a managed node."""
+    if not hosts:
+        return {}
+    found = await db.execute(select(Node.ip_address, Node.node_id).where(Node.ip_address.in_(hosts)))
+    return {ip: node_id for ip, node_id in found.all()}
+
+
 async def apply_observations(
     db: AsyncSession, source: str, scope_kinds: Iterable[str], observed: List[Observation], now: datetime
 ) -> Plan:
     """Fold one producer's complete batch into the model and persist the result."""
     kinds = tuple(scope_kinds)
+    observed = rename_hosts(observed, await _node_ids_by_host(db, {o.node_id for o in observed if o.node_id}))
     existing = await load_rows(db, entities.c.kind.in_(kinds))
     plan = reconcile(existing, observed, now, source=source, scope_kinds=kinds)
     await persist(db, plan)

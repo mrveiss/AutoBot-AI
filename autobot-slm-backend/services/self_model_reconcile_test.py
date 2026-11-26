@@ -17,6 +17,7 @@ from services.self_model_reconcile import (
     entity_key,
     mark_stale,
     reconcile,
+    rename_hosts,
     touch,
     unavailable_because,
 )
@@ -133,3 +134,13 @@ def test_requirement_on_an_absent_or_stale_command_is_unavailable_on_that_node()
     tool = {"node_id": "n1", "attrs": {"requires": ["ffmpeg", "git", "never-seen"]}}
     assert unavailable_because(tool, rows) == ["ffmpeg"]
     assert unavailable_because({"node_id": None, "attrs": {"requires": ["ffmpeg"]}}, rows) == []
+
+
+def test_a_host_address_becomes_the_nodes_own_id_and_an_unmanaged_host_is_kept():
+    tools = [
+        Observation("tool", "a", DECLARED, node_id="10.0.0.5"),
+        Observation("tool", "b", DECLARED, node_id="10.0.0.9"),
+        Observation("tool", "c", DECLARED),
+    ]
+    renamed = rename_hosts(tools, {"10.0.0.5": "node-redis"})
+    assert [o.node_id for o in renamed] == ["node-redis", "10.0.0.9", None]

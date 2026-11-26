@@ -15,11 +15,13 @@ erases another producer's entity.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
-KINDS = ("node", "service", "route", "tool", "model", "command", "agent", "package")
+from autobot_shared.self_model_constants import ENTITY_KINDS
+
+KINDS = ENTITY_KINDS
 
 DECLARED = "declared"
 PROBED_OK = "probed_ok"
@@ -219,3 +221,12 @@ def unavailable_because(row: Mapping[str, Any], by_key: Mapping[str, Mapping[str
         if command is not None and command["status"] in _UNAVAILABLE:
             missing.append(name)
     return missing
+
+
+def rename_hosts(observed: List[Observation], node_ids_by_host: Mapping[str, str]) -> List[Observation]:
+    """Observations that name their node by host address, renamed to the SLM's node id where the host is a node.
+
+    A producer that knows a tool's placement from code only knows the SSOT host; the node entities are
+    keyed by the node's own id. A host the SLM does not manage keeps the address it was given.
+    """
+    return [replace(o, node_id=node_ids_by_host.get(o.node_id or "", o.node_id)) for o in observed]

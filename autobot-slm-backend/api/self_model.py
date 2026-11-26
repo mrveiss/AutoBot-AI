@@ -123,11 +123,15 @@ async def list_entities(
     node_id: Optional[str] = None,
     status: Annotated[Optional[str], Query(pattern="^(" + "|".join(STATUSES) + ")$")] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_ENTITIES)] = DEFAULT_ENTITIES,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> Dict[str, Any]:
-    """Entities matching the filters, each with its status, ``last_seen`` and whether its commands are present."""
+    """Entities matching the filters, each with its status, ``last_seen`` and whether its commands are present.
+
+    ``total`` counts every match; ``offset`` pages through them, so a caller can tell a short page from a full set.
+    """
     await sweep_stale(db, datetime.now(timezone.utc))
     found = await load_rows(db, *_filters(kind, name, node_id, status))
-    rows = rows_for_response(found.values())[:limit]
+    rows = rows_for_response(found.values())[offset : offset + limit]
     needing = {entity_key("node", r["node_id"]) for r in rows if r["node_id"] and r["attrs"].get("requires")}
     commands = await load_rows(db, entities.c.parent_key.in_(needing)) if needing else {}
     for row in rows:
