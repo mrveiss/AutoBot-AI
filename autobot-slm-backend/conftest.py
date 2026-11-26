@@ -450,6 +450,8 @@ _REAL_SERVICE_MODULES = (
     # secrets_store_snapshot (BACKEND_DATA_DIR), so that loads first.
     "secrets_store_snapshot",
     "sync_restart",
+    # #22277: the pure self-model reconcile; its co-located test imports it directly.
+    "self_model_reconcile",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

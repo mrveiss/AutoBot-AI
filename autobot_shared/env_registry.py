@@ -84,6 +84,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_rag,
     env_registry_rate_limit,
     env_registry_security,
+    env_registry_self_model,
     env_registry_slm,
     env_registry_slm_client,
     env_registry_slm_health,

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from .inventory import get_inventory_reporter
 from .port_scanner import get_listening_ports
 
 
@@ -99,6 +100,8 @@ def build_heartbeat_payload(
         extra_data["total_ram_mb"] = health["total_ram_mb"]
         extra_data["npu_present"] = health["npu_present"]
         extra_data["free_disk_model_dir_mb"] = health["free_disk_model_dir_mb"]
+    # #22277: the inventory hash always; the full package/command list only when it changed or is due.
+    extra_data.update(get_inventory_reporter().report())
     return {
         "cpu_percent": health.get("cpu_percent", 0.0),
         "memory_percent": health.get("memory_percent", 0.0),
