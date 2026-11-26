@@ -297,7 +297,7 @@ def test_a_long_request_id_is_truncated():
 
 
 @pytest.mark.asyncio
-async def test_the_guarded_outbound_client_carries_the_active_trace_context():
+async def test_the_guarded_outbound_client_carries_the_active_trace_context(monkeypatch):
     """``HTTPClientManager.request`` sends the same headers ``get_trace_context`` builds (one propagation path)."""
     pytest.importorskip("opentelemetry.sdk.trace")
     from unittest.mock import AsyncMock
@@ -306,12 +306,12 @@ async def test_the_guarded_outbound_client_carries_the_active_trace_context():
 
     from autobot_shared.http_client_manager import HTTPClientManager
 
-    manager = HTTPClientManager.__new__(HTTPClientManager)
+    manager = HTTPClientManager()  # the process singleton: patch the CLASS so monkeypatch undoes it (#19527)
     session = MagicMock()
     session.request = AsyncMock(return_value="response")
-    manager.get_session = AsyncMock(return_value=session)
-    manager.increment_active = AsyncMock()
-    manager._adjust_pool_size = AsyncMock()
+    monkeypatch.setattr(HTTPClientManager, "get_session", AsyncMock(return_value=session))
+    monkeypatch.setattr(HTTPClientManager, "increment_active", AsyncMock())
+    monkeypatch.setattr(HTTPClientManager, "_adjust_pool_size", AsyncMock())
 
     with TracerProvider().get_tracer("t").start_as_current_span("outbound"):
         await manager.request("GET", "http://service.internal/ping", headers={"X-Own": "1"})
@@ -333,7 +333,7 @@ def test_the_service_version_comes_from_the_ssot_settings(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_a_caller_supplied_trace_header_is_kept_and_its_dict_is_not_mutated():
+async def test_a_caller_supplied_trace_header_is_kept_and_its_dict_is_not_mutated(monkeypatch):
     pytest.importorskip("opentelemetry.sdk.trace")
     from unittest.mock import AsyncMock
 
@@ -341,12 +341,12 @@ async def test_a_caller_supplied_trace_header_is_kept_and_its_dict_is_not_mutate
 
     from autobot_shared.http_client_manager import HTTPClientManager
 
-    manager = HTTPClientManager.__new__(HTTPClientManager)
+    manager = HTTPClientManager()  # the process singleton: patch the CLASS so monkeypatch undoes it (#19527)
     session = MagicMock()
     session.request = AsyncMock(return_value="response")
-    manager.get_session = AsyncMock(return_value=session)
-    manager.increment_active = AsyncMock()
-    manager._adjust_pool_size = AsyncMock()
+    monkeypatch.setattr(HTTPClientManager, "get_session", AsyncMock(return_value=session))
+    monkeypatch.setattr(HTTPClientManager, "increment_active", AsyncMock())
+    monkeypatch.setattr(HTTPClientManager, "_adjust_pool_size", AsyncMock())
 
     caller_headers = {"TraceParent": "00-caller-trace-01", "X-Own": "1"}
     with TracerProvider().get_tracer("t").start_as_current_span("outbound"):
