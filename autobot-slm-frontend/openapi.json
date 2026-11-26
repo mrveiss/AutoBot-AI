@@ -6106,6 +6106,29 @@
         "title": "IdleSubscribersResponse",
         "type": "object"
       },
+      "IngestResult": {
+        "properties": {
+          "changed": {
+            "title": "Changed",
+            "type": "integer"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "upserted": {
+            "title": "Upserted",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "upserted",
+          "changed",
+          "revision"
+        ],
+        "title": "IngestResult",
+        "type": "object"
+      },
       "LDAPLoginRequest": {
         "description": "Request model for LDAP login.",
         "properties": {
@@ -8837,6 +8860,101 @@
         "title": "NodeUpdateSummary",
         "type": "object"
       },
+      "ObservationBatch": {
+        "description": "One producer's complete claim about the entities of ``scope_kinds``.",
+        "properties": {
+          "observations": {
+            "items": {
+              "$ref": "#/components/schemas/ObservationIn"
+            },
+            "maxItems": 20000,
+            "title": "Observations",
+            "type": "array"
+          },
+          "scope_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scope Kinds",
+            "type": "array"
+          },
+          "source": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "scope_kinds",
+          "observations"
+        ],
+        "title": "ObservationBatch",
+        "type": "object"
+      },
+      "ObservationIn": {
+        "properties": {
+          "attrs": {
+            "additionalProperties": true,
+            "title": "Attrs",
+            "type": "object"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Id"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "status"
+        ],
+        "title": "ObservationIn",
+        "type": "object"
+      },
       "OrchestrationServiceActionResponse": {
         "description": "Response for a service action.",
         "properties": {
@@ -8920,6 +9038,24 @@
           "outdated_nodes"
         ],
         "title": "PackageUploadResponse",
+        "type": "object"
+      },
+      "ParentRef": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "title": "ParentRef",
         "type": "object"
       },
       "PasswordChange": {
@@ -26938,6 +27074,220 @@
         "summary": "Delete Service Conflict",
         "tags": [
           "services"
+        ]
+      }
+    },
+    "/api/nodes/self-model/entities": {
+      "get": {
+        "description": "Entities matching the filters, each with its status, ``last_seen`` and whether its commands are present.\n\n``total`` counts every match; ``offset`` pages through them, so a caller can tell a short page from a full set.",
+        "operationId": "list_entities_api_nodes_self_model_entities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(node|service|route|tool|model|command|agent|package)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          },
+          {
+            "in": "query",
+            "name": "node_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Node Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(declared|probed_ok|probed_failed|absent|stale)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Entities Api Nodes Self Model Entities Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Entities",
+        "tags": [
+          "nodes",
+          "self-model"
+        ]
+      }
+    },
+    "/api/nodes/self-model/observations": {
+      "post": {
+        "description": "Fold a producer's batch into the model; entities it owns and no longer lists become ``absent``.",
+        "operationId": "post_observations_api_nodes_self_model_observations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Post Observations",
+        "tags": [
+          "nodes",
+          "self-model"
         ]
       }
     },
