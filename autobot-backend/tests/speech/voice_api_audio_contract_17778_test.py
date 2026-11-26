@@ -53,7 +53,7 @@ def post(real_personality_service):
     def _post(app: FastAPI, route: str, tts, **form):
         resolver = create_autospec(real_personality_service.resolve_voice_id)
         resolver.return_value = "RESOLVED"
-        with patch("api.voice.get_tts_client", return_value=tts), patch("api.voice.resolve_voice_id", resolver):
+        with patch("api.voice.resolve_tts_provider", return_value=tts), patch("api.voice.resolve_voice_id", resolver):
             response = TestClient(app).post(f"/api/voice/{route}", data={"text": "hello", **form})
         return response, resolver
 

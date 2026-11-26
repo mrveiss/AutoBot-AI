@@ -36,7 +36,7 @@ from services.tts_client import TTSReferenceAudioRejected
 from services.tts_client import get_tts_client as _canonical_tts_client
 
 
-def get_tts_client():
+def resolve_tts_provider():
     """Resolve the TTS provider through the CapabilityRegistry (#22270).
 
     Falls back to the canonical client when the registry holds no TTS provider.
@@ -107,7 +107,7 @@ AUDIO_STREAM_FRAMING = "length-prefixed-wav"
 
 async def _framed_audio_chunks(text: str, voice_id: str, language: str) -> AsyncIterator[bytes]:
     """Yield length-prefixed WAV chunks as the worker produces them."""
-    tts = get_tts_client()
+    tts = resolve_tts_provider()
     async with aclosing(tts.stream_or_synthesize(text, voice_id=voice_id, language=language)) as stream:
         async for chunk in stream:
             yield len(chunk).to_bytes(4, "big") + chunk
@@ -127,7 +127,7 @@ async def _synthesized_audio_response(text: str, voice_id: str, language: str, s
             media_type=AUDIO_STREAM_MEDIA_TYPE,
             headers={AUDIO_STREAM_FRAMING_HEADER: AUDIO_STREAM_FRAMING},
         )
-    wav_bytes = await get_tts_client().synthesize(text, voice_id=resolved_voice, language=language)
+    wav_bytes = await resolve_tts_provider().synthesize(text, voice_id=resolved_voice, language=language)
     return Response(
         content=wav_bytes,
         media_type="audio/wav",
@@ -334,7 +334,7 @@ async def voice_clone_api(
     from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
 
     ref_bytes = await read_capped_audio(reference_audio)
-    tts = get_tts_client()
+    tts = resolve_tts_provider()
     wav_bytes = await tts.clone_voice(text, ref_bytes)
     security_layer.audit_log("voice_clone", user_role, "success", {"text_preview": text[:50]})
     return Response(
@@ -358,7 +358,7 @@ async def voice_clone_api(
 @service_opt_in("slm-voice-proxy")
 async def voice_list_api():
     """List available voice profiles from TTS worker."""
-    tts = get_tts_client()
+    tts = resolve_tts_provider()
     voices = await tts.list_voices()
     return voices
 
@@ -380,7 +380,7 @@ async def voice_create_api(
 
     audio_bytes = await to_reference_wav(await read_capped_audio(audio), audio.filename)  # #18477: WAV for libsndfile
     try:
-        return await get_tts_client().create_voice(name, audio_bytes, "ref.wav")
+        return await resolve_tts_provider().create_voice(name, audio_bytes, "ref.wav")
     except TTSReferenceAudioRejected as exc:  # the worker could not decode it either: the client's file, not a 500
         logger.warning("TTS worker rejected the reference audio: %s", exc)
         raise HTTPException(
@@ -396,7 +396,7 @@ async def voice_create_api(
 )
 async def voice_delete_api(voice_id: str):
     """Delete a custom voice profile."""
-    tts = get_tts_client()
+    tts = resolve_tts_provider()
     success = await tts.delete_voice(voice_id)
     if not success:
         return JSONResponse(status_code=404, content={"error": "Voice not found"})

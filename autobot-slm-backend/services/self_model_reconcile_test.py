@@ -16,7 +16,7 @@ from services.self_model_reconcile import (
     Observation,
     entity_key,
     mark_stale,
-    reconcile,
+    reconcile_observations,
     rename_hosts,
     touch,
     unavailable_because,
@@ -37,7 +37,7 @@ def _apply(rows: dict, plan) -> dict:
 
 
 def _run(rows: dict, observed: list, now: datetime):
-    plan = reconcile(rows, observed, now, **SCOPE)
+    plan = reconcile_observations(rows, observed, now, **SCOPE)
     return _apply(rows, plan), plan
 
 
@@ -107,8 +107,8 @@ def test_a_recent_entity_is_not_stale():
 def test_declared_entity_never_probed_stays_declared():
     tool = Observation("tool", "web_fetch", DECLARED, attrs={"requires": ["curl"]})
     kwargs = {"source": "catalogue", "scope_kinds": ("tool",)}
-    rows = _apply({}, reconcile({}, [tool], T0, **kwargs))
-    rows = _apply(rows, reconcile(rows, [tool], T1, **kwargs))
+    rows = _apply({}, reconcile_observations({}, [tool], T0, **kwargs))
+    rows = _apply(rows, reconcile_observations(rows, [tool], T1, **kwargs))
     assert rows["tool:web_fetch"]["status"] == DECLARED
     assert mark_stale(rows.values(), T1 + timedelta(days=9), timedelta(minutes=5)).upserts == []
 
@@ -117,14 +117,14 @@ def test_a_declaration_does_not_downgrade_a_probed_entity():
     probed = Observation("service", "backend", PROBED_OK)
     declared = Observation("service", "backend", DECLARED)
     kwargs = {"source": "catalogue", "scope_kinds": ("service",)}
-    rows = _apply({}, reconcile({}, [probed], T0, **kwargs))
-    rows = _apply(rows, reconcile(rows, [declared], T1, **kwargs))
+    rows = _apply({}, reconcile_observations({}, [probed], T0, **kwargs))
+    rows = _apply(rows, reconcile_observations(rows, [declared], T1, **kwargs))
     assert rows["service:backend"]["status"] == PROBED_OK
 
 
 def test_a_batch_never_marks_absent_another_sources_entity():
     rows, _ = _run({}, [_cmd("git")], T0)
-    other = reconcile(rows, [], T1, source="catalogue", scope_kinds=("command",))
+    other = reconcile_observations(rows, [], T1, source="catalogue", scope_kinds=("command",))
     assert other.upserts == []
 
 

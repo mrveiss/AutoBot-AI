@@ -9,7 +9,7 @@ service stayed UNKNOWN with ``last_check`` 0. The scheduled ``tasks.probe_servic
 calls :func:`probe_and_store`: it probes through the registry, which updates ``last_check``
 and ``failure_count`` on its own health records, then writes one Redis hash entry per
 service. The hash is what the backend process, the SLM plane and the self-model read via
-:func:`read_snapshot`; the worker's in-process registry is not visible to them.
+:func:`read_service_health_snapshot`; the worker's in-process registry is not visible to them.
 """
 
 import json
@@ -55,7 +55,7 @@ async def probe_and_store() -> Dict[str, Dict[str, Any]]:
     return {name: json.loads(raw) for name, raw in records.items()}
 
 
-async def read_snapshot() -> Dict[str, Dict[str, Any]]:
+async def read_service_health_snapshot() -> Dict[str, Dict[str, Any]]:
     """The last stored probe of every service; empty when nothing was probed recently."""
     redis_client = get_redis_client(async_client=True, database="main")
     if redis_client is None:

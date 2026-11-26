@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Pure reconcile of the self-model against what a producer just observed (#22277).
+"""Pure reconcile_observations of the self-model against what a producer just observed (#22277).
 
-No database, no clock, no I/O: ``reconcile`` takes the existing entity rows and one batch of
+No database, no clock, no I/O: ``reconcile_observations`` takes the existing entity rows and one batch of
 observations and returns the rows to upsert and the history to append, so install, removal,
 upgrade and node silence are tested from fixtures. A removed entity is never deleted: it becomes
 ``absent`` with ``removed_at``. Producers record what they claim in ``attrs["source"]``; a batch
@@ -68,7 +68,7 @@ class Observation:
 
 
 @dataclass
-class Plan:
+class InventoryPlan:
     """Rows to upsert and history rows to append; ``changed`` is true when any status or version moved."""
 
     upserts: List[Dict[str, Any]] = field(default_factory=list)
@@ -142,7 +142,7 @@ def _absent(row: Mapping[str, Any], now: datetime) -> dict:
     return {**row, "status": ABSENT, "removed_at": now}
 
 
-def reconcile(
+def reconcile_observations(
     existing: Mapping[str, Mapping[str, Any]],
     observed: Iterable[Observation],
     now: datetime,
@@ -150,14 +150,14 @@ def reconcile(
     source: str,
     scope_kinds: Sequence[str],
     scope_parent: Optional[str] = None,
-) -> Plan:
+) -> InventoryPlan:
     """Fold *observed* (the complete batch of one producer's scope) into *existing* rows keyed by entity key.
 
     Entities of ``scope_kinds`` (under ``scope_parent`` when given) that this ``source`` owns and the batch no
     longer contains become ``absent``; an entity another source owns, or one never probed and declared elsewhere,
     is untouched, so a declared entity that is never probed stays ``declared``. Nothing is deleted.
     """
-    plan = Plan()
+    plan = InventoryPlan()
     seen = set()
     for obs in observed:
         seen.add(obs.key)
@@ -172,7 +172,7 @@ def reconcile(
     return plan
 
 
-def _fold(plan: Plan, row: Optional[Mapping[str, Any]], obs: Observation, source: str, now: datetime) -> None:
+def _fold(plan: InventoryPlan, row: Optional[Mapping[str, Any]], obs: Observation, source: str, now: datetime) -> None:
     if row is None:
         new = _created(obs, source, now)
         plan.upserts.append(new)
@@ -185,9 +185,9 @@ def _fold(plan: Plan, row: Optional[Mapping[str, Any]], obs: Observation, source
         plan.history.append(_history(new["entity_key"], event, row, new, now))
 
 
-def mark_stale(rows: Iterable[Mapping[str, Any]], now: datetime, stale_after: timedelta) -> Plan:
+def mark_stale(rows: Iterable[Mapping[str, Any]], now: datetime, stale_after: timedelta) -> InventoryPlan:
     """Probed entities not seen within *stale_after* become ``stale``; declared and absent ones are left alone."""
-    plan = Plan()
+    plan = InventoryPlan()
     for row in rows:
         if row["status"] in _PROBED and row["last_seen"] < now - stale_after:
             new = {**row, "status": STALE}
@@ -196,9 +196,9 @@ def mark_stale(rows: Iterable[Mapping[str, Any]], now: datetime, stale_after: ti
     return plan
 
 
-def touch(rows: Iterable[Mapping[str, Any]], now: datetime, source: str) -> Plan:
+def touch(rows: Iterable[Mapping[str, Any]], now: datetime, source: str) -> InventoryPlan:
     """A node reported an unchanged inventory: its live ``source`` entities are seen now; ``stale`` ones revive."""
-    plan = Plan()
+    plan = InventoryPlan()
     for row in rows:
         if row.get("attrs", {}).get("source") != source or row["status"] in (ABSENT, DECLARED):
             continue

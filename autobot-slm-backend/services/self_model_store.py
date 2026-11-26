@@ -28,11 +28,11 @@ from services.node_capability import apply_capability_profile
 from services.self_model_reconcile import (
     PROBED_FAILED,
     PROBED_OK,
+    InventoryPlan,
     Observation,
-    Plan,
     entity_key,
     mark_stale,
-    reconcile,
+    reconcile_observations,
     rename_hosts,
     touch,
 )
@@ -52,7 +52,7 @@ async def load_rows(db: AsyncSession, *conditions: Any) -> Dict[str, Dict[str, A
     return {row.entity_key: dict(row._mapping) for row in result}
 
 
-async def persist(db: AsyncSession, plan: Plan) -> None:
+async def persist(db: AsyncSession, plan: InventoryPlan) -> None:
     """Upsert the plan's entity rows (one batched statement) and append its history rows."""
     by_key = {r["entity_key"]: {k: v for k, v in r.items() if k != "id"} for r in plan.upserts}
     if by_key:
@@ -88,12 +88,12 @@ async def _node_ids_by_host(db: AsyncSession, hosts: set) -> Dict[str, str]:
 
 async def apply_observations(
     db: AsyncSession, source: str, scope_kinds: Iterable[str], observed: List[Observation], now: datetime
-) -> Plan:
+) -> InventoryPlan:
     """Fold one producer's complete batch into the model and persist the result."""
     kinds = tuple(scope_kinds)
     observed = rename_hosts(observed, await _node_ids_by_host(db, {o.node_id for o in observed if o.node_id}))
     existing = await load_rows(db, entities.c.kind.in_(kinds))
-    plan = reconcile(existing, observed, now, source=source, scope_kinds=kinds)
+    plan = reconcile_observations(existing, observed, now, source=source, scope_kinds=kinds)
     await persist(db, plan)
     return plan
 
@@ -118,23 +118,27 @@ def _inventory_observations(node_id: str, inventory: Dict[str, Any]) -> List[Obs
     return [*packages, *commands]
 
 
-async def _inventory_plan(db: AsyncSession, node_id: str, extra: Dict[str, Any], previous: Optional[str], now) -> Plan:
+async def _inventory_plan(
+    db: AsyncSession, node_id: str, extra: Dict[str, Any], previous: Optional[str], now
+) -> InventoryPlan:
     """The inventory plan for one heartbeat: full reconcile, a touch when the hash is unchanged, else nothing."""
     parent = entity_key("node", node_id)
     rows = await load_rows(db, entities.c.parent_key == parent)
     if "inventory" in extra:
         if not isinstance(extra["inventory"], dict):
             logger.warning("node %s sent a malformed inventory; ignoring it", node_id)
-            return Plan()
+            return InventoryPlan()
         observed = _inventory_observations(node_id, extra["inventory"])
         scope = {"source": INVENTORY_SOURCE, "scope_kinds": _INVENTORY_KINDS, "scope_parent": parent}
-        return reconcile(rows, observed, now, **scope)
+        return reconcile_observations(rows, observed, now, **scope)
     if extra.get("inventory_hash") == previous:
         return touch(rows.values(), now, INVENTORY_SOURCE)
-    return Plan()
+    return InventoryPlan()
 
 
-async def apply_heartbeat_inventory(db: AsyncSession, node_id: str, extra: Dict[str, Any], now: datetime) -> Plan:
+async def apply_heartbeat_inventory(
+    db: AsyncSession, node_id: str, extra: Dict[str, Any], now: datetime
+) -> InventoryPlan:
     """Fold one heartbeat's node liveness and inventory report into the model."""
     node_key = entity_key("node", node_id)
     node_rows = await load_rows(db, entities.c.entity_key == node_key)
@@ -145,18 +149,18 @@ async def apply_heartbeat_inventory(db: AsyncSession, node_id: str, extra: Dict[
     folded = "inventory" in extra or reported == previous
     attrs = {"inventory_hash": reported} if folded and reported else {}
     node_obs = Observation("node", node_id, PROBED_OK, node_id=node_id, attrs=attrs)
-    node_plan = reconcile(node_rows, [node_obs], now, source=HEARTBEAT_SOURCE, scope_kinds=())
+    node_plan = reconcile_observations(node_rows, [node_obs], now, source=HEARTBEAT_SOURCE, scope_kinds=())
     plan.upserts.extend(node_plan.upserts)
     plan.history.extend(node_plan.history)
     await persist(db, plan)
     return plan
 
 
-async def sweep_stale(db: AsyncSession, now: datetime) -> Plan:
+async def sweep_stale(db: AsyncSession, now: datetime) -> InventoryPlan:
     """Mark probed entities that no producer has reported within the stale window ``stale``."""
     global _last_sweep
     if time.monotonic() - _last_sweep < _SWEEP_MIN_GAP_S:
-        return Plan()
+        return InventoryPlan()
     _last_sweep = time.monotonic()
     probed = entities.c.status.in_((PROBED_OK, PROBED_FAILED))
     rows = await load_rows(db, probed, entities.c.last_seen < now - STALE_AFTER)

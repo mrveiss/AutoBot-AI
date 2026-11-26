@@ -41,7 +41,7 @@ def test_read_snapshot_decodes_bytes_and_text_replies():
     raw = {b"backend": b'{"status": "healthy", "failure_count": 0}', "redis": '{"status": "unhealthy"}'}
     redis_client = MagicMock(hgetall=AsyncMock(return_value=raw))
     with patch.object(probe, "get_redis_client", return_value=redis_client):
-        snapshot = asyncio.run(probe.read_snapshot())
+        snapshot = asyncio.run(probe.read_service_health_snapshot())
     assert snapshot == {"backend": {"status": "healthy", "failure_count": 0}, "redis": {"status": "unhealthy"}}
 
 

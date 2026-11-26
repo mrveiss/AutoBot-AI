@@ -7,7 +7,7 @@
 On a schedule, the route, tool and agent catalogues are pushed as ``declared`` entities and the
 service-health snapshot as ``probed_ok`` / ``probed_failed`` services. Each catalogue is one complete
 batch for its kinds, so an entity the backend stopped declaring becomes ``absent`` in the model.
-The accessors (``route_records``, ``tool_records``, ``agent_records``, ``read_snapshot``) are the
+The accessors (``route_records``, ``tool_records``, ``agent_records``, ``read_service_health_snapshot``) are the
 catalogue of record; nothing here restates a name list.
 """
 
@@ -25,7 +25,7 @@ from autobot_shared.self_model_constants import CATALOGUE_SOURCE, HEALTH_SOURCE,
 from events.bus import PersistStrategy, publish_event
 from events.event_types import SELF_MODEL_CHANGED
 from orchestration.agent_record import agent_records
-from services.service_health_probe import read_snapshot
+from services.service_health_probe import read_service_health_snapshot
 from services.slm_self_model import push_observations
 from tools.tool_records import tool_records
 
@@ -96,7 +96,9 @@ async def push_catalogue(app: FastAPI) -> None:
 
 async def push_service_health() -> None:
     """Push the latest service-health probe as probed services."""
-    result = await push_observations(HEALTH_SOURCE, (_SERVICE,), health_observations(await read_snapshot()))
+    result = await push_observations(
+        HEALTH_SOURCE, (_SERVICE,), health_observations(await read_service_health_snapshot())
+    )
     logger.info("self-model service health pushed: %s", result)
     await _announce_if_changed(result)
 
