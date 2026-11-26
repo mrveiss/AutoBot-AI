@@ -17,13 +17,16 @@ async def emit_tool_call_hook(session_id, tool_calls: List[Dict[str, Any]]) -> N
     try:
         from autobot_shared.plugin_sdk import Hook, HookRegistry
 
-        await HookRegistry().call_hook(
-            Hook.ON_TOOL_CALL.value,
-            session_id=session_id,
-            tool_calls=tool_calls,
-        )
+        registry = HookRegistry()
+        for call in tool_calls:  # the declared contract (HOOK_REGISTRY) is one call per tool (#20888)
+            await registry.call_hook(
+                Hook.ON_TOOL_CALL.value,
+                tool_name=call.get("name", ""),
+                args=call.get("params", {}),
+                session_id=session_id,
+            )
     except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_TOOL_CALL failed (non-fatal): %s", _hook_exc)
+        logger.warning("Plugin hook ON_TOOL_CALL failed (non-fatal): %s", _hook_exc)
 
 
 async def emit_tool_complete_hook(session_id, exec_history: List[Dict[str, Any]]) -> None:

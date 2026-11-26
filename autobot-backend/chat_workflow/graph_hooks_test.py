@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""``on_agent_execute`` has one contract: the real caller, the declaration and the real subscriber agree (#20888)."""
+"""``on_agent_execute`` and ``on_tool_call`` each have one contract: the real caller, the declaration and the real subscriber agree (#20888)."""
 
 import importlib.util
 import json
@@ -15,6 +15,7 @@ from autobot_shared.plugin_sdk import Hook, HookRegistry
 from autobot_shared.plugin_sdk.base import PluginManifest
 from autobot_shared.plugin_sdk.hooks import HOOK_REGISTRY
 from chat_workflow.graph_hooks import _emit_agent_execute_hook
+from chat_workflow.graph_tool_dispatch import emit_tool_call_hook
 
 _LOGGER_PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "core-plugins" / "logger-plugin" / "main.py"
 
@@ -75,3 +76,29 @@ async def test_the_caller_passes_exactly_what_the_declaration_names(registry):
     await _emit_agent_execute_hook("session-1", 1)
 
     assert set(seen) == set(HOOK_REGISTRY[Hook.ON_AGENT_EXECUTE.value].params)
+
+
+@pytest.mark.asyncio
+async def test_on_tool_call_reaches_the_real_logger_plugin_once_per_call(registry, tmp_path):
+    log_file = tmp_path / "events.log"
+    await _load_logger_plugin(log_file).initialize()
+
+    await emit_tool_call_hook("session-1", [{"name": "ls", "params": {"path": "/"}}, {"name": "cat", "params": {}}])
+
+    calls = [e for e in _entries(log_file) if e["event"] == "tool_call"]
+    assert [c["tool_name"] for c in calls] == ["ls", "cat"], "the plugin saw no tool_call: a contract mismatch"
+    assert calls[0]["data"] == {"args": {"path": "/"}, "session_id": "session-1"}
+
+
+@pytest.mark.asyncio
+async def test_the_tool_call_caller_passes_exactly_what_the_declaration_names(registry):
+    seen = {}
+
+    async def capture(**kwargs):
+        seen.update(kwargs)
+
+    registry.register_hook(Hook.ON_TOOL_CALL.value, capture, plugin_name="probe")
+
+    await emit_tool_call_hook("session-1", [{"name": "ls", "params": {}}])
+
+    assert set(seen) == set(HOOK_REGISTRY[Hook.ON_TOOL_CALL.value].params)

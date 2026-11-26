@@ -129,8 +129,8 @@ HOOK_REGISTRY: Dict[str, HookSignature] = {
         {"session_id": "str", "iteration": "int", "error": "str"},
     ),
     Hook.ON_TOOL_CALL.value: HookSignature(
-        "Called before a tool is invoked.",
-        {"tool_name": "str", "args": "dict"},
+        "Called before each tool is invoked (once per call).",
+        {"tool_name": "str", "args": "dict", "session_id": "str"},
     ),
     Hook.ON_TOOL_COMPLETE.value: HookSignature(
         "Called after a tool returns.",
