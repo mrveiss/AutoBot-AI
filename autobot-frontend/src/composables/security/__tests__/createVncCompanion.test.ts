@@ -70,6 +70,20 @@ describe('createVncCompanion', () => {
     expect(createSecret.mock.invocationCallOrder[0]).toBeLessThan(deleteSecret.mock.invocationCallOrder[0])
   })
 
+  it('a retry after a failed removal still removes the stale general-scoped companion', async () => {
+    const stale = { id: 'g1', type: 'password', scope: 'general', chat_id: null, metadata: { vnc_host_id: 'h1' } }
+    const scoped = { id: 'c9', type: 'password', scope: 'chat', chat_id: 'c1', metadata: { vnc_host_id: 'h1' } }
+    const chatHost = { scope: 'chat', chat_id: 'c1' }
+    getSecrets.mockResolvedValue({ secrets: [stale] })
+    deleteSecret.mockRejectedValueOnce(new Error('delete failed'))
+    await expect(createVncCompanion({ data: { id: 'h1' } }, form, chatHost, t)).rejects.toThrow('delete failed')
+    getSecrets.mockResolvedValue({ secrets: [stale, scoped] }) // the retry sees both
+    await createVncCompanion({ data: { id: 'h1' } }, form, chatHost, t)
+    expect(updateSecret).toHaveBeenCalledWith('c9', { value: 'pw' }, { chatId: 'c1' })
+    expect(deleteSecret).toHaveBeenLastCalledWith('g1', { chatId: null })
+    expect(deleteSecret).toHaveBeenCalledTimes(2)
+  })
+
   it('looks the companion up in the host\'s chat scope, so a chat-scoped one is found, not duplicated', async () => {
     await createVncCompanion({ data: { id: 'h1' } }, form, { scope: 'chat', chat_id: 'c1' }, t)
     expect(getSecrets).toHaveBeenCalledWith({ chatId: 'c1' })

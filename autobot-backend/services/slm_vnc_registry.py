@@ -100,6 +100,7 @@ async def _store_pin(node_id: str | None) -> None:
 
 
 def reset_cache() -> None:
+    """Test-only (no production caller): clears this process's state, never the shared Redis pin."""
     global _cache, _pinned_node_id
     _cache = None
     _pinned_node_id = None

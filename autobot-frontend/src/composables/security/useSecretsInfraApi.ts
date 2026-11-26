@@ -112,16 +112,19 @@ export async function createVncCompanion(
   const known = fresh.secrets ?? []
   const linked = known.filter((s) => s.type === 'password' && s.metadata?.[VNC_COMPANION_HOST_KEY] === hostId);
   const inScope = linked.find((s) => inHostScope(s, hostData));
+  // A companion in another scope (e.g. general, for a chat-scoped host) is never given the new password:
+  // the scoped one is created or updated first, then every mismatched one is removed as part of THIS save,
+  // also on a retry after a failed removal.
   if (inScope) {
     await secretsApiClient.updateSecret(inScope.id, { value: form.vnc_password } as never, {
       chatId: hostData.chat_id as string | null | undefined
     });
-    return;
+  } else {
+    await createCompanionSecret(hostId, form, hostData, t);
   }
-  // A companion in another scope (e.g. general, for a chat-scoped host) is never given the new password:
-  // the correctly scoped one is created first, then the mismatched one is removed as part of THIS save.
-  await createCompanionSecret(hostId, form, hostData, t);
-  for (const stale of linked) await secretsApiClient.deleteSecret(stale.id, { chatId: stale.chat_id });
+  for (const stale of linked.filter((s) => !inHostScope(s, hostData))) {
+    await secretsApiClient.deleteSecret(stale.id, { chatId: stale.chat_id });
+  }
 }
 
 async function createCompanionSecret(
