@@ -15,6 +15,7 @@ Issue #6970 - Hook registry with signatures and validation.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import threading
 import warnings
@@ -76,6 +77,28 @@ class HookSignature:
         return f"HookSignature({self.description!r}, params={list(self.params)})"
 
 
+def _require_declared_params(hook_name: str, callback: Callable, plugin_name: str | None) -> None:
+    """Refuse a subscriber that requires a parameter the hook's declared signature does not carry (#20888).
+
+    Such a callback raises ``TypeError`` on every call and the registry only logs it; failing here names the
+    plugin and hook at registration instead. Hooks with no declaration (custom ones) are not checked.
+    """
+    declared = HOOK_REGISTRY.get(hook_name)
+    if declared is None:
+        return
+    try:
+        parameters = inspect.signature(callback).parameters.values()
+    except (TypeError, ValueError):  # a builtin or C callable has no inspectable signature
+        return
+    kinds = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    missing = [p.name for p in parameters if p.kind in kinds and p.default is p.empty and p.name not in declared.params]
+    if missing:
+        raise TypeError(
+            f"Plugin '{plugin_name or 'unknown'}' hook '{hook_name}': callback requires {missing}, "
+            f"which the declared signature does not pass ({list(declared.params)})"
+        )
+
+
 # Registry mapping canonical hook names to their expected signatures.
 # Plugins declare hooks by name in PluginManifest.hooks; the loader
 # validates each name against this registry and emits a DeprecationWarning
@@ -95,15 +118,15 @@ HOOK_REGISTRY: Dict[str, HookSignature] = {
     ),
     Hook.ON_AGENT_EXECUTE.value: HookSignature(
         "Called before an agent task is executed.",
-        {"agent_id": "str", "task": "dict"},
+        {"agent_name": "str", "session_id": "str", "iteration": "int"},
     ),
     Hook.ON_AGENT_COMPLETE.value: HookSignature(
         "Called after an agent task completes.",
-        {"agent_id": "str", "task": "dict", "result": "Any"},
+        {"session_id": "str", "iteration": "int", "response": "str"},
     ),
     Hook.ON_AGENT_ERROR.value: HookSignature(
         "Called when an agent task raises an error.",
-        {"agent_id": "str", "task": "dict", "error": "Exception"},
+        {"session_id": "str", "iteration": "int", "error": "str"},
     ),
     Hook.ON_TOOL_CALL.value: HookSignature(
         "Called before a tool is invoked.",
@@ -224,6 +247,7 @@ class HookRegistry:
             callback: Async or sync callable
             plugin_name: Plugin name for tracking (optional)
         """
+        _require_declared_params(hook_name, callback, plugin_name)
         plugin_name = resolve_owner(plugin_name)  # inside plugin context: the plugin itself, never another (#19302)
         if hook_name not in self._hooks:
             self._hooks[hook_name] = []
