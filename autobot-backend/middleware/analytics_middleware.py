@@ -50,7 +50,8 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
         except Exception as e:
-            logger.error("Error processing %s %s: %s", request.method, endpoint, e)
+            # The route template, never the raw path (it can carry ids or tokens); the exception text is as before
+            logger.error("Error processing %s %s: %s", request.method, self._template(request), e)
             self._track(request, endpoint, time.time() - start_time, 500)
             raise
 
@@ -60,15 +61,20 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         response.headers["X-Tracked-Analytics"] = "true"
         return response
 
+    @staticmethod
+    def _template(request: Request) -> str:
+        """The matched route template, or ``UNRESOLVED_ROUTE``: what is stored and logged instead of the raw path."""
+        return getattr(request.scope.get("route"), "path", None) or UNRESOLVED_ROUTE
+
     def _track(self, request: Request, endpoint: str, response_time: float, status_code: int) -> None:
         """Record one call in the background, keyed by the route template when routing resolved one."""
         if not (self.analytics_controller and hasattr(self.analytics_controller, "track_api_call")):
             return
         if not get_telemetry_settings()["enabled"]:  # re-checked: the opt-out may have landed mid-request
             return
-        route = request.scope.get("route")
-        template = getattr(route, "path", None) or UNRESOLVED_ROUTE
-        task = asyncio.create_task(self._track_call_async(template, response_time, status_code, request.method))
+        task = asyncio.create_task(
+            self._track_call_async(self._template(request), response_time, status_code, request.method)
+        )
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
 

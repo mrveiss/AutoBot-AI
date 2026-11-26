@@ -268,3 +268,24 @@ def test_the_ring_size_setting_is_clamped(monkeypatch, raw, expected):
     value = env_int_clamped("AUTOBOT_API_CALL_PATTERNS_MAX", 10000, *module.API_CALL_PATTERNS_BOUNDS)
     assert value == expected
     assert module.deque(maxlen=value).maxlen == expected  # no OverflowError
+
+
+async def test_the_error_log_carries_the_route_template_never_the_raw_path(controller, monkeypatch, caplog):
+    """The failure path logged the raw path, which can hold ids or tokens (#21684)."""
+    import logging
+
+    monkeypatch.setattr(config.telemetry, "enabled", True)
+    app = FastAPI()
+    app.add_middleware(AnalyticsMiddleware, analytics_controller=controller)
+
+    @app.get("/api/items/{item_id}")
+    async def item(item_id: str):
+        raise RuntimeError("boom")
+
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    with caplog.at_level(logging.ERROR):
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.get("/api/items/secret-id-9981")
+    logged = " ".join(r.getMessage() for r in caplog.records if "Error processing" in r.getMessage())
+    assert "/api/items/{item_id}" in logged
+    assert "secret-id-9981" not in logged
