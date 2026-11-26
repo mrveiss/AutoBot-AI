@@ -184,6 +184,7 @@ async def test_block_renders_collected_data_and_omits_route_list(monkeypatch: py
         return context
 
     monkeypatch.setattr(awareness, "get_system_context", _fake)
+    monkeypatch.setattr(render, "SELF_MODEL_QUERY_TOOL_NAME", None)
     block = await awareness.inject_awareness_context("q")
 
     assert "Phase: Phase 3: LLM Integration" in block
@@ -192,5 +193,7 @@ async def test_block_renders_collected_data_and_omits_route_list(monkeypatch: py
     assert "/api/secret-route-xyz" not in block
     assert "omits endpoint" in block
 
-    monkeypatch.setattr(render, "SELF_MODEL_QUERY_TOOL_NAME", "query_self_model")
+    from tools.tool_records import SELF_MODEL_QUERY_TOOL_NAME as catalogued  # #22278: the real default
+
+    monkeypatch.setattr(render, "SELF_MODEL_QUERY_TOOL_NAME", catalogued)
     assert "call the query_self_model tool" in await awareness.inject_awareness_context("q")

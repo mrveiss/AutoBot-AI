@@ -11,8 +11,10 @@ metrics and operational status. The route list is not inlined; the owner decisio
 
 from typing import Any, Dict, List
 
-# On-demand self-model query tool name (#22278); None until the tool is registered.
-SELF_MODEL_QUERY_TOOL_NAME: str | None = None
+from tools.tool_records import SELF_MODEL_QUERY_TOOL_NAME as _QUERY_TOOL
+
+# On-demand self-model query tool name (#22278), from the tool catalogue.
+SELF_MODEL_QUERY_TOOL_NAME: str | None = _QUERY_TOOL
 
 
 def render_capability_lines(categories: Dict[str, List[str]]) -> str:

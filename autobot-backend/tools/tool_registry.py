@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from tools.code_interpreter import execute_code
 from tools.kb_read_tools import KnowledgeReadToolsMixin
 from tools.kb_write_tools import KnowledgeWriteToolsMixin
+from tools.self_model_tools import SelfModelToolsMixin
 from tools.system_read_tools import SystemReadToolsMixin
 from tools.tool_records import prompt_tool_names
 
@@ -40,11 +41,8 @@ GET_PROCESS_INFO_VARIANTS = {"getprocessinfo", "systemgetprocessinfo"}
 TERMINATE_PROCESS_VARIANTS = {"terminateprocess", "systemterminateprocess"}
 
 
-class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SystemReadToolsMixin):
-    """
-    Unified tool registry that provides standardized tool implementations
-    for both orchestrator types, eliminating code duplication.
-    """
+class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SelfModelToolsMixin, SystemReadToolsMixin):
+    """Unified tool implementations for both orchestrator types (no duplication)."""
 
     def __init__(
         self,
@@ -548,6 +546,7 @@ class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin, SystemRead
             ),
             "storefact": lambda args: self.store_fact(args.get("content", ""), args.get("metadata")),
             "getfact": lambda args: self.get_fact(args.get("fact_id"), args.get("query"), user_id),
+            "queryselfmodel": lambda args: self.query_self_model(args, user_id),
             "typetext": lambda args: self.type_text(args.get("text", "")),
             "clickelement": lambda args: self.click_element(args.get("image_path", "")),
             "bringwindowtofront": lambda args: self.bring_window_to_front(args.get("window_title", "")),

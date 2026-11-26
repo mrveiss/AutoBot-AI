@@ -41,6 +41,9 @@ LOCATION_BROWSER = SERVICE_DEFINITIONS["playwright-vnc"].name
 
 CATEGORY_WEB_RESEARCH = "web_research"
 
+#: The read-only chat tool over the SLM self-model (#22278); the self-awareness block points at it.
+SELF_MODEL_QUERY_TOOL_NAME = "query_self_model"
+
 #: name -> (category, execution location). Order is the order the model's prompt lists them.
 REGISTRY_TOOLS: Dict[str, Tuple[str, str]] = {
     "execute_system_command": ("system", LOCATION_WORKER),
@@ -56,6 +59,7 @@ REGISTRY_TOOLS: Dict[str, Tuple[str, str]] = {
     "add_file_to_knowledge_base": ("knowledge", LOCATION_BACKEND),
     "store_fact": ("knowledge", LOCATION_BACKEND),
     "get_fact": ("knowledge", LOCATION_BACKEND),
+    SELF_MODEL_QUERY_TOOL_NAME: ("self_model", LOCATION_BACKEND),
     "type_text": ("gui", LOCATION_WORKER),
     "click_element": ("gui", LOCATION_WORKER),
     "bring_window_to_front": ("gui", LOCATION_WORKER),
