@@ -183,3 +183,49 @@ class TestUnreadableRedis:
         redis = _FakeRedis()
         redis.get = AsyncMock(side_effect=ConnectionError("redis down"))
         await _bare_telemetry(redis).check_caps("unknown")  # existing behaviour: no record, no breach
+
+
+class TestSessionEndedDuringAnOutage:
+    """A session that ends while Redis is unreachable is flushed when Redis returns, once (#21678)."""
+
+    @staticmethod
+    async def _ended_during_outage(monkeypatch, tail_tokens=400):
+        monkeypatch.setattr("services.voice_realtime_telemetry.get_telemetry_settings", lambda: {"enabled": True})
+        server = _FakeRedis()
+        t = _bare_telemetry(server)
+        t._prom = MagicMock()
+        await t.session_start("o1")
+        await t.record_response_done("o1", input_tokens=100)
+        t._get_redis = AsyncMock(return_value=None)  # outage
+        await t.record_response_done("o1", input_tokens=tail_tokens)
+        ended = await t.session_end("o1")
+        return server, t, ended
+
+    @pytest.mark.asyncio
+    async def test_redis_holds_the_end_and_the_full_usage_once_after_the_next_operation(self, monkeypatch):
+        server, t, ended = await self._ended_during_outage(monkeypatch)
+        stored = json.loads(server.stored["voice_realtime_session:o1"])
+        assert stored["ended_at"] is None and stored["input_tokens"] == 100  # the outage left the tail behind
+        assert "o1" not in t._in_memory_sessions and "o1" in t._ended_unflushed
+        t._get_redis = AsyncMock(return_value=server)
+        await t.session_start("other")  # any operation that reaches Redis flushes it
+        stored = json.loads(server.stored["voice_realtime_session:o1"])
+        assert stored["ended_at"] == ended.ended_at and stored["duration_s"] == ended.duration_s
+        assert stored["input_tokens"] == 500 and stored["estimated_cost_usd"] > 0
+        await t.record_audio("other", "input", 1.0)  # a later operation must not apply it again
+        assert json.loads(server.stored["voice_realtime_session:o1"])["input_tokens"] == 500
+        assert t._ended_unflushed == {}
+
+    @pytest.mark.asyncio
+    async def test_an_unflushed_ended_session_past_the_abandoned_age_is_dropped_with_a_warning(
+        self, monkeypatch, caplog
+    ):
+        from datetime import datetime, timedelta, timezone
+
+        from services import voice_realtime_telemetry as module
+
+        _, t, _ = await self._ended_during_outage(monkeypatch)
+        old = datetime.now(timezone.utc) - timedelta(seconds=module.abandoned_session_max_age_s(t._max_seconds) + 60)
+        t._ended_unflushed["o1"].ended.ended_at = old.isoformat()
+        t._evict_abandoned_sessions()
+        assert t._ended_unflushed == {} and "session_id=o1" in caplog.text

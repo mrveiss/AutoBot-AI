@@ -57,6 +57,7 @@ def bare_telemetry(fake_redis, prom=None, max_seconds=1800, max_cost=5.0):
     t._config.telemetry.enabled = True
     t._in_memory_sessions = {}
     t._pending = {}
+    t._ended_unflushed = {}
     return t
 
 

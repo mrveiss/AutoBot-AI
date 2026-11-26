@@ -34,7 +34,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.store_authority import system_of_record
 from autobot_shared.time_utils import now_utc
 from services.telemetry_settings import get_telemetry_settings
-from services.voice_realtime_usage import UsageDelta
+from services.voice_realtime_usage import EndedSession, UsageDelta
 
 logger = get_logger(__name__)
 
@@ -155,6 +155,8 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         self._in_memory_sessions: dict[str, RealtimeSessionRecord] = {}
         # Usage not yet committed to Redis (it was down, telemetry off, or a write failed), added on the next commit
         self._pending: dict[str, UsageDelta] = {}
+        # Sessions that ended while Redis could not take them; flushed when it returns, dropped when abandoned
+        self._ended_unflushed: dict[str, EndedSession] = {}
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -343,6 +345,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         # The local copy is kept whatever the consent: cap checks and session_end need it when Redis is off or
         # down, even after an opt-out/opt-in flips mid-session (#9035). It is never read ahead of Redis.
         self._hold_locally(record)
+        await self._flush_ended_sessions()
         redis = await self._authoritative_redis()
         if redis is None:
             return
@@ -359,6 +362,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         Committed to Redis under WATCH/MULTI when it is readable; otherwise (or when the commit fails) the usage is
         kept pending and counted by every cap check until a later commit flushes it with that update.
         """
+        await self._flush_ended_sessions()
         total = self._pending.pop(session_id, UsageDelta()).merged(delta)  # taken whole, so no one else re-adds it
         record = await self._commit_to_redis(session_id, total, finish)
         if record is not None:
@@ -371,19 +375,24 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         view = _usage_view(local, total, finish)
         if view.ended_at:
             self._hold_locally(view)
+            self._ended_unflushed[session_id] = EndedSession(local, total, view)  # flushed when Redis returns
         else:
             self._pending[session_id] = self._pending.get(session_id, UsageDelta()).merged(total)
         return view
 
     async def _commit_to_redis(
-        self, session_id: str, total: UsageDelta, finish: Callable[[RealtimeSessionRecord], None] | None
+        self,
+        session_id: str,
+        total: UsageDelta,
+        finish: Callable[[RealtimeSessionRecord], None] | None,
+        base: RealtimeSessionRecord | None = None,
     ) -> RealtimeSessionRecord | None:
         """The committed record, or None when Redis is off, the session unknown, or the commit failed (logged)."""
         try:
             redis = await self._authoritative_redis()
             if redis is None:
                 return None
-            base = self._in_memory_sessions.get(session_id)
+            base = base or self._in_memory_sessions.get(session_id)
             return await _update_in_redis(redis, session_id, total, finish, base)
         except Exception as exc:
             # An EXEC that raised after sending may have applied: the delta is still counted pending, i.e. it may be
@@ -391,10 +400,29 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
             logger.warning("voice_realtime: redis commit failed session_id=%s, usage kept pending: %s", session_id, exc)
             return None
 
+    async def _flush_ended_sessions(self) -> None:
+        """Commit sessions that ended during an outage: end stamp plus final usage, through the same WATCH/MULTI apply.
+
+        An entry leaves the map only once committed (taken whole while in flight, restored on failure), so a flush
+        is never applied twice; an unreachable Redis leaves it for the next operation or the abandoned-age drop.
+        """
+        for sid in list(self._ended_unflushed):
+            entry = self._ended_unflushed.pop(sid)
+            if await self._commit_to_redis(sid, entry.delta, _end_stamp(entry.ended), entry.base) is None:
+                self._ended_unflushed.setdefault(sid, entry)
+
+    def _drop_stale_ended_sessions(self, max_age: int) -> None:
+        now = now_utc()
+        for sid, entry in list(self._ended_unflushed.items()):
+            if (now - _parse_iso(entry.ended.ended_at)).total_seconds() > max_age:
+                del self._ended_unflushed[sid]
+                logger.warning("voice_realtime: dropped an unflushed ended session session_id=%s", sid)
+
     def _evict_abandoned_sessions(self) -> None:
         """Drop in-memory sessions that never ended and are older than the max age (a dropped connection)."""
         now = now_utc()
         max_age = abandoned_session_max_age_s(self._max_seconds)
+        self._drop_stale_ended_sessions(max_age)
         stale = [
             sid
             for sid, rec in self._in_memory_sessions.items()
@@ -489,6 +517,18 @@ async def _update_in_redis(
             except WatchError:
                 continue  # another write landed first: re-read its state and apply ours on top
     raise RuntimeError(f"voice_realtime: session {session_id} contended for {_UPDATE_MAX_ATTEMPTS} attempts")
+
+
+def _end_stamp(ended: RealtimeSessionRecord) -> Callable[[RealtimeSessionRecord], None]:
+    """Finish step that stamps *ended*'s end time, duration and reason, and the cost from the final usage."""
+
+    def finish(record: RealtimeSessionRecord) -> None:
+        record.ended_at = ended.ended_at
+        record.duration_s = ended.duration_s
+        record.disconnect_reason = ended.disconnect_reason
+        record.estimated_cost_usd = _estimate_cost(record)
+
+    return finish
 
 
 def _apply_end(record: RealtimeSessionRecord, reason: DisconnectReason) -> None:

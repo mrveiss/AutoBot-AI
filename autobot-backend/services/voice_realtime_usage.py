@@ -34,3 +34,16 @@ class UsageDelta:
         """Add this delta onto *record* in place."""
         for f in fields(self):
             setattr(record, f.name, getattr(record, f.name) + getattr(self, f.name))
+
+
+@dataclass
+class EndedSession:
+    """A session that ended while Redis could not take it: kept until its final state is committed (#21678).
+
+    ``base`` is the local record before the unflushed usage, ``delta`` that usage, ``ended`` the finished view
+    (its end time, duration and reason are what gets stamped, so a late flush keeps the real end).
+    """
+
+    base: Any
+    delta: UsageDelta
+    ended: Any
