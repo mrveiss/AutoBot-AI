@@ -35,7 +35,7 @@ def _tracked_files() -> list[str]:
 REACH = declare(
     "kb-wipe-never-invoked",
     discover=_discover,
-    floor=14623,  # mid-window: population 14823, window (14423, 14823); a new guard pins until it lands on the base (#19676)
+    floor=14784,  # mid-window: population 14984, window (14584, 14984); a new guard pins until it lands on the base (#19676)
     growth=400,
     what="tracked files",
 )
