@@ -60,10 +60,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.logging_once import log_once
 from autobot_shared.secret_redaction import redact_nested
 from autobot_shared.ssot_config import config as ssot_config
-from autobot_shared.status_enums import CommandRisk
 from autobot_shared.tool_catalogue import (
     ALWAYS_AVAILABLE_TOOLS,
-    SHELL_EXEC_TOOLS,
     approval_category_for,
     canonical_tool_name,
     valid_approval_categories,
@@ -72,6 +70,8 @@ from llc.services.ai_lines import stored_line
 from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.audit_logger import audit_log
+from services.command_line_risk import is_read_only_command as _is_read_only_command
+from services.command_line_risk import lift_by_learned_rule
 from user_management.database import get_async_session_factory
 
 logger = get_logger(__name__)
@@ -136,27 +136,6 @@ async def _stored(scope: Optional[LineScope], key: str) -> tuple[Optional[AiLine
         return None, True
 
 
-def _is_read_only_command(tool_name: str, params: Optional[Mapping[str, Any]]) -> bool:
-    """Whether this call is a shell command rated SAFE that also only reads (#19950).
-
-    The tool name says only "runs a command", so the command decides. SAFE alone is not enough: it covers
-    ``git push`` and ``curl -X POST``. No command, or a classifier that cannot answer, is not read-only:
-    the call keeps the tool's own line.
-    """
-    command = (params or {}).get("command") if canonical_tool_name(tool_name) in SHELL_EXEC_TOOLS else None
-    if not command or not isinstance(command, str):
-        return False
-    try:
-        from secure_command_executor import SecureCommandExecutor
-        from security.read_only_commands import is_read_only_command
-
-        risk, _reasons = SecureCommandExecutor(use_docker_sandbox=False).assess_command_risk(command)
-        return risk is CommandRisk.SAFE and is_read_only_command(command)
-    except Exception as exc:  # noqa: BLE001 - fail closed on an unreadable verdict
-        logger.error("Command risk unreadable (%s); the command keeps its tool's line", exc)
-        return False
-
-
 async def resolve_action_line(
     tool_name: str,
     params: Optional[Mapping[str, Any]],
@@ -165,6 +144,7 @@ async def resolve_action_line(
     user_id: Any = None,
     declared_categories: Iterable[str] = (),
     role_requires_approval: bool = False,
+    learned_rules_apply: bool = True,
 ) -> LineResolution:
     """Resolve the effective line for one action. Read-only: creates nothing, runs nothing.
 
@@ -182,7 +162,7 @@ async def resolve_action_line(
     unmanaged = read_only or canonical_tool_name(tool_name) in ALWAYS_AVAILABLE_TOOLS
     gated = list(declared_categories) if unmanaged else await gated_categories(declared_categories)
     category = approval_category_for(tool_name, gated)
-    return resolve_line(
+    resolution = resolve_line(
         key,
         stored=stored,
         mutating=not read_only and is_mutating(tool_name),
@@ -191,6 +171,7 @@ async def resolve_action_line(
         store_unavailable=unavailable,
         scope_missing=scope is None,
     )
+    return await lift_by_learned_rule(resolution, tool_name, params, user_id, applies=learned_rules_apply)
 
 
 def turn_requires_approval(tool_name: str, ctx: Any) -> bool:
@@ -217,6 +198,7 @@ async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
         user_id=(getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY),
         declared_categories=declared_categories_of(ctx),
         role_requires_approval=turn_requires_approval(tool_call.get("name", ""), ctx),
+        learned_rules_apply=not turn_requires_approval(tool_call.get("name", ""), ctx),
     )
     return resolution.line is AiLine.DRAFT_THEN_SEND
 
@@ -349,6 +331,7 @@ async def enforce_line(
     user_id: Any = None,
     declared_categories: Iterable[str] = (),
     role_requires_approval: bool = False,
+    learned_rules_apply: bool = True,
     hold_in_approvals: bool = True,
     approved_fingerprints: frozenset[str] = frozenset(),
     floor_waived: bool = False,
@@ -369,6 +352,7 @@ async def enforce_line(
         user_id=user_id,
         declared_categories=declared_categories,
         role_requires_approval=role_requires_approval,
+        learned_rules_apply=learned_rules_apply,
     )
     if resolution.line is AiLine.NEVER:
         verdict = LineVerdict(Outcome.REFUSE, resolution)

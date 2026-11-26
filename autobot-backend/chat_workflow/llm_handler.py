@@ -25,7 +25,6 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_history.rolling_summary import prompt_summary
-from chat_workflow import tiered_context_sources as tcs
 from dependencies import provide_config_manager
 from intent_classifier import apply_topic_guidance
 from middleware.base import HookContext

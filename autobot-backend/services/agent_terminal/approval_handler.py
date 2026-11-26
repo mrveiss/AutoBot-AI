@@ -136,27 +136,17 @@ class ApprovalHandler:
             user_id: User who created the rule
             command: Command that was approved
             risk_level: Risk level of the command
+
+        Keyed by the verified user id, not the username, so chat and the terminal match one rule (#16840).
         """
+        from .ai_line_gate import owner_user_id
+
+        rule_owner = await owner_user_id(user_id)
+        if rule_owner is None:
+            logger.warning("No auto-approve rule stored: %s is not a known user", user_id)
+            return
         await self.approval_manager.store_auto_approve_rule(
-            user_id=user_id,
-            command=command,
-            risk_level=risk_level,
-        )
-
-    async def check_auto_approve_rules(self, user_id: str, command: str, risk_level: str) -> bool:
-        """
-        Check if command matches any auto-approve rules.
-
-        Args:
-            user_id: User ID to check rules for
-            command: Command to check
-            risk_level: Risk level of the command
-
-        Returns:
-            True if command should be auto-approved
-        """
-        return await self.approval_manager.check_auto_approve_rules(
-            user_id=user_id,
+            user_id=rule_owner,
             command=command,
             risk_level=risk_level,
         )

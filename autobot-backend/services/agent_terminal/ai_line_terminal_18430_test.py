@@ -46,7 +46,6 @@ def _service(permissions=None):
     svc._drain_peer_messages = lambda session: None
     svc._assess_command = lambda command: (None, svc.risk, [], False, [])
     svc.risk = CommandRisk.SAFE
-    svc.approval_handler.check_auto_approve_rules = AsyncMock(return_value=False)
     svc._queue_command_for_approval = AsyncMock(return_value={"status": "pending_approval"})
     svc._execute_auto_approved_command = AsyncMock(return_value={"status": "success"})
     return svc

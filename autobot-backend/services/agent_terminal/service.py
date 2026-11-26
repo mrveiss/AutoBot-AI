@@ -18,6 +18,7 @@ from monitoring.prometheus_metrics import get_metrics_manager
 from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
 from services.command_approval_manager import AgentRole, CommandApprovalManager
 from services.command_execution_queue import get_command_queue
+from services.command_line_risk import shared_approval_manager
 from type_defs.common import Metadata
 
 from .ai_line_gate import claim_pending, decide_command, permission_refusal, queue_reservation, settle_pending
@@ -69,7 +70,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
         # Use passed ChatWorkflowManager instead of creating new one
         self.chat_workflow_manager = chat_workflow_manager
 
-        self.approval_manager = CommandApprovalManager()
+        self.approval_manager = shared_approval_manager()  # #16840: one learned-rule set with chat
         self.command_queue = command_queue or get_command_queue()
 
         self.terminal_logger = TerminalLogger(redis_client=redis_client, data_dir="data/chats")
@@ -210,12 +211,11 @@ class AgentTerminalService(InterpretationOwnershipMixin):
 
         # #14955 review: session.pending_approval["risk"] (read back via
         # get_pending_risk_level()) feeds the auto-approve rules engine
-        # (store_auto_approve_rule / check_auto_approve_rules in
-        # approval_handler.py) and approval_memory.py's RISK_LEVELS table,
+        # (store_auto_approve_rule in approval_handler.py, matched in
+        # command_line_risk.py) and approval_memory.py's RISK_LEVELS table,
         # BOTH of which key on the 6-member CommandRisk vocabulary — the
-        # check site (_check_auto_approval_or_queue, below) was never
-        # touched and still compares against raw CommandRisk.value. Storing
-        # a converted RiskLevel here instead would silently break every
+        # check site was never touched and compares against raw CommandRisk.value.
+        # Storing a converted RiskLevel here instead would silently break every
         # "always allow" rule created after this point (RiskLevel != the
         # CommandRisk the check compares against) and would permanently
         # collapse the DANGEROUS/FORBIDDEN/CRITICAL distinction
