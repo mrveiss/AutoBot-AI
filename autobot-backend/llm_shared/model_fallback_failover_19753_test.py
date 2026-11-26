@@ -478,11 +478,15 @@ async def test_every_hop_skipped_for_size_names_the_size_skip_in_the_reason():
     mgr = _chains("m-a", ["m-s1", "m-s2"], ["anthropic", "anthropic"])
     with _env(mgr) as (_, emitted), _windows({"m-s1": 100, "m-s2": 200}):
         result = await ModelFallbackCoordinator().execute_with_fallback(_big_request(), registry)
+        assert emitted.await_count == 1 and emitted.await_args.kwargs["reason"] == "request_exceeds_window"
+        emitted.reset_mock()  # the streaming entry point must emit its own audit, not borrow the one above
         assert await ModelFallbackCoordinator().fail_over(_big_request(), registry, UNAVAILABLE, acted=False) is None
+        assert emitted.await_count == 1
+        assert emitted.await_args.kwargs["reason"] == "request_exceeds_window"
+        assert emitted.await_args.kwargs["exhausted"] is True
     assert registry.asked == ["m-a"] and result.error == "HTTP 503"  # the original failure, not a bare exhaustion
     assert result.provider_metadata["fallback_reason"] == "request_exceeds_window"
     assert [s["model"] for s in result.provider_metadata["size_skipped"]] == ["m-s1", "m-s2"]
-    assert emitted.await_args.kwargs["reason"] == "request_exceeds_window"
 
 
 @pytest.mark.asyncio
