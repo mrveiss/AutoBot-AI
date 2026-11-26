@@ -169,3 +169,12 @@ class TestNonFatal:
 
         messages = [str(c.args[0]) for c in log.info.call_args_list if c.args]
         assert any("#13640" in m and "trimmed" in m for m in messages), messages
+
+
+class TestBudgetNeverExceedsTheDeclaredWindow:
+    def test_a_model_declaring_less_than_the_sent_window_is_budgeted_to_its_own(self):
+        """#22016: the sent num_ctx (8,192) must not lift the budget past a smaller declared window."""
+        manager = ContextWindowManager()
+
+        with patch.object(manager, "get_adaptive_context_length", return_value=4096):
+            assert 0 < manager.get_prompt_budget(None) < 4096

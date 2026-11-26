@@ -15,11 +15,11 @@ Command: ``python -m chat_workflow.prompt_drift [--language en] [--company]
 [--against saved.json]`` prints the current record, or the drift report.
 """
 
-import hashlib
 import json
 import sys
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.content_digest import content_digest
 from autobot_shared.env_registry import env
 from autobot_shared.logging_manager import get_logger
 
@@ -32,7 +32,7 @@ _DIGEST_CHARS = 16
 
 
 def _digest(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:_DIGEST_CHARS]
+    return content_digest(text, width=_DIGEST_CHARS)
 
 
 def prefix_record(text: str, release: str = PROMPT_RELEASE) -> Dict[str, Any]:

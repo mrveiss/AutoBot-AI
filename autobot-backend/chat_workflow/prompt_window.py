@@ -26,11 +26,13 @@ def request_window_tokens(cwm: Any, model_name: str | None, *, hop: bool = False
     """Tokens of context the request's model really gets.
 
     The primary request is always the Ollama generate payload, which sends ``sent_num_ctx()`` whatever the model
-    (the same function ``chat_request_options`` reads, so the budget and the payload cannot disagree). A failover
-    *hop* goes through the provider registry, which does not carry ``num_ctx``: the hop model gets its own
+    (the same function ``chat_request_options`` reads, so the budget and the payload cannot disagree), but a model
+    whose declared window is smaller than that cannot use the difference: the smaller of the two is the window. A
+    failover *hop* goes through the provider registry, which does not carry ``num_ctx``: the hop model gets its own
     declared window.
     """
-    return int(cwm.get_adaptive_context_length(model_name)) if hop else sent_num_ctx()
+    declared = int(cwm.get_adaptive_context_length(model_name))
+    return declared if hop else min(sent_num_ctx(), declared)
 
 
 def output_reserve_tokens(cwm: Any, model_name: str | None, *, hop: bool = False) -> int:
