@@ -20,7 +20,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Mapping, Optional
 
-from autobot_shared.ai_lines import AiLine, LineResolution
+from autobot_shared.ai_lines import SOURCE_DEFAULT, SOURCE_LEARNED_RULE, AiLine, LineResolution
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import CommandRisk
 from autobot_shared.tool_catalogue import SHELL_EXEC_TOOLS, canonical_tool_name
@@ -28,7 +28,6 @@ from services.command_approval_manager import CommandApprovalManager
 
 logger = get_logger(__name__)
 
-SOURCE_LEARNED_RULE = "learned_rule"
 LEARNABLE_RISKS = frozenset({CommandRisk.SAFE, CommandRisk.MODERATE})
 _manager: Optional[CommandApprovalManager] = None
 
@@ -39,6 +38,12 @@ def shared_approval_manager() -> CommandApprovalManager:
     if _manager is None:
         _manager = CommandApprovalManager()
     return _manager
+
+
+def reset_shared_approval_manager() -> None:
+    """Drop the shared manager and every learned rule in it, so tests that build one do not share state."""
+    global _manager
+    _manager = None
 
 
 def _shell_command(tool_name: str, params: Optional[Mapping[str, Any]]) -> Optional[str]:
@@ -80,9 +85,14 @@ async def lift_by_learned_rule(
     *,
     applies: bool = True,
 ) -> LineResolution:
-    """Line 1 for a line-2 shell command that one of *user_id*'s own learned rules matches; else unchanged."""
+    """Line 1 for a line-2 shell command that one of *user_id*'s own learned rules matches; else unchanged.
+
+    Lifts only an UNSET line (``SOURCE_DEFAULT``): an approval-baseline hold ("never autonomous"), a role hold (a
+    role policy only tightens) and an explicitly stored line 2 stay held. The rule belongs to the approver who
+    created it; it is in process memory, and persistence across workers and restarts is #22314.
+    """
     command = _shell_command(tool_name, params)
-    if not (applies and user_id and command) or resolution.line is not AiLine.DRAFT_THEN_SEND:
+    if not (applies and user_id and command) or resolution.source != SOURCE_DEFAULT:
         return resolution
     risk = assess_command_risk(command)
     if risk not in LEARNABLE_RISKS:

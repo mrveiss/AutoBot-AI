@@ -16,13 +16,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autobot_shared.ai_lines import AiLine
+from autobot_shared.ai_lines import (
+    SOURCE_BASELINE,
+    SOURCE_DEFAULT,
+    SOURCE_LEARNED_RULE,
+    SOURCE_ROLE,
+    SOURCE_STORED,
+    AiLine,
+    LineResolution,
+)
 from autobot_shared.status_enums import CommandRisk
 from chat_workflow.tool_dispatch_guards import COMMAND_FORCE_APPROVAL_KEY, enforce_ai_line
 from services import ai_line_enforcement as enforcement
 from services.agent_terminal.ai_line_gate import decide_command
 from services.ai_line_enforcement import resolve_action_line
 from services.command_approval_manager import CommandApprovalManager
+from services.command_line_risk import lift_by_learned_rule, reset_shared_approval_manager, shared_approval_manager
 
 pytestmark = pytest.mark.asyncio
 
@@ -81,6 +90,46 @@ async def test_line_3_is_never_lifted_by_a_rule():
 
 async def test_the_attachment_floor_is_not_lifted_by_a_rule():
     assert await _line(_CREATOR, role_requires_approval=True, learned_rules_apply=False) is AiLine.DRAFT_THEN_SEND
+
+
+async def _lift(source: str, stored: AiLine | None = None) -> LineResolution:
+    held = LineResolution("execute_command", AiLine.DRAFT_THEN_SEND, source, stored)
+    with _env(CommandRisk.MODERATE, await _manager_with_rule()):
+        return await lift_by_learned_rule(held, "execute_command", {"command": _COMMAND}, _CREATOR)
+
+
+async def test_an_unset_line_is_lifted_and_says_a_saved_rule_allowed_it():
+    lifted = await _lift(SOURCE_DEFAULT)
+    assert (lifted.line, lifted.source) == (AiLine.AUTONOMOUS, SOURCE_LEARNED_RULE)
+    assert "rule you saved" in lifted.reason
+
+
+async def test_an_approval_baseline_hold_is_not_lifted_by_a_rule():
+    assert (await _lift(SOURCE_BASELINE)).line is AiLine.DRAFT_THEN_SEND
+
+
+async def test_a_role_hold_is_not_lifted_by_a_rule():
+    assert (await _lift(SOURCE_ROLE)).line is AiLine.DRAFT_THEN_SEND
+
+
+async def test_an_explicitly_stored_line_2_is_not_lifted_by_a_rule():
+    assert (await _lift(SOURCE_STORED, AiLine.DRAFT_THEN_SEND)).line is AiLine.DRAFT_THEN_SEND
+
+
+async def test_a_rule_is_stored_once_per_pattern_and_risk():
+    manager = await _manager_with_rule()
+    assert await manager.store_auto_approve_rule(_CREATOR, _COMMAND, CommandRisk.MODERATE.value) is True
+    assert len(manager.get_user_rules(_CREATOR)) == 1
+
+
+async def test_reset_gives_the_next_caller_an_empty_rule_set():
+    first = shared_approval_manager()
+    await first.store_auto_approve_rule(_CREATOR, _COMMAND, CommandRisk.MODERATE.value)
+    reset_shared_approval_manager()
+    try:
+        assert shared_approval_manager() is not first and shared_approval_manager().get_user_rules(_CREATOR) == []
+    finally:
+        reset_shared_approval_manager()
 
 
 async def _chat_call(user_id):

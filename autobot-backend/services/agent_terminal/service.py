@@ -386,9 +386,9 @@ class AgentTerminalService(InterpretationOwnershipMixin):
         user_id: str | None,
         comment: str | None,
         auto_approve_future: bool,
-    ) -> None:
+    ) -> bool:
         """
-        Perform all post-execution updates after command runs.
+        Perform all post-execution updates after command runs; True when an auto-approve rule was saved (#16840).
 
         Issue #665: Extracted from _execute_approved_command.
 
@@ -415,14 +415,15 @@ class AgentTerminalService(InterpretationOwnershipMixin):
 
         await settle_pending(session, self.session_manager)
 
-        if auto_approve_future and user_id:
-            await self.approval_handler.store_auto_approve_rule(
-                user_id=user_id,
-                command=command,
-                risk_level=risk_level,
+        stored = bool(
+            auto_approve_future
+            and user_id
+            and await self.approval_handler.store_auto_approve_rule(
+                user_id=user_id, command=command, risk_level=risk_level
             )
-
+        )
         await self._update_and_broadcast_approval_status(session, command, True, user_id, comment)
+        return stored
 
     async def _run_approved_command_body(
         self,
@@ -448,23 +449,20 @@ class AgentTerminalService(InterpretationOwnershipMixin):
                 return_code=result.get("return_code", 0),
             )
             await log_command_result(self.terminal_logger, session, command, result, user_id)
-            await self._post_execution_updates(
-                session,
-                command,
-                result,
-                risk_level,
-                user_id,
-                comment,
-                auto_approve_future,
+            stored = await self._post_execution_updates(
+                session, command, result, risk_level, user_id, comment, auto_approve_future
             )
 
-        return {
+        response = {
             "status": "approved",
             "command": command,
             "result": result,
             "comment": comment,
-            "auto_approve_stored": auto_approve_future,
+            "auto_approve_stored": stored is True,
         }
+        if auto_approve_future and stored is not True:
+            response["auto_approve_note"] = "The command ran, but the 'approve similar commands' rule was not saved."
+        return response
 
     async def _execute_approved_command(
         self,
