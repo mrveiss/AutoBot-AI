@@ -81,7 +81,14 @@ async def apply_observations(
 def _inventory_observations(node_id: str, inventory: Dict[str, Any]) -> List[Observation]:
     parent = entity_key("node", node_id)
     packages = [
-        Observation("package", name, PROBED_OK, parent_key=parent, node_id=node_id, version=str(version) or None)
+        Observation(
+            "package",
+            name,
+            PROBED_OK,
+            parent_key=parent,
+            node_id=node_id,
+            version=str(version) if version is not None else None,
+        )
         for name, version in (inventory.get("packages") or {}).items()
     ]
     commands = [

@@ -104,8 +104,17 @@ class InventoryReporter:
         due = self._hash != self._sent_hash or now - self._sent_at >= INVENTORY_RESEND_S
         if not due:
             return {"inventory_hash": self._hash}
-        self._sent_hash, self._sent_at = self._hash, now
         return {"inventory_hash": self._hash, "inventory": self._inventory}
+
+    def confirm(self, extra: Dict[str, Any], delivered: bool) -> bool:
+        """Record a full report as sent only once the SLM acknowledged the heartbeat that carried it.
+
+        A lost report leaves ``_sent_hash`` behind, so the next heartbeat carries the full list again
+        instead of waiting for the backstop while the node's entities go stale. Returns *delivered*.
+        """
+        if delivered and "inventory" in extra:
+            self._sent_hash, self._sent_at = extra["inventory_hash"], self._clock()
+        return delivered
 
 
 _reporter: Optional[InventoryReporter] = None

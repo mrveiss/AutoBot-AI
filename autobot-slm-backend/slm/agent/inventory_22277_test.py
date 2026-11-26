@@ -55,3 +55,29 @@ def test_unchanged_signature_does_not_rescan(monkeypatch):
     state["git"] = "9.9"  # a rescan would notice; an unchanged mtime signature must not rescan
     assert reporter.report()["inventory_hash"] == reporter.report()["inventory_hash"]
     assert "inventory" not in reporter.report()
+
+
+def test_a_lost_full_report_is_resent_on_the_next_heartbeat(monkeypatch):
+    clock, state = _Clock(), {"sig": (("p", 1),), "git": "2.43"}
+    reporter = _reporter(monkeypatch, state, clock)
+    lost = reporter.report()
+    assert reporter.confirm(lost, delivered=False) is False
+    assert "inventory" in reporter.report()  # not waiting for the 6h backstop
+
+
+def test_an_acknowledged_full_report_is_not_resent(monkeypatch):
+    clock, state = _Clock(), {"sig": (("p", 1),), "git": "2.43"}
+    reporter = _reporter(monkeypatch, state, clock)
+    assert reporter.confirm(reporter.report(), delivered=True) is True
+    assert "inventory" not in reporter.report()
+
+
+def test_the_agent_confirms_through_the_payload_helper(monkeypatch):
+    from slm.agent import heartbeat_payload
+
+    clock, state = _Clock(), {"sig": (("p", 1),), "git": "2.43"}
+    reporter = _reporter(monkeypatch, state, clock)
+    monkeypatch.setattr(heartbeat_payload, "get_inventory_reporter", lambda: reporter)
+    payload = {"extra_data": reporter.report()}
+    assert heartbeat_payload.confirm_inventory(payload, False) is False
+    assert "inventory" in reporter.report()

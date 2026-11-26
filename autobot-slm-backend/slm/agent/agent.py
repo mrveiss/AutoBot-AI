@@ -29,7 +29,7 @@ from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 
 from . import event_buffer, request_timeouts
 from .health_collector import HealthCollector
-from .heartbeat_payload import build_heartbeat_payload
+from .heartbeat_payload import build_heartbeat_payload, confirm_inventory
 from .role_detector import RoleDetector
 from .version import get_agent_version
 
@@ -283,7 +283,7 @@ class SLMAgent:
         payload = build_heartbeat_payload(
             health, os_info, code_version, self.role_detector, self._role_definitions_loaded, self.heartbeat_interval
         )
-        return await self._send_heartbeat_request(payload)
+        return confirm_inventory(payload, await self._send_heartbeat_request(payload))
 
     async def prune_event_buffer(self) -> None:
         """Cap the buffer every cycle and never raise -- why: `event_buffer.prune` (#17647)."""
