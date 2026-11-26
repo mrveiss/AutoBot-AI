@@ -93,7 +93,7 @@ class TestVncWebsocketProxyAuthentication:
             ),
             patch("api.vnc_proxy.record_observation", new=AsyncMock()) as mock_observe,
         ):
-            await websocket_proxy(ws, "desktop")
+            await websocket_proxy(ws, "browser")
 
         ws.accept.assert_awaited_once()
         connect_call = mock_observe.await_args_list[0]

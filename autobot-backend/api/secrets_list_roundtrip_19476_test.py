@@ -28,6 +28,9 @@ from api.secrets import SecretsManager
 _SECRET_VALUE = "super-secret-value-19476"  # pragma: allowlist secret
 
 
+_HOST_META = {"host": "h", "username": "u", "capabilities": ["ssh"]}  # E7: no defaults (#22145)
+
+
 def _manager(tmp_path) -> SecretsManager:
     manager = SecretsManager()
     manager.secrets_file = str(tmp_path / "secrets.json")
@@ -43,7 +46,7 @@ def _request(**overrides) -> SecretCreateRequest:
         type="infrastructure_host",
         scope=ChatSecretScope.GENERAL,
         value=_SECRET_VALUE,
-        metadata={"host": "h", "username": "root"},
+        metadata={"host": "h", "username": "root", "capabilities": ["ssh"]},
     )
     fields.update(overrides)
     return SecretCreateRequest(**fields)
@@ -176,7 +179,13 @@ def test_post_then_get_over_http_lists_the_owned_secret(tmp_path) -> None:
         patch("api.secrets.secrets_manager", _manager(tmp_path)),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
-        body = {"name": "h", "type": "infrastructure_host", "scope": "general", "value": _SECRET_VALUE}
+        body = {
+            "name": "h",
+            "type": "infrastructure_host",
+            "scope": "general",
+            "value": _SECRET_VALUE,
+            "metadata": _HOST_META,
+        }
         assert client.post("/api/secrets/", json={**body, "owner_id": "spoofed"}).status_code == 201
         listed = client.get("/api/secrets/")
 

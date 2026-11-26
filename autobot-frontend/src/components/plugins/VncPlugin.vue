@@ -6,9 +6,12 @@
       :loading="loading"
       @update:model-value="$emit('update:modelValue', $event)"
     />
+    <!-- The backend refuses a control with no host_id (422): no selected host, no controls (#22145). -->
     <VncToolbar
+      v-if="host"
       :connected="modelValue"
-      :api-base-url="apiBaseUrl"
+      :api-base-url="apiBaseUrl ?? getApiBase()"
+      :host-id="host.id"
     />
   </div>
 </template>
@@ -19,12 +22,14 @@
 // Wire-in for @autobot/vnc — satisfies GH#6836 wiring gate for autobot-frontend
 import { VncViewer, VncToolbar } from '@autobot/vnc'
 import type { VncHost } from '@autobot/vnc'
+import { getApiBase } from '@/config/ssot-config'
 
 defineProps<{
   modelValue: boolean
+  /** The selected host; its `id` is the /secrets host id (or the desktop VM id) every control acts on. */
   host?: VncHost
   loading?: boolean
-  /** Base URL for VNC API calls propagated to VncToolbar. Defaults to /api in plugin. */
+  /** Base URL for VNC API calls propagated to VncToolbar. Defaults to the canonical API base. */
   apiBaseUrl?: string
 }>()
 

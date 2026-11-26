@@ -98,18 +98,18 @@ async def _vnc_proxy(n, base):
 
 
 async def _vnc_proxy_status(n, base):
-    n.monkeypatch.setattr(vnc_proxy, "VNC_ENDPOINTS", {"desktop": base})
-    await vnc_proxy.get_vnc_status("desktop", current_user={})
+    n.monkeypatch.setattr(vnc_proxy, "VNC_ENDPOINTS", {"browser": base})
+    await vnc_proxy.get_vnc_status("browser", current_user={})
 
 
 async def _vnc_proxy_client(n, base):
-    n.monkeypatch.setattr(vnc_proxy, "VNC_ENDPOINTS", {"desktop": base})
-    await vnc_proxy.get_vnc_client("desktop", current_user={})
+    n.monkeypatch.setattr(vnc_proxy, "VNC_ENDPOINTS", {"browser": base})
+    await vnc_proxy.get_vnc_client("browser", current_user={})
 
 
 async def _vnc_proxy_assets(n, base):
-    n.monkeypatch.setattr(vnc_proxy, "VNC_ENDPOINTS", {"desktop": base})
-    await vnc_proxy.proxy_vnc_assets("desktop", "app.js", current_user={})
+    n.monkeypatch.setattr(vnc_proxy, "VNC_ENDPOINTS", {"browser": base})
+    await vnc_proxy.proxy_vnc_assets("browser", "app.js", current_user={})
 
 
 async def _alertmanager(n, base):
