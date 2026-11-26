@@ -144,3 +144,15 @@ def test_a_host_address_becomes_the_nodes_own_id_and_an_unmanaged_host_is_kept()
     ]
     renamed = rename_hosts(tools, {"10.0.0.5": "node-redis"})
     assert [o.node_id for o in renamed] == ["node-redis", "10.0.0.9", None]
+
+
+def test_paging_order_is_stable_when_timestamps_tie_across_a_page_boundary():
+    from services.self_model_store import rows_for_response
+
+    rows = [{"id": i, "entity_key": f"tool:t{i}", "last_seen": T0} for i in (3, 1, 4, 0, 2)]
+    ordered = rows_for_response(rows)
+    heartbeat = rows_for_response([{**r, "last_seen": T1} if r["id"] == 4 else r for r in rows])
+    assert [r["entity_key"] for r in ordered] == [f"tool:t{i}" for i in range(5)]
+    assert [r["entity_key"] for r in heartbeat] == [r["entity_key"] for r in ordered]
+    pages = [ordered[0:2], ordered[2:4], ordered[4:6]]
+    assert [r["entity_key"] for page in pages for r in page] == [r["entity_key"] for r in ordered]

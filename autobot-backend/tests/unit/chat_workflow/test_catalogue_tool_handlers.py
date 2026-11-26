@@ -71,12 +71,22 @@ async def test_the_read_only_system_tools_are_reachable_from_chat(tool):
 
 
 @pytest.mark.asyncio
-async def test_no_verified_user_reaches_the_tool_as_none_never_a_model_named_user():
-    with _registry({"result": "none", "status": "error"}) as execute:
-        msgs = await _dispatch({"name": "query_self_model", "params": {"user_id": "someone-else"}}, [], user_id=None)
+async def test_no_verified_user_is_refused_before_any_tool_runs():
+    results = []
+    with _registry({"result": "none", "status": "success"}) as execute:
+        msgs = await _dispatch({"name": "query_system_information", "params": {"user_id": "x"}}, results, user_id=None)
 
-    assert execute.await_args.args[2] is None
-    assert msgs[0].type == "error"
+    execute.assert_not_awaited()
+    assert msgs[0].type == "error" and results[0]["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_a_tool_exception_becomes_an_error_message_not_a_crash():
+    results = []
+    with patch("tools.tool_registry.ToolRegistry.execute_tool", new=AsyncMock(side_effect=RuntimeError("boom"))):
+        msgs = await _dispatch({"name": "list_system_services", "params": {}}, results)
+
+    assert msgs[0].type == "error" and "boom" in msgs[0].content and results[0]["status"] == "error"
 
 
 @pytest.mark.asyncio

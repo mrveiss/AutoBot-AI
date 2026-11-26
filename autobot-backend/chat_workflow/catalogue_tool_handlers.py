@@ -50,6 +50,12 @@ REGISTRY_CHAT_TOOL_SCHEMAS: dict[str, dict] = {
 }
 
 
+def _failure(tool_name: str, reason: str, execution_results: list[dict[str, Any]]) -> WorkflowMessage:
+    """Record a refused or failed registry tool and return the error the model sees."""
+    execution_results.append({"tool": tool_name, "status": "error", "error": reason})
+    return WorkflowMessage(type="error", content=reason, metadata={"tool": tool_name, "error": True})
+
+
 async def handle_registry_tool(
     tool_name: str,
     tool_call: dict[str, Any],
@@ -61,18 +67,27 @@ async def handle_registry_tool(
     """Run one catalogue tool through ``ToolRegistry`` as *user_id*, after the catalogue's permission gate.
 
     A tool whose catalogue permission is ``None`` declares no check, so the gate (which refuses a missing
-    permission, #14523) is skipped for it; the tool itself decides what the caller may see.
+    permission, #14523) is skipped for it; the tool itself decides what the caller may see. Without a verified
+    user no tool runs at all.
     """
     from tools.tool_registry import ToolRegistry  # noqa: PLC0415  (tools -> chat_workflow import cycle, #4557)
 
     params = tool_call.get("params", {}) or {}
+    if not user_id:
+        yield _failure(tool_name, "no verified user for this turn", execution_results)
+        return
     permission = permission_value_for(tool_name)
     if permission is not None:
         denial = await permission_denial(tool_name, params, session_id, permission, role, execution_results)
         if denial is not None:
             yield denial
             return
-    result = await ToolRegistry().execute_tool(tool_name, params, user_id)
+    try:
+        result = await ToolRegistry().execute_tool(tool_name, params, user_id)
+    except Exception as exc:  # noqa: BLE001 - reported to the model as a tool error, never swallowed
+        logger.error("%s failed: %s", tool_name, exc, exc_info=True)
+        yield _failure(tool_name, f"{tool_name} failed: {exc}", execution_results)
+        return
     output = result.get("result", "")
     text = output if isinstance(output, str) else json.dumps(output, default=str, ensure_ascii=False)
     status = result.get("status", "error")

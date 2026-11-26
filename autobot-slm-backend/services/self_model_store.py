@@ -74,7 +74,16 @@ async def _node_ids_by_host(db: AsyncSession, hosts: set) -> Dict[str, str]:
     if not hosts:
         return {}
     found = await db.execute(select(Node.ip_address, Node.node_id).where(Node.ip_address.in_(hosts)))
-    return {ip: node_id for ip, node_id in found.all()}
+    by_host: Dict[str, str] = {}
+    for ip, node_id in sorted(found.all(), key=lambda pair: pair[1], reverse=True):
+        if ip in by_host:
+            logger.warning(
+                "host %s is shared by nodes %s and %s; the self-model uses %s", ip, node_id, by_host[ip], node_id
+            )
+        by_host[ip] = (
+            node_id  # reverse order, so the lowest node id wins and a shared address maps the same way each time
+        )
+    return by_host
 
 
 async def apply_observations(
@@ -168,5 +177,9 @@ async def apply_heartbeat_extra_data(db: AsyncSession, node_id: str, extra_data:
 
 
 def rows_for_response(rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Entity rows without the surrogate id, newest ``last_seen`` first."""
-    return sorted(({k: v for k, v in r.items() if k != "id"} for r in rows), key=lambda r: r["last_seen"], reverse=True)
+    """Entity rows without the surrogate id, in ``entity_key`` order.
+
+    The key is unique and a heartbeat never changes it, so ``offset`` paging neither repeats nor skips a row
+    when timestamps tie or move between page reads. A caller wanting newest-first sorts after the full read.
+    """
+    return sorted(({k: v for k, v in r.items() if k != "id"} for r in rows), key=lambda r: r["entity_key"])

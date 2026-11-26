@@ -98,10 +98,10 @@ async def _dependencies(read: _Read, kind: str, allowed: List[Dict[str, Any]], a
             for e in await read.fetch({"kind": kind, **_call_filters(args)})
             if any(_depends_on(t, e) for t in allowed)
         ]
+    nodes = sorted({t["node_id"] for t in allowed if t.get("node_id") and _requires(t)})
     out: List[Dict[str, Any]] = []
-    wanted = {(t["node_id"], name) for t in allowed if t.get("node_id") for name in _requires(t)}
-    for node_id, name in sorted(wanted):
-        rows = await read.fetch({"kind": kind, **{**_call_filters(args), "node_id": node_id, "name": name}})
+    for node_id in nodes:  # one read per node; the required names are matched locally
+        rows = await read.fetch({"kind": kind, **{**_call_filters(args), "node_id": node_id}})
         out += [e for e in rows if any(_depends_on(t, e) for t in allowed) and _matches(e, args)]
     return out
 
