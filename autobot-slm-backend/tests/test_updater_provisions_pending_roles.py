@@ -356,3 +356,52 @@ def test_a_held_unprovisioned_vnc_role_is_selected_by_the_pending_step(monkeypat
     role = _role("active", age=timedelta(seconds=1))
     db = _fake_db([role], creds=[])
     assert asyncio.run(prp.pending_roles(db, "n1")) == [role]
+
+
+# --------------------------------------------------------------------------
+# the detector and the health poll leave a provisioner-owned status alone (#22262)
+# --------------------------------------------------------------------------
+def _load_process_role_report(monkeypatch):
+    """`api.nodes._process_role_report` itself, compiled from source (api.nodes is stubbed by the conftest)."""
+    import ast
+
+    tree = ast.parse((_ROOT / "api" / "nodes.py").read_text(encoding="utf-8"))
+    fn = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "_process_role_report")
+    ns = {"select": lambda *a, **k: MagicMock(), "NodeRole": MagicMock()}
+    monkeypatch.setitem(sys.modules, "services.pending_role_provisioning", prp)
+    monkeypatch.setitem(
+        sys.modules, "models.schemas", types.SimpleNamespace(RoleReportItem=lambda **kw: SimpleNamespace(**kw))
+    )
+    exec(compile(ast.Module([fn], []), "nodes.py", "exec"), ns)
+    return ns["_process_role_report"]
+
+
+def _detect(monkeypatch, row, status: str = "active"):
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: row))
+    db.flush = AsyncMock()
+    report = {"vnc": {"status": status, "version": "1.2"}}
+    asyncio.run(_load_process_role_report(monkeypatch)(db, "n1", report))
+
+
+@pytest.mark.parametrize("held", ["failed", "installing"])
+def test_the_detector_keeps_a_provisioner_owned_status_so_the_cooldown_holds(monkeypatch, held) -> None:
+    row = _role(held, age=timedelta(minutes=5))
+    _detect(monkeypatch, row)
+    assert row.status == held
+    assert prp._needs_provisioning(row, set()) is False  # still inside the cooldown: not re-provisioned
+
+
+@pytest.mark.parametrize("status", ["not_installed", "installed", "active", "inactive"])
+def test_the_detector_still_writes_every_other_status(monkeypatch, status) -> None:
+    row = _role(status)
+    _detect(monkeypatch, row, "inactive")
+    assert row.status == "inactive"
+    assert row.current_version == "1.2"
+
+
+def test_the_health_poll_skips_provisioner_owned_rows_and_uses_the_one_constant() -> None:
+    src = (_ROOT / "services" / "reconciler.py").read_text(encoding="utf-8")
+    assert "from services.pending_role_provisioning import PROVISIONER_HELD_STATUSES" in src
+    assert "node_role.status in PROVISIONER_HELD_STATUSES" in src
+    assert prp.PROVISIONER_HELD_STATUSES == ("failed", "installing")

@@ -111,9 +111,9 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
     Updates NodeRole entries based on detected roles.
     """
     from models.schemas import RoleReportItem
+    from services.pending_role_provisioning import PROVISIONER_HELD_STATUSES
 
     for role_name, report_data in role_report.items():
-        # Handle both dict and RoleReportItem
         if isinstance(report_data, dict):
             report = RoleReportItem(**report_data)
         else:
@@ -130,8 +130,8 @@ async def _process_role_report(db: AsyncSession, node_id: str, role_report: dict
             # from appearing on every node that runs the agent (#2900).
             continue
 
-        # Update role status
-        node_role.status = report.status
+        if node_role.status not in PROVISIONER_HELD_STATUSES:  # provisioner-owned (#22262)
+            node_role.status = report.status
         node_role.current_version = report.version
 
     await db.flush()
