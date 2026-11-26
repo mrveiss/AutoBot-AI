@@ -755,9 +755,6 @@ route:autobot-backend/api/vnc_mcp.py:POST /mcp/desktop_screenshot	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/desktop_special_key	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/get_browser_vnc_context	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/observe_vnc_activity	#10603
-route:autobot-backend/api/vnc_proxy.py:GET /{vnc_type}/control/status	#10603
-route:autobot-backend/api/vnc_proxy.py:POST /{vnc_type}/control/acquire	#10603
-route:autobot-backend/api/vnc_proxy.py:POST /{vnc_type}/control/release	#10603
 route:autobot-backend/api/vnc_proxy.py:WEBSOCKET /{vnc_type}/websockify	#10603
 route:autobot-backend/api/voice_bundle_user.py:GET /users/{user_id}/bundle	#10603
 route:autobot-backend/api/voice_bundle_user.py:PUT /users/{user_id}/bundle	#10603
