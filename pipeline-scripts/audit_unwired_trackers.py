@@ -48,6 +48,7 @@ from audit_entry_points import CALLER_ONLY_DIRS, is_launched_module  # noqa: E40
 from audit_issue_lookup import (  # noqa: E402
     TrackerLookupError,
     already_filed,
+    ambiguous_stem_keys,
     existing_audit_issue_keys,
     fetch_closed_tracker_set,
 )
@@ -248,6 +249,21 @@ def derive_module_path(file_path: Path) -> Optional[str]:
     return ".".join(inner)
 
 
+def derive_launcher_module_path(file_path: Path) -> Optional[str]:
+    """The ``python -m`` name of a module: ``derive_module_path`` for backend roots, full path for ``autobot_shared``.
+
+    Backend source roots (``autobot-backend``) are not importable names, so they are stripped; a root that
+    is itself a package (``autobot_shared``) is part of the launch name and is kept.
+    """
+    try:
+        parts = file_path.relative_to(REPO_ROOT).parts
+    except ValueError:
+        return None
+    if parts and parts[0].isidentifier() and len(parts) >= 2 and parts[-1].endswith(".py"):
+        return ".".join((*parts[:-1], parts[-1][:-3]))
+    return derive_module_path(file_path)
+
+
 def extract_tracker_refs(file_path: Path) -> list[int]:
     """Return list of Issue #N numbers from the first DOCSTRING_HEAD_LINES."""
     try:
@@ -322,9 +338,9 @@ def _is_production_caller_line(line: str, self_str: str) -> bool:
     """One ``path:lineno:code`` grep hit: a caller unless pycache, a test, the module itself, or a comment."""
     if not line or "/__pycache__/" in line:
         return False
-    if any(frag in line for frag in TEST_PATH_FRAGMENTS):
-        return False
     path, _, rest = line.partition(":")
+    if is_test_path(Path(path)):
+        return False
     if path == self_str:
         return False
     return not _is_comment_line(path, rest.partition(":")[2])
@@ -358,7 +374,7 @@ def scan() -> list[Finding]:
                 if module_path and module_path in registry_modules:
                     continue
                 # #22199: launched modules (__main__.py, benchmarks, own `python -m`) are reached without imports.
-                if is_launched_module(f, module_path):
+                if is_launched_module(f, derive_launcher_module_path(f)):
                     continue
                 refs = extract_tracker_refs(f)
                 if not refs:
@@ -490,7 +506,12 @@ def _build_parser() -> argparse.ArgumentParser:
 def _file_new_issues(findings: list[Finding], max_issues: int) -> None:
     """File discovery issues for findings not already filed, capped at *max_issues*."""
     filed_keys = existing_audit_issue_keys()
-    new = [f for f in findings if not already_filed(f.file, f.tracker, filed_keys)]
+    ambiguous = ambiguous_stem_keys([(f.file, f.tracker) for f in findings])
+    for stem, tracker in sorted(ambiguous & filed_keys):
+        logger.warning(
+            "legacy issue for %r (tracker #%d) names no path and matches several modules; filing each", stem, tracker
+        )
+    new = [f for f in findings if not already_filed(f.file, f.tracker, filed_keys, ambiguous)]
     capped = new[:max_issues]
     # WARNING, not INFO: INFO goes to stdout, which carries the report; WARNING goes to stderr.
     logger.warning(

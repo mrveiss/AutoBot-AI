@@ -147,3 +147,33 @@ def test_scan_skips_launched_modules_but_flags_a_plain_library(tmp_path: Path) -
         },
     )
     assert [f.file for f in findings] == ["autobot-backend/lib/plain_library.py"]
+
+
+def test_main_block_example_inside_the_docstring_is_not_a_main_block(tmp_path: Path) -> None:
+    """The docstring quotes an unindented main-block example; only a parsed top-level ``if`` counts."""
+    doc = '"""Run:\n    python -m mcp_server.main_d\n\nif __name__ == "__main__":\n    main()\n"""\nX = 1\n'
+    fake = _write(tmp_path, "autobot-backend/mcp_server/main_d.py", doc)
+    with patch.object(audit, "REPO_ROOT", tmp_path):
+        assert not audit.is_launched_module(fake, audit.derive_module_path(fake))
+
+
+def test_test_prefixed_script_import_is_not_a_production_caller(tmp_path: Path) -> None:
+    mod = _write(tmp_path, "autobot-backend/knowledge/vector_repair.py", '"""x"""\n')
+    _write(tmp_path, "scripts/test_repair.py", "from knowledge import vector_repair\n")
+    with patch.object(audit, "REPO_ROOT", tmp_path):
+        assert audit.grep_count_production_callers("vector_repair", mod) == 0
+        _write(tmp_path, "scripts/repair.py", "from knowledge import vector_repair\n")
+        assert audit.grep_count_production_callers("vector_repair", mod) == 1
+
+
+def test_shared_package_launcher_keeps_its_package_prefix(tmp_path: Path) -> None:
+    doc = '"""Run:\n    python -m autobot_shared.repair\n"""\n' + MAIN_BLOCK
+    shared = _write(tmp_path, "autobot_shared/repair.py", doc)
+    backend = _write(
+        tmp_path, "autobot-backend/mcp_server/main_b.py", doc.replace("autobot_shared.repair", "mcp_server.main_b")
+    )
+    with patch.object(audit, "REPO_ROOT", tmp_path):
+        assert audit.derive_launcher_module_path(shared) == "autobot_shared.repair"
+        assert audit.derive_launcher_module_path(backend) == "mcp_server.main_b"
+        assert audit.is_launched_module(shared, audit.derive_launcher_module_path(shared))
+        assert audit.is_launched_module(backend, audit.derive_launcher_module_path(backend))

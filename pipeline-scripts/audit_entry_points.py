@@ -20,7 +20,6 @@ from typing import Optional
 CALLER_ONLY_DIRS = ("scripts",)
 BENCHMARK_DIR_NAME = "benchmarks"
 BENCHMARK_FILE_SUFFIXES = ("_benchmark.py", "_benchmarks.py")
-MAIN_BLOCK_RE = re.compile(r"^if\s+__name__\s*==\s*[\"']__main__[\"']\s*:", re.MULTILINE)
 MODULE_RUN_RE = re.compile(r"\bpython(?:3(?:\.\d+)?)?\s+-m\s+([A-Za-z_][\w.]*)")
 
 
@@ -36,13 +35,27 @@ def is_benchmark(path: Path) -> bool:
     return BENCHMARK_DIR_NAME in path.parts[:-1] or path.name.endswith(BENCHMARK_FILE_SUFFIXES)
 
 
-def _read_module(path: Path) -> tuple[str, str]:
-    """Return ``(module docstring, source)``; both empty when the file cannot be read or parsed."""
+def _is_name_eq_main(test: ast.expr) -> bool:
+    """True only for ``__name__ == "__main__"`` -- not ``!=``, not another constant."""
+    if not (isinstance(test, ast.Compare) and isinstance(test.left, ast.Name) and test.left.id == "__name__"):
+        return False
+    if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq):
+        return False
+    return isinstance(test.comparators[0], ast.Constant) and test.comparators[0].value == "__main__"
+
+
+def _has_main_block(tree: ast.Module) -> bool:
+    """True when a top-level statement is ``if __name__ == "__main__":`` (a docstring example is not)."""
+    return any(isinstance(n, ast.If) and _is_name_eq_main(n.test) for n in tree.body)
+
+
+def _read_module(path: Path) -> tuple[str, bool]:
+    """Return ``(module docstring, has main block)``; ``("", False)`` when unreadable or unparsable."""
     try:
-        source = path.read_text(encoding="utf-8")
-        return ast.get_docstring(ast.parse(source)) or "", source
+        tree = ast.parse(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
-        return "", ""
+        return "", False
+    return ast.get_docstring(tree) or "", _has_main_block(tree)
 
 
 def documents_own_module_run(path: Path, module_path: Optional[str]) -> bool:
@@ -52,8 +65,8 @@ def documents_own_module_run(path: Path, module_path: Optional[str]) -> bool:
     """
     if not module_path or path.suffix != ".py":
         return False
-    doc, source = _read_module(path)
-    return module_path in MODULE_RUN_RE.findall(doc) and bool(MAIN_BLOCK_RE.search(source))
+    doc, has_main = _read_module(path)
+    return has_main and module_path in MODULE_RUN_RE.findall(doc)
 
 
 def is_launched_module(path: Path, module_path: Optional[str]) -> bool:

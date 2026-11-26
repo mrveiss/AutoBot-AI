@@ -213,3 +213,17 @@ def test_audit_issue_lists_at_the_limit_raise() -> None:
     # contrast: one under the limit is accepted
     with patch.object(lookup, "_gh_json", side_effect=_gh_stub(full[:-1], [])):
         assert len(lookup.existing_audit_issue_keys()) == lookup.OPEN_AUDIT_ISSUE_LIMIT - 1
+
+
+def test_legacy_stem_issue_does_not_suppress_two_modules_sharing_the_stem() -> None:
+    """A body-less issue names only a stem; with two same-stem findings it identifies neither module."""
+    findings = [_finding("a/hierarchical_agent.py", 657), _finding("b/hierarchical_agent.py", 657)]
+    assert _filed_files([_issue(1, "hierarchical_agent", 657)], [], findings) == [
+        "a/hierarchical_agent.py",
+        "b/hierarchical_agent.py",
+    ]
+
+
+def test_legacy_stem_issue_still_suppresses_its_one_unambiguous_module() -> None:
+    findings = [_finding("a/hierarchical_agent.py", 657), _finding("b/delegate_tool.py", 657)]
+    assert _filed_files([_issue(1, "hierarchical_agent", 657)], [], findings) == ["b/delegate_tool.py"]

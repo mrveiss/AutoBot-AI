@@ -119,6 +119,21 @@ def existing_audit_issue_keys() -> set[tuple[str, int]]:
     return keys
 
 
-def already_filed(file: str, tracker: int, filed: set[tuple[str, int]]) -> bool:
-    """True when an issue covers this module+tracker (by path, or by stem for a body-less issue)."""
-    return (file, tracker) in filed or (Path(file).stem, tracker) in filed
+def ambiguous_stem_keys(findings: list[tuple[str, int]]) -> set[tuple[str, int]]:
+    """``(stem, tracker)`` shared by more than one ``(file, tracker)`` finding: a stem alone cannot name a module."""
+    seen: dict[tuple[str, int], set[str]] = {}
+    for file, tracker in findings:
+        seen.setdefault((Path(file).stem, tracker), set()).add(file)
+    return {k for k, files in seen.items() if len(files) > 1}
+
+
+def already_filed(
+    file: str, tracker: int, filed: set[tuple[str, int]], ambiguous: frozenset | set = frozenset()
+) -> bool:
+    """True when an issue covers this module+tracker (by path, or by stem for a body-less issue).
+
+    A stem key is honoured only when it names one module; if several findings share the stem it is in
+    *ambiguous* and suppresses none of them (the issue filed now carries a path, so the next run dedups).
+    """
+    stem_key = (Path(file).stem, tracker)
+    return (file, tracker) in filed or (stem_key in filed and stem_key not in ambiguous)
