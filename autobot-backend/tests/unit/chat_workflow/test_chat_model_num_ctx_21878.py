@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import sys
+from contextvars import ContextVar
 from unittest.mock import patch
 
 import httpx
@@ -39,7 +41,7 @@ def llm_shared_real():
 def chat_model(monkeypatch):
     from autobot_shared.ssot_config import config
 
-    monkeypatch.setattr(chat_model_context, "_last_turn_model", None)
+    monkeypatch.setattr(chat_model_context, "_last_turn_model", ContextVar("t", default=None))
     monkeypatch.delenv(chat_model_context.CHAT_NUM_GPU_ENV, raising=False)
     monkeypatch.setattr(chat_model_context, "_host_has_nvidia_gpu", lambda: False)  # the host's GPU never leaks in
     monkeypatch.setattr(type(config), "default_llm_model", property(lambda _self: CHAT), raising=False)
@@ -250,3 +252,37 @@ async def test_a_context_without_the_toggle_sends_think_false_and_an_explicit_on
     assert await reasoning_kwargs.build_reasoning_api_kwargs(
         {"thinking_mode_enabled": True}, CHAT, "http://o", "s2"
     ) == {"think": True}
+
+
+@pytest.mark.asyncio
+async def test_concurrent_sessions_never_see_each_others_turn_model_or_think():
+    """#22258: the turn's model and think are per request; one session's turn never decides another's side calls."""
+    seen: dict[str, tuple[bool, dict]] = {}
+
+    async def _turn(name: str, model: str, think: dict) -> None:
+        note_chat_turn_model(model)
+        chat_model_context.note_chat_turn_think(think)
+        await asyncio.sleep(0)  # the other turn runs and notes its own
+        await asyncio.sleep(0)
+        seen[name] = (chat_model_context.is_chat_model(model), chat_model_context.chat_think_options(model))
+
+    await asyncio.gather(
+        asyncio.create_task(_turn("a", "alpha-model:1b", {"think": True})),
+        asyncio.create_task(_turn("b", "beta-model:2b", {})),
+    )
+    assert seen["a"] == (True, {"think": True})
+    assert seen["b"] == (True, {})
+    assert chat_model_context.is_chat_model("alpha-model:1b") is False  # nothing leaks into the parent context
+
+
+@pytest.mark.asyncio
+async def test_a_turn_with_no_endpoint_clears_the_previous_turns_think(monkeypatch):
+    from chat_workflow import reasoning_kwargs
+
+    note_chat_turn_model(CHAT)
+    chat_model_context.note_chat_turn_think({"think": True})
+    try:
+        await reasoning_kwargs.build_reasoning_api_kwargs({}, CHAT, "", "s3")
+        assert chat_model_context.chat_think_options(CHAT) == {}
+    finally:
+        chat_model_context.note_chat_turn_think({})

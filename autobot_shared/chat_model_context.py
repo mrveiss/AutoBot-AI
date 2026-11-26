@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import functools
 import logging
+from contextvars import ContextVar
 
 from autobot_shared.env_utils import env_raw
 from autobot_shared.gpu_telemetry import query_nvidia_gpus
@@ -26,16 +27,16 @@ logger = logging.getLogger(__name__)
 
 CHAT_NUM_GPU_ENV = "AUTOBOT_CHAT_NUM_GPU"
 
-#: The model the last chat turn ran with (a user may select another than the configured default). Ollama keeps that
-#: one resident, so it is the one a side call must not reload; this process-wide mark is set where the turn's request
-#: is built.
-_last_turn_model: str | None = None
+#: The model THIS request's chat turn runs with (a user may select another than the configured default). Ollama keeps
+#: that one resident, so it is the one a side call must not reload. A context variable, not a process global: it is
+#: set where the turn's request is built and read by the side calls of the same request (the awaited verifier and
+#: planner), so a concurrent session never decides another's request (#22258). Unset = no chat turn in this context.
+_last_turn_model: ContextVar[str | None] = ContextVar("chat_turn_model", default=None)
 
 
 def note_chat_turn_model(model: str | None) -> None:
-    """Record the model a chat turn is running with, so its side calls send the chat's context size too."""
-    global _last_turn_model
-    _last_turn_model = model or None
+    """Record the model this request's chat turn is running with, so its side calls send the chat's context size too."""
+    _last_turn_model.set(model or None)
 
 
 def sent_num_ctx() -> int:
@@ -53,7 +54,7 @@ def is_chat_model(model: str | None) -> bool:
 
     if not model:
         return False
-    chats = [name for name in (config.default_llm_model, _last_turn_model) if name]
+    chats = [name for name in (config.default_llm_model, _last_turn_model.get()) if name]
     return any(model_listed(model, [c]) or model_listed(c, [model]) for c in chats)
 
 
@@ -121,16 +122,15 @@ def session_thinking(session_id: str | None) -> bool:
     return _thinking_by_session.get(session_id, False) if session_id else False
 
 
-#: The ``think`` field the last chat turn resolved for its model (capability-checked, toggle applied); ``{}`` when the
-#: model has no thinking switch. Side calls on the provider path (the verifier, the planner) send the same one, as
-#: they send the chat's ``num_ctx``: process-wide like ``_last_turn_model``, set where the turn's request is built.
-_last_turn_think: dict[str, bool] = {}
+#: The ``think`` field THIS request's chat turn resolved for its model (capability-checked, toggle applied); ``{}`` when
+#: the model has no thinking switch. Side calls on the provider path (the verifier, the planner) send the same one, as
+#: they send the chat's ``num_ctx``. A context variable like ``_last_turn_model``: per request, never process-wide.
+_last_turn_think: ContextVar[dict[str, bool]] = ContextVar("chat_turn_think", default={})
 
 
 def note_chat_turn_think(field: dict[str, bool]) -> None:
-    """Record the resolved ``think`` field of the chat turn now running (#22258)."""
-    global _last_turn_think
-    _last_turn_think = dict(field)
+    """Record the resolved ``think`` field of the chat turn now running in this request (#22258)."""
+    _last_turn_think.set(dict(field))
 
 
 def chat_think_options(model: str | None, *, reuses_chat: bool = False) -> dict[str, bool]:
@@ -139,7 +139,7 @@ def chat_think_options(model: str | None, *, reuses_chat: bool = False) -> dict[
     Same gate as ``chat_context_options``: a caller of a different model keeps the model's own default, and
     *reuses_chat* is a caller that has already decided it asks the resident chat model (the verifier).
     """
-    return dict(_last_turn_think) if (reuses_chat or is_chat_model(model)) else {}
+    return dict(_last_turn_think.get()) if (reuses_chat or is_chat_model(model)) else {}
 
 
 def chat_think_field(thinking_enabled: bool, supports_thinking: bool) -> dict[str, bool]:

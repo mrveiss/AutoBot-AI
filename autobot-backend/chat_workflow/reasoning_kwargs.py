@@ -99,8 +99,7 @@ async def build_reasoning_api_kwargs(
     toggle = bool(context.get("thinking_mode_enabled", False))  # unset = off, as the GUI shows (#22258)
     note_session_thinking(session_id, toggle)  # the interpretation pass of this session carries no context
     think = await ollama_think_kwargs(selected_model, ollama_endpoint, toggle) if ollama_endpoint else {}
-    if ollama_endpoint:
-        note_chat_turn_think(think)  # the verifier and planner of this turn send the same field (#22258)
+    note_chat_turn_think(think)  # this turn's field, `{}` with no endpoint: never the previous turn's (#22258)
     kwargs = await _provider_reasoning_kwargs(context, selected_model)
     return {**(kwargs or {}), **think} or None
 
