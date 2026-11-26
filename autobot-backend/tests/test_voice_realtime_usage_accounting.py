@@ -345,3 +345,48 @@ class TestConcurrentFinalisation:
     async def test_different_sessions_do_not_share_a_lock(self, monkeypatch):
         _, a, _ = self._setup(monkeypatch)
         assert a._locks.get("x") is not a._locks.get("y") and a._locks.get("x") is a._locks.get("x")
+
+    @pytest.mark.asyncio
+    async def test_an_end_while_another_update_waits_keeps_them_serialised_and_leaves_no_lock(self, monkeypatch):
+        _, t, _ = self._setup(monkeypatch)
+        await t.session_start("w1")
+        order: list[str] = []
+        lock = t._locks.get("w1")
+        await lock.acquire()  # held, so both the end and the update queue on this very lock
+        end = asyncio.create_task(t.session_end("w1"))
+        late = asyncio.create_task(t.record_response_done("w1", input_tokens=5))
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        order.append("released")
+        lock.release()
+        await asyncio.gather(end, late)
+        assert order == ["released"] and t._locks._locks == {}
+        assert "w1" not in t._in_memory_sessions
+
+    @pytest.mark.asyncio
+    async def test_updates_for_an_unknown_session_leave_no_lock_behind(self, monkeypatch):
+        _, t, _ = self._setup(monkeypatch)
+        assert await t.record_response_done("ghost", input_tokens=5) is None
+        assert await t.session_end("ghost") is None
+        assert t._locks._locks == {}
+
+    def test_a_lock_with_a_waiter_is_never_forgotten(self):
+        from services.voice_realtime_usage import SessionLocks
+
+        async def scenario():
+            locks = SessionLocks()
+            held = locks.get("s")
+            await held.acquire()
+            waiter = asyncio.create_task(held.acquire())
+            await asyncio.sleep(0)
+            locks.release_if_idle("s")
+            assert locks.get("s") is held  # locked, with a waiter: kept
+            held.release()
+            locks.release_if_idle("s")
+            assert locks.get("s") is held  # woken waiter has not run yet: kept
+            await waiter
+            held.release()
+            locks.release_if_idle("s")
+            assert locks._locks == {}
+
+        asyncio.run(scenario())

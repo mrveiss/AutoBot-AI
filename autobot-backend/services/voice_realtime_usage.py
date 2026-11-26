@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, fields
 from typing import Any, Callable
 
@@ -66,8 +67,24 @@ class SessionLocks:
     def get(self, session_id: str) -> asyncio.Lock:
         return self._locks.setdefault(session_id, asyncio.Lock())
 
-    def drop(self, session_id: str) -> None:
-        self._locks.pop(session_id, None)
+    def release_if_idle(self, session_id: str) -> None:
+        """Forget the lock only when nobody holds it or waits on it (a dropped busy lock splits the serialisation).
+
+        asyncio.Lock has no public waiter count; a woken waiter stays in ``_waiters`` until it has run, so the
+        private attribute is the only way to see it.
+        """
+        lock = self._locks.get(session_id)
+        if lock is not None and not lock.locked() and not getattr(lock, "_waiters", None):
+            del self._locks[session_id]
+
+    @asynccontextmanager
+    async def hold(self, session_id: str):
+        """Serialise on the session's lock; on exit (after releasing) forget it if idle, known session or not."""
+        try:
+            async with self.get(session_id):
+                yield
+        finally:
+            self.release_if_idle(session_id)
 
 
 @dataclass

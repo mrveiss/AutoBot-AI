@@ -367,7 +367,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         Opted out: never committed; in memory for the caps only (``_apply_opted_out``).
         """
         await self._flush_ended_sessions()
-        async with self._locks.get(session_id):
+        async with self._locks.hold(session_id):
             if not get_telemetry_settings()["enabled"]:
                 return self._apply_opted_out(session_id, delta, finish)
             total = self._pending.pop(session_id, UsageDelta()).merged(delta)  # taken whole, so no one re-adds it
@@ -416,7 +416,7 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
         """A finished (or evicted) session keeps no usage buffers."""
         self._pending.pop(session_id, None)
         self._cap_only.pop(session_id, None)
-        self._locks.drop(session_id)
+        self._locks.release_if_idle(session_id)  # no-op while held; the lock's own exit releases it
 
     async def _commit_to_redis(
         self,
