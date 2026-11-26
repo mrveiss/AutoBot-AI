@@ -348,19 +348,33 @@ class TestConcurrentFinalisation:
 
     @pytest.mark.asyncio
     async def test_an_end_while_another_update_waits_keeps_them_serialised_and_leaves_no_lock(self, monkeypatch):
+        from services import voice_realtime_telemetry as module
+
         _, t, _ = self._setup(monkeypatch)
         await t.session_start("w1")
         order: list[str] = []
-        lock = t._locks.get("w1")
-        await lock.acquire()  # held, so both the end and the update queue on this very lock
+        real = module.update_in_redis
+
+        async def marked(*args, **kwargs):
+            name = "end" if kwargs["finish"] else "update"
+            order.append(f"{name}:in")
+            await asyncio.sleep(0)  # a yield inside the critical section: an interleaver would show here
+            result = await real(*args, **kwargs)
+            order.append(f"{name}:out")
+            return result
+
+        monkeypatch.setattr(module, "update_in_redis", marked)
+        gate = t._locks.hold("w1")
+        await gate.__aenter__()  # held, so the end and the update queue behind it, in this order
         end = asyncio.create_task(t.session_end("w1"))
+        await asyncio.sleep(0)
         late = asyncio.create_task(t.record_response_done("w1", input_tokens=5))
         await asyncio.sleep(0)
-        await asyncio.sleep(0)
-        order.append("released")
-        lock.release()
+        assert t._locks._users["w1"] == 3 and order == []
+        await gate.__aexit__(None, None, None)
         await asyncio.gather(end, late)
-        assert order == ["released"] and t._locks._locks == {}
+        assert order == ["end:in", "end:out", "update:in", "update:out"]
+        assert t._locks._locks == {} and t._locks._users == {}
         assert "w1" not in t._in_memory_sessions
 
     @pytest.mark.asyncio
@@ -370,23 +384,28 @@ class TestConcurrentFinalisation:
         assert await t.session_end("ghost") is None
         assert t._locks._locks == {}
 
-    def test_a_lock_with_a_waiter_is_never_forgotten(self):
+    def test_a_lock_in_use_is_kept_until_the_last_user_leaves_and_a_cancelled_waiter_is_counted_out(self):
         from services.voice_realtime_usage import SessionLocks
 
         async def scenario():
             locks = SessionLocks()
-            held = locks.get("s")
-            await held.acquire()
-            waiter = asyncio.create_task(held.acquire())
+            gate, second, third = locks.hold("s"), locks.hold("s"), locks.hold("s")  # contexts kept referenced
+            await gate.__aenter__()
+            waiter = asyncio.create_task(second.__aenter__())
             await asyncio.sleep(0)
+            assert locks._users["s"] == 2
             locks.release_if_idle("s")
-            assert locks.get("s") is held  # locked, with a waiter: kept
-            held.release()
-            locks.release_if_idle("s")
-            assert locks.get("s") is held  # woken waiter has not run yet: kept
+            assert "s" in locks._locks  # in use: kept
+            await gate.__aexit__(None, None, None)
+            assert locks._users["s"] == 1 and "s" in locks._locks  # the waiter is next in line
             await waiter
-            held.release()
-            locks.release_if_idle("s")
-            assert locks._locks == {}
+            doomed = asyncio.create_task(third.__aenter__())
+            await asyncio.sleep(0)
+            assert locks._users["s"] == 2
+            doomed.cancel()
+            await asyncio.gather(doomed, return_exceptions=True)
+            assert locks._users["s"] == 1  # the cancelled waiter counted out; the holder still keeps the entry
+            await second.__aexit__(None, None, None)
+            assert locks._locks == {} and locks._users == {}
 
         asyncio.run(scenario())

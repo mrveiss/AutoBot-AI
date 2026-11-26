@@ -59,32 +59,38 @@ class EndStep:
 
 
 class SessionLocks:
-    """Lazily created per-session locks: updates and ends of ONE session serialise, different sessions never wait."""
+    """Lazily created, reference-counted per-session locks: one session's updates and ends serialise, others never wait.
+
+    ``_users`` counts the coroutines inside ``hold`` (holder and waiters); an entry is forgotten only at zero, so a
+    busy lock is never replaced by a fresh one, and a cancelled waiter still decrements.
+    """
 
     def __init__(self) -> None:
         self._locks: dict[str, asyncio.Lock] = {}
+        self._users: dict[str, int] = {}
 
     def get(self, session_id: str) -> asyncio.Lock:
         return self._locks.setdefault(session_id, asyncio.Lock())
 
     def release_if_idle(self, session_id: str) -> None:
-        """Forget the lock only when nobody holds it or waits on it (a dropped busy lock splits the serialisation).
-
-        asyncio.Lock has no public waiter count; a woken waiter stays in ``_waiters`` until it has run, so the
-        private attribute is the only way to see it.
-        """
+        """Forget the lock when no coroutine is in ``hold`` for it and it is not locked; otherwise keep it."""
         lock = self._locks.get(session_id)
-        if lock is not None and not lock.locked() and not getattr(lock, "_waiters", None):
+        if lock is not None and not self._users.get(session_id) and not lock.locked():
             del self._locks[session_id]
 
     @asynccontextmanager
     async def hold(self, session_id: str):
-        """Serialise on the session's lock; on exit (after releasing) forget it if idle, known session or not."""
+        """Serialise on the session's lock; the last one out (after releasing) forgets it, known session or not."""
+        self._users[session_id] = self._users.get(session_id, 0) + 1
         try:
             async with self.get(session_id):
                 yield
         finally:
-            self.release_if_idle(session_id)
+            if self._users[session_id] > 1:
+                self._users[session_id] -= 1
+            else:
+                del self._users[session_id]
+                self.release_if_idle(session_id)
 
 
 @dataclass
