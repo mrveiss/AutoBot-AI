@@ -49,7 +49,7 @@ NO_REQUIRED_CHECKS='^$'
 # A run that dies part-way prints no FAIL for anything it never reached, so an
 # expected "not reported" would pass on a crash. The verdict line is the
 # script's last output; without it, the run did not finish.
-finished() { printf '%s\n' "$1" | grep -qE '^(pre-flight[ :]|[0-9]+ pre-flight failure)'; }
+finished() { grep -qE '^(pre-flight[ :]|[0-9]+ pre-flight failure)' <<<"$1"; }
 
 # Assert that running the script over the given fixtures does (or does not)
 # report a failure whose text contains $pattern.
@@ -59,7 +59,7 @@ check_reports() {
     out=$(PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 --only "${NO_REQUIRED_CHECKS}" \
             ${body:+--body "$body"} ${message:+--message "$message"} 2>&1)
     local actual="no"
-    printf '%s' "$out" | grep -q "FAIL.*${pattern}" && actual="yes"
+    grep -q "FAIL.*${pattern}" <<<"$out" && actual="yes"
     if ! finished "$out"; then
         fail=$((fail + 1))
         echo "  FAIL: ${name} -- the preflight did not reach its verdict line"
@@ -178,7 +178,7 @@ fi
 # #19233: an unreadable rule is a hard error, never "no fleet IP found".
 out=$(cd "${HERE}/lib" && PREFLIGHT_BASE=HEAD PREFLIGHT_FLEET_RULE="${TMP}/no-such-rule.py" bash "${SCRIPT}" \
         --issue 9999 --only "${NO_REQUIRED_CHECKS}" --body "${GOOD_BODY}" 2>&1); rc=$?
-if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q "fleet IP rule unreadable"; then
+if [ "$rc" -eq 2 ] && grep -q "fleet IP rule unreadable" <<<"$out"; then
     pass=$((pass + 1))
 else
     fail=$((fail + 1))
@@ -190,7 +190,7 @@ fi
 # script-relative path is the fix, and this pins only that the default is found.
 out=$(cd "${HERE}/lib" && PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 --only "${NO_REQUIRED_CHECKS}" \
         --body "${GOOD_BODY}" 2>&1); rc=$?
-if printf '%s' "$out" | grep -q "fleet IP rule unreadable"; then
+if grep -q "fleet IP rule unreadable" <<<"$out"; then
     fail=$((fail + 1))
     echo "  FAIL: run from another directory, the default fleet rule was not found"
 else
@@ -246,7 +246,7 @@ for ctx in "${REQUIRED[@]}"; do
     # A context is covered when the script names it -- as a run, as a skip with
     # a reason, as a cross-reference to the section that already predicts it,
     # or (in this scoped run) in the "not selected" note.
-    if printf '%s' "${COVERAGE_OUT}" | grep -qF "${ctx}"; then
+    if grep -qF "${ctx}" <<<"${COVERAGE_OUT}"; then
         pass=$((pass + 1))
     else
         fail=$((fail + 1))
@@ -353,7 +353,7 @@ else
 
     # Default: the fixture-only diff matches no filter, so the check is
     # skipped with a note rather than attempted.
-    if printf '%s' "${FILTER_DEFAULT_OUT}" | grep -qF "workflow path filters -- no matching paths changed"; then
+    if grep -qF "workflow path filters -- no matching paths changed" <<<"${FILTER_DEFAULT_OUT}"; then
         pass=$((pass + 1))
     else
         fail=$((fail + 1))
@@ -365,7 +365,7 @@ else
     # actually attempted instead of skipped. Asserted by its ok/FAIL result
     # line, not by the skip note's absence: a run that died before reaching the
     # check lacks the note too, and passed this way while the script aborted.
-    if printf '%s\n' "${FILTER_FULL_OUT}" | grep -qE '^  (ok|FAIL) +workflow path filters'; then
+    if grep -qE '^  (ok|FAIL) +workflow path filters' <<<"${FILTER_FULL_OUT}"; then
         pass=$((pass + 1))
     else
         fail=$((fail + 1))

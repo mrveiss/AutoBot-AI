@@ -17,6 +17,7 @@ present, passing locally, and never run where it matters.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -24,9 +25,7 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
-_WORKFLOW = (
-    repo_root() / ".github" / "workflows" / "pr-issue-validation.yml"
-)
+_WORKFLOW = repo_root() / ".github" / "workflows" / "pr-issue-validation.yml"
 
 
 _STEP_NAME = "Validate PR issue linkage"
@@ -121,9 +120,7 @@ def test_a_fork_branch_naming_the_wrong_issue_passes_on_an_explicit_close(tmp_pa
     """The reproduction: #14146's branch was `fix/issue-13162-...` while the PR
     actually fixed #14235. A maintainer cannot rename a fork branch, so the only
     green path was linking an issue the PR did not address."""
-    code, out = _decide(
-        tmp_path, branch="fix/issue-13162-1786528649", body="Closes #14235", is_fork="true"
-    )
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body="Closes #14235", is_fork="true")
 
     assert code == 0 and "status=success" in out
 
@@ -132,9 +129,7 @@ def test_a_fork_with_only_refs_does_not_qualify(tmp_path):
     """`Refs` alone must not open the gate — requirement (a) already accepts it,
     so any `Refs #1` would otherwise satisfy any branch. Overriding the branch
     takes an explicit claim of closure."""
-    code, out = _decide(
-        tmp_path, branch="fix/issue-13162-1786528649", body="Refs #14235", is_fork="true"
-    )
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body="Refs #14235", is_fork="true")
 
     assert code == 1 and "status=failure" in out
 
@@ -161,9 +156,7 @@ def test_a_fork_with_a_bare_closing_verb_does_not_qualify(tmp_path):
 def test_a_fork_naming_its_own_branch_issue_still_takes_the_normal_path(tmp_path):
     """The relaxation is a fallback, not a replacement — a correct fork PR must
     not start depending on it."""
-    code, out = _decide(
-        tmp_path, branch="fix/issue-14235-1", body="Closes #14235", is_fork="true"
-    )
+    code, out = _decide(tmp_path, branch="fix/issue-14235-1", body="Closes #14235", is_fork="true")
 
     assert code == 0 and "status=success" in out and "#14241" not in out
 
@@ -206,9 +199,7 @@ def test_a_superstring_does_not_count_as_the_issue(tmp_path):
 )
 def test_a_word_merely_containing_a_keyword_does_not_qualify(tmp_path, body):
     """No left word boundary meant `encloses` matched `closes` as a substring."""
-    code, out = _decide(
-        tmp_path, branch="fix/issue-13162-1786528649", body=body + " Refs #14235", is_fork="true"
-    )
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body=body + " Refs #14235", is_fork="true")
 
     assert code == 1 and "status=failure" in out
 
@@ -239,9 +230,7 @@ def test_issue_zero_does_not_qualify(tmp_path, body):
 
 def test_the_tightening_did_not_break_the_ordinary_case(tmp_path):
     """A keyword at the very start of the body has no character to its left."""
-    code, out = _decide(
-        tmp_path, branch="fix/issue-13162-1786528649", body="Closes #14235", is_fork="true"
-    )
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body="Closes #14235", is_fork="true")
 
     assert code == 0 and "status=success" in out
 
@@ -255,3 +244,33 @@ def test_a_keyword_after_punctuation_still_qualifies(tmp_path):
     )
 
     assert code == 0 and "status=success" in out
+
+
+# ---------------------------------------------------------------------------
+# A large body must not race the pipe (printf | grep -q under pipefail: SIGPIPE)
+# ---------------------------------------------------------------------------
+
+# One env var is capped at MAX_ARG_STRLEN (128 KiB) by the kernel, so this is the
+# largest body the gate can ever be handed; it is ~2x the 64 KiB pipe buffer.
+_LARGE_BODY_FILLER = "x" * 120_000
+
+
+def test_a_large_body_whose_link_is_on_the_first_line_passes_every_time(tmp_path):
+    """`grep -q` exits on the first match; a producer still writing gets SIGPIPE and
+    pipefail then reports no match. It was a race, so one run proves nothing."""
+    body = "Closes #14241\n" + _LARGE_BODY_FILLER
+    for attempt in range(25):
+        code, out = _decide(tmp_path, branch="issue-14241", body=body)
+        assert code == 0 and "status=success" in out, f"attempt {attempt}: {out[-200:]}"
+
+
+def test_no_workflow_run_block_pipes_printf_into_grep_quiet():
+    """The class, not the instance: every workflow `run:` body is scanned."""
+    offenders = []
+    pipe_into_quiet_grep = re.compile(r"printf\b[^\n|]*\|\s*(?:e|f)?grep\s+-[A-Za-z]*q")
+    for path in sorted((repo_root() / ".github" / "workflows").glob("*.yml")):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if pipe_into_quiet_grep.search(line):
+                offenders.append(f"{path.name}:{number}")
+
+    assert not offenders, f"printf piped into grep -q (SIGPIPE under pipefail): {offenders}"
