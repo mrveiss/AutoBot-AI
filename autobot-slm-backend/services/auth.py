@@ -29,7 +29,7 @@ rejected before PyJWT is invoked.
 import asyncio
 import secrets
 from datetime import timedelta
-from typing import Callable, NoReturn
+from typing import Awaitable, Callable, NoReturn
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -321,7 +321,7 @@ _optional_security = HTTPBearer(auto_error=False)
 async def _internal_key_or_user(
     x_internal_api_key: str | None,
     credentials: HTTPAuthorizationCredentials | None,
-    extra_gate=None,
+    extra_gate: Callable[[dict], Awaitable[dict]] | None = None,
 ) -> dict:
     """The one internal-key-or-admin-session decision behind both dependencies below.
 
