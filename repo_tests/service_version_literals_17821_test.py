@@ -55,6 +55,7 @@ REACH = declare(
     discover=_sources,
     floor=549,
     growth=60,
+    roots=_ROOTS + _FILES,
     what="non-test API, MCP, A2A, app-factory, self-awareness and tracing modules scanned for version literals",
 )
 
