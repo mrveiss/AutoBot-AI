@@ -25,6 +25,7 @@ from autobot_shared.self_model_constants import CATALOGUE_SOURCE, HEALTH_SOURCE,
 from events.bus import PersistStrategy, publish_event
 from events.event_types import SELF_MODEL_CHANGED
 from orchestration.agent_record import agent_records
+from orchestration.capability_audit import build_audit_report
 from services.service_health_probe import read_service_health_snapshot
 from services.slm_self_model import push_observations
 from tools.tool_records import tool_records
@@ -36,6 +37,8 @@ _HEALTHY = "healthy"
 _NAME_MAX = 255  # the SLM entity name column
 _EVENT_CHANNEL = "global"
 _PROBED_FAILED = ("unhealthy", "circuit_open", "degraded")
+_AGENT = "agent"
+_AUDIT_ERROR = "error"
 
 
 def _from_record(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -67,6 +70,28 @@ def health_observations(snapshot: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
     return out
 
 
+def apply_audit(observations: List[Dict[str, Any]], report: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Agent observations the capability audit covered become ``probed_failed`` (an error finding) or ``probed_ok``.
+
+    The reason rides in ``attrs.audit``; an agent the audit did not cover stays ``declared`` (#22271).
+    """
+    findings: Dict[str, List[Dict[str, Any]]] = {}
+    for finding in report["findings"]:
+        findings.setdefault(finding["agent_id"], []).append(finding)
+    audited = set(report["audited_agents"])
+    out = []
+    for obs in observations:
+        if obs["kind"] != _AGENT or obs["name"] not in audited:
+            out.append(obs)
+            continue
+        found = findings.get(obs["name"], [])
+        failed = any(f["severity"] == _AUDIT_ERROR for f in found)
+        out.append(
+            {**obs, "status": "probed_failed" if failed else "probed_ok", "attrs": {**obs["attrs"], "audit": found}}
+        )
+    return out
+
+
 _last_revision: int | None = None
 
 
@@ -88,7 +113,9 @@ async def push_catalogue(app: FastAPI) -> None:
     """Push the route, tool and agent catalogues (one batch: the services they are served by come with them)."""
     records = [*await route_records(app), *tool_records(), *agent_records()]
     unique = {(r["kind"], r["name"]): r for r in records}  # a tool may be registered in two catalogues
-    observations = [*_service_observations(records), *(_from_record(r) for r in unique.values())]
+    observations = apply_audit(
+        [*_service_observations(records), *(_from_record(r) for r in unique.values())], build_audit_report()
+    )
     result = await push_observations(CATALOGUE_SOURCE, ("service", "route", "tool", "agent"), observations)
     logger.info("self-model catalogue pushed: %s", result)
     await _announce_if_changed(result)
