@@ -26,7 +26,7 @@ from type_defs.common import Metadata
 
 MANIFEST = MCPBridgeManifest(
     name="prometheus_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="Prometheus Metrics - System Monitoring and Alerting",
     features=[
         "query_metric",

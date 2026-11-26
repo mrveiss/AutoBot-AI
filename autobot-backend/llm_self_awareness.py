@@ -72,7 +72,7 @@ class LLMSelfAwareness:
         """
         return {
             "name": "AutoBot",
-            "version": "1.0.0",
+            "version": "unknown",  # the repo declares no version; never an invented number (#17821)
             "description": ("Advanced AI-powered automation and development assistant"),
             "current_phase": project_status["current_phase"],
             "system_maturity": capabilities["system_maturity"],
@@ -126,7 +126,7 @@ class LLMSelfAwareness:
         return {
             "system_identity": {
                 "name": "AutoBot",
-                "version": "1.0.0",
+                "version": "unknown",  # the repo declares no version; never an invented number (#17821)
                 "error": "Failed to load complete context",
             },
             "current_capabilities": {"active": [], "error": str(error)},
@@ -644,7 +644,7 @@ You should be aware of your current capabilities and limitations based on the sy
         export_data = {
             "export_metadata": {
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                "version": "1.0.0",
+                "version": "unknown",  # the repo declares no version; never an invented number (#17821)
                 "type": "system_awareness_export",
             },
             "system_context": context,

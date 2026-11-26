@@ -398,12 +398,12 @@ def discover_bridges() -> List[Tuple[str, str, str, List[str]]]:
         if manifest is None:
             manifest = MCPBridgeManifest(
                 name=name,
-                version="0.0.0",
+                version="unknown",
                 description="",
                 features=features,
                 endpoint=endpoint,
             )
-            logger.warning("Bridge '%s' has no MANIFEST attribute — using minimal fallback (version=0.0.0)", name)
+            logger.warning("Bridge '%s' has no MANIFEST attribute — using minimal fallback (version=unknown)", name)
 
         manifests.append(manifest)
         _MANIFEST_REGISTRY[name] = (manifest, module_path)
@@ -1142,7 +1142,7 @@ async def get_mcp_registry_info() -> Metadata:
     """
     return {
         "name": "AutoBot MCP Registry",
-        "version": "1.1.0",  # Updated for Issue #50 caching
+        "version": "unknown",  # the repo declares no version; never an invented number (#17821)
         "description": "Centralized registry for all AutoBot MCP tools and bridges",
         "architecture": {
             "purpose": "Aggregate and manage MCP tools from multiple bridges",

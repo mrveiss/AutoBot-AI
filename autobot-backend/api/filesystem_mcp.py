@@ -121,7 +121,7 @@ from utils.io_executor import run_in_file_executor
 
 MANIFEST = MCPBridgeManifest(
     name="filesystem_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="Filesystem Operations - Secure File & Directory Access",
     features=["read_files", "write_files", "directory_management", "search", "metadata"],
     endpoint="/api/filesystem/mcp/tools",

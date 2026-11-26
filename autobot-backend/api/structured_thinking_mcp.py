@@ -50,7 +50,7 @@ from type_defs.common import Metadata
 
 MANIFEST = MCPBridgeManifest(
     name="structured_thinking_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="Structured Thinking - 5-Stage Cognitive Framework",
     features=["process_thought", "generate_summary", "clear_history", "stage_tracking"],
     endpoint="/api/structured_thinking/mcp/tools",

@@ -19,7 +19,7 @@ from services.mcp_bridge_manifest import MCPBridgeManifest
 
 MANIFEST = MCPBridgeManifest(
     name="vnc_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="VNC Observation and Browser Context",
     features=["vnc_status", "observe_activity", "browser_context"],
     endpoint="/api/vnc/mcp/tools",

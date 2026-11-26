@@ -58,7 +58,7 @@ from .schemas_code import HTTPClientMCPStatusResponse, HTTPRequestResultResponse
 
 MANIFEST = MCPBridgeManifest(
     name="http_client_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="HTTP Client - Secure REST API Interactions",
     features=["get", "post", "put", "patch", "delete", "head", "rate_limiting"],
     endpoint="/api/http_client/mcp/tools",

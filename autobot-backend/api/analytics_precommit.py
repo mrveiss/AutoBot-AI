@@ -441,7 +441,7 @@ async def get_status(
             # Issue #358 - avoid blocking
             content = await asyncio.to_thread(hook_path.read_text)
             if "AutoBot" in content:
-                version = "1.0.0"
+                version = "1.0.0"  # hook format version: marks an AutoBot-written hook, not a release
         except Exception as e:
             logger.debug("Hook file unreadable: %s", e)
 

@@ -950,7 +950,7 @@ async def terminal_info(
     """
     return {
         "name": "Consolidated Terminal API",
-        "version": "1.0.0",
+        "version": "unknown",  # the repo declares no version; never an invented number (#17821)
         "description": "Single canonical terminal API — all previous implementations consolidated here (#3383)",
         "features": [
             "REST API for session management",
