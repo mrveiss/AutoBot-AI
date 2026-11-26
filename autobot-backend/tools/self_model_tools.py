@@ -16,15 +16,63 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.auth.permissions import role_has_permission
 from autobot_shared.logging_manager import get_logger
 from services.slm_self_model import SelfModelUnavailable, query_entities
 from tools.tool_records import SELF_MODEL_QUERY_TOOL_NAME
+from user_management.services.user_role import role_for_user_id
 
 logger = get_logger(__name__)
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 100
-_FILTERS = ("kind", "name", "node_id", "status")
+SLM_PAGE = 500  # the SLM's own ceiling: the whole graph is read so visibility is decided on all of it
+_HOST_KINDS = frozenset({"node", "command", "package"})
+
+
+def _permitted(tool: Dict[str, Any], role: str | None) -> bool:
+    """Whether *role* may use the tool entity: its declared ``required_permission`` (None: any caller)."""
+    required = (tool.get("attrs") or {}).get("required_permission")
+    return required is None or role_has_permission(role, required)
+
+
+def _depends_on(tool: Dict[str, Any], entity: Dict[str, Any]) -> bool:
+    """Whether *entity* is where *tool* runs or something it requires: its service, node, command or package."""
+    if entity.get("entity_key") == tool.get("parent_key"):
+        return True
+    node_id = tool.get("node_id")
+    if not node_id or entity.get("kind") not in _HOST_KINDS:
+        return False
+    if entity["kind"] == "node":
+        return node_id in (entity.get("node_id"), entity.get("name"))
+    needs = (tool.get("attrs") or {}).get("requires") or []
+    return entity.get("node_id") == node_id and entity.get("name") in needs
+
+
+def _entity_visible(entity: Dict[str, Any], allowed: List[Dict[str, Any]]) -> bool:
+    """A tool is visible when permitted (*allowed*); a host kind only as a dependency of one; others as ever."""
+    if entity["kind"] == "tool":
+        return any(entity is t for t in allowed)
+    if entity["kind"] in _HOST_KINDS:
+        return any(_depends_on(t, entity) for t in allowed)
+    return True
+
+
+def visible_entities(entities: List[Dict[str, Any]], role: str | None) -> List[Dict[str, Any]]:
+    """Entities *role* may see: tools it may use and what they depend on; no other node, command or package."""
+    allowed = [e for e in entities if e["kind"] == "tool" and _permitted(e, role)]
+    return [e for e in entities if _entity_visible(e, allowed)]
+
+
+def _matches(entity: Dict[str, Any], args: Dict[str, Any]) -> bool:
+    """Whether *entity* satisfies the caller's kind, name, node_id and status filters."""
+    name = (args.get("name") or "").lower()
+    return (
+        (not args.get("kind") or entity["kind"] == args["kind"])
+        and (not name or name in entity["name"].lower())
+        and (not args.get("node_id") or entity.get("node_id") == args["node_id"])
+        and (not args.get("status") or entity["status"] == args["status"])
+    )
 
 
 def _clamped_limit(raw: Any) -> int:
@@ -64,11 +112,19 @@ class SelfModelToolsMixin:
         if not user_id:
             logger.warning("self-model query with no user id; returning nothing")
             return {**envelope, "result": "No self-model entities are visible without a user.", "status": "error"}
-        filters = {key: args.get(key) for key in _FILTERS}
-        filters["limit"] = _clamped_limit(args.get("limit"))
         try:
-            data = await query_entities(filters)
+            data = await query_entities({"limit": SLM_PAGE})
         except (SelfModelUnavailable, aiohttp.ClientError) as exc:
             logger.error("Self-model query failed: %s", exc)
             return {**envelope, "result": f"The self-model is not reachable: {exc}", "status": "error"}
-        return {**envelope, "result": format_result(data), "status": "success"}
+        role = await role_for_user_id(user_id)
+        if role is None:
+            return {
+                **envelope,
+                "result": "No self-model entities are visible to an unknown account.",
+                "status": "error",
+            }
+        seen = visible_entities(data.get("entities", []), role)
+        found = [e for e in seen if _matches(e, args)]
+        shown = {"total": len(found), "entities": found[: _clamped_limit(args.get("limit"))]}
+        return {**envelope, "result": format_result(shown), "status": "success"}
