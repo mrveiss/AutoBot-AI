@@ -21,11 +21,12 @@ from fastapi import FastAPI
 
 from api.self_capabilities import route_records
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.self_model_constants import CATALOGUE_SOURCE, HEALTH_SOURCE, PUSH_INTERVAL_S
+from autobot_shared.self_model_constants import CATALOGUE_SOURCE, HEALTH_SOURCE, MODEL_SOURCE, PUSH_INTERVAL_S
 from events.bus import PersistStrategy, publish_event
 from events.event_types import SELF_MODEL_CHANGED
 from orchestration.agent_record import agent_records
 from orchestration.capability_audit import build_audit_report
+from services.self_model_models import MODEL_KIND, model_observations
 from services.service_health_probe import read_service_health_snapshot
 from services.slm_self_model import push_observations
 from tools.tool_records import tool_records
@@ -130,9 +131,16 @@ async def push_service_health() -> None:
     await _announce_if_changed(result)
 
 
+async def push_models() -> None:
+    """Push the models the registered LLM providers serve, probed by their availability checks."""
+    result = await push_observations(MODEL_SOURCE, (MODEL_KIND,), await model_observations())
+    logger.info("self-model models pushed: %s", result)
+    await _announce_if_changed(result)
+
+
 async def _run_forever(app: FastAPI) -> None:
     while True:
-        for push in (push_catalogue(app), push_service_health()):
+        for push in (push_catalogue(app), push_service_health(), push_models()):
             try:
                 await push
             except Exception as exc:  # noqa: BLE001 - one failed push must not end the loop; the next tick retries
