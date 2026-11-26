@@ -5813,7 +5813,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Nome de usuário ausente: defina-o em Segredos",
+      "desktopVm": "VM de área de trabalho do AutoBot",
+      "desktopVmDesc": "A área de trabalho própria do AutoBot",
+      "noDesktopVm": "Nenhuma VM de área de trabalho está registrada, então só os seus hosts de Segredos são listados."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6858,7 +6862,11 @@
         "slackDesc": "Token do bot do Slack",
         "serverLabel": "Host do servidor",
         "serverDesc": "Acesso a servidor SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (credencial VNC)",
+      "vncCompanionDescription": "Credencial VNC para {host}",
+      "vncCompanionNoHostId": "O host foi salvo, mas seu id não foi retornado, então a credencial VNC não foi armazenada.",
+      "vncRetry": "O host foi salvo, mas a senha VNC não. Salve novamente para tentar de novo; o host não será criado duas vezes."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7753,7 +7761,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Selecione um host com VNC para usar a área de trabalho.",
+      "vncCredentialMissing": "Nenhuma senha VNC está armazenada para este host. Adicione-a em Segredos.",
+      "hostNotFound": "Este host não é um dos seus hosts de Segredos.",
+      "hostFieldsMissing": "Este host não tem nome de usuário ou capacidades. Defina-os em Segredos.",
+      "hostVncUnavailable": "Este host não tem capacidade VNC nem porta em Segredos.",
+      "desktopVmUnavailable": "Nenhuma área de trabalho VNC está registrada, então a VM de área de trabalho não está disponível.",
+      "registryUnavailable": "Não foi possível ler o registro de áreas de trabalho. Tente novamente em breve."
     },
     "popoutBrowser": {
       "title": "Research Browser",

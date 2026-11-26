@@ -55,7 +55,7 @@ _SOURCE = Path(__file__).with_name("vnc_manager.py")
 #: Sync, blocking functions from `api.vnc_blocking_probes`. Each name is the
 #: whole point: reaching one from `async def` without a thread hop stalls every
 #: other request for as long as its subprocess or socket timeout allows.
-_BLOCKING_PROBES = ("is_vnc_running", "run_clipboard_write", "probe_connection_quality")
+_BLOCKING_PROBES = ("is_vnc_running", "probe_connection_quality")
 
 
 def _async_functions() -> dict:

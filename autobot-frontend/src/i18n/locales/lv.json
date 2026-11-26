@@ -5813,7 +5813,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Trūkst lietotājvārda: iestatiet to sadaļā Noslēpumi",
+      "desktopVm": "AutoBot darbvirsmas VM",
+      "desktopVmDesc": "AutoBot paša darbvirsma",
+      "noDesktopVm": "Nav reģistrēta darbvirsmas VM, tāpēc tiek rādīti tikai jūsu Noslēpumu resursdatori."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6858,7 +6862,11 @@
         "slackDesc": "Slack robota žetons",
         "serverLabel": "Servera resursdators",
         "serverDesc": "SSH/VNC servera piekļuve"
-      }
+      },
+      "vncCompanionName": "{name} (VNC akreditācijas dati)",
+      "vncCompanionDescription": "VNC akreditācijas dati resursdatoram {host}",
+      "vncCompanionNoHostId": "Resursdators tika saglabāts, bet tā id netika atgriezts, tāpēc VNC akreditācijas dati netika saglabāti.",
+      "vncRetry": "Resursdators tika saglabāts, bet tā VNC parole ne. Saglabājiet vēlreiz, lai mēģinātu vēlreiz; resursdators netiks izveidots divreiz."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7753,7 +7761,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Atlasiet resursdatoru ar VNC, lai izmantotu darbvirsmu.",
+      "vncCredentialMissing": "Šim resursdatoram nav saglabāta VNC parole. Pievienojiet to sadaļā Noslēpumi.",
+      "hostNotFound": "Šis resursdators nav viens no jūsu Noslēpumu resursdatoriem.",
+      "hostFieldsMissing": "Šim resursdatoram trūkst lietotājvārda vai iespēju. Iestatiet tos sadaļā Noslēpumi.",
+      "hostVncUnavailable": "Šim resursdatoram sadaļā Noslēpumi nav VNC iespējas vai porta.",
+      "desktopVmUnavailable": "Nav reģistrēta neviena VNC darbvirsma, tāpēc darbvirsmas VM nav pieejama.",
+      "registryUnavailable": "Darbvirsmu reģistru neizdevās nolasīt. Mēģiniet vēlreiz pēc brīža."
     },
     "popoutBrowser": {
       "title": "Research Browser",

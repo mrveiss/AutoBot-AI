@@ -89,6 +89,7 @@
           </div>
         </button>
 
+        <p v-if="desktopVmHint" class="empty-state" data-testid="desktop-vm-hint">{{ desktopVmHint }}</p>
         <!-- Empty state -->
         <div v-if="filteredHosts.length === 0" class="empty-state">
           <Icon name="server" size="lg" />
@@ -136,6 +137,8 @@ const { t } = useI18n();
 const props = defineProps<{
   chatId?: string;
   requiredCapability?: 'ssh' | 'vnc';
+  /** Also offer AutoBot's own desktop VM (chat Desktop picker). */
+  includeDesktopVm?: boolean;
   modelValue?: InfrastructureHost | null;
 }>();
 
@@ -147,9 +150,10 @@ const emit = defineEmits<{
 }>();
 
 // Composable
-const { hosts, loading, loadHosts } = useHostSelector({
+const { hosts, loading, loadHosts, desktopVmHint } = useHostSelector({
   requiredCapability: props.requiredCapability,
   chatId: props.chatId,
+  includeDesktopVm: props.includeDesktopVm,
 });
 
 // State

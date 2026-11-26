@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import HostSelectionDialog from '../HostSelectionDialog.vue'
+import { secretsApiClient } from '@/utils/SecretsApiClient'
 
 vi.mock('@/utils/SecretsApiClient', () => ({
   secretsApiClient: {
@@ -67,6 +68,7 @@ const i18n = createI18n({
           hostNotFound: 'Missing',
           failedToLoadHosts: 'Load failed',
           failedToConnect: 'Connect failed',
+          usernameMissing: 'Username missing',
         },
       },
     },
@@ -177,5 +179,21 @@ describe('HostSelectionDialog focus trap (#5016)', () => {
     expect(document.activeElement).toBe(outside)
     wrapper.unmount()
     outside.remove()
+  })
+})
+
+describe('HostSelectionDialog host without a username (E7, #22191)', () => {
+  it('shows a username-missing link to Secrets and never invents root', async () => {
+    vi.mocked(secretsApiClient.getSecrets).mockResolvedValueOnce({
+      secrets: [{ id: 'h3', name: 'No User', type: 'infrastructure_host', metadata: { host: '10.0.0.3', ssh_port: 22 } }],
+    } as never)
+    const wrapper = mountDialog()
+    await flushPromises()
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('Username missing')
+    expect(text).not.toContain('root@10.0.0.3')
+    expect(wrapper.html()).toContain('/secrets')
+    wrapper.unmount()
   })
 })

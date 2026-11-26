@@ -24,7 +24,7 @@ crash left at ``installing`` becomes eligible again once it is older than the co
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
@@ -45,6 +45,19 @@ PENDING_STATUSES = (RoleStatus.NOT_INSTALLED.value, "failed")
 CREDENTIAL_REGISTERED_BY_ROLE = {"vnc": "vnc"}
 _INSTALLING = "installing"
 _FAILED = "failed"
+_INSTALLED = "installed"  # what api.nodes._execute_provision_playbook records on success
+#: Statuses only the provisioner writes: their ``updated_at`` is the time of the attempt.
+_PROVISIONER_STATUSES = (_FAILED, _INSTALLING, _INSTALLED)
+#: Provisioner-owned statuses the role detector and the health poll must NOT overwrite: a ``failed``/``installing``
+#: row stays so, so its ``updated_at`` keeps marking the attempt and the retry cooldown holds (#22262).
+PROVISIONER_HELD_STATUSES = (_FAILED, _INSTALLING)
+
+
+def is_provisioner_held(role) -> bool:
+    """True for an updater-provisioned role left failed/installing: only the updater retry settles it (#22262)."""
+    return role.role_name in UPDATER_PROVISIONED_ROLES and role.status in PROVISIONER_HELD_STATUSES
+
+
 #: Hours before a role already attempted on a node is provisioned again (registered in env_registry_slm_rollback).
 RETRY_COOLDOWN_HOURS = env_int_clamped("SLM_ROLE_PROVISION_RETRY_COOLDOWN_HOURS", 6, min_v=1, max_v=720)
 
@@ -70,20 +83,51 @@ def _attempted_recently(role, now: datetime) -> bool:
 
 
 def _needs_provisioning(role, credential_types: set[str], now: datetime | None = None) -> bool:
-    """Whether the fleet update should provision this row now.
+    """Whether the fleet update should provision this row now: the ONE rule (#22211, #22262).
 
     * ``not_installed``: assigned, never attempted -> yes, at once.
-    * every other status is a row that was already attempted (or is mid-attempt, or was left at
-      ``installing`` by a crash): provision again only when it is failed or lacks its credential, and only
-      once the cooldown has passed.
+    * a row the PROVISIONER wrote (``failed``, ``installing``, ``installed``) is provisioned again when it is
+      failed/stuck or lacks its credential, and only once the cooldown has passed.
+    * a row the role DETECTOR wrote (``active``/``inactive``: held, never provisioned) lacking its credential is
+      provisioned at once. Its ``updated_at`` moves with every detection, so it is no sign of an attempt and
+      must not hold the cooldown (#22262).
     """
     if role.status == RoleStatus.NOT_INSTALLED.value:
         return True
-    if _attempted_recently(role, now or datetime.now(timezone.utc)):
-        return False
     wanted = CREDENTIAL_REGISTERED_BY_ROLE.get(role.role_name)
     missing_credential = wanted is not None and wanted not in credential_types
+    if role.status not in _PROVISIONER_STATUSES:
+        return missing_credential
+    if _attempted_recently(role, now or datetime.now(timezone.utc)):
+        return False
     return role.status in (_FAILED, _INSTALLING) or missing_credential
+
+
+async def provisioner_holds(db, role) -> bool:
+    """Whether the role detector, health poll and code sync must leave this row alone (#22262).
+
+    :func:`is_provisioner_held`, plus an ``installed`` row whose credential is still missing inside the
+    cooldown: letting detection rewrite it to ``active`` would make ``updated_at`` (the attempt's clock)
+    look like a detection and re-provision it at once.
+    """
+    if is_provisioner_held(role):
+        return True
+    wanted = CREDENTIAL_REGISTERED_BY_ROLE.get(role.role_name)
+    if wanted is None or role.status != _INSTALLED or not _attempted_recently(role, datetime.now(timezone.utc)):
+        return False
+    return wanted not in await _credential_types(db, role.node_id)
+
+
+async def set_role_status_if_unchanged(db, role, new_status: str) -> bool:
+    """Write *new_status* only while the row still has the status the caller observed (conditional UPDATE).
+
+    A provisioner that committed ``installing``/``failed`` after the caller loaded the row wins; the caller's
+    stale result is dropped. Returns whether the row was updated.
+    """
+    result = await db.execute(
+        update(NodeRole).where(NodeRole.id == role.id, NodeRole.status == role.status).values(status=new_status)
+    )
+    return result.rowcount > 0
 
 
 async def pending_roles(db, node_id: str) -> list:

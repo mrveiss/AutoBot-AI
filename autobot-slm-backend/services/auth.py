@@ -29,7 +29,7 @@ rejected before PyJWT is invoked.
 import asyncio
 import secrets
 from datetime import timedelta
-from typing import Callable, NoReturn
+from typing import Awaitable, Callable, NoReturn
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -318,6 +318,29 @@ require_any_permission = _permission_gate.require_any_permission
 _optional_security = HTTPBearer(auto_error=False)
 
 
+async def _internal_key_or_user(
+    x_internal_api_key: str | None,
+    credentials: HTTPAuthorizationCredentials | None,
+    extra_gate: Callable[[dict], Awaitable[dict]] | None = None,
+) -> dict:
+    """The one internal-key-or-admin-session decision behind both dependencies below.
+
+    A valid ``AUTOBOT_INTERNAL_API_KEY`` (``verify_internal_api_key``, the single key check) authenticates
+    the machine caller; every other caller must present a session that ``get_current_user`` accepts
+    (admin, #20631). ``extra_gate(user)``, when given, is awaited on that user and its result returned.
+    """
+    if verify_internal_api_key(x_internal_api_key):
+        return {"internal_service": True, "role": "service"}
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    current_user = await get_current_user(credentials)
+    return await extra_gate(current_user) if extra_gate else current_user
+
+
 async def require_service_management_or_internal(
     request: Request,
     x_internal_api_key: str | None = Header(None, alias="X-Internal-API-Key"),
@@ -336,16 +359,23 @@ async def require_service_management_or_internal(
     service.management — preserving #10198's human-surface gate. ``get_current_user``
     decides that person must be an admin (#20631), so the operator role is refused here too.
     """
-    if verify_internal_api_key(x_internal_api_key):
-        return {"internal_service": True, "role": "service"}
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    current_user = await get_current_user(credentials)
-    return await _permission_gate.enforce(request, current_user, (Permission.SERVICE_MANAGEMENT,))
+    return await _internal_key_or_user(
+        x_internal_api_key,
+        credentials,
+        lambda user: _permission_gate.enforce(request, user, (Permission.SERVICE_MANAGEMENT,)),
+    )
+
+
+async def get_current_user_or_registry_service(
+    x_internal_api_key: str | None = Header(None, alias="X-Internal-API-Key"),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_optional_security),
+) -> dict:
+    """Session gate for the few read/redeem routes the main backend's VNC registry client calls (#22144).
+
+    The internal service key authenticates that machine caller; every other caller goes through
+    :func:`get_current_user` unchanged (admin session required). The general service JWT is NOT widened.
+    """
+    return await _internal_key_or_user(x_internal_api_key, credentials)
 
 
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:

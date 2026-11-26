@@ -12713,8 +12713,8 @@ export interface paths {
         put?: never;
         /**
          * Vnc Mouse Click
-         * @description Perform mouse click at specified coordinates with human-like behavior.
-         *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         * @description Click at the given coordinates on the selected /secrets host (#22145).
+         *     Issue #74: Desktop interaction controls.
          *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
          *     control-lock -- the lock owner's own toolbar keeps working.
          *
@@ -12742,8 +12742,8 @@ export interface paths {
         put?: never;
         /**
          * Vnc Keyboard Type
-         * @description Type text via keyboard with human-like speed and pauses.
-         *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         * @description Type text on the selected /secrets host (#22145).
+         *     Issue #74: Desktop interaction controls.
          *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
          *     control-lock -- the lock owner's own toolbar keeps working.
          *
@@ -12829,8 +12829,8 @@ export interface paths {
         put?: never;
         /**
          * Vnc Mouse Drag
-         * @description Perform mouse drag operation with curved, human-like movement.
-         *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         * @description Drag along a curved path on the selected /secrets host (#22145).
+         *     Issue #74: Desktop interaction controls.
          *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
          *     control-lock -- the lock owner's own toolbar keeps working.
          *
@@ -12856,19 +12856,10 @@ export interface paths {
         };
         /**
          * Vnc Screenshot
-         * @description Capture desktop screenshot.
-         *     Issue #74: Desktop interaction controls.
+         * @description Capture the selected /secrets host's desktop over its VNC endpoint (#22145).
          *
-         *     Issue #13208: ``temporary_file_path`` owns the temp file, so it is removed
-         *     on the success path, on capture failure and on any exception. Previously
-         *     only the success path unlinked it and each failed capture leaked a PNG.
-         *
-         *     Returns:
-         *         {
-         *             "status": "success|error",
-         *             "image_data": "base64-encoded PNG",
-         *             "message": "..."
-         *         }
+         *     Returns {"status": "success|error", "image_data": "base64 PNG", "message": "..."}.
+         *     A host that is not a /secrets infrastructure host is refused with 404.
          */
         get: operations["vnc_screenshot_api_vnc_screenshot_get"];
         put?: never;
@@ -12890,14 +12881,7 @@ export interface paths {
         put?: never;
         /**
          * Vnc Clipboard Sync
-         * @description Sync clipboard content to remote desktop.
-         *     Issue #74: Desktop interaction controls.
-         *
-         *     Args:
-         *         request: ClipboardSyncRequest with text content
-         *
-         *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         * @description Send clipboard text to the selected /secrets host's desktop (#22145); muted like the other controls.
          */
         post: operations["vnc_clipboard_sync_api_vnc_clipboard_post"];
         delete?: never;
@@ -13514,6 +13498,26 @@ export interface paths {
          * @description Get current desktop control-lock owner/state (#12002, #11506 T1).
          */
         get: operations["get_desktop_control_status_api_vnc_proxy__vnc_type__control_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/desktop/endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Desktop Vm Endpoint
+         * @description Where the desktop VM is, from the SLM registry; null when no VNC desktop node is registered.
+         */
+        get: operations["get_desktop_vm_endpoint_api_vnc_proxy_desktop_endpoint_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -66176,6 +66180,11 @@ export interface components {
         /** ClipboardSyncRequest */
         ClipboardSyncRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Content
              * @description Text content to copy to clipboard
              */
@@ -74734,8 +74743,7 @@ export interface components {
         DesktopControlAcquireRequest: {
             /**
              * Session Id
-             * @description Desktop control-lock session id
-             * @default default
+             * @description Selected /secrets host id (the control-lock key)
              */
             session_id: string;
         } & {
@@ -74766,8 +74774,7 @@ export interface components {
         DesktopControlReleaseRequest: {
             /**
              * Session Id
-             * @description Desktop control-lock session id
-             * @default default
+             * @description Selected /secrets host id (the control-lock key)
              */
             session_id: string;
         } & {
@@ -74931,6 +74938,21 @@ export interface components {
              * @default default
              */
             session_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopVmEndpointResponse
+         * @description Where the chat Desktop's desktop VM is: the one answer both the page and the controls use.
+         */
+        DesktopVmEndpointResponse: {
+            /** Host */
+            host: string;
+            /**
+             * Port
+             * @description noVNC web port
+             */
+            port: number;
         } & {
             [key: string]: unknown;
         };
@@ -78902,6 +78924,11 @@ export interface components {
          */
         FindImageRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Template Data
              * @description Base64-encoded template image (PNG)
              */
@@ -82507,16 +82534,15 @@ export interface components {
         /** KeyboardTypeRequest */
         KeyboardTypeRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Text
              * @description Text to type
              */
             text: string;
-            /**
-             * Session Id
-             * @description Desktop control-lock session id
-             * @default default
-             */
-            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -89200,6 +89226,11 @@ export interface components {
         /** MouseClickRequest */
         MouseClickRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * X
              * @description X coordinate
              */
@@ -89215,17 +89246,16 @@ export interface components {
              * @default left
              */
             button: string;
-            /**
-             * Session Id
-             * @description Desktop control-lock session id
-             * @default default
-             */
-            session_id: string;
         } & {
             [key: string]: unknown;
         };
         /** MouseDragRequest */
         MouseDragRequest: {
+            /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
             /**
              * X1
              * @description Start X coordinate
@@ -89246,17 +89276,16 @@ export interface components {
              * @description End Y coordinate
              */
             y2: number;
-            /**
-             * Session Id
-             * @description Desktop control-lock session id
-             * @default default
-             */
-            session_id: string;
         } & {
             [key: string]: unknown;
         };
         /** MouseScrollRequest */
         MouseScrollRequest: {
+            /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
             /**
              * Direction
              * @description Scroll direction: up or down
@@ -89268,12 +89297,6 @@ export interface components {
              * @default 3
              */
             amount: number;
-            /**
-             * Session Id
-             * @description Desktop control-lock session id
-             * @default default
-             */
-            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -101674,16 +101697,15 @@ export interface components {
         /** SpecialKeyRequest */
         SpecialKeyRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Key
              * @description Special key name (e.g., Return, Escape, ctrl+c)
              */
             key: string;
-            /**
-             * Session Id
-             * @description Desktop control-lock session id
-             * @default default
-             */
-            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -107152,6 +107174,11 @@ export interface components {
          */
         VNCOCRRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Region
              * @description Optional region {x, y, width, height}, empty for full screen
              */
@@ -108131,6 +108158,11 @@ export interface components {
          */
         WaitForImageRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Template Data
              * @description Base64-encoded template image
              */
@@ -108170,6 +108202,11 @@ export interface components {
          * @description Wait for text to appear request.
          */
         WaitForTextRequest: {
+            /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
             /**
              * Text
              * @description Text to wait for
@@ -127026,7 +127063,10 @@ export interface operations {
     };
     vnc_screenshot_api_vnc_screenshot_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Selected /secrets infrastructure host id */
+                host_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127040,6 +127080,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VncScreenshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -127269,6 +127318,8 @@ export interface operations {
         parameters: {
             query: {
                 name: string;
+                /** @description Selected /secrets infrastructure host id */
+                host_id: string;
             };
             header?: never;
             path?: never;
@@ -127591,6 +127642,8 @@ export interface operations {
         parameters: {
             query: {
                 session_id: string;
+                /** @description Selected /secrets infrastructure host id */
+                host_id: string;
             };
             header?: never;
             path?: never;
@@ -127752,8 +127805,9 @@ export interface operations {
     };
     get_desktop_control_status_api_vnc_proxy__vnc_type__control_status_get: {
         parameters: {
-            query?: {
-                session_id?: string;
+            query: {
+                /** @description Selected /secrets infrastructure host id */
+                session_id: string;
             };
             header?: never;
             path: {
@@ -127779,6 +127833,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_desktop_vm_endpoint_api_vnc_proxy_desktop_endpoint_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopVmEndpointResponse"] | null;
                 };
             };
         };

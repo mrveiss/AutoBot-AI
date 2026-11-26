@@ -23743,7 +23743,9 @@ export interface operations {
             query?: {
                 include_inactive?: boolean;
             };
-            header?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
             path: {
                 node_id: string;
             };
@@ -28691,7 +28693,9 @@ export interface operations {
     get_vnc_connection_info_api_vnc_credentials__credential_id__connect_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
             path: {
                 credential_id: string;
             };
@@ -28724,7 +28728,9 @@ export interface operations {
             query?: {
                 include_inactive?: boolean;
             };
-            header?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -28755,7 +28761,9 @@ export interface operations {
             query: {
                 token: string;
             };
-            header?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };

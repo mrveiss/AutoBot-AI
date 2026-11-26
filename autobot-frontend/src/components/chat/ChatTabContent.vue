@@ -70,6 +70,7 @@
               v-model="selectedVncHost"
               :chat-id="currentSessionId ?? undefined"
               required-capability="vnc"
+              include-desktop-vm
               @host-selected="onVncHostSelected"
               @open-secrets-manager="emit('open-secrets-manager')"
             />
