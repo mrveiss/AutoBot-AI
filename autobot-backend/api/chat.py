@@ -16,24 +16,18 @@ Consolidated from chat.py and chat_enhanced.py per Issue #708.
 import asyncio
 import functools
 import json
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List
 from uuid import uuid4
-
-from autobot_shared.error_utils import safe_http_detail
-from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
-
-# Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on.
-# Reads env at import time (process restart required to change).
-_CHAT_SSOT_STRICT = config.chat_ssot_strict.lower() == "true"
-
-import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.chat_citations import retrieve_citations
+from api.chat_sessions import delete_session as _canonical_delete_session
+from api.chat_sessions import list_user_sessions, log_request_context, resolve_company_scope
+from api.chat_sessions import router as sessions_router
 from api.chat_streaming import (
     _stream_chat_workflow_messages,
     _stream_direct_response,
@@ -65,6 +59,9 @@ from api.user_management.dependencies import require_org_context
 from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from chat_history.deduplication import parse_message_timestamp, timestamp_sort_key
 from chat_history.message_schema import llm_role, message_text, message_type
@@ -317,6 +314,10 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
 # Router Configuration
 # ====================================================================
 
+# Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on.
+# Reads env at import time (process restart required to change).
+_CHAT_SSOT_STRICT = config.chat_ssot_strict.lower() == "true"
+
 router = APIRouter(tags=["chat"])
 logger = get_logger(__name__)
 
@@ -331,10 +332,6 @@ def _log_ssot_mode_once() -> None:
 
 
 # Include session management router
-from api.chat_sessions import delete_session as _canonical_delete_session
-from api.chat_sessions import list_user_sessions, log_request_context, resolve_company_scope
-from api.chat_sessions import router as sessions_router
-
 router.include_router(sessions_router)
 
 # ====================================================================
