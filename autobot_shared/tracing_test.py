@@ -354,7 +354,8 @@ async def test_a_caller_supplied_trace_header_is_kept_and_its_dict_is_not_mutate
 
     sent = session.request.call_args.kwargs["headers"]
     assert sent["TraceParent"] == "00-caller-trace-01"
-    assert "traceparent" not in sent  # no second, differently-cased copy
+    assert sent.getall("traceparent") == ["00-caller-trace-01"]  # one copy, case-insensitively, the caller's value
+    assert [k for k in sent if k.lower() == "traceparent"] == ["TraceParent"]  # no second, differently-cased key
     assert sent["X-Own"] == "1"
     assert caller_headers == {"TraceParent": "00-caller-trace-01", "X-Own": "1"}  # the caller's dict is untouched
 
