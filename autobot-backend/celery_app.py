@@ -302,6 +302,11 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.reconcile_credentials",
         "schedule": crontab(minute=20),
     },
+    # #22271: daily agent capability-manifest consistency audit (findings are logged and returned).
+    "capability-manifest-audit-daily": {
+        "task": "tasks.run_capability_audit",
+        "schedule": crontab(hour=3, minute=40),
+    },
     # GH#8995: data-hygiene retention tasks (nightly, staggered to avoid Redis contention)
     # All tasks are no-ops when their respective retention_days == 0 (safe default).
     # Schedules are configurable via AUTOBOT_*_RETENTION_SCHEDULE env vars (5-field cron).

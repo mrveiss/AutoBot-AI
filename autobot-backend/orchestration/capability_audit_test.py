@@ -71,3 +71,14 @@ def test_run_capability_audit_report_shape():
     assert report["agent_count"] >= 4
     assert report["error_count"] == 0
     assert isinstance(report["findings"], list)
+
+
+def test_scheduled_task_runs_the_audit_and_is_on_the_beat_schedule():
+    """#22271: the Celery task is the scheduled entry point for the audit."""
+    from celery_app import celery_app
+    from tasks.capability_audit_task import run_capability_audit_task
+
+    report = run_capability_audit_task()
+    assert report["error_count"] == 0
+    scheduled = {entry["task"] for entry in celery_app.conf.beat_schedule.values()}
+    assert "tasks.run_capability_audit" in scheduled

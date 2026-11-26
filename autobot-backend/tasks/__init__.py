@@ -24,6 +24,7 @@ from .analytics_tasks import (
 )
 from .audit_log_retention import cleanup_expired_audit_logs
 from .batch_job_tasks import dispatch_due_batch_schedules, run_batch_job
+from .capability_audit_task import run_capability_audit_task
 from .chat_retention import cleanup_expired_chats
 from .credential_reconcile import reconcile_credentials
 from .file_retention import cleanup_expired_files
@@ -89,6 +90,7 @@ __all__ = [
     # @celery_app.task decorators never ran and beat-scheduled runs raised
     # "Received unregistered task of type ...".
     "reconcile_credentials",
+    "run_capability_audit_task",
     "cleanup_expired_snapshots",
     "cleanup_stale_mobile_devices",
     "transcribe_recording",
