@@ -55,7 +55,6 @@ from autobot_shared.tool_catalogue import (
     SYSTEM_EXEC_TOOLS,
     TERMINAL_TOOLS,
 )
-from autobot_shared.verifier_deadline import verifier_deadline_s
 from autobot_shared.verifier_degradation import (
     VerifierDegradation,
     VerifierObservation,
@@ -66,8 +65,8 @@ from autobot_shared.verifier_degradation import (
 )
 from autobot_shared.verifier_model import (  # noqa: F401 - VERIFIER_SPEND_SITE is re-exported
     VERIFIER_SPEND_SITE,
+    chat_within_deadline,
     configured_verifier_model,
-    resolve_and_chat,
 )
 from autobot_shared.verifier_prompt import _build_verifier_prompt  # noqa: F401  (re-export, #17306)
 
@@ -326,17 +325,12 @@ async def _call_verifier_once(
 
     system_prompt, user_prompt = _build_verifier_prompt(tool_name, args, reason)
     attempt: dict[str, Any] = {}
-    # #22254: the deadline follows the model's measured speed (an env-set VERIFIER_TIMEOUT_S always wins).
-    deadline = verifier_deadline_s(configured_verifier_model(provider), VERIFIER_MAX_TOKENS, VERIFIER_TIMEOUT_S)
     try:
-        import asyncio as _asyncio
-
-        # One deadline covers the model lookup (a cache miss lists models over the network) and the chat call.
-        _request, response = await _asyncio.wait_for(
-            resolve_and_chat(provider, system_prompt, user_prompt, tool_name, VERIFIER_MAX_TOKENS, attempt),
-            timeout=deadline,
+        response = await chat_within_deadline(
+            provider, system_prompt, user_prompt, tool_name, VERIFIER_MAX_TOKENS, VERIFIER_TIMEOUT_S, attempt
         )
     except Exception as exc:
+        deadline = attempt.get("deadline", VERIFIER_TIMEOUT_S)
         if "response" in attempt:  # the deadline hit during accounting: the reply is complete, so it decides (#21844)
             return VerifierObservation.from_reply(
                 attempt["response"].content or "",

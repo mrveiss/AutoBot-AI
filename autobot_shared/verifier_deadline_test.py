@@ -49,9 +49,35 @@ def test_a_stale_rate_is_not_used(monkeypatch):
     assert vd.verifier_deadline_s("m", 512, 10.0, 90.0, explicit=False) == 10.0
 
 
-def test_the_chat_models_rate_stands_in_when_the_verifier_model_was_not_measured():
+def test_a_different_verifier_model_never_borrows_the_chat_models_rate():
     vd.note_generation_rate("chat-model", 20.0)
-    assert vd.verifier_deadline_s("other", 512, 10.0, 600.0, explicit=False) == pytest.approx(51.2)
+    assert vd.verifier_deadline_s("other", 512, 10.0, 600.0, explicit=False) == 10.0  # its own rate, else the floor
+
+
+def test_the_chat_models_rate_stands_in_only_when_the_verifier_reuses_the_chat_model(monkeypatch):
+    from contextvars import ContextVar
+
+    from autobot_shared import chat_model_context
+
+    monkeypatch.setattr(chat_model_context, "_last_turn_model", ContextVar("t", default="chat-model"))
+    vd.note_generation_rate("chat-model", 20.0)
+    assert vd.verifier_deadline_s("chat-model:latest", 512, 10.0, 600.0, explicit=False, reuses_chat=True) == (
+        pytest.approx(51.2)
+    )
+    assert vd.verifier_deadline_s("chat-model:latest", 512, 10.0, 600.0, explicit=False) == 10.0
+
+
+def test_the_verifier_models_own_rate_wins_even_when_reusing_chat():
+    vd.note_generation_rate("v", 40.0)
+    vd.note_generation_rate("chat-model", 5.0)
+    assert vd.recent_tokens_per_second("v", reuses_chat=True) == 40.0
+
+
+def test_headroom_and_rate_age_are_registered_env_constants():
+    from autobot_shared.env_registry import REGISTRY
+
+    assert REGISTRY["AUTOBOT_VERIFIER_HEADROOM_FACTOR"].default == vd.HEADROOM_FACTOR == 2.0
+    assert REGISTRY["AUTOBOT_VERIFIER_RATE_MAX_AGE_S"].default == vd.RATE_MAX_AGE_S == 900.0
 
 
 def test_a_timeout_names_the_deadline_it_hit():

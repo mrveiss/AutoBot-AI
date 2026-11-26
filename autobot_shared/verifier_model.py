@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import Any, Callable
 
 import aiohttp
 
@@ -34,6 +34,7 @@ from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_ps_url
 from autobot_shared.spend_recording import report_spend
+from autobot_shared.verifier_deadline import verifier_deadline_s
 
 logger = get_logger(__name__)
 
@@ -169,9 +170,19 @@ async def resolve_verifier_model(provider: Any, decision: dict[str, Any] | None 
 
 
 async def resolve_and_chat(
-    provider: Any, system_prompt: str, user_prompt: str, tool_name: str, max_tokens: int, attempt: dict[str, Any]
+    provider: Any,
+    system_prompt: str,
+    user_prompt: str,
+    tool_name: str,
+    max_tokens: int,
+    attempt: dict[str, Any],
+    on_resolved: Callable[[str | None, bool], None] | None = None,
 ) -> tuple[Any, Any]:
-    """Resolve the model, record it in *attempt*, chat, and record the spend; returns (request, response)."""
+    """Resolve the model, record it in *attempt*, chat, and record the spend; returns (request, response).
+
+    *on_resolved* receives ``(model, reuses_chat)`` once the model is known, so the caller can size its deadline
+    for the model that actually answers (#22254).
+    """
     from autobot_shared.chat_model_context import chat_context_options, chat_think_options
     from autobot_shared.ssot_constants import CategoryDefaults
     from llm_shared.models import LLMRequest
@@ -181,6 +192,8 @@ async def resolve_and_chat(
     attempt["model_reason"] = decision.get("reason")
     # The chat model is asked with the chat's own context size: a different num_ctx makes Ollama reload the runner.
     reuses_chat = bool(decision.get("reuses_chat"))
+    if on_resolved is not None:
+        on_resolved(attempt["model"], reuses_chat)
     options = {
         **chat_context_options(attempt["model"], reuses_chat=reuses_chat),
         **chat_think_options(attempt["model"], reuses_chat=reuses_chat),  # the turn's thinking toggle (#22258)
@@ -235,3 +248,33 @@ async def check_verifier_model() -> tuple[str, bool | None]:
     if model is None:
         return "", None
     return model, await verifier_model_available(provider, model)
+
+
+async def chat_within_deadline(
+    provider: Any,
+    system_prompt: str,
+    user_prompt: str,
+    tool_name: str,
+    max_tokens: int,
+    floor_s: float,
+    attempt: dict[str, Any],
+) -> Any:
+    """Resolve the model and ask it under one deadline; the deadline used is left in ``attempt["deadline"]``.
+
+    #22254: the deadline follows the measured speed of the model that answers (an env-set VERIFIER_TIMEOUT_S wins).
+    That model is known only once resolved, so the deadline starts from the configured verifier model's own rate and
+    is re-sized then; the chat model's rate counts only when the verifier reuses the chat model. One deadline covers
+    the model lookup (a cache miss lists models over the network) and the chat call.
+    """
+    attempt["deadline"] = verifier_deadline_s(configured_verifier_model(provider), max_tokens, floor_s)
+    async with asyncio.timeout(attempt["deadline"]) as scope:
+        started = asyncio.get_running_loop().time()
+
+        def _rescale(model: str | None, reuses_chat: bool) -> None:
+            attempt["deadline"] = verifier_deadline_s(model, max_tokens, floor_s, reuses_chat=reuses_chat)
+            scope.reschedule(started + attempt["deadline"])
+
+        _request, response = await resolve_and_chat(
+            provider, system_prompt, user_prompt, tool_name, max_tokens, attempt, _rescale
+        )
+    return response
