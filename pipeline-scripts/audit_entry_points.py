@@ -16,6 +16,8 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from tools.lint._main_guard import has_main_guard
+
 # Repo-root directories searched for callers but never scanned for findings.
 CALLER_ONLY_DIRS = ("scripts",)
 BENCHMARK_DIR_NAME = "benchmarks"
@@ -35,27 +37,13 @@ def is_benchmark(path: Path) -> bool:
     return BENCHMARK_DIR_NAME in path.parts[:-1] or path.name.endswith(BENCHMARK_FILE_SUFFIXES)
 
 
-def _is_name_eq_main(test: ast.expr) -> bool:
-    """True only for ``__name__ == "__main__"`` -- not ``!=``, not another constant."""
-    if not (isinstance(test, ast.Compare) and isinstance(test.left, ast.Name) and test.left.id == "__name__"):
-        return False
-    if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq):
-        return False
-    return isinstance(test.comparators[0], ast.Constant) and test.comparators[0].value == "__main__"
-
-
-def _has_main_block(tree: ast.Module) -> bool:
-    """True when a top-level statement is ``if __name__ == "__main__":`` (a docstring example is not)."""
-    return any(isinstance(n, ast.If) and _is_name_eq_main(n.test) for n in tree.body)
-
-
 def _read_module(path: Path) -> tuple[str, bool]:
     """Return ``(module docstring, has main block)``; ``("", False)`` when unreadable or unparsable."""
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
         return "", False
-    return ast.get_docstring(tree) or "", _has_main_block(tree)
+    return ast.get_docstring(tree) or "", has_main_guard(tree)
 
 
 def documents_own_module_run(path: Path, module_path: Optional[str]) -> bool:
