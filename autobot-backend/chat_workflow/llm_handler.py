@@ -20,6 +20,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_history.rolling_summary import prompt_summary
+from chat_workflow import tiered_context_sources as tcs
 from dependencies import provide_config_manager
 from intent_classifier import apply_topic_guidance
 from middleware.base import HookContext
@@ -827,12 +828,8 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # When false the pre-existing unconditional EssentialStory path is used.
         # Issue MVA-1992: Skip memory graph lookup when lightweight_mode=True.
         if not lightweight_mode:
-            from chat_workflow import tiered_context_sources as tcs
-
             system_prompt = await tcs.append_memory_context(system_prompt, session, message, selected_model)
-        system_prompt = apply_topic_guidance(
-            system_prompt, message, session
-        )  # volatile: after the hooked stable prefix
+        system_prompt = apply_topic_guidance(system_prompt, message, session)  # volatile: after the stable prefix
         conversation_context = self._build_conversation_context(session, await prompt_summary(session))
 
         # Knowledge retrieval for RAG
