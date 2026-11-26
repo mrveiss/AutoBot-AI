@@ -149,11 +149,31 @@ from api.schemas_terminal import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 
+# Import handler classes (extracted from this file - Issue #210)
+from api.terminal_handlers import TerminalWebSocket, session_manager
+
+# SSH terminal support lives in api/terminal_ssh.py (#14959). The stub handler,
+# its session manager and the three websocket helpers moved together; the
+# /ws/ssh/{host_id} route below stays here with the rest of the router. Imported
+# under this module's own names so `api.terminal.ssh_terminal_manager` keeps
+# resolving for every existing caller and patch target.
+from api.terminal_ssh import (
+    _init_ssh_redis_client,
+    _run_ssh_message_loop,
+    _setup_ssh_terminal,
+    resolve_ssh_host_id,
+    ssh_terminal_manager,
+)
+
+# Tool management router, extracted from this file (#185).
+from api.terminal_tools import router as tools_router
+
 # Import models from dedicated module (Issue #185 - split oversized files)
 # Response schemas for OpenAPI documentation and response validation
 from api.ws_security import enforce_ws_origin, enforce_ws_terminal_auth
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
@@ -178,26 +198,6 @@ _ADMIN_COMMAND_TIMEOUT_S = 30.0  # one value for the wait and its timeout messag
 router = APIRouter(tags=["terminal"])
 admin_router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
-
-# Import handler classes (extracted from this file - Issue #210)
-from api.terminal_handlers import TerminalWebSocket, session_manager
-
-# SSH terminal support lives in api/terminal_ssh.py (#14959). The stub handler,
-# its session manager and the three websocket helpers moved together; the
-# /ws/ssh/{host_id} route below stays here with the rest of the router. Imported
-# under this module's own names so `api.terminal.ssh_terminal_manager` keeps
-# resolving for every existing caller and patch target.
-from api.terminal_ssh import (  # noqa: E402
-    _init_ssh_redis_client,
-    _run_ssh_message_loop,
-    _setup_ssh_terminal,
-    resolve_ssh_host_id,
-    ssh_terminal_manager,
-)
-
-# Tool management router, extracted from this file (#185).
-from api.terminal_tools import router as tools_router
-from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 
 # On `admin_router` (#15084): they run system commands and carry no gate of their own.
 admin_router.include_router(tools_router, prefix="/terminal")

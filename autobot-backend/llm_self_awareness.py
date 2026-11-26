@@ -16,7 +16,9 @@ from typing import Any, Dict, List
 
 import aiofiles
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 from phase_progression_manager import get_progression_manager
@@ -666,11 +668,7 @@ You should be aware of your current capabilities and limitations based on the sy
         return output_path
 
 
-from autobot_shared.async_compat import run_or_schedule
-
 # Global instance (thread-safe)
-from autobot_shared.singleton_factory import lazy_singleton
-
 _llm_self_awareness = lazy_singleton(LLMSelfAwareness)
 
 
