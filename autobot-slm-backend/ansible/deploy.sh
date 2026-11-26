@@ -344,7 +344,7 @@ restart_services() {
 # Rollback functionality
 rollback_deployment() {
     # #19239: no rollback.yml exists; this stopped every service, then failed, leaving the fleet down.
-    # The SLM's rollback runs no playbook yet (#17657). Code Sync deploys only main, so there is no pinned deploy (#20214).
+    # No deploy-rollback playbook exists (#17657, open); rolling back is the SLM updater's job (#20214, closed).
     error_exit "deploy.sh cannot roll back. Use the SLM updater instead: Maintenance > Updates > Code Sync, 'Roll back to an earlier version' (gated by SLM_ROLLBACK_ENABLED; see docs/runbooks/CODE_UPDATE.md). Fix forward on main."
 }
 
