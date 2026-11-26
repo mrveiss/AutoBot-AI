@@ -25,6 +25,9 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+from tools.lint._scan_helpers import tracked_paths
+
 _WORKFLOW = repo_root() / ".github" / "workflows" / "pr-issue-validation.yml"
 
 
@@ -284,15 +287,15 @@ def test_no_workflow_step_under_pipefail_pipes_a_producer_into_quiet_grep():
     shell has pipefail. A step with no pipefail (the default shell) is exempt: there
     the pipeline status is grep's alone, so an early exit cannot fail it."""
     offenders = []
-    for path in sorted((repo_root() / ".github" / "workflows").glob("*.yml")):
+    for path in (repo_root() / rel for rel in sorted(tracked_paths(repo_root(), ".github/workflows/*.y*ml"))):
         document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         for job_id, job in (document.get("jobs") or {}).items():
             for step in job.get("steps", []) if isinstance(job, dict) else []:
                 if "run" not in step or not _pipefail_active(document, job, step):
                     continue
-                joined = step["run"].replace("\\\n", " ")
-                for line in joined.splitlines():
-                    if not line.lstrip().startswith("#") and _PIPE_INTO_QUIET_GREP.search(line):
+                code = "\n".join(c.text for c in code_lines(step["run"], name="step.sh"))
+                for line in code.replace("\\\n", " ").splitlines():
+                    if _PIPE_INTO_QUIET_GREP.search(line):
                         offenders.append(f"{path.name}:{job_id}:{step.get('name')}: {line.strip()[:80]}")
 
     assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"
@@ -317,14 +320,15 @@ def test_no_shell_script_under_pipefail_pipes_a_producer_into_quiet_grep():
     """The script half of the class: a file with `set -o pipefail` (any flag mix) must
     not pipe a producer into `grep -q`, including across a continued line."""
     offenders = []
-    for path in sorted((repo_root() / "scripts").rglob("*.sh")):
+    for path in (repo_root() / rel for rel in sorted(tracked_paths(repo_root(), "scripts/*.sh"))):
         if path.name in _FIXED_INPUT_SCRIPTS:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         if not _SET_PIPEFAIL.search(text):
             continue
-        for line in _logical_lines(text):
-            if not line.lstrip().startswith("#") and _PIPE_INTO_QUIET_GREP.search(line):
+        code = "\n".join(c.text for c in code_lines(text, name=path.name))
+        for line in _logical_lines(code):
+            if _PIPE_INTO_QUIET_GREP.search(line):
                 offenders.append(f"{path.relative_to(repo_root())}: {line.strip()[:90]}")
 
     assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"
