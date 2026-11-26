@@ -121,6 +121,7 @@ def test_the_verifier_uses_the_same_rule():
 @pytest.fixture
 def gpu_host(monkeypatch):
     monkeypatch.setattr(chat_model_context, "_host_has_nvidia_gpu", lambda: True)
+    monkeypatch.setattr(chat_model_context, "_chat_endpoint_local", ContextVar("t", default=True))
 
 
 def test_num_gpu_is_all_layers_on_a_gpu_host_and_left_out_without_one(monkeypatch, gpu_host):
@@ -286,3 +287,44 @@ async def test_a_turn_with_no_endpoint_clears_the_previous_turns_think(monkeypat
         assert chat_model_context.chat_think_options(CHAT) == {}
     finally:
         chat_model_context.note_chat_turn_think({})
+
+
+# --- #22257: the auto-detect applies to a local endpoint only, runs off the loop and never caches a failure ---
+
+
+def test_a_remote_endpoint_gets_no_auto_num_gpu_even_on_a_gpu_host(monkeypatch, gpu_host):
+    monkeypatch.setattr(chat_model_context, "_chat_endpoint_local", ContextVar("t", default=False))
+    assert "num_gpu" not in chat_context_options(CHAT)
+    monkeypatch.setenv(chat_model_context.CHAT_NUM_GPU_ENV, "33")
+    assert chat_context_options(CHAT)["num_gpu"] == 33  # the explicit value still applies
+
+
+@pytest.mark.asyncio
+async def test_the_probe_runs_off_the_event_loop_and_only_for_a_local_endpoint(monkeypatch):
+    import threading
+
+    monkeypatch.setattr(chat_model_context, "_host_gpu_probe", None)
+    monkeypatch.setattr(chat_model_context, "_chat_endpoint_local", ContextVar("t", default=None))
+    seen = []
+
+    def _smi(fields):
+        seen.append(threading.current_thread() is threading.main_thread())
+        return [{"name": "gpu"}]
+
+    monkeypatch.setattr(chat_model_context, "query_nvidia_gpus", _smi)
+    await chat_model_context.note_chat_turn_endpoint("http://203.0.113.9:11434/api/generate")  # remote
+    assert seen == [] and chat_model_context._chat_endpoint_local.get() is False
+    await chat_model_context.note_chat_turn_endpoint("http://127.0.0.1:11434/api/generate")
+    assert seen == [False], "nvidia-smi ran in a worker thread, not on the loop"
+    assert chat_model_context.chat_num_gpu() == ModelConfig.CHAT_NUM_GPU_ALL_LAYERS
+
+
+@pytest.mark.asyncio
+async def test_a_failed_probe_is_asked_again_and_is_never_cached(monkeypatch):
+    monkeypatch.setattr(chat_model_context, "_host_gpu_probe", None)
+    answers = iter([None, []])  # nvidia-smi unavailable, then answering: no GPU
+    monkeypatch.setattr(chat_model_context, "query_nvidia_gpus", lambda fields: next(answers))
+    await chat_model_context.note_chat_turn_endpoint("http://127.0.0.1:11434")
+    assert chat_model_context._host_gpu_probe is None
+    await chat_model_context.note_chat_turn_endpoint("http://127.0.0.1:11434")
+    assert chat_model_context._host_gpu_probe is False  # an answer, even "no GPU", is kept

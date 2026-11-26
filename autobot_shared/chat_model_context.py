@@ -14,12 +14,13 @@ gives every other caller of the same model the same number. A caller of a differ
 
 from __future__ import annotations
 
-import functools
+import asyncio
 import logging
 from contextvars import ContextVar
 
 from autobot_shared.env_utils import env_raw
 from autobot_shared.gpu_telemetry import query_nvidia_gpus
+from autobot_shared.network_utils import is_local_host
 from autobot_shared.ssot_constants import ModelConfig
 from autobot_shared.verifier_model import model_listed
 
@@ -63,20 +64,49 @@ def num_ctx_for_model(model: str | None, default: int | None = None) -> int | No
     return ModelConfig.CHAT_NUM_CTX if is_chat_model(model) else default
 
 
-@functools.lru_cache(maxsize=1)
+#: This host's nvidia-smi verdict. Only a probe that ANSWERED is kept: a failed one (nvidia-smi missing, slow or
+#: erroring) is asked again on the next turn, never cached as "no GPU" (#22257).
+_host_gpu_probe: bool | None = None
+
+#: Whether THIS request's Ollama endpoint runs on this host. The backend host's nvidia-smi says nothing about a remote
+#: runtime, so only a local endpoint takes the auto-detected layer count. Unset = unknown = not local.
+_chat_endpoint_local: ContextVar[bool | None] = ContextVar("chat_endpoint_local", default=None)
+
+
+def _probe_host_gpu() -> None:
+    """Ask nvidia-smi (the signal ``HardwareAccelerationManager`` uses, #620) and keep an answer, never a failure."""
+    global _host_gpu_probe
+    rows = query_nvidia_gpus(("name",))
+    if rows is not None:
+        _host_gpu_probe = bool(rows)
+
+
 def _host_has_nvidia_gpu() -> bool:
-    """Whether nvidia-smi lists a GPU on this host (the signal ``HardwareAccelerationManager`` uses, #620)."""
-    return bool(query_nvidia_gpus(("name",)))
+    """The kept probe result; never runs nvidia-smi, so it is safe on the event loop. Unprobed = False."""
+    return bool(_host_gpu_probe)
+
+
+async def note_chat_turn_endpoint(endpoint: str | None) -> None:
+    """Record whether this request's Ollama endpoint is local, and probe the host's GPU once if it is (#22257).
+
+    Both the hostname check and nvidia-smi block, so they run off the event loop. Not needed when
+    ``AUTOBOT_CHAT_NUM_GPU`` is set: the operator's value decides then.
+    """
+    local = await asyncio.to_thread(is_local_host, endpoint) if endpoint else False
+    _chat_endpoint_local.set(local)
+    if local and _host_gpu_probe is None and env_raw(CHAT_NUM_GPU_ENV) is None:
+        await asyncio.to_thread(_probe_host_gpu)
 
 
 def chat_num_gpu() -> int | None:
-    """The chat model's ``num_gpu``: ``AUTOBOT_CHAT_NUM_GPU`` when set, else all layers on a GPU host, else None.
+    """The chat model's ``num_gpu``: ``AUTOBOT_CHAT_NUM_GPU`` when set, else all layers when the endpoint is local
+    and this host has a GPU, else None (a remote runtime needs the explicit value, #22257).
 
     ``off`` or a negative number leaves the option out; an unparseable value is logged and treated as unset (#22257).
     """
     raw = env_raw(CHAT_NUM_GPU_ENV)
     if raw is None:
-        return ModelConfig.CHAT_NUM_GPU_ALL_LAYERS if _host_has_nvidia_gpu() else None
+        return ModelConfig.CHAT_NUM_GPU_ALL_LAYERS if _chat_endpoint_local.get() and _host_has_nvidia_gpu() else None
     if raw.strip().lower() == "off":
         return None
     try:

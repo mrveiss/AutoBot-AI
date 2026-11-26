@@ -14,7 +14,12 @@ import json
 from typing import Any, Dict, List, Optional
 
 from async_chat_workflow import WorkflowMessage
-from autobot_shared.chat_model_context import interpretation_llm_options, note_chat_turn_model, session_thinking
+from autobot_shared.chat_model_context import (
+    interpretation_llm_options,
+    note_chat_turn_endpoint,
+    note_chat_turn_model,
+    session_thinking,
+)
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_generate_url
@@ -830,6 +835,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         """
         selected_model = self._select_turn_model(session)
         ollama_endpoint = await self._resolve_ollama_endpoint(selected_model)
+        await note_chat_turn_endpoint(ollama_endpoint)  # local or remote decides num_gpu (#22257)
         # Issue #4265: Emit BEFORE_PROMPT_BUILD hook before building prompts
         await _emit_before_prompt_build(
             session.session_id,
