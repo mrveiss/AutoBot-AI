@@ -71,8 +71,9 @@ _FALLBACK = {
     "unsupported": "This file type cannot be read as text, so it was not used.",
     "unreadable": "This file could not be read, so it was not used.",
     "empty": "This file has no readable text, so it was not used.",
-    "truncated": "This file is long; only the start of it was used.",
+    "truncated": "This file is long; only the first {used} of {total} characters were used.",
     "over_budget": "The attached files reached the size limit; this file was not used.",
+    "over_window": "The conversation is too long for the model's window, so some earlier text may not reach it.",
 }
 
 
@@ -95,7 +96,7 @@ def _notice(code: str, filename: str | None = None, **extra: Any) -> Dict[str, A
     metadata: Dict[str, Any] = {"code": code, **extra}
     if filename:
         metadata["filename"] = sanitize_injected(filename, _NAME_LIMIT)
-    return {"type": NOTICE_TYPE, "content": _FALLBACK[code], "metadata": metadata}
+    return {"type": NOTICE_TYPE, "content": _FALLBACK[code].format(**extra), "metadata": metadata}
 
 
 def requested_ids(context: Dict[str, Any] | None) -> tuple[List[str], int]:
@@ -174,10 +175,12 @@ def _bound(text: str, remaining: int) -> tuple[str, bool]:
     return text[:limit], len(text) > limit
 
 
-def _frame(name: str, text: str) -> str:
+def _frame(name: str, text: str, total: int | None = None) -> str:
+    """The framed file text; a cut file says so, so the model never takes the start for the whole (#22016)."""
     label = f"File name (data): {sanitize_injected(name, _NAME_LIMIT)}"
+    partial = [f"PARTIAL: only the first {len(text)} of {total} characters of this file are shown."] if total else []
     return frame_untrusted_block(
-        "ATTACHED_FILE", [*_WARNING, label], neutralize_frame_markers(text).splitlines() or [""]
+        "ATTACHED_FILE", [*_WARNING, label, *partial], neutralize_frame_markers(text).splitlines() or [""]
     )
 
 
@@ -229,9 +232,9 @@ async def resolve_attachments(
             continue
         shown, cut = _bound(text, remaining)
         remaining -= len(shown)
-        blocks.append(_frame(name, shown))
+        blocks.append(_frame(name, shown, len(text) if cut else None))
         if cut:
-            result.notices.append(_notice("truncated", name))
+            result.notices.append(_notice("truncated", name, used=len(shown), total=len(text)))
         logger.info("Attachment %s read into the prompt: %d of %d chars", file_id, len(shown), len(text))
     result.block = (_HEADER + "".join(blocks) + "\n") if blocks else ""
     return result
@@ -256,15 +259,81 @@ def _window_char_budget(llm_params: Dict[str, Any], file_count: int) -> int | No
     bounds still apply).
     """
     try:
+        from chat_workflow.prompt_window import measured_prompt_budget
         from context_window_manager import get_context_window_manager
 
         cwm = get_context_window_manager()
-        room_tokens = cwm.get_prompt_budget(llm_params.get("model")) - cwm.estimate_tokens(llm_params["prompt"])
-        overhead = len(_HEADER) + file_count * len(_frame("x" * _NAME_LIMIT, ""))
+        budget = measured_prompt_budget(cwm, llm_params.get("model"), llm_params.get("system_prompt"))
+        room_tokens = budget - cwm.estimate_tokens(llm_params["prompt"])
+        overhead = len(_HEADER) + file_count * len(_frame("x" * _NAME_LIMIT, "", 10**9))
         return room_tokens * cwm._chars_per_token() - overhead
     except Exception as exc:  # noqa: BLE001 -- a budgeting failure must not cost the user their turn
         logger.warning("Attachment window budget unavailable, using the configured bounds: %s", type(exc).__name__)
         return None
+
+
+#: Turn-scoped flags kept in ``session.metadata`` (they survive a rebuilt request context and a ``None`` one); set once
+#: an ``over_window`` notice was issued for the primary request / a failover hop, cleared when the next turn starts.
+OVER_WINDOW_KEY = "_over_window_noticed"
+OVER_WINDOW_HOP_KEY = "_over_window_hop_noticed"
+
+
+def _turn_flags(session) -> Dict[str, Any] | None:
+    """The session's metadata dict (the turn-scoped store), else ``None`` when there is no session to hold it."""
+    meta = getattr(session, "metadata", None)
+    return meta if isinstance(meta, dict) else None
+
+
+def _window_notice(llm_params: Dict[str, Any], session) -> List[Dict[str, Any]]:
+    """An ``over_window`` notice when the request cannot fit its window, with or without attachments (#22016)."""
+    from chat_workflow.prompt_window import send_overflow
+
+    try:
+        over = send_overflow(llm_params.get("model"), llm_params.get("system_prompt"), llm_params.get("prompt"))
+    except Exception as exc:  # noqa: BLE001 -- a check must not cost the user their turn
+        logger.warning("Send-window check unavailable: %s", type(exc).__name__)
+        return []
+    if over is None:
+        return []
+    logger.warning("[#22016] Prompt over the window: ~%(estimated)d of %(window)d tokens", over)
+    if (flags := _turn_flags(session)) is not None:
+        flags[OVER_WINDOW_KEY] = True
+    return [_notice("over_window", **over)]
+
+
+async def send_point_notices(call, model: str | None = None, *, hop: bool = False) -> list:
+    """The send-point check (#22016): once per turn, an ``over_window`` notice if the prompt outgrew the window.
+
+    The turn-start check (``_window_notice``) covers the first prompt; continuation iterations grow it, so this
+    catches the later overflow. With *hop* the request went to *model* through the registry, which sends no
+    ``num_ctx``: the hop model's own window decides. The once-per-turn flags live in the session's metadata, not
+    the request context, which is rebuilt (or ``None``). The notice is stored here once (``persist_notices``); the
+    yielded copy is live display only and ``_build_workflow_message_batch`` does not store it a second time.
+    Everything is read inside the try: a check must never cost the user their turn.
+    """
+    from chat_history.session_lease import SessionLeaseError
+    from chat_workflow.prompt_window import send_overflow
+
+    try:
+        ctx = call.ctx
+        key = OVER_WINDOW_HOP_KEY if hop else OVER_WINDOW_KEY
+        session = await call.manager.get_or_create_session(ctx.session_id)
+        flags = _turn_flags(session)
+        if flags is None or flags.get(key):
+            return []
+        over = send_overflow(model or ctx.selected_model, ctx.system_prompt, call.prompt, hop=hop)
+        if over is None:
+            return []
+        flags[key] = True
+        logger.warning("[#22016] Sending ~%(estimated)d tokens into a %(window)d-token window: input will be cut", over)
+        notices = attachment_notice_messages({"attachment_notices": [_notice("over_window", **over)]})
+        await persist_notices(ctx.session_id, notices)
+        return notices
+    except SessionLeaseError:
+        raise  # #20862: a turn that lost its session lease must stop, not go on to the model request
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[#22016] Send-window check unavailable: %s", type(exc).__name__)
+        return []
 
 
 async def _resolve_turn(session, context: Dict[str, Any] | None, llm_params: Dict[str, Any]) -> AttachmentResult:
@@ -288,14 +357,23 @@ async def apply_attachments(session, context: Dict[str, Any] | None, llm_params:
         context.pop(ATTACHMENT_TURN_KEY, None)
         if file_ids or invalid:
             context[ATTACHMENT_TURN_KEY] = True
-    if not file_ids and not invalid:
-        return
+    for key in (OVER_WINDOW_KEY, OVER_WINDOW_HOP_KEY):
+        (_turn_flags(session) or {}).pop(key, None)  # a new turn says it again
+    if file_ids or invalid:
+        await _attach_files(session, context, llm_params)
+    notices = [*llm_params.get("attachment_notices", []), *_window_notice(llm_params, session)]
+    if notices:
+        llm_params["attachment_notices"] = notices
+
+
+async def _attach_files(session, context: Dict[str, Any] | None, llm_params: Dict[str, Any]) -> None:
+    """Resolve the turn's attached files into the prompt and park their notices (#20195)."""
     await attachment_floor.mark_chat(session.session_id)  # #20195: later turns of this chat keep asking
     result = await _resolve_turn(session, context, llm_params)
     if result.block:
         llm_params["prompt"] = result.block + llm_params["prompt"]
         llm_params["attachment_block"] = result.block
-    llm_params["attachment_notices"] = result.notices
+    llm_params["attachment_notices"] = list(result.notices)
 
 
 def without_block(llm_params: Dict[str, Any]) -> str:
