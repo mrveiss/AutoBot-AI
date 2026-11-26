@@ -93,6 +93,10 @@ async def test_a_shell_that_ends_is_not_a_timeout():
         ("cat big.log | grep -q ERROR", 141, 0),
         ("false || true", 141, 141),  # `||` is not a pipeline
         ("sleep 1", 141, 141),
+        ('echo "a|b"', 141, 141),  # a `|` inside quotes is text
+        ("bash -c 'x|y'", 141, 141),  # and inside a quoted script
+        ('echo "a|b" | head -1', 141, 0),  # a real pipeline after a quoted one still counts
+        ('echo "unbalanced | x', 141, 141),
         ("yes | head -1", 1, 1),
         ("ls", 0, 0),
     ],
