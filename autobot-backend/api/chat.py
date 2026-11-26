@@ -14,6 +14,7 @@ Consolidated from chat.py and chat_enhanced.py per Issue #708.
 """
 
 import asyncio
+import functools
 import json
 from datetime import datetime
 from typing import Any, Dict, List
@@ -318,11 +319,15 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
 router = APIRouter(tags=["chat"])
 logger = get_logger(__name__)
 
-# Phase 4 (#7590): log feature flag state at startup so operators know which mode is active
-logger.info(
-    "AUTOBOT_CHAT_SSOT_STRICT=%s",
-    "true" if _CHAT_SSOT_STRICT else "false (default — session_id enforcement via schema only)",
-)
+
+@functools.lru_cache(maxsize=1)
+def _log_ssot_mode_once() -> None:
+    """Phase 4 (#7590): tell operators which mode is active, on first use — never at import (#21264)."""
+    logger.info(
+        "AUTOBOT_CHAT_SSOT_STRICT=%s",
+        "true" if _CHAT_SSOT_STRICT else "false (default — session_id enforcement via schema only)",
+    )
+
 
 # Include session management router
 from api.chat_sessions import delete_session as _canonical_delete_session
@@ -367,6 +372,7 @@ def _validate_session_id(session_id: str | None) -> None:
         get_error_code,
     ) = get_exceptions_lazy()
 
+    _log_ssot_mode_once()
     if _CHAT_SSOT_STRICT and not session_id:
         raise ValidationError("session_id is required (AUTOBOT_CHAT_SSOT_STRICT)")
 
