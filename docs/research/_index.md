@@ -97,6 +97,7 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[RES_agent-loop-budget-framing-stop-reasons]] | Agent-loop budgets, untrusted-data framing and typed stop reasons — nested budgets with a wrap-up round, nonce-framed untrusted data, failover context-window skip and typed provider stop reasons, compared with AutoBot; adoptable patterns filed as #21863, #21864, #21865 |
 | [[RES_local-first-agent-scheduler-and-curated-knowledge]] | Local-first agent platform — priority-preemptive model scheduling, app-enforced knowledge edit discipline, multi-query RRF retrieval, edge write-ahead ledger, compared with AutoBot; filed #21913–#21920, delta on #16768 |
 | [[RES_short-video-transcription-and-publishing-pipeline]] | Short-video SaaS: transcribe, generate title and tags, review once, publish to many channels; compared with AutoBot; defects filed as #22302 (filename-only audio language detection) and #22303 (calendar skill fake success) |
+| [[RES_personal-agent-action-authorization-and-provenance]] | Single-owner personal agent — action authorization judged from the person's own words, standing rules, quote-backed memory, browser secret fill by handle, layer-import ratchet, compared with AutoBot; filed #22282–#22290, delta on #18367 |
 
 ## Related Sections
 

@@ -181,35 +181,51 @@ async def set_provider(body: SetRealtimeProviderRequest) -> dict:
 
 @router.post("/session/{session_id}/end")
 async def end_realtime_session(session_id: str, body: SessionEndRequest) -> dict:
-    """Finalise telemetry for a Realtime session."""
+    """Finalise telemetry for a Realtime session; a telemetry failure is logged, never a 500."""
     from services.voice_realtime_telemetry import DisconnectReason, get_voice_realtime_telemetry
 
     try:
         reason = DisconnectReason(body.reason)
     except ValueError:
         reason = DisconnectReason.NORMAL
-    await get_voice_realtime_telemetry().session_end(session_id=session_id, reason=reason)
+    await _telemetry_call(
+        "end", session_id, get_voice_realtime_telemetry().session_end(session_id=session_id, reason=reason)
+    )
     return {"status": "ok", "session_id": session_id}
+
+
+async def _telemetry_call(what: str, session_id: str, call) -> None:
+    """Await a telemetry write; log a failure at warning with the session id and carry on (#21678)."""
+    try:
+        await call
+    except Exception as exc:
+        logger.warning("voice_realtime telemetry %s failed session_id=%s: %s", what, session_id, exc)
 
 
 @router.post("/session/{session_id}/response_done")
 async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> dict:
-    """Ingest a response.done payload and enforce soft-caps."""
+    """Ingest a response.done payload and enforce soft-caps, even when the usage write fails."""
     from services.voice_realtime_telemetry import CapBreachError, get_voice_realtime_telemetry
 
     telemetry = get_voice_realtime_telemetry()
-    await telemetry.record_response_done(
-        session_id=session_id,
-        input_tokens=body.input_tokens,
-        output_tokens=body.output_tokens,
-        cached_input_tokens=body.cached_input_tokens,
-        audio_in_s=body.audio_in_s,
-        audio_out_s=body.audio_out_s,
+    await _telemetry_call(
+        "response_done",
+        session_id,
+        telemetry.record_response_done(
+            session_id=session_id,
+            input_tokens=body.input_tokens,
+            output_tokens=body.output_tokens,
+            cached_input_tokens=body.cached_input_tokens,
+            audio_in_s=body.audio_in_s,
+            audio_out_s=body.audio_out_s,
+        ),
     )
     try:
         await telemetry.check_caps(session_id)
     except CapBreachError as exc:
-        await telemetry.session_end(session_id=session_id, reason=exc.reason)
+        await _telemetry_call(
+            "cap_breach end", session_id, telemetry.session_end(session_id=session_id, reason=exc.reason)
+        )
         # CapBreachError carries an intentional, hardcoded
         # client-facing cap-breach notice (e.g. "session ended: N minute limit reached"), not a stack trace.
         return {"status": "cap_breach", "reason": exc.reason.value, "message": str(exc)}

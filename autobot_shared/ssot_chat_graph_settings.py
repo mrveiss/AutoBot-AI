@@ -37,6 +37,9 @@ class ChatGraphSettings(BaseSettings):
     chat_stall_escalation: Literal["stop", "ask"] = Field(default="stop", alias="AUTOBOT_CHAT_STALL_ESCALATION")
     # Longest answer to a stall question that reaches the prompt (#21022); longer text is truncated.
     chat_stall_answer_max_chars: int = Field(default=2000, ge=1, alias="AUTOBOT_CHAT_STALL_ANSWER_MAX_CHARS")
+    # Topic guidance on the chat system prompt (intent_classifier.detect_topic / select_context_prompt, #21678).
+    # OFF by default: it changes the prompt of every turn whose message matches a topic keyword.
+    chat_topic_guidance_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_TOPIC_GUIDANCE")
     # Ask-the-human defaults (#10553): seconds to wait, then the escalation policy.
     ask_human_timeout_seconds: int = Field(default=300, ge=1, alias="AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS")
     ask_human_escalation_policy: Literal["abandon", "default", "re_ask"] = Field(

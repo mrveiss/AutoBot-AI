@@ -505,6 +505,19 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "running before the gate existed are grandfathered as enabled on the first start, each with a "
         "durable audit entry.",
     ),
+    "voice_realtime_session": Concept(
+        name="voice_realtime_session",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/voice_realtime_telemetry.py",),
+        rebuilt_by="Nothing rebuilds it: a finished record is read back only for the recent-sessions listing. "
+        "The per-process map is a fallback for when Redis is off or down, never read ahead of Redis.",
+        note="Per-session cost and duration accounting for a realtime voice session (#7421, #21678). "
+        "Ephemeral by design: the key carries a TTL of voice_realtime_session_ttl_days and only feeds cap "
+        "checks and the recent-sessions view. Redis is shared by every worker, so updates are made under "
+        "WATCH/MULTI; a local copy read first would go stale and let session end overwrite another "
+        "worker's usage.",
+    ),
 }
 
 

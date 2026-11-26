@@ -15,6 +15,7 @@ from chat_workflow.delegation import (
     forbidden_to_claude_tools,
     run_delegated_subtask,
 )
+from chat_workflow.models import AgentContext
 from chat_workflow.run_authority import NO_INHERITANCE
 
 # --- forbidden_work → claude_code tool mapping -----------------------------
@@ -62,6 +63,20 @@ def test_claude_tool_mapping_derived_from_canonical_atoms():
 async def test_run_delegated_subtask_depth_guard():
     with pytest.raises(ValueError):
         await run_delegated_subtask("t", depth=MAX_DELEGATION_DEPTH)
+
+
+@pytest.mark.asyncio
+async def test_depth_guard_tells_the_model_what_to_do_instead():
+    with pytest.raises(ValueError, match="complete this task directly instead of delegating further"):
+        await run_delegated_subtask("t", depth=MAX_DELEGATION_DEPTH)
+
+
+@pytest.mark.asyncio
+async def test_run_delegated_subtask_logs_elapsed_time(caplog):
+    engine = AsyncMock(return_value="ok")
+    with patch.dict(delegation._ENGINES, {"claude_code": engine}), caplog.at_level("INFO"):
+        await run_delegated_subtask("t")
+    assert any("delegation done" in r.getMessage() and "elapsed=" in r.getMessage() for r in caplog.records)
 
 
 @pytest.mark.asyncio
@@ -324,3 +339,65 @@ def test_env_flag_covers_on_truthy():
 
     with patch.dict("os.environ", {"AUTOBOT_DELEGATION_ENABLED": "false"}):
         assert env_flag("AUTOBOT_DELEGATION_ENABLED") is False
+
+
+# --- AgentContext hierarchy (moved from the retired subordinate_delegation_test, #21687) ---
+
+
+class TestAgentContext:
+    """Test AgentContext dataclass functionality."""
+
+    def test_default_creation(self):
+        """Test default context creation."""
+        ctx = AgentContext(agent_id="test-agent")
+        assert ctx.agent_id == "test-agent"
+        assert ctx.level == 0
+        assert ctx.parent_id is None
+        assert ctx.max_depth == 3
+        assert ctx.can_delegate() is True
+
+    def test_root_can_delegate(self):
+        """Root agent should be able to delegate."""
+        ctx = AgentContext(agent_id="root", level=0)
+        assert ctx.can_delegate() is True
+
+    def test_at_max_depth_cannot_delegate(self):
+        """Agent at max depth should not be able to delegate."""
+        ctx = AgentContext(agent_id="deep", level=3, max_depth=3)
+        assert ctx.can_delegate() is False
+
+    def test_create_subordinate_context(self):
+        """create_subordinate_context should create proper child context."""
+        parent = AgentContext(agent_id="parent", level=0, session_id="session-123")
+        child = parent.create_subordinate_context("child-id")
+
+        assert child.agent_id == "child-id"
+        assert child.level == 1
+        assert child.parent_id == "parent"
+        assert child.session_id == "session-123"
+        assert child.max_depth == 3  # Inherited
+
+    def test_create_subordinate_at_max_depth_raises(self):
+        """Creating subordinate at max depth should raise ValueError."""
+        ctx = AgentContext(agent_id="deep", level=3, max_depth=3)
+
+        with pytest.raises(ValueError, match="Cannot delegate"):
+            ctx.create_subordinate_context("child")
+
+    def test_to_dict(self):
+        """to_dict should serialize all fields."""
+        ctx = AgentContext(
+            agent_id="test",
+            level=1,
+            parent_id="parent",
+            max_depth=5,
+            session_id="session",
+        )
+        d = ctx.to_dict()
+
+        assert d["agent_id"] == "test"
+        assert d["level"] == 1
+        assert d["parent_id"] == "parent"
+        assert d["max_depth"] == 5
+        assert d["session_id"] == "session"
+        assert d["can_delegate"] is True
