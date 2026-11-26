@@ -483,6 +483,7 @@ REACH_ROOTS = {
         "autobot-backend/llm_self_awareness.py",
         "autobot-backend/mcp_server/",
         "autobot-backend/services/tracing_service.py",
+        "autobot_shared/ssot_tracing_settings.py",
         "autobot_shared/tracing.py",
     ),
     "repo_tests/severity_enum_fork_guard_18098_test.py": (
