@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The man-page indexer is where the refresh task looks for it (#15853).
+"""The man-page refresh does not shell out to the indexer script (#15853, #22272).
+
+#22272 retired the subprocess: the task awaits `services.man_page_ingestion.index_all_man_pages`
+and uses its return value, so the path this guard once resolved no longer exists. What follows
+is the history of the defect; the live assertions are the no-subprocess check and the sweep.
 
 `knowledge_tasks._run_indexing_subprocess` -- now
 `tasks.man_page_indexing.run_indexing_subprocess` -- shelled out to
@@ -51,8 +55,6 @@ nothing, which is how a floor stops being a reach check.
 """
 
 import ast
-import re
-from pathlib import Path
 from typing import List, Optional, Tuple
 
 from repo_tests._paths import repo_root
@@ -71,7 +73,7 @@ _INDEXER_NAME = "index_all_man_pages.py"
 #: The one module that may invoke the indexer. Not an allowlist -- an expectation:
 #: a second entry here is a second copy of the invocation, which is the drift this
 #: guard exists to catch, and adding one should require saying why in review.
-_EXPECTED_EXECUTORS = frozenset({"autobot-backend/tasks/man_page_indexing.py"})
+_EXPECTED_EXECUTORS: frozenset = frozenset()  # #22272: nothing invokes the script; it is a CLI entry only
 
 #: Files that name the indexer in code without invoking it, by path, with the
 #: reason. Recorded rather than inferred from context: "it looked like a test" is
@@ -197,79 +199,17 @@ def _module_source() -> str:
     return code_text(_MODULE.read_text(encoding="utf-8"), name="x.py")
 
 
-def _indexer_path_expression() -> str:
-    """The right-hand side of MAN_PAGE_INDEXER, as written in the module."""
-    tree = parse_cache.parse(_module_source())
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "MAN_PAGE_INDEXER" for t in node.targets
-        ):
-            return ast.unparse(node.value)
-    raise AssertionError("MAN_PAGE_INDEXER is not defined -- this test would prove nothing")
+def test_the_task_module_runs_no_subprocess_and_parses_no_stdout():
+    """#22272: the refresh calls the canonical module; the path this guard once pinned is gone.
 
-
-def _resolved_indexer() -> Path:
-    """Resolve the module's expression to a real path, without importing the backend.
-
-    Importing `knowledge_tasks` pulls in Celery and the whole task graph. The
-    expression is a chain of `/` operands, so the string literals in it are the
-    path segments -- read them from the AST instead.
-    """
-    expression = _indexer_path_expression()
-    assert "infrastructure_dir(" in expression, f"MAN_PAGE_INDEXER is not anchored to the tree: {expression}"
-    segments = re.findall(r"'([^']+)'|\"([^\"]+)\"", expression)
-    parts = [a or b for a, b in segments]
-    assert parts, f"no path segments found in {expression}"
-    # #20578: infrastructure_dir() is the tree's own autobot-infrastructure in a checkout.
-    return REPO_ROOT.joinpath("autobot-infrastructure", *parts)
-
-
-def test_the_indexer_path_is_anchored_to_the_repo_root_not_the_cwd():
-    """A cwd-relative path resolves differently under Celery, systemd and pytest."""
-    expression = _indexer_path_expression()
-
-    assert "infrastructure_dir(" in expression, expression
-    assert not re.search(
-        r"^['\"]scripts/", expression
-    ), "the indexer is addressed relative to the process working directory"
-
-
-def test_the_indexer_exists_where_the_task_looks_for_it():
-    """The defect itself, with the path read from the caller rather than restated."""
-    indexer = _resolved_indexer()
-
-    assert indexer.is_file(), (
-        f"knowledge_tasks resolves the man-page indexer to {indexer.relative_to(REPO_ROOT)}, " "which does not exist"
-    )
-
-
-def test_a_missing_indexer_is_reported_by_path():
-    """Absence must be distinguishable from a run that failed.
-
-    The old code returned the subprocess's truncated stderr, so "the indexer is
-    not where we looked" and "the indexer ran and failed" produced the same
-    message.
+    The defect class (a wired script path that resolves nowhere, counts parsed from the wrong
+    stream) cannot recur while nothing shells out to the script and nothing parses its stdout.
     """
     source = _module_source()
 
-    assert "MAN_PAGE_INDEXER.is_file()" in source, "nothing checks whether the indexer exists before shelling out to it"
-    assert re.search(
-        r"not found at \{MAN_PAGE_INDEXER\}", source
-    ), "the not-found message does not name the path it looked for"
-
-
-def test_the_subprocess_invokes_the_anchored_path():
-    """The constant must be what is executed.
-
-    Defining an anchored constant and then passing a literal to `subprocess.run`
-    would satisfy every assertion above while changing nothing.
-    """
-    source = _module_source()
-
-    assert "[sys.executable, str(MAN_PAGE_INDEXER)]" in source, "the subprocess does not execute MAN_PAGE_INDEXER"
-    assert (
-        "scripts/utilities/index_all_man_pages.py" not in source
-    ), "the cwd-relative literal is still present in the module"
+    assert "subprocess" not in source, "tasks.man_page_indexing shells out again"
+    assert "MAN_PAGE_INDEXER" not in source and "Successfully indexed" not in source
+    assert "from services.man_page_ingestion import index_all_man_pages" in source
 
 
 def test_the_caller_delegates_rather_than_carrying_its_own_path():
@@ -283,7 +223,7 @@ def test_the_caller_delegates_rather_than_carrying_its_own_path():
     # first was migrated and this one kept the entry listed.
     caller = code_text(_CALLER.read_text(encoding="utf-8"), name="x.py")
 
-    assert "from tasks.man_page_indexing import run_indexing_subprocess" in caller
+    assert "from tasks.man_page_indexing import run_man_page_indexing" in caller
     assert "index_all_man_pages.py" not in caller, "knowledge_tasks names the indexer script again; it should delegate"
 
 
@@ -318,19 +258,10 @@ def test_only_the_expected_module_invokes_the_indexer() -> None:
     )
 
 
-def test_the_expected_executor_is_still_there() -> None:
-    """The other direction, and the one a discovery sweep gets wrong.
-
-    `test_only_the_expected_module_invokes_the_indexer` passes when NOTHING
-    invokes the indexer — a repository that had deleted the caller entirely
-    would look clean. This is what makes the expectation two-sided.
-    """
-    missing = sorted(_EXPECTED_EXECUTORS - set(_found_and_swept()[0]))
-    assert not missing, (
-        f"{missing} no longer names {_INDEXER_NAME} in executable code. Either the invocation "
-        "moved — in which case `_EXPECTED_EXECUTORS` should say where — or nothing indexes man "
-        "pages any more and this guard is watching an empty room."
-    )
+def test_the_script_is_a_thin_entry_of_the_canonical_module() -> None:
+    """The other direction (#22272): the script must still exist and delegate, not carry a writer."""
+    script = REPO_ROOT / "autobot-infrastructure/shared/scripts/utilities" / _INDEXER_NAME
+    assert "from services.man_page_ingestion import index_all_man_pages" in script.read_text(encoding="utf-8")
 
 
 def stale_allowlist_entries(allowed, found) -> List[str]:

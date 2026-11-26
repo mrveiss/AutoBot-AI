@@ -10,7 +10,7 @@ writes carries the host that owns the page (``utils.system_context.get_machine_i
 ``unique_key`` from ``generate_unique_key``, so the same command on two hosts is two facts
 and a re-run on one host overwrites its own.
 
-Callers: ``index_all_man_pages.py`` (the CLI and the Celery refresh), and the
+Callers: ``index_all_man_pages()`` below (the CLI script and the Celery refresh), and the
 ``/populate_man_pages`` endpoint, which passes its curated command list.
 """
 
@@ -308,3 +308,53 @@ async def index_commands_in_batches(kb_v2, all_commands, system_ctx: dict) -> in
         )
 
     return total_indexed
+
+
+class ManPageIndexingError(RuntimeError):
+    """The full man-page index could not run: no usable knowledge base, or nothing to index."""
+
+
+async def _ready_knowledge_base():
+    """The initialised knowledge base, or ``ManPageIndexingError``."""
+    from knowledge_factory import get_knowledge_base_async  # noqa: PLC0415
+
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        raise ManPageIndexingError("Knowledge base unavailable: initialization failed or retry cooldown active")
+    if not kb.initialized:
+        raise ManPageIndexingError("Knowledge Base V2 initialization failed")
+    return kb
+
+
+def _log_system_context(system_ctx: dict) -> None:
+    """Log the host the pages are indexed for."""
+    logger.info("Machine: %s (%s)", system_ctx["machine_id"], system_ctx["machine_ip"])
+    logger.info("OS: %s %s (%s)", system_ctx["os_name"], system_ctx["os_version"], system_ctx["architecture"])
+    logger.info("Compatible with: %s", ", ".join(get_compatible_os_list(system_ctx["os_name"])))
+
+
+async def index_all_man_pages() -> dict:
+    """Index every available man page into the knowledge base and return the counts (#22272).
+
+    The one entry for the CLI script and the Celery refresh: callers use this return value,
+    never the output of a subprocess. Keys: ``commands_scanned``, ``commands_indexed``,
+    ``total_facts``, ``total_vectors``.
+    """
+    kb = await _ready_knowledge_base()
+    try:
+        commands = await get_all_available_commands()
+        if not commands:
+            raise ManPageIndexingError("No commands found")
+        system_ctx = get_system_context()
+        _log_system_context(system_ctx)
+        indexed = await index_commands_in_batches(kb, commands, system_ctx)
+        stats = await kb.get_stats()
+        return {
+            "commands_scanned": len(commands),
+            "commands_indexed": indexed,
+            "total_facts": stats.get("total_facts", 0),
+            "total_vectors": stats.get("total_vectors", 0),
+        }
+    finally:
+        # Facts stored before a failure still count; this process's loop would cancel a waiting recompute (#19726).
+        await kb._get_keyword_searcher().flush_refresh()

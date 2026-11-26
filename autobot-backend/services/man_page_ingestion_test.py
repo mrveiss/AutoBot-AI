@@ -64,3 +64,27 @@ def test_the_populate_endpoint_uses_this_path():
     commands = batches.await_args.args[1]
     assert ("ls", ingest.MAN_PAGE_DEFAULT_SECTION) in commands
     assert not hasattr(pop, "_store_man_page")
+
+
+def test_index_all_man_pages_returns_counts_without_a_subprocess():
+    """#22272: the Celery refresh reads this return value; nothing parses a script's stdout."""
+    kb = MagicMock(initialized=True)
+    kb.get_stats = AsyncMock(return_value={"total_facts": 7, "total_vectors": 5})
+    kb._get_keyword_searcher.return_value.flush_refresh = AsyncMock()
+    with (
+        patch("knowledge_factory.get_knowledge_base_async", AsyncMock(return_value=kb)),
+        patch.object(ingest, "get_all_available_commands", AsyncMock(return_value=["ls", "cat"])),
+        patch.object(ingest, "get_system_context", return_value=_ctx("host-a")),
+        patch.object(ingest, "index_commands_in_batches", AsyncMock(return_value=2)),
+    ):
+        result = asyncio.run(ingest.index_all_man_pages())
+    assert result == {"commands_scanned": 2, "commands_indexed": 2, "total_facts": 7, "total_vectors": 5}
+    kb._get_keyword_searcher.return_value.flush_refresh.assert_awaited_once()
+
+
+def test_index_all_man_pages_without_a_knowledge_base_raises():
+    import pytest
+
+    with patch("knowledge_factory.get_knowledge_base_async", AsyncMock(return_value=None)):
+        with pytest.raises(ingest.ManPageIndexingError):
+            asyncio.run(ingest.index_all_man_pages())

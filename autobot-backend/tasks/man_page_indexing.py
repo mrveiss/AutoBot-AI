@@ -2,90 +2,35 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Running the man-page indexer and reading its output (#15853).
+"""The Celery refresh's man-page indexing, called in-process (#22272).
 
-Extracted from ``knowledge_tasks`` rather than added to it. That module sits at
-its recorded file-size ceiling (#14236), and the exemption freezes the size the
-file was granted -- it does not license more. Fixing the indexer path made the
-module grow, so the fix and its two helpers moved here instead, and the ceiling
-came down.
-
-The two functions belong together in any case: one runs the indexer, the other
-reads the numbers back out of its stdout. Neither has another caller.
+This used to shell out to ``index_all_man_pages.py`` and parse "Successfully indexed" out of
+its stdout (#15853) -- but the script logs to stderr, so the counts were always 0, and the
+script path was a second thing that could resolve nowhere. It now awaits the canonical
+``services.man_page_ingestion.index_all_man_pages`` and uses its return value. Kept out of
+``knowledge_tasks``, which sits at its file-size ceiling (#14236).
 """
 
-import subprocess  # nosec B404  # used for internal script execution only
-import sys
-from pathlib import Path
-
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.paths import infrastructure_dir
+from services.man_page_ingestion import index_all_man_pages
 
 logger = get_logger(__name__)
 
-#: The man-page indexer, in code_source's infrastructure tree (#20578: the copy beside the install is stale).
-#:
-#: This was addressed relative to the process working directory, which is not
-#: the repo root under Celery, systemd or a test runner -- and no such directory
-#: exists at the root under any cwd. The script is real; only the path was not.
-#: So the refresh returned its failed dict on every run.
-MAN_PAGE_INDEXER = (
-    infrastructure_dir(fallback_root=Path(__file__).resolve().parents[2])
-    / "shared"
-    / "scripts"
-    / "utilities"
-    / "index_all_man_pages.py"
-)
 
+async def run_man_page_indexing() -> dict:
+    """Index all man pages and return the refresh task's success dict.
 
-def parse_indexing_output(output: str) -> tuple:
-    """Parse indexing script output for statistics (Issue #315: extracted helper).
-
-    Args:
-        output: Raw stdout from indexing script
-
-    Returns:
-        Tuple of (indexed_count, total_facts)
+    A failure propagates as an exception; the Celery task reports it as ``failed``.
     """
-    indexed_count = 0
-    total_facts = 0
-    for line in output.split("\n"):
-        if "Successfully indexed:" in line:
-            indexed_count = int(line.split(":")[1].strip())
-        elif "Total facts in KB:" in line:
-            total_facts = int(line.split(":")[1].strip())
-    return indexed_count, total_facts
-
-
-def run_indexing_subprocess() -> dict:
-    """Run the man-page indexer and return a result dict. Ref: #1088.
-
-    On a missing indexer or a non-zero exit returns a ``failed`` dict; on
-    success returns a ``success`` dict with commands_indexed and total_facts.
-    """
-    if not MAN_PAGE_INDEXER.is_file():
-        # Name the path. The previous failure mode truncated the subprocess's
-        # stderr into a generic message, so "the indexer is not where we looked"
-        # was indistinguishable from "the indexer ran and failed".
-        message = f"man-page indexer not found at {MAN_PAGE_INDEXER}"
-        logger.error("System knowledge refresh cannot run: %s", message)
-        return {"status": "failed", "error": message, "message": "Knowledge refresh failed"}
-
-    result = subprocess.run(  # nosec B603  # uses sys.executable with fixed internal script path
-        [sys.executable, str(MAN_PAGE_INDEXER)],
-        capture_output=True,
-        text=True,
+    counts = await index_all_man_pages()
+    logger.info(
+        "System knowledge refresh complete: %d commands indexed, %d total facts",
+        counts["commands_indexed"],
+        counts["total_facts"],
     )
-    if result.returncode != 0:
-        error_msg = result.stderr[:500] if result.stderr else "Unknown error"
-        logger.error("System knowledge refresh failed: %s", error_msg)
-        return {"status": "failed", "error": error_msg, "message": "Knowledge refresh failed"}
-
-    indexed_count, total_facts = parse_indexing_output(result.stdout)
-    logger.info("System knowledge refresh complete: %d commands indexed, %d total facts", indexed_count, total_facts)
     return {
         "status": "success",
-        "commands_indexed": indexed_count,
-        "total_facts": total_facts,
+        "commands_indexed": counts["commands_indexed"],
+        "total_facts": counts["total_facts"],
         "message": "System knowledge refreshed successfully",
     }

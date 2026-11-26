@@ -359,3 +359,17 @@ def test_crontab_from_string_falls_back_on_malformed():
     cron = crontab_from_string("not a cron")
     assert 0 in cron.minute
     assert 3 in cron.hour
+
+
+@pytest.mark.asyncio
+async def test_run_man_page_indexing_uses_the_return_value_not_stdout():
+    """#22272: counts come from ``index_all_man_pages``' return value (the script logs to stderr)."""
+    from unittest.mock import AsyncMock
+
+    from tasks import man_page_indexing
+
+    counts = {"commands_scanned": 9, "commands_indexed": 8, "total_facts": 40, "total_vectors": 39}
+    with patch.object(man_page_indexing, "index_all_man_pages", AsyncMock(return_value=counts)):
+        result = await man_page_indexing.run_man_page_indexing()
+    assert result["status"] == "success"
+    assert (result["commands_indexed"], result["total_facts"]) == (8, 40)
