@@ -13,6 +13,19 @@ import services.simple_pty as simple_pty_module
 from services.simple_pty import SimplePTY
 
 
+class _FakeOs:
+    """``simple_pty``'s ``os`` with the two fd calls faked: the swap is on the module attribute only, so the real
+    ``os.close`` / ``os.set_blocking`` stay untouched for pytest, asyncio and every other thread (#17074)."""
+
+    close = staticmethod(lambda fd: None)
+    set_blocking = staticmethod(lambda fd, flag: None)
+
+    def __getattr__(self, name):
+        import os
+
+        return getattr(os, name)
+
+
 def test_the_transcript_is_addressed_by_absolute_offset():
     pty = SimplePTY("t-1")
     pty._append_transcript("abc")
@@ -55,8 +68,7 @@ def test_the_shell_gets_the_sbin_dirs_and_pipefail_22251_22252(monkeypatch):
     monkeypatch.setenv("PATH", "/opt/venv/bin:/usr/local/bin:/usr/bin:/bin")
     popen = MagicMock()
     monkeypatch.setattr(simple_pty_module.subprocess, "Popen", popen)
-    monkeypatch.setattr(simple_pty_module.os, "close", lambda fd: None)
-    monkeypatch.setattr(simple_pty_module.os, "set_blocking", lambda fd, flag: None)
+    monkeypatch.setattr(simple_pty_module, "os", _FakeOs())
     pty = SimplePTY("t-1", pipefail=True)
     pty.master_fd = 0
     pty._spawn_bash_process(5, simple_pty_module.with_sbin_on_path(dict(simple_pty_module.os.environ)), "/")
@@ -73,7 +85,7 @@ def test_an_interactive_shell_does_not_get_pipefail_22252(monkeypatch):
 
     popen = MagicMock()
     monkeypatch.setattr(simple_pty_module.subprocess, "Popen", popen)
-    monkeypatch.setattr(simple_pty_module.os, "close", lambda fd: None)
+    monkeypatch.setattr(simple_pty_module, "os", _FakeOs())
     pty = SimplePTY("t-2")
     pty._spawn_bash_process(5, {}, "/")
 
