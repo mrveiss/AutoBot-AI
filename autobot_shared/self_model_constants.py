@@ -16,6 +16,11 @@ from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 #: The entity kinds of the self-model: one list for the SLM's validation and the backend's queries.
 ENTITY_KINDS = ("node", "service", "route", "tool", "model", "command", "agent", "package")
 
+#: The sources a producer may claim entities under: the backend's two pushes. The SLM refuses any other.
+CATALOGUE_SOURCE = "backend_catalogue"
+HEALTH_SOURCE = "backend_service_health"
+PRODUCER_SOURCES = (CATALOGUE_SOURCE, HEALTH_SOURCE)
+
 #: A node resends its full inventory at least this often, even when the hash did not change.
 INVENTORY_RESEND_S = env_int_clamped("AUTOBOT_SELF_MODEL_INVENTORY_RESEND_HOURS", 6, min_v=1, max_v=168) * 3600
 

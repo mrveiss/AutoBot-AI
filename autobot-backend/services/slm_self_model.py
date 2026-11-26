@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List
 
+from autobot_shared import node_proxy
 from services.slm_client import get_slm_client
 
 SELF_MODEL_PATH = "/api/nodes/self-model"
@@ -32,7 +33,8 @@ def _client():
 async def push_observations(source: str, scope_kinds: Iterable[str], observations: List[Dict[str, Any]]) -> dict:
     """POST one producer's complete batch; returns ``{"upserted", "changed", "revision"}``."""
     body = {"source": source, "scope_kinds": list(scope_kinds), "observations": observations}
-    return await _client()._slm_json("POST", f"{SELF_MODEL_PATH}/observations", json=body)
+    headers = node_proxy.internal_headers()  # the SLM accepts observations only from the backend's service key
+    return await _client()._slm_json("POST", f"{SELF_MODEL_PATH}/observations", json=body, headers=headers)
 
 
 async def query_entities(filters: Dict[str, Any]) -> dict:

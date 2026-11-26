@@ -21,7 +21,7 @@ from fastapi import FastAPI
 
 from api.self_capabilities import route_records
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.self_model_constants import PUSH_INTERVAL_S
+from autobot_shared.self_model_constants import CATALOGUE_SOURCE, HEALTH_SOURCE, PUSH_INTERVAL_S
 from events.bus import PersistStrategy, publish_event
 from events.event_types import SELF_MODEL_CHANGED
 from orchestration.agent_record import agent_records
@@ -31,8 +31,6 @@ from tools.tool_records import tool_records
 
 logger = get_logger(__name__)
 
-CATALOGUE_SOURCE = "backend_catalogue"
-HEALTH_SOURCE = "backend_service_health"
 _SERVICE = "service"
 _HEALTHY = "healthy"
 _NAME_MAX = 255  # the SLM entity name column

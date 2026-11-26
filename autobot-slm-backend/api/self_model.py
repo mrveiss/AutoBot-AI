@@ -5,9 +5,10 @@
 """Self-model API: read the entities, and accept the backend's producer observations (#22277).
 
 Nested onto ``nodes_router`` in ``api/__init__.py`` (the move ``api/capability_profile.py`` made)
-so it inherits that router's include-level auth, which the backend's service credential already
-satisfies. The read side is what the backend's chat tool queries; the write side takes only
-``declared`` / ``probed_*`` claims -- ``absent`` and ``stale`` are derived here, never asserted.
+so it inherits that router's include-level auth. Writing further requires the backend's internal service key
+(``require_internal_api_key``) and a known producer ``source``. The read side is what the backend's chat tool
+queries; the write side takes only ``declared`` / ``probed_*`` claims -- ``absent`` and ``stale`` are derived
+here, never asserted.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.auth.internal_api_key import require_internal_api_key
+from autobot_shared.self_model_constants import PRODUCER_SOURCES
 from models.self_model import self_model_entities as entities
 from services.auth import get_current_user
 from services.database import get_db
@@ -80,6 +83,13 @@ class ObservationBatch(BaseModel):
     scope_kinds: List[str]
     observations: List[ObservationIn] = Field(max_length=MAX_OBSERVATIONS)
 
+    @field_validator("source")
+    @classmethod
+    def _known_source(cls, value: str) -> str:
+        if value not in PRODUCER_SOURCES:
+            raise ValueError(f"source must be one of {PRODUCER_SOURCES}")
+        return value
+
 
 class IngestResult(BaseModel):
     upserted: int
@@ -87,11 +97,10 @@ class IngestResult(BaseModel):
     revision: int
 
 
-@router.post("/observations", response_model=IngestResult)
+@router.post("/observations", response_model=IngestResult, dependencies=[Depends(require_internal_api_key)])
 async def post_observations(
     batch: ObservationBatch,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
 ) -> IngestResult:
     """Fold a producer's batch into the model; entities it owns and no longer lists become ``absent``."""
     now = datetime.now(timezone.utc)
