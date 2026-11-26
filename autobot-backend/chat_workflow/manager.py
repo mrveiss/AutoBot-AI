@@ -2978,8 +2978,8 @@ before summarizing.
                 clean_reply_text(wf_msg.content) if sender == "assistant" else strip_unparsed_tool_tags(wf_msg.content)
             )
             # Issue #4448: Extract KB-only citations into top-level sources list.
-            # metadata.citations includes the always-appended llm_training entry —
-            # filter it out so sources contains only knowledge-base references.
+            # metadata.citations holds knowledge-base entries only (#21976: the answer's own
+            # sources, tool steps included, are attached at the turn's end) — keep those here.
             raw_citations = (wf_msg.metadata or {}).get("citations", [])
             kb_citations = [c for c in raw_citations if c.get("type") == "knowledge_base"]
             batch.append(
