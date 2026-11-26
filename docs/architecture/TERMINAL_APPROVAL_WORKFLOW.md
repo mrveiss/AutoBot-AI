@@ -374,6 +374,8 @@ async def approve_pending_command(
 
 A command runs without approval only when the single AI-line decision (`services/ai_line_enforcement.py`, `resolve_action_line`) resolves to line 1. That decision is shared with the chat graph's approval interrupt (`call_needs_approval`), so a command is never held in one path and run in the other. A read-only command rated SAFE is unmanaged and runs; any other command follows its stored line (an unset line counts as line 2) and the approval baseline. The agent role's `auto_approve_safe` / `auto_approve_moderate` can only tighten it. Anything not run here waits in the terminal's approval queue unless a learned rule matches.
 
+**Learned rules are terminal-only (#16840, open decision).** `check_auto_approve_rules` (the per-user "approve similar commands in future" rules) is consulted only in `ai_line_gate.decide_command`, after the line resolved to a hold. `resolve_action_line` and `call_needs_approval` do not read it, so for a command that a learned rule would let run, the chat graph still shows an approval card while the terminal path would have run it. The rule can only turn a line-2 hold into a run; it never lifts line 3 and never overrides a forced approval. Moving it into `resolve_action_line` would make chat skip the card for rule-matched commands, which changes who may auto-run a command from chat and needs the owner's decision (it needs the user id and the command's risk level, which the resolver does not take today). Until that is decided the divergence is deliberate and documented here.
+
 ```
 ┌──────────────────┐
 │ 3b. Safe Command │  Risk = SAFE

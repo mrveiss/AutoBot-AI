@@ -63,6 +63,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.status_enums import CommandRisk
 from autobot_shared.tool_catalogue import (
     ALWAYS_AVAILABLE_TOOLS,
+    SHELL_EXEC_TOOLS,
     approval_category_for,
     canonical_tool_name,
     valid_approval_categories,
@@ -142,7 +143,7 @@ def _is_read_only_command(tool_name: str, params: Optional[Mapping[str, Any]]) -
     ``git push`` and ``curl -X POST``. No command, or a classifier that cannot answer, is not read-only:
     the call keeps the tool's own line.
     """
-    command = (params or {}).get("command") if tool_name == TERMINAL_TOOL else None
+    command = (params or {}).get("command") if canonical_tool_name(tool_name) in SHELL_EXEC_TOOLS else None
     if not command or not isinstance(command, str):
         return False
     try:

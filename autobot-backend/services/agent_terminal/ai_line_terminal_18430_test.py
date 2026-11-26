@@ -186,3 +186,40 @@ async def test_the_chat_gate_and_the_terminal_hold_the_same_commands(command):
         )
         result = await svc.execute_command("s", command)
     assert (result == {"status": "pending_approval"}) is chat_holds
+
+
+#: What each path must do with each command: ``True`` = held for a person. A read-only SAFE command runs; anything
+#: that mutates, and a command the classifier does not know, waits (an unset line is line 2).
+_EXPECTED_HELD = {"ls -la": False, "rm -rf /tmp/ai-line-probe": True, "frobnicate --now": True}
+
+
+@pytest.mark.parametrize("relaxed", [ALL_RELAXED, None], ids=["relaxed_baseline", "default_baseline"])
+@pytest.mark.parametrize("command, held", sorted(_EXPECTED_HELD.items()))
+async def test_the_expected_commands_are_held_and_run_on_both_paths(command, held, relaxed):
+    """#19950: pins the verdict itself, not only parity: ``rm -rf`` and an unknown command wait, ``ls -la`` runs.
+
+    The default baseline (nothing relaxed) gates every category; a read-only command is unmanaged and still runs.
+    """
+    from types import SimpleNamespace
+
+    from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY
+
+    svc = _service()
+    svc.security_policy = CommandSecurityPolicy()
+    svc._assess_command = AgentTerminalService._assess_command.__get__(svc)
+    ctx = SimpleNamespace(context={VERIFIED_COMPANY_KEY: TENANT}, requires_approval_before=[], approve_every_call=False)
+    a, b, c = _world(None, relaxed)
+    with a, b, c:
+        chat_holds = await enforcement.call_needs_approval(
+            {"name": enforcement.TERMINAL_TOOL, "params": {"command": command}}, ctx
+        )
+        result = await svc.execute_command("s", command)
+    assert chat_holds is held
+    assert (result == {"status": "pending_approval"}) is held
+
+
+@pytest.mark.parametrize("name", ["bash", "shell", "run_command", "execute_command"])
+async def test_every_shell_spelling_gets_the_read_only_treatment(name):
+    """#19950: the read-only check keys on the canonical shell tool names, not the one raw spelling."""
+    assert enforcement._is_read_only_command(name, {"command": "ls -la"}) is True
+    assert enforcement._is_read_only_command(name, {"command": "rm -rf /tmp/x"}) is False
