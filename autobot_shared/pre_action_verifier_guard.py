@@ -347,10 +347,17 @@ async def _call_verifier_once(
                 attempt["model"] if "model" in attempt else configured_verifier_model(provider)
             ),  # None = default
         )
+        # The deadline's own cancel reaches the provider as a bare CancelledError ("Stream cancelled", #22254): say here
+        # that this deadline did it, with its length, so a chat model that always overruns it is visible as such.
+        cause = (
+            f"exceeded VERIFIER_TIMEOUT_S={VERIFIER_TIMEOUT_S:g}s, the call was cancelled"
+            if isinstance(exc, TimeoutError)
+            else repr(exc)
+        )
         logger.warning(
-            "pre_action_verifier: LLM call failed (%s: %r) — degraded (%s), fail_closed=%s",
+            "pre_action_verifier: LLM call failed (%s: %s) — degraded (%s), fail_closed=%s",
             type(exc).__name__,
-            exc,
+            cause,
             observation.degradation.value,
             degraded_response_blocks(observation.degradation),
         )
