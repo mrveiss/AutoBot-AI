@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // AutoBot - AI-Powered Automation Platform
 
-import { ref } from 'vue'
+import { ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { createLogger } from '../utils'
 
 const logger = createLogger('useVncControls')
@@ -10,7 +10,15 @@ const logger = createLogger('useVncControls')
 export interface MouseClickParams { x: number; y: number; button?: 'left' | 'middle' | 'right' }
 export interface MouseDragParams { x1: number; y1: number; x2: number; y2: number }
 export interface MouseScrollParams { direction: 'up' | 'down'; amount?: number }
-export interface VncActionResponse { status: 'success' | 'error'; message: string; image_data?: string }
+export interface VncActionResponse { status: 'success' | 'error'; message: string; image_data?: string; code?: string }
+
+/** The backend's stable error code (`detail.code`), when the failed response carried one (#22191). */
+function extractErrorCode(err: unknown): string | undefined {
+  const details = (err as { details?: { detail?: unknown; code?: unknown } } | null)?.details
+  const detail = details?.detail as { code?: unknown } | string | undefined
+  const code = typeof detail === 'object' && detail !== null ? detail.code : details?.code
+  return typeof code === 'string' ? code : undefined
+}
 
 function extractErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error) return err.message
@@ -41,23 +49,26 @@ async function vncFetch<T>(method: 'GET' | 'POST', path: string, body?: unknown)
 export type VncRequest = <T>(method: 'GET' | 'POST', path: string, body?: unknown) => Promise<T>
 
 export interface UseVncControlsOptions {
-  /** Path prefix for the `/vnc/*` endpoints. */
-  baseUrl?: string
+  /** API base for the `/vnc/*` endpoints; each app supplies its own (no default, #22144). */
+  baseUrl: string
   /**
-   * Threaded into every request body as `session_id` (#12002), so a lock
-   * owner's toolbar drives their own session rather than whichever is default.
+   * The selected /secrets host id (#22145). Threaded into every request as
+   * `host_id`; the backend resolves it only from /secrets and refuses any other id.
+   * Read on every call, so switching the host retargets the controls. Omitted by the SLM toolbar,
+   * whose target scope is the fleet.
    */
-  sessionId?: string
+  hostId?: MaybeRefOrGetter<string | undefined>
   /** Defaults to plain `fetch` — see {@link VncRequest}. */
   request?: VncRequest
 }
 
-export function useVncControls(options: UseVncControlsOptions = {}) {
-  const { baseUrl = '/api', sessionId, request = vncFetch } = options
+export function useVncControls(options: UseVncControlsOptions) {
+  const { baseUrl, hostId, request = vncFetch } = options
 
-  // #12002: every POST body carries the session id when one was supplied.
+  // #22145: every POST body names the host the control acts on.
+  const currentHost = () => toValue(hostId)
   const withSession = (body?: Record<string, unknown>) =>
-    sessionId === undefined ? body : { ...(body ?? {}), session_id: sessionId }
+    currentHost() === undefined ? body : { ...(body ?? {}), host_id: currentHost() }
 
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -71,37 +82,37 @@ export function useVncControls(options: UseVncControlsOptions = {}) {
 
   async function mouseClick(params: MouseClickParams): Promise<VncActionResponse> {
     try { return await call(() => request<VncActionResponse>('POST', `${baseUrl}/vnc/click`, withSession({ ...params }))) }
-    catch (err) { logger.error('Mouse click failed:', err); const m = extractErrorMessage(err, 'Mouse click failed'); error.value = m; return { status: 'error', message: m } }
+    catch (err) { logger.error('Mouse click failed:', err); const m = extractErrorMessage(err, 'Mouse click failed'); error.value = m; return { status: 'error', message: m, code: extractErrorCode(err) } }
   }
 
   async function keyboardType(text: string): Promise<VncActionResponse> {
     try { return await call(() => request<VncActionResponse>('POST', `${baseUrl}/vnc/type`, withSession({ text }))) }
-    catch (err) { logger.error('Keyboard type failed:', err); const m = extractErrorMessage(err, 'Keyboard type failed'); error.value = m; return { status: 'error', message: m } }
+    catch (err) { logger.error('Keyboard type failed:', err); const m = extractErrorMessage(err, 'Keyboard type failed'); error.value = m; return { status: 'error', message: m, code: extractErrorCode(err) } }
   }
 
   async function specialKey(key: string): Promise<VncActionResponse> {
     try { return await call(() => request<VncActionResponse>('POST', `${baseUrl}/vnc/key`, withSession({ key }))) }
-    catch (err) { logger.error('Special key failed:', err); const m = extractErrorMessage(err, 'Special key failed'); error.value = m; return { status: 'error', message: m } }
+    catch (err) { logger.error('Special key failed:', err); const m = extractErrorMessage(err, 'Special key failed'); error.value = m; return { status: 'error', message: m, code: extractErrorCode(err) } }
   }
 
   async function mouseScroll(params: MouseScrollParams): Promise<VncActionResponse> {
     try { return await call(() => request<VncActionResponse>('POST', `${baseUrl}/vnc/scroll`, withSession({ ...params }))) }
-    catch (err) { logger.error('Mouse scroll failed:', err); const m = extractErrorMessage(err, 'Mouse scroll failed'); error.value = m; return { status: 'error', message: m } }
+    catch (err) { logger.error('Mouse scroll failed:', err); const m = extractErrorMessage(err, 'Mouse scroll failed'); error.value = m; return { status: 'error', message: m, code: extractErrorCode(err) } }
   }
 
   async function mouseDrag(params: MouseDragParams): Promise<VncActionResponse> {
     try { return await call(() => request<VncActionResponse>('POST', `${baseUrl}/vnc/drag`, withSession({ ...params }))) }
-    catch (err) { logger.error('Mouse drag failed:', err); const m = extractErrorMessage(err, 'Mouse drag failed'); error.value = m; return { status: 'error', message: m } }
+    catch (err) { logger.error('Mouse drag failed:', err); const m = extractErrorMessage(err, 'Mouse drag failed'); error.value = m; return { status: 'error', message: m, code: extractErrorCode(err) } }
   }
 
   async function captureScreenshot(): Promise<VncActionResponse> {
-    try { return await call(() => request<VncActionResponse>('GET', `${baseUrl}/vnc/screenshot`)) }
-    catch (err) { logger.error('Screenshot capture failed:', err); const m = extractErrorMessage(err, 'Screenshot capture failed'); error.value = m; return { status: 'error', message: m, image_data: '' } }
+    try { return await call(() => request<VncActionResponse>('GET', `${baseUrl}/vnc/screenshot${currentHost() === undefined ? '' : `?host_id=${encodeURIComponent(currentHost() as string)}`}`)) }
+    catch (err) { logger.error('Screenshot capture failed:', err); const m = extractErrorMessage(err, 'Screenshot capture failed'); error.value = m; return { status: 'error', message: m, code: extractErrorCode(err), image_data: '' } }
   }
 
   async function syncClipboard(content: string): Promise<VncActionResponse> {
     try { return await call(() => request<VncActionResponse>('POST', `${baseUrl}/vnc/clipboard`, withSession({ content }))) }
-    catch (err) { logger.error('Clipboard sync failed:', err); const m = extractErrorMessage(err, 'Clipboard sync failed'); error.value = m; return { status: 'error', message: m } }
+    catch (err) { logger.error('Clipboard sync failed:', err); const m = extractErrorMessage(err, 'Clipboard sync failed'); error.value = m; return { status: 'error', message: m, code: extractErrorCode(err) } }
   }
 
   const sendCtrlAltDel = () => specialKey('ctrl+alt+Delete')

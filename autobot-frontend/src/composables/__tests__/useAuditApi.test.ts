@@ -10,9 +10,10 @@ import { useAuditApi, useAuditState } from '../useAuditApi'
 import { calculateSuccessRate, resolveAuditStatistics } from '@/types/audit'
 
 const mockGet = vi.fn()
+const mockCall = vi.fn()
 
 vi.mock('@/plugins/api', () => ({
-  useApiClient: () => ({ get: mockGet, post: vi.fn(), put: vi.fn(), delete: vi.fn(), patch: vi.fn() }),
+  useApiClient: () => ({ call: mockCall, get: mockGet, post: vi.fn(), put: vi.fn(), delete: vi.fn(), patch: vi.fn() }),
 }))
 
 vi.mock('@/utils/cacheManagement', () => ({
@@ -317,5 +318,59 @@ describe('useAuditState.resolvedStatistics (#21513)', () => {
     expect(api.resolvedStatistics.value).toMatchObject({
       total_entries: 3, success_count: 1, denied_count: 1, failed_count: 0, error_count: 0, success_rate: 50,
     })
+  })
+})
+
+describe('useAuditApi.queryEventLogs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('calls GET /api/admin/event-logs with the filter, limit and offset as the query', async () => {
+    const page = { events: [], count: 0, limit: 50, offset: 100, available_event_types: [] }
+    mockCall.mockResolvedValue(page)
+    const query = { user_id: 'alice', event_type: 'user.login', limit: 50, offset: 100 }
+
+    const result = await useAuditApi().queryEventLogs(query)
+
+    expect(mockCall).toHaveBeenCalledTimes(1)
+    expect(mockCall).toHaveBeenCalledWith('get', '/api/admin/event-logs', { query })
+    expect(result).toBe(page)
+  })
+
+  it('sends an empty query for no filters', async () => {
+    mockCall.mockResolvedValue({ events: [] })
+
+    await useAuditApi().queryEventLogs()
+
+    expect(mockCall).toHaveBeenCalledWith('get', '/api/admin/event-logs', { query: {} })
+  })
+
+  it('returns null when the call fails', async () => {
+    mockCall.mockRejectedValue(new Error('403'))
+
+    expect(await useAuditApi().queryEventLogs()).toBeNull()
+  })
+})
+
+describe('useAuditApi.getCommandHistory', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('calls GET /api/security/command-history with user and limit and returns the entries', async () => {
+    const entry = { timestamp: 't', user: 'bob', action: 'command.execute', outcome: 'success', details: {} }
+    mockCall.mockResolvedValue({ success: true, command_history: [entry], count: 1 })
+
+    const result = await useAuditApi().getCommandHistory({ user: 'bob', limit: 50 })
+
+    expect(mockCall).toHaveBeenCalledWith('get', '/api/security/command-history', { query: { user: 'bob', limit: 50 } })
+    expect(result).toEqual([entry])
+  })
+
+  it('returns null when the call fails', async () => {
+    mockCall.mockRejectedValue(new Error('500'))
+
+    expect(await useAuditApi().getCommandHistory()).toBeNull()
   })
 })

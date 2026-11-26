@@ -45,6 +45,7 @@ from .provider_error_category import (
     failure_from_exception,
     failure_from_response,
 )
+from .token_budget import _estimate_request_tokens
 
 if TYPE_CHECKING:
     from .provider_registry import ProviderRegistry
@@ -56,6 +57,8 @@ _MAX_FALLBACK_ATTEMPTS: int = env_int("AUTOBOT_MAX_FALLBACK_ATTEMPTS", 3)
 REASON_RATE_LIMIT = "rate_limit_429"
 #: Pre-emptive switch on observed headroom (#15028) -- no 429 was paid for.
 REASON_HEADROOM_PREEMPT = "headroom_preempt"
+#: Every remaining hop was skipped because the request cannot fit its context window (#21864).
+REASON_REQUEST_TOO_LARGE = "request_exceeds_window"
 
 
 def _reason_for(category: ProviderErrorCategory) -> str:
@@ -78,11 +81,18 @@ class _FallbackTrail:
     def __init__(self) -> None:
         self.reasons: list[str] = []
         self.preempted: list[dict] = []
+        self.size_skipped: list[dict] = []
+        self.skips_before_dispatch = 0  # len(size_skipped) when the request last moved onto a model
 
     @property
     def reason(self) -> str:
-        """The reason of the most recent hop (reactive 429 until a hop says otherwise)."""
+        """The reason of the most recent hop, or of the failure that ended the chain (429 before any failure)."""
         return self.reasons[-1] if self.reasons else REASON_RATE_LIMIT
+
+    @property
+    def ended_on_size_skip(self) -> bool:
+        """True when a hop was size-skipped after the last model the request was moved onto (#21864)."""
+        return len(self.size_skipped) > self.skips_before_dispatch
 
     def note_preempt(self, hop: "_PreemptiveSwitch", from_model: str) -> None:
         logger.info(
@@ -97,6 +107,21 @@ class _FallbackTrail:
             {"from_model": from_model, "from_provider": hop.provider, "window": hop.window,
              "to_model": hop.next_model, "to_provider": hop.next_provider}
         )  # fmt: skip
+
+
+def _window_overflow(request: LLMRequest, model: str) -> dict | None:
+    """The overflow record (model, estimated_tokens, window, reason) when *request* cannot fit *model*, else ``None``.
+
+    The window is ``known_context_window_tokens`` and the estimate is the token budget's own request
+    estimator (input + ``max_tokens``). An unknown window (0) is no evidence of overflow: the hop is offered (#21864).
+    """
+    from context_window_lookup import known_context_window_tokens
+
+    window = known_context_window_tokens(model)
+    estimated = _estimate_request_tokens(request)
+    if window > 0 and estimated > window:
+        return {"model": model, "estimated_tokens": estimated, "window": window, "reason": REASON_REQUEST_TOO_LARGE}
+    return None
 
 
 class _FallbackRun:
@@ -118,6 +143,7 @@ class _FallbackRun:
     def switch_to(self, model: str, provider: Optional[str], operator_configured: bool = False) -> None:
         """Move the request onto the next model of the chain."""
         self.model, self.provider, self.operator_configured = model, provider, operator_configured
+        self.trail.skips_before_dispatch = len(self.trail.size_skipped)
         self.chain_tried.append(model)
         self.request = ModelFallbackCoordinator._clone_with_model(self.request, model, provider)
 
@@ -140,6 +166,7 @@ class _FallbackRun:
         hop = {"fallback_provider": self.provider, "operator_configured": self.operator_configured}
         return {
             **({"preemptive_switches": list(self.trail.preempted)} if self.trail.preempted else {}),
+            **({"size_skipped": list(self.trail.size_skipped)} if self.trail.size_skipped else {}),
             **(hop if fallback_used else {"fallback_provider": None, "operator_configured": None}),
         }
 
@@ -232,7 +259,10 @@ class ModelFallbackCoordinator:
             return None
         run = _FallbackRun(request)
         run.last_error = LLMResponse(content="", model=run.model, provider=run.provider or "", error=failure.message)
+        if not may_fail_over(failure):  # a caller's own credential surfaces silently
+            return None
         if not await self._on_failure(run, failure, 0, max_attempts, mark=not held):
+            await self._emit(run, exhausted=True)  # every other exhaustion is audited, as _run_loop does
             return None
         return await self._run_loop(run, registry, max_attempts, first_attempt=1)
 
@@ -251,7 +281,8 @@ class ModelFallbackCoordinator:
                 run.trail.note_preempt(hop, run.model)
                 run.switch_to(hop.next_model, hop.next_provider, hop.operator_configured)
             except (RateLimitError, _ProviderFailureError, ProviderAuthError) as exc:
-                if not await self._on_failure(run, self._record_failure(run, exc), attempt, max_attempts):
+                failure = self._record_failure(run, exc)
+                if not may_fail_over(failure) or not await self._on_failure(run, failure, attempt, max_attempts):
                     break
 
         # All fallbacks exhausted.
@@ -302,21 +333,23 @@ class ModelFallbackCoordinator:
     ) -> bool:
         """Hold the failed model out where that is fair to everyone, then pick the next usable one.
 
-        Returns True when the loop should retry on the fallback, False when the chain is exhausted or
-        the failure is not one to fail over on (a caller's own credential, see ``may_fail_over``).
+        Returns True when the loop should retry on the fallback, False when the chain is exhausted. The
+        caller has already checked ``may_fail_over``. An exhaustion names the failure that ended the chain.
         """
-        if not may_fail_over(failure):
-            return False
         if mark:
             await self._mark_failed(run, failure)
         if attempt >= max_attempts:
             logger.warning(
                 "quota-fallback: all %d fallback attempts exhausted for model=%r", max_attempts, run.primary_model
             )
+            run.trail.reasons.append(_reason_for(failure.category))
             return False
         hop = await self._next_usable_hop(run)
         if hop is None:
             logger.warning("quota-fallback: no usable fallback for model=%r provider=%r", run.model, run.provider)
+            run.trail.reasons.append(_reason_for(failure.category))
+            if run.trail.ended_on_size_skip:  # the chain ended because its remaining hops could not hold the request
+                run.trail.reasons.append(REASON_REQUEST_TOO_LARGE)
             return False
         self._log_hop(run, failure, attempt, hop)
         run.trail.reasons.append(_reason_for(failure.category))
@@ -367,6 +400,8 @@ class ModelFallbackCoordinator:
 
         Each model is tried at most once per request (``chain_tried``). A hop that would move the
         prompt from a local provider to an external one is skipped unless the operator wrote the chain.
+        A hop whose known context window cannot hold the request is skipped too (#21864); that is no
+        degradation mark -- the model is healthy, this request is too big for it -- and is recorded on the trail.
         """
         manager, store = get_fallback_chain_manager(), get_degradation_store()
         tried = {m.lower() for m in run.chain_tried}
@@ -376,7 +411,13 @@ class ModelFallbackCoordinator:
             tried.add(hop.model.lower())
             allowed = locality_allows(from_provider, hop.provider, operator_configured=hop.operator_configured)
             if allowed and not (hop.provider and await store.is_degraded(hop.provider, hop.model)):
-                return hop
+                if (overflow := _window_overflow(run.request, hop.model)) is None:
+                    return hop
+                logger.warning(
+                    "failover: skipping %(model)r: request ~%(estimated_tokens)d tokens exceeds its window %(window)d",
+                    overflow,
+                )
+                run.trail.size_skipped.append(overflow)
             model, owner = hop.model, hop.provider
         return None
 

@@ -14,7 +14,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 from autobot_shared.secret_redaction import redact_text
-from autobot_shared.slm_credential_actions import INTERNAL_KEY_REALIGN, SSH_PASSWORD_DELETE, CredentialAction
+from autobot_shared.slm_credential_actions import INTERNAL_KEY_REALIGN, SSH_PASSWORD_DELETE, SlmApprovalAction
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 
@@ -54,7 +54,7 @@ _REALIGN_AUDIT = {
 }
 
 
-def proposal_text(action: CredentialAction, node_id: str) -> tuple[str, str]:
+def proposal_text(action: SlmApprovalAction, node_id: str) -> tuple[str, str]:
     """The approval's title and description for *action* on *node_id*."""
     title, description = _TEXTS[action.name]
     return title.format(node=node_id), description.format(node=node_id)

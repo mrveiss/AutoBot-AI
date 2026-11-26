@@ -494,3 +494,44 @@ def test_a_template_literal_line_starting_with_double_slash_is_code_and_a_real_c
 def test_a_string_continuation_line_and_an_indented_comment_follow_the_scanner_too() -> None:
     source = "const a = `\n    // kept\n`;\n    // dropped\n/* b */ // dropped too\nconst c = 2;\n"
     assert [line.lineno for line in code_lines(source, name="x.vue")] == [1, 2, 3, 6]
+
+
+@pytest.mark.parametrize(
+    ("source", "gone", "kept"),
+    [
+        ("a {# gone_one #} b\n", "gone_one", "a"),
+        ("keep_top\n{#\n gone_many\n more\n#}\nkeep_bottom\n", "gone_many", "keep_bottom"),
+        ("{#- gone_trim -#}\nkeep_me\n", "gone_trim", "keep_me"),
+        ('x = {{ "{# kept_str" }} {# gone_after #}\n', "gone_after", "{# kept_str"),
+        ("{% set a = '{# kept_tag' %} {# gone_after #}\n", "gone_after", "{# kept_tag"),
+    ],
+)
+def test_a_jinja_comment_is_stripped_and_a_quoted_opener_in_an_expression_is_data(source, gone, kept) -> None:
+    """#22099: `{# #}` (single- and multi-line) in a `.j2` goes; a `{#` inside a quoted Jinja string is data."""
+    text = code_text(source, name="x.conf.j2")
+    assert gone not in text, text
+    assert kept in text, text
+
+
+def test_the_same_literal_outside_a_jinja_comment_is_kept_and_line_numbers_hold() -> None:
+    source = "{# secret_flag #}\nsecret_flag on;\n{#\nsecret_flag\n#}\nlast\n"
+    lines = code_lines(source, name="nginx.conf.j2")
+    assert [line.lineno for line in lines if "secret_flag" in line.text] == [2]
+    assert [line.lineno for line in lines if "last" in line.text] == [6]
+
+
+def test_a_single_line_jinja_comment_leaves_no_stray_brace_and_the_host_marker_still_works() -> None:
+    source = "listen 80; {# why #}\n# host comment\nroot /x; # trailing\n"
+    text = code_text(source, name="a.conf.j2", strip_trailing=True)
+    assert "{" not in text and "why" not in text and "host comment" not in text and "trailing" not in text, text
+    assert "listen 80;" in text and "root /x;" in text
+
+
+def test_the_html_comment_helpers_are_built_on_the_one_shared_pattern() -> None:
+    """#21569 AC3: `<!--` is the shared helper's, defined once in `autobot_shared.html_comments` (#22261)."""
+    from autobot_shared.html_comments import HTML_COMMENT_PATTERN
+    from tools.lint import _comment_syntax as cs
+
+    assert HTML_COMMENT_PATTERN in cs._HTML_SCRIPT_OR_COMMENT.pattern
+    assert HTML_COMMENT_PATTERN in cs._HTML_OR_BLOCK_COMMENT.pattern
+    assert strip_html_comments("a<!-- x\ny -->b") == "a\nb"

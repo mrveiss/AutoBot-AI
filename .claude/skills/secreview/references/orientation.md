@@ -1,22 +1,6 @@
-When to use: Fast findings-first security review of a diff — emits a findings table within 3 tool calls, then verifies. Use when asked to security-review a diff, branch, uncommitted changes, or "check this for vulnerabilities". For deep multi-agent PR review use `/autobot-dev-skills:review review-fleet` instead; for whole-codebase audits use the `autobot-dev-skills:reviewer` agent with the security-auditor lens.
+# Secreview — orientation (step 1)
 
-# Secreview — Findings Before Exploration
-
-A diff-scoped security review that **emits before it explores**. Partial value
-delivered in seconds beats total value delivered in minutes — a review that is
-abandoned mid-exploration delivers nothing at all.
-
-## The Ordering Contract (non-negotiable)
-
-1. **One orientation call.** Read the diff. Nothing else.
-2. **Findings table within 3 tool calls.** No preamble, no full-file reads, no
-   codebase greps before the table is on screen.
-3. **Verify after.** Only once the table is printed, read supporting files to
-   confirm, downgrade, or drop each finding.
-4. **Verdict last.** `BLOCK` / `APPROVE-WITH-NITS` / `APPROVE`.
-
-Never reorder these. A finding stated with `CONFIDENCE: unverified` and corrected
-in step 3 is useful; a perfectly-verified finding that never gets printed is not.
+The ordering contract, and why the table comes before exploration, live in `SKILL.md`; this file covers when not to use the skill, choosing the diff command, and the large-diff rule.
 
 ## When NOT to use this skill
 

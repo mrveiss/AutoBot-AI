@@ -12733,8 +12733,8 @@ export interface paths {
         put?: never;
         /**
          * Vnc Mouse Click
-         * @description Perform mouse click at specified coordinates with human-like behavior.
-         *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         * @description Click at the given coordinates on the selected /secrets host (#22145).
+         *     Issue #74: Desktop interaction controls.
          *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
          *     control-lock -- the lock owner's own toolbar keeps working.
          *
@@ -12762,8 +12762,8 @@ export interface paths {
         put?: never;
         /**
          * Vnc Keyboard Type
-         * @description Type text via keyboard with human-like speed and pauses.
-         *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         * @description Type text on the selected /secrets host (#22145).
+         *     Issue #74: Desktop interaction controls.
          *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
          *     control-lock -- the lock owner's own toolbar keeps working.
          *
@@ -12849,8 +12849,8 @@ export interface paths {
         put?: never;
         /**
          * Vnc Mouse Drag
-         * @description Perform mouse drag operation with curved, human-like movement.
-         *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         * @description Drag along a curved path on the selected /secrets host (#22145).
+         *     Issue #74: Desktop interaction controls.
          *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
          *     control-lock -- the lock owner's own toolbar keeps working.
          *
@@ -12876,19 +12876,10 @@ export interface paths {
         };
         /**
          * Vnc Screenshot
-         * @description Capture desktop screenshot.
-         *     Issue #74: Desktop interaction controls.
+         * @description Capture the selected /secrets host's desktop over its VNC endpoint (#22145).
          *
-         *     Issue #13208: ``temporary_file_path`` owns the temp file, so it is removed
-         *     on the success path, on capture failure and on any exception. Previously
-         *     only the success path unlinked it and each failed capture leaked a PNG.
-         *
-         *     Returns:
-         *         {
-         *             "status": "success|error",
-         *             "image_data": "base64-encoded PNG",
-         *             "message": "..."
-         *         }
+         *     Returns {"status": "success|error", "image_data": "base64 PNG", "message": "..."}.
+         *     A host that is not a /secrets infrastructure host is refused with 404.
          */
         get: operations["vnc_screenshot_api_vnc_screenshot_get"];
         put?: never;
@@ -12910,14 +12901,7 @@ export interface paths {
         put?: never;
         /**
          * Vnc Clipboard Sync
-         * @description Sync clipboard content to remote desktop.
-         *     Issue #74: Desktop interaction controls.
-         *
-         *     Args:
-         *         request: ClipboardSyncRequest with text content
-         *
-         *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         * @description Send clipboard text to the selected /secrets host's desktop (#22145); muted like the other controls.
          */
         post: operations["vnc_clipboard_sync_api_vnc_clipboard_post"];
         delete?: never;
@@ -13534,6 +13518,26 @@ export interface paths {
          * @description Get current desktop control-lock owner/state (#12002, #11506 T1).
          */
         get: operations["get_desktop_control_status_api_vnc_proxy__vnc_type__control_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/desktop/endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Desktop Vm Endpoint
+         * @description Where the desktop VM is, from the SLM registry; null when no VNC desktop node is registered.
+         */
+        get: operations["get_desktop_vm_endpoint_api_vnc_proxy_desktop_endpoint_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -19837,6 +19841,46 @@ export interface paths {
          *     forged or overwritten after the fact. The reported detail is cleaned and capped before it is kept.
          */
         post: operations["report_credential_outcome_api_internal_slm_credential_approvals__approval_id__outcome_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/slm/stale-file-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Stale File Cleanup
+         * @description Propose removing the files -- a request, not an execution; one open proposal per location per node.
+         */
+        post: operations["propose_stale_file_cleanup_api_internal_slm_stale_file_proposals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/slm/stale-file-approvals/{approval_id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Stale File Approval
+         * @description The SLM's last check: a human approved THESE files for this node, unused -- now spent; they come back.
+         */
+        post: operations["claim_stale_file_approval_api_internal_slm_stale_file_approvals__approval_id__claim_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -31842,6 +31886,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/integrations/microsoft365/test-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Microsoft 365 connection
+         * @description Test the connection using the token held in the secrets store.
+         */
+        post: operations["test_connection_api_integrations_microsoft365_test_connection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/microsoft365/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Outlook messages
+         * @description List messages from the inbox or a specific folder.
+         */
+        get: operations["list_messages_api_integrations_microsoft365_messages_get"];
+        put?: never;
+        /**
+         * Send an Outlook message
+         * @description Send a message, after the egress governance gate (#14270).
+         */
+        post: operations["send_email_api_integrations_microsoft365_messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/microsoft365/messages/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Outlook messages
+         * @description Search messages with a Graph ``$search`` query.
+         */
+        get: operations["search_messages_api_integrations_microsoft365_messages_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/integrations/microsoft365/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Outlook top-level mail folders
+         * @description List the top-level mail folders (Graph returns root children only; nested folders are out of scope, #13710).
+         */
+        get: operations["list_folders_api_integrations_microsoft365_folders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/whatsapp/webhook": {
         parameters: {
             query?: never;
@@ -35486,7 +35614,7 @@ export interface paths {
          * Navigate To Url
          * @description Navigate to a URL using Playwright on Browser VM
          *
-         *     Forwards navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          */
         post: operations["navigate_to_url_api_playwright_navigate_post"];
         delete?: never;
@@ -35508,7 +35636,7 @@ export interface paths {
          * Reload Page
          * @description Reload the current page using Playwright on Browser VM
          *
-         *     Forwards reload request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards reload request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          */
         post: operations["reload_page_api_playwright_reload_post"];
         delete?: never;
@@ -35530,7 +35658,7 @@ export interface paths {
          * Go Back
          * @description Navigate back in browser history using Playwright on Browser VM
          *
-         *     Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards back navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
          *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
@@ -35554,7 +35682,7 @@ export interface paths {
          * Go Forward
          * @description Navigate forward in browser history using Playwright on Browser VM
          *
-         *     Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
+         *     Forwards forward navigation request to Browser VM (ServiceURLs.BROWSER_SERVICE)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
          *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
@@ -55785,7 +55913,7 @@ export interface paths {
         put?: never;
         /**
          * End Realtime Session
-         * @description Finalise telemetry for a Realtime session.
+         * @description Finalise telemetry for a Realtime session; a telemetry failure is logged, never a 500.
          */
         post: operations["end_realtime_session_api_voice_realtime_session__session_id__end_post"];
         delete?: never;
@@ -55805,7 +55933,7 @@ export interface paths {
         put?: never;
         /**
          * Ingest Response Done
-         * @description Ingest a response.done payload and enforce soft-caps.
+         * @description Ingest a response.done payload and enforce soft-caps, even when the usage write fails.
          */
         post: operations["ingest_response_done_api_voice_realtime_session__session_id__response_done_post"];
         delete?: never;
@@ -62737,11 +62865,6 @@ export interface components {
             text: string;
             /** Reference Audio */
             reference_audio: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -62751,16 +62874,6 @@ export interface components {
             name: string;
             /** Audio */
             audio: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** Body_voice_listen_api_api_voice_listen_post */
-        Body_voice_listen_api_api_voice_listen_post: {
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -62778,11 +62891,6 @@ export interface components {
              * @default
              */
             language: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Stream
              * @default false
@@ -62810,11 +62918,6 @@ export interface components {
              * @default
              */
             language: string;
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
             /**
              * Stream
              * @default false
@@ -66096,6 +66199,11 @@ export interface components {
         };
         /** ClipboardSyncRequest */
         ClipboardSyncRequest: {
+            /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
             /**
              * Content
              * @description Text content to copy to clipboard
@@ -74655,8 +74763,7 @@ export interface components {
         DesktopControlAcquireRequest: {
             /**
              * Session Id
-             * @description Desktop control-lock session id
-             * @default default
+             * @description Selected /secrets host id (the control-lock key)
              */
             session_id: string;
         } & {
@@ -74687,8 +74794,7 @@ export interface components {
         DesktopControlReleaseRequest: {
             /**
              * Session Id
-             * @description Desktop control-lock session id
-             * @default default
+             * @description Selected /secrets host id (the control-lock key)
              */
             session_id: string;
         } & {
@@ -74852,6 +74958,21 @@ export interface components {
              * @default default
              */
             session_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopVmEndpointResponse
+         * @description Where the chat Desktop's desktop VM is: the one answer both the page and the controls use.
+         */
+        DesktopVmEndpointResponse: {
+            /** Host */
+            host: string;
+            /**
+             * Port
+             * @description noVNC web port
+             */
+            port: number;
         } & {
             [key: string]: unknown;
         };
@@ -78823,6 +78944,11 @@ export interface components {
          */
         FindImageRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Template Data
              * @description Base64-encoded template image (PNG)
              */
@@ -82428,16 +82554,15 @@ export interface components {
         /** KeyboardTypeRequest */
         KeyboardTypeRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Text
              * @description Text to type
              */
             text: string;
-            /**
-             * Session Id
-             * @description Desktop control-lock session id
-             * @default default
-             */
-            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -89121,6 +89246,11 @@ export interface components {
         /** MouseClickRequest */
         MouseClickRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * X
              * @description X coordinate
              */
@@ -89136,17 +89266,16 @@ export interface components {
              * @default left
              */
             button: string;
-            /**
-             * Session Id
-             * @description Desktop control-lock session id
-             * @default default
-             */
-            session_id: string;
         } & {
             [key: string]: unknown;
         };
         /** MouseDragRequest */
         MouseDragRequest: {
+            /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
             /**
              * X1
              * @description Start X coordinate
@@ -89167,17 +89296,16 @@ export interface components {
              * @description End Y coordinate
              */
             y2: number;
-            /**
-             * Session Id
-             * @description Desktop control-lock session id
-             * @default default
-             */
-            session_id: string;
         } & {
             [key: string]: unknown;
         };
         /** MouseScrollRequest */
         MouseScrollRequest: {
+            /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
             /**
              * Direction
              * @description Scroll direction: up or down
@@ -89189,12 +89317,6 @@ export interface components {
              * @default 3
              */
             amount: number;
-            /**
-             * Session Id
-             * @description Desktop control-lock session id
-             * @default default
-             */
-            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -99495,6 +99617,40 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SendEmailRequest
+         * @description Request model for sending an Outlook message.
+         */
+        SendEmailRequest: {
+            /**
+             * To
+             * @description Recipient addresses
+             */
+            to: string[];
+            /**
+             * Subject
+             * @description Message subject
+             */
+            subject: string;
+            /**
+             * Body
+             * @description Message body
+             */
+            body: string;
+            /**
+             * Cc
+             * @description Carbon-copy addresses
+             */
+            cc?: string[] | null;
+            /**
+             * Body Type
+             * @description Body content type
+             * @default HTML
+             */
+            body_type: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SendMessageRequest
          * @description Request model for sending messages.
          */
@@ -101561,16 +101717,15 @@ export interface components {
         /** SpecialKeyRequest */
         SpecialKeyRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Key
              * @description Special key name (e.g., Return, Escape, ctrl+c)
              */
             key: string;
-            /**
-             * Session Id
-             * @description Desktop control-lock session id
-             * @default default
-             */
-            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -101735,6 +101890,94 @@ export interface components {
             velocity_actual?: number | null;
             /** Capacity Points */
             capacity_points?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileClaim
+         * @description The SLM names the action and the node it is about to clean; the approval must name the same.
+         */
+        StaleFileClaim: {
+            /**
+             * Action
+             * @constant
+             */
+            action: "slm_node_stale_sync_files_cleanup";
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileClaimResponse
+         * @description The approval was a human's and is now spent: what it approved, to be re-checked by the SLM.
+         */
+        StaleFileClaimResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Node Id */
+            node_id: string;
+            /** Old Target */
+            old_target: string;
+            /** Files */
+            files: components["schemas"]["StaleFileEntry"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileEntry
+         * @description One file offered for removal: where, how big, how old, and the git blob it is byte-identical to.
+         */
+        StaleFileEntry: {
+            /** Path */
+            path: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Modified At
+             * Format: date-time
+             */
+            modified_at: string;
+            /** Blob */
+            blob: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileProposal
+         * @description What the SLM proposes: the files of ONE old sync location on ONE node, never file contents.
+         */
+        StaleFileProposal: {
+            /** Node Id */
+            node_id: string;
+            /** Old Target */
+            old_target: string;
+            /** Commit */
+            commit: string;
+            /** Files */
+            files: components["schemas"]["StaleFileEntry"][];
+            /** Total Found */
+            total_found: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileProposalResponse
+         * @description The location's open approval, whether this call created it, and the counts of that STORED approval.
+         *
+         *     A reused proposal keeps the file set a reviewer will open, so its counts can differ from this request's.
+         */
+        StaleFileProposalResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Created */
+            created: boolean;
+            /** Proposed */
+            proposed: number;
+            /** Total Found */
+            total_found: number;
         } & {
             [key: string]: unknown;
         };
@@ -106951,6 +107194,11 @@ export interface components {
          */
         VNCOCRRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Region
              * @description Optional region {x, y, width, height}, empty for full screen
              */
@@ -107930,6 +108178,11 @@ export interface components {
          */
         WaitForImageRequest: {
             /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
+            /**
              * Template Data
              * @description Base64-encoded template image
              */
@@ -107969,6 +108222,11 @@ export interface components {
          * @description Wait for text to appear request.
          */
         WaitForTextRequest: {
+            /**
+             * Host Id
+             * @description Selected /secrets infrastructure host id; also the control-lock key
+             */
+            host_id: string;
             /**
              * Text
              * @description Text to wait for
@@ -125031,11 +125289,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_voice_listen_api_api_voice_listen_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -125044,15 +125298,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VoiceListenResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -126860,7 +127105,10 @@ export interface operations {
     };
     vnc_screenshot_api_vnc_screenshot_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Selected /secrets infrastructure host id */
+                host_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -126874,6 +127122,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VncScreenshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -127103,6 +127360,8 @@ export interface operations {
         parameters: {
             query: {
                 name: string;
+                /** @description Selected /secrets infrastructure host id */
+                host_id: string;
             };
             header?: never;
             path?: never;
@@ -127425,6 +127684,8 @@ export interface operations {
         parameters: {
             query: {
                 session_id: string;
+                /** @description Selected /secrets infrastructure host id */
+                host_id: string;
             };
             header?: never;
             path?: never;
@@ -127586,8 +127847,9 @@ export interface operations {
     };
     get_desktop_control_status_api_vnc_proxy__vnc_type__control_status_get: {
         parameters: {
-            query?: {
-                session_id?: string;
+            query: {
+                /** @description Selected /secrets infrastructure host id */
+                session_id: string;
             };
             header?: never;
             path: {
@@ -127613,6 +127875,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_desktop_vm_endpoint_api_vnc_proxy_desktop_endpoint_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopVmEndpointResponse"] | null;
                 };
             };
         };
@@ -136104,6 +136386,78 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_stale_file_cleanup_api_internal_slm_stale_file_proposals_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaleFileProposal"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFileProposalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_stale_file_approval_api_internal_slm_stale_file_approvals__approval_id__claim_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaleFileClaim"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFileClaimResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -151542,6 +151896,151 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VCSProviderInfo"][];
+                };
+            };
+        };
+    };
+    test_connection_api_integrations_microsoft365_test_connection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationHealth"];
+                };
+            };
+        };
+    };
+    list_messages_api_integrations_microsoft365_messages_get: {
+        parameters: {
+            query?: {
+                folder_id?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_email_api_integrations_microsoft365_messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_messages_api_integrations_microsoft365_messages_search_get: {
+        parameters: {
+            query: {
+                query: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_folders_api_integrations_microsoft365_folders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

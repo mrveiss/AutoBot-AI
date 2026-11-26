@@ -799,8 +799,10 @@
       "unsupported": "\"{filename}\" ليس ملفًا نصيًا يستطيع المساعد قراءته، لذلك لم يُستخدم.",
       "unreadable": "تعذّرت قراءة \"{filename}\"، لذلك لم يُستخدم.",
       "empty": "لا يحتوي \"{filename}\" على نص قابل للقراءة، لذلك لم يُستخدم.",
-      "truncated": "\"{filename}\" طويل، لذلك استُخدمت بدايته فقط.",
-      "over_budget": "بلغت الملفات المرفقة حدّ الحجم، لذلك لم يُستخدم \"{filename}\"."
+      "truncated": "\"{filename}\" طويل، لذلك استُخدم فقط أول {used} من {total} حرفًا.",
+      "truncated_legacy": "\"{filename}\" طويل، لذلك استُخدمت بدايته فقط.",
+      "over_budget": "بلغت الملفات المرفقة حدّ الحجم، لذلك لم يُستخدم \"{filename}\".",
+      "over_window": "المحادثة أطول من نافذة النموذج، لذلك قد لا يصله بعض النص السابق."
     }
   },
   "settings": {
@@ -2246,8 +2248,6 @@
     },
     "duplicates": {
       "title": "Duplicate Code",
-      "pairs": "pairs",
-      "totalPairs": "Total Pairs",
       "highLabel": "High",
       "mediumLabel": "Medium",
       "lowLabel": "Low",
@@ -5813,7 +5813,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "إغلاق"
+      "close": "إغلاق",
+      "usernameMissing": "اسم المستخدم مفقود: عيّنه في الأسرار",
+      "desktopVm": "جهاز AutoBot الافتراضي لسطح المكتب",
+      "desktopVmDesc": "سطح مكتب AutoBot الخاص",
+      "noDesktopVm": "لا يوجد جهاز افتراضي لسطح المكتب مسجّل، لذا تُعرض مضيفات الأسرار الخاصة بك فقط."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6858,7 +6862,11 @@
         "slackDesc": "رمز بوت Slack",
         "serverLabel": "مضيف الخادم",
         "serverDesc": "الوصول إلى خادم SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (بيانات اعتماد VNC)",
+      "vncCompanionDescription": "بيانات اعتماد VNC لـ {host}",
+      "vncCompanionNoHostId": "تم حفظ المضيف لكن لم يُرجع معرّفه، لذلك لم تُحفظ بيانات اعتماد VNC.",
+      "vncRetry": "تم حفظ المضيف لكن لم تُحفظ كلمة مرور VNC الخاصة به. احفظ مرة أخرى لإعادة المحاولة؛ لن يُنشأ المضيف مرتين."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7753,7 +7761,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "اختر مضيفًا يدعم VNC لاستخدام سطح المكتب.",
+      "vncCredentialMissing": "لا توجد كلمة مرور VNC محفوظة لهذا المضيف. أضفها في الأسرار.",
+      "hostNotFound": "هذا المضيف ليس من مضيفات الأسرار الخاصة بك.",
+      "hostFieldsMissing": "يفتقد هذا المضيف إلى اسم المستخدم أو القدرات. عيّنها في الأسرار.",
+      "hostVncUnavailable": "ليس لدى هذا المضيف قدرة VNC أو منفذ في الأسرار.",
+      "desktopVmUnavailable": "لا يوجد سطح مكتب VNC مسجّل، لذا فإن جهاز سطح المكتب الافتراضي غير متاح.",
+      "registryUnavailable": "تعذّرت قراءة سجل أسطح المكتب. حاول مرة أخرى بعد قليل."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -8575,7 +8590,6 @@
       "attachRoleLabel": "الدور",
       "attachRolePlaceholder": "اختر دورًا…",
       "attachWorkflowLabel": "معرّف سير العمل",
-      "attachWorkflowPlaceholder": "معرّف سير العمل",
       "attachError": "تعذّر إرفاق سير العمل هذا.",
       "detachError": "تعذّرت إزالة سير العمل هذا.",
       "processDetach": "إزالة {workflow} من {role}",
@@ -9817,7 +9831,6 @@
     "endTenure": "إنهاء التعيين",
     "holderIdPlaceholder": "معرّف الشاغل",
     "permissionPlaceholder": "مثل knowledge.read",
-    "workflowPlaceholder": "معرّف سير العمل",
     "toolPlaceholder": "اسم الأداة",
     "credentialPlaceholder": "معرّف السر",
     "errorAssign": "تعذّر تعيين الشاغل.",
@@ -10041,5 +10054,15 @@
     "resumeFailed": "فشل استئناف الوكلاء",
     "successRate": "معدل النجاح",
     "tasksCompleted": "المهام المكتملة"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "أدخل عنوان ويب كاملاً يبدأ بـ http:// أو https://",
+    "recognitionUnsupported": "التعرف على الكلام غير مدعوم في هذا المتصفح",
+    "recognitionError": "خطأ في التعرف على الكلام: {error}",
+    "speakFailed": "تعذّر نطق النص",
+    "playbackFailed": "فشل تشغيل الصوت",
+    "spoken": "تم نطقه:",
+    "speakToInteractWith": "تحدّث واستمع إلى القراءة بصوت عالٍ",
+    "voiceId": "معرّف الصوت"
   }
 }

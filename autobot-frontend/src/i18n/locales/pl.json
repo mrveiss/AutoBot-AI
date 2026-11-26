@@ -799,8 +799,10 @@
       "unsupported": "\"{filename}\" nie jest plikiem tekstowym, który asystent potrafi odczytać, więc nie został użyty.",
       "unreadable": "Nie udało się odczytać pliku \"{filename}\", więc nie został użyty.",
       "empty": "Plik \"{filename}\" nie zawiera czytelnego tekstu, więc nie został użyty.",
-      "truncated": "Plik \"{filename}\" jest długi, więc użyto tylko jego początku.",
-      "over_budget": "Załączone pliki osiągnęły limit rozmiaru, więc plik \"{filename}\" nie został użyty."
+      "truncated": "Plik \"{filename}\" jest długi, więc użyto tylko pierwszych {used} z {total} znaków.",
+      "truncated_legacy": "Plik \"{filename}\" jest długi, więc użyto tylko jego początku.",
+      "over_budget": "Załączone pliki osiągnęły limit rozmiaru, więc plik \"{filename}\" nie został użyty.",
+      "over_window": "Rozmowa jest dłuższa niż okno modelu, więc część wcześniejszego tekstu może do niego nie dotrzeć."
     }
   },
   "settings": {
@@ -2246,8 +2248,6 @@
     },
     "duplicates": {
       "title": "Duplicate Code",
-      "pairs": "pairs",
-      "totalPairs": "Total Pairs",
       "highLabel": "High",
       "mediumLabel": "Medium",
       "lowLabel": "Low",
@@ -5813,7 +5813,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Brak nazwy użytkownika: ustaw ją w Sekretach",
+      "desktopVm": "Maszyna wirtualna pulpitu AutoBot",
+      "desktopVmDesc": "Własny pulpit AutoBot",
+      "noDesktopVm": "Nie zarejestrowano maszyny wirtualnej pulpitu, więc wyświetlane są tylko Twoje hosty z Sekretów."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6858,7 +6862,11 @@
         "slackDesc": "Token bota Slack",
         "serverLabel": "Host serwera",
         "serverDesc": "Dostęp do serwera SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (dane logowania VNC)",
+      "vncCompanionDescription": "Dane logowania VNC dla {host}",
+      "vncCompanionNoHostId": "Host został zapisany, ale jego identyfikator nie został zwrócony, więc danych logowania VNC nie zapisano.",
+      "vncRetry": "Host został zapisany, ale jego hasło VNC nie. Zapisz ponownie, aby spróbować jeszcze raz; host nie zostanie utworzony dwukrotnie."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7753,7 +7761,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Wybierz host z VNC, aby użyć pulpitu.",
+      "vncCredentialMissing": "Dla tego hosta nie zapisano hasła VNC. Dodaj je w Sekretach.",
+      "hostNotFound": "Ten host nie należy do Twoich hostów w Sekretach.",
+      "hostFieldsMissing": "Temu hostowi brakuje nazwy użytkownika lub możliwości. Ustaw je w Sekretach.",
+      "hostVncUnavailable": "Ten host nie ma w Sekretach możliwości VNC ani portu.",
+      "desktopVmUnavailable": "Nie zarejestrowano żadnego pulpitu VNC, więc maszyna wirtualna pulpitu jest niedostępna.",
+      "registryUnavailable": "Nie udało się odczytać rejestru pulpitów. Spróbuj ponownie za chwilę."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -8575,7 +8590,6 @@
       "attachRoleLabel": "Rola",
       "attachRolePlaceholder": "Wybierz rolę…",
       "attachWorkflowLabel": "ID przepływu",
-      "attachWorkflowPlaceholder": "ID przepływu",
       "attachError": "Nie udało się dołączyć tego przepływu.",
       "detachError": "Nie udało się odłączyć tego przepływu.",
       "processDetach": "Odłącz {workflow} od {role}",
@@ -9817,7 +9831,6 @@
     "endTenure": "Zakończ przypisanie",
     "holderIdPlaceholder": "ID pełniącego",
     "permissionPlaceholder": "np. knowledge.read",
-    "workflowPlaceholder": "ID przepływu",
     "toolPlaceholder": "Nazwa narzędzia",
     "credentialPlaceholder": "ID poświadczenia",
     "errorAssign": "Nie udało się przypisać.",
@@ -10041,5 +10054,15 @@
     "resumeFailed": "Nie udało się wznowić agentów",
     "successRate": "Wskaźnik powodzenia",
     "tasksCompleted": "Ukończone zadania"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Wpisz pełny adres internetowy zaczynający się od http:// lub https://",
+    "recognitionUnsupported": "Rozpoznawanie mowy nie jest obsługiwane w tej przeglądarce",
+    "recognitionError": "Błąd rozpoznawania mowy: {error}",
+    "speakFailed": "Nie udało się odczytać tekstu",
+    "playbackFailed": "Odtwarzanie dźwięku nie powiodło się",
+    "spoken": "Odczytano:",
+    "speakToInteractWith": "Mów i posłuchaj odczytu na głos",
+    "voiceId": "ID głosu"
   }
 }

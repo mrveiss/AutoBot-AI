@@ -1,0 +1,122 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Regression test: GET /api/nodes must not hang on a slow/stale DB (#10913).
+
+Root cause: ``list_nodes`` ran its DB query + service-count lookup inline
+with no bound, so a stale/hung DB connection (e.g. a silently-dropped WSL2
+idle socket, #10491) could block the whole request indefinitely — clients
+observed a curl ``000`` after 45s.
+
+Fix: the DB-bound body was extracted to ``_query_nodes_page`` and wrapped in
+``asyncio.wait_for(..., timeout=_NODES_LIST_TIMEOUT)`` (mirrors the
+``_ROLES_LIST_TIMEOUT`` precedent in ``api/roles.py``, #11360) so a slow
+backend fails fast with ``504 Gateway Timeout`` instead of hanging.
+
+Follows the code_version_test.py real-module-swap pattern (#11737): the
+slm-backend root conftest stubs ``sqlalchemy``/``models.database``/
+``models.schemas`` as MagicMocks for import-time safety, so ``api.nodes``
+is imported inside ``_real_modules_swapped()`` to get the real FastAPI/
+pydantic machinery ``asyncio.wait_for`` and ``HTTPException`` need.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import importlib
+import sys
+import time
+from pathlib import Path
+from unittest.mock import AsyncMock
+
+import pytest
+from _real_orm_import import build_real_modules
+from fastapi import HTTPException
+
+_SLM_ROOT = Path(__file__).parent.parent.parent
+if str(_SLM_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SLM_ROOT))
+
+_REAL_MODULES = build_real_modules(("models.database", "models.schemas"))
+
+
+@contextlib.contextmanager
+def _real_modules_swapped():
+    """Temporarily put the real sqlalchemy/models modules into sys.modules."""
+    saved = {name: sys.modules.get(name) for name in _REAL_MODULES}
+    sys.modules.update(_REAL_MODULES)
+    try:
+        yield
+    finally:
+        for name, mod in saved.items():
+            if mod is not None:
+                sys.modules[name] = mod
+            else:
+                sys.modules.pop(name, None)
+
+
+def _load_nodes_module():
+    """Import the real ``api.nodes`` module under the real-module swap."""
+    with _real_modules_swapped():
+        sys.modules.pop("api.nodes", None)
+        sys.modules.pop("services.node_events", None)  # bind to the real models, then do not leak them (#17856)
+        try:
+            return importlib.import_module("api.nodes")
+        finally:
+            sys.modules.pop("services.node_events", None)
+
+
+class TestListNodesTimeout:
+    """GET /nodes bounds the DB round-trip so it can't hang (#10913)."""
+
+    @pytest.mark.asyncio
+    async def test_returns_504_promptly_when_db_hangs(self):
+        """A hung db.execute() must not block the endpoint past the timeout."""
+        nodes_module = _load_nodes_module()
+        nodes_module._NODES_LIST_TIMEOUT = 0.05  # keep the test itself fast
+
+        async def _hang(*_args, **_kwargs):
+            await asyncio.sleep(10)  # far longer than _NODES_LIST_TIMEOUT
+
+        mock_db = AsyncMock()
+        mock_db.execute.side_effect = _hang
+
+        start = time.monotonic()
+        with pytest.raises(HTTPException) as exc_info:
+            await nodes_module.list_nodes(
+                db=mock_db,
+                _={"admin": True, "role": "admin"},
+                status_filter=None,
+                page=1,
+                per_page=20,
+            )
+        elapsed = time.monotonic() - start
+
+        assert exc_info.value.status_code == 504
+        # Bounded well under the 10s hang -- proves wait_for actually cancelled it.
+        assert elapsed < 2.0, f"list_nodes took {elapsed:.2f}s -- timeout did not bound it"
+
+    @pytest.mark.asyncio
+    async def test_fast_path_still_returns_page(self):
+        """A normal (fast) DB round-trip is unaffected by the wait_for wrapper."""
+        nodes_module = _load_nodes_module()
+        nodes_module._NODES_LIST_TIMEOUT = 5.0
+
+        expected = nodes_module.NodeListResponse(nodes=[], total=0, page=1, per_page=20)
+
+        async def _fast_query(*_args, **_kwargs):
+            return expected
+
+        nodes_module._query_nodes_page = _fast_query
+
+        result = await nodes_module.list_nodes(
+            db=AsyncMock(),
+            _={"admin": True, "role": "admin"},
+            status_filter=None,
+            page=1,
+            per_page=20,
+        )
+
+        assert result is expected

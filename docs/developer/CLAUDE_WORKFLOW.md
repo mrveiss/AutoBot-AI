@@ -199,7 +199,7 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 - `senior-developer` — backend, frontend, database, devops, testing, performance, ai-ml, multimodal, refactoring
 - `reviewer` — `/autobot-dev-skills:review code-reviewer` (MANDATORY on every PR), `/autobot-dev-skills:review code-skeptic`, `/autobot-dev-skills:review security-auditor`
 - `planner` — `/autobot-dev-skills:engineering systems-architect`, `/autobot-dev-skills:engineering project-manager`, `/autobot-dev-skills:engineering project-task-planner`, `/autobot-dev-skills:engineering prd-writer`, `/autobot-dev-skills:engineering frontend-designer`
-- `researcher` — `/autobot-dev-skills:lifecycle research-to-issues`, research, adopt hand-off
+- `researcher` — `/research-hub to-issues`, `/research-hub technical`, adopt hand-off
 - `writer` — `/autobot-dev-skills:engineering documentation-engineer`, `/autobot-dev-skills:engineering content-writer`
 - `sweeper` — `/autobot-dev-skills:engineering repo-sweeper`, `/autobot-dev-skills:engineering conversation-compacter` (read-only)
 - `memory` — `/autobot-dev-skills:engineering memory-monitor`, `/autobot-dev-skills:engineering memory-curator`

@@ -65,6 +65,7 @@ from api.git_mcp import router as git_mcp_router
 from api.http_client_mcp import router as http_client_mcp_router
 from api.intelligent_agent import router as intelligent_agent_router
 from api.internal_slm_credential_proposals import router as internal_slm_credential_proposals_router  # #20046
+from api.internal_slm_stale_file_proposals import router as internal_slm_stale_file_proposals_router  # #22033
 from api.jwks import auth_router as jwks_auth_router  # #10196
 from api.knowledge import router as knowledge_router
 from api.knowledge_ai_stack import router as knowledge_ai_stack_router
@@ -550,6 +551,7 @@ def _get_credential_admin_routers() -> list:
         (admin_oauth_bundle_strip_router, "", ["admin", "oauth-bundle-strip"], "admin_oauth_bundle_strip"),
         (admin_org_tier_column_router, "", ["admin", "org-tier-column"], "admin_org_tier_column"),
         (internal_slm_credential_proposals_router, "", ["internal", "slm"], "internal_slm_credential_proposals"),
+        (internal_slm_stale_file_proposals_router, "", ["internal", "slm"], "internal_slm_stale_file_proposals"),
         (admin_cleanup_proposals_router, "", ["admin", "cleanup-proposals"], "admin_cleanup_proposals"),
         (admin_secret_duplicates_router, "", ["admin", "secret-duplicates"], "admin_secret_duplicates"),  # #17850
         (

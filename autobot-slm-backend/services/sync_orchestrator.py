@@ -23,6 +23,7 @@ from autobot_shared.ssot_config import config
 from models.database import Node, NodeCodeSource, NodeRole, Role, RoleStatus
 from services.database import db_service
 from services.deploy_artifacts import RSYNC_NEVER_WORLD_WRITABLE, rsync_artifact_excludes
+from services.pending_role_provisioning import provisioner_holds
 from services.post_sync_timeouts import POST_SYNC_TIMEOUT_S
 from services.process_group import kill_process_group
 from services.ssh_utils import _ssh_key_usable, ssh_destination_args, ssh_remote_path
@@ -201,11 +202,7 @@ class SyncOrchestrator:
             return False, f"Sync error: {e}"
 
     async def _update_node_role_record(self, node_id: str, role_name: str, commit: str) -> None:
-        """
-        Update or create NodeRole record in database.
-
-        Helper for sync_role_files (Issue #665).
-        """
+        """Update or create the NodeRole row (#665); a provisioner-held row is left alone (#22262)."""
         async with db_service.session() as db:
             role_result = await db.execute(
                 select(NodeRole).where(
@@ -215,6 +212,8 @@ class SyncOrchestrator:
             )
             node_role = role_result.scalar_one_or_none()
 
+            if node_role and await provisioner_holds(db, node_role):
+                return  # any write moves updated_at, the retry cooldown's clock
             if node_role:
                 node_role.current_version = commit
                 node_role.last_synced_at = datetime.now(timezone.utc)

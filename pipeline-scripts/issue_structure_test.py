@@ -422,3 +422,10 @@ def test_a_tie_on_one_second_is_broken_by_number_and_the_cursor_moves() -> None:
     assert first == [1, 2] and until == "2026-11-19T02:00:00Z#2"
     _, second, _ = mod.changed_window(WindowClient([f"{mod.CURSOR_JOB_PREFIX}{until}"], items), cap=2)
     assert second == [3, 4]
+
+
+def test_parent_ref_inside_an_html_comment_is_ignored_and_one_outside_is_read() -> None:
+    """#22261: the comment pattern is the shared one; behaviour unchanged (code and comments are skipped)."""
+    assert mod.parse_parent_ref("<!--\nParent: #5\n-->\nParent: #7", 1) == 7
+    assert mod.parse_parent_ref("<!-- Parent: #5 -->", 1) is None
+    assert mod.parse_parent_ref("`Parent: #5`\n```\nParent: #6\n```", 1) is None

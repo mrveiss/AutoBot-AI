@@ -799,8 +799,10 @@
       "unsupported": "\"{filename}\" não é um arquivo de texto que o assistente consiga ler, por isso não foi usado.",
       "unreadable": "Não foi possível ler \"{filename}\", por isso ele não foi usado.",
       "empty": "\"{filename}\" não tem texto legível, por isso não foi usado.",
-      "truncated": "\"{filename}\" é longo, por isso apenas o início foi usado.",
-      "over_budget": "Os arquivos anexados atingiram o limite de tamanho, por isso \"{filename}\" não foi usado."
+      "truncated": "\"{filename}\" é longo, por isso apenas os primeiros {used} de {total} caracteres foram usados.",
+      "truncated_legacy": "\"{filename}\" é longo, por isso apenas o início foi usado.",
+      "over_budget": "Os arquivos anexados atingiram o limite de tamanho, por isso \"{filename}\" não foi usado.",
+      "over_window": "A conversa é maior que a janela do modelo, por isso parte do texto anterior pode não chegar a ele."
     }
   },
   "settings": {
@@ -2246,8 +2248,6 @@
     },
     "duplicates": {
       "title": "Duplicate Code",
-      "pairs": "pairs",
-      "totalPairs": "Total Pairs",
       "highLabel": "High",
       "mediumLabel": "Medium",
       "lowLabel": "Low",
@@ -5813,7 +5813,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Nome de usuário ausente: defina-o em Segredos",
+      "desktopVm": "VM de área de trabalho do AutoBot",
+      "desktopVmDesc": "A área de trabalho própria do AutoBot",
+      "noDesktopVm": "Nenhuma VM de área de trabalho está registrada, então só os seus hosts de Segredos são listados."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6858,7 +6862,11 @@
         "slackDesc": "Token do bot do Slack",
         "serverLabel": "Host do servidor",
         "serverDesc": "Acesso a servidor SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (credencial VNC)",
+      "vncCompanionDescription": "Credencial VNC para {host}",
+      "vncCompanionNoHostId": "O host foi salvo, mas seu id não foi retornado, então a credencial VNC não foi armazenada.",
+      "vncRetry": "O host foi salvo, mas a senha VNC não. Salve novamente para tentar de novo; o host não será criado duas vezes."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7753,7 +7761,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Selecione um host com VNC para usar a área de trabalho.",
+      "vncCredentialMissing": "Nenhuma senha VNC está armazenada para este host. Adicione-a em Segredos.",
+      "hostNotFound": "Este host não é um dos seus hosts de Segredos.",
+      "hostFieldsMissing": "Este host não tem nome de usuário ou capacidades. Defina-os em Segredos.",
+      "hostVncUnavailable": "Este host não tem capacidade VNC nem porta em Segredos.",
+      "desktopVmUnavailable": "Nenhuma área de trabalho VNC está registrada, então a VM de área de trabalho não está disponível.",
+      "registryUnavailable": "Não foi possível ler o registro de áreas de trabalho. Tente novamente em breve."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -8575,7 +8590,6 @@
       "attachRoleLabel": "Função",
       "attachRolePlaceholder": "Escolher uma função…",
       "attachWorkflowLabel": "ID do fluxo",
-      "attachWorkflowPlaceholder": "ID do fluxo",
       "attachError": "Não foi possível anexar esse fluxo.",
       "detachError": "Não foi possível remover esse fluxo.",
       "processDetach": "Remover {workflow} de {role}",
@@ -9817,7 +9831,6 @@
     "endTenure": "Terminar atribuição",
     "holderIdPlaceholder": "ID do titular",
     "permissionPlaceholder": "ex. knowledge.read",
-    "workflowPlaceholder": "ID do fluxo",
     "toolPlaceholder": "Nome da ferramenta",
     "credentialPlaceholder": "ID do segredo",
     "errorAssign": "Não foi possível atribuir esse titular.",
@@ -10041,5 +10054,15 @@
     "resumeFailed": "Falha ao retomar os agentes",
     "successRate": "Taxa de sucesso",
     "tasksCompleted": "Tarefas concluídas"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Introduza um endereço web completo que comece por http:// ou https://",
+    "recognitionUnsupported": "O reconhecimento de voz não é suportado neste navegador",
+    "recognitionError": "Erro de reconhecimento de voz: {error}",
+    "speakFailed": "Não foi possível falar o texto",
+    "playbackFailed": "Falha na reprodução de áudio",
+    "spoken": "Falado:",
+    "speakToInteractWith": "Fale e ouça a leitura em voz alta",
+    "voiceId": "ID da voz"
   }
 }

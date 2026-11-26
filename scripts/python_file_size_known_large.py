@@ -145,7 +145,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/benchmarks/benchmark_belief_state.py": 725,
     "autobot-backend/chat_history/context_overflow.py": 815,
     "autobot-backend/chat_history/session.py": 766,
-    "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1443,  # #19715; #21023
     "autobot-backend/chat_workflow/llm_handler.py": 1286,  # #20852: model reaches the refresh
     "autobot-backend/chat_workflow/manager.py": 3749,  # #17273: turn_control; #19753: reasoning_kwargs
@@ -201,7 +200,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/initialization/router_registry/feature_routers.py": 758,
     "autobot-backend/integrations/cloud_integration.py": 616,
     "autobot-backend/integrations/communication_integration.py": 605,
-    "autobot-backend/integrations/microsoft365_integration.py": 632,
     "autobot-backend/integrations/project_management_integration.py": 743,
     "autobot-backend/integrations/slack_integration.py": 739,
     "autobot-backend/integrations/whatsapp_integration.py": 749,

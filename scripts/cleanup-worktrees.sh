@@ -83,7 +83,7 @@ branch_is_landed() {
     tip=$(git -C "$REPO_ROOT" rev-parse "$branch" 2>/dev/null) || return 1
     merged_head=$(gh pr list --head "$branch" --state merged --json headRefOid \
         --jq '.[].headRefOid' 2>/dev/null) || return 1
-    printf '%s\n' "$merged_head" | grep -qxF "$tip"
+    grep -qxF "$tip" <<<"$merged_head"
 }
 
 # Delete a local branch: -D only when landed, otherwise -d (git refuses an unmerged

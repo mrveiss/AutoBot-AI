@@ -799,8 +799,10 @@
       "unsupported": "\"{filename}\" ist keine Textdatei, die der Assistent lesen kann, daher wurde sie nicht verwendet.",
       "unreadable": "\"{filename}\" konnte nicht gelesen werden und wurde nicht verwendet.",
       "empty": "\"{filename}\" enthält keinen lesbaren Text und wurde nicht verwendet.",
-      "truncated": "\"{filename}\" ist lang, daher wurde nur der Anfang verwendet.",
-      "over_budget": "Die angehängten Dateien haben die Größenbeschränkung erreicht, daher wurde \"{filename}\" nicht verwendet."
+      "truncated": "\"{filename}\" ist lang, daher wurden nur die ersten {used} von {total} Zeichen verwendet.",
+      "truncated_legacy": "\"{filename}\" ist lang, daher wurde nur der Anfang verwendet.",
+      "over_budget": "Die angehängten Dateien haben die Größenbeschränkung erreicht, daher wurde \"{filename}\" nicht verwendet.",
+      "over_window": "Die Unterhaltung ist länger als das Kontextfenster des Modells, daher erreicht ihn möglicherweise nicht der ganze frühere Text."
     }
   },
   "settings": {
@@ -2246,8 +2248,6 @@
     },
     "duplicates": {
       "title": "Duplikate",
-      "pairs": "Paare",
-      "totalPairs": "Paare gesamt",
       "highLabel": "Hoch",
       "mediumLabel": "Mittel",
       "lowLabel": "Niedrig",
@@ -5813,7 +5813,11 @@
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
       "failedToConnect": "Failed to connect to host",
-      "close": "Close"
+      "close": "Close",
+      "usernameMissing": "Benutzername fehlt: unter Secrets festlegen",
+      "desktopVm": "AutoBot-Desktop-VM",
+      "desktopVmDesc": "Der eigene Desktop von AutoBot",
+      "noDesktopVm": "Es ist keine Desktop-VM registriert; daher werden nur Ihre Secrets-Hosts aufgeführt."
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -6858,7 +6862,11 @@
         "slackDesc": "Slack-Bot-Token",
         "serverLabel": "Server-Host",
         "serverDesc": "SSH/VNC-Serverzugriff"
-      }
+      },
+      "vncCompanionName": "{name} (VNC-Zugangsdaten)",
+      "vncCompanionDescription": "VNC-Zugangsdaten für {host}",
+      "vncCompanionNoHostId": "Der Host wurde gespeichert, aber seine ID wurde nicht zurückgegeben; die VNC-Zugangsdaten wurden daher nicht gespeichert.",
+      "vncRetry": "Der Host wurde gespeichert, sein VNC-Passwort jedoch nicht. Speichern Sie erneut, um es noch einmal zu versuchen; der Host wird nicht doppelt angelegt."
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7753,7 +7761,14 @@
       "errorClipboardRead": "Failed to read clipboard contents.",
       "iframeTitle": "Remote Desktop - XFCE Environment",
       "screenshotAlt": "Desktop Screenshot",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "Wählen Sie einen Host mit VNC, um den Desktop zu verwenden.",
+      "vncCredentialMissing": "Für diesen Host ist kein VNC-Passwort gespeichert. Fügen Sie es unter Secrets hinzu.",
+      "hostNotFound": "Dieser Host gehört nicht zu Ihren Secrets-Hosts.",
+      "hostFieldsMissing": "Diesem Host fehlen Benutzername oder Fähigkeiten. Legen Sie sie unter Secrets fest.",
+      "hostVncUnavailable": "Dieser Host hat in Secrets weder VNC-Fähigkeit noch Port.",
+      "desktopVmUnavailable": "Es ist kein VNC-Desktop registriert, daher ist die Desktop-VM nicht verfügbar.",
+      "registryUnavailable": "Die Desktop-Registry konnte nicht gelesen werden. Versuchen Sie es gleich erneut."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -8575,7 +8590,6 @@
       "attachRoleLabel": "Rolle",
       "attachRolePlaceholder": "Rolle auswählen…",
       "attachWorkflowLabel": "Workflow-ID",
-      "attachWorkflowPlaceholder": "Workflow-ID",
       "attachError": "Dieser Workflow konnte nicht zugeordnet werden.",
       "detachError": "Dieser Workflow konnte nicht entfernt werden.",
       "processDetach": "{workflow} von {role} entfernen",
@@ -9817,7 +9831,6 @@
     "endTenure": "Zuweisung beenden",
     "holderIdPlaceholder": "Inhaber-ID",
     "permissionPlaceholder": "z. B. knowledge.read",
-    "workflowPlaceholder": "Workflow-ID",
     "toolPlaceholder": "Werkzeugname",
     "credentialPlaceholder": "Secret-ID",
     "errorAssign": "Inhaber konnte nicht zugewiesen werden.",
@@ -10041,5 +10054,15 @@
     "resumeFailed": "Agenten konnten nicht fortgesetzt werden",
     "successRate": "Erfolgsquote",
     "tasksCompleted": "Abgeschlossene Aufgaben"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "Geben Sie eine vollständige Webadresse ein, die mit http:// oder https:// beginnt",
+    "recognitionUnsupported": "Spracherkennung wird in diesem Browser nicht unterstützt",
+    "recognitionError": "Spracherkennungsfehler: {error}",
+    "speakFailed": "Der Text konnte nicht gesprochen werden",
+    "playbackFailed": "Audiowiedergabe fehlgeschlagen",
+    "spoken": "Gesprochen:",
+    "speakToInteractWith": "Sprechen Sie und hören Sie es vorgelesen",
+    "voiceId": "Stimmen-ID"
   }
 }

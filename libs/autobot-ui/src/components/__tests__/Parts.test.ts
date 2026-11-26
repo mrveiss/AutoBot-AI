@@ -20,6 +20,7 @@ import inputSrc from '../BaseInput.vue?raw'
 import emptySrc from '../EmptyState.vue?raw'
 import buttonSrc from '../BaseButton.vue?raw'
 import badgeSrc from '../BaseBadge.vue?raw'
+import chipSrc from '../BaseChip.vue?raw'
 
 // The root's own part plus every descendant's, once each (find may or may not include the root).
 const slots = (w: ReturnType<typeof mount>): string[] =>
@@ -85,6 +86,7 @@ const PARTS: Record<string, { prefix: string; source: string; parts: string[] }>
   EmptyState: { prefix: "aui-empty", source: emptySrc, parts: ["empty", "empty-icon", "empty-title", "empty-description", "empty-actions"] },
   BaseButton: { prefix: "aui-btn", source: buttonSrc, parts: ["button", "button-label", "button-spinner"] },
   BaseBadge: { prefix: "aui-badge", source: badgeSrc, parts: ["badge", "badge-remove"] },
+  BaseChip: { prefix: "aui-chip", source: chipSrc, parts: ["chip", "chip-icon", "chip-label"] },
 }
 
 const mountAll = () => ({

@@ -407,21 +407,14 @@ class ContextWindowManager:
         return allocated, tokens
 
     def get_prompt_budget(self, model_name: str | None = None) -> int:
-        """Tokens available to the *prompt*, after reserving room to answer (#13640).
+        """Tokens available to the *prompt*, after reserving room to answer (#13640, #22016).
 
-        ``get_adaptive_context_length`` returns the whole declared window. A
-        prompt that fills it leaves the model nowhere to generate, and the
-        system prompt is sent separately (Ollama ``system`` field) so it
-        consumes window while being invisible to the allocator. Both are
-        subtracted here.
+        Measured against the window the request really sends, with the reply reserve, the YAML
+        ``safety_margin`` and the declared system reserve taken off; see ``chat_workflow.prompt_window``.
         """
-        window = self.get_adaptive_context_length(model_name)
-        info = self.get_model_info(model_name)
-        reserved = int(info.get("max_output_tokens", 0) or 0)
-        reserved += int((info.get("message_budget") or {}).get("system_prompt", 0) or 0)
-        # Never reserve the window away entirely: a pathological config must
-        # still leave a usable prompt budget rather than zero.
-        return max(window // 4, window - reserved)
+        from chat_workflow.prompt_window import prompt_budget_tokens
+
+        return prompt_budget_tokens(self, model_name)
 
     def calculate_retrieval_limit(self, model_name: str | None = None) -> int:
         """Calculate how many messages to retrieve from Redis.

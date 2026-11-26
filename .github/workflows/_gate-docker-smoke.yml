@@ -171,7 +171,7 @@ jobs:
             done
             for svc in "${!declared[@]}"; do
               if [ "$svc" = "autobot-slm" ]; then
-                printf '%s\n' "${reg[@]}" | grep -qxF "${declared[$svc]}" || { echo "no node is registered at the SLM manager's address ${declared[$svc]}"; return 1; }
+                grep -qxF "${declared[$svc]}" < <(printf '%s\n' "${reg[@]}") || { echo "no node is registered at the SLM manager's address ${declared[$svc]}"; return 1; }
               elif [ "${reg[$svc]:-}" != "${declared[$svc]}" ]; then
                 echo "node ${svc} is registered at '${reg[$svc]:-missing}', but its container has ${declared[$svc]}"; return 1
               fi

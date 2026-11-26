@@ -13,7 +13,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import List
 
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role, role_value
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role, is_admin_role, role_value
 
 # Performance optimization: O(1) lookup for deprecated privileged roles (Issue #326)
 DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}
@@ -37,6 +37,15 @@ def _normalise_role(user_role: str) -> str:
     """
     normalised = role_value(user_role).strip().lower()
     return Role.ADMIN.value if normalised in DEPRECATED_PRIVILEGED_ROLES else normalised
+
+
+def grant_role(user_role: str) -> str:
+    """The role whose default permission table applies to *user_role*.
+
+    #19125: superadmin holds admin's grants, so every administrative role reads admin's defaults. ``is_admin_role``
+    is the one predicate that says who is administrative; other roles read their own entry.
+    """
+    return Role.ADMIN.value if is_admin_role(user_role) else user_role
 
 
 @lru_cache(maxsize=64)

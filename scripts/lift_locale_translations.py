@@ -91,6 +91,16 @@ KEY_MAPPINGS: dict[str, str] = {
     # still English; this names the one dedicated source key for the prune dialog.
     # The main-app `driftPrune` block exists only as a lift source for the SLM locales.
     "fullTreeDriftPanel.prune.cancel": "driftPrune.cancel",
+    # SLM Browser and Voice tool strings: dedicated main-app source keys, because short or reworded sources
+    # ("Spoken:", "Voice ID") would otherwise match unrelated keys or stay English. Lift source only.
+    "tools.admin.browserTool.invalidUrl": "slmVoiceBrowserTools.invalidUrl",
+    "tools.admin.voiceTool.recognitionUnsupported": "slmVoiceBrowserTools.recognitionUnsupported",
+    "tools.admin.voiceTool.recognitionError": "slmVoiceBrowserTools.recognitionError",
+    "tools.admin.voiceTool.speakFailed": "slmVoiceBrowserTools.speakFailed",
+    "tools.admin.voiceTool.playbackFailed": "slmVoiceBrowserTools.playbackFailed",
+    "tools.admin.voiceTool.spoken": "slmVoiceBrowserTools.spoken",
+    "tools.admin.voiceTool.speakToInteractWith": "slmVoiceBrowserTools.speakToInteractWith",
+    "tools.admin.voiceTool.voiceId": "slmVoiceBrowserTools.voiceId",
 }
 
 #: How dominant one translation must be among disagreeing candidates.

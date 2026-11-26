@@ -72,6 +72,20 @@ def new_cancel_token() -> threading.Event:
     return threading.Event()
 
 
+class CancelTokenSet(asyncio.CancelledError):
+    """Pooled work stopped itself at a signalled cancel token (#22094) -- not a cancel of the awaiting task.
+
+    A ``CancelledError``, so a per-item ``except Exception`` in the work cannot swallow it. A caller that sees it
+    while its own task is not being cancelled can answer "cancelled" instead of propagating.
+    """
+
+
+def raise_if_cancelled(*tokens: threading.Event | None, what: str = "work") -> None:
+    """Raise :class:`CancelTokenSet` once any of *tokens* is set; ``None`` entries are no token."""
+    if any(token is not None and token.is_set() for token in tokens):
+        raise CancelTokenSet(f"{what} cancelled by its caller")
+
+
 def begin_cancel_scope() -> contextvars.Token:
     """Open a collection point for tokens created during this call.
 
@@ -213,6 +227,8 @@ def cancel_scope_depth() -> int:
 
 
 __all__ = [
+    "CancelTokenSet",
+    "raise_if_cancelled",
     "new_cancel_token",
     "begin_cancel_scope",
     "end_cancel_scope",

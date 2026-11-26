@@ -1606,8 +1606,6 @@
     },
     "duplicates": {
       "title": "Duplicate Code",
-      "pairs": "pairs",
-      "totalPairs": "Total Pairs",
       "highLabel": "High",
       "mediumLabel": "Medium",
       "lowLabel": "Low",
@@ -4560,7 +4558,14 @@
       "errorVncConnection": "VNC connection failed: {error}",
       "cancel": "Cancel",
       "connecting": "Connecting to desktop...",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "בחר מארח עם VNC כדי להשתמש בשולחן העבודה.",
+      "vncCredentialMissing": "לא נשמרה סיסמת VNC עבור מארח זה. הוסף אותה ב'סודות'.",
+      "hostNotFound": "מארח זה אינו אחד ממארחי 'הסודות' שלך.",
+      "hostFieldsMissing": "למארח זה חסרים שם משתמש או יכולות. הגדר אותם ב'סודות'.",
+      "hostVncUnavailable": "למארח זה אין יכולת VNC או יציאה ב'סודות'.",
+      "desktopVmUnavailable": "לא נרשם שולחן עבודה VNC, ולכן המכונה הווירטואלית של שולחן העבודה אינה זמינה.",
+      "registryUnavailable": "לא ניתן היה לקרוא את רישום שולחנות העבודה. נסה שוב בעוד רגע."
     },
     "contextPanel": {
       "pid": "PID {pid}",
@@ -4957,7 +4962,11 @@
       "close": "Close",
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
-      "commandToExecute": "Command to Execute"
+      "commandToExecute": "Command to Execute",
+      "usernameMissing": "שם משתמש חסר: הגדר אותו ב'סודות'",
+      "desktopVm": "מכונה וירטואלית של שולחן העבודה של AutoBot",
+      "desktopVmDesc": "שולחן העבודה של AutoBot עצמו",
+      "noDesktopVm": "לא נרשמה מכונה וירטואלית של שולחן עבודה, ולכן מוצגים רק מארחי 'הסודות' שלך."
     },
     "systemStatus": {
       "lastCheck": "Last Check:",
@@ -5845,8 +5854,10 @@
       "unsupported": "\"{filename}\" אינו קובץ טקסט שהעוזר יכול לקרוא, ולכן לא נעשה בו שימוש.",
       "unreadable": "לא ניתן היה לקרוא את \"{filename}\", ולכן לא נעשה בו שימוש.",
       "empty": "ב-\"{filename}\" אין טקסט קריא, ולכן לא נעשה בו שימוש.",
-      "truncated": "\"{filename}\" ארוך, ולכן נעשה שימוש רק בתחילתו.",
-      "over_budget": "הקבצים המצורפים הגיעו למגבלת הגודל, ולכן לא נעשה שימוש ב-\"{filename}\"."
+      "truncated": "\"{filename}\" ארוך, ולכן נעשה שימוש רק ב-{used} התווים הראשונים מתוך {total}.",
+      "truncated_legacy": "\"{filename}\" ארוך, ולכן נעשה שימוש רק בתחילתו.",
+      "over_budget": "הקבצים המצורפים הגיעו למגבלת הגודל, ולכן לא נעשה שימוש ב-\"{filename}\".",
+      "over_window": "השיחה ארוכה מחלון המודל, ולכן ייתכן שחלק מהטקסט הקודם לא יגיע אליו."
     }
   },
   "serviceMessages": {
@@ -6061,7 +6072,11 @@
         "slackDesc": "אסימון בוט של Slack",
         "serverLabel": "מארח שרת",
         "serverDesc": "גישה לשרת SSH/VNC"
-      }
+      },
+      "vncCompanionName": "{name} (אישורי VNC)",
+      "vncCompanionDescription": "אישורי VNC עבור {host}",
+      "vncCompanionNoHostId": "המארח נשמר אך המזהה שלו לא הוחזר, ולכן אישורי ה-VNC לא נשמרו.",
+      "vncRetry": "המארח נשמר, אך סיסמת ה-VNC שלו לא. שמור שוב כדי לנסות שוב; המארח לא ייווצר פעמיים."
     },
     "threatDashboard": {
       "checking": "Checking...",
@@ -8575,7 +8590,6 @@
       "attachRoleLabel": "תפקיד",
       "attachRolePlaceholder": "בחר תפקיד…",
       "attachWorkflowLabel": "מזהה תהליך",
-      "attachWorkflowPlaceholder": "מזהה תהליך",
       "attachError": "לא ניתן היה לצרף תהליך זה.",
       "detachError": "לא ניתן היה להסיר תהליך זה.",
       "processDetach": "הסר את {workflow} מ-{role}",
@@ -9817,7 +9831,6 @@
     "endTenure": "סיים כהונה",
     "holderIdPlaceholder": "מזהה ממלא התפקיד",
     "permissionPlaceholder": "למשל knowledge.read",
-    "workflowPlaceholder": "מזהה תהליך",
     "toolPlaceholder": "שם כלי",
     "credentialPlaceholder": "מזהה סוד",
     "errorAssign": "לא ניתן לשבץ.",
@@ -10041,5 +10054,15 @@
     "resumeFailed": "חידוש הסוכנים נכשל",
     "successRate": "שיעור הצלחה",
     "tasksCompleted": "משימות שהושלמו"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "הזן כתובת אינטרנט מלאה המתחילה ב-http:// או https://",
+    "recognitionUnsupported": "זיהוי דיבור אינו נתמך בדפדפן זה",
+    "recognitionError": "שגיאת זיהוי דיבור: {error}",
+    "speakFailed": "לא ניתן היה להקריא את הטקסט",
+    "playbackFailed": "ניגון השמע נכשל",
+    "spoken": "הוקרא:",
+    "speakToInteractWith": "דברו ושמעו את ההקראה",
+    "voiceId": "מזהה קול"
   }
 }

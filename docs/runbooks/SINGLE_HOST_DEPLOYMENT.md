@@ -146,7 +146,7 @@ AUTOBOT_LLM_TIMEOUT=120
 
 **Note:** Do NOT modify IPs after provisioning without re-running the role setup.
 
-**Updated (MVA-2418):** The `AUTOBOT_BACKEND_HOST` variable is now automatically configured by the Ansible backend role in `/etc/autobot/autobot-backend.env`. If using Ansible for deployment, this variable no longer needs manual configuration in the global `.env` file — it will be set from the `backend_host` Ansible variable (defaults to `127.0.0.1`, or `0.0.0.0` on WSL2).
+**Updated (MVA-2418):** The `AUTOBOT_BACKEND_HOST` variable is now automatically configured by the Ansible backend role in `/etc/autobot/autobot-backend.env`. If using Ansible for deployment, this variable no longer needs manual configuration in the global `.env` file — `AUTOBOT_BACKEND_BIND_HOST` is set from the `backend_host` Ansible variable (defaults to `127.0.0.1`, or `0.0.0.0` on WSL2) and `AUTOBOT_BACKEND_HOST` from `backend_advertised_host`, which is never a bind-all address (#18810).
 
 ---
 

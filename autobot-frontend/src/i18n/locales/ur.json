@@ -1606,8 +1606,6 @@
     },
     "duplicates": {
       "title": "Duplicate Code",
-      "pairs": "pairs",
-      "totalPairs": "Total Pairs",
       "highLabel": "High",
       "mediumLabel": "Medium",
       "lowLabel": "Low",
@@ -4560,7 +4558,14 @@
       "errorVncConnection": "VNC connection failed: {error}",
       "cancel": "Cancel",
       "connecting": "Connecting to desktop...",
-      "openInNewWindow": "Open in new window"
+      "openInNewWindow": "Open in new window",
+      "noHostSelected": "ڈیسک ٹاپ استعمال کرنے کے لیے VNC والا میزبان منتخب کریں۔",
+      "vncCredentialMissing": "اس میزبان کے لیے کوئی VNC پاس ورڈ محفوظ نہیں ہے۔ اسے رازوں میں شامل کریں۔",
+      "hostNotFound": "یہ میزبان آپ کے رازوں کے میزبانوں میں سے نہیں ہے۔",
+      "hostFieldsMissing": "اس میزبان کا صارف نام یا صلاحیتیں موجود نہیں ہیں۔ انہیں رازوں میں مقرر کریں۔",
+      "hostVncUnavailable": "اس میزبان کے پاس رازوں میں VNC کی صلاحیت یا پورٹ نہیں ہے۔",
+      "desktopVmUnavailable": "کوئی VNC ڈیسک ٹاپ رجسٹر نہیں ہے، اس لیے ڈیسک ٹاپ VM دستیاب نہیں۔",
+      "registryUnavailable": "ڈیسک ٹاپ رجسٹری پڑھی نہ جا سکی۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔"
     },
     "contextPanel": {
       "pid": "PID {pid}",
@@ -4957,7 +4962,11 @@
       "close": "Close",
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
-      "commandToExecute": "Command to Execute"
+      "commandToExecute": "Command to Execute",
+      "usernameMissing": "صارف نام موجود نہیں: اسے رازوں میں مقرر کریں",
+      "desktopVm": "AutoBot ڈیسک ٹاپ VM",
+      "desktopVmDesc": "AutoBot کا اپنا ڈیسک ٹاپ",
+      "noDesktopVm": "کوئی ڈیسک ٹاپ VM رجسٹر نہیں ہے، اس لیے صرف آپ کے رازوں کے میزبان درج ہیں۔"
     },
     "systemStatus": {
       "lastCheck": "Last Check:",
@@ -5845,8 +5854,10 @@
       "unsupported": "\"{filename}\" ایسی متنی فائل نہیں جسے اسسٹنٹ پڑھ سکے، اس لیے استعمال نہیں کی گئی۔",
       "unreadable": "\"{filename}\" نہیں پڑھی جا سکی، اس لیے استعمال نہیں کی گئی۔",
       "empty": "\"{filename}\" میں پڑھنے کے قابل متن نہیں ہے، اس لیے استعمال نہیں کی گئی۔",
-      "truncated": "\"{filename}\" لمبی ہے، اس لیے صرف اس کا آغاز استعمال کیا گیا۔",
-      "over_budget": "منسلک فائلیں سائز کی حد تک پہنچ گئیں، اس لیے \"{filename}\" استعمال نہیں کی گئی۔"
+      "truncated": "\"{filename}\" لمبی ہے، اس لیے {total} میں سے صرف پہلے {used} حروف استعمال ہوئے۔",
+      "truncated_legacy": "\"{filename}\" لمبی ہے، اس لیے صرف اس کا آغاز استعمال کیا گیا۔",
+      "over_budget": "منسلک فائلیں سائز کی حد تک پہنچ گئیں، اس لیے \"{filename}\" استعمال نہیں کی گئی۔",
+      "over_window": "گفتگو ماڈل کی ونڈو سے لمبی ہے، اس لیے پچھلی تحریر کا کچھ حصہ اس تک نہ پہنچے۔"
     }
   },
   "serviceMessages": {
@@ -6061,7 +6072,11 @@
         "slackDesc": "Slack بوٹ ٹوکن",
         "serverLabel": "سرور میزبان",
         "serverDesc": "SSH/VNC سرور تک رسائی"
-      }
+      },
+      "vncCompanionName": "{name} (VNC اسناد)",
+      "vncCompanionDescription": "{host} کے لیے VNC اسناد",
+      "vncCompanionNoHostId": "میزبان محفوظ ہو گیا لیکن اس کی شناخت واپس نہیں آئی، اس لیے VNC اسناد محفوظ نہیں ہوئیں۔",
+      "vncRetry": "میزبان محفوظ ہو گیا لیکن اس کا VNC پاس ورڈ محفوظ نہیں ہوا۔ دوبارہ کوشش کے لیے پھر محفوظ کریں؛ میزبان دو بار نہیں بنے گا۔"
     },
     "threatDashboard": {
       "checking": "Checking...",
@@ -8575,7 +8590,6 @@
       "attachRoleLabel": "کردار",
       "attachRolePlaceholder": "ایک کردار منتخب کریں…",
       "attachWorkflowLabel": "ورک فلو شناخت",
-      "attachWorkflowPlaceholder": "ورک فلو شناخت",
       "attachError": "یہ ورک فلو منسلک نہیں ہو سکا۔",
       "detachError": "یہ ورک فلو الگ نہیں ہو سکا۔",
       "processDetach": "{workflow} کو {role} سے الگ کریں",
@@ -9817,7 +9831,6 @@
     "endTenure": "مدت ختم کریں",
     "holderIdPlaceholder": "حامل کی شناخت",
     "permissionPlaceholder": "مثلاً knowledge.read",
-    "workflowPlaceholder": "ورک فلو شناخت",
     "toolPlaceholder": "اوزار کا نام",
     "credentialPlaceholder": "راز کی شناخت",
     "errorAssign": "حامل تفویض نہیں ہو سکا۔",
@@ -10041,5 +10054,15 @@
     "resumeFailed": "ایجنٹس کو دوبارہ شروع کرنے میں ناکامی",
     "successRate": "کامیابی کی شرح",
     "tasksCompleted": "مکمل شدہ کام"
+  },
+  "slmVoiceBrowserTools": {
+    "invalidUrl": "ایک مکمل ویب ایڈریس درج کریں جو http:// یا https:// سے شروع ہو",
+    "recognitionUnsupported": "اس براؤزر میں تقریر کی شناخت معاون نہیں ہے",
+    "recognitionError": "تقریر کی شناخت میں خرابی: {error}",
+    "speakFailed": "متن بولا نہیں جا سکا",
+    "playbackFailed": "آڈیو چلانا ناکام رہا",
+    "spoken": "بولا گیا:",
+    "speakToInteractWith": "بولیں اور اسے پڑھ کر سنا جانا سنیں",
+    "voiceId": "آواز کی شناخت"
   }
 }
