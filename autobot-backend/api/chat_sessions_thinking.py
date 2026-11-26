@@ -49,8 +49,8 @@ def stored_thinking_preferences(session_metadata: Dict | None) -> Dict[str, obje
 )
 async def get_thinking_preferences(
     session_id: str,
+    request: Request,
     current_user: Dict = Depends(get_current_user),
-    request: Request | None = None,
     ownership: Dict = Depends(validate_session_ownership),
 ):
     """Get thinking mode preferences for a conversation (#8993).
@@ -89,8 +89,8 @@ async def get_thinking_preferences(
 async def update_thinking_preferences(
     session_id: str,
     preferences: ThinkingPreferences,
+    request: Request,
     current_user: Dict = Depends(get_current_user),
-    request: Request | None = None,
     ownership: Dict = Depends(validate_session_ownership),
 ):
     """Update thinking mode preferences for a conversation (#8993).
