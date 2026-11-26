@@ -60,8 +60,10 @@ _TOKEN_COST_PER_1M: dict[str, float] = {
 _KEY_PREFIX = "voice_realtime_session"
 _SESSION_TTL = config.misc.voice_realtime_session_ttl_days * 86400
 #: An in-memory session that never ended (dropped connection) is evicted after this long; the cap checks
-#: end a live one well before (#21678).
+#: end a live one well before (#21678). Never effective below the duration cap plus the margin below.
 _ABANDONED_SESSION_MAX_AGE_S = env_int_clamped("AUTOBOT_VOICE_REALTIME_ABANDONED_SESSION_SECONDS", 7200, 60, 604800)
+#: Slack added past the duration cap so a session the cap is about to end is never evicted first.
+_ABANDONED_SESSION_CAP_MARGIN_S = 300
 
 
 class DisconnectReason(str, Enum):
@@ -362,10 +364,11 @@ class VoiceRealtimeTelemetry(AsyncRedisClientMixin):
     def _evict_abandoned_sessions(self) -> None:
         """Drop in-memory sessions that never ended and are older than the max age (a dropped connection)."""
         now = now_utc()
+        max_age = max(_ABANDONED_SESSION_MAX_AGE_S, self._max_seconds + _ABANDONED_SESSION_CAP_MARGIN_S)
         stale = [
             sid
             for sid, rec in self._in_memory_sessions.items()
-            if (now - _parse_iso(rec.started_at)).total_seconds() > _ABANDONED_SESSION_MAX_AGE_S
+            if (now - _parse_iso(rec.started_at)).total_seconds() > max_age
         ]
         for sid in stale:
             del self._in_memory_sessions[sid]

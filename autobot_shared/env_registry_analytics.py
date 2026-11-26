@@ -218,8 +218,8 @@ register_env_var(
         default=7200,
         description=(
             "How long a realtime voice session that never ended (a dropped connection) stays in the in-memory "
-            "session map before it is evicted (voice_realtime_telemetry.py, #21678). Finished sessions are "
-            "released at once."
+            "session map before it is evicted (voice_realtime_telemetry.py, #21678). Never effective below "
+            "AUTOBOT_VOICE_REALTIME_MAX_SECONDS plus a 300 s margin. Finished sessions are released at once."
         ),
         component="voice",
         range=(60, 604800),

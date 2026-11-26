@@ -451,3 +451,15 @@ class TestConsentChangesMidSession:
         await t._save_record(_make_record(session_id="fresh"))
         assert "gone" not in t._in_memory_sessions
         assert "fresh" in t._in_memory_sessions
+
+    @pytest.mark.asyncio
+    async def test_a_session_younger_than_the_cap_is_not_evicted_when_cap_exceeds_the_age(self, monkeypatch):
+        from services import voice_realtime_telemetry as module
+
+        cap = module._ABANDONED_SESSION_MAX_AGE_S * 2
+        t = _bare_telemetry(AsyncMock(), max_seconds=cap)
+        self._consent(monkeypatch, False)
+        started = datetime.now(timezone.utc) - timedelta(seconds=module._ABANDONED_SESSION_MAX_AGE_S + 60)
+        t._in_memory_sessions["live"] = _make_record(session_id="live", started_at=started.isoformat())
+        await t._save_record(_make_record(session_id="fresh"))
+        assert "live" in t._in_memory_sessions
