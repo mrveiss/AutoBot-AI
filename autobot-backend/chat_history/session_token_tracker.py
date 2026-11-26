@@ -8,7 +8,7 @@
 lives here and ``context_overflow`` re-exports it by name.
 """
 
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
@@ -24,6 +24,29 @@ _SUMMARY_MARKER_KEY_PREFIX = "chat:summary_marker:"
 # How long to skip compaction after it fails, so a rate-limited provider costs
 # one attempt per window instead of one per turn (#14065 review).
 _SUMMARY_FAILURE_BACKOFF_SECONDS = env_int("AUTOBOT_SUMMARY_FAILURE_BACKOFF_SECONDS", 300)
+
+
+def _zero_usage() -> Dict[str, int]:
+    """The usage of a session with nothing recorded."""
+    return {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0, "message_count": 0, "active_tokens": 0}
+
+
+def _usage_from_hash(data: Dict[Any, Any]) -> Dict[str, int]:
+    """The usage dict of one session's Redis hash.
+
+    ``add_message_tokens`` hincrby's str field names and the shared client is ``decode_responses=True``, so
+    ``hgetall`` yields str keys. Probing with bytes literals always missed and every counter read back 0 (#13274).
+    """
+    total = int(decode_redis_value(data.get("total_tokens")) or 0)
+    active = decode_redis_value(data.get("active_tokens"))
+    return {
+        # A counter written before active_tokens existed has no such field: its spend is the best it has.
+        "active_tokens": total if active is None else int(active),
+        "total_tokens": total,
+        "prompt_tokens": int(decode_redis_value(data.get("prompt_tokens")) or 0),
+        "completion_tokens": int(decode_redis_value(data.get("completion_tokens")) or 0),
+        "message_count": int(decode_redis_value(data.get("message_count")) or 0),
+    }
 
 
 class SessionTokenTracker:
@@ -75,22 +98,24 @@ class SessionTokenTracker:
             return
 
         key = f"{_TOKEN_TRACKER_KEY_PREFIX}{session_id}"
-        total_tokens = prompt_tokens + completion_tokens
-
         try:
-            # Atomic increment and expiry
             pipe = redis.pipeline()
-            pipe.hincrby(key, "total_tokens", total_tokens)
-            pipe.hincrby(key, "prompt_tokens", prompt_tokens)
-            pipe.hincrby(key, "completion_tokens", completion_tokens)
-            pipe.hincrby(key, "message_count", 1)
-            # #17802: the prompt is the WHOLE history each turn and the reply joins it, so the context now held is
-            # this turn's size, written (not added) -- the hincrby fields above stay as cumulative spend.
-            pipe.hset(key, "active_tokens", total_tokens)
-            pipe.expire(key, self.ttl_seconds)
+            self._queue_turn_tokens(pipe, key, prompt_tokens, completion_tokens)
             await pipe.execute()
         except Exception as e:
             logger.error("Failed to track tokens for session %s: %s", session_id, e)
+
+    def _queue_turn_tokens(self, pipe: Any, key: str, prompt_tokens: int, completion_tokens: int) -> None:
+        """Queue one turn's atomic increments and the expiry on *pipe*."""
+        total_tokens = prompt_tokens + completion_tokens
+        pipe.hincrby(key, "total_tokens", total_tokens)
+        pipe.hincrby(key, "prompt_tokens", prompt_tokens)
+        pipe.hincrby(key, "completion_tokens", completion_tokens)
+        pipe.hincrby(key, "message_count", 1)
+        # #17802: the prompt is the WHOLE history each turn and the reply joins it, so the context now held is
+        # this turn's size, written (not added) -- the hincrby fields above stay as cumulative spend.
+        pipe.hset(key, "active_tokens", total_tokens)
+        pipe.expire(key, self.ttl_seconds)
 
     async def seed_session(self, session_id: str, token_counts: List[int]) -> None:
         """Start a just-reset session from the sizes of the messages it kept: their sum is the context held (#17802)."""
@@ -122,47 +147,17 @@ class SessionTokenTracker:
         """
         redis = await self._ensure_redis()
         if not redis:
-            return {
-                "total_tokens": 0,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "message_count": 0,
-                "active_tokens": 0,
-            }
+            return _zero_usage()
 
         key = f"{_TOKEN_TRACKER_KEY_PREFIX}{session_id}"
         try:
             data = await redis.hgetall(key)
             if not data:
-                return {
-                    "total_tokens": 0,
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "message_count": 0,
-                }
-
-            # add_message_tokens hincrby's str field names and the shared client is
-            # decode_responses=True, so hgetall yields str keys. Probing with bytes
-            # literals always missed and every counter read back 0 (#13274).
-            total = int(decode_redis_value(data.get("total_tokens")) or 0)
-            active = decode_redis_value(data.get("active_tokens"))
-            return {
-                # A counter written before active_tokens existed has no such field: its spend is the best it has.
-                "active_tokens": total if active is None else int(active),
-                "total_tokens": total,
-                "prompt_tokens": int(decode_redis_value(data.get("prompt_tokens")) or 0),
-                "completion_tokens": int(decode_redis_value(data.get("completion_tokens")) or 0),
-                "message_count": int(decode_redis_value(data.get("message_count")) or 0),
-            }
+                return {k: v for k, v in _zero_usage().items() if k != "active_tokens"}
+            return _usage_from_hash(data)
         except Exception as e:
             logger.error("Failed to get session usage for %s: %s", session_id, e)
-            return {
-                "total_tokens": 0,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "message_count": 0,
-                "active_tokens": 0,
-            }
+            return _zero_usage()
 
     async def reset_session(self, session_id: str) -> None:
         """Reset token tracking for a session (after summarization).
