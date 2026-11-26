@@ -54,8 +54,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from github_api import TRUSTED_ASSOCIATIONS, build_api  # noqa: E402
 from issue_api import IssueApiError, IssueClient, ensure_label, load_upsert  # noqa: E402
+
+from autobot_shared.html_comments import HTML_COMMENT_PATTERN  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +90,7 @@ _REFS_RE = re.compile(
     r"(?<![\w-])refs?:?\s+((?:[\w.-]+/[\w.-]+)?#\d+(?:(?:\s*,\s*|\s+)(?:and\s+)?(?:[\w.-]+/[\w.-]+)?#\d+)*)", re.I
 )
 _TARGET_RE = re.compile(_TARGET)
-_CODE_AND_COMMENTS_RE = re.compile(r"<!--.*?-->|```.*?```|~~~.*?~~~|`[^`\n]*`", re.S)
+_CODE_AND_COMMENTS_RE = re.compile(HTML_COMMENT_PATTERN + r"|```.*?```|~~~.*?~~~|`[^`\n]*`", re.S)
 _TABLE_MEMBER_RE = re.compile(r"^\s*\|\s*#(\d+)\s*\|", re.M)
 
 

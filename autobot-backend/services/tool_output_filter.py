@@ -26,6 +26,7 @@ from typing import Any, Protocol, runtime_checkable
 import yaml
 
 from autobot_shared.env_utils import env_int
+from autobot_shared.html_comments import remove_html_comments
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slug import sanitize_token
 from utils.encoding_utils import strip_ansi_escapes
@@ -50,7 +51,6 @@ _NO_OP_PATTERNS = re.compile(
 )
 _BADGE_RE = re.compile(r"^\[!\[.*?\]\(.*?\)\]\(.*?\)\s*$")
 _IMAGE_ONLY_RE = re.compile(r"^!\[.*?\]\(.*?\)\s*$")
-_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 _HR_RE = re.compile(r"^[-*_]{3,}\s*$")
 _SHORT_SUMMARY_RE = re.compile(r"^=+ short test summary info =+", re.IGNORECASE)
 
@@ -434,7 +434,7 @@ def condense_unified_diff(diff: str, max_changes_per_file: int = 30) -> str:
 
 def filter_markdown_body(text: str) -> str:
     """Strip boilerplate from markdown: HTML comments, badge lines, image-only lines, HR rules."""
-    text = _HTML_COMMENT_RE.sub("", text)
+    text = remove_html_comments(text)
     lines = text.splitlines()
     kept: list[str] = []
     in_code = False

@@ -53,6 +53,7 @@ from typing import Iterable, Iterator, NamedTuple, Sequence
 if str(Path(__file__).resolve().parents[2]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from autobot_shared.html_comments import HTML_COMMENT_PATTERN  # noqa: E402
 from autobot_shared.js_lexer import BLOCK_COMMENT, LINE_COMMENT, blank_block_comment, lex_js  # noqa: E402
 
 #: Comment markers by file suffix. Selected by file type rather than assumed,
@@ -213,7 +214,7 @@ _SFC_MARKUP = re.compile(
     rf"(?P<code>^{SCRIPT_OR_STYLE_ELEMENT})"
     r"|^<template(?=[\s>/])[^>]*>(?:(?P<one>[^\n]*?)</template\s*>[ \t]*$"
     r"|(?P<body>(?:(?!^<(?:script|style)(?=[\s>/])).)*)</template\s*>)"
-    r"|(?P<comment>^<!--.*?-->)",
+    rf"|(?P<comment>^{HTML_COMMENT_PATTERN})",
     re.DOTALL | re.IGNORECASE | re.MULTILINE,
 )
 
@@ -446,7 +447,7 @@ def _join_continuations(lines: Iterable[CodeLine]) -> list[CodeLine]:
 #: A ``<script>`` element (group 1, whole) or an HTML comment, whichever starts first. Markup has no line comments, so
 #: the comment is its whole comment syntax; a script element is matched only so its body is kept, since a ``'<!--'``
 #: in JavaScript is a string and not a comment. A comment that wraps a script element starts first and goes whole.
-_HTML_SCRIPT_OR_COMMENT = re.compile(f"({SCRIPT_ELEMENT})|<!--.*?-->", SCRIPT_ELEMENT_FLAGS)
+_HTML_SCRIPT_OR_COMMENT = re.compile(f"({SCRIPT_ELEMENT})|{HTML_COMMENT_PATTERN}", SCRIPT_ELEMENT_FLAGS)
 
 
 def strip_html_comments(text: str) -> str:
@@ -456,7 +457,7 @@ def strip_html_comments(text: str) -> str:
 
 
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-_HTML_OR_BLOCK_COMMENT = re.compile(rf"({SCRIPT_ELEMENT})|<!--.*?-->|/\*.*?\*/", SCRIPT_ELEMENT_FLAGS)
+_HTML_OR_BLOCK_COMMENT = re.compile(rf"({SCRIPT_ELEMENT})|{HTML_COMMENT_PATTERN}|/\*.*?\*/", SCRIPT_ELEMENT_FLAGS)
 
 
 def _blank(text: str) -> str:
