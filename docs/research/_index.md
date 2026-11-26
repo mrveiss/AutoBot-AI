@@ -96,6 +96,7 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[RES_outbound-agent-safety-patterns]] | Outbound agent safety — egress governor coverage for email, pause as an in-flight kill switch, AI lines for CLI-adapter agents, deterministic outgoing-content check; filed #21866–#21872 |
 | [[RES_agent-loop-budget-framing-stop-reasons]] | Agent-loop budgets, untrusted-data framing and typed stop reasons — nested budgets with a wrap-up round, nonce-framed untrusted data, failover context-window skip and typed provider stop reasons, compared with AutoBot; adoptable patterns filed as #21863, #21864, #21865 |
 | [[RES_local-first-agent-scheduler-and-curated-knowledge]] | Local-first agent platform — priority-preemptive model scheduling, app-enforced knowledge edit discipline, multi-query RRF retrieval, edge write-ahead ledger, compared with AutoBot; filed #21913–#21920, delta on #16768 |
+| [[RES_short-video-transcription-and-publishing-pipeline]] | Short-video SaaS: transcribe, generate title and tags, review once, publish to many channels; compared with AutoBot; defects filed as #22302 (filename-only audio language detection) and #22303 (calendar skill fake success) |
 
 ## Related Sections
 
