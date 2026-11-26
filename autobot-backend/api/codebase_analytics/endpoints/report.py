@@ -31,7 +31,13 @@ from code_intelligence.cross_language_patterns import CrossLanguageAnalysis, Cro
 # Issue #208: Code Pattern Detection & Optimization
 from code_intelligence.pattern_analysis import CodePatternAnalyzer, PatternAnalysisReport
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
-from utils.cancel_tokens import new_cancel_token, register_cancel_token, run_cancellable, signal_cancel_token
+from utils.cancel_tokens import (
+    CancelTokenSet,
+    new_cancel_token,
+    register_cancel_token,
+    run_cancellable,
+    signal_cancel_token,
+)
 from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
@@ -1571,29 +1577,20 @@ async def _get_cross_language_analysis(
 async def _get_pattern_analysis(
     project_root: Path,
 ) -> PatternAnalysisReport | None:
-    """
-    Get code pattern analysis for the project (Issue #208).
+    """Code pattern analysis of the requested source's root, and nothing else (Issue #208).
 
-    #20513: the analysis scans the selected source's root and nothing else. The earlier #2655
-    shortcut (scan AutoBot's own backend directory when the root was the install's) is gone.
+    #12372/#20513: ``project_root`` is required and scanned as given; the analysis never substitutes AutoBot's own
+    backend directory, which answered every source with AutoBot's own findings (the #2655 shortcut is gone).
 
-    Bounds: the outer ``wait_for`` ends the wait after about 180 s and a cancel token (#22094, as in
-    ``_get_api_endpoint_analysis``) stops the analyzer before its next file or phase.
-
-    Issue #12372: When a distinct source is resolved, scan that source's root
-    instead of always defaulting to AutoBot's own backend directory --
-    otherwise a report requested for source A returned AutoBot's own
-    pattern-analysis findings for every source.
-
-    Args:
-        project_root: Resolved filesystem root for the requested source (required, #20513): the
-            analysis never substitutes AutoBot's own backend dir.
+    Bounds (#22094): the ``wait_for`` ends the wait after about 180 s and then sets the cancel token, which stops
+    the analyzer before its next file or phase and the clone thread before its next file. Stopped at its token
+    (``AnalysisCancelled``, a ``CancelTokenSet``) the analysis answers None; an outer cancel still propagates.
 
     Returns:
-        PatternAnalysisReport or None if analysis fails
+        PatternAnalysisReport, or None when the analysis fails, times out or stops at its cancel token.
     """
     cancel_token = new_cancel_token()
-    register_cancel_token("pattern_analysis", cancel_token)  # bounded() signals it on a route deadline
+    register_cancel_token("pattern_analysis", cancel_token)  # /report's bounded() signals it (scope provider, #14256)
     try:
         scan_target = str(project_root)
 
@@ -1622,9 +1619,12 @@ async def _get_pattern_analysis(
         signal_cancel_token("pattern_analysis", cancel_token, "pattern analysis deadline")
         logger.warning("Pattern analysis timed out")
         return None
-    except asyncio.CancelledError:
+    except asyncio.CancelledError as cancelled:
         signal_cancel_token("pattern_analysis", cancel_token, "pattern analysis cancelled")
-        raise
+        if not isinstance(cancelled, CancelTokenSet) or asyncio.current_task().cancelling():
+            raise
+        logger.warning("Pattern analysis stopped at its cancel token: %s", cancelled)
+        return None
     except Exception as e:
         logger.error("Pattern analysis failed: %s", e, exc_info=True)
         return None

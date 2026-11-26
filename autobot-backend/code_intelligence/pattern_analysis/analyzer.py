@@ -10,6 +10,7 @@ analysis tools to provide comprehensive code pattern detection.
 """
 
 import asyncio
+import functools
 import threading
 import time
 from pathlib import Path
@@ -18,6 +19,7 @@ from typing import Any, Dict, List, Set
 from api.source_scope import require_source_id
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files, discover_files
+from utils.cancel_tokens import new_cancel_token, run_cancellable
 from utils.io_executor import get_analytics_executor
 
 from .cancellation import CancellableAnalysis
@@ -533,35 +535,23 @@ class CodePatternAnalyzer(CancellableAnalysis):
         return file_count, line_count
 
     async def _run_clone_detection(self, directory: str) -> Dict[str, Any]:
-        """Run clone detection analysis.
-
-        Args:
-            directory: Path to directory
-
-        Returns:
-            Dictionary with clone detection results
-        """
+        """Clone detection over *directory* on the analytics executor (Issue #1233), as a result dict."""
         if not self._clone_detector:
             return {"type": "clone_detection", "patterns": []}
 
         try:
-            # Issue #1233: Use dedicated analytics executor
-            report = await asyncio.get_running_loop().run_in_executor(
-                get_analytics_executor(),
-                self._clone_detector.detect_clones,
-                directory,
+            # #22094: the thread checks both tokens per file; run_cancellable sets its own when this await is
+            # abandoned (this phase's timeout or the whole analysis's), the analysis token covers any other cancel.
+            phase_token = new_cancel_token()
+            tokens = (self.cancel_token, phase_token)
+            detect = functools.partial(self._clone_detector.detect_clones, directory, tokens)
+            report = await run_cancellable(
+                get_analytics_executor(), detect, operation="clone_detection", cancel_token=phase_token
             )
-
-            # Convert to our types
-            duplicate_patterns = []
-            for group in report.clone_groups:
-                duplicate = self._clone_group_to_duplicate(group)
-                if duplicate:
-                    duplicate_patterns.append(duplicate)
-
+            duplicates = [self._clone_group_to_duplicate(group) for group in report.clone_groups]
             return {
                 "type": "clone_detection",
-                "patterns": duplicate_patterns,
+                "patterns": [duplicate for duplicate in duplicates if duplicate],
                 "raw_report": report,
             }
 

@@ -6,13 +6,16 @@
 
 import asyncio
 import threading
+import time
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from api.codebase_analytics.endpoints import report as report_mod
+from code_intelligence.fingerprinting.detector import CloneDetector
 from testkit.real_pattern_analysis import load_real_pattern_analysis_package
+from utils.cancel_tokens import CancelTokenSet
 
 # The top-level conftest stubs ``code_intelligence.pattern_analysis``; load the real modules.
 _pkg = load_real_pattern_analysis_package(Path(__file__).resolve().parent, "_real_pattern_analysis_cancel")
@@ -92,3 +95,98 @@ async def test_the_report_signals_the_analyzer_token_when_its_deadline_fires(tmp
     ):
         assert await report_mod._get_pattern_analysis(tmp_path) is None
     assert captured["token"].is_set()
+
+
+def _clone_analyzer(detector: CloneDetector, token=None) -> CodePatternAnalyzer:
+    analyzer = _analyzer(token)
+    analyzer._clone_detector = detector
+    return analyzer
+
+
+def _slow_files(detector: CloneDetector, seen: list, done: threading.Event):
+    """Patches: each file takes 50 ms in the thread, and ``done`` is set when the thread's scan returns or raises."""
+    extract, detect = detector._extract_fragments, detector.detect_clones
+
+    def slow_extract(path):
+        seen.append(path)
+        time.sleep(0.05)
+        return extract(path)
+
+    def detect_then_flag(*args):
+        try:
+            return detect(*args)
+        finally:
+            done.set()
+
+    return patch.object(detector, "_extract_fragments", slow_extract), patch.object(
+        detector, "detect_clones", detect_then_flag
+    )
+
+
+async def test_a_timeout_stops_the_clone_thread_before_its_last_file(tmp_path):
+    """The clone thread scans the whole tree; abandoning its await must stop it, not just the wait."""
+    _tree(tmp_path, 40)
+    detector, seen, done = CloneDetector(), [], threading.Event()
+    analyzer = _clone_analyzer(detector, threading.Event())
+    slow, flag = _slow_files(detector, seen, done)
+    with slow, flag:
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(analyzer._run_clone_detection(str(tmp_path)), timeout=0.2)
+        assert await asyncio.to_thread(done.wait, 10)  # the thread returned, instead of walking on
+    assert 0 < len(seen) < 40  # contrast below: unabandoned, it reads all forty
+    assert not analyzer.cancel_token.is_set()  # a phase timeout skips the phase; it does not cancel the analysis
+
+
+async def test_an_unabandoned_clone_thread_reads_every_file(tmp_path):
+    _tree(tmp_path, 4)
+    detector, seen, done = CloneDetector(), [], threading.Event()
+    slow, flag = _slow_files(detector, seen, done)
+    with slow, flag:
+        result = await _clone_analyzer(detector)._run_clone_detection(str(tmp_path))
+    assert len(seen) == 4 and "error" not in result
+
+
+async def test_the_analysis_token_stops_the_clone_thread(tmp_path):
+    _tree(tmp_path, 3)
+    token = threading.Event()
+    token.set()
+    detector, seen, done = CloneDetector(), [], threading.Event()
+    slow, flag = _slow_files(detector, seen, done)
+    with slow, flag:
+        with pytest.raises(CancelTokenSet):  # the thread stopped itself at the analysis token
+            await _clone_analyzer(detector, token)._run_clone_detection(str(tmp_path))
+    assert seen == []
+
+
+async def test_an_analysis_stopped_at_its_token_answers_none(tmp_path):
+    class Stopped:
+        def __init__(self, **kwargs):
+            pass
+
+        async def analyze_directory(self, _directory):
+            raise AnalysisCancelled("stopped at its token")
+
+    with patch.object(report_mod, "CodePatternAnalyzer", Stopped):
+        assert await report_mod._get_pattern_analysis(tmp_path) is None
+
+
+async def test_an_outer_cancel_still_propagates_even_when_the_analysis_stops_at_its_token(tmp_path):
+    started = asyncio.Event()
+
+    class StopsOnCancel:
+        def __init__(self, **kwargs):
+            pass
+
+        async def analyze_directory(self, _directory):
+            started.set()
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                raise AnalysisCancelled("stopped while the caller was cancelled")
+
+    with patch.object(report_mod, "CodePatternAnalyzer", StopsOnCancel):
+        task = asyncio.create_task(report_mod._get_pattern_analysis(tmp_path))
+        await started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task

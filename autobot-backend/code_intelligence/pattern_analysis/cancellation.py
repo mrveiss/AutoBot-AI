@@ -14,10 +14,11 @@ import asyncio
 import threading
 from typing import Any, Callable
 
+from utils.cancel_tokens import CancelTokenSet
 from utils.io_executor import get_analytics_executor
 
 
-class AnalysisCancelled(asyncio.CancelledError):
+class AnalysisCancelled(CancelTokenSet):
     """The caller stopped waiting for the analysis and signalled its cancel token."""
 
 
