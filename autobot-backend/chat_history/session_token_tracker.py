@@ -153,7 +153,7 @@ class SessionTokenTracker:
         try:
             data = await redis.hgetall(key)
             if not data:
-                return {k: v for k, v in _zero_usage().items() if k != "active_tokens"}
+                return _zero_usage()
             return _usage_from_hash(data)
         except Exception as e:
             logger.error("Failed to get session usage for %s: %s", session_id, e)
