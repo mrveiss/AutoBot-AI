@@ -20,8 +20,10 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 _ROOT = repo_root()
-_ROOTS = ("autobot-backend/api/", "autobot-backend/mcp_server/", "autobot-backend/a2a/")
-_FILES = (
+_ROOTS = (
+    "autobot-backend/api/",
+    "autobot-backend/mcp_server/",
+    "autobot-backend/a2a/",
     "autobot-backend/app_factory.py",
     "autobot-backend/llm_self_awareness.py",
     "autobot-backend/services/tracing_service.py",
@@ -46,7 +48,9 @@ def _sources(root: Path) -> list[Path]:
         base = root / top
         if base.is_dir():
             found += [p for p in sorted(base.rglob("*.py")) if not _TEST.search(p.relative_to(root).as_posix())]
-    return found + [root / rel for rel in _FILES if (root / rel).is_file()]
+        elif base.is_file():
+            found.append(base)
+    return found
 
 
 #: 579 modules measured (2026-11-26); growth 60 puts the pin mid-window (579 - 30).
@@ -55,7 +59,7 @@ REACH = declare(
     discover=_sources,
     floor=549,
     growth=60,
-    roots=_ROOTS + _FILES,
+    roots=_ROOTS,
     what="non-test API, MCP, A2A, app-factory, self-awareness and tracing modules scanned for version literals",
 )
 

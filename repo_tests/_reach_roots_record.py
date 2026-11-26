@@ -476,6 +476,15 @@ REACH_ROOTS = {
         "autobot_shared",
         "scripts",
     ),
+    "repo_tests/service_version_literals_17821_test.py": (
+        "autobot-backend/a2a/",
+        "autobot-backend/api/",
+        "autobot-backend/app_factory.py",
+        "autobot-backend/llm_self_awareness.py",
+        "autobot-backend/mcp_server/",
+        "autobot-backend/services/tracing_service.py",
+        "autobot_shared/tracing.py",
+    ),
     "repo_tests/severity_enum_fork_guard_18098_test.py": (
         "autobot-backend",
         "autobot-infrastructure",
