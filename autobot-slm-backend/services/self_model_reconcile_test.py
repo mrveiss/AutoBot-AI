@@ -136,6 +136,17 @@ def test_requirement_on_an_absent_or_stale_command_is_unavailable_on_that_node()
     assert unavailable_because({"node_id": None, "attrs": {"requires": ["ffmpeg"]}}, rows) == []
 
 
+def test_removing_a_required_command_makes_the_tool_unavailable_and_reinstalling_restores_it():
+    """#22298: the tool follows its command through removal and reinstall on the same node."""
+    tool = {"node_id": "n1", "attrs": {"requires": ["xdotool"]}}
+    rows, _ = _run({}, [_cmd("xdotool", "3.0")], T0)
+    assert unavailable_because(tool, rows) == []
+    rows, _ = _run(rows, [], T1)
+    assert unavailable_because(tool, rows) == ["xdotool"]
+    rows, _ = _run(rows, [_cmd("xdotool", "3.0")], T1 + timedelta(hours=1))
+    assert unavailable_because(tool, rows) == []
+
+
 def test_a_host_address_becomes_the_nodes_own_id_and_an_unmanaged_host_is_kept():
     tools = [
         Observation("tool", "a", DECLARED, node_id="10.0.0.5"),

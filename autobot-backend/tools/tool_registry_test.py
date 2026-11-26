@@ -309,3 +309,14 @@ async def test_handler_gate_takes_the_permission_from_the_catalogue(monkeypatch,
     async for _ in handler._handle_web_research_tool(tool, {"params": {}}, [], "s", "user"):
         pass
     assert gate == [Permission.WORKFLOW_CREATE.value]
+
+
+def test_requires_is_declared_only_for_known_tools_and_sent_in_every_record():
+    """#22298: ``requires`` names commands for catalogue tools only; every record carries the field."""
+    from tools.tool_records import TOOL_REQUIRES, tool_records
+
+    records = {r["name"]: r for r in tool_records()}
+    assert set(TOOL_REQUIRES) <= set(records)
+    assert all("requires" in r["fields"] for r in records.values())
+    assert records["bring_window_to_front"]["fields"]["requires"] == ["xdotool"]
+    assert records["web_fetch"]["fields"]["requires"] == []

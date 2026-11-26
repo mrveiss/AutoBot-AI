@@ -79,6 +79,23 @@ REGISTRY_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = {
     "content_reach": ("web", LOCATION_BACKEND, None),  # #10932
 }
 
+#: tool -> command names its handler needs on the node it runs on (#22298). Only what the code proves; a tool
+#: absent here declares none. Linux-only paths are safe: ``unavailable_because`` fires only for a command a node's
+#: inventory reported and later lost, never for one it never had.
+TOOL_REQUIRES: Dict[str, Tuple[str, ...]] = {
+    # tool_registry.py ``bring_window_to_front`` -> task_handlers/executor.py gui_bring_window_to_front ->
+    # gui_controller.py ``bring_window_to_front`` runs ["/usr/bin/xdotool", ...].
+    "bring_window_to_front": ("xdotool",),
+    # tool_registry.py ``read_text_from_region`` -> executor.py gui_read_text_from_region ->
+    # gui_controller.py ``read_text_from_region`` calls ``pytesseract.image_to_string``, which shells out to
+    # the ``tesseract`` binary (media/document/ocr.py: "pytesseract reaches a system binary").
+    "read_text_from_region": ("tesseract",),
+    # system_read_tools.py ``list_system_services`` -> system_integration.py ``_list_linux_services`` runs systemctl.
+    "list_system_services": ("systemctl",),
+    # tool_registry.py ``manage_service`` -> system_handlers.py -> system_integration.py ``_manage_linux_service``.
+    "manage_service": ("systemctl",),
+}
+
 #: Offered only while the tool-output spill flag is on (#13754, #13865).
 SPILL_READ_TOOL = ("read_spilled_output", ("conversation", LOCATION_BACKEND, None))
 
@@ -140,7 +157,7 @@ def _browser_permission(name: str) -> Optional[str]:
     return _value(_mcp_required_permission(name))
 
 
-def _location_host(location: str) -> Optional[str]:
+def location_host(location: str) -> Optional[str]:
     """The SSOT host of the service serving *location*; None where the placement is not known from code."""
     return next((d.host for d in SERVICE_DEFINITIONS.values() if d.name == location), None)
 
@@ -151,8 +168,8 @@ def _record(name: str, location: str, **fields: Any) -> Dict[str, Any]:
         "kind": TOOL_RECORD_KIND,
         "name": name,
         "serving_service": location,
-        "node_id": _location_host(location),
-        "fields": fields,
+        "node_id": location_host(location),
+        "fields": {"requires": list(TOOL_REQUIRES.get(name, ())), **fields},
     }
 
 
