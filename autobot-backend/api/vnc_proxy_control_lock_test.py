@@ -15,6 +15,7 @@ import pytest
 from fastapi import HTTPException
 
 from api.schemas_system import DesktopControlAcquireRequest, DesktopControlReleaseRequest
+from api.vnc_host_target_22145_test import SECRETS_HOST, secrets_hosts  # noqa: F401  (the PR's /secrets host stub)
 from api.vnc_proxy import (
     acquire_desktop_control,
     get_desktop_control_status,
@@ -22,6 +23,7 @@ from api.vnc_proxy import (
 )
 
 
+@pytest.mark.usefixtures("secrets_hosts")
 class TestAcquireEndpoint:
     @pytest.mark.asyncio
     async def test_acquire_success(self):
@@ -37,7 +39,7 @@ class TestAcquireEndpoint:
         ):
             response = await acquire_desktop_control(
                 "desktop",
-                DesktopControlAcquireRequest(session_id="default"),
+                DesktopControlAcquireRequest(session_id=SECRETS_HOST["id"]),
                 current_user={"username": "alice", "user_id": None},
             )
 
@@ -51,12 +53,13 @@ class TestAcquireEndpoint:
         with pytest.raises(HTTPException) as exc_info:
             await acquire_desktop_control(
                 "not-a-real-type",
-                DesktopControlAcquireRequest(),
+                DesktopControlAcquireRequest(session_id=SECRETS_HOST["id"]),
                 current_user={"username": "alice"},
             )
         assert exc_info.value.status_code == 404
 
 
+@pytest.mark.usefixtures("secrets_hosts")
 class TestReleaseEndpoint:
     @pytest.mark.asyncio
     async def test_release_success(self):
@@ -72,7 +75,7 @@ class TestReleaseEndpoint:
         ):
             response = await release_desktop_control(
                 "desktop",
-                DesktopControlReleaseRequest(session_id="default"),
+                DesktopControlReleaseRequest(session_id=SECRETS_HOST["id"]),
                 current_user={"username": "alice", "user_id": None},
             )
 
@@ -93,7 +96,7 @@ class TestReleaseEndpoint:
         ):
             response = await release_desktop_control(
                 "desktop",
-                DesktopControlReleaseRequest(),
+                DesktopControlReleaseRequest(session_id=SECRETS_HOST["id"]),
                 current_user={"username": "bob"},
             )
 
@@ -101,11 +104,12 @@ class TestReleaseEndpoint:
         assert response["owner"] == "alice"
 
 
+@pytest.mark.usefixtures("secrets_hosts")
 class TestStatusEndpoint:
     @pytest.mark.asyncio
     async def test_status_reports_owner(self):
         fake_state = {
-            "session_id": "default",
+            "session_id": SECRETS_HOST["id"],
             "human_active": True,
             "owner": "alice",
             "acquired_at": "2026-07-22T00:00:00+00:00",
@@ -113,7 +117,7 @@ class TestStatusEndpoint:
         }
         with patch("api.vnc_proxy.get_control_lock_state", new=AsyncMock(return_value=fake_state)):
             response = await get_desktop_control_status(
-                "desktop", session_id="default", current_user={"username": "bob"}
+                "desktop", session_id=SECRETS_HOST["id"], current_user={"username": "bob"}
             )
 
         assert response["human_active"] is True
@@ -126,6 +130,7 @@ class TestStatusEndpoint:
         assert exc_info.value.status_code == 404
 
 
+@pytest.mark.usefixtures("secrets_hosts")
 class TestAuditBestEffort:
     """Audit logging must never block the safety-critical lock operation.
 
@@ -147,7 +152,7 @@ class TestAuditBestEffort:
         with patch("api.vnc_proxy.acquire_human_control", new=AsyncMock(return_value=fake_result)):
             response = await acquire_desktop_control(
                 "desktop",
-                DesktopControlAcquireRequest(),
+                DesktopControlAcquireRequest(session_id=SECRETS_HOST["id"]),
                 current_user={"username": "alice"},  # no user_id -- audit no-ops
             )
 

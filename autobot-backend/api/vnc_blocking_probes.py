@@ -42,17 +42,6 @@ def is_vnc_running() -> bool:
         return False
 
 
-def run_clipboard_write(payload: bytes) -> subprocess.CompletedProcess:
-    """Write *payload* to the desktop clipboard. Blocking -- call via ``asyncio.to_thread``."""
-    return subprocess.run(  # nosec B603 B607  # fixed argv, no user input
-        ["xclip", "-selection", "clipboard"],
-        input=payload,
-        capture_output=True,
-        env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
-        timeout=5,
-    )
-
-
 def probe_connection_quality() -> Dict[str, object]:
     """Every blocking probe for the quality endpoint, in one place.
 

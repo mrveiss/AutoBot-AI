@@ -168,4 +168,23 @@ describe('SecretsManager writes and reloads (#20732, #20734)', () => {
     expect(wrapper.find('[data-testid="secrets-write-failed"]').exists()).toBe(false)
     expect(getSecrets.mock.calls.length).toBe(loadsBefore + 1)
   })
+  it('the VNC companion uses the form as it was when Save was pressed, not after a Cancel reset (#22144)', async () => {
+    let created: (v: unknown) => void = () => {}
+    createSecret.mockReset()
+      .mockImplementationOnce(() => new Promise((resolve) => { created = resolve }))
+      .mockResolvedValue({})
+    const { vm } = await mountManager()
+    vm.openCreateModal()
+    Object.assign(vm.secretForm, {
+      type: 'infrastructure_host', name: 'box', host: 'vnc.example.test', ssh_port: 22, vnc_port: 5900,
+      username: 'alice', auth_type: 'password', ssh_password: 'ssh-pw', capabilities: ['ssh', 'vnc'], vnc_password: 'vnc-pw', // pragma: allowlist secret
+    })
+    const saving = vm.saveSecret()
+    Object.assign(vm.secretForm, { vnc_password: '', capabilities: [] }) // Cancel resets the form in place mid-request
+    created({ data: { id: 'h1' } })
+    await saving
+    await flushPromises()
+    expect(createSecret).toHaveBeenCalledTimes(2)
+    expect(createSecret.mock.calls[1][0]).toMatchObject({ type: 'password', value: 'vnc-pw', metadata: { vnc_host_id: 'h1' } })
+  })
 })

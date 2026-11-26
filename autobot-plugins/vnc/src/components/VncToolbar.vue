@@ -78,8 +78,10 @@ const logger = createLogger('VncToolbar')
 const props = defineProps<{
   /** Whether VNC is currently connected */
   connected: boolean
-  /** Base URL for VNC API calls — defaults to /api */
-  apiBaseUrl?: string
+  /** Base URL for VNC API calls; the host app supplies its own (#22144) */
+  apiBaseUrl: string
+  /** Selected host id (#22145), sent as `host_id` on every control. Omitted by the SLM toolbar (fleet-scoped). */
+  hostId?: string
   /** iframe element id to fullscreen */
   frameId?: string
 }>()
@@ -88,7 +90,7 @@ const emit = defineEmits<{
   error: [message: string]
 }>()
 
-const controls = useVncControls({ baseUrl: props.apiBaseUrl ?? '/api' })
+const controls = useVncControls({ baseUrl: props.apiBaseUrl, hostId: () => props.hostId })
 const lastError = ref<string | null>(null)
 const isFullscreen = ref(false)
 const showTypeDialog = ref(false)

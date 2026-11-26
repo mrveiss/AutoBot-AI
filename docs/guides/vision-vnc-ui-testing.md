@@ -869,7 +869,7 @@ Authorization: Bearer <admin-token>
 
 #### Clipboard Sync
 
-Copy text to the remote desktop clipboard (requires `xclip`).
+Send clipboard text to the selected host over RFB cut-text (`vnc_host_actions.py`); no `xclip` is needed.
 
 ```http
 POST /api/vnc/clipboard

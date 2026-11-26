@@ -17,39 +17,15 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autobot_shared.time_utils import utc_timestamp
+from tests.helpers._voice_realtime_fakes import FakeRedis as _FakeRedis
+from tests.helpers._voice_realtime_fakes import bare_telemetry as _bare_telemetry
+from tests.helpers._voice_realtime_fakes import make_record as _make_record
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-
-
-def _make_record(**kwargs):
-    """Return a RealtimeSessionRecord with sensible defaults."""
-    from services.voice_realtime_telemetry import RealtimeSessionRecord
-
-    defaults: dict[str, Any] = {
-        "session_id": "test-session-1",
-        "user_id": "user-42",
-        "model": "gpt-realtime-2",
-        "started_at": utc_timestamp(),
-        "ended_at": None,
-        "duration_s": 0.0,
-        "audio_in_s": 0.0,
-        "audio_out_s": 0.0,
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "cached_input_tokens": 0,
-        "tool_calls": 0,
-        "estimated_cost_usd": 0.0,
-        "disconnect_reason": "normal",
-        "metadata": {},
-    }
-    defaults.update(kwargs)
-    return RealtimeSessionRecord(**defaults)
 
 
 def _fake_prom():
@@ -72,27 +48,6 @@ def _fake_prom():
         child.labels.return_value = child
         setattr(m, attr, child)
     return m
-
-
-def _bare_telemetry(fake_redis, prom=None, max_seconds=1800, max_cost=5.0):
-    """Construct VoiceRealtimeTelemetry via __new__ with all attrs __init__ sets.
-
-    Mirrors __init__ including _config/_in_memory_sessions added by the
-    telemetry opt-out feature (commit 50b5e13d3, Issue #9035); telemetry is
-    enabled so the Redis persistence path is exercised.
-    """
-    from services.voice_realtime_telemetry import VoiceRealtimeTelemetry
-
-    t = VoiceRealtimeTelemetry.__new__(VoiceRealtimeTelemetry)
-    t._redis = fake_redis
-    t._model = "gpt-realtime-2"
-    t._max_seconds = max_seconds
-    t._max_cost_usd = max_cost
-    t._prom = prom if prom is not None else MagicMock()
-    t._config = MagicMock()
-    t._config.telemetry.enabled = True
-    t._in_memory_sessions = {}
-    return t
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -213,9 +168,7 @@ class TestMetricIncrements:
         )
         stored = {"voice_realtime_session:s2": json.dumps(record.to_dict())}
 
-        fake_redis = AsyncMock()
-        fake_redis.set = AsyncMock(side_effect=lambda k, v, ex=None: stored.update({k: v}))
-        fake_redis.get = AsyncMock(side_effect=lambda k: stored.get(k))
+        fake_redis = _FakeRedis(stored)
 
         prom = MagicMock()
         vr = _fake_prom()
@@ -235,9 +188,7 @@ class TestMetricIncrements:
         record = _make_record(session_id="s3")
         stored = {"voice_realtime_session:s3": json.dumps(record.to_dict())}
 
-        fake_redis = AsyncMock()
-        fake_redis.set = AsyncMock(side_effect=lambda k, v, ex=None: stored.update({k: v}))
-        fake_redis.get = AsyncMock(side_effect=lambda k: stored.get(k))
+        fake_redis = _FakeRedis(stored)
 
         prom = MagicMock()
         vr = _fake_prom()
@@ -258,9 +209,7 @@ class TestMetricIncrements:
         record = _make_record(session_id="s4")
         stored = {"voice_realtime_session:s4": json.dumps(record.to_dict())}
 
-        fake_redis = AsyncMock()
-        fake_redis.set = AsyncMock(side_effect=lambda k, v, ex=None: stored.update({k: v}))
-        fake_redis.get = AsyncMock(side_effect=lambda k: stored.get(k))
+        fake_redis = _FakeRedis(stored)
 
         prom = MagicMock()
         vr = _fake_prom()
@@ -379,3 +328,89 @@ class TestSessionTTL:
         await t._save_record(rec)
 
         assert captured == [_SESSION_TTL]
+
+
+class TestConsentChangesMidSession:
+    """Active session state survives an opt-out/opt-in flip; consent only governs persistence (#9035)."""
+
+    @staticmethod
+    def _consent(monkeypatch, enabled):
+        monkeypatch.setattr("services.voice_realtime_telemetry.get_telemetry_settings", lambda: {"enabled": enabled})
+
+    @pytest.mark.asyncio
+    async def test_a_session_started_opted_in_is_still_capped_after_an_opt_out(self, monkeypatch):
+        from services.voice_realtime_telemetry import CapBreachError
+
+        t = _bare_telemetry(AsyncMock(), max_seconds=1800)
+        self._consent(monkeypatch, True)
+        record = _make_record(
+            session_id="flip1",
+            started_at=(datetime.now(timezone.utc) - timedelta(seconds=1810)).isoformat(),
+        )
+        await t._save_record(record)
+        self._consent(monkeypatch, False)
+        with pytest.raises(CapBreachError):
+            await t.check_caps("flip1")
+
+    @pytest.mark.asyncio
+    async def test_a_session_started_opted_out_can_still_end_after_an_opt_in(self, monkeypatch):
+        t = _bare_telemetry(_FakeRedis())
+        t._prom = MagicMock()
+        self._consent(monkeypatch, False)
+        await t._save_record(_make_record(session_id="flip2"))
+        self._consent(monkeypatch, True)
+        ended = await t.session_end("flip2")
+        assert ended is not None and ended.ended_at
+        assert "flip2" not in t._in_memory_sessions  # persisted to Redis, so memory lets go
+
+    @pytest.mark.asyncio
+    async def test_nothing_reaches_redis_while_opted_out(self, monkeypatch):
+        redis = AsyncMock()
+        t = _bare_telemetry(redis)
+        self._consent(monkeypatch, False)
+        await t._save_record(_make_record(session_id="off1"))
+        redis.set.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_finished_record_is_released_when_redis_is_down(self, monkeypatch):
+        t = _bare_telemetry(None)
+        t._get_redis = AsyncMock(return_value=None)
+        self._consent(monkeypatch, True)
+        await t._save_record(_make_record(session_id="r1"))
+        assert "r1" in t._in_memory_sessions
+        await t._save_record(_make_record(session_id="r1", ended_at=datetime.now(timezone.utc).isoformat()))
+        assert "r1" not in t._in_memory_sessions
+
+    @pytest.mark.asyncio
+    async def test_a_finished_record_is_released_when_telemetry_is_off(self, monkeypatch):
+        t = _bare_telemetry(AsyncMock())
+        self._consent(monkeypatch, False)
+        await t._save_record(_make_record(session_id="r2"))
+        await t._save_record(_make_record(session_id="r2", ended_at=datetime.now(timezone.utc).isoformat()))
+        assert "r2" not in t._in_memory_sessions
+
+    @pytest.mark.asyncio
+    async def test_an_abandoned_session_older_than_the_max_age_is_evicted(self, monkeypatch):
+        from services import voice_realtime_telemetry as module
+
+        t = _bare_telemetry(AsyncMock())
+        self._consent(monkeypatch, False)
+        threshold = module.abandoned_session_max_age_s(t._max_seconds)
+        old = (datetime.now(timezone.utc) - timedelta(seconds=threshold + 60)).isoformat()
+        t._in_memory_sessions["gone"] = _make_record(session_id="gone", started_at=old)
+        await t._save_record(_make_record(session_id="fresh"))
+        assert "gone" not in t._in_memory_sessions
+        assert "fresh" in t._in_memory_sessions
+
+    @pytest.mark.asyncio
+    async def test_a_session_younger_than_the_cap_is_not_evicted_when_cap_exceeds_the_age(self, monkeypatch):
+        from services import voice_realtime_telemetry as module
+
+        cap = module._ABANDONED_SESSION_MAX_AGE_S * 2
+        t = _bare_telemetry(AsyncMock(), max_seconds=cap)
+        self._consent(monkeypatch, False)
+        assert module.abandoned_session_max_age_s(cap) > module._ABANDONED_SESSION_MAX_AGE_S
+        started = datetime.now(timezone.utc) - timedelta(seconds=module._ABANDONED_SESSION_MAX_AGE_S + 60)
+        t._in_memory_sessions["live"] = _make_record(session_id="live", started_at=started.isoformat())
+        await t._save_record(_make_record(session_id="fresh"))
+        assert "live" in t._in_memory_sessions

@@ -29,9 +29,7 @@ global instructions and are not repeated here; where the two disagree, **this fi
 
 ## Engineering Standard
 
-Correctness → Speed → Maintainability. No wasted motion, no speculative work.
-Parallelize independent calls · minimal surface area · async-first · ≤3 exploration commands
-then act.
+Correctness → Speed → Maintainability. No speculative work · minimal surface area · async-first.
 
 **The 8 core rules** — full text in [`CLAUDE_RULES.md`](docs/developer/CLAUDE_RULES.md):
 1 Check before writing · 2 Reuse from `autobot_shared/` · 3 Standardize (≤30-line functions,
@@ -76,11 +74,11 @@ Rules here accumulate; some pull against each other. **Precedence, highest first
 
 **PR-granularity conflicts** (same file vs same scope vs append) → [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md#pr-granularity).
 
-**Known conflict, by design:** *finish everything* vs *CI is a shared resource*. Two CI slots; exactly one train is worked at a time ([`OWNER_RULES.md`](docs/developer/OWNER_RULES.md)). The completion goal is *nothing mergeable left unmerged, nothing merged left uncleaned*, checkable at any instant; "no work in flight" has no reachable end state with running CI.
+**Known conflict, by design:** *finish everything* vs *CI is a shared resource*. The CI slot count and how many trains run at once are set in [`OWNER_RULES.md`](docs/developer/OWNER_RULES.md). The completion goal is *nothing mergeable left unmerged, nothing merged left uncleaned*, checkable at any instant; "no work in flight" has no reachable end state with running CI.
 
 ## Git/PR Workflow
 
-### Pre-Push Checklist (non-negotiable)
+### Pre-Push Checklist
 1. No file exceeds `MAX_LINES` (600, enforced by `check_python_file_size.py`) — split, don't
    raise the ceiling; see [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md).
 2. Run the repo's lint/type-check locally before pushing — don't rely on `/autobot-dev-skills:review pre-merge-validate`
@@ -109,7 +107,7 @@ it in the ledger first) — see the global worktree-mandate exception.
 
 Search open **and** closed issues (`gh issue list --search "<query>" --state all`) before
 filing — no duplicates. Scrub external vendor/product names from filed content; the
-`/autobot-dev-skills:lifecycle research-to-issues` skill, run by the `autobot-dev-skills:researcher`
+`/research-hub to-issues` skill, run by the `autobot-dev-skills:researcher`
 agent, does this. Link children to their umbrella with native GitHub relationships,
 not just the `- [ ]` checklist — full commands in [`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md).
 

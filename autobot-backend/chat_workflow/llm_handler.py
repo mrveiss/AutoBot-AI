@@ -20,7 +20,9 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_history.rolling_summary import prompt_summary
+from chat_workflow import tiered_context_sources as tcs
 from dependencies import provide_config_manager
+from intent_classifier import apply_topic_guidance
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
 from middleware.manager import get_extension_manager
@@ -804,8 +806,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
         # Issue #4265: Emit BEFORE_PROMPT_BUILD hook before building prompts
         await _emit_before_prompt_build(
-            session.session_id,
-            {"message": message, "use_knowledge": use_knowledge, "language": language},
+            session.session_id, {"message": message, "use_knowledge": use_knowledge, "language": language}
         )
 
         company_id = session.metadata.get("company_id") if session and session.metadata else None
@@ -827,9 +828,8 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # When false the pre-existing unconditional EssentialStory path is used.
         # Issue MVA-1992: Skip memory graph lookup when lightweight_mode=True.
         if not lightweight_mode:
-            from chat_workflow import tiered_context_sources as tcs
-
             system_prompt = await tcs.append_memory_context(system_prompt, session, message, selected_model)
+        system_prompt = apply_topic_guidance(system_prompt, message, session)  # volatile: after the stable prefix
         conversation_context = self._build_conversation_context(session, await prompt_summary(session))
 
         # Knowledge retrieval for RAG

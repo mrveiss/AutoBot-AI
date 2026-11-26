@@ -367,6 +367,16 @@ STORE_AUTHORITY: dict[str, Concept] = {
         note="Deliberate exception. The challenge is single-use and TTL'd; the credential it "
         "issues is device_credentials, which is durable in Postgres.",
     ),
+    "vnc_desktop_pin": Concept(
+        name="vnc_desktop_pin",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/slm_vnc_registry.py",),
+        rebuilt_by="Losing the pin re-picks the desktop node deterministically from the SLM registry "
+        "(slm_vnc_registry._pick_desktop: hostname, then node id).",
+        note="Deliberate exception. The pin is a preference for the last chosen desktop node, shared by "
+        "every worker so a viewer and its controls agree; the nodes themselves are the SLM registry's.",
+    ),
     "agent_work_claims": Concept(
         name="agent_work_claims",
         system_of_record=Store.REDIS,
@@ -509,6 +519,19 @@ STORE_AUTHORITY: dict[str, Concept] = {
         note="Owner decision on #22277 (2026-11-26): SLM Postgres, because the SLM already owns node identity and "
         "the heartbeat. self_model_history is append-only and nothing is ever deleted: a removal is status "
         "'absent' with removed_at.",
+    ),
+    "voice_realtime_session": Concept(
+        name="voice_realtime_session",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot-backend/services/voice_realtime_telemetry.py",),
+        rebuilt_by="Nothing rebuilds it: a finished record is read back only for the recent-sessions listing. "
+        "The per-process map is a fallback for when Redis is off or down, never read ahead of Redis.",
+        note="Per-session cost and duration accounting for a realtime voice session (#7421, #21678). "
+        "Ephemeral by design: the key carries a TTL of voice_realtime_session_ttl_days and only feeds cap "
+        "checks and the recent-sessions view. Redis is shared by every worker, so updates are made under "
+        "WATCH/MULTI; a local copy read first would go stale and let session end overwrite another "
+        "worker's usage.",
     ),
 }
 

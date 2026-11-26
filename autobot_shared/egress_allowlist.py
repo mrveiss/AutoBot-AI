@@ -196,6 +196,12 @@ def register_internal_origin_provider(provider: OriginProvider) -> None:
     _cache = None
 
 
+def invalidate_internal_origin_cache() -> None:
+    """Drop the cached provider origins so the next check re-runs the providers (a provider's source changed)."""
+    global _cache
+    _cache = None
+
+
 async def _provider_origins() -> frozenset[str]:
     global _cache
     now = time.monotonic()

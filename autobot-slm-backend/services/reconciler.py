@@ -57,6 +57,7 @@ from services.node_health_status import (
     strip_reserved,
 )
 from services.self_model_store import apply_heartbeat_extra_data
+from services.pending_role_provisioning import provisioner_holds, set_role_status_if_unchanged
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 from services.service_remediation_tracker import (
     clear_service_remediation,
@@ -2057,19 +2058,15 @@ class ReconcilerService:
             node_roles = result.scalars().all()
 
             node_ip_map = await self._build_node_ip_map(db)
-
+            changed: list[tuple] = []  # written after the loop: no row lock held across the remaining checks
             for node_role in node_roles:
                 endpoint = loader.get_health_endpoint(node_role.role_name)
-                if not endpoint:
+                if not endpoint or await provisioner_holds(db, node_role):  # provisioner-owned (#22262)
                     continue
-
                 node_ip = node_ip_map.get(node_role.node_id)
                 if not node_ip:
                     continue
-
-                # Replace localhost/127.0.0.1 with the node's actual IP
                 url = endpoint.replace("localhost", node_ip).replace("127.0.0.1", node_ip)
-
                 new_status = await self._http_health_check(url)
                 if new_status != node_role.status:
                     logger.info(
@@ -2079,8 +2076,10 @@ class ReconcilerService:
                         node_role.status,
                         new_status,
                     )
-                    node_role.status = new_status
+                    changed.append((node_role, new_status))
 
+            for node_role, new_status in changed:
+                await set_role_status_if_unchanged(db, node_role, new_status)  # not over a provisioner write
             await db.commit()
 
     async def _build_node_ip_map(self, db: AsyncSession) -> dict:
