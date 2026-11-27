@@ -428,7 +428,8 @@ export class KnowledgeRepository extends ApiRepository {
         largest_fact_size: 0,
         smallest_fact_size: 0
       },
-      rag_available: data?.rag_available ?? false
+      rag_available: data?.rag_available ?? false,
+      degraded: data?.degraded ?? false
     }
   }
 
