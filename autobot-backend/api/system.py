@@ -452,7 +452,7 @@ async def get_system_info(admin_check: bool = Depends(check_admin_permission)):
 
     system_info = {
         "name": "AutoBot Backend",
-        "version": "1.0.0",
+        "version": "unknown",  # the repo declares no version (#17821)
         "python_version": python_version,
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "features": {

@@ -91,6 +91,7 @@ SOURCE_BASELINE = "baseline_floor"
 SOURCE_ROLE = "role_floor"
 SOURCE_UNAVAILABLE = "store_unavailable"
 SOURCE_UNMANAGED = "unmanaged"
+SOURCE_LEARNED_RULE = "learned_rule"
 SOURCE_NO_COMPANY = "no_verified_company"
 
 
@@ -172,6 +173,17 @@ def is_mutating(tool_name: str) -> bool:
     return declared is None or bool(declared & ToolEffect.MUTATING)
 
 
+_REASONS = {
+    SOURCE_BASELINE: "approval baseline category '{0.floor_category}' can never be autonomous",
+    SOURCE_ROLE: "the agent role's policy requires approval for this risk",
+    SOURCE_NO_COMPANY: "no verified company or user scopes this action, so it cannot be allowed",
+    SOURCE_UNAVAILABLE: "the line store could not be read, so the action fails closed",
+    SOURCE_DEFAULT: "no line is set for this action; an unset line counts as line 2",
+    SOURCE_UNMANAGED: "no line is set and the action does not change anything",
+    SOURCE_LEARNED_RULE: "a rule you saved ('approve similar commands') allows this command",
+}
+
+
 @dataclass(frozen=True)
 class LineResolution:
     """A resolved line and the reason for it."""
@@ -184,19 +196,7 @@ class LineResolution:
 
     @property
     def reason(self) -> str:
-        if self.source == SOURCE_BASELINE:
-            return f"approval baseline category '{self.floor_category}' can never be autonomous"
-        if self.source == SOURCE_ROLE:
-            return "the agent role's policy requires approval for this risk"
-        if self.source == SOURCE_NO_COMPANY:
-            return "no verified company or user scopes this action, so it cannot be allowed"
-        if self.source == SOURCE_UNAVAILABLE:
-            return "the line store could not be read, so the action fails closed"
-        if self.source == SOURCE_DEFAULT:
-            return "no line is set for this action; an unset line counts as line 2"
-        if self.source == SOURCE_UNMANAGED:
-            return "no line is set and the action does not change anything"
-        return f"line {self.line.rank} is set for this action"
+        return t.format(self) if (t := _REASONS.get(self.source)) else f"line {self.line.rank} is set for this action"
 
 
 def resolve_line(

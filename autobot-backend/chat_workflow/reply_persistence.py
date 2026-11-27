@@ -24,6 +24,9 @@ only), a thought left unclosed before its call ends at the call, and a call-only
 
 Every assistant entry carries the model that produced it (#21881): the model of the
 streamed chunk of its own iteration, else the turn's selected model, else ``unknown``.
+
+The surviving reply of an iteration also carries the iteration's token ``usage`` when the provider reported it
+(#21880): on the prose entry, or, when the prose was dropped as a repeat of ``respond``, on the ``respond`` bubble.
 """
 
 from __future__ import annotations
@@ -118,6 +121,28 @@ def stamp_model(entry: Dict[str, Any], model: Any) -> None:
         return
     if not isinstance(metadata.get("model"), str) or not metadata["model"].strip():
         entry["metadata"] = {**metadata, "model": model_or_unknown(model)}
+
+
+def stamp_usage(entry: Dict[str, Any] | None, usage: Any) -> None:
+    """Give an assistant *entry* the iteration's token *usage* unless it has one (#21880); no usage writes nothing."""
+    if entry is None or not usage or entry.get("sender") != "assistant":
+        return
+    metadata = entry.get("metadata")
+    if isinstance(metadata, dict) and not metadata.get("usage"):
+        entry["metadata"] = {**metadata, "usage": dict(usage)}
+
+
+def surviving_reply(
+    final_entry: Dict[str, Any] | None, tool_entries: Iterable[Dict[str, Any]]
+) -> Dict[str, Any] | None:
+    """The one entry that shows an iteration's answer: its prose, else the ``respond`` bubble that made it redundant.
+
+    Narration dropped as a repeat of the ``respond`` text leaves the bubble as the reply, so the iteration's
+    usage belongs on it (#21880).
+    """
+    if final_entry is not None:
+        return final_entry
+    return next((e for e in tool_entries if _is_respond_entry(e)), None)
 
 
 def stable_entry_id(turn_id: str, iteration: int | None, kind: str, text: str, occurrence: int = 0) -> str:

@@ -595,7 +595,7 @@ async def advanced_control_info(
     """
     return {
         "name": "Advanced Control Interface",
-        "version": "1.0.0",
+        "version": "unknown",  # the repo declares no version; never an invented number (#17821)
         "features": [
             "Desktop streaming with NoVNC",
             "Human-in-the-loop takeover management",

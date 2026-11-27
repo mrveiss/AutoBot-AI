@@ -31,6 +31,13 @@ from security.read_only_commands import is_read_only_command
         "cat -n 123",
         "head -n 5 123",
         "grep -A 3 x notes.txt",
+        "ip addr show",
+        "ip -br a",
+        "ip route get 192.0.2.1",
+        "arp -a",
+        "arp -an",
+        "hostname",
+        "uptime",
     ],
 )
 def test_these_only_read(command):
@@ -41,6 +48,14 @@ def test_these_only_read(command):
     "command",
     [
         "echo x > ~/.bashrc",
+        "ip addr add 192.0.2.1/24 dev eth0",
+        "ip route del default",
+        "ip -b cmds.txt",
+        "ip netns exec x sh",
+        "ip link set eth0 down",
+        "arp -s 192.0.2.1 aa:bb:cc:dd:ee:ff",
+        "arp -d 192.0.2.1",
+        "hostname newname",
         "cat a >> ~/.ssh/authorized_keys",
         "ls > /tmp/f",
         "find . -delete",

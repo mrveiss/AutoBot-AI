@@ -332,6 +332,15 @@ def test_the_service_version_comes_from_the_ssot_settings(monkeypatch):
     assert tracing._create_tracer_provider("svc", "7.0").resource.attributes["service.version"] == "7.0"
 
 
+def test_no_configured_version_omits_the_service_version_attribute(monkeypatch):
+    pytest.importorskip("opentelemetry.sdk.trace")
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config.misc, "otel_service_version", "")
+    provider = tracing._create_tracer_provider("svc", None)
+    assert "service.version" not in provider.resource.attributes
+
+
 @pytest.mark.asyncio
 async def test_a_caller_supplied_trace_header_is_kept_and_its_dict_is_not_mutated(monkeypatch):
     pytest.importorskip("opentelemetry.sdk.trace")

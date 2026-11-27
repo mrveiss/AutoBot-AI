@@ -38,7 +38,7 @@ from type_defs.common import Metadata
 
 MANIFEST = MCPBridgeManifest(
     name="sequential_thinking_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="Sequential Thinking - Dynamic Problem-Solving Framework",
     features=["sequential_thinking", "thought_tracking", "branching", "revision"],
     endpoint="/api/sequential_thinking/mcp/tools",

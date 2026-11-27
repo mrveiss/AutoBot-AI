@@ -24,7 +24,7 @@ from agents.overseer.types import (
     StepChunk,
     StepRunResult,
 )
-from tests.helpers.fake_pty_shell import FakeManager, FakeShell
+from tests.helpers._fake_pty_shell import FakeManager, FakeShell
 
 
 @pytest.fixture()
