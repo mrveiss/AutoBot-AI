@@ -278,6 +278,8 @@ async def test_a_revision_change_between_pages_restarts_the_read(monkeypatch, ro
     revisions = iter([1, 2, 2, 2])  # page 1 at revision 1, then the set moved: restart, read cleanly at 2
 
     async def moving(filters):
+        if filters["kind"] != "route":  # the permission read of the tool rows comes first and is stable
+            return {"revision": 1, "total": 0, "entities": []}
         start = int(filters.get("offset", 0))
         return {
             "revision": next(revisions),

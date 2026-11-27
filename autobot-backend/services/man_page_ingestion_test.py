@@ -147,7 +147,7 @@ def test_partial_storage_failure_keeps_the_successful_writes():
         patch.object(ingest, "_get_man_page_description", AsyncMock(return_value="list")),
     ):
         total = asyncio.run(ingest.index_commands_in_batches(kb, [("ls", "1"), ("cat", "1")], _ctx("redis")))
-    assert total == 1
+    assert total == ingest.BatchOutcome(indexed=1, storage_failed=1)
 
 
 def test_a_cancelled_wait_kills_and_reaps_the_man_child_then_propagates():

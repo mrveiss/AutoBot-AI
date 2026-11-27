@@ -54,12 +54,10 @@ def env(name: str, default: Any = None) -> Any:
 
 
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
-from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
-from autobot_shared import env_registry_ai_stack  # noqa: E402,F401
+from autobot_shared import env_registry_agent_runtime, env_registry_ai_stack  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_host_binding  # noqa: E402,F401
-from autobot_shared import env_registry_knowledge  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
     env_registry_admin_files,
     env_registry_agent_tools,
@@ -73,6 +71,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_chat_lease,
     env_registry_gateway,
     env_registry_kb_graph,
+    env_registry_knowledge,
     env_registry_ledger,
     env_registry_llc,
     env_registry_logging,
@@ -83,6 +82,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_rag,
     env_registry_rate_limit,
     env_registry_security,
+    env_registry_self_model,
     env_registry_slm,
     env_registry_slm_client,
     env_registry_slm_health,

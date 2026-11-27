@@ -55,6 +55,7 @@ nothing, which is how a floor stops being a reach check.
 """
 
 import ast
+import re
 from typing import List, Optional, Tuple
 
 from repo_tests._paths import repo_root
@@ -81,7 +82,6 @@ _EXPECTED_EXECUTORS: frozenset = frozenset()  # #22272: nothing invokes the scri
 #: time is not a rule.
 _ALLOWED = {
     "repo_tests/man_page_indexer_path_resolves_15853_test.py": "this guard; the name is its subject",
-    "repo_tests/kb_write_chokepoint_19517_test.py": "classifies that script as a knowledge writer; it does not run it",
     "autobot-backend/api/api_endpoint_migrations_test.py": (
         "PARKED under #15173 and skipped -- 1017 source-text assertions frozen by #5359 Option C. "
         "Its assertion that `refresh_system_knowledge` contains the script name describes the "
@@ -209,7 +209,7 @@ def test_the_task_module_runs_no_subprocess_and_parses_no_stdout():
 
     assert "subprocess" not in source, "tasks.man_page_indexing shells out again"
     assert "MAN_PAGE_INDEXER" not in source and "Successfully indexed" not in source
-    assert "from services.man_page_ingestion import index_all_man_pages" in source
+    assert re.search(r"from services\.man_page_ingestion import [^\n]*\bindex_all_man_pages\b", source)
 
 
 def test_the_caller_delegates_rather_than_carrying_its_own_path():
@@ -264,7 +264,7 @@ def delegates_to_the_canonical_indexer(source: str) -> bool:
     Read from the AST, so the import or the call appearing only in a comment or a string proves nothing,
     and an import left behind after ``main`` stops calling it does not pass.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     imported = any(
         isinstance(n, ast.ImportFrom)
         and n.module == "services.man_page_ingestion"

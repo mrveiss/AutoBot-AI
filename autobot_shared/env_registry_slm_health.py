@@ -163,6 +163,3 @@ register_env_var(
         range=(60, 86400),
     )
 )
-
-# #22280: the self-model's registrations chain from here -- env_registry.py sits at its size ceiling.
-from autobot_shared import env_registry_self_model  # noqa: E402,F401

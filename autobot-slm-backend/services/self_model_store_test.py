@@ -133,6 +133,9 @@ def test_the_sweep_reads_its_candidates_under_a_row_lock(monkeypatch):
         seen["lock"] = lock
         return {}
 
+    last_seen = MagicMock()  # the stubbed sqlalchemy column has no ``<``; the real one builds a SQL clause
+    last_seen.__lt__.return_value = "stale"
+    monkeypatch.setattr(store, "entities", MagicMock(c=MagicMock(last_seen=last_seen)))
     monkeypatch.setattr(store, "load_rows", _load_rows)
     monkeypatch.setattr(store, "persist", AsyncMock())
     asyncio.run(store.sweep_stale(None, NOW))
