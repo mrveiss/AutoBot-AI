@@ -114,6 +114,28 @@ class TestOneAgentRecord:
             assert r["kind"] == "agent" and r["serving_service"] == "backend"
             assert {"capabilities", "health", "presence", "forbidden_work"} <= set(r["fields"])
 
+    def test_populated_health_and_presence_are_joined_on_their_own_keys(self) -> None:
+        """research_agent (agent_type "research"): health joins on agent_type, presence on agent_id (#22280)."""
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock, patch
+
+        from orchestration import agent_record
+        from protocols.agent_kind import AgentKind
+        from protocols.agent_presence import PresenceEntry
+
+        health = SimpleNamespace(agent_health={"research": MagicMock(to_dict=lambda: {"status": "healthy"})})
+        entry = PresenceEntry(kind=AgentKind.AI_STACK, tenant_id=None, name="research_agent", busy=True, instance_id="i-1")
+        presence = MagicMock(snapshot_for_projection=lambda: [entry])
+        with patch.object(agent_record, "get_presence_registry", return_value=presence):
+            by_name = {r["name"]: r["fields"] for r in agent_record.agent_records(health)}
+
+        research = by_name["research_agent"]
+        assert research["health"] == {"status": "healthy"}
+        assert research["presence"]["busy"] is True and research["presence"]["instance_id"] == "i-1"
+        # A profile with neither a health nor a presence entry keeps both attributes None.
+        other = next(f for n, f in by_name.items() if n != "research_agent")
+        assert other["health"] is None and other["presence"] is None
+
     def test_no_further_agent_registry_class(self) -> None:
         """A new live-status registry must be an attribute of the record, not a class of its own."""
         import pathlib

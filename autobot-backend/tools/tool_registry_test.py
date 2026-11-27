@@ -285,7 +285,7 @@ def test_a_tool_served_from_a_placed_service_carries_its_host_and_one_not_placed
     from tools.tool_records import LOCATION_WORKER, tool_records
 
     by_name = {r["name"]: r for r in tool_records()}
-    assert by_name["web_fetch"]["node_id"]
+    assert by_name["web_search"]["node_id"]
     assert by_name["type_text"]["serving_service"] == LOCATION_WORKER and by_name["type_text"]["node_id"] is None
 
 
@@ -332,3 +332,12 @@ async def test_handler_gate_takes_the_permission_from_the_catalogue(monkeypatch,
     async for _ in handler._handle_web_research_tool(tool, {"params": {}}, [], "s", "user"):
         pass
     assert gate == [Permission.WORKFLOW_CREATE.value]
+
+
+def test_worker_dispatched_tools_are_recorded_at_the_worker_not_the_backend():
+    """#22280: web_fetch, ask_user_for_manual and respond_conversationally go through _execute_worker_task."""
+    from tools.tool_records import LOCATION_WORKER, tool_records
+
+    by_name = {r["name"]: r for r in tool_records()}
+    for name in ("web_fetch", "ask_user_for_manual", "respond_conversationally"):
+        assert by_name[name]["serving_service"] == LOCATION_WORKER, name

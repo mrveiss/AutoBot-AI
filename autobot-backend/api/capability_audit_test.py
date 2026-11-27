@@ -34,7 +34,11 @@ def test_a_non_admin_is_refused():
 
 
 def test_admin_gets_the_audit_report():
-    response = _client().get("/api/capability-audit")
+    auth = MagicMock()
+    auth.get_user_from_request.return_value = _ADMIN
+
+    with real_admin_gate(auth) as wire:
+        response = wire(_client()).get("/api/capability-audit")
 
     assert response.status_code == 200
     body = response.json()

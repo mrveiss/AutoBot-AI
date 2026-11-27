@@ -25,19 +25,11 @@ CAPABILITY_AUDIT_SCHEDULE = env_str("AUTOBOT_CAPABILITY_AUDIT_SCHEDULE", "40 3 *
 SERVICE_HEALTH_PROBE_INTERVAL_SECONDS = env_int_clamped("AUTOBOT_SERVICE_HEALTH_PROBE_INTERVAL_SECONDS", 60, min_v=10)
 
 
-def crontab_from_string(cron_expr: str) -> crontab:
-    """Parse a 5-field cron string ('m h dom mon dow') into a Celery crontab.
+_FALLBACK_CRON_FIELDS = ["0", "3", "*", "*", "*"]
 
-    Falls back to a daily 03:00 UTC schedule if the expression is malformed,
-    logging a warning so misconfiguration does not prevent Beat from starting.
-    """
-    parts = cron_expr.strip().split()
-    if len(parts) != 5:
-        logger.warning(
-            "Invalid cron expression: %d fields, expected 5; falling back to '0 3 * * *'",
-            len(parts),
-        )
-        parts = ["0", "3", "*", "*", "*"]
+
+def _build_crontab(parts: list) -> crontab:
+    """A crontab from five cron fields; raises on an out-of-range or unparseable field."""
     minute, hour, day_of_month, month_of_year, day_of_week = parts
     return crontab(
         minute=minute,
@@ -46,3 +38,24 @@ def crontab_from_string(cron_expr: str) -> crontab:
         month_of_year=month_of_year,
         day_of_week=day_of_week,
     )
+
+
+def crontab_from_string(cron_expr: str) -> crontab:
+    """Parse a 5-field cron string ('m h dom mon dow') into a Celery crontab.
+
+    Falls back to a daily 03:00 UTC schedule if the expression is malformed or a field
+    is out of range (Celery raises ``ValueError``/``ParseException``), logging a warning
+    so misconfiguration does not prevent Beat from starting.
+    """
+    parts = cron_expr.strip().split()
+    if len(parts) != 5:
+        logger.warning(
+            "Invalid cron expression: %d fields, expected 5; falling back to '0 3 * * *'",
+            len(parts),
+        )
+        return _build_crontab(_FALLBACK_CRON_FIELDS)
+    try:
+        return _build_crontab(parts)
+    except Exception as exc:  # celery raises ValueError / its own ParseException for bad fields
+        logger.warning("Invalid cron expression %r (%s); falling back to '0 3 * * *'", cron_expr, exc)
+        return _build_crontab(_FALLBACK_CRON_FIELDS)

@@ -23413,7 +23413,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import developer
 
         source = inspect.getsource(developer.get_api_endpoints)
-        self.assertIn("api_registry.get_all_endpoints()", source)
+        # The retired RuntimeEndpointRegistry is gone; the view comes from the discovered routes (#22274).
+        self.assertNotIn("api_registry", source)
+        self.assertIn("runtime_endpoint_view(request.app)", source)
         self.assertIn("developer_mode", source)
         self.assertIn("Developer mode is not enabled", source)
 

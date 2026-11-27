@@ -111,7 +111,6 @@ for _script in (
     "scripts/identity_config_utility.py",
     "scripts/quick_populate_kb.py",
     "scripts/reset_kb_dimensions.py",
-    "scripts/utilities/index_all_man_pages.py",
     "scripts/utilities/integrate_system_knowledge.py",
     "scripts/utilities/quick_test_os_context.py",
 ):

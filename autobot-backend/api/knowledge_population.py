@@ -39,7 +39,7 @@ from knowledge.schemas.population import (
     TaskStatusResponse,
 )
 from knowledge_factory import get_or_create_knowledge_base
-from services.man_page_ingestion import MAN_PAGE_DEFAULT_SECTION, index_commands_in_batches
+from services.man_page_ingestion import index_commands_in_batches
 from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
 logger = get_logger(__name__)
@@ -519,7 +519,8 @@ async def _populate_man_pages_background(kb_to_use):
 
     try:
         logger.info("Starting manual pages population in background...")
-        commands = [(command, MAN_PAGE_DEFAULT_SECTION) for command in COMMON_MAN_PAGE_COMMANDS]
+        # Section None: each page is indexed under the section ``man`` itself resolves for the command.
+        commands = [(command, None) for command in COMMON_MAN_PAGE_COMMANDS]
         items_added = await index_commands_in_batches(kb_to_use, commands, get_system_context())
         logger.info("Manual pages population completed. Added %s man pages.", items_added)
         return items_added

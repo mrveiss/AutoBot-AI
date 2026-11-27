@@ -269,3 +269,68 @@ async def test_a_service_used_by_a_permitted_tool_is_shown(monkeypatch, role):
     monkeypatch.setattr(self_model_tools, "query_entities", _slm(_services_graph()))
     names = _names(await ToolRegistry().query_self_model({"kind": "service"}, "user-1"))
     assert names == {"service open-svc"}
+
+
+@pytest.mark.asyncio
+async def test_a_revision_change_between_pages_restarts_the_read(monkeypatch, role):
+    """#22280: a reconcile between two pages shifts the offsets; the read starts over on the new revision."""
+    rows = [_entity("route", f"r{i}") for i in range(4)]
+    revisions = iter([1, 2, 2, 2])  # page 1 at revision 1, then the set moved: restart, read cleanly at 2
+
+    async def moving(filters):
+        start = int(filters.get("offset", 0))
+        return {
+            "revision": next(revisions),
+            "total": 4,
+            "entities": rows[start : start + int(filters["limit"])],
+        }
+
+    monkeypatch.setattr(self_model_tools, "query_entities", moving)
+    monkeypatch.setattr(self_model_tools, "SLM_PAGE", 2)
+    result = await ToolRegistry().query_self_model({"kind": "route", "limit": 100}, "admin-1")
+    assert _names(result) == {f"route r{i}" for i in range(4)}
+    assert "holds more matching rows" not in result["result"]
+
+
+@pytest.mark.asyncio
+async def test_a_revision_that_keeps_changing_is_reported_as_incomplete(monkeypatch, role):
+    rows = [_entity("route", f"r{i}") for i in range(4)]
+    counter = iter(range(1, 1000))
+
+    async def churning(filters):
+        start = int(filters.get("offset", 0))
+        return {"revision": next(counter), "total": 4, "entities": rows[start : start + int(filters["limit"])]}
+
+    monkeypatch.setattr(self_model_tools, "query_entities", churning)
+    monkeypatch.setattr(self_model_tools, "SLM_PAGE", 2)
+    text = (await ToolRegistry().query_self_model({"kind": "route", "limit": 100}, "admin-1"))["result"]
+    assert "holds more matching rows than were read" in text
+
+
+@pytest.mark.asyncio
+async def test_an_admin_sees_an_admin_sdk_tool_and_a_user_does_not(monkeypatch, role):
+    """#22280: the SDK ToolPermission level is stored as a canonical Permission, so role_has_permission can answer."""
+    from autobot_shared.tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
+    from autobot_shared.tool_sdk.registry import get_tool_registry
+    from tools.tool_records import tool_records
+
+    class _AdminOnly(BaseTool):
+        metadata = ToolMetadata(name="sdk_admin_probe", description="d", permission=ToolPermission.ADMIN)
+        input_schema = {"type": "object", "properties": {}}
+
+        async def execute(self, validated_input: dict) -> ToolResult:
+            return ToolResult(success=True)
+
+    registry = get_tool_registry()
+    registry.register(_AdminOnly)
+    try:
+        record = next(r for r in tool_records() if r["name"] == "sdk_admin_probe")
+    finally:
+        registry.unregister("sdk_admin_probe")
+    assert record["fields"]["required_permission"] == "api.admin"
+    graph = {"revision": 1, "entities": [_entity("tool", "sdk_admin_probe", attrs=record["fields"])]}
+    monkeypatch.setattr(self_model_tools, "query_entities", _slm(graph))
+    role["is"] = "admin"
+    assert "tool sdk_admin_probe" in _names(await ToolRegistry().query_self_model({"kind": "tool"}, "a-1"))
+    role["is"] = "user"
+    assert "tool sdk_admin_probe" not in _names(await ToolRegistry().query_self_model({"kind": "tool"}, "u-1"))

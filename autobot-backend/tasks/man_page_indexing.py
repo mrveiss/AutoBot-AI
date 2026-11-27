@@ -12,7 +12,7 @@ script path was a second thing that could resolve nowhere. It now awaits the can
 """
 
 from autobot_shared.logging_manager import get_logger
-from services.man_page_ingestion import index_all_man_pages
+from services.man_page_ingestion import ManPageIndexingError, index_all_man_pages
 
 logger = get_logger(__name__)
 
@@ -20,9 +20,15 @@ logger = get_logger(__name__)
 async def run_man_page_indexing() -> dict:
     """Index all man pages and return the refresh task's success dict.
 
-    A failure propagates as an exception; the Celery task reports it as ``failed``.
+    A known indexing failure (no knowledge base, no man pages, storage rejecting every page)
+    returns ``failed`` with its message, which is a fixed diagnostic safe to show an admin; any
+    other failure propagates and the Celery task reports the generic ``failed``.
     """
-    counts = await index_all_man_pages()
+    try:
+        counts = await index_all_man_pages()
+    except ManPageIndexingError as exc:
+        logger.error("System knowledge refresh could not run: %s", exc)
+        return {"status": "failed", "error": str(exc), "message": "Knowledge refresh failed"}
     logger.info(
         "System knowledge refresh complete: %d commands indexed, %d total facts",
         counts["commands_indexed"],

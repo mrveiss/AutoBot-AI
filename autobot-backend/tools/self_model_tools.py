@@ -36,6 +36,10 @@ _SERVICE_KIND = (
 _TOOL_KIND = "tool"
 _FILTERS = ("name", "node_id", "status")
 
+#: Re-reads of one filter set after the SLM's ``revision`` moved between its pages, before the read is flagged incomplete.
+MAX_REVISION_RESTARTS = 2
+_DONE, _TRUNCATED, _REVISION_CHANGED = "done", "truncated", "revision_changed"
+
 
 def _permitted(tool: Dict[str, Any], role: str | None) -> bool:
     """Whether *role* may use the tool entity: its declared ``required_permission`` (None: any caller)."""
@@ -77,16 +81,33 @@ class _Read:
         self.incomplete = False
 
     async def fetch(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Every row matching *filters*, paged; flags ``incomplete`` when the SLM's ``total`` exceeds what was read."""
+        """Every row matching *filters*, paged; flags ``incomplete`` when the read could not be completed.
+
+        Each page reloads the whole set, so a reconcile between two pages shifts the offsets. A changed
+        ``revision`` restarts the read (at most ``MAX_REVISION_RESTARTS`` times), then flags it incomplete.
+        """
+        for _ in range(MAX_REVISION_RESTARTS + 1):
+            rows, outcome = await self._read_pages(filters)
+            if outcome != _REVISION_CHANGED:
+                self.incomplete = self.incomplete or outcome == _TRUNCATED
+                return rows
+        self.incomplete = True
+        return rows
+
+    async def _read_pages(self, filters: Dict[str, Any]) -> tuple[List[Dict[str, Any]], str]:
+        """One pass over the pages: the rows read and why it stopped (done, truncated, or revision changed)."""
         got: List[Dict[str, Any]] = []
+        revision = None
         for _ in range(MAX_PAGES):
             data = await query_entities({**filters, "limit": SLM_PAGE, "offset": len(got)})
+            if got and data.get("revision") != revision:
+                return got, _REVISION_CHANGED
+            revision = data.get("revision")
             page = data.get("entities", [])
             got += page
             if not page or len(got) >= data.get("total", len(got)):
-                return got
-        self.incomplete = True
-        return got
+                return got, _DONE
+        return got, _TRUNCATED
 
 
 def _call_filters(args: Dict[str, Any]) -> Dict[str, Any]:

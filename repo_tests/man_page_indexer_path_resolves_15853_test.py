@@ -252,16 +252,63 @@ def test_only_the_expected_module_invokes_the_indexer() -> None:
         f"{len(unexpected)} file(s) name {_INDEXER_NAME} in executable code but are neither the "
         f"expected executor nor allowed ({_found_and_swept()[1]} files swept):\n"
         + "\n".join(f"  {name}" for name in unexpected)
-        + f"\n\nThe invocation belongs in {sorted(_EXPECTED_EXECUTORS)[0]}, which anchors it to the "
-        "project root and reports absence by path. A second copy is the drift #15853 fixed, "
-        "returning. If the mention is legitimate, add it to `_ALLOWED` with the reason."
+        + "\n\nCallers must use services.man_page_ingestion.index_all_man_pages in-process (#22272); "
+        "naming the script is the drift #15853 fixed, returning. "
+        "If the mention is legitimate, add it to `_ALLOWED` with the reason."
     )
 
 
+def delegates_to_the_canonical_indexer(source: str) -> bool:
+    """Whether *source* imports ``index_all_man_pages`` from the ingestion module AND ``main`` awaits it.
+
+    Read from the AST, so the import or the call appearing only in a comment or a string proves nothing,
+    and an import left behind after ``main`` stops calling it does not pass.
+    """
+    tree = ast.parse(source)
+    imported = any(
+        isinstance(n, ast.ImportFrom)
+        and n.module == "services.man_page_ingestion"
+        and any(a.name == "index_all_man_pages" for a in n.names)
+        for n in ast.walk(tree)
+    )
+    mains = [n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == "main"]
+    awaited = any(
+        isinstance(n, ast.Await)
+        and isinstance(n.value, ast.Call)
+        and isinstance(n.value.func, ast.Name)
+        and n.value.func.id == "index_all_man_pages"
+        for main in mains
+        for n in ast.walk(main)
+    )
+    return imported and awaited
+
+
 def test_the_script_is_a_thin_entry_of_the_canonical_module() -> None:
-    """The other direction (#22272): the script must still exist and delegate, not carry a writer."""
+    """The other direction (#22272): the script must still exist, import the indexer and await it in main()."""
     script = REPO_ROOT / "autobot-infrastructure/shared/scripts/utilities" / _INDEXER_NAME
-    assert "from services.man_page_ingestion import index_all_man_pages" in script.read_text(encoding="utf-8")
+    assert delegates_to_the_canonical_indexer(script.read_text(encoding="utf-8"))
+
+
+_DELEGATING_CLI = """
+from services.man_page_ingestion import index_all_man_pages
+
+async def main():
+    return await index_all_man_pages()
+"""
+
+_IMPORT_ONLY_CLI = """
+from services.man_page_ingestion import index_all_man_pages
+# result = await index_all_man_pages()
+
+async def main():
+    return 0
+"""
+
+
+def test_a_delegating_cli_passes_and_an_import_only_cli_does_not() -> None:
+    """Contrast pair for the detector above: it must trip on the import-only fixture and not on the delegating one."""
+    assert delegates_to_the_canonical_indexer(_DELEGATING_CLI)
+    assert not delegates_to_the_canonical_indexer(_IMPORT_ONLY_CLI)
 
 
 def stale_allowlist_entries(allowed, found) -> List[str]:

@@ -15,6 +15,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from starlette.routing import compile_path
 
 from api.schemas_system import (
     DeveloperConfigResponse,
@@ -46,6 +47,20 @@ def find_similar_endpoints(endpoints: List[Metadata], path: str, method: str) ->
         elif path_lower in endpoint_path or endpoint_path in path_lower:
             similar.append(f"{ep['method']} {ep['path']} (similar path)")
     return similar[:5]  # Limit to 5 suggestions
+
+
+def allowed_methods_for_path(endpoints: List[Metadata], path: str) -> List[str]:
+    """Methods of every discovered route whose template matches the concrete ``path``.
+
+    ``GET /items/{id}`` matches ``/items/42``; a literal route matches only itself, because
+    ``compile_path`` turns a template without parameters into an exact-match pattern.
+    """
+    methods = []
+    for ep in endpoints:
+        pattern, _, _ = compile_path(ep["path"])
+        if pattern.match(path):
+            methods.append(ep["method"])
+    return methods
 
 
 async def runtime_endpoint_view(app) -> Metadata:
@@ -190,10 +205,7 @@ async def method_not_allowed_handler(request: Request, exc: HTTPException):
     method = request.method
 
     # Find endpoints with same path but different methods
-    allowed_methods = []
-    for ep in (await runtime_endpoint_view(request.app))["list"]:
-        if ep["path"] == path:
-            allowed_methods.append(ep["method"])
+    allowed_methods = allowed_methods_for_path((await runtime_endpoint_view(request.app))["list"], path)
 
     response_content = {
         "detail": f"Method {method} not allowed for {path}",

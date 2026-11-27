@@ -16,6 +16,7 @@ Callers: ``index_all_man_pages()`` below (the CLI script and the Celery refresh)
 
 import asyncio
 import os
+from typing import NamedTuple, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.ingestion_visibility import INGESTED_DOCUMENT_VISIBILITY
@@ -31,8 +32,49 @@ MAN_LIST_TIMEOUT_SECONDS = 30
 MAN_DESCRIPTION_TIMEOUT_SECONDS = 5
 MAN_CONTENT_TIMEOUT_SECONDS = 10
 
-#: Section for a command named without one: user commands.
-MAN_PAGE_DEFAULT_SECTION = "1"
+#: Seconds ``man -w`` may run to resolve which section a bare command name belongs to.
+MAN_RESOLVE_TIMEOUT_SECONDS = 5
+
+
+async def _communicate(process, timeout: float) -> Tuple[bytes, bytes]:
+    """``process.communicate()`` bounded by ``timeout``; the child is killed and reaped on every abnormal exit.
+
+    A timeout and an external cancellation both leave the child running otherwise (a child blocked
+    on a full stdout pipe never exits). The exception is re-raised after the cleanup.
+    """
+    try:
+        return await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except (asyncio.TimeoutError, asyncio.CancelledError):
+        if process.returncode is None:
+            process.kill()
+        await process.wait()
+        raise
+
+
+class BatchOutcome(NamedTuple):
+    """What one batch did: pages stored, and pages whose storage failed (not the same as no manual)."""
+
+    indexed: int = 0
+    storage_failed: int = 0
+
+
+async def resolve_man_section(command: str) -> Optional[str]:
+    """The section ``man`` resolves ``command`` to (``man -w`` path ``.../man8/x.8.gz`` gives ``"8"``), or None."""
+    process = await asyncio.create_subprocess_exec(
+        "man",
+        "-w",
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, _ = await _communicate(process, MAN_RESOLVE_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        return None
+    if process.returncode != 0:
+        return None
+    directory = os.path.basename(os.path.dirname(stdout.decode().strip().split("\n")[0]))
+    return directory[3:] or None if directory.startswith("man") else None
 
 
 async def get_all_available_commands():
@@ -50,10 +92,8 @@ async def get_all_available_commands():
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=MAN_LIST_TIMEOUT_SECONDS)
+            stdout, stderr = await _communicate(process, MAN_LIST_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
             logger.error("Timeout listing man pages")
             return []
 
@@ -114,10 +154,8 @@ async def _get_man_page_description(command: str) -> str:
     )
 
     try:
-        desc_stdout, _ = await asyncio.wait_for(desc_process.communicate(), timeout=MAN_DESCRIPTION_TIMEOUT_SECONDS)
+        desc_stdout, _ = await _communicate(desc_process, MAN_DESCRIPTION_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        desc_process.kill()
-        await desc_process.wait()
         return ""
 
     if desc_process.returncode == 0:
@@ -191,10 +229,8 @@ async def _get_man_content(command: str, section: str) -> str:
     )
 
     try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=MAN_CONTENT_TIMEOUT_SECONDS)
+        stdout, stderr = await _communicate(process, MAN_CONTENT_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        process.kill()
-        await process.wait()
         return ""
 
     if process.returncode != 0:
@@ -237,76 +273,77 @@ def _format_man_content(command: str, section: str, description: str, man_conten
 """
 
 
-async def index_command_batch(kb_v2, commands_batch, system_ctx=None):
-    """Index a batch of commands with OS/machine context"""
-    indexed_count = 0
+async def _store_page(kb_v2, command: str, section: str, system_ctx: dict) -> Optional[bool]:
+    """Store one page. None: no manual to store; True: stored; False: storage failed."""
+    man_content = await _get_man_content(command, section)
+    if not man_content:
+        return None
+    description = await _get_man_page_description(command)
+    content = _format_man_content(command, section, description, man_content, system_ctx)
+    unique_key = generate_unique_key(system_ctx["machine_id"], system_ctx["os_name"], command, section)
+    metadata = build_man_page_metadata(command, section, system_ctx, unique_key)
+    try:
+        result = await kb_v2.store_fact(content=content, metadata=metadata)
+    except Exception as e:
+        logger.warning("Storage failed for %s(%s): %s", command, section, e)
+        return False
+    return result.get("status") == "success"
 
-    # Get system context once for the batch
+
+async def index_command_batch(kb_v2, commands_batch, system_ctx=None) -> BatchOutcome:
+    """Index a batch of ``(command, section)`` pairs with OS/machine context.
+
+    A ``None`` section means "whichever section ``man`` resolves for the command"; the resolved
+    section is what the fact's key, ``section`` and ``title`` record.
+    """
+    indexed = storage_failed = 0
     if system_ctx is None:
         system_ctx = get_system_context()
 
     for command, section in commands_batch:
         try:
-            # Get man page content
-            man_content = await _get_man_content(command, section)
-            if not man_content:
-                continue
-
-            # Get description
-            description = await _get_man_page_description(command)
-
-            # Build content with enhanced context
-            content = _format_man_content(command, section, description, man_content, system_ctx)
-
-            # Generate unique key
-            unique_key = generate_unique_key(system_ctx["machine_id"], system_ctx["os_name"], command, section)
-
-            # Build metadata
-            metadata = build_man_page_metadata(command, section, system_ctx, unique_key)
-
-            # Store in Knowledge Base
-            result = await kb_v2.store_fact(content=content, metadata=metadata)
-
-            if result.get("status") == "success":
-                indexed_count += 1
-
+            resolved = section or await resolve_man_section(command)
+            stored = await _store_page(kb_v2, command, resolved, system_ctx) if resolved else None
         except Exception as e:
             logger.warning("Error indexing %s: %s", command, e)
             continue
+        if stored is None:
+            continue
+        indexed += stored
+        storage_failed += not stored
 
-    return indexed_count
+    return BatchOutcome(indexed, storage_failed)
 
 
 async def index_commands_in_batches(kb_v2, all_commands, system_ctx: dict) -> int:
     """
-    Index commands in batches.
+    Index commands in batches and return how many pages were stored.
 
-    Helper for main (#825).
+    Raises ``ManPageIndexingError`` when pages had a manual but storage rejected every one of them,
+    so a dead knowledge base is a failed run, not a successful run of zero. Partial storage failure
+    keeps the successful writes and their count and is logged.
 
     Args:
         kb_v2: KnowledgeBase instance
-        all_commands: List of (command, section) tuples
+        all_commands: List of (command, section-or-None) tuples
         system_ctx: System context dict
-
-    Returns:
-        Total number of indexed commands
     """
     batch_size = MAN_PAGE_BATCH_SIZE
-    total_indexed = 0
+    total_indexed = total_failed = 0
 
     for i in range(0, len(all_commands), batch_size):
         batch = all_commands[i : i + batch_size]
-        batch_indexed = await index_command_batch(kb_v2, batch, system_ctx)
-        total_indexed += batch_indexed
+        outcome = await index_command_batch(kb_v2, batch, system_ctx)
+        total_indexed += outcome.indexed
+        total_failed += outcome.storage_failed
 
         progress = min(i + batch_size, len(all_commands))
-        logger.info(
-            "Progress: %s/%s (%s indexed)",
-            progress,
-            len(all_commands),
-            total_indexed,
-        )
+        logger.info("Progress: %s/%s (%s indexed)", progress, len(all_commands), total_indexed)
 
+    if total_failed:
+        logger.warning("Man page storage failed for %d pages (%d stored)", total_failed, total_indexed)
+        if not total_indexed:
+            raise ManPageIndexingError(f"Knowledge base rejected all {total_failed} man pages")
     return total_indexed
 
 

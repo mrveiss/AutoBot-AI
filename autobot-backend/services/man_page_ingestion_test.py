@@ -62,7 +62,7 @@ def test_the_populate_endpoint_uses_this_path():
     ):
         assert asyncio.run(pop._populate_man_pages_background(kb)) == 3
     commands = batches.await_args.args[1]
-    assert ("ls", ingest.MAN_PAGE_DEFAULT_SECTION) in commands
+    assert ("ls", None) in commands  # man resolves the section, none is forced
     assert not hasattr(pop, "_store_man_page")
 
 
@@ -88,3 +88,70 @@ def test_index_all_man_pages_without_a_knowledge_base_raises():
     with patch("knowledge_factory.get_knowledge_base_async", AsyncMock(return_value=None)):
         with pytest.raises(ingest.ManPageIndexingError):
             asyncio.run(ingest.index_all_man_pages())
+
+
+def _stub_process(stdout: bytes = b"", returncode: int = 0) -> MagicMock:
+    process = MagicMock(returncode=returncode)
+    process.communicate = AsyncMock(return_value=(stdout, b""))
+    process.wait = AsyncMock()
+    return process
+
+
+def test_a_command_with_no_section_one_page_is_indexed_under_the_resolved_section():
+    """service(8) has no section-1 page: the stored key, section and title carry 8 (#22280)."""
+    kb = MagicMock(store_fact=AsyncMock(return_value={"status": "success"}))
+    process = _stub_process(b"/usr/share/man/man8/service.8.gz\n")
+    with (
+        patch.object(ingest.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)),
+        patch.object(ingest, "_get_man_content", AsyncMock(return_value="NAME service")) as content,
+        patch.object(ingest, "_get_man_page_description", AsyncMock(return_value="run")),
+    ):
+        outcome = asyncio.run(ingest.index_command_batch(kb, [("service", None)], _ctx("redis")))
+    content.assert_awaited_once_with("service", "8")
+    metadata = kb.store_fact.await_args.kwargs["metadata"]
+    assert (metadata["section"], metadata["title"]) == ("8", "man service(8)")
+    assert outcome.indexed == 1
+
+
+def test_a_command_man_cannot_resolve_is_skipped_not_failed():
+    kb = MagicMock(store_fact=AsyncMock())
+    process = _stub_process(returncode=1)
+    with patch.object(ingest.asyncio, "create_subprocess_exec", AsyncMock(return_value=process)):
+        outcome = asyncio.run(ingest.index_command_batch(kb, [("nosuch", None)], _ctx("redis")))
+    assert outcome == ingest.BatchOutcome(0, 0)
+    kb.store_fact.assert_not_awaited()
+
+
+def test_storage_failure_for_every_page_is_a_failed_run():
+    import pytest
+
+    kb = MagicMock(store_fact=AsyncMock(side_effect=RuntimeError("down")))
+    with (
+        patch.object(ingest, "_get_man_content", AsyncMock(return_value="NAME ls")),
+        patch.object(ingest, "_get_man_page_description", AsyncMock(return_value="list")),
+    ):
+        with pytest.raises(ingest.ManPageIndexingError):
+            asyncio.run(ingest.index_commands_in_batches(kb, [("ls", "1"), ("cat", "1")], _ctx("redis")))
+
+
+def test_partial_storage_failure_keeps_the_successful_writes():
+    kb = MagicMock(store_fact=AsyncMock(side_effect=[{"status": "success"}, {"status": "error"}]))
+    with (
+        patch.object(ingest, "_get_man_content", AsyncMock(return_value="NAME ls")),
+        patch.object(ingest, "_get_man_page_description", AsyncMock(return_value="list")),
+    ):
+        total = asyncio.run(ingest.index_commands_in_batches(kb, [("ls", "1"), ("cat", "1")], _ctx("redis")))
+    assert total == 1
+
+
+def test_a_cancelled_wait_kills_and_reaps_the_man_child_then_propagates():
+    import pytest
+
+    process = _stub_process()
+    process.returncode = None
+    process.kill = MagicMock()
+    process.communicate = AsyncMock(side_effect=asyncio.CancelledError())
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(ingest._communicate(process, 5))
+    process.kill.assert_called_once()
+    process.wait.assert_awaited_once()

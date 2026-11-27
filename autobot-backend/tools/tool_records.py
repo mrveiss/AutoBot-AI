@@ -31,6 +31,7 @@ from autobot_shared.auth.mcp_tool_permissions import required_permission as _mcp
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.service_registry_core import SERVICE_DEFINITIONS
 from autobot_shared.tool_catalogue import BROWSER_TOOLS
+from autobot_shared.tool_sdk.base import ToolPermission
 
 TOOL_RECORD_KIND = "tool"
 
@@ -57,7 +58,7 @@ REGISTRY_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = {
     "manage_service": ("system", LOCATION_WORKER, None),
     "get_process_info": ("system", LOCATION_WORKER, None),
     "terminate_process": ("system", LOCATION_WORKER, None),
-    "web_fetch": ("web", LOCATION_BACKEND, None),
+    "web_fetch": ("web", LOCATION_WORKER, None),  # ToolRegistry._execute_worker_task
     "web_search": ("web", LOCATION_BACKEND, Permission.MCP_BROWSER_READ),
     "search_knowledge_base": ("knowledge", LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
     "add_file_to_knowledge_base": ("knowledge", LOCATION_BACKEND, None),
@@ -69,14 +70,23 @@ REGISTRY_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = {
     "bring_window_to_front": ("gui", LOCATION_WORKER, None),
     "read_text_from_region": ("gui", LOCATION_WORKER, None),  # #12070
     "move_mouse": ("gui", LOCATION_WORKER, None),
-    "ask_user_for_manual": ("conversation", LOCATION_BACKEND, None),
-    "respond_conversationally": ("conversation", LOCATION_BACKEND, None),
+    "ask_user_for_manual": ("conversation", LOCATION_WORKER, None),
+    "respond_conversationally": ("conversation", LOCATION_WORKER, None),
     "code_interpreter": ("code", LOCATION_BACKEND, None),
     "scrape_url": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ),  # #7509
     "crawl_site": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_WRITE),
     "map_site": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
     "extract_structured_data": (CATEGORY_WEB_RESEARCH, LOCATION_BACKEND, Permission.KNOWLEDGE_READ),
     "content_reach": ("web", LOCATION_BACKEND, None),  # #10932
+}
+
+#: SDK ``ToolPermission`` level -> the canonical ``Permission`` a role must hold to see the tool. ``role_has_permission``
+#: knows only dot-style Permission values, so storing the bare level would hide every SDK tool from every role.
+_SDK_PERMISSIONS: Dict[ToolPermission, Optional[Permission]] = {
+    ToolPermission.PUBLIC: None,
+    ToolPermission.AUTHENTICATED: Permission.API_READ,
+    ToolPermission.ADMIN: Permission.API_ADMIN,
+    ToolPermission.SYSTEM: Permission.ADMIN_SYSTEM,
 }
 
 #: Offered only while the tool-output spill flag is on (#13754, #13865).
@@ -156,6 +166,12 @@ def _record(name: str, location: str, **fields: Any) -> Dict[str, Any]:
     }
 
 
+def _sdk_required_permission(level: ToolPermission) -> Optional[str]:
+    """The canonical dot-style Permission value an SDK ``ToolPermission`` level stands for; None: no check."""
+    permission = _SDK_PERMISSIONS[level]
+    return _value(permission)
+
+
 def _sdk_records() -> List[Dict[str, Any]]:
     """Tools registered as ``BaseTool`` classes in the SDK registry (run in the registering process)."""
     from autobot_shared.tool_sdk.registry import get_tool_registry  # noqa: PLC0415
@@ -169,7 +185,7 @@ def _sdk_records() -> List[Dict[str, Any]]:
             description=m.description,
             version=m.version,
             permission=m.permission.value,
-            required_permission=m.permission.value,
+            required_permission=_sdk_required_permission(m.permission),
             tags=list(m.tags),
         )
         for m in get_tool_registry().list_tools()
