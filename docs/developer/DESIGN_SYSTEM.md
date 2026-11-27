@@ -364,7 +364,7 @@ other name that exists only in the SLM, and on a name here that no longer exists
 | Name | Why it is not shared |
 |---|---|
 | `--slm-bar`, `--slm-bar-fg`, `--slm-bar-muted`, `--slm-bar-hover`, `--slm-bar-line`, `--slm-bar-on` | The SLM control plane always wears a dark identity bar in every theme so it is told apart from the user frontend. The user frontend has no such surface, so there is nothing to share. Read by `Sidebar.vue` and the language picker. |
-| `--slm-stripe`, `--slm-badge-bg`, `--slm-badge-fg` | The same identity: stripe and badge accents of that bar. Declared per scheme and not yet read by a component; kept, not deleted, because the bar is where they are meant to be applied. |
+| `--slm-stripe`, `--slm-badge-bg`, `--slm-badge-fg` | The same identity: stripe and badge accents of that bar. Declared per scheme and not yet read by a component; kept, not deleted, because the SLM identity bar that applies them is deferred to Refined UI step 5f. |
 | `--color-white`, `--color-black` | Tailwind's own theme variables, restated so the scheme has them when the build tree-shakes the theme. Framework names, not tokens. |
 
 A new SLM-only name needs a row in this table (and an owner decision that the concept really has no user-frontend
