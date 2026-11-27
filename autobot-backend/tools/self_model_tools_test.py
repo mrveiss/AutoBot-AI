@@ -310,23 +310,15 @@ async def test_a_revision_that_keeps_changing_is_reported_as_incomplete(monkeypa
 @pytest.mark.asyncio
 async def test_an_admin_sees_an_admin_sdk_tool_and_a_user_does_not(monkeypatch, role):
     """#22280: the SDK ToolPermission level is stored as a canonical Permission, so role_has_permission can answer."""
-    from autobot_shared.tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
-    from autobot_shared.tool_sdk.registry import get_tool_registry
+    from unittest.mock import MagicMock, patch
+
+    from autobot_shared.tool_sdk.base import ToolMetadata, ToolPermission
     from tools.tool_records import tool_records
 
-    class _AdminOnly(BaseTool):
-        metadata = ToolMetadata(name="sdk_admin_probe", description="d", permission=ToolPermission.ADMIN)
-        input_schema = {"type": "object", "properties": {}}
-
-        async def execute(self, validated_input: dict) -> ToolResult:
-            return ToolResult(success=True)
-
-    registry = get_tool_registry()
-    registry.register(_AdminOnly)
-    try:
+    metadata = ToolMetadata(name="sdk_admin_probe", description="d", permission=ToolPermission.ADMIN)
+    sdk_registry = MagicMock(list_tools=MagicMock(return_value=[metadata]))
+    with patch("autobot_shared.tool_sdk.registry.get_tool_registry", return_value=sdk_registry):
         record = next(r for r in tool_records() if r["name"] == "sdk_admin_probe")
-    finally:
-        registry.unregister("sdk_admin_probe")
     assert record["fields"]["required_permission"] == "api.admin"
     graph = {"revision": 1, "entities": [_entity("tool", "sdk_admin_probe", attrs=record["fields"])]}
     monkeypatch.setattr(self_model_tools, "query_entities", _slm(graph))
