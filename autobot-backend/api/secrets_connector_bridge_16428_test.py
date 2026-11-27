@@ -15,6 +15,10 @@ and ``auth_type`` bridges transparently to it for create/get/rotate/revoke,
 instead of the legacy file. These prove the bridge for both auth shapes AC3
 names explicitly: a single-field kind (``BearerAuth``) and the multi-field
 kind (``OAuthRefreshAuth``, four fields bundled together).
+
+#22234: the ``OAuthRefreshAuth`` bridge stores the refreshable bundle
+(``client_id`` and ``token_url`` included), so the credential survives its
+first access-token expiry instead of dying in ``_resolve_app_credentials``.
 """
 
 import json
@@ -77,7 +81,7 @@ class TestConnectorBridgedSecretCreate:
         from autobot_shared.auth.connector_auth import BearerAuth
 
         store = MagicMock()
-        store.store = AsyncMock(return_value=("secret-123", {}))
+        store.store_bridged = AsyncMock(return_value="secret-123")
         request = _connector_secret_request(auth_type="BearerAuth", credentials={"token": "tok-abc"})
 
         with patch("api.secrets.get_credential_store", return_value=store):
@@ -86,7 +90,7 @@ class TestConnectorBridgedSecretCreate:
         assert result["id"] == "secret-123"
         assert "value" not in result
         assert result["metadata"]["connector_id"] == "conn-1"
-        store.store.assert_awaited_once_with("conn-1", "owner-1", BearerAuth, {"token": "tok-abc"})
+        store.store_bridged.assert_awaited_once_with("conn-1", "owner-1", BearerAuth, {"token": "tok-abc"})
 
     @pytest.mark.asyncio
     async def test_oauth_refresh_auth_stores_the_full_multi_field_bundle(self):
@@ -101,7 +105,7 @@ class TestConnectorBridgedSecretCreate:
             "token_url": "https://provider.example/token",
         }
         store = MagicMock()
-        store.store = AsyncMock(return_value=("secret-456", {}))
+        store.store_bridged = AsyncMock(return_value="secret-456")
         request = _connector_secret_request(
             type=SecretType.CONNECTOR_OAUTH_TOKEN, auth_type="OAuthRefreshAuth", credentials=oauth_creds
         )
@@ -110,7 +114,7 @@ class TestConnectorBridgedSecretCreate:
             result = await _create_connector_bridged_secret(request, "owner-1")
 
         assert result["id"] == "secret-456"
-        store.store.assert_awaited_once_with("conn-1", "owner-1", OAuthRefreshAuth, oauth_creds)
+        store.store_bridged.assert_awaited_once_with("conn-1", "owner-1", OAuthRefreshAuth, oauth_creds)
 
     @pytest.mark.asyncio
     async def test_oauth_refresh_auth_missing_a_field_is_rejected(self):
@@ -122,6 +126,83 @@ class TestConnectorBridgedSecretCreate:
         )
         with pytest.raises(ValueError, match="missing required auth field"):
             await _create_connector_bridged_secret(request, "owner-1")
+
+
+_OAUTH_CREDS = {
+    "client_id": "cid",
+    "client_secret": "csecret",  # pragma: allowlist secret
+    "refresh_token": "rtok",
+    "token_url": "https://provider.example/token",
+}
+
+
+def _dict_backed_store():
+    """A real ConnectorCredentialStore over a dict-backed fake SecretsService."""
+    from knowledge.connectors.credential_store import ConnectorCredentialStore
+
+    rows = {}
+    svc = MagicMock()
+
+    def _create(name, secret_type, value, scope, created_by=None, **_):
+        rows[f"sid-{name}"] = {"id": f"sid-{name}", "value": value, "created_by": created_by}
+        return {"id": f"sid-{name}"}
+
+    def _get(secret_id=None, include_value=False, **_):
+        return dict(rows[secret_id]) if secret_id in rows else None
+
+    def _update(secret_id, value=None, **_):
+        rows[secret_id]["value"] = value
+        return True
+
+    svc.create_secret.side_effect = _create
+    svc.get_secret.side_effect = _get
+    svc.update_secret.side_effect = _update
+    return ConnectorCredentialStore(svc)
+
+
+class TestBridgedOAuthCredentialRefreshes:
+    """#22234: a Secrets-page OAuthRefreshAuth credential survives its first expiry."""
+
+    @pytest.mark.asyncio
+    async def test_created_credential_refreshes_with_no_network(self, monkeypatch):
+        from api.secrets import _create_connector_bridged_secret
+        from autobot_shared.leader_lease import LeaderLease
+        from knowledge.connectors import oauth_flow
+        from knowledge.connectors.credential_store import ConnectorCredentialStore
+
+        calls = []
+
+        async def _fake_refresh(token_url, client_id, client_secret, refresh_token, **_kw):
+            calls.append((token_url, client_id, client_secret, refresh_token))
+            return {"access_token": "fresh", "expires_in": 3600}
+
+        monkeypatch.setattr(oauth_flow, "refresh_access_token", _fake_refresh)
+        monkeypatch.setattr(LeaderLease, "update_leadership", AsyncMock(return_value=False))
+        monkeypatch.setattr(ConnectorCredentialStore, "_refresh_lock_available", AsyncMock(return_value=False))
+        store = _dict_backed_store()
+        request = _connector_secret_request(
+            type=SecretType.CONNECTOR_OAUTH_TOKEN, auth_type="OAuthRefreshAuth", credentials=_OAUTH_CREDS
+        )
+
+        with patch("api.secrets.get_credential_store", return_value=store):
+            created = await _create_connector_bridged_secret(request, "owner-1")
+        token = await store.get_access_token(created["id"], "owner-1")
+
+        assert token == "fresh"
+        assert calls == [("https://provider.example/token", "cid", "csecret", "rtok")]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("field", ["token_url", "client_id"])
+    async def test_missing_or_empty_field_is_refused_at_create_not_at_refresh(self, field):
+        from api.secrets import _create_connector_bridged_secret
+
+        store = _dict_backed_store()
+        for creds in ({k: v for k, v in _OAUTH_CREDS.items() if k != field}, {**_OAUTH_CREDS, field: ""}):
+            request = _connector_secret_request(auth_type="OAuthRefreshAuth", credentials=creds)
+            with patch("api.secrets.get_credential_store", return_value=store):
+                with pytest.raises(ValueError, match=field):
+                    await _create_connector_bridged_secret(request, "owner-1")
+        store._svc.create_secret.assert_not_called()
 
 
 class TestGetConnectorBridgedSecretEnforcesOwnership:

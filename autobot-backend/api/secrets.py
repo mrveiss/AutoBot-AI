@@ -656,7 +656,7 @@ async def _create_connector_bridged_secret(request: SecretCreateRequest, owner_i
     if errors:
         raise ValueError("; ".join(errors))
 
-    secret_id, _sanitized = await get_credential_store().store(
+    secret_id = await get_credential_store().store_bridged(
         request.connector_id, owner_id, auth_cls, request.credentials
     )
     return _connector_secret_metadata(secret_id, request)

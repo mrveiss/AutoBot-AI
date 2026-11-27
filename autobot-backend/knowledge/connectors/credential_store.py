@@ -25,6 +25,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import now_utc, parse_utc_iso
+from knowledge.connectors.oauth_bundle import OAuthBundleMixin
 from services.credential_read import load_imported_credential
 from services.credential_write import connector_secret_name, delete_credential_from_vault, mirror_credential_to_vault
 
@@ -208,7 +209,7 @@ async def _release_quietly(lease: LeaderLease) -> None:
         await asyncio.shield(lease.release())
 
 
-class ConnectorCredentialStore:
+class ConnectorCredentialStore(OAuthBundleMixin):
     """Bridges ConnectorConfig ↔ SecretsService for credential isolation (ADR-007).
 
     All methods are async-safe; the underlying SecretsService calls are
@@ -392,6 +393,28 @@ class ConnectorCredentialStore:
         provider config at refresh time (#13630).  Returns the secret id.
         """
         creds = self._oauth_bundle(token_response, token_url, scopes, provider)
+        return await self._persist_oauth_bundle(
+            connector_id, owner_id, creds, {"provider": provider, "connector_id": connector_id}
+        )
+
+    async def store_refreshable_oauth(self, connector_id: str, owner_id: str, config: dict) -> str:
+        """Persist an ``OAuthRefreshAuth`` credential so it can refresh itself (#22234).
+
+        Same bundle shape and write path as :meth:`store_oauth`, plus the app
+        credentials :meth:`_resolve_app_credentials` falls back to. Raises
+        ValueError for a missing/empty required field, at create time.
+        """
+        metadata = {"auth_type": "OAuthRefreshAuth", "connector_id": connector_id}
+        return await self._persist_oauth_bundle(connector_id, owner_id, self._refreshable_bundle(config), metadata)
+
+    async def store_bridged(self, connector_id: str, owner_id: str, auth_cls: type, config: dict) -> str:
+        """Store a Secrets-page credential in the shape its auth type reads back (#22234)."""
+        if auth_cls.__name__ == "OAuthRefreshAuth":
+            return await self.store_refreshable_oauth(connector_id, owner_id, config)
+        return (await self.store(connector_id, owner_id, auth_cls, config))[0]
+
+    async def _persist_oauth_bundle(self, connector_id: str, owner_id: str, creds: dict, metadata: dict) -> str:
+        """Write one OAuth bundle as a ``connector_oauth_token`` secret; return its id."""
         name = connector_secret_name(connector_id)
         value = json.dumps(creds, ensure_ascii=False)
         result = await asyncio.get_running_loop().run_in_executor(
@@ -402,7 +425,7 @@ class ConnectorCredentialStore:
                 value=value,
                 scope="user",
                 created_by=owner_id,
-                metadata={"provider": provider, "connector_id": connector_id},
+                metadata=metadata,
             ),
         )
         if _vault_write_enabled():
@@ -616,28 +639,6 @@ class ConnectorCredentialStore:
     # Helpers
     # ------------------------------------------------------------------
 
-    @classmethod
-    def _oauth_bundle(
-        cls,
-        token_response: dict,
-        token_url: str,
-        scopes: list,
-        provider: str,
-    ) -> dict:
-        """Build the stored OAuth credential bundle from a token response."""
-        return {
-            "provider": provider,
-            "access_token": token_response.get("access_token", ""),
-            "refresh_token": token_response.get("refresh_token", ""),
-            "access_token_expires_at": cls._expiry_iso(token_response.get("expires_in")),
-            # The lifetime, kept alongside the derived timestamp so a refresh
-            # response that omits ``expires_in`` can recompute one (#13626).
-            "access_token_lifetime_seconds": cls._lifetime_seconds(token_response.get("expires_in")),
-            "token_type": token_response.get("token_type", "Bearer"),
-            "scope": token_response.get("scope", " ".join(scopes)),
-            "token_url": token_url,
-        }
-
     @staticmethod
     def _require_owner(secret: dict, secret_id: str, owner_id: str) -> None:
         """Refuse to release a credential that is not provably *owner_id*'s (#13628).
@@ -690,37 +691,6 @@ class ConnectorCredentialStore:
             "provider config yields none; configure the provider's OAuth app (#13630)."
         )
         return stored
-
-    @staticmethod
-    def _lifetime_seconds(expires_in) -> int | None:
-        """Return *expires_in* as whole seconds, or None when not reported (#13626).
-
-        Kept separate from :meth:`_expiry_iso` so the stored lifetime survives a
-        refresh response that omits ``expires_in``. Parsing failures return None
-        for the same reason ``_expiry_iso`` does — an unusable value is treated
-        as "not reported" rather than guessed at.
-        """
-        if expires_in is None:
-            return None
-        try:
-            return int(expires_in)
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _expiry_iso(expires_in) -> str | None:
-        """Return ISO expiry timestamp for *expires_in* seconds, or None.
-
-        Only a missing value (None) means non-expiring; ``expires_in == 0`` is a
-        real, immediate expiry.
-        """
-        if expires_in is None:
-            return None
-        try:
-            seconds = int(expires_in)
-        except (TypeError, ValueError):
-            return None
-        return (now_utc() + timedelta(seconds=seconds)).isoformat()
 
     @staticmethod
     def _access_token_expired(expires_at_iso: str | None) -> bool:
