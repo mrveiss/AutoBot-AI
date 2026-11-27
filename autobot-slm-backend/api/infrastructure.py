@@ -648,7 +648,7 @@ async def _run_playbook(
             logger.error("Dynamic inventory generation failed: no nodes in DB")
             return
         inventory_path = str(inventory_path_obj)
-        # #22262: this route runs the fleet-update playbook raw, so its targets' roles are provisioned here first
+        # #22262: this route runs the fleet-update playbook raw, so its targets' assigned roles are provisioned first
         execution.output.extend(await provision_before_raw_update(playbook.playbook_file, limit_hosts))
 
         # Inject stored SLM secrets so standalone re-deploys receive the same
