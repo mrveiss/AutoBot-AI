@@ -237,7 +237,11 @@ def _with_early_messages(result: dict, early: list[str], node_id: str) -> dict:
     if result.get("success"):
         return _with_messages(result, early, prepend=True)
     if any(early):
-        logger.info("Pending-role provisioning before a failed update on %s: %s", node_id, " | ".join(filter(None, early)))
+        logger.info(
+            "Pending-role provisioning before a failed update on %s: %s",
+            node_id,
+            " | ".join(filter(None, early)),
+        )
     return result
 
 
