@@ -10,10 +10,11 @@ time, so the caller can stop scanning as soon as ``offset + limit`` eligible fac
 
 from __future__ import annotations
 
+import json
 from typing import Any, AsyncIterator, Callable, Dict, List
 
 from autobot_shared.env_utils import env_int
-from knowledge.fact_key_families import NON_HASH_FACT_PREFIXES
+from autobot_shared.fact_key_families import fact_keys_only, is_fact_key
 from knowledge.quarantine import not_quarantined
 
 FACT_KEY_PATTERN = "fact:*"
@@ -22,24 +23,26 @@ FACT_SCAN_BATCH_SIZE: int = env_int("AUTOBOT_FACT_SCAN_BATCH_SIZE", 200)
 FactProcessor = Callable[[Any, Any, "str | None"], "Dict[str, Any] | None"]
 
 
-def is_fact_key(key: Any) -> bool:
-    """True for a real ``fact:<id>`` hash; the other ``fact:`` key families share the scan prefix and are not hashes.
+def is_retention_exempt(raw_metadata: Any) -> bool:
+    """True for a fact that age-based retention must keep (owner decision 2026-11-27, #17530).
 
-    Fact ids legitimately contain ``:`` (``claude_memory:<owner>:<slug>``, connector ``<src>:<id>:file:<path>``,
-    ``ext:...``, ``stream:...``), so a colon cannot be the discriminator. A key is a fact hash unless it starts
-    with one of :data:`NON_HASH_FACT_PREFIXES` (``fact:collections:``, ``fact:origin:session:``,
-    ``fact:versions:``, ``fact:version:meta:``), defined once in ``fact_key_families`` and imported by their
-    writers. A prefix test is chosen over a pipelined ``TYPE`` check because it costs no round trip and no
-    production id starts with one of those four namespaced prefixes. A WRONGTYPE ``hgetall`` on a non-hash
-    family would fail the whole pipelined batch.
+    Claude-memory facts and connector-synced facts are exempt. Read from ``metadata``, not the id: ids come from
+    several builders (``claude_code_memory:<owner>:<slug>``, ``<type>:<connector>:file:<id>``, ``ext:``/``stream:``
+    and a connector's own source ids), but every connector write goes through ``_ingest_content``, which stamps
+    ``source_type`` (``CONNECTOR_SOURCE_TYPE``), and the importer stamps ``category`` (``CATEGORY``). That covers
+    ``ext:`` and ``stream:`` facts too, since the external adapter ingests through the same path. One predicate for
+    the retention task and the admin count, so the preview matches what retention deletes.
     """
-    text = key.decode("utf-8") if isinstance(key, bytes) else key
-    return text.startswith("fact:") and not text.startswith(NON_HASH_FACT_PREFIXES)
+    from knowledge.claude_memory_importer import CATEGORY  # lazy: pulls the PII pipeline
+    from knowledge.connectors.base import CONNECTOR_SOURCE_TYPE
 
-
-def fact_keys_only(keys: Any) -> List[Any]:
-    """*keys* without the non-hash ``fact:`` families: the filter for a ``fact:*`` SCAN/KEYS that reads hashes."""
-    return [k for k in keys if is_fact_key(k)]
+    if isinstance(raw_metadata, (bytes, str)):
+        try:
+            raw_metadata = json.loads(raw_metadata)
+        except ValueError:
+            return False
+    meta = raw_metadata if isinstance(raw_metadata, dict) else {}
+    return meta.get("source_type") == CONNECTOR_SOURCE_TYPE or meta.get("category") == CATEGORY
 
 
 def scan_fact_keys(client: Any, cursor: Any, count: int) -> "tuple[Any, List[Any]]":

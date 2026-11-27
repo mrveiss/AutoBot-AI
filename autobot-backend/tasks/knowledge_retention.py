@@ -20,7 +20,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
-from knowledge.fact_stream import is_fact_key
+from knowledge.fact_stream import is_fact_key, is_retention_exempt
 from services.audit.audit import AuditCategory
 from tasks.retention_audit import emit_deletion_audit
 
@@ -56,6 +56,8 @@ def _collect_expired_facts(redis_client, cutoff: datetime) -> Tuple[List[Tuple[s
                     fact_ts = fact_ts.replace(tzinfo=timezone.utc)
                 if fact_ts >= cutoff:
                     continue
+                if is_retention_exempt(redis_client.hget(key, "metadata")):
+                    continue  # Claude-memory and connector-synced facts are kept (owner decision 2026-11-27)
                 age_days = (datetime.now(timezone.utc) - fact_ts).days
                 candidates.append((fact_id, age_days))
             except Exception as exc:

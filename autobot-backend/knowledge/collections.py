@@ -17,10 +17,10 @@ import json
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.fact_key_families import FACT_COLLECTIONS_PREFIX
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.fact_aggregate import invalidates_fact_rows
-from knowledge.fact_key_families import FACT_COLLECTIONS_PREFIX
 
 if TYPE_CHECKING:
     import aioredis

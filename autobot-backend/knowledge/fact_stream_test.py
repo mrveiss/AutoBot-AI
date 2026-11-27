@@ -9,14 +9,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from autobot_shared.ssot_config import config
-from knowledge.fact_key_families import (
+from autobot_shared.fact_key_families import (
     FACT_COLLECTIONS_PREFIX,
     FACT_ORIGIN_SESSION_PREFIX,
     FACT_VERSION_META_PREFIX,
     FACT_VERSIONS_PREFIX,
 )
-from knowledge.fact_stream import get_facts_page, is_fact_key
+from autobot_shared.ssot_config import config
+from knowledge.fact_stream import get_facts_page, is_fact_key, is_retention_exempt
 from knowledge.facts import FactsMixin
 
 _RESEARCH = config.research_quarantine_collection
@@ -143,3 +143,32 @@ async def test_facts_already_stored_under_colon_ids_are_listed_with_their_full_i
 async def test_a_scan_page_lists_colon_ids_and_skips_every_non_hash_family():
     cursor, facts = await get_facts_page(_Store(_mixed_rows()), 0, 100)
     assert cursor == 0 and sorted(f["fact_id"] for f in facts) == sorted(["plain01", *_COLON_IDS])
+
+
+def _old_fact(metadata: dict) -> dict:
+    return {b"content": b"c", b"metadata": json.dumps(metadata).encode(), b"timestamp": b"2020-01-01T00:00:00+00:00"}
+
+
+def test_retention_keeps_memory_and_connector_facts_past_the_ttl_and_expires_an_ordinary_one():
+    """Owner decision 2026-11-27: Claude-memory and connector-synced facts are exempt from age-based retention."""
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    from knowledge.claude_memory_importer import CATEGORY
+    from knowledge.connectors.base import CONNECTOR_SOURCE_TYPE
+    from tasks.knowledge_retention import _collect_expired_facts
+
+    rows = {
+        "fact:claude_code_memory:u1:slug": _old_fact({"category": CATEGORY}),
+        "fact:gdrive:c1:file:x": _old_fact({"source_type": CONNECTOR_SOURCE_TYPE}),
+        "fact:ext:feed:abc123": _old_fact({"source_type": CONNECTOR_SOURCE_TYPE, "stream_name": "feed"}),
+        "fact:ordinary01": _old_fact({"category": "notes"}),
+        "fact:collections:ordinary01": {},
+    }
+    client = MagicMock()
+    client.scan.return_value = (0, list(rows))
+    client.hget.side_effect = lambda key, field: rows[key][field.encode()]
+    candidates, skipped = _collect_expired_facts(client, datetime(2025, 1, 1, tzinfo=timezone.utc))
+
+    assert [fact_id for fact_id, _ in candidates] == ["ordinary01"] and skipped == 0
+    assert is_retention_exempt(rows["fact:ext:feed:abc123"][b"metadata"]) and not is_retention_exempt(None)

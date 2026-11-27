@@ -26,12 +26,14 @@ from typing import Any, Dict, List
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))  # the repository root: provides ``autobot_shared``
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
 
 load_dotenv(PROJECT_ROOT / ".env")
 
+from autobot_shared.fact_key_families import fact_keys_only
 from knowledge_base import KnowledgeBase
 from knowledge_factory import get_knowledge_base_async
 
@@ -106,7 +108,7 @@ async def get_documentation_fact_ids(kb: KnowledgeBase) -> List[str]:
     while True:
         cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=1000)
 
-        for key in keys:
+        for key in fact_keys_only(keys):  # a WRONGTYPE hget on a non-hash fact: family is skipped here
             try:
                 metadata_raw = kb.redis_client.hget(key, "metadata")
                 if metadata_raw:

@@ -15,9 +15,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from autobot_shared.fact_key_families import FACT_COLLECTIONS_PREFIX
 from autobot_shared.logging_manager import get_logger
 from knowledge.collections import _unapproved
-from knowledge.fact_key_families import FACT_COLLECTIONS_PREFIX
 
 logger = get_logger(__name__)
 

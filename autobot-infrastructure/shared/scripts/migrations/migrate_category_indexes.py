@@ -44,6 +44,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from autobot_shared.fact_key_families import fact_keys_only  # noqa: E402
 from autobot_shared.knowledge_categories import get_category_for_source  # noqa: E402
 from autobot_shared.redis_client import require_redis_client  # noqa: E402
 
@@ -120,7 +121,7 @@ def _scan_all_fact_keys(redis_client: redis.Redis) -> list:
     cursor = 0
     while True:
         cursor, keys = redis_client.scan(cursor, match="fact:*", count=1000)
-        all_fact_keys.extend(keys)
+        all_fact_keys.extend(fact_keys_only(keys))  # not the non-hash fact: families
         if cursor == 0:
             break
 

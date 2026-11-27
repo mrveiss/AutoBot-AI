@@ -27,7 +27,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
-from knowledge.fact_stream import is_fact_key
+from knowledge.fact_stream import fact_keys_only, is_retention_exempt
 from user_management.models.retention_policy import RetentionPolicy
 from user_management.schemas.retention_policy import (
     PolicyType,
@@ -227,7 +227,7 @@ async def _count_audit_entries() -> int:
 
 
 async def _count_kb_facts() -> int:
-    """Return count of bare fact:<id> Redis hashes."""
+    """Return the count of fact hashes retention can act on (Claude-memory and connector facts are exempt)."""
     try:
         from autobot_shared.redis_client import get_async_redis_client
 
@@ -238,9 +238,14 @@ async def _count_kb_facts() -> int:
         cursor: int = 0
         while True:
             cursor, keys = await redis.scan(cursor, match="fact:*", count=500)
-            for key in keys:
-                if is_fact_key(key):
-                    count += 1
+            keys = fact_keys_only(keys)
+            if keys:
+                pipe = redis.pipeline()
+                for key in keys:
+                    pipe.hget(key, "metadata")
+                count += sum(
+                    1 for raw in await pipe.execute() if not is_retention_exempt(raw)
+                )  # same rule as retention
             if cursor == 0:
                 break
         return count

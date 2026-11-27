@@ -18,11 +18,11 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.content_digest import fact_dedup_key
 from autobot_shared.env_utils import env_float, env_int
+from autobot_shared.fact_key_families import FACT_ORIGIN_SESSION_PREFIX, reserved_fact_id_error
 from autobot_shared.logging_manager import get_logger
 from knowledge.category_quarantine import sync_fact_quarantine, unindex_deleted_fact
 from knowledge.embedding_space_binding import current_space
 from knowledge.fact_aggregate import invalidates_fact_rows
-from knowledge.fact_key_families import FACT_ORIGIN_SESSION_PREFIX, reserved_fact_id_error
 from knowledge.fact_projection import FactProjectionMixin
 from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable here
     _apply_usage_fields,
