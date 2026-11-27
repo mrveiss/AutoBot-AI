@@ -63,6 +63,7 @@ async def resolve_man_section(command: str) -> Optional[str]:
     process = await asyncio.create_subprocess_exec(
         "man",
         "-w",
+        "--",
         command,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -148,6 +149,7 @@ async def _get_man_page_description(command: str) -> str:
     desc_process = await asyncio.create_subprocess_exec(
         "man",
         "-k",
+        "--",
         f"^{command}$",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -221,6 +223,7 @@ async def _get_man_content(command: str, section: str) -> str:
 
     process = await asyncio.create_subprocess_exec(
         "man",
+        "--",
         section,
         command,
         stdout=asyncio.subprocess.PIPE,
@@ -315,9 +318,9 @@ async def index_command_batch(kb_v2, commands_batch, system_ctx=None) -> BatchOu
     return BatchOutcome(indexed, storage_failed)
 
 
-async def index_commands_in_batches(kb_v2, all_commands, system_ctx: dict) -> int:
+async def index_commands_in_batches(kb_v2, all_commands, system_ctx: dict) -> BatchOutcome:
     """
-    Index commands in batches and return how many pages were stored.
+    Index commands in batches and return how many pages were stored and how many failed to store.
 
     Raises ``ManPageIndexingError`` when pages had a manual but storage rejected every one of them,
     so a dead knowledge base is a failed run, not a successful run of zero. Partial storage failure
@@ -344,7 +347,7 @@ async def index_commands_in_batches(kb_v2, all_commands, system_ctx: dict) -> in
         logger.warning("Man page storage failed for %d pages (%d stored)", total_failed, total_indexed)
         if not total_indexed:
             raise ManPageIndexingError(f"Knowledge base rejected all {total_failed} man pages")
-    return total_indexed
+    return BatchOutcome(total_indexed, total_failed)
 
 
 class ManPageIndexingError(RuntimeError):
@@ -375,7 +378,7 @@ async def index_all_man_pages() -> dict:
 
     The one entry for the CLI script and the Celery refresh: callers use this return value,
     never the output of a subprocess. Keys: ``commands_scanned``, ``commands_indexed``,
-    ``total_facts``, ``total_vectors``.
+    ``storage_failed``, ``total_facts``, ``total_vectors``.
     """
     kb = await _ready_knowledge_base()
     try:
@@ -384,11 +387,12 @@ async def index_all_man_pages() -> dict:
             raise ManPageIndexingError("No commands found")
         system_ctx = get_system_context()
         _log_system_context(system_ctx)
-        indexed = await index_commands_in_batches(kb, commands, system_ctx)
+        outcome = await index_commands_in_batches(kb, commands, system_ctx)
         stats = await kb.get_stats()
         return {
             "commands_scanned": len(commands),
-            "commands_indexed": indexed,
+            "commands_indexed": outcome.indexed,
+            "storage_failed": outcome.storage_failed,
             "total_facts": stats.get("total_facts", 0),
             "total_vectors": stats.get("total_vectors", 0),
         }

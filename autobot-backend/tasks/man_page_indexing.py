@@ -37,6 +37,7 @@ async def run_man_page_indexing() -> dict:
     return {
         "status": "success",
         "commands_indexed": counts["commands_indexed"],
+        "storage_failed": counts["storage_failed"],
         "total_facts": counts["total_facts"],
         "message": "System knowledge refreshed successfully",
     }

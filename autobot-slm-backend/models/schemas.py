@@ -254,8 +254,7 @@ class HeartbeatRequest(BaseModel):
     os_info: str | None = None
     code_version: str | None = None  # Issue #741: Git commit hash
     extra_data: Dict = Field(default_factory=dict)
-    # Role detection (Issue #779)
-    role_report: Dict[str, RoleReportItem] = Field(default_factory=dict)
+    role_report: Dict[str, RoleReportItem] = Field(default_factory=dict)  # Role detection (Issue #779)
     listening_ports: List[PortInfo] = Field(default_factory=list)
 
 
@@ -266,9 +265,7 @@ class HeartbeatResponse(BaseModel):
     update_available: bool = False
     latest_version: str | None = None
     update_url: str | None = None
-    # The inventory hash the SLM has folded into the self-model for this node; the agent treats a full
-    # inventory as delivered only when this equals the hash it sent (#22280).
-    inventory_ack: str | None = None
+    inventory_ack: str | None = Field(None, description="Inventory hash stored in the self-model (#22280)")
 
 
 class EnrollRequest(BaseModel):

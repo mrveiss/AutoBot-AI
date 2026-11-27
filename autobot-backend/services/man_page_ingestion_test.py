@@ -57,7 +57,7 @@ def test_the_populate_endpoint_uses_this_path():
 
     kb = object()
     with (
-        patch.object(pop, "index_commands_in_batches", AsyncMock(return_value=3)) as batches,
+        patch.object(pop, "index_commands_in_batches", AsyncMock(return_value=ingest.BatchOutcome(3, 0))) as batches,
         patch("utils.system_context.get_system_context", return_value=_ctx("redis")),
     ):
         assert asyncio.run(pop._populate_man_pages_background(kb)) == 3
@@ -75,10 +75,16 @@ def test_index_all_man_pages_returns_counts_without_a_subprocess():
         patch("knowledge_factory.get_knowledge_base_async", AsyncMock(return_value=kb)),
         patch.object(ingest, "get_all_available_commands", AsyncMock(return_value=["ls", "cat"])),
         patch.object(ingest, "get_system_context", return_value=_ctx("host-a")),
-        patch.object(ingest, "index_commands_in_batches", AsyncMock(return_value=2)),
+        patch.object(ingest, "index_commands_in_batches", AsyncMock(return_value=ingest.BatchOutcome(2, 1))),
     ):
         result = asyncio.run(ingest.index_all_man_pages())
-    assert result == {"commands_scanned": 2, "commands_indexed": 2, "total_facts": 7, "total_vectors": 5}
+    assert result == {
+        "commands_scanned": 2,
+        "commands_indexed": 2,
+        "storage_failed": 1,
+        "total_facts": 7,
+        "total_vectors": 5,
+    }
     kb._get_keyword_searcher.return_value.flush_refresh.assert_awaited_once()
 
 

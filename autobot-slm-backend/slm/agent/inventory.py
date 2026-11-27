@@ -46,15 +46,28 @@ def signature() -> Tuple[Tuple[str, int], ...]:
 
 
 def scan_commands() -> List[str]:
-    """Sorted names of the executable files on ``PATH``; any other ``OSError`` propagates (a failed scan)."""
+    """Sorted names of the executable files on ``PATH``.
+
+    An entry that cannot be examined (a symlink loop, an over-long name) is skipped on its own; only a
+    directory that cannot be opened at all is a scan failure, and a missing or denied one is skipped.
+    """
     names = set()
     for directory in _path_dirs():
         try:
             with os.scandir(directory) as entries:
-                names.update(e.name for e in entries if e.is_file() and os.access(e.path, os.X_OK))
+                names.update(e.name for e in entries if _is_executable(e))
         except _ABSENT_OR_DENIED as exc:  # stable across rescans: skipping it is the honest answer
             logger.warning("inventory: cannot scan %s: %s", directory, exc)
     return sorted(names)
+
+
+def _is_executable(entry: "os.DirEntry[str]") -> bool:
+    """Whether *entry* is an executable file; an entry the OS cannot examine (ELOOP, ENAMETOOLONG) is not."""
+    try:
+        return entry.is_file() and os.access(entry.path, os.X_OK)
+    except OSError as exc:
+        logger.debug("inventory: skipping %s: %s", entry.path, exc)
+        return False
 
 
 def _parse_dpkg(text: str) -> Dict[str, str]:

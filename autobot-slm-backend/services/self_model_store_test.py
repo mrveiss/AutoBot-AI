@@ -99,11 +99,16 @@ def test_a_misshapen_inventory_does_not_advance_the_stored_hash(beat):
     assert beat({"inventory_hash": "h3", "inventory": {"packages": {}, "commands": "git"}}) == "h1"
 
 
-def test_inventory_members_must_be_strings_of_a_storable_length(beat):
+def test_a_bad_inventory_member_is_dropped_and_the_rest_still_advances_the_hash(beat):
     beat({"inventory_hash": "h1", "inventory": FULL})
-    assert beat({"inventory_hash": "h2", "inventory": {"packages": {}, "commands": [None]}}) == "h1"
-    assert beat({"inventory_hash": "h3", "inventory": {"packages": {}, "commands": ["x" * 256]}}) == "h1"
-    assert beat({"inventory_hash": "h4", "inventory": {"packages": {}, "commands": ["  "]}}) == "h1"
+    for n, bad in enumerate([None, "x" * 256, "  "], start=2):
+        inventory = {"packages": {"git": "2.44"}, "commands": [bad, "git"]}
+        assert beat({"inventory_hash": f"h{n}", "inventory": inventory}) == f"h{n}"
+
+
+def test_only_the_good_members_are_observed(monkeypatch):
+    inventory = {"packages": {"git": "1", "": "2"}, "commands": ["ls", None, "x" * 256]}
+    assert store._readable("n1", inventory) == {"packages": {"git": "1"}, "commands": ["ls"]}
 
 
 def test_the_ack_is_the_stored_hash_and_none_when_the_fold_failed(monkeypatch):

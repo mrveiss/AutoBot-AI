@@ -40,8 +40,11 @@ def test_a_version_the_column_cannot_hold_is_refused_before_any_write():
     assert len(ok.observations[0].version) == 128
 
 
-@pytest.mark.parametrize(("push_s", "stale_s", "expected"), [(60, 90.0, 60), (90, 90.0, 45), (3600, 30.0, 15)])
-def test_the_push_interval_must_stay_below_the_stale_window(push_s, stale_s, expected):
+@pytest.mark.parametrize(
+    ("push_s", "stale_s", "expected"),
+    [(40, 90.0, 40), (45, 90.0, 45), (60, 90.0, 45), (90, 90.0, 45), (3600, 30.0, 15)],
+)
+def test_the_push_interval_must_stay_within_half_the_stale_window(push_s, stale_s, expected):
     from autobot_shared.self_model_constants import coherent_push_interval
 
     assert coherent_push_interval(push_s, stale_s) == expected

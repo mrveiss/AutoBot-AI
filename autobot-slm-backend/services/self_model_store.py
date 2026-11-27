@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.self_model_constants import STALE_AFTER
 from models.database import Node
+from models.self_model import MAX_NAME_LENGTH, MAX_VERSION_LENGTH
 from models.self_model import self_model_entities as entities
 from models.self_model import self_model_history as history
 from services.db_transaction_errors import write_in_savepoint
@@ -45,17 +46,16 @@ INVENTORY_SOURCE = "inventory"
 HEARTBEAT_SOURCE = "heartbeat"
 _INVENTORY_KINDS = ("command", "package")
 _SWEEP_MIN_GAP_S = 30.0
-MAX_NAME_LENGTH = 255  # entities.name
-MAX_VERSION_LENGTH = 128  # entities.version
 _last_sweep = 0.0
 
 
 async def load_rows(db: AsyncSession, *conditions: Any, lock: bool = False) -> Dict[str, Dict[str, Any]]:
     """Entity rows matching *conditions*, keyed by entity key.
 
-    ``lock`` takes a row lock on each match until the transaction ends, in ``entity_key`` order (the order
-    ``persist`` writes in) and skipping rows another transaction holds: a row in someone else's write is being
-    refreshed by them, so it is not this caller's to rewrite from a snapshot.
+    ``lock`` takes a row lock on each match until the transaction ends, skipping rows another transaction holds:
+    a row in someone else's write is being refreshed by them, so it is not this caller's to rewrite from a
+    snapshot. The lock order is the database's ``ORDER BY`` collation, which need not equal ``persist``'s
+    Python sort; ``skip_locked`` is what keeps the two from waiting on each other.
     """
     query = select(entities).where(*conditions)
     if lock:
@@ -125,14 +125,25 @@ async def apply_observations(
     return plan
 
 
-def _well_formed(inventory: Any) -> bool:
-    """An inventory the fold can read: a mapping whose ``packages`` is a mapping and ``commands`` a list (#22280)."""
+def _readable(node_id: str, inventory: Any) -> Optional[Dict[str, Any]]:
+    """The readable part of *inventory*, or None when its shape is wrong (#22280).
+
+    A mapping whose ``packages`` is a mapping and ``commands`` a list. Members that are not storable names
+    are dropped and logged, so one bad member never blocks the rest or the hash and ack advancing.
+    """
     if not isinstance(inventory, dict):
-        return False
+        return None
     packages, commands = inventory.get("packages") or {}, inventory.get("commands") or []
     if not isinstance(packages, dict) or not isinstance(commands, list):
-        return False
-    return all(_is_name(n) for n in (*packages, *commands))
+        return None
+    kept = {
+        "packages": {name: version for name, version in packages.items() if _is_name(name)},
+        "commands": [name for name in commands if _is_name(name)],
+    }
+    dropped = len(packages) + len(commands) - len(kept["packages"]) - len(kept["commands"])
+    if dropped:
+        logger.warning("node %s sent %d inventory members that are not storable names; dropped them", node_id, dropped)
+    return kept
 
 
 def _is_name(name: Any) -> bool:
@@ -161,16 +172,24 @@ def _inventory_observations(node_id: str, inventory: Dict[str, Any]) -> List[Obs
 
 
 async def _inventory_plan(
-    db: AsyncSession, node_id: str, extra: Dict[str, Any], previous: Optional[str], now
+    db: AsyncSession,
+    node_id: str,
+    extra: Dict[str, Any],
+    readable: Optional[Dict[str, Any]],
+    previous: Optional[str],
+    now: datetime,
 ) -> InventoryPlan:
-    """The inventory plan for one heartbeat: full reconcile, a touch when the hash is unchanged, else nothing."""
+    """The inventory plan for one heartbeat: full reconcile, a touch when the hash is unchanged, else nothing.
+
+    *readable* is the full inventory after ``_readable``; None when the report carried none or a misshapen one.
+    """
     parent = entity_key("node", node_id)
     rows = await load_rows(db, entities.c.parent_key == parent)
     if "inventory" in extra:
-        if not _well_formed(extra["inventory"]):
+        if readable is None:
             logger.warning("node %s sent a malformed inventory; ignoring it", node_id)
             return InventoryPlan()
-        observed = _inventory_observations(node_id, extra["inventory"])
+        observed = _inventory_observations(node_id, readable)
         scope = {"source": INVENTORY_SOURCE, "scope_kinds": _INVENTORY_KINDS, "scope_parent": parent}
         return reconcile_observations(rows, observed, now, **scope)
     if extra.get("inventory_hash") == previous:
@@ -185,11 +204,12 @@ async def apply_heartbeat_inventory(
     node_key = entity_key("node", node_id)
     node_rows = await load_rows(db, entities.c.entity_key == node_key)
     previous = node_rows.get(node_key, {}).get("attrs", {}).get("inventory_hash")
-    plan = await _inventory_plan(db, node_id, extra, previous, now)
+    readable = _readable(node_id, extra["inventory"]) if "inventory" in extra else None
+    plan = await _inventory_plan(db, node_id, extra, readable, previous, now)
     # The stored hash advances only when the inventory it describes was actually folded in.
     reported = extra.get("inventory_hash")
     # A malformed inventory is ignored by _inventory_plan, so it is not folded either (#22280).
-    folded = _well_formed(extra.get("inventory")) or reported == previous
+    folded = readable is not None or reported == previous
     attrs = {"inventory_hash": reported} if folded and reported else {}
     node_obs = Observation("node", node_id, PROBED_OK, node_id=node_id, attrs=attrs)
     node_plan = reconcile_observations(node_rows, [node_obs], now, source=HEARTBEAT_SOURCE, scope_kinds=())

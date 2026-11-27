@@ -42,6 +42,20 @@ def test_probe_stores_last_check_and_failure_count_per_service():
     pipe.execute.assert_awaited_once()
 
 
+def test_an_empty_probe_still_clears_the_stored_snapshot():
+    """Every service left the registry: the old snapshot must not keep answering for them."""
+    pipe = MagicMock(execute=AsyncMock())
+    redis_client = MagicMock(pipeline=MagicMock(return_value=pipe))
+    with (
+        patch.object(probe, "get_service_registry", return_value=_registry({})),
+        patch.object(probe, "get_redis_client", new=AsyncMock(return_value=redis_client)),
+    ):
+        assert asyncio.run(probe.probe_and_store()) == {}
+    pipe.delete.assert_called_once_with(probe.SERVICE_HEALTH_SNAPSHOT_KEY)
+    pipe.hset.assert_not_called()
+    pipe.execute.assert_awaited_once()
+
+
 def test_read_snapshot_decodes_bytes_and_text_replies():
     raw = {b"backend": b'{"status": "healthy", "failure_count": 0}', "redis": '{"status": "unhealthy"}'}
     redis_client = MagicMock(hgetall=AsyncMock(return_value=raw))

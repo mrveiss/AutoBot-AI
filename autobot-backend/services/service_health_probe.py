@@ -50,8 +50,9 @@ async def _publish_snapshot(redis_client: Any, records: Dict[str, str]) -> None:
     ttl = SERVICE_HEALTH_PROBE_INTERVAL_SECONDS * _SNAPSHOT_TTL_INTERVALS
     pipe = redis_client.pipeline(transaction=True)
     pipe.delete(SERVICE_HEALTH_SNAPSHOT_KEY)
-    pipe.hset(SERVICE_HEALTH_SNAPSHOT_KEY, mapping=records)
-    pipe.expire(SERVICE_HEALTH_SNAPSHOT_KEY, ttl)
+    if records:  # an empty probe still clears the key: a stale snapshot must not outlive its services
+        pipe.hset(SERVICE_HEALTH_SNAPSHOT_KEY, mapping=records)
+        pipe.expire(SERVICE_HEALTH_SNAPSHOT_KEY, ttl)
     await pipe.execute()
 
 
@@ -60,7 +61,7 @@ async def probe_and_store() -> Dict[str, Dict[str, Any]]:
     report = await get_service_registry().check_all_services_health()
     records = {name: _record(health) for name, health in report.items()}
     redis_client = await get_redis_client(async_client=True, database="main")
-    if records and redis_client is not None:
+    if redis_client is not None:
         await _publish_snapshot(redis_client, records)
     logger.info("Service health probe: %d services stored", len(records))
     return {name: json.loads(raw) for name, raw in records.items()}

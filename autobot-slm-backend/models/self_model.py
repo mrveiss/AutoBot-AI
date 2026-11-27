@@ -38,6 +38,9 @@ self_model_entities = Table(
     Index("ix_self_model_entities_parent_key", "parent_key"),
 )
 
+MAX_NAME_LENGTH = self_model_entities.c.name.type.length
+MAX_VERSION_LENGTH = self_model_entities.c.version.type.length
+
 self_model_history = Table(
     "self_model_history",
     metadata,

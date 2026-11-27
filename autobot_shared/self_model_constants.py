@@ -37,21 +37,22 @@ STALE_HEARTBEATS = env_int_clamped("AUTOBOT_SELF_MODEL_STALE_HEARTBEATS", 3, min
 #: ``STALE_HEARTBEATS`` heartbeats, as a duration.
 STALE_AFTER = timedelta(seconds=STALE_HEARTBEATS * DEFAULT_HEARTBEAT_INTERVAL)
 
-#: Seconds between the backend's pushes; it must stay below ``STALE_AFTER`` or its probed entities go stale.
+#: Seconds between the backend's pushes; it must stay within half of ``STALE_AFTER`` or its probed entities go stale.
 _PUSH_INTERVAL_REQUESTED_S = env_int_clamped("AUTOBOT_SELF_MODEL_PUSH_INTERVAL_S", 60, min_v=10, max_v=3600)
 
 
 def coherent_push_interval(push_s: int, stale_s: float) -> int:
-    """*push_s* when it stays below *stale_s*, else half the stale window, with a warning naming both settings.
+    """*push_s* when it is at most half of *stale_s*, else half the stale window, with a warning naming both settings.
 
+    Half is the margin: a push that merely beats the window by a second is lost to one slow cycle.
     The two settings are clamped one by one, so only the pair can say that the backend's pushes would arrive
     after its probed entities went ``stale``.
     """
-    if push_s < stale_s:
+    if push_s <= stale_s / 2:
         return push_s
     corrected = max(1, int(stale_s // 2))
     logger.warning(
-        "AUTOBOT_SELF_MODEL_PUSH_INTERVAL_S=%d is not below the stale window of %d s "
+        "AUTOBOT_SELF_MODEL_PUSH_INTERVAL_S=%d is not within half of the stale window of %d s "
         "(AUTOBOT_SELF_MODEL_STALE_HEARTBEATS=%d x %d s); using %d s",
         push_s,
         int(stale_s),

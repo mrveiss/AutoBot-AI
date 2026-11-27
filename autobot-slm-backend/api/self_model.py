@@ -23,6 +23,7 @@ from typing_extensions import Annotated
 
 from autobot_shared.auth.internal_api_key import require_internal_api_key
 from autobot_shared.self_model_constants import PRODUCER_SOURCES
+from models.self_model import MAX_NAME_LENGTH, MAX_VERSION_LENGTH
 from models.self_model import self_model_entities as entities
 from services.auth import get_current_user
 from services.database import get_db
@@ -42,7 +43,6 @@ router = APIRouter(prefix="/self-model", tags=["self-model"])
 MAX_ENTITIES = 500
 DEFAULT_ENTITIES = 100
 MAX_OBSERVATIONS = 20000
-MAX_VERSION_LENGTH = 128
 
 
 class ParentRef(BaseModel):
@@ -52,11 +52,11 @@ class ParentRef(BaseModel):
 
 class ObservationIn(BaseModel):
     kind: str
-    name: str = Field(min_length=1, max_length=255)
+    name: str = Field(min_length=1, max_length=MAX_NAME_LENGTH)
     status: str
     parent: Optional[ParentRef] = None
     node_id: Optional[str] = None
-    version: Optional[str] = Field(default=None, max_length=MAX_VERSION_LENGTH)  # the column is String(128)
+    version: Optional[str] = Field(default=None, max_length=MAX_VERSION_LENGTH)
     attrs: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("kind")

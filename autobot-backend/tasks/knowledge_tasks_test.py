@@ -381,11 +381,11 @@ async def test_run_man_page_indexing_uses_the_return_value_not_stdout():
 
     from tasks import man_page_indexing
 
-    counts = {"commands_scanned": 9, "commands_indexed": 8, "total_facts": 40, "total_vectors": 39}
+    counts = {"commands_scanned": 9, "commands_indexed": 8, "storage_failed": 2, "total_facts": 40, "total_vectors": 39}
     with patch.object(man_page_indexing, "index_all_man_pages", AsyncMock(return_value=counts)):
         result = await man_page_indexing.run_man_page_indexing()
     assert result["status"] == "success"
-    assert (result["commands_indexed"], result["total_facts"]) == (8, 40)
+    assert (result["commands_indexed"], result["storage_failed"], result["total_facts"]) == (8, 2, 40)
 
 
 @pytest.mark.asyncio

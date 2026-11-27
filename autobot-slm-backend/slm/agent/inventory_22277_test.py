@@ -87,8 +87,10 @@ def test_the_agent_confirms_through_the_payload_helper(monkeypatch):
     reporter = _reporter(monkeypatch, state, clock)
     monkeypatch.setattr(heartbeat_payload, "get_inventory_reporter", lambda: reporter)
     payload = {"extra_data": reporter.report()}
-    assert heartbeat_payload.confirm_inventory(payload, False) is False
+    heartbeat_payload.confirm_inventory(payload, {})  # accepted but not acknowledged: still due
     assert "inventory" in reporter.report()
+    heartbeat_payload.confirm_inventory(payload, {"inventory_ack": payload["extra_data"]["inventory_hash"]})
+    assert "inventory" not in reporter.report()
 
 
 def test_a_heartbeat_accepted_without_the_inventory_ack_is_resent(monkeypatch):
@@ -137,3 +139,13 @@ def test_no_inventory_is_reported_before_the_first_successful_scan(monkeypatch):
 
     monkeypatch.setattr(inventory, "scan_packages", _unreadable)
     assert reporter.report() == {}
+
+
+def test_an_unexaminable_entry_is_skipped_not_a_failed_scan(monkeypatch, tmp_path):
+    """A symlink loop (ELOOP) in a PATH directory drops that one entry; the rest of the scan stands."""
+    tool = tmp_path / "tool"
+    tool.write_text("#!/bin/sh\n", encoding="utf-8")
+    tool.chmod(0o755)
+    (tmp_path / "loop").symlink_to(tmp_path / "loop")
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert inventory.scan_commands() == ["tool"]

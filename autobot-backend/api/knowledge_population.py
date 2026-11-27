@@ -514,14 +514,13 @@ COMMON_MAN_PAGE_COMMANDS = [
 
 
 async def _populate_man_pages_background(kb_to_use):
-    """Background task to populate the curated man pages through the one ingestion path (#22272)."""
+    """Populate the curated man pages through the one ingestion path (#22272); section None lets ``man`` resolve it."""
     from utils.system_context import get_system_context
 
     try:
         logger.info("Starting manual pages population in background...")
-        # Section None: each page is indexed under the section ``man`` itself resolves for the command.
         commands = [(command, None) for command in COMMON_MAN_PAGE_COMMANDS]
-        items_added = await index_commands_in_batches(kb_to_use, commands, get_system_context())
+        items_added = (await index_commands_in_batches(kb_to_use, commands, get_system_context())).indexed
         logger.info("Manual pages population completed. Added %s man pages.", items_added)
         return items_added
 

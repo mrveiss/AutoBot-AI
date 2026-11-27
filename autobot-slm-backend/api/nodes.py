@@ -1955,9 +1955,7 @@ async def node_heartbeat(
             )
 
         await _apply_heartbeat_reports(db, node_id, heartbeat, node)
-
         await _auto_populate_ansible_name(db, node, node_id, heartbeat)
-
         latest_version = await _update_heartbeat_code_status(db, node, heartbeat.extra_data)
         await db.commit()
         await db.refresh(node)
