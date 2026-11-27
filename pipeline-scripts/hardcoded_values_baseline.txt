@@ -395,8 +395,6 @@
 2|other|autobot-backend/resources/knowledge/tools/rss_tools.yaml|https://news.ycombinator.com/rss
 1|other|autobot-backend/resources/knowledge/tools/video_tools.yaml|https://www.bilibili.com/video/BV{id}
 2|other|autobot-backend/resources/knowledge/tools/video_tools.yaml|https://www.youtube.com/watch?v=VIDEO_ID
-1|other|autobot-backend/resources/knowledge/tools/web_fetch.yaml|https://r.jina.ai/https://docs.python.org/3/library/asyncio.html
-3|other|autobot-backend/resources/knowledge/tools/web_fetch.yaml|https://r.jina.ai/{url}
 1|other|autobot-backend/resources/knowledge/tools/web_fetch.yaml|https://short.url/abc
 1|other|autobot-backend/resources/knowledge/tools/web_search.yaml|https://api.exa.ai
 1|other|autobot-backend/resources/knowledge/tools/web_search.yaml|https://docs.python.org/3/library/asyncio.html

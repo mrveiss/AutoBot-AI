@@ -41,7 +41,7 @@ tools:
     configuration:
       env_var: EXA_API_KEY
       base_url: "https://api.exa.ai"
-    related_tools: ["jina-reader", "wget", "feedparser"]
+    related_tools: ["reader-service", "wget", "feedparser"]
 
   - name: mcporter
     type: mcp_search_bridge
@@ -62,7 +62,7 @@ tools:
       - "mcporter is the preferred search tool for AutoBot agents — uses Exa backend"
       - "Direct Exa API access should be used as fallback when MCP is unavailable"
       - "Results are returned as structured MCP tool response objects"
-    related_tools: ["exa", "jina-reader"]
+    related_tools: ["exa", "reader-service"]
 
   - name: duckduckgo-search
     type: web_search_library
@@ -89,4 +89,4 @@ tools:
       - "No API key required — useful as anonymous fallback"
       - "Prefer Exa/mcporter for better result quality in agent contexts"
       - "Rate limits are stricter than paid search APIs"
-    related_tools: ["exa", "mcporter", "jina-reader"]
+    related_tools: ["exa", "mcporter", "reader-service"]
