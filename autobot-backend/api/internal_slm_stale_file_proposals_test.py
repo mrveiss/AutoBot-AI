@@ -65,6 +65,11 @@ def _service(existing: list):
     return service
 
 
+def _audited_actor(written) -> str:
+    """The ``user_id`` of the creation audit row."""
+    return written.await_args.kwargs["user_id"]
+
+
 def _propose(service, body=None, headers=None, audit=True):
     headers = {"X-Internal-API-Key": _KEY} if headers is None else headers
     with (
@@ -84,11 +89,13 @@ def test_the_proposal_route_refuses_without_the_key() -> None:
 
 def test_a_proposal_lists_every_file_and_freezes_them_in_the_context() -> None:
     service = _service([])
-    response, _ = _propose(service)
+    response, written = _propose(service)
     assert response.status_code == 201 and response.json()["created"] is True
     assert response.json()["proposed"] == 1 and response.json()["total_found"] == 1
     kwargs = service.create_approval.await_args.kwargs
     assert kwargs["approval_type"] == "destructive_action" and kwargs["requested_by_agent"] == "slm-code-sync:node-a"
+    # #22222: the audit row names the admitted service principal, not a username
+    assert _audited_actor(written) == f"service:{route.SLM_CALLER}"
     assert kwargs["context"]["action"] == ACTION and kwargs["context"][LOCATION_KEY] == f"node-a:{_TARGET}"
     assert kwargs["context"]["files"][0]["path"] == "main.py" and kwargs["context"]["old_target"] == _TARGET
     assert f"{_TARGET}/main.py" in kwargs["description"] and "12 B" in kwargs["description"]

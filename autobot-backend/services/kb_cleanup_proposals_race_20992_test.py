@@ -145,3 +145,33 @@ async def test_a_caller_without_an_identity_is_refused_and_nothing_is_audited():
         await record_cleanup_proposed(uuid.uuid4(), {"username": "admin"}, operation="op", resource="r:v")
     assert refused.value.status_code == 401
     audit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_username_only_loser_is_refused_on_the_lost_race_path():
+    """#22222: the lost-race row is not written under a mutable name; the loser gets the resolver's 401."""
+    audit = AsyncMock(return_value=True)
+    session = SimpleNamespace(rollback=AsyncMock())
+    with patch("services.kb_cleanup_proposals.audit_log", audit), pytest.raises(HTTPException) as refused:
+        await create_proposal_once(
+            _service([[], [SimpleNamespace(id="w")]], session),
+            "a",
+            "k",
+            "v",
+            AsyncMock(side_effect=_lost()),
+            current_user={"username": "admin"},
+            resource="r:v",
+        )
+    assert refused.value.status_code == 401
+    audit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_admitted_service_is_recorded_under_its_service_name():
+    """#22222: a service principal has no user id; its stable ``service:<caller>`` name is the actor."""
+    audit = AsyncMock(return_value=True)
+    service = {"username": "service:slm-x", "role": "service", "service": True}
+    with patch("services.kb_cleanup_proposals.audit_log", audit):
+        await record_cleanup_proposed(uuid.uuid4(), service, operation="op", resource="r:v")
+    assert audit.await_args.kwargs["user_id"] == "service:slm-x"
+    assert cleanup_proposal(service, title="t", description="d", context={})["requested_by_agent"] == "service:slm-x"

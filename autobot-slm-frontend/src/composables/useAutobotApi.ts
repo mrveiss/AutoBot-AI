@@ -164,6 +164,7 @@ export interface ApprovalGateResponse {
   approval_type: string
   status: string
   requested_by_agent: string | null
+  requested_by_name?: string | null
   decided_by_user: string | null
   workflow_id: string | null
   workflow_step: string | null
