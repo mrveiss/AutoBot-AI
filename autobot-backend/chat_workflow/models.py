@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from chat_workflow.thought_markers import unwrap_invented_tags
+
 if TYPE_CHECKING:
     from async_chat_workflow import WorkflowMessage
     from security.authority import Authority
@@ -236,7 +238,7 @@ class StreamingMessage:
         # Import here to avoid circular dependency
         from async_chat_workflow import WorkflowMessage
 
-        content = self.content
+        content = unwrap_invented_tags(self.content)  # #22249: the same cleaner the stored reply gets
         if filter_prompts:
             content = self._filter_internal_prompts(content)
 

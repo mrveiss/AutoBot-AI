@@ -244,7 +244,7 @@ async def export_full_json(
             "period_days": days,
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
-            "version": "1.0",
+            "version": "1.0",  # export format version: the layout of this payload, not a release
         },
         "cost_analytics": {
             "summary": cost_summary,

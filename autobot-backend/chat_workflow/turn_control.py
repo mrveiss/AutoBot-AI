@@ -26,7 +26,7 @@ import asyncio
 import uuid
 from contextlib import aclosing
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict
+from typing import Any, AsyncGenerator, Awaitable, Callable, Dict
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.env_utils import env_float_clamped
@@ -178,7 +178,7 @@ def _to_message(data: Any) -> Any:
     )
 
 
-async def stream_turn(session_id: str, body: TurnBody) -> AsyncIterator[Any]:
+async def stream_turn(session_id: str, body: TurnBody) -> AsyncGenerator[Any, None]:
     """Run *body* as a registered turn and yield what it puts on the queue.
 
     Leaving the iterator for any reason -- normal end, an error, or the client
@@ -201,7 +201,7 @@ async def stream_turn(session_id: str, body: TurnBody) -> AsyncIterator[Any]:
             _REGISTRY.remove(turn)
 
 
-def stream_graph_turn(manager, graph, session_id: str, graph_input: Any) -> AsyncIterator[Any]:
+def stream_graph_turn(manager, graph, session_id: str, graph_input: Any) -> AsyncGenerator[Any, None]:
     """A LangGraph run as a turn: *graph_input* is the initial state or a resume Command."""
 
     async def body(queue: asyncio.Queue) -> None:
@@ -214,7 +214,7 @@ def stream_graph_turn(manager, graph, session_id: str, graph_input: Any) -> Asyn
     return stream_turn(session_id, body)
 
 
-def stream_legacy_turn(manager, session_id: str, message: str, context: Any) -> AsyncIterator[Any]:
+def stream_legacy_turn(manager, session_id: str, message: str, context: Any) -> AsyncGenerator[Any, None]:
     """The pre-LangGraph fallback as a turn, so it is as cancellable and bounded as the graph path."""
 
     async def body(queue: asyncio.Queue) -> None:

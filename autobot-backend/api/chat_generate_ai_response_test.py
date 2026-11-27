@@ -134,3 +134,49 @@ async def test_generate_ai_response_does_not_call_legacy_generate_response(make_
     assert ai_response["content"] == "ok"
     llm_service.generate_response.assert_not_awaited()
     llm_service.chat.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_thinking_on_reaches_the_final_anthropic_sdk_kwargs(make_llm_response: Any) -> None:
+    """#20922: the thinking toggle and budget of a chat reach the SDK request, shaped for the model."""
+    from api.chat import _generate_ai_response
+    from llm_shared.models import LLMRequest
+    from llm_shared.providers.anthropic import AnthropicProvider
+
+    llm_service = AsyncMock()
+    llm_service.chat = AsyncMock(return_value=make_llm_response(content="ok", error=None))
+
+    await _generate_ai_response(
+        llm_service=llm_service,
+        llm_context=[{"role": "user", "content": "hi"}],
+        session_id="s-1",
+        request_id="r-1",
+        reasoning_effort="auto",
+        thinking=(True, 6000),
+    )
+
+    metadata = llm_service.chat.await_args.kwargs["metadata"]
+    request = LLMRequest(messages=[{"role": "user", "content": "hi"}], metadata=metadata)
+    provider = AnthropicProvider(settings={"api_key": "k"})
+    legacy, _headers, _preserve = provider._build_request_kwargs("claude-sonnet-4-5", request)
+    assert legacy["thinking"] == {"type": "enabled", "budget_tokens": 6000}
+    adaptive, _headers, _preserve = provider._build_request_kwargs("claude-opus-4-7", request)
+    assert adaptive["thinking"] == {"type": "adaptive"}
+
+
+@pytest.mark.asyncio
+async def test_thinking_off_sends_no_thinking_and_keeps_the_effort(make_llm_response: Any) -> None:
+    from api.chat import _generate_ai_response
+
+    llm_service = AsyncMock()
+    llm_service.chat = AsyncMock(return_value=make_llm_response(content="ok", error=None))
+
+    await _generate_ai_response(
+        llm_service=llm_service,
+        llm_context=[{"role": "user", "content": "hi"}],
+        session_id="s-1",
+        request_id="r-1",
+        reasoning_effort="high",
+    )
+
+    assert llm_service.chat.await_args.kwargs["metadata"] == {"api_kwargs": {"reasoning_effort": "high"}}

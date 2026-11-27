@@ -34,7 +34,7 @@ ONLY the returned UI response is converted.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -161,17 +161,16 @@ async def test_auto_approve_rule_matches_after_the_full_store_and_check_round_tr
     stored_risk_level = session.get_pending_risk_level()
 
     # Real store, exactly as _post_execution_updates does on "always allow".
-    await svc.approval_handler.store_auto_approve_rule(
-        user_id=user_id,
-        command=command,
-        risk_level=stored_risk_level,
-    )
+    with patch("services.agent_terminal.ai_line_gate.owner_user_id", AsyncMock(return_value=user_id)):  # #16840
+        await svc.approval_handler.store_auto_approve_rule(
+            user_id="alice", command=command, risk_level=stored_risk_level
+        )
 
     # SecureCommandExecutor.assess_command_risk is deterministic for the same
     # command text, so a later invocation re-assesses the identical
     # CommandRisk -- checked here exactly as _check_auto_approval_or_queue
     # does.
-    is_auto_approved = await svc.approval_handler.check_auto_approve_rules(
+    is_auto_approved = await svc.approval_handler.approval_manager.check_auto_approve_rules(
         user_id=user_id,
         command=command,
         risk_level=CommandRisk.DANGEROUS.value,

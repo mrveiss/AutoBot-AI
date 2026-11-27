@@ -26,6 +26,7 @@ from api.schemas_system import (
 from api.system_health import register_singleton_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from services.causal_inference_engine import CausalInferenceEngine
@@ -95,7 +96,7 @@ async def analyze_failure(request: FailureAnalysisRequest):
         raise
     except Exception as e:
         logger.error("Unexpected error analyzing task %s: %s", request.task_id, e)
-        raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=safe_http_detail(e, "Analysis error"))
 
 
 register_singleton_probe("diagnostics", get_engine)

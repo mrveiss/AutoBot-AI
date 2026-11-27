@@ -3,7 +3,7 @@
 /**
  * The ONE chat-message formatter (#21771).
  *
- * `ChatMessages.vue` and `MessageItem.vue` each carried their own copy of this
+ * `ChatMessages.vue` and `MessageItem.vue` (removed in #22179, replaced by `ChatMessageRow.vue` and `ChatMessageContent.vue`) each carried their own copy of this
  * pipeline and the copies had drifted. Differences found when merging them, and
  * the behaviour chosen:
  *

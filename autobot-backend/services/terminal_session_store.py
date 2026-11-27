@@ -7,7 +7,7 @@
 ``api.terminal_handlers.TerminalManager.session_configs`` used to be a plain
 process-local ``dict``. The deployed backend runs uvicorn with multiple
 workers plus request-count recycling (see
-``autobot-infrastructure/autobot-backend/templates/autobot-user-backend.service``),
+``autobot-slm-backend/ansible/roles/backend/templates/autobot-backend.service.j2``),
 so a session created on one worker was invisible to a WebSocket handshake
 served by another -- and, after #14989 turned an unknown session_id from a
 default-configured terminal into a hard `1008` refusal, that invisibility

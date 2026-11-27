@@ -19,7 +19,7 @@ import threading
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
-from chat_workflow.step_outcome import exit_code_field
+from chat_workflow.step_outcome import command_failure_error, exit_code_field
 from services.agent_terminal.errors import (
     POST_EXECUTION_FAILED_CODE,
     POST_EXECUTION_FAILED_STATUS,
@@ -234,7 +234,7 @@ class TerminalTool:
         """
         return {
             "status": "error",
-            "error": result.get("error") or result.get("stderr") or "Command failed with no error detail",
+            "error": command_failure_error(result),  # return code + output tail (#22250)
             "command": command,
             "stdout": result.get("stdout", ""),
             "stderr": result.get("stderr", ""),
@@ -419,11 +419,12 @@ class TerminalTool:
             if error:
                 return error
 
+            history = history_data or {}
             return {
                 "status": "success",
                 "session_id": user_session_id,
-                "history": history_data.get("history", []),
-                "total_commands": history_data.get("total_commands", 0),
+                "history": history.get("history", []),
+                "total_commands": history.get("total_commands", 0),
             }
 
         except Exception as e:

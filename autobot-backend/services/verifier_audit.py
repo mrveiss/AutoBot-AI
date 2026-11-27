@@ -51,6 +51,7 @@ async def audit_verifier_degraded(result: Any, session_id: str | None = None, us
         "model": result.model_used,
         "provider": result.provider_used,
         "verdict": result.verdict.value,
+        "rationale": result.rationale,  # a timeout names the deadline it hit (#22254)
     }
     try:
         return await audit_log(

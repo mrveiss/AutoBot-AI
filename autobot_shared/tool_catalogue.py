@@ -295,7 +295,9 @@ TOOL_EFFECTS: "dict[str, ToolEffect]" = {
     **_entries(("sleep", "wait", "poll", "check_status"), _E.POLL),
     # #18430: tools the live seam dispatches that were declared nowhere. The AI lines treat an unknown tool as
     # mutating (fail closed), so every builtin that only observes must be KNOWN to be a read.
-    **_entries(BROWSER_READ_TOOLS + ("extract_content", "crawl_site", "read_spilled_output"), _E.READ),
+    **_entries(
+        BROWSER_READ_TOOLS + ("extract_content", "crawl_site", "read_spilled_output", "command_manual"), _E.READ
+    ),
 }
 
 #: Tools whose arguments name a file path (artifact capture, config guard, fact-forcing).

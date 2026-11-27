@@ -9,7 +9,7 @@ must be a hard no-op when OFF (default) — generate_response dispatches tool
 calls inline exactly as before. When ON, generate_response becomes plan-only
 (parses tool calls without dispatching), tags each with the combined
 work-item + category needs_approval gate (_tool_call_needs_approval, reusing
-_approval_category_for verbatim), and the graph's request_approval /
+approval_category_for verbatim), and the graph's request_approval /
 execute_tools nodes gate and dispatch exactly once.
 """
 
@@ -357,7 +357,7 @@ async def test_manager_plan_only_never_calls_process_tool_calls(monkeypatch):
     assert should_stop is False
 
 
-# --- _tool_call_needs_approval: combined gate reuses _approval_category_for -
+# --- _tool_call_needs_approval: combined gate reuses approval_category_for -
 
 
 @pytest.mark.asyncio
