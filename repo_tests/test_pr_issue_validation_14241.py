@@ -270,11 +270,66 @@ def test_a_large_body_whose_link_is_on_the_first_line_passes_every_time(tmp_path
 # A producer piped (`|` or `|&`) into an early-exiting grep: `grep -q` / `--quiet`, any
 # producer, behind wrappers (sudo, xargs, timeout N, env A=b, ...), with -q before or after
 # the pattern. Quoted pattern text may itself contain `|`, `;` or `&`.
-_WRAPPERS = r"(?:(?:sudo|xargs|timeout|env|nice|nohup|stdbuf|command|exec)\b(?:\s+(?:-\S+|\w+=\S*|\d+[smhd]?))*\s+)*"
+# A wrapper option may carry an operand (`sudo -u root`, `timeout -s KILL 5`, `xargs -I {}`,
+# `env -u NAME`, `nice -n 5`, `stdbuf -o0`): the operand is a following non-option word.
+_WRAPPER_ARG = r"(?:-\S+(?:\s+[^\s|;&-]\S*)?|\w+=\S*|\d+[smhd]?)"
+_WRAPPERS = r"(?:(?:sudo|xargs|timeout|env|nice|nohup|stdbuf|command|exec)\b(?:\s+" + _WRAPPER_ARG + r")*\s+)*"
 _GREP_ARG = r"""(?:"[^"]*"|'[^']*'|[^|;&\n"'])"""
 _PIPE_INTO_QUIET_GREP = re.compile(
     r"(?<!\|)\|&?(?!\|)\s*" + _WRAPPERS + r"(?:e|f)?grep\s+(?:" + _GREP_ARG + r"*?\s)?(?:-[A-Za-z]*q[A-Za-z]*|--quiet)\b"
 )
+
+
+_MATCHING_PIPELINES = (
+    "producer | sudo -u root grep -q hit",
+    "producer | sudo -g adm -u root grep hit -q",
+    "producer | timeout -s KILL 5 grep --quiet hit",
+    "producer | timeout -k 2s -s TERM 9 grep -q hit",
+    "producer | env -u NAME grep -q hit",
+    "producer | nice -n 5 grep -q hit",
+    "producer | stdbuf -o0 -e0 grep -q hit",
+    "producer | xargs -I {} -n 1 grep -q hit",
+    "producer |& sudo -u root grep -q hit",
+    "producer |& grep -q hit",
+)
+_NON_MATCHING_PIPELINES = (
+    "producer | sudo -u root grep hit",
+    "producer | sudo -g adm -u root grep hit",
+    "producer | timeout -s KILL 5 grep hit",
+    "producer | env -u NAME grep hit",
+    "producer | nice -n 5 grep hit",
+    "producer | stdbuf -o0 -e0 grep hit",
+    "producer | xargs -I {} -n 1 grep hit",
+    "producer |& sudo -u root grep hit",
+    "producer |& grep hit",
+    "producer || sudo -u root grep -q hit",
+)
+
+
+@pytest.mark.parametrize("line", _MATCHING_PIPELINES)
+def test_the_quiet_grep_detector_matches_wrapper_operands_and_stderr_pipes(line):
+    assert _PIPE_INTO_QUIET_GREP.search(line), line
+
+
+@pytest.mark.parametrize("line", _NON_MATCHING_PIPELINES)
+def test_the_quiet_grep_detector_ignores_the_same_pipelines_without_q(line):
+    assert not _PIPE_INTO_QUIET_GREP.search(line), line
+
+
+@pytest.mark.parametrize(
+    ("text", "matches"),
+    [
+        ("producer |&\n  grep -q hit\n", True),
+        ("producer |\n  sudo -u root grep -q hit\n", True),
+        ("producer \\\n  |& grep -q hit\n", True),
+        ("producer |&\n  grep hit\n", False),
+        ("producer ||\n  grep -q hit\n", False),
+        ("producer \\\n  | sudo -u root grep hit\n", False),
+    ],
+)
+def test_the_continuation_joiner_folds_pipes_and_backslashes_into_one_line(text, matches):
+    found = any(_PIPE_INTO_QUIET_GREP.search(line) for line in _logical_lines(text))
+    assert found is matches, text
 
 
 def _pipefail_active(document: dict, job: dict, step: dict) -> bool:
@@ -330,9 +385,9 @@ def _shell_script_paths() -> list[Path]:
 
 
 def _logical_lines(text: str) -> list[str]:
-    """Join `\\` continuations and lines ending in a pipe, so `cmd \\ \\n | grep -q` is one line."""
+    """Join `\\` continuations and lines ending in `|` or `|&`, so `cmd \\ \\n | grep -q` is one line."""
     joined = re.sub(r"\\\n\s*", " ", text)
-    joined = re.sub(r"(?<!\|)\|\s*\n\s*", "| ", joined)
+    joined = re.sub(r"(?<!\|)(\|&?)\s*\n\s*", r"\1 ", joined)
     return joined.splitlines()
 
 
