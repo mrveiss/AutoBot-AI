@@ -296,6 +296,7 @@ _NON_MATCHING_PIPELINES = (
     "producer | sudo -u root grep hit",
     "producer | sudo -g adm -u root grep hit",
     "producer | timeout -s KILL 5 grep hit",
+    "producer | timeout -k 2s -s TERM 9 grep hit",
     "producer | env -u NAME grep hit",
     "producer | nice -n 5 grep hit",
     "producer | stdbuf -o0 -e0 grep hit",
