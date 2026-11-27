@@ -245,7 +245,7 @@ class TestBridgedOAuthCredentialRefreshes:
 
         assert token == "fresh"
         assert calls == [("https://provider.example/token", "cid", "csecret", "rtok", "PINNED")]
-        oauth_bundle.pinned_connector.assert_awaited_once()
+        oauth_bundle.pinned_connector.assert_awaited_once_with(_OAUTH_CREDS["token_url"])
 
     @pytest.mark.parametrize("field", ["token_url", "client_id"])
     def test_missing_or_empty_field_is_a_400_at_create_and_nothing_is_stored(self, route_client, field):
@@ -263,6 +263,30 @@ class TestBridgedOAuthCredentialRefreshes:
 
     def test_scopes_must_be_a_list_of_strings(self, route_client):
         assert _post_oauth(route_client, scopes="a b").status_code == 400
+
+    def test_legacy_private_token_url_is_refused_at_refresh_before_any_post(self, route_client, monkeypatch):
+        from autobot_shared.security.ssrf_guard import SSRFError
+        from knowledge.connectors import oauth_bundle, oauth_flow
+
+        reached = AsyncMock()
+        monkeypatch.setattr(oauth_flow, "refresh_access_token", reached)
+        monkeypatch.setattr(oauth_bundle, "pinned_connector", AsyncMock(side_effect=SSRFError("private")))
+        legacy = {
+            **_OAUTH_CREDS,
+            "token_url": "https://127.0.0.1/token",
+            "access_token": "",
+            "access_token_expires_at": None,
+        }
+        route_client.store.rows["legacy"] = {"id": "legacy", "value": json.dumps(legacy), "created_by": "owner-1"}
+
+        with pytest.raises(SSRFError):
+            asyncio.run(route_client.store.get_access_token("legacy", "owner-1"))
+        reached.assert_not_awaited()
+
+    def test_rotate_refuses_a_non_string_token_url(self, route_client):
+        secret_id = _post_oauth(route_client).json()["secret"]["id"]
+        with pytest.raises(ValueError):
+            asyncio.run(route_client.store.rotate(secret_id, {"token_url": 123}, "owner-1"))
 
     def test_rotate_refuses_an_unsafe_token_url(self, route_client):
         secret_id = _post_oauth(route_client).json()["secret"]["id"]

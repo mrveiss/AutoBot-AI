@@ -26,8 +26,8 @@ async def require_public_https_url(url: str) -> None:
     create-time check and the refresh-time pin agree. Raises ValueError
     (``SSRFError`` is one), which the Secrets route maps to 400.
     """
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.hostname:
+    parsed = urlparse(url) if isinstance(url, str) else None
+    if parsed is None or parsed.scheme != "https" or not parsed.hostname:
         raise SSRFError("token_url must be an https URL")
     await resolve_safe_ip(parsed.hostname)
 
