@@ -229,6 +229,18 @@ def _with_messages(result: dict, messages: list[str], prepend: bool = False) -> 
     return {**result, "output": f"{text}\n{output}" if prepend else f"{output}\n{text}"}
 
 
+def _with_early_messages(result: dict, early: list[str], node_id: str) -> dict:
+    """The early step's messages ahead of a successful run's output; a failed run's output stays exact.
+
+    The failure reason is read from the output of a failed run, so the messages go to the log there.
+    """
+    if result.get("success"):
+        return _with_messages(result, early, prepend=True)
+    if any(early):
+        logger.info("Pending-role provisioning before a failed update on %s: %s", node_id, " | ".join(filter(None, early)))
+    return result
+
+
 async def _provision_before_update(node_id: str, limit: list, restart_args: dict) -> list[str]:
     """Provision the pending roles of every node the run targets, ahead of the play's vnc gate (#22262).
 
@@ -262,10 +274,9 @@ async def _raw_update_targets(limit_hosts: list[str] | None) -> list[str]:
 def _raw_restart_args(variables: dict | None) -> dict:
     """The restart policy the raw run's extra vars carry, as ``run_update_all_nodes`` passes it (#20743)."""
     value = (variables or {}).get(RESTART_VAR, True)  # missing → restart, as Ansible's default(true)
-    if isinstance(value, bool):
-        return no_restart_args(value)
-    # any other value is truthy only by Ansible's `| bool` rules; "", "garbage" and None are not restarts
-    return no_restart_args(str(value).strip().lower() in {"true", "yes", "on", "1", "t", "y"})
+    # any non-bool value is truthy only by Ansible's `| bool` rules; "", "garbage" and None are not restarts
+    restart = value if isinstance(value, bool) else str(value).strip().lower() in {"true", "yes", "on", "1", "t", "y"}
+    return no_restart_args(restart)  # the one call site (#20743)
 
 
 async def provision_before_raw_update(
@@ -308,14 +319,14 @@ async def run_update_all_nodes(
     from services.pending_role_resume import clear_provision_marker, mark_provision_after_restart
     from services.rollback_target import FLEET_UPDATE_PLAYBOOK
 
-    restart_args = no_restart_args(restart)  # #20743
+    restart_args = _raw_restart_args({RESTART_VAR: restart})  # the one no_restart_args call site (#20743)
     early = await _provision_before_update(node_id, limit, restart_args)
     if resume_after_restart:
         await mark_provision_after_restart(node_id)
     result = await executor.execute_playbook(
         playbook_name=FLEET_UPDATE_PLAYBOOK, limit=limit, **playbook_kwargs, **restart_args
     )
-    result = _with_messages(result, early, prepend=True)
+    result = _with_early_messages(result, early, node_id)
     if resume_after_restart:
         from api._resume_plan import restart_cut_the_wait
 
