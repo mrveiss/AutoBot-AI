@@ -21,13 +21,11 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 import os
 import re
 import threading
-from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from autobot_shared.content_digest import content_digest
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from utils.file_categorization import (
@@ -39,6 +37,16 @@ from utils.file_categorization import (
     is_skipped_path,
 )
 
+from .duplicate_blocks import JS_FAMILY_SUFFIXES, MIN_DUPLICATE_LINES, CodeBlock, make_block
+from .duplicate_clusters import (
+    KIND_EXACT,
+    KIND_STRUCTURAL,
+    DuplicateCluster,
+    cluster_similar_pairs,
+    count_distinct_locations,
+    find_identical_clusters,
+    merge_adjacent_clusters,
+)
 from .duplicate_lsh import CANCEL_CHECK_INTERVAL, LSH_AVAILABLE, eligible_indices, find_lsh_candidates
 
 logger = get_logger(__name__)
@@ -66,11 +74,6 @@ _JS_FUNC_RE = re.compile(
 # Configuration Constants
 # =============================================================================
 
-# Minimum lines for a code block to be considered for duplicate detection
-# Issue #609: Reduced from 5 to 4 to catch more smaller duplicates
-MIN_DUPLICATE_LINES = 4
-# Minimum characters for a code block
-MIN_DUPLICATE_CHARS = 80
 # Similarity thresholds
 HIGH_SIMILARITY_THRESHOLD = 0.90
 MEDIUM_SIMILARITY_THRESHOLD = 0.70
@@ -78,8 +81,11 @@ LOW_SIMILARITY_THRESHOLD = 0.50
 # Maximum files to scan (0 = no limit, scan all files)
 # Issue #609: No limit on files - scan entire codebase
 MAX_FILES_TO_SCAN = 0
-# Maximum duplicate pairs RETURNED (0 = no limit). The count and the statistics
-# always describe every pair found; only the list is cut, and the analysis says so
+# Shape of a cached analysis, part of its Redis key: an entry written under another shape (the
+# pair-shaped one before #22157) is never read, so a deploy cannot hand old rows to ``from_dict``.
+DUPLICATE_CACHE_SCHEMA_VERSION = 2
+# Maximum duplicate clusters RETURNED (0 = no limit). The count and the statistics
+# always describe every cluster found; only the list is cut, and the analysis says so
 # (`truncated`). "No artificial limit" (#609) meant 2.5 million pairs on AutoBot's
 # own tree -- nothing a panel can show, a Redis result, or a JSON response (#18067).
 MAX_DUPLICATES_RETURNED = env_int("AUTOBOT_DUPLICATE_MAX_RETURNED", 5000)
@@ -96,22 +102,6 @@ MAX_BLOCKS_FOR_SIMILARITY = 500
 # =============================================================================
 # Data Models
 # =============================================================================
-
-
-@dataclass
-class CodeBlock:
-    """Represents a block of code for duplicate detection."""
-
-    file_path: str
-    start_line: int
-    end_line: int
-    content: str
-    normalized_content: str
-    content_hash: str
-    line_count: int
-    # Issue #659: Pre-computed token set for 30-40% faster similarity computation
-    # Avoids recomputing tokens on every comparison
-    token_set: Set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -152,9 +142,37 @@ class DuplicateAnalysis:
     medium_similarity_count: int
     low_similarity_count: int
     total_duplicate_lines: int
-    duplicates: List[DuplicatePair] = field(default_factory=list)
+    duplicates: List[DuplicateCluster] = field(default_factory=list)
     files_analyzed: int = 0
     scan_timestamp: str = ""
+    # #22157: ``total_duplicates`` counts clusters, ``total_locations`` the places
+    # they occupy; exact (equal code) and structural (equal once string literals are
+    # erased) are counted apart, and the excluded trees are part of the answer.
+    total_locations: int = 0
+    exact_cluster_count: int = 0
+    structural_cluster_count: int = 0
+    excluded_dirs: List[str] = field(default_factory=lambda: sorted(SKIP_DIRS))
+
+    @classmethod
+    def from_dict(cls, cached: Dict) -> "DuplicateAnalysis":
+        """Rebuild an analysis from its ``to_dict`` form (the Redis cache entry).
+
+        ``to_dict`` carries derived keys (``truncated``) and cluster rows as dicts, so
+        ``cls(**cached)`` raised TypeError and every cache hit fell through (#22157).
+        """
+        fields = {k: v for k, v in cached.items() if k not in ("truncated", "duplicates")}
+        return cls(duplicates=[DuplicateCluster.from_dict(r) for r in cached.get("duplicates", [])], **fields)
+
+    @classmethod
+    def from_cache(cls, cached: Optional[Dict]) -> Optional["DuplicateAnalysis"]:
+        """The analysis a cache entry holds, or None (a miss) when it is absent or of another shape."""
+        if not cached:
+            return None
+        try:
+            return cls.from_dict(cached)
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("Ignoring unreadable cached duplicate analysis: %r", exc)
+            return None
 
     @property
     def truncated(self) -> bool:
@@ -165,6 +183,10 @@ class DuplicateAnalysis:
         """Convert to dictionary for JSON serialization."""
         return {
             "total_duplicates": self.total_duplicates,
+            "total_locations": self.total_locations,
+            "exact_cluster_count": self.exact_cluster_count,
+            "structural_cluster_count": self.structural_cluster_count,
+            "excluded_dirs": self.excluded_dirs,
             "truncated": self.truncated,
             "high_similarity_count": self.high_similarity_count,
             "medium_similarity_count": self.medium_similarity_count,
@@ -179,37 +201,6 @@ class DuplicateAnalysis:
 # =============================================================================
 # Helper Functions
 # =============================================================================
-
-
-def _normalize_code(content: str) -> str:
-    """
-    Normalize code for comparison by removing:
-    - Comments
-    - Whitespace variations
-    - String literals (replace with placeholder)
-    """
-    # Remove single-line comments
-    content = re.sub(r"#.*$", "", content, flags=re.MULTILINE)
-    content = re.sub(r"//.*$", "", content, flags=re.MULTILINE)
-
-    # Remove multi-line comments
-    content = re.sub(r"/\*.*?\*/", "", content, flags=re.DOTALL)
-    content = re.sub(r'""".*?"""', '""', content, flags=re.DOTALL)
-    content = re.sub(r"'''.*?'''", "''", content, flags=re.DOTALL)
-
-    # Normalize string literals
-    content = re.sub(r'"[^"]*"', '"STR"', content)
-    content = re.sub(r"'[^']*'", "'STR'", content)
-
-    # Normalize whitespace
-    content = re.sub(r"\s+", " ", content)
-
-    return content.strip().lower()
-
-
-def _compute_hash(content: str) -> str:
-    """Compute SHA-256 hash of content."""
-    return content_digest(content)
 
 
 def _extract_code_blocks(file_path: str, content: str) -> List[CodeBlock]:
@@ -230,7 +221,7 @@ def _extract_code_blocks(file_path: str, content: str) -> List[CodeBlock]:
         blocks.extend(_extract_python_blocks(file_path, lines))
 
     # Extract function blocks for JS/TS/Vue
-    elif any(file_path.endswith(ext) for ext in [".js", ".ts", ".vue", ".jsx", ".tsx"]):
+    elif file_path.endswith(JS_FAMILY_SUFFIXES):
         blocks.extend(_extract_js_blocks(file_path, lines))
 
     # Fallback: sliding window for generic blocks
@@ -242,59 +233,26 @@ def _extract_code_blocks(file_path: str, content: str) -> List[CodeBlock]:
 
 def _extract_python_blocks(file_path: str, lines: List[str]) -> List[CodeBlock]:
     """Extract Python function and class blocks."""
+    starts = [i for i, line in enumerate(lines) if line.lstrip().startswith(("def ", "async def ", "class "))]
     blocks = []
-    current_block_start = None
-
-    for i, line in enumerate(lines):
-        stripped = line.lstrip()
-
-        # Detect function or class definition
-        if stripped.startswith(("def ", "async def ", "class ")):
-            # Save previous block if exists
-            if current_block_start is not None:
-                block_content = "\n".join(lines[current_block_start:i])
-                if len(block_content) >= MIN_DUPLICATE_CHARS:
-                    normalized = _normalize_code(block_content)
-                    # Issue #659: Pre-compute token set for faster similarity
-                    token_set = set(normalized.split())
-                    blocks.append(
-                        CodeBlock(
-                            file_path=file_path,
-                            start_line=current_block_start + 1,
-                            end_line=i,
-                            content=block_content,
-                            normalized_content=normalized,
-                            content_hash=_compute_hash(normalized),
-                            line_count=i - current_block_start,
-                            token_set=token_set,
-                        )
-                    )
-
-            current_block_start = i
-            # Track indentation for future use in duplicate grouping
-            _ = len(line) - len(stripped)
-
-    # Don't forget the last block
-    if current_block_start is not None:
-        block_content = "\n".join(lines[current_block_start:])
-        if len(block_content) >= MIN_DUPLICATE_CHARS:
-            normalized = _normalize_code(block_content)
-            # Issue #659: Pre-compute token set for faster similarity
-            token_set = set(normalized.split())
-            blocks.append(
-                CodeBlock(
-                    file_path=file_path,
-                    start_line=current_block_start + 1,
-                    end_line=len(lines),
-                    content=block_content,
-                    normalized_content=normalized,
-                    content_hash=_compute_hash(normalized),
-                    line_count=len(lines) - current_block_start,
-                    token_set=token_set,
-                )
-            )
-
+    for start, stop in zip(starts, starts[1:] + [len(lines)]):
+        block = make_block(file_path, start + 1, stop, "\n".join(lines[start:stop]), stop - start)
+        if block:
+            blocks.append(block)
     return blocks
+
+
+def _js_block_end(content: str, match: "re.Match[str]") -> int:
+    """Offset just past the brace that closes the function ``match`` opens."""
+    brace_count = 1
+    pos = match.end()
+    while pos < len(content) and brace_count > 0:
+        if content[pos] == "{":
+            brace_count += 1
+        elif content[pos] == "}":
+            brace_count -= 1
+        pos += 1
+    return pos
 
 
 def _extract_js_blocks(file_path: str, lines: List[str]) -> List[CodeBlock]:
@@ -303,38 +261,15 @@ def _extract_js_blocks(file_path: str, lines: List[str]) -> List[CodeBlock]:
     content = "\n".join(lines)
 
     for match in _JS_FUNC_RE.finditer(content):
-        start_pos = match.start()
-        start_line = content[:start_pos].count("\n")
-
-        # Find matching closing brace
-        brace_count = 1
-        pos = match.end()
-        while pos < len(content) and brace_count > 0:
-            if content[pos] == "{":
-                brace_count += 1
-            elif content[pos] == "}":
-                brace_count -= 1
-            pos += 1
-
+        start_line = content[: match.start()].count("\n")
+        pos = _js_block_end(content, match)
         end_line = content[:pos].count("\n")
-        block_content = content[start_pos:pos]
-
-        if len(block_content) >= MIN_DUPLICATE_CHARS and (end_line - start_line) >= MIN_DUPLICATE_LINES:
-            normalized = _normalize_code(block_content)
-            # Issue #659: Pre-compute token set for faster similarity
-            token_set = set(normalized.split())
-            blocks.append(
-                CodeBlock(
-                    file_path=file_path,
-                    start_line=start_line + 1,
-                    end_line=end_line + 1,
-                    content=block_content,
-                    normalized_content=normalized,
-                    content_hash=_compute_hash(normalized),
-                    line_count=end_line - start_line + 1,
-                    token_set=token_set,
-                )
-            )
+        line_count = end_line - start_line + 1  # inclusive: a function on lines 1-4 is four lines
+        if line_count < MIN_DUPLICATE_LINES:
+            continue
+        block = make_block(file_path, start_line + 1, end_line + 1, content[match.start() : pos], line_count)
+        if block:
+            blocks.append(block)
 
     return blocks
 
@@ -342,34 +277,10 @@ def _extract_js_blocks(file_path: str, lines: List[str]) -> List[CodeBlock]:
 def _extract_sliding_window_blocks(file_path: str, lines: List[str], window_size: int = 10) -> List[CodeBlock]:
     """Extract blocks using sliding window for generic files."""
     blocks = []
-
     for i in range(0, len(lines) - window_size + 1, window_size // 2):
-        block_lines = lines[i : i + window_size]
-        block_content = "\n".join(block_lines)
-
-        # Skip mostly empty blocks
-        if len(block_content.strip()) < MIN_DUPLICATE_CHARS:
-            continue
-
-        normalized = _normalize_code(block_content)
-        if len(normalized) < 50:  # Skip if normalized content is too short
-            continue
-
-        # Issue #659: Pre-compute token set for faster similarity
-        token_set = set(normalized.split())
-        blocks.append(
-            CodeBlock(
-                file_path=file_path,
-                start_line=i + 1,
-                end_line=i + window_size,
-                content=block_content,
-                normalized_content=normalized,
-                content_hash=_compute_hash(normalized),
-                line_count=window_size,
-                token_set=token_set,
-            )
-        )
-
+        block = make_block(file_path, i + 1, i + window_size, "\n".join(lines[i : i + window_size]), window_size)
+        if block:
+            blocks.append(block)
     return blocks
 
 
@@ -407,6 +318,33 @@ def _compute_similarity(block1: CodeBlock, block2: CodeBlock) -> float:
     union = len(tokens1 | tokens2)
 
     return intersection / union if union > 0 else 0.0
+
+
+def _is_new_semantic_pair(block1: CodeBlock, block2: CodeBlock, seen_pairs: Set[Tuple[str, str]]) -> bool:
+    """True for a cross-file, non-identical pair not seen before; records it in ``seen_pairs``."""
+    if block1.file_path == block2.file_path:
+        return False
+    # Identical blocks are already clusters (#22157)
+    if block1.content_hash == block2.content_hash:
+        return False
+    pair_key = tuple(sorted([f"{block1.file_path}:{block1.start_line}", f"{block2.file_path}:{block2.start_line}"]))
+    if pair_key in seen_pairs:
+        return False
+    seen_pairs.add(pair_key)
+    return True
+
+
+def _cluster_totals(clusters: List[DuplicateCluster]) -> Tuple[int, int, int, int]:
+    """``(clusters, distinct locations, exact clusters, structural clusters)`` of ``clusters``.
+
+    A structural cluster lists the blocks of its exact subgroups too; each place counts once.
+    """
+    return (
+        len(clusters),
+        count_distinct_locations(clusters)[0],
+        sum(1 for d in clusters if d.kind == KIND_EXACT),
+        sum(1 for d in clusters if d.kind == KIND_STRUCTURAL),
+    )
 
 
 # =============================================================================
@@ -561,55 +499,13 @@ class DuplicateCodeDetector(_BaseClass):
                 logger.debug("Failed to process %s: %s", file_path, e)
         return all_blocks
 
-    def _find_exact_duplicates(
-        self,
-        hash_groups: Dict[str, List[CodeBlock]],
-        seen_pairs: Set[Tuple[str, str]],
-    ) -> List[DuplicatePair]:
-        """Find exact hash-based duplicates (Issue #560: extracted).
+    def _to_clusters(self, all_blocks: List[CodeBlock], pairs: List[DuplicatePair]) -> List[DuplicateCluster]:
+        """Clusters of identical blocks plus clustered fuzzy pairs, adjacent ones merged (#22157).
 
-        Issue #616: O(n²) pairwise comparison is NECESSARY for duplicate detection.
-        Already optimized with: (1) hash-based grouping, (2) early continue for
-        same-file pairs, (3) seen_pairs set for O(1) deduplication.
+        Identical blocks are grouped by hash in O(n); a cluster lists every location
+        instead of the k(k-1)/2 pairs it used to cost (#616: no O(n^2) pass is needed).
         """
-        duplicates: List[DuplicatePair] = []
-
-        for blocks in hash_groups.values():
-            if len(blocks) <= 1:
-                continue
-
-            for i, block1 in enumerate(blocks):
-                for block2 in blocks[i + 1 :]:
-                    if block1.file_path == block2.file_path:
-                        continue
-
-                    pair_key = tuple(
-                        sorted(
-                            [
-                                f"{block1.file_path}:{block1.start_line}",
-                                f"{block2.file_path}:{block2.start_line}",
-                            ]
-                        )
-                    )
-                    if pair_key in seen_pairs:
-                        continue
-                    seen_pairs.add(pair_key)
-
-                    duplicates.append(
-                        DuplicatePair(
-                            file1=block1.file_path,
-                            file2=block2.file_path,
-                            start_line1=block1.start_line,
-                            end_line1=block1.end_line,
-                            start_line2=block2.start_line,
-                            end_line2=block2.end_line,
-                            similarity=1.0,
-                            line_count=block1.line_count,
-                            code_snippet=block1.content[:200],
-                        )
-                    )
-
-        return duplicates
+        return merge_adjacent_clusters(find_identical_clusters(all_blocks) + cluster_similar_pairs(pairs))
 
     def _process_lsh_candidates(
         self,
@@ -759,7 +655,7 @@ class DuplicateCodeDetector(_BaseClass):
 
     def _calculate_statistics(
         self,
-        duplicates: List[DuplicatePair],
+        duplicates: List[DuplicateCluster],
     ) -> Tuple[int, int, int, int]:
         """Calculate duplicate statistics (Issue #560: extracted)."""
         high_count = sum(1 for d in duplicates if d.similarity >= HIGH_SIMILARITY_THRESHOLD)
@@ -767,7 +663,8 @@ class DuplicateCodeDetector(_BaseClass):
             1 for d in duplicates if MEDIUM_SIMILARITY_THRESHOLD <= d.similarity < HIGH_SIMILARITY_THRESHOLD
         )
         low_count = sum(1 for d in duplicates if LOW_SIMILARITY_THRESHOLD <= d.similarity < MEDIUM_SIMILARITY_THRESHOLD)
-        total_lines = sum(d.line_count for d in duplicates)
+        # k copies hold k-1 redundant ones (a pair: one); a block listed by two clusters counts once
+        total_lines = count_distinct_locations(duplicates)[1]
         return high_count, medium_count, low_count, total_lines
 
     def run_analysis(self) -> DuplicateAnalysis:
@@ -794,15 +691,7 @@ class DuplicateCodeDetector(_BaseClass):
             logger.info("Duplicate detection abandoned before similarity search")
             return self._build_duplicate_analysis([], len(files))
 
-        # Group blocks by hash for exact matches
-        hash_groups: Dict[str, List[CodeBlock]] = defaultdict(list)
-        for block in all_blocks:
-            hash_groups[block.content_hash].append(block)
-
-        # Find duplicates using both methods
-        seen_pairs: Set[Tuple[str, str]] = set()
-        duplicates = self._find_exact_duplicates(hash_groups, seen_pairs)
-        duplicates.extend(self._find_similar_duplicates(all_blocks, seen_pairs))
+        duplicates = self._to_clusters(all_blocks, self._find_similar_duplicates(all_blocks, set()))
 
         analysis = self._build_duplicate_analysis(duplicates, len(files))
         logger.info(
@@ -882,52 +771,18 @@ class DuplicateCodeDetector(_BaseClass):
         all_blocks: List[CodeBlock],
         seen_pairs: Set[Tuple[str, str]],
     ) -> List[DuplicatePair]:
-        """
-        Find semantically similar code blocks using LLM embeddings.
-
-        Issue #554: Uses ChromaDB vector storage and cosine similarity.
-        Issue #620: Refactored to use extracted helper methods.
-
-        Args:
-            all_blocks: List of code blocks to analyze
-            seen_pairs: Set of already-detected pairs to skip
-
-        Returns:
-            List of semantically similar duplicate pairs
-        """
+        """Find semantically similar blocks using LLM embeddings (#554, #620); extends ``seen_pairs``."""
         if not self.use_semantic_analysis:
             return []
 
-        duplicates: List[DuplicatePair] = []
-        blocks_to_compare = self._sample_blocks_for_analysis(all_blocks, "semantic")
-
-        # Generate embeddings and compute similarities
-        codes = [block.normalized_content for block in blocks_to_compare]
-        embeddings = await self._get_embeddings_batch(codes)
+        blocks = self._sample_blocks_for_analysis(all_blocks, "semantic")
+        embeddings = await self._get_embeddings_batch([block.normalized_content for block in blocks])
         similarity_pairs = self._compute_batch_similarities(embeddings, min_similarity=self.min_similarity)
-
-        for i, j, similarity in similarity_pairs:
-            block1, block2 = blocks_to_compare[i], blocks_to_compare[j]
-
-            # Skip same file
-            if block1.file_path == block2.file_path:
-                continue
-
-            # Skip if already found by other methods
-            pair_key = tuple(
-                sorted(
-                    [
-                        f"{block1.file_path}:{block1.start_line}",
-                        f"{block2.file_path}:{block2.start_line}",
-                    ]
-                )
-            )
-            if pair_key in seen_pairs:
-                continue
-            seen_pairs.add(pair_key)
-
-            duplicates.append(self._create_duplicate_pair(block1, block2, similarity))
-
+        duplicates = [
+            self._create_duplicate_pair(blocks[i], blocks[j], similarity)
+            for i, j, similarity in similarity_pairs
+            if _is_new_semantic_pair(blocks[i], blocks[j], seen_pairs)
+        ]
         logger.info("Semantic analysis found %d additional duplicates", len(duplicates))
         return duplicates
 
@@ -944,50 +799,27 @@ class DuplicateCodeDetector(_BaseClass):
             all_blocks: List of code blocks to analyze
 
         Returns:
-            List of all detected duplicate pairs
+            List of all detected duplicate clusters
         """
-        # Group blocks by hash for exact matches
-        hash_groups: Dict[str, List[CodeBlock]] = defaultdict(list)
-        for block in all_blocks:
-            hash_groups[block.content_hash].append(block)
-
-        # Find duplicates using all methods
         seen_pairs: Set[Tuple[str, str]] = set()
-        duplicates = self._find_exact_duplicates(hash_groups, seen_pairs)
-        duplicates.extend(self._find_similar_duplicates(all_blocks, seen_pairs))
+        pairs = self._find_similar_duplicates(all_blocks, seen_pairs)
 
         # Add semantic duplicates if enabled
         if self.use_semantic_analysis:
-            semantic_dups = await self._find_semantic_duplicates_async(all_blocks, seen_pairs)
-            duplicates.extend(semantic_dups)
+            pairs.extend(await self._find_semantic_duplicates_async(all_blocks, seen_pairs))
 
-        return duplicates
+        return self._to_clusters(all_blocks, pairs)
 
-    def _build_duplicate_analysis(
-        self,
-        duplicates: List[DuplicatePair],
-        files_count: int,
-    ) -> DuplicateAnalysis:
+    def _build_duplicate_analysis(self, duplicates: List[DuplicateCluster], files_count: int) -> DuplicateAnalysis:
+        """Build DuplicateAnalysis from duplicate clusters (#665).
+
+        Statistics describe EVERY cluster found; only the returned list is cut (#18067).
         """
-        Build DuplicateAnalysis from duplicate pairs.
-
-        Issue #665: Extracted from run_analysis_async to reduce function length.
-
-        Args:
-            duplicates: List of detected duplicate pairs
-            files_count: Number of files analyzed
-
-        Returns:
-            DuplicateAnalysis with statistics
-        """
-        # Statistics describe EVERY pair found; only the returned list is cut
-        # (#18067), so a capped result still reports the true size of the problem.
         high_count, medium_count, low_count, total_lines = self._calculate_statistics(duplicates)
-        total = len(duplicates)
+        total, total_locations, exact, structural = _cluster_totals(duplicates)
         duplicates.sort(key=lambda x: (x.similarity, x.line_count), reverse=True)
         if MAX_DUPLICATES_RETURNED > 0:
             duplicates = duplicates[:MAX_DUPLICATES_RETURNED]
-
         return DuplicateAnalysis(
             total_duplicates=total,
             high_similarity_count=high_count,
@@ -997,6 +829,9 @@ class DuplicateCodeDetector(_BaseClass):
             duplicates=duplicates,
             files_analyzed=files_count,
             scan_timestamp=datetime.now(tz=timezone.utc).isoformat(),
+            total_locations=total_locations,
+            exact_cluster_count=exact,
+            structural_cluster_count=structural,
         )
 
     async def run_analysis_async(self) -> DuplicateAnalysis:
@@ -1016,12 +851,12 @@ class DuplicateCodeDetector(_BaseClass):
         )
 
         # Check for cached results first
-        cache_key = f"dup_analysis:{self.project_root}"
+        cache_key = f"dup_analysis:v{DUPLICATE_CACHE_SCHEMA_VERSION}:{self.project_root}"
         if self.use_semantic_analysis:
-            cached = await self._get_cached_result(cache_key, prefix="duplicate_detector")
+            cached = DuplicateAnalysis.from_cache(await self._get_cached_result(cache_key, prefix="duplicate_detector"))
             if cached:
                 logger.info("Returning cached duplicate analysis")
-                return DuplicateAnalysis(**cached)
+                return cached
 
         files = self._get_files_to_scan()
         logger.info("Found %d files to scan", len(files))

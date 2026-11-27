@@ -21,6 +21,7 @@ pytest.importorskip("datasketch")
 
 from api.codebase_analytics import duplicate_detector as det  # noqa: E402
 from api.codebase_analytics import duplicate_lsh  # noqa: E402
+from api.codebase_analytics.duplicate_blocks import normalize_structural  # noqa: E402
 
 _LIMITER = """
 def acquire_slot(bucket, now, limit, window):
@@ -92,17 +93,18 @@ def test_an_exact_copy_is_found_at_any_size_but_a_tiny_near_copy_is_not_fuzzy_ma
     pairs = _pairs(_scan(tmp_path))
     assert frozenset({"one.py", "two.py"}) in pairs, "an exact tiny copy must still be found"
     assert not any("three.py" in p for p in pairs), "a tiny near-copy was fuzzy-matched"
-    tiny = {len(set(det._normalize_code(_SHORT).split()))}
+    tiny = {len(set(normalize_structural(_SHORT).split()))}
     assert max(tiny) < duplicate_lsh.MIN_TOKENS_FOR_SIMILARITY, "fixture no longer exercises the floor"
 
 
 def test_the_result_is_capped_but_the_count_is_not(tmp_path, monkeypatch):
-    """2.5 million returned pairs was the failure; the cap must not hide the size."""
-    _plant(tmp_path, {f"d{i}/limiter.py": _LIMITER for i in range(4)})  # 6 exact pairs
+    """2.5 million returned rows was the failure; the cap must not hide the size."""
+    for n in range(4):  # 4 distinct clusters, each one function copied into two files
+        _plant(tmp_path, {f"a{n}/m.py": _unrelated(n), f"b{n}/m.py": _unrelated(n)})
     monkeypatch.setattr(det, "MAX_DUPLICATES_RETURNED", 2)
     analysis = _scan(tmp_path)
-    assert analysis.total_duplicates == 6 and len(analysis.duplicates) == 2 and analysis.truncated
-    assert analysis.high_similarity_count == 6, "statistics must describe every pair, not the returned slice"
+    assert analysis.total_duplicates == 4 and len(analysis.duplicates) == 2 and analysis.truncated
+    assert analysis.high_similarity_count == 4, "statistics must describe every cluster, not the returned slice"
 
 
 def test_the_lsh_threshold_follows_min_similarity(monkeypatch, tmp_path):

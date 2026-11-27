@@ -312,10 +312,16 @@ GLOB_RUN_BY_A_DEDICATED_WORKFLOW: dict[str, tuple[set[str], str, str]] = {
     # #21713: the promotion-base wiring guard reads every workflow; actionlint.yml already fires on
     # that tree, so it runs the guard there instead of spending the suite on every workflow edit.
     ".github/workflows/*.y*ml": (
-        {"repo_tests/release_promotion_base_wiring_21713_test.py"},
+        {"repo_tests/release_promotion_base_wiring_21713_test.py", "repo_tests/test_pr_issue_validation_14241.py"},
         ".github/workflows/actionlint.yml",
         "the guard reads only workflow YAML and repo_tests imports; actionlint.yml fires on every "
         "workflow change, and covering `.github/workflows/**` in the python filter would run the "
-        "twelve-shard suite on each one (#21713)",
+        "twelve-shard suite on each one (#21713; #22195 adds the pipefail-grep guard over run blocks)",
+    ),
+    "scripts/*.sh": (
+        {"repo_tests/test_pr_issue_validation_14241.py"},
+        ".github/workflows/actionlint.yml",
+        "the guard reads only shell scripts and repo_tests imports; actionlint.yml is widened to "
+        "fire on scripts, rather than running the twelve-shard suite on each script edit (#22195)",
     ),
 }

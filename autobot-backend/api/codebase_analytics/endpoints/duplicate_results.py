@@ -25,6 +25,9 @@ def _convert_analysis_to_result(analysis, project_root: str) -> dict:
     """
     Convert analysis result to frontend-compatible format.
 
+    Rows are clusters (#22157); ``total_count`` is the number of clusters found,
+    ``returned_count`` the rows in this response.
+
     Args:
         analysis: DuplicateAnalysis result
         project_root: Project root for relative paths
@@ -32,21 +35,9 @@ def _convert_analysis_to_result(analysis, project_root: str) -> dict:
     Returns:
         Frontend-compatible result dict
     """
-    duplicates_for_frontend = []
-    for dup in analysis.duplicates:
-        duplicates_for_frontend.append(
-            {
-                "file1": _make_relative_path(dup.file1, project_root),
-                "file2": _make_relative_path(dup.file2, project_root),
-                "start_line1": dup.start_line1,
-                "end_line1": dup.end_line1,
-                "start_line2": dup.start_line2,
-                "end_line2": dup.end_line2,
-                "similarity": round(dup.similarity * 100, 1),
-                "lines": dup.line_count,
-                "code_snippet": dup.code_snippet[:200] if dup.code_snippet else "",
-            }
-        )
+    duplicates_for_frontend = [
+        dup.to_dict(lambda path: _make_relative_path(path, project_root)) for dup in analysis.duplicates
+    ]
 
     return {
         "status": "success",
@@ -54,6 +45,10 @@ def _convert_analysis_to_result(analysis, project_root: str) -> dict:
         "total_count": analysis.total_duplicates,
         "returned_count": len(duplicates_for_frontend),
         "truncated": analysis.truncated,
+        "total_locations": analysis.total_locations,
+        "exact_cluster_count": analysis.exact_cluster_count,
+        "structural_cluster_count": analysis.structural_cluster_count,
+        "excluded_dirs": analysis.excluded_dirs,
         "high_similarity_count": analysis.high_similarity_count,
         "medium_similarity_count": analysis.medium_similarity_count,
         "low_similarity_count": analysis.low_similarity_count,
