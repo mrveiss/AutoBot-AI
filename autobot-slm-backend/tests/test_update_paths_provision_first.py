@@ -101,5 +101,5 @@ def test_every_update_path_provisions_before_the_play() -> None:
     infra = (_ROOT / "api" / "infrastructure.py").read_text(encoding="utf-8")
     assert _PLAYBOOK not in infra, "the catalogue uses FLEET_UPDATE_PLAYBOOK, not a second spelling"
     run = infra[infra.index("async def _run_playbook(") :]
-    early = run.index("await provision_before_raw_update(playbook.playbook_file, limit_hosts)")
+    early = run.index("await provision_before_raw_update(playbook.playbook_file, limit_hosts, variables)")
     assert early < run.index("create_subprocess_exec("), "the raw route provisions before it spawns the play"

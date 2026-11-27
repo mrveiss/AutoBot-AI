@@ -371,7 +371,7 @@ def test_an_assigned_and_provisioned_node_is_left_alone(monkeypatch) -> None:
     assert asyncio.run(prp.provision_pending_roles("n1")) == ""
 
 
-def _raw(monkeypatch, nodes, limit, playbook="update-all-nodes.yml"):
+def _raw(monkeypatch, nodes, limit, playbook="update-all-nodes.yml", variables=None, kwargs_seen=None):
     """provision_before_raw_update over `nodes`, with each provisioned node's message recorded."""
     db = MagicMock(execute=AsyncMock(return_value=MagicMock(**{"scalars.return_value.all.return_value": nodes})))
     _use(monkeypatch, db, None)
@@ -381,10 +381,12 @@ def _raw(monkeypatch, nodes, limit, playbook="update-all-nodes.yml"):
 
     async def fake(node_id, **kwargs):
         seen.append(node_id)
+        if kwargs_seen is not None:
+            kwargs_seen.append(kwargs)
         return "provisioned newly assigned role(s) vnc"
 
     monkeypatch.setattr(prp, "provision_pending_roles", fake)
-    return asyncio.run(prp.provision_before_raw_update(playbook, limit)), seen
+    return asyncio.run(prp.provision_before_raw_update(playbook, limit, variables)), seen
 
 
 def _host(node_id, roles):
@@ -398,6 +400,23 @@ def test_the_raw_update_route_provisions_assigned_targets_first(monkeypatch) -> 
     assert _raw(monkeypatch, nodes, ["localhost", "node_DESK"])[1] == ["desk"], "a node-only limit narrows"
     assert _raw(monkeypatch, nodes, ["infrastructure"])[1] == ["desk", "other"], "a group may cover any node"
     assert _raw(monkeypatch, nodes, None, playbook="other.yml") == ([], []), "other playbooks are left alone"
+
+
+def test_a_limit_naming_only_the_archive_build_host_reaches_no_node(monkeypatch) -> None:
+    nodes = [_host("desk", ["vnc"]), _host("other", ["vnc"])]
+    assert _raw(monkeypatch, nodes, [prp.ARCHIVE_BUILD_HOST]) == ([], [])
+    assert _raw(monkeypatch, nodes, None)[1] == ["desk", "other"], "no limit stays fleet-wide"
+
+
+def test_the_raw_update_route_provisions_with_the_runs_restart_policy(monkeypatch) -> None:
+    nodes = [_host("desk", ["vnc"])]
+    seen: list[dict] = []
+    _raw(monkeypatch, nodes, None, variables={"autobot_restart_services": "false"}, kwargs_seen=seen)
+    assert seen == [NO_RESTART]
+    seen.clear()
+    _raw(monkeypatch, nodes, None, variables={"autobot_restart_services": True}, kwargs_seen=seen)
+    _raw(monkeypatch, nodes, None, kwargs_seen=seen)
+    assert seen == [{}, {}], "restarting (the default) passes no restart arguments"
 
 
 # --------------------------------------------------------------------------

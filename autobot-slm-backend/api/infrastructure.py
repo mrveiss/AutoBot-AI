@@ -649,7 +649,7 @@ async def _run_playbook(
             return
         inventory_path = str(inventory_path_obj)
         # #22262: this route runs the fleet-update playbook raw, so its targets' assigned roles are provisioned first
-        execution.output.extend(await provision_before_raw_update(playbook.playbook_file, limit_hosts))
+        execution.output.extend(await provision_before_raw_update(playbook.playbook_file, limit_hosts, variables))
 
         # Inject stored SLM secrets so standalone re-deploys receive the same
         # secrets as the full wizard provisioning flow (#3519, #3778).

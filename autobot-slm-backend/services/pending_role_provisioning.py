@@ -40,7 +40,7 @@ from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from models.database import Node, NodeCredential, NodeRole
 from services.database import db_service
-from services.sync_restart import no_restart_args
+from services.sync_restart import RESTART_VAR, no_restart_args
 from status_enums import RoleStatus
 
 logger = get_logger(__name__)
@@ -243,7 +243,8 @@ async def _raw_update_targets(limit_hosts: list[str] | None) -> list[str]:
     """Node ids an ``update-all-nodes.yml`` run over the setup-wizard inventory reaches that hold an assigned role.
 
     A limit naming only nodes (node id or inventory host name) narrows the set; a group or pattern token may cover
-    any node, so then every node with an assigned updater-provisioned role is a target.
+    any node, so then every node with an assigned updater-provisioned role is a target. A limit naming only the
+    archive-build host reaches no node; no limit at all is fleet-wide.
     """
     from api.setup_wizard import _sanitize_ansible_name  # lazy: the inventory's own host naming (#9283)
 
@@ -251,16 +252,27 @@ async def _raw_update_targets(limit_hosts: list[str] | None) -> list[str]:
         nodes = list((await db.execute(select(Node))).scalars().all())
     names = {n.node_id: {n.node_id, _sanitize_ansible_name(n.ansible_target)} for n in nodes}
     tokens = set(limit_hosts or []) - {ARCHIVE_BUILD_HOST}
+    if limit_hosts and not tokens:
+        return []
     narrow = bool(tokens) and tokens <= set().union(*names.values())
     assigned = [n.node_id for n in nodes if set(n.roles or []) & set(UPDATER_PROVISIONED_ROLES)]
     return [node_id for node_id in assigned if not narrow or names[node_id] & tokens]
 
 
-async def provision_before_raw_update(playbook_file: str, limit_hosts: list[str] | None) -> list[str]:
+def _raw_restart_args(variables: dict | None) -> dict:
+    """The restart policy the raw run's extra vars carry, as ``run_update_all_nodes`` passes it (#20743)."""
+    value = (variables or {}).get(RESTART_VAR, True)
+    return no_restart_args(str(value).strip().lower() not in {"false", "no", "off", "0"})
+
+
+async def provision_before_raw_update(
+    playbook_file: str, limit_hosts: list[str] | None, variables: dict | None = None
+) -> list[str]:
     """Output lines of the pending-role step for a run that bypasses ``run_update_all_nodes`` (#22262).
 
     ``POST /infrastructure/execute`` runs ``update-all-nodes.yml`` through its own subprocess, so it takes this
-    step before the play's vnc gate instead. Any other playbook is left alone.
+    step before the play's vnc gate instead, with the run's restart policy (``autobot_restart_services``).
+    Any other playbook is left alone.
     """
     from services.rollback_target import FLEET_UPDATE_PLAYBOOK  # lazy, like api.nodes: keeps this import light
 
@@ -271,9 +283,10 @@ async def provision_before_raw_update(playbook_file: str, limit_hosts: list[str]
     except Exception as exc:  # noqa: BLE001 - the update goes on; the gate still fails an unprovisioned node
         logger.error("Pending-role targets for a raw update could not be read: %s", exc)
         return ["[WARNING] pending roles could not be provisioned (database error); it does not fail the update"]
+    restart_args = _raw_restart_args(variables)
     lines = []
     for node_id in targets:
-        message = await provision_pending_roles(node_id)
+        message = await provision_pending_roles(node_id, **restart_args)
         if message:
             lines.append(f"[INFO] {node_id}: {message}")
     return lines
