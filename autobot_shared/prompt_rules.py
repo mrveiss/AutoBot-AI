@@ -118,6 +118,16 @@ def frame_untrusted_text(
     return f"{head}{open_marker}{attr}\n{safe}\n{close_marker}{tail}"
 
 
+def _neutralize_rows(rows: List[str], names: Tuple[str, ...]) -> List[str]:
+    """Neutralize ``rows`` as one text (a marker split across rows is still caught), keeping each row intact.
+
+    Neutralizing never adds or removes a newline, so the result is regrouped by each row's own newline count:
+    a row that holds newlines (a multi-line code chunk) stays ONE row and is not re-indented per line.
+    """
+    pieces = iter(neutralize_untrusted("\n".join(rows), names).split("\n"))
+    return ["\n".join(next(pieces) for _ in range(row.count("\n") + 1)) for row in rows]
+
+
 def frame_untrusted_block(label: str, warning_lines: List[str], body_lines: List[str]) -> str:
     """Wrap already-sanitized untrusted content in data-only framing (#11074).
 
@@ -133,7 +143,6 @@ def frame_untrusted_block(label: str, warning_lines: List[str], body_lines: List
     private cross-package import.
     """
     indent = "        "
-    joined = neutralize_untrusted("\n".join(body_lines), (label,))
-    safe_body = joined.split("\n") if body_lines else []
+    safe_body = _neutralize_rows(body_lines, (label,))
     rows = [*warning_lines, f"<<<BEGIN_{label}>>>", *safe_body, f"<<<END_{label}>>>"]
     return "\n" + "\n".join(f"{indent}{row}" for row in rows) + "\n"
