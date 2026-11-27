@@ -6,7 +6,7 @@
 
 Owner decision 2026-10-11: every mutating tool is gated by an approval category. The
 categories are the existing ones (``autobot_shared.tool_catalogue.APPROVAL_CATEGORY_TOOLS``) and
-the existing seam enforces them (``_approval_category_for`` over ``ctx.requires_approval_before``).
+the existing seam enforces them (``approval_category_for`` over ``ctx.requires_approval_before``).
 This module only decides WHICH categories a run starts with: all of them, minus the ones an
 administrator relaxed in the SLM's server-wide settings.
 

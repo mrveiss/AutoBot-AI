@@ -68,7 +68,6 @@ _TEMPLATES = "autobot-slm-backend/ansible/roles"
 #: in this repo (#21271 tracks those units).
 UNIT_TARGETS: dict[str, str | None] = {
     "autobot-infrastructure/autobot-ai-stack/templates/autobot-ai-stack.service": None,
-    "autobot-infrastructure/autobot-backend/templates/autobot-user-backend.service": "autobot-backend/main.py",
     "autobot-infrastructure/autobot-npu-worker/templates/autobot-npu-worker.service": (
         "autobot-infrastructure/autobot-npu-worker/docker/npu_inference_server.py"
     ),

@@ -321,7 +321,7 @@ hand-rolled regex markdown that strips whole-word `THOUGHT|PLANNING|DEBUG|SOURCE
 tags and has no citation branch; no markdown library exists to hang a plugin on
 (`marked`/`markdown-it`/`vue-markdown` absent from `package.json`). A sources
 panel exists (`CitationsDisplay.vue`) but its `citation-click` is not bound in
-the live parent, and the component that does bind it (`MessageItem.vue:130-136`)
+the live parent, and the component that does bind it (`MessageItem.vue:130-136` (removed in #22179; see ChatMessageContent.vue))
 has no production caller at all.
 Visible benefit: the model's own output becomes interactive provenance.
 Hidden cost: adding a markdown-AST dependency to a frontend that deliberately
@@ -358,7 +358,7 @@ report.
 | F1 (#17826) | Saving **any** LLM setting in the SLM admin GUI overwrites every configured provider's real API key in the vault with its masked display string | `llm_config.py:127-142` resolves the real key → `:194-196` masks it → `LLMSettings.vue:70-96` round-trips `{...config}` → `llm_config.py:214-216` `if d.get("api_key")` → `llm_secrets.py:96` `vault_rotate(id, "sk-a...b3f2")`. No mask comparison at any hop | critical — silent credential destruction |
 | F2 (#17827) | The LLM's own HTTP tool checks the domain allowlist on the initial URL, then follows redirects anywhere | `api/http_client_mcp.py:666` `is_domain_allowed(request.url)`, then `:588-620` `execute_http_request` calls `session.request(...)` directly on a `tracked_session()`, bypassing `HTTPClientManager.request()` where `guard_egress` and `allow_redirects=False` live; `_build_request_kwargs` sets url/headers/timeout/ssl and **not** `allow_redirects` | high — the source's own hole, narrowed to allowlisted-host redirects |
 | F3 (#17828) | Citation ids are always synthetic; the durable `fact_id` is never read | `services/knowledge/service.py:405` vs `knowledge/facts.py:757`. Same key-shape class as closed #16708 — second sighting, one fix | medium |
-| F4 (#17828) | `[Source N]` is instructed, never parsed; sources-panel click is a no-op; the component that wires it is unreachable | `ChatMessages.vue:889-926`, `:228-231`; `MessageItem.vue:130-136` with zero importers | medium |
+| F4 (#17828) | `[Source N]` is instructed, never parsed; sources-panel click is a no-op; the component that wires it is unreachable | `ChatMessages.vue:889-926`, `:228-231`; `MessageItem.vue:130-136` (removed in #22179; see ChatMessageContent.vue) with zero importers | medium |
 | F5 (#17273, #17829) | A disconnected SSE client orphans the generation — no `finally: graph_task.cancel()`, so the LLM call runs to completion, billed and invisible; and there is no stop control to begin with (`stopGenerating` defined in 11 locales, **0** component references) | `chat_workflow/manager.py:3827` create → `:3845` await, nothing between | medium — cost and correctness |
 | F6 (#17830) | `add_document` never chunks, despite the class docstring claiming "Add documents with chunking" / "Automatic chunking and vectorization" — a whole transcript or file becomes **one** embedding | `knowledge/documents.py:30,37` (claim) vs `:42-76` → `:77-92` → `store_fact(content, …)`; 8 production callers incl. `api/transcripts.py:229`, `api/knowledge_maintenance.py:558` | medium — silently degrades retrieval |
 | F7 (#16845) | Chat-originated spend carries no `user_id`, so per-user breakdowns miss it and the budget hard-stop cannot fire for chat | `services/llm_service.py:1174` `_track_usage(response, session_id)`; called at `:635,969,989` | witnessed on #16845 |
@@ -371,7 +371,7 @@ report.
 - `autobot-slm-backend/api/llm_config.py` (+ `user_management/services/llm_secrets.py`) — skip the write when the submitted value equals the mask; better, follow `sso_secrets.py` and omit the field from the response entirely.
 - `autobot-backend/api/http_client_mcp.py` — route `execute_http_request` through `HTTPClientManager.request(..., guard_egress=…)`, or set `allow_redirects=False` and re-validate each hop via `pinned_request_with_redirects`.
 - `autobot-backend/services/knowledge/service.py:405` — read `fact_id`.
-- `autobot-frontend/src/components/chat/ChatMessages.vue` — parse the citation marker; bind `@citation-click`; then either promote or retire `MessageItem.vue`.
+- `autobot-frontend/src/components/chat/ChatMessages.vue` — parse the citation marker; bind `@citation-click`; then either promote or retire `MessageItem.vue` (removed in #22179; see ChatMessageContent.vue).
 - `autobot-backend/chat_workflow/manager.py:3827-3845` — `try/finally` cancelling `graph_task`; wire a stop control to the already-translated string.
 - `autobot-backend/knowledge/documents.py:77-92` — chunk before `store_fact`, reusing `autobot_shared/doc_chunking.py`, or correct the docstring if single-vector is intended.
 

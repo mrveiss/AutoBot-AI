@@ -377,11 +377,11 @@ class CommandApprovalManager:
                 original_command=command,
             )
 
-            # Store in memory (could be persisted to Redis later)
-            if user_id not in self.auto_approve_rules:
-                self.auto_approve_rules[user_id] = []
-
-            self.auto_approve_rules[user_id].append(rule)
+            # In process memory; persistence across workers and restarts is #22314. One rule per (pattern, risk).
+            rules = self.auto_approve_rules.setdefault(user_id, [])
+            if any(r.pattern == pattern and r.risk_level == risk_level for r in rules):
+                return True
+            rules.append(rule)
 
             logger.info(f"Auto-approve rule stored for user {user_id}: " f"pattern='{pattern}', risk={risk_level}")
             return True

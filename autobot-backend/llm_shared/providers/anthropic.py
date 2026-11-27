@@ -334,6 +334,10 @@ class AnthropicProvider(BaseProvider):
         if not request.tools:
             return
         kwargs["tools"] = anthropic_tool_schemas(request.tools)
+        if request.metadata.get("enable_prompt_cache", config.llm_prompt_cache_default):
+            # #17278: a breakpoint on the last tool caches the whole tools block (tools precede system in the prefix),
+            # so the tool descriptors are not re-sent uncached on every request.
+            kwargs["tools"][-1]["cache_control"] = {"type": "ephemeral"}
         if request.tool_choice:
             kwargs["tool_choice"] = {"type": request.tool_choice}
 

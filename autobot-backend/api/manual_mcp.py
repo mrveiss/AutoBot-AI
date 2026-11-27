@@ -36,7 +36,7 @@ from services.mcp_bridge_manifest import MCPBridgeManifest
 # module-scan fallback, the same mechanism every other governed bridge uses.
 MANIFEST = MCPBridgeManifest(
     name="manual_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="Man page and documentation lookup (issue #3287)",
     features=["man_pages", "documentation_index"],
     endpoint="/api/manual/mcp/tools",

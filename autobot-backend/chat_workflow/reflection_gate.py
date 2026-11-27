@@ -18,7 +18,7 @@ failure carry no such instruction.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
 
 from autobot_shared.logging_manager import get_logger
 
@@ -82,7 +82,7 @@ async def evaluate_with_one_retry(evaluator: Any, **kwargs: Any) -> Any:
     return result
 
 
-def reflection_update(state: Dict[str, Any], result: Any, history: list, max_reflections: int) -> dict:
+def reflection_update(state: Mapping[str, Any], result: Any, history: list, max_reflections: int) -> dict:
     """The state update after one reflection pass; carries the configured budget for the router."""
     return {
         "reflection_count": state.get("reflection_count", 0) + 1,

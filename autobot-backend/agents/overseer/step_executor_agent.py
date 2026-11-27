@@ -526,7 +526,7 @@ class StepExecutorAgent:
             logger.warning("[StepExecutor] PTY session %s not found or not alive", self.pty_session_id)
             from constants.path_constants import PATH
 
-            pty = simple_pty_manager.create_session(self.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT))
+            pty = simple_pty_manager.create_session(self.pty_session_id, str(PATH.PROJECT_ROOT), pipefail=True)
             if not pty:
                 logger.error("[StepExecutor] Failed to create PTY session")
             return pty or None

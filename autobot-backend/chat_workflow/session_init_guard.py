@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Mapping
 
 from autobot_shared.logging_manager import get_logger
 
@@ -16,7 +16,7 @@ REQUIRED_TURN_KEYS = ("session_id", "user_message")
 NO_TURN_MESSAGE = "Nothing to run: the chat state carries no turn input"
 
 
-def missing_turn_state(state: Dict[str, Any], stream_cb: Callable | None) -> Dict[str, Any] | None:
+def missing_turn_state(state: Mapping[str, Any], stream_cb: Callable | None) -> Dict[str, Any] | None:
     """The error update for a state lacking the turn's input, or ``None`` when it is complete.
 
     A resume reaches the entry node with an empty state when nothing was waiting to resume; the route refuses that

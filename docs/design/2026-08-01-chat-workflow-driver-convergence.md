@@ -120,7 +120,7 @@ generate_response
 **Path B — the manager/tool_handler message-based gate**
 
 ```
-tool_handler._approval_category_for(tool_name, declared)   # :629
+tool_handler.approval_category_for(tool_name, declared)   # :629
 tool_handler._emit_approval_required / _emit_approval_received
 manager._handle_tool_message_types                          # :2213
   -> tool_msg.type == "command_approval_request"            # :2227

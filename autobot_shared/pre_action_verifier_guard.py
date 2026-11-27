@@ -65,8 +65,8 @@ from autobot_shared.verifier_degradation import (
 )
 from autobot_shared.verifier_model import (  # noqa: F401 - VERIFIER_SPEND_SITE is re-exported
     VERIFIER_SPEND_SITE,
+    chat_within_deadline,
     configured_verifier_model,
-    resolve_and_chat,
 )
 from autobot_shared.verifier_prompt import _build_verifier_prompt  # noqa: F401  (re-export, #17306)
 
@@ -326,14 +326,11 @@ async def _call_verifier_once(
     system_prompt, user_prompt = _build_verifier_prompt(tool_name, args, reason)
     attempt: dict[str, Any] = {}
     try:
-        import asyncio as _asyncio
-
-        # One deadline covers the model lookup (a cache miss lists models over the network) and the chat call.
-        _request, response = await _asyncio.wait_for(
-            resolve_and_chat(provider, system_prompt, user_prompt, tool_name, VERIFIER_MAX_TOKENS, attempt),
-            timeout=VERIFIER_TIMEOUT_S,
+        response = await chat_within_deadline(
+            provider, system_prompt, user_prompt, tool_name, VERIFIER_MAX_TOKENS, VERIFIER_TIMEOUT_S, attempt
         )
     except Exception as exc:
+        deadline = attempt.get("deadline", VERIFIER_TIMEOUT_S)
         if "response" in attempt:  # the deadline hit during accounting: the reply is complete, so it decides (#21844)
             return VerifierObservation.from_reply(
                 attempt["response"].content or "",
@@ -341,16 +338,23 @@ async def _call_verifier_once(
                 model_used=getattr(attempt["response"], "model", None),
             )
         observation = replace(
-            failure_observation(exc),
+            failure_observation(exc, deadline),
             provider_used=provider.provider_name,
             model_used=(
                 attempt["model"] if "model" in attempt else configured_verifier_model(provider)
             ),  # None = default
         )
+        # The deadline's own cancel reaches the provider as a bare CancelledError ("Stream cancelled", #22254): say here
+        # that this deadline did it, with its length, so a chat model that always overruns it is visible as such.
+        cause = (
+            f"exceeded the {deadline:g}s deadline (VERIFIER_TIMEOUT_S={VERIFIER_TIMEOUT_S:g}s), the call was cancelled"
+            if isinstance(exc, TimeoutError)
+            else repr(exc)
+        )
         logger.warning(
-            "pre_action_verifier: LLM call failed (%s: %r) — degraded (%s), fail_closed=%s",
+            "pre_action_verifier: LLM call failed (%s: %s) — degraded (%s), fail_closed=%s",
             type(exc).__name__,
-            exc,
+            cause,
             observation.degradation.value,
             degraded_response_blocks(observation.degradation),
         )

@@ -94,6 +94,37 @@ def test_the_surviving_entry_keeps_the_model():
     assert survivor["metadata"]["model"] == "model-a"
 
 
+def _usage_marker(iteration, prompt=12, completion=34):
+    from chat_workflow.stream_identity import usage_marker
+
+    marker = usage_marker({"done": True, "prompt_eval_count": prompt, "eval_count": completion}, "model-a")
+    marker.metadata["iteration"] = iteration
+    return marker
+
+
+def test_the_surviving_respond_bubble_keeps_the_iterations_usage():
+    """The narration is dropped as a repeat; the bubble that remains carries what the iteration cost (#21880)."""
+    batch = _build([_chunk_marker(1, "model-a"), _usage_marker(1), _respond(ANSWER, 1)], [ANSWER])
+    (survivor,) = [e for e in batch if e["sender"] == "assistant"]
+    assert survivor["metadata"]["usage"] == {"prompt_tokens": 12, "completion_tokens": 34, "total_tokens": 46}
+    assert survivor["metadata"]["model"] == "model-a"
+
+
+def test_a_kept_narration_carries_the_usage_and_the_respond_bubble_does_not_double_it():
+    narration = "I could not reach the second site, so the figure comes from the first one only."
+    batch = _build([_usage_marker(1), _respond(ANSWER, 1)], [narration])
+    by_text = {e["text"]: e["metadata"].get("usage") for e in batch if e["sender"] == "assistant"}
+    assert by_text[narration]["total_tokens"] == 46 and by_text[ANSWER] is None
+
+
+def test_a_provider_that_reports_no_counts_leaves_no_usage_key():
+    from chat_workflow.stream_identity import usage_marker
+
+    assert usage_marker({"done": True}, "model-a") is None
+    batch = _build([_respond(ANSWER, 1)], [ANSWER])
+    assert all("usage" not in e["metadata"] for e in batch if e["sender"] == "assistant")
+
+
 def test_every_assistant_entry_of_a_two_iteration_turn_has_a_model():
     first = WorkflowMessage(type="terminal_output", content="out", metadata={"iteration": 1})
     batch = _build([first, _respond(ANSWER, 2)], ["Let me search.", ""], selected_model="model-a")
