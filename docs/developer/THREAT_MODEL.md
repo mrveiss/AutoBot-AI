@@ -143,11 +143,6 @@ refused `1008` before any RFB byte. Full reasoning is in that function's docstri
   [`autobot_shared/security/ssrf_guard.py`](../../autobot_shared/security/ssrf_guard.py)
   `fetch_safe_url` (:305) / `pinned_request_with_redirects` (:230). A bare `aiohttp`/`requests`
   call on a user-influenced URL is SSRF (core rule 8).
-- **Third-party reader/search fast paths are opt-in (#21850):** the fetch fast path, the link pipeline and the content-reach
-  reader/search backends send every URL and search query to a third-party service. The destinations are the SSOT keys
-  `third_party_reader_base_url` / `third_party_search_base_url` ([`ssot_third_party_reach.py`](../../autobot_shared/ssot_third_party_reach.py));
-  the gate is `web_research_config.third_party_fast_paths_enabled()`, default off, set by a user in the web research settings.
-  Off means no request reaches those hosts: AUTO starts at the local fetch with the browser as fallback.
 - **LLM failover moves prompts (#19753):** [`ModelFallbackCoordinator`](../../autobot-backend/llm_shared/model_fallback_coordinator.py)
   `fail_over` re-sends a turn's prompt to another model. It never carries a prompt from a local provider to an external one unless
   the operator wrote that chain (`AUTOBOT_FALLBACK_CHAIN_*`, `FallbackChain.operator_configured`) -- `failover_policy.locality_allows`
