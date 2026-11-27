@@ -68,7 +68,7 @@ bcrypt  # Direct bcrypt API — passlib removed (#2669)
 python-multipart  # SECURITY UPDATE - arbitrary file write fix
 
 # Cache (GH #6511: Redis-backed permission cache replaces in-process dict)
-redis[asyncio]>=8.1.0  # redis 8.2 needs fakeredis>=2.41.0 (constraints/shared.txt); cap lifted (#22120)
+redis[asyncio]>=8.1.0,<9.0  # redis 8.2 needs fakeredis>=2.41.0 (constraints/shared.txt); cap lifted (#22120)
 
 # Async utilities
 aiofiles
