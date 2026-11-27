@@ -151,21 +151,38 @@ async def test_agent_kb_tools_never_return_another_users_private_fact(call):
 
 
 @pytest.mark.asyncio
-async def test_system_read_tools_work_through_get_tool_registry_without_worker_node():
-    """#22267: both system tools return real data from the production singleton."""
+async def test_system_read_tools_work_through_get_tool_registry_without_worker_node(monkeypatch):
+    """#22267: the system-info tool returns real data from the production singleton (service list: unit test below)."""
     from tools.tool_registry import get_tool_registry
 
     registry = get_tool_registry()
     assert registry.worker_node is None
+    monkeypatch.setattr(registry, "_system_integration", None)  # undo restores None: no real instance stays cached
 
     info = await registry.query_system_information()
-    services = await registry.list_system_services()
 
     assert info["status"] == "success"
     assert "os_type" in info["result"]
-    assert services["status"] == "success"
-    assert isinstance(services["result"], list) and services["result"], "no service records came back"
-    assert all("Name" in record for record in services["result"])
+
+
+@pytest.mark.asyncio
+async def test_list_system_services_returns_the_services_or_the_error_message(monkeypatch):
+    """#22280: unit test, no real systemctl; a failure's message reaches the caller."""
+    from unittest.mock import create_autospec
+
+    from system_integration import SystemIntegration
+    from tools.tool_registry import ToolRegistry
+
+    registry = ToolRegistry()
+    fake = create_autospec(SystemIntegration, instance=True)
+    monkeypatch.setattr(registry, "_system_integration", fake)
+
+    services = [{"Name": "ssh", "Status": "active"}]
+    fake.list_services.return_value = {"status": "success", "services": services}
+    assert (await registry.list_system_services())["result"] == services
+
+    fake.list_services.return_value = {"status": "error", "message": "systemctl unavailable", "output": ""}
+    assert (await registry.list_system_services())["result"] == "systemctl unavailable"
 
 
 # ---------------------------------------------------------------------------

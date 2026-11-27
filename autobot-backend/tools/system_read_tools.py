@@ -48,7 +48,8 @@ class SystemReadToolsMixin:
         return {
             "tool_name": "list_system_services",
             "tool_args": {},
-            # SystemIntegration answers {"status", "services"}; a worker node answers "output" (#22280).
-            "result": result.get("output", result.get("services", result.get("message", "Services listed"))),
+            # Local (system_handlers.py) and worker (worker_node.py) paths both answer {"status", "services"};
+            # a failure carries "message"/"output" instead, so it must not reach chat as "" (#22280).
+            "result": result.get("services") or result.get("message") or result.get("output"),
             "status": result.get("status", "success"),
         }
