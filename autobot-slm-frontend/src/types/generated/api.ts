@@ -10448,6 +10448,11 @@ export interface components {
          * @description Agent heartbeat response (Issue #741).
          */
         HeartbeatResponse: {
+            /**
+             * Inventory Ack
+             * @description Inventory hash stored in the self-model (#22280)
+             */
+            inventory_ack?: string | null;
             /** Latest Version */
             latest_version?: string | null;
             /**

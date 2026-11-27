@@ -316,7 +316,8 @@ for _m in sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES)):
 
 # #22277: every binding the API and the heartbeat path await needs an AsyncMock; a plain MagicMock child is
 # not awaitable. The inventory ack is a response field, so it resolves to None (nothing acknowledged).
-for _awaited in ("apply_heartbeat_extra_data", "apply_observations", "revision", "sweep_stale", "load_rows", "load_page"):
+_AWAITED = "apply_heartbeat_extra_data apply_observations revision sweep_stale load_rows load_page"
+for _awaited in _AWAITED.split():
     setattr(sys.modules["services.self_model_store"], _awaited, AsyncMock())
 sys.modules["services.self_model_store"].acknowledged_inventory_hash = AsyncMock(return_value=None)
 

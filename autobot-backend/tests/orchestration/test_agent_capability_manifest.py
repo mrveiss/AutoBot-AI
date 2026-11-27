@@ -124,7 +124,9 @@ class TestOneAgentRecord:
         from protocols.agent_presence import PresenceEntry
 
         health = SimpleNamespace(agent_health={"research": MagicMock(to_dict=lambda: {"status": "healthy"})})
-        entry = PresenceEntry(kind=AgentKind.AI_STACK, tenant_id=None, name="research_agent", busy=True, instance_id="i-1")
+        entry = PresenceEntry(
+            kind=AgentKind.AI_STACK, tenant_id=None, name="research_agent", busy=True, instance_id="i-1"
+        )
         presence = MagicMock(snapshot_for_projection=lambda: [entry])
         with patch.object(agent_record, "get_presence_registry", return_value=presence):
             by_name = {r["name"]: r["fields"] for r in agent_record.agent_records(health)}

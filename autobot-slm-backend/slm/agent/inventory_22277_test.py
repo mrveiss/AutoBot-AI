@@ -45,7 +45,9 @@ def test_full_inventory_only_when_hash_changes_or_backstop_is_due(monkeypatch):
     reporter = _reporter(monkeypatch, state, clock)
     first = reporter.report()
     assert "inventory" in first
-    reporter.confirm(first, delivered=True, acknowledged=first["inventory_hash"])  # only an acknowledged report counts as sent
+    reporter.confirm(
+        first, delivered=True, acknowledged=first["inventory_hash"]
+    )  # only an acknowledged report counts as sent
     assert "inventory" not in reporter.report()
     state["sig"], state["git"] = (("p", 2),), "2.44"
     changed = reporter.report()

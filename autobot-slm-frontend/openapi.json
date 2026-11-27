@@ -6004,6 +6004,18 @@
       "HeartbeatResponse": {
         "description": "Agent heartbeat response (Issue #741).",
         "properties": {
+          "inventory_ack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Inventory hash stored in the self-model (#22280)",
+            "title": "Inventory Ack"
+          },
           "latest_version": {
             "anyOf": [
               {
@@ -8962,6 +8974,7 @@
           "version": {
             "anyOf": [
               {
+                "maxLength": 128,
                 "type": "string"
               },
               {
