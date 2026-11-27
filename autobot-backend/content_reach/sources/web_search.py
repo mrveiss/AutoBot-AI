@@ -6,7 +6,7 @@
 
 Chain priority:
   1. DdgsBackend   — keyless web search via the ddgs library (sync, wrapped in asyncio.to_thread)
-  2. JinaSearchBackend — GET https://s.jina.ai/<query> (pure httpx, always available)
+  2. JinaSearchBackend — GET <third-party search base><query> (pure httpx; opt-in only, #21850)
   3. BrowserSearchBackend — Playwright-backed DuckDuckGo search (browser required)
 """
 
@@ -18,10 +18,12 @@ from urllib.parse import quote_plus
 import httpx
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from content_reach._http import http_get
 from content_reach.backends.browser import BrowserSearchBackend
 from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from content_reach.chain import ContentSourceChain
+from services import web_research_config
 from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
@@ -29,7 +31,7 @@ logger = get_logger(__name__)
 # Module-level name so tests can monkeypatch: content_reach.sources.web_search.DDGS
 DDGS = None  # populated lazily by _import_ddgs()
 
-_JINA_SEARCH_BASE = "https://s.jina.ai/"
+_JINA_SEARCH_BASE = config.feature.third_party_search_base_url
 
 
 def _import_ddgs():
@@ -92,10 +94,10 @@ class DdgsBackend(ContentBackend):
 
 
 class JinaSearchBackend(ContentBackend):
-    """Web-search backend via the Jina AI search endpoint (https://s.jina.ai/).
+    """Web-search backend via the third-party search endpoint (SSOT base URL). Opt-in only (#21850).
 
     probe() returns True — pure-HTTP backend, always capable.
-    fetch() GETs https://s.jina.ai/<urlencoded query> and returns the response text.
+    fetch() GETs <search base><urlencoded query> and returns the response text.
     Non-200 or empty body → BackendError.
 
     Accepts an optional injected httpx.AsyncClient for testing.
@@ -108,11 +110,13 @@ class JinaSearchBackend(ContentBackend):
         self._client = client
 
     async def probe(self) -> bool:
-        """Return True — Jina search is a plain HTTP endpoint, always available."""
-        return True
+        """True only when a user opted in to the third-party fast paths (#21850)."""
+        return web_research_config.third_party_fast_paths_enabled()
 
     async def fetch(self, request: ContentRequest) -> ContentReachResult:
-        """GET https://s.jina.ai/<query>; raise BackendError on non-200 or empty body."""
+        """GET <search base><query>; raise BackendError when not opted in, on non-200 or on empty body."""
+        if not web_research_config.third_party_fast_paths_enabled():
+            raise BackendError("JinaSearchBackend: third-party fast paths are off (opt-in setting)")
         encoded_query = quote_plus(request.query)
         url = f"{_JINA_SEARCH_BASE}{encoded_query}"
         headers = {"Accept": "application/json"}

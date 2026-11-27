@@ -303,3 +303,17 @@ def test_build_web_page_chain_order():
     assert chain.backend_names() == ["trafilatura", "jina_reader", "browser"]
     assert chain.source_type is SourceKind.WEB_PAGE
     assert chain.source == "web_page"
+
+
+@pytest.mark.asyncio
+async def test_jina_reader_gate_off_sends_nothing(monkeypatch):
+    """#21850: opt-in off -> probe False and fetch raises before any request leaves."""
+    monkeypatch.setattr("services.web_research_config.third_party_fast_paths_enabled", lambda: False)
+    from content_reach.sources.web_page import JinaReaderBackend
+
+    mock_client = AsyncMock()
+    backend = JinaReaderBackend(client=mock_client)
+    assert await backend.probe() is False
+    with pytest.raises(BackendError):
+        await backend.fetch(ContentRequest(url="https://example.com/page"))
+    mock_client.get.assert_not_called()

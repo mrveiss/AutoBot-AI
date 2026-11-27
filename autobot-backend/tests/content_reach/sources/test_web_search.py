@@ -222,3 +222,17 @@ def test_build_web_search_chain_order():
     assert chain.backend_names() == ["ddgs", "jina_search", "browser_search"]
     assert chain.source_type is SourceKind.WEB_SEARCH
     assert chain.source == "web_search"
+
+
+@pytest.mark.asyncio
+async def test_jina_search_gate_off_sends_nothing(monkeypatch):
+    """#21850: opt-in off -> probe False and the query never leaves for the third-party search host."""
+    monkeypatch.setattr("services.web_research_config.third_party_fast_paths_enabled", lambda: False)
+    from content_reach.sources.web_search import JinaSearchBackend
+
+    mock_client = AsyncMock()
+    backend = JinaSearchBackend(client=mock_client)
+    assert await backend.probe() is False
+    with pytest.raises(BackendError):
+        await backend.fetch(ContentRequest(query="secret query"))
+    mock_client.get.assert_not_called()

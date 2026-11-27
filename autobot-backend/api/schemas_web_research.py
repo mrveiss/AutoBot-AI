@@ -32,6 +32,7 @@ class WebResearchSettings(BaseModel):
     store_results_in_kb: bool
     filter_adult_content: bool
     anonymize_requests: bool
+    third_party_fast_paths_enabled: bool
 
 
 class WebResearchSettingsUpdate(BaseModel):
@@ -52,6 +53,7 @@ class WebResearchSettingsUpdate(BaseModel):
     store_results_in_kb: bool | None = None
     filter_adult_content: bool | None = None
     anonymize_requests: bool | None = None
+    third_party_fast_paths_enabled: bool | None = None
 
 
 class WebResearchStatusData(BaseModel):

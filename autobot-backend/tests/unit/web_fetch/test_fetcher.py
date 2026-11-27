@@ -547,3 +547,42 @@ class TestFetchRawHtml:
             await WebFetcher.fetch_raw_html("https://example.com")
 
         assert captured["timeout"] == 30.0
+
+
+@pytest.fixture(autouse=True)
+def _third_party_fast_paths_on(monkeypatch):
+    """These tests exercise the opt-in third-party fast path, so the gate is on (#21850)."""
+    monkeypatch.setattr("services.web_research_config.third_party_fast_paths_enabled", lambda: True)
+
+
+class TestThirdPartyReaderGateOff:
+    """#21850: with the opt-in off, no request reaches the third-party reader in any render mode."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", [RenderMode.AUTO, RenderMode.FAST])
+    async def test_auto_and_fast_start_at_bs4(self, monkeypatch, mode) -> None:
+        monkeypatch.setattr("services.web_research_config.third_party_fast_paths_enabled", lambda: False)
+        client = MagicMock()
+        with (
+            patch("web_fetch.fetcher.get_http_client", return_value=client),
+            patch("web_fetch.fetcher._fetch_jina_impl", new=AsyncMock()) as reader,
+            patch("web_fetch.fetcher._is_public_url", return_value=True),
+            patch("web_fetch.fetcher._fetch_bs4", return_value=(_STATIC_HTML, 200, "text/html")),
+        ):
+            result = await WebFetcher.fetch("https://example.com", render=mode)
+
+        assert result.success is True
+        assert result.source == "bs4"
+        reader.assert_not_called()
+        client.tracked_request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_link_pipeline_gate_off_sends_nothing(monkeypatch) -> None:
+    """#21850: opt-in off -> the link pipeline never opens a request to the third-party reader."""
+    from media.link.pipeline import LinkPipeline
+
+    monkeypatch.setattr("services.web_research_config.third_party_fast_paths_enabled", lambda: False)
+    with patch("media.link.pipeline._get_jina_session") as session:
+        assert await LinkPipeline()._try_jina("https://example.com") is None
+    session.assert_not_called()

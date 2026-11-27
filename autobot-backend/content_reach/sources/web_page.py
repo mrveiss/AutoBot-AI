@@ -6,7 +6,7 @@
 
 Chain priority:
   1. TrafilaturaBackend — HTML fetch via httpx + text extraction via trafilatura (sync, in asyncio.to_thread)
-  2. JinaReaderBackend  — GET https://r.jina.ai/<url> (pure httpx, always available)
+  2. JinaReaderBackend  — GET <third-party reader base>/<url> (pure httpx; opt-in only, #21850)
   3. BrowserContentBackend     — Playwright-backed page fetch (browser required)
 """
 
@@ -18,17 +18,19 @@ import httpx
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.ssrf_guard import SSRFError
+from autobot_shared.ssot_config import config
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
 from content_reach.backends.browser import BrowserContentBackend
 from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from content_reach.chain import ContentSourceChain
+from services import web_research_config
 from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
 
-# Jina Reader base URL.
-_JINA_READER_BASE = "https://r.jina.ai/"
+# Third-party reader base URL (SSOT).
+_JINA_READER_BASE = config.feature.third_party_reader_base_url
 
 
 def _import_trafilatura():
@@ -111,10 +113,10 @@ class TrafilaturaBackend(ContentBackend):
 
 
 class JinaReaderBackend(ContentBackend):
-    """Web-page backend via the Jina AI reader endpoint (https://r.jina.ai/).
+    """Web-page backend via the third-party reader endpoint (SSOT base URL). Opt-in only (#21850).
 
     probe() returns True — pure-HTTP backend, always capable.
-    fetch() GETs https://r.jina.ai/<url> with Accept: text/plain and returns
+    fetch() GETs <reader base><url> with Accept: text/plain and returns
     the response body. Non-200 or empty body → BackendError.
 
     Accepts an optional injected httpx.AsyncClient for testing.
@@ -127,11 +129,13 @@ class JinaReaderBackend(ContentBackend):
         self._client = client
 
     async def probe(self) -> bool:
-        """Return True — Jina reader is a plain HTTP endpoint, always available."""
-        return True
+        """True only when a user opted in to the third-party fast paths (#21850)."""
+        return web_research_config.third_party_fast_paths_enabled()
 
     async def fetch(self, request: ContentRequest) -> ContentReachResult:
-        """GET https://r.jina.ai/<url>; raise BackendError on non-200 or empty body."""
+        """GET <reader base><url>; raise BackendError when not opted in, on non-200 or on empty body."""
+        if not web_research_config.third_party_fast_paths_enabled():
+            raise BackendError("JinaReaderBackend: third-party fast paths are off (opt-in setting)")
         await ensure_public_url(request.url)
         await ensure_robots_allowed(request.url)
 

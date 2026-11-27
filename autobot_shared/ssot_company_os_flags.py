@@ -7,16 +7,18 @@
 ``ssot_config.py`` is over the file-size ceiling and may not grow, so the Company OS
 switches live here and ``FeatureConfig`` inherits them: ``config.feature.<name>`` and
 ``is_feature_enabled`` are unchanged. ``RedactedSettings`` is defined in ``ssot_config``,
-so this base uses ``BaseSettings`` directly; ``FeatureConfig`` supplies the redacted repr.
+so this base uses ``BaseSettings`` directly (through ``ThirdPartyReachSettings``, #21850, which rides here
+for the same size reason); ``FeatureConfig`` supplies the redacted repr.
 """
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
 
 from autobot_shared.paths import project_root
+from autobot_shared.ssot_third_party_reach import ThirdPartyReachSettings
 
 
-class CompanyOsFeatureFlags(BaseSettings):
+class CompanyOsFeatureFlags(ThirdPartyReachSettings):
     model_config = SettingsConfigDict(env_file=str(project_root() / ".env"), env_file_encoding="utf-8", extra="ignore")
 
     # Issue #16950/#16974: enforce each Company OS agent's org-role tool bound at

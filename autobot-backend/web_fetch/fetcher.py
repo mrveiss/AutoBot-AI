@@ -8,7 +8,8 @@ web_fetch.fetcher — Core WebFetcher with auto-detect render decision tree.
 Issue #7400: Foundation package for unified web search/scrape/crawl.
 
 Render decision tree (RenderMode.AUTO):
-  1. Jina Reader fast-path (~200ms).  Success: HTTP 200 + >=500 chars + no SPA markers.
+  1. Third-party reader fast-path (~200ms), ONLY when a user opted in (#21850; off by default).
+     Success: HTTP 200 + >=500 chars + no SPA markers.
   2. BS4 raw HTML fetch (~300ms).    Same success criteria.
   3. Playwright fallback.             Always renders JS, waits for networkidle.
 
@@ -25,7 +26,7 @@ connect. It now routes through
 independently resolves + pins EVERY hop (including redirects) so validation
 and connection can never diverge. ``_fetch_jina_impl`` and
 ``_fetch_playwright`` are NOT affected: the actual TCP connection they make
-is always to a fixed, trusted proxy (``r.jina.ai`` — the caller's ``url`` is
+is always to the fixed third-party reader host from the SSOT (the caller's ``url`` is
 only embedded in the *request path*, never the connect target) or to our own
 in-cluster Playwright service, so pinning ``url`` there would be a no-op —
 the ``_is_public_url`` check on those paths remains a defense-in-depth guard
@@ -41,6 +42,7 @@ from urllib.parse import urlparse
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from services import web_research_config
 from web_fetch.cache import WEB_FETCH_MAX_BYTES, get_cached_result, set_cached_result
 from web_fetch.content_types import BodyKind, UnsupportedContentType, decode_body, page_from_body
 from web_fetch.extractors import _MIN_CONTENT_CHARS, is_spa_content
@@ -91,7 +93,7 @@ _CIRCUIT_WINDOW = 60.0
 _CIRCUIT_THRESHOLD = 3
 _CIRCUIT_COOLDOWN = 60.0
 
-_JINA_BASE_URL = "https://r.jina.ai/"
+_JINA_BASE_URL = config.feature.third_party_reader_base_url
 _USER_AGENT = "AutoBot/1.0 (web-fetch)"
 
 
@@ -156,10 +158,20 @@ def _fail(url: str, code: str, retryable: bool = False, status: int | None = Non
 
 
 async def _fetch_jina(url: str, timeout: float) -> str | None:
-    """Fetch markdown via Jina Reader fast-path. SSRF guard enforced inline."""
+    """Fetch markdown via the third-party reader fast-path. Off unless a user opted in (#21850)."""
+    if not web_research_config.third_party_fast_paths_enabled():
+        return None
     if not await _is_public_url(url):
         return None
     return await _fetch_jina_impl(url, timeout)
+
+
+async def _reader_text(url: str, timeout: float) -> str | None:
+    """Reader fast-path text, or None without taking a slot when the user has not opted in (#21850)."""
+    if not web_research_config.third_party_fast_paths_enabled():
+        return None
+    async with _get_fast_sem():
+        return await _fetch_jina(url, min(timeout, 10.0))
 
 
 async def _fetch_jina_impl(url: str, timeout: float) -> str | None:
@@ -445,10 +457,9 @@ class WebFetcher:
             return await self._run_auto(url, timeout)
 
     async def _run_auto(self, url: str, timeout: float) -> FetchResult:
-        """AUTO mode: Jina -> BS4 -> Playwright."""
-        # Step 1: Jina — success requires >=500 chars and no SPA markers.
-        async with _get_fast_sem():
-            jina_text = await _fetch_jina(url, min(timeout, 10.0))
+        """AUTO mode: [third-party reader, opt-in only] -> BS4 -> Playwright."""
+        # Step 1: third-party reader, only when opted in — success requires >=500 chars and no SPA markers.
+        jina_text = await _reader_text(url, timeout)
         if jina_text:
             title, md = _parse_jina_markdown(jina_text)
             if len(md.strip()) >= _MIN_CONTENT_CHARS and not is_spa_content(md):
@@ -473,9 +484,8 @@ class WebFetcher:
         return await self._run_playwright(url, timeout)
 
     async def _run_fast(self, url: str, timeout: float) -> FetchResult:
-        """FAST mode: Jina -> BS4, no Playwright."""
-        async with _get_fast_sem():
-            jina_text = await _fetch_jina(url, min(timeout, 10.0))
+        """FAST mode: [third-party reader, opt-in only] -> BS4, no Playwright."""
+        jina_text = await _reader_text(url, timeout)
         if jina_text:
             title, md = _parse_jina_markdown(jina_text)
             if len(md.strip()) >= _MIN_CONTENT_CHARS and not is_spa_content(md):

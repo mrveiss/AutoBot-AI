@@ -57,6 +57,7 @@ def test_every_field_round_trips_through_the_web_research_section():
         "store_results_in_kb": False,
         "filter_adult_content": False,
         "anonymize_requests": False,
+        "third_party_fast_paths_enabled": True,
     }
     assert set(changed) == set(wrc.DEFAULTS)
     assert wrc.save_settings(manager, changed) == changed
@@ -130,3 +131,15 @@ def test_every_field_the_old_put_wrote_to_agents_research_is_carried_over():
     }
     settings = wrc.load_settings(FakeConfigManager({"agents": {"research": legacy}}))
     assert {field: settings[field] for field in legacy} == legacy
+
+
+def test_third_party_fast_paths_default_off_and_gate_follows_the_saved_choice(monkeypatch):
+    """#21850: nothing leaves for a third party until a user opts in; an unreadable config stays off."""
+    assert wrc.DEFAULTS["third_party_fast_paths_enabled"] is False
+    manager = FakeConfigManager()
+    monkeypatch.setattr("config.config_manager", manager)
+    assert wrc.third_party_fast_paths_enabled() is False
+    wrc.save_settings(manager, {"third_party_fast_paths_enabled": True})
+    assert wrc.third_party_fast_paths_enabled() is True
+    monkeypatch.setattr(wrc, "load_settings", lambda _m: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert wrc.third_party_fast_paths_enabled() is False
