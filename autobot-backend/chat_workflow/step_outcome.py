@@ -54,3 +54,27 @@ def not_run_note(step: Dict[str, Any]) -> str:
     if did_execute(step):
         return ""
     return "\n- NOT RUN: this step did not execute (it is not complete; do not report it as done)"
+
+
+#: How much of a failed command's output the error message carries (#22250).
+FAILURE_TAIL_LINES = 5
+FAILURE_TAIL_CHARS = 600
+NO_FAILURE_DETAIL = "Command failed with no error detail"
+
+
+def command_failure_error(result: Dict[str, Any]) -> str:
+    """Why a command failed: its own error, else ``exit N: <last output lines>`` (#22250).
+
+    The PTY combines the streams, so ``stderr`` is empty and the cause sits in stdout. The placeholder is only
+    for a result with no error, no output and no exit code.
+    """
+    if result.get("error"):
+        return str(result["error"])
+    output = "\n".join(str(result.get(key) or "") for key in ("stderr", "stdout"))
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    tail = "\n".join(lines[-FAILURE_TAIL_LINES:])[-FAILURE_TAIL_CHARS:]
+    code = result.get("return_code")
+    prefix = f"exit {code}" if code is not None else ""
+    if prefix and tail:
+        return f"{prefix}: {tail}"
+    return prefix or tail or NO_FAILURE_DETAIL

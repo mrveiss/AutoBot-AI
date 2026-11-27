@@ -10,7 +10,7 @@ call's arguments, so each summary is stamped with the fingerprint of the call th
 
 import hashlib
 import json
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Mapping, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers
@@ -142,7 +142,7 @@ def _append_loop_abort_message(messages: list, stream_cb, iteration: int) -> Non
         stream_cb(abort_msg)
 
 
-def _inline_loop_update(state: Dict[str, Any], summaries: list, messages: list, stream_cb, iteration: int) -> dict:
+def _inline_loop_update(state: Mapping[str, Any], summaries: list, messages: list, stream_cb, iteration: int) -> dict:
     """Run the #3254 loop detection on calls generate_response already dispatched inline (#19715)."""
     is_loop, fingerprints = detect_tool_call_loop(
         summary_fingerprints(summaries), list(state.get("tool_call_fingerprints", []))
@@ -159,7 +159,7 @@ def _inline_loop_update(state: Dict[str, Any], summaries: list, messages: list, 
     }
 
 
-def planned_loop_update(state: Dict[str, Any], tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
+def planned_loop_update(state: Mapping[str, Any], tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Run the #3254 loop detection on calls about to be dispatched."""
     new_fps = [fingerprint_tool_call(tc) for tc in tool_calls]
     is_loop, fingerprints = detect_tool_call_loop(new_fps, list(state.get("tool_call_fingerprints", [])))

@@ -29,6 +29,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.http_egress_guard import assert_public_egress
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
@@ -283,9 +284,10 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
                         detail="Marketplace catalog exceeds 4MB",
                     )
     except aiohttp.ClientError as exc:
+        logger.error("Marketplace URL fetch failed for %s: %s", host, exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to reach marketplace URL: {exc}",
+            detail=safe_http_detail(exc, "Failed to reach marketplace URL"),
         ) from exc
     except TimeoutError as exc:
         raise HTTPException(

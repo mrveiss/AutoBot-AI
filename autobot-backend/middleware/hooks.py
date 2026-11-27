@@ -127,7 +127,7 @@ HOOK_METADATA = {
     },
     HookPoint.AFTER_TOOL_EXECUTE: {
         "description": "Called after tool execution completes",
-        "can_modify": ["result"],
+        "can_modify": ["tool_result"],
         "return_type": "Modified result or None",
     },
     HookPoint.TOOL_ERROR: {

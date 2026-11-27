@@ -18,7 +18,7 @@ legacy fallback loop never reach the graph's router and always stop.
 from __future__ import annotations
 
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
@@ -50,7 +50,7 @@ def _guidance(answer: str) -> str:
     return _GUIDANCE_INTRO + block
 
 
-def stall_mode(state: Dict[str, Any]) -> str:
+def stall_mode(state: Mapping[str, Any]) -> str:
     """``ask`` only when the SSOT flag says so AND the turn can be interrupted; otherwise ``stop``."""
     from autobot_shared.ssot_config import config
 

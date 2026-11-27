@@ -4,7 +4,7 @@
 # Author: mrveiss
 """The dispatch and plugin-hook parts of graph.py's execute_tools node, moved unchanged (#19715)."""
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Mapping, Tuple
 
 from autobot_shared.ai_lines import DECLARED_CATEGORIES_KEY, declared_categories_of
 from autobot_shared.logging_manager import get_logger
@@ -17,13 +17,16 @@ async def emit_tool_call_hook(session_id, tool_calls: List[Dict[str, Any]]) -> N
     try:
         from autobot_shared.plugin_sdk import Hook, HookRegistry
 
-        await HookRegistry().call_hook(
-            Hook.ON_TOOL_CALL.value,
-            session_id=session_id,
-            tool_calls=tool_calls,
-        )
+        registry = HookRegistry()
+        for call in tool_calls:  # the declared contract (HOOK_REGISTRY) is one call per tool (#20888)
+            await registry.call_hook(
+                Hook.ON_TOOL_CALL.value,
+                tool_name=call.get("name", ""),
+                args=call.get("params", {}),
+                session_id=session_id,
+            )
     except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_TOOL_CALL failed (non-fatal): %s", _hook_exc)
+        logger.warning("Plugin hook ON_TOOL_CALL failed (non-fatal): %s", _hook_exc)
 
 
 async def emit_tool_complete_hook(session_id, exec_history: List[Dict[str, Any]]) -> None:
@@ -76,7 +79,7 @@ def split_refused(tool_calls: List[Dict[str, Any]], decision: Dict[str, Any]) ->
 
 
 async def dispatch_approved_calls(
-    manager, exec_ctx, state: Dict[str, Any], tool_calls: list, iteration: int, messages: list, stream_cb
+    manager, exec_ctx, state: Mapping[str, Any], tool_calls: list, iteration: int, messages: list, stream_cb
 ) -> Tuple[List[Dict[str, Any]], bool]:
     """Run planned calls through the manager's dispatch; returns (execution_history, break_loop)."""
     # Execute via existing manager method

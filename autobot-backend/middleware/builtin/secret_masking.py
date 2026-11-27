@@ -286,12 +286,12 @@ class SecretMaskingExtension(Extension):
         Mask secrets in tool results.
 
         Args:
-            ctx: Hook context with result in data
+            ctx: Hook context with tool_result in data
 
         Returns:
             Masked result or None if no changes
         """
-        result = ctx.get("result", "")
+        result = ctx.get("tool_result", "")  # the key _emit_after_tool_execute writes (#21884)
         if not result or not isinstance(result, str):
             return None
 

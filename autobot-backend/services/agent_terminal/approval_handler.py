@@ -128,37 +128,22 @@ class ApprovalHandler:
             permissions=self.approval_manager.agent_permissions,
         )
 
-    async def store_auto_approve_rule(self, user_id: str, command: str, risk_level: str) -> None:
-        """
-        Store an auto-approve rule for future similar commands.
+    async def store_auto_approve_rule(self, user_id: str, command: str, risk_level: str) -> bool:
+        """Store an auto-approve rule for future similar commands; True only when a rule now exists (#16840).
 
-        Args:
-            user_id: User who created the rule
-            command: Command that was approved
-            risk_level: Risk level of the command
+        The rule belongs to the approver: it is keyed by the verified user id (not the username, so chat and the
+        terminal match one rule) and never applies to anyone else. False means NOT saved, e.g. the username does not
+        resolve to a user id, and the approval response says so. Rules live in process memory; surviving restarts and
+        other workers is #22314.
         """
-        await self.approval_manager.store_auto_approve_rule(
-            user_id=user_id,
-            command=command,
-            risk_level=risk_level,
-        )
+        from .ai_line_gate import owner_user_id
 
-    async def check_auto_approve_rules(self, user_id: str, command: str, risk_level: str) -> bool:
-        """
-        Check if command matches any auto-approve rules.
-
-        Args:
-            user_id: User ID to check rules for
-            command: Command to check
-            risk_level: Risk level of the command
-
-        Returns:
-            True if command should be auto-approved
-        """
-        return await self.approval_manager.check_auto_approve_rules(
-            user_id=user_id,
-            command=command,
-            risk_level=risk_level,
+        rule_owner = await owner_user_id(user_id)
+        if rule_owner is None:
+            logger.warning("No auto-approve rule stored: %s is not a known user", user_id)
+            return False
+        return await self.approval_manager.store_auto_approve_rule(
+            user_id=rule_owner, command=command, risk_level=risk_level
         )
 
     async def broadcast_approval_status(

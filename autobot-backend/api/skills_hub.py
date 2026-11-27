@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_skills_hub import InstalledSkillOut, SkillHubInstallRequest, SkillListingOut, SkillUpdateOut
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from skills.hub import get_skill_hub
@@ -53,7 +54,7 @@ async def install_skill(body: SkillHubInstallRequest, _: None = Depends(check_ad
         raise fixed_refusal(403) from exc
     except Exception as exc:
         logger.exception("Hub install failed for '%s'", body.skill_id)
-        raise HTTPException(status_code=500, detail=f"Install failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=safe_http_detail(exc, "Install failed")) from exc
     return InstalledSkillOut.from_installed(installed)
 
 
@@ -68,7 +69,7 @@ async def uninstall_skill(skill_id: str, _: None = Depends(check_admin_permissio
         raise fixed_refusal(404) from exc
     except Exception as exc:
         logger.exception("Hub uninstall failed for '%s'", skill_id)
-        raise HTTPException(status_code=500, detail=f"Uninstall failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=safe_http_detail(exc, "Uninstall failed")) from exc
     return {"status": "uninstalled", "skill_id": skill_id}
 
 

@@ -82,6 +82,20 @@ _NUMERIC_VALUED_LONG = frozenset(
 
 _SHELL_OPERATOR_CHARS = frozenset("<>&;|()")
 
+#: Host introspection with no arguments at all (``hostname NAME`` would set the name).
+_NO_ARGUMENT_BASES: FrozenSet[str] = frozenset({"hostname", "uptime"})
+
+#: ``ip`` objects and the verbs that only read; ``ip addr add`` / ``ip route del`` write. Options other than
+#: these (``-b`` batch, ``-n`` netns, ``-force``) can run or change something, so they are not allowed.
+_IP_OBJECTS: FrozenSet[str] = frozenset(
+    {"a", "addr", "address", "l", "link", "r", "route", "n", "neigh", "neighbor", "neighbour", "rule", "maddr"}
+)
+_IP_READ_VERBS: FrozenSet[str] = frozenset({"show", "list", "ls", "lst", "get"})
+_IP_FLAGS: FrozenSet[str] = frozenset(
+    {"-4", "-6", "-br", "-brief", "-o", "-oneline", "-s", "-stats", "-d", "-details", "-j", "-json", "-p", "-c"}
+)
+_ARP_FLAGS: FrozenSet[str] = frozenset({"-a", "-n", "-e", "-v", "-an", "-na"})
+
 
 def _tokens(segment: str) -> Optional[List[str]]:
     """The segment's words, or ``None`` when it cannot be parsed or carries a shell operator."""
@@ -151,6 +165,14 @@ def _reads_bounded_input(base: str, args: List[str], piped: bool) -> bool:
     return bool(_operands(base, args))
 
 
+def _ip_is_read_only(args: List[str]) -> bool:
+    """``ip [read-only options] OBJECT [show|list|...] [dev NAME]``: a bare object means ``show``."""
+    rest = [arg for arg in args if arg not in _IP_FLAGS]
+    if not rest or rest[0] not in _IP_OBJECTS:
+        return False
+    return len(rest) == 1 or rest[1] in _IP_READ_VERBS
+
+
 def _segment_is_read_only(segment: str, piped: bool) -> bool:
     words = _tokens(segment)
     if words is None:
@@ -163,6 +185,12 @@ def _segment_is_read_only(segment: str, piped: bool) -> bool:
     if base in _FILE_READERS or base in _PATTERN_READERS:
         flags_ok = base != "tail" or all(_TAIL_FLAGS.match(arg) for arg in args if arg.startswith("-"))
         return flags_ok and not _reads_files_unseen(args) and _reads_bounded_input(base, args, piped)
+    if base in _NO_ARGUMENT_BASES:
+        return not args
+    if base == "ip":
+        return _ip_is_read_only(args)
+    if base == "arp":
+        return all(arg in _ARP_FLAGS for arg in args)
     if base == "find":
         return not any(arg in _FIND_FORBIDDEN for arg in args)
     if base == "git":
