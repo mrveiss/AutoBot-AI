@@ -4,8 +4,7 @@
 # Author: mrveiss
 """SLM Infrastructure API Routes
 
-Issue #786: Provides endpoints for running infrastructure setup playbooks
-such as database deployment, monitoring setup, and other infrastructure tasks.
+Issue #786: Endpoints that run infrastructure setup playbooks (database, monitoring, other).
 """
 
 import asyncio
@@ -28,6 +27,7 @@ from services.ansible_utils import _extract_failure_summary, ansible_run_failure
 from services.auth import get_current_user
 from services.pending_role_provisioning import provision_before_raw_update
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
+from services.rollback_target import FLEET_UPDATE_PLAYBOOK
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])
@@ -329,7 +329,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         "Syncs latest code, restarts services gracefully (3 nodes at a time). "
         "NO system package updates or configuration changes. ~30s per node.",
         category=PlaybookCategory.NETWORKING,
-        playbook_file="update-all-nodes.yml",
+        playbook_file=FLEET_UPDATE_PLAYBOOK,
         target_hosts=["infrastructure"],
         variables={},
         estimated_duration="2 minutes (fleet-wide)",

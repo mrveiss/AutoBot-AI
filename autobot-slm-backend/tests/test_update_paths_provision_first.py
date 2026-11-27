@@ -99,6 +99,7 @@ def test_every_update_path_provisions_before_the_play() -> None:
     code_sync = (_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
     assert code_sync.count("run_update_all_nodes(") == 4 and "await provision_pending_roles(node_id)" in code_sync
     infra = (_ROOT / "api" / "infrastructure.py").read_text(encoding="utf-8")
+    assert _PLAYBOOK not in infra, "the catalogue uses FLEET_UPDATE_PLAYBOOK, not a second spelling"
     run = infra[infra.index("async def _run_playbook(") :]
     early = run.index("await provision_before_raw_update(playbook.playbook_file, limit_hosts)")
     assert early < run.index("create_subprocess_exec("), "the raw route provisions before it spawns the play"
