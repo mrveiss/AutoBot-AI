@@ -97,7 +97,13 @@ async def test_the_legacy_loop_that_delegation_drives_plans_and_advances_through
         yield ("reply", iteration < 2)
 
     ctx = SimpleNamespace(
-        session_id="s", message=_TASK, selected_model="m", context={}, initial_prompt="go", execution_history=history
+        session_id="s",
+        message=_TASK,
+        selected_model="m",
+        context={},
+        initial_prompt="go",
+        execution_history=history,
+        consecutive_invalid_tool_calls=0,
     )
     with (
         patch.object(plan_runner, "planner_enabled", return_value=True),

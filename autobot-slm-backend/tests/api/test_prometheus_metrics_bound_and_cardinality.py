@@ -29,7 +29,7 @@ both correct and cheaper. The SLO query's ``enabled`` filter is pushed into
 SQL, and a short TTL cache means duplicate/overlapping scrapes inside one
 interval reuse the same aggregate query pair instead of re-running it.
 
-Strategy for the DB-backed tests (mirrors ``tests/api/test_slm_endpoints_12515.py``):
+Strategy for the DB-backed tests (mirrors ``tests/api/test_slm_endpoints.py``):
 the root conftest stubs ``sqlalchemy``/``models.database``/``config`` as
 MagicMocks for import-time safety, so the real ``sqlalchemy``/``models.database``
 modules are loaded once here and swapped in to import ``api.performance`` with
@@ -53,6 +53,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from _real_orm_import import build_real_modules
 
 pytest.importorskip("fastapi")
 pytest.importorskip("aiosqlite")
@@ -61,53 +62,7 @@ _SLM_ROOT = Path(__file__).resolve().parents[2]
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
 
-_SQLALCHEMY_MODULES = ("sqlalchemy", "sqlalchemy.ext", "sqlalchemy.ext.asyncio", "sqlalchemy.orm")
-
-
-def _is_sqlalchemy_key(name: str) -> bool:
-    return name == "sqlalchemy" or name.startswith("sqlalchemy.")
-
-
-def _load_real_module(name: str, path: Path):
-    """Exec *path* under canonical *name* (registered so relative imports work)."""
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    sys.modules[name] = module
-    spec.loader.exec_module(module)  # type: ignore[union-attr]
-    return module
-
-
-def _build_real_modules() -> dict:
-    """One-time real sqlalchemy + models.database snapshot.
-
-    Copied from ``test_slm_endpoints_12515.py``: the root conftest stubs these
-    as MagicMocks for import-time safety, so the real packages are loaded once
-    here and swapped in on demand.
-    """
-    saved = {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)}
-    saved["models.database"] = sys.modules.get("models.database")
-    for name in list(saved):
-        sys.modules.pop(name, None)
-    try:
-        for name in _SQLALCHEMY_MODULES:
-            importlib.import_module(name)
-        importlib.import_module("sqlalchemy.dialects.sqlite")
-        _load_real_module("models.database", _SLM_ROOT / "models" / "database.py")
-        return {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)} | {
-            "models.database": sys.modules["models.database"],
-        }
-    finally:
-        for name in [n for n in sys.modules if _is_sqlalchemy_key(n)]:
-            del sys.modules[name]
-        sys.modules.pop("models.database", None)
-        for name, mod in saved.items():
-            if mod is not None:
-                sys.modules[name] = mod
-            else:
-                sys.modules.pop(name, None)
-
-
-_REAL_MODULES = _build_real_modules()
+_REAL_MODULES = build_real_modules(("models.database",))
 
 
 @contextlib.contextmanager
@@ -156,10 +111,14 @@ async def _close_session_and_engine(session, engine) -> None:
 async def db():
     """A fresh real in-memory SQLite AsyncSession per test."""
     with _real_modules_swapped():
-        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
+            "sqlite+aiosqlite:///:memory:"
+        )
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-    session = async_sessionmaker(engine, expire_on_commit=False)()
+    session = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local factory)
+        engine, expire_on_commit=False
+    )()
     try:
         yield session
     finally:

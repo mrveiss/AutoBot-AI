@@ -376,6 +376,7 @@ SKIP_DIRS: Set[str] = {
     ".vscode",
     ".vs",
     "vendor",
+    "external",  # #22157: vendored third-party test trees, not AutoBot code
     "bower_components",
     "target",  # Rust/Java build output
     "bin",
@@ -384,9 +385,8 @@ SKIP_DIRS: Set[str] = {
     ".m2",  # Java build caches
     # #13602: git worktrees are near-complete copies of the repo. Measured on a
     # working checkout, 160,105 of 167,072 code files (96%) lived under these two
-    # directories — every analytics walk was scanning the repo ~26 times over.
-    # `duplicate_detector._get_files_to_scan` already documented `.worktrees/` as
-    # pruned; it never was, because the name was missing from this set.
+    # directories — every analytics walk was scanning the repo ~26 times over;
+    # `.worktrees/` was documented as pruned but missing from this set.
     ".worktrees",
     "worktrees",  # .claude/worktrees — same content, different parent
 }

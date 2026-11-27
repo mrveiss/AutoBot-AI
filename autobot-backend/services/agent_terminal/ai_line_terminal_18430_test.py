@@ -21,6 +21,7 @@ from autobot_shared.ai_lines import AiLine
 from autobot_shared.status_enums import CommandRisk
 from autobot_shared.tool_catalogue import valid_approval_categories
 from chat_workflow import approval_baseline as baseline
+from secure_command_executor import CommandSecurityPolicy
 from services import ai_line_enforcement as enforcement
 from services.agent_terminal.models import AgentTerminalSession
 from services.agent_terminal.service import AgentTerminalService
@@ -45,7 +46,6 @@ def _service(permissions=None):
     svc._drain_peer_messages = lambda session: None
     svc._assess_command = lambda command: (None, svc.risk, [], False, [])
     svc.risk = CommandRisk.SAFE
-    svc.approval_handler.check_auto_approve_rules = AsyncMock(return_value=False)
     svc._queue_command_for_approval = AsyncMock(return_value={"status": "pending_approval"})
     svc._execute_auto_approved_command = AsyncMock(return_value={"status": "success"})
     return svc
@@ -145,7 +145,7 @@ async def test_a_user_with_no_company_gets_line_two_for_their_terminal_commands(
     queued, ran = _service(), _service()
     for svc in (queued, ran):
         svc.get_session = AsyncMock(return_value=session)
-    with patch("services.agent_terminal.ai_line_gate._owner_user_id", AsyncMock(return_value=str(uuid.UUID(int=7)))):
+    with patch("services.agent_terminal.ai_line_gate.owner_user_id", AsyncMock(return_value=str(uuid.UUID(int=7)))):
         assert await _run(queued, stored=None, relaxed=ALL_RELAXED) == {"status": "pending_approval"}
         assert await _run(ran, stored=AiLine.AUTONOMOUS, relaxed=ALL_RELAXED) == {"status": "success"}
 
@@ -159,3 +159,66 @@ async def test_a_forged_tenant_is_refused_and_is_not_replaced_by_the_owners_pers
     result = await _run(svc, stored=AiLine.AUTONOMOUS, relaxed=ALL_RELAXED)
     assert result["status"] == "error"
     svc._execute_auto_approved_command.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "command", ["ls -la", "touch /tmp/ai-line-probe", "rm -rf /tmp/ai-line-probe", "frobnicate --now"]
+)
+async def test_the_chat_gate_and_the_terminal_hold_the_same_commands(command):
+    """#19950, #13250, #16840: both paths consume one decision, so a command is never run in one and held in the other.
+
+    Real risk classification, same line and baseline: the chat graph's ``call_needs_approval`` and the terminal's
+    ``execute_command`` must agree on whether the command waits for a person.
+    """
+    from types import SimpleNamespace
+
+    from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY
+
+    svc = _service()
+    svc.security_policy = CommandSecurityPolicy()
+    svc._assess_command = AgentTerminalService._assess_command.__get__(svc)
+    ctx = SimpleNamespace(context={VERIFIED_COMPANY_KEY: TENANT}, requires_approval_before=[], approve_every_call=False)
+    a, b, c = _world(None, ALL_RELAXED)
+    with a, b, c:
+        chat_holds = await enforcement.call_needs_approval(
+            {"name": enforcement.TERMINAL_TOOL, "params": {"command": command}}, ctx
+        )
+        result = await svc.execute_command("s", command)
+    assert (result == {"status": "pending_approval"}) is chat_holds
+
+
+#: What each path must do with each command: ``True`` = held for a person. A read-only SAFE command runs; anything
+#: that mutates, and a command the classifier does not know, waits (an unset line is line 2).
+_EXPECTED_HELD = {"ls -la": False, "rm -rf /tmp/ai-line-probe": True, "frobnicate --now": True}
+
+
+@pytest.mark.parametrize("relaxed", [ALL_RELAXED, None], ids=["relaxed_baseline", "default_baseline"])
+@pytest.mark.parametrize("command, held", sorted(_EXPECTED_HELD.items()))
+async def test_the_expected_commands_are_held_and_run_on_both_paths(command, held, relaxed):
+    """#19950: pins the verdict itself, not only parity: ``rm -rf`` and an unknown command wait, ``ls -la`` runs.
+
+    The default baseline (nothing relaxed) gates every category; a read-only command is unmanaged and still runs.
+    """
+    from types import SimpleNamespace
+
+    from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY
+
+    svc = _service()
+    svc.security_policy = CommandSecurityPolicy()
+    svc._assess_command = AgentTerminalService._assess_command.__get__(svc)
+    ctx = SimpleNamespace(context={VERIFIED_COMPANY_KEY: TENANT}, requires_approval_before=[], approve_every_call=False)
+    a, b, c = _world(None, relaxed)
+    with a, b, c:
+        chat_holds = await enforcement.call_needs_approval(
+            {"name": enforcement.TERMINAL_TOOL, "params": {"command": command}}, ctx
+        )
+        result = await svc.execute_command("s", command)
+    assert chat_holds is held
+    assert (result == {"status": "pending_approval"}) is held
+
+
+@pytest.mark.parametrize("name", ["bash", "shell", "run_command", "execute_command"])
+async def test_every_shell_spelling_gets_the_read_only_treatment(name):
+    """#19950: the read-only check keys on the canonical shell tool names, not the one raw spelling."""
+    assert enforcement._is_read_only_command(name, {"command": "ls -la"}) is True
+    assert enforcement._is_read_only_command(name, {"command": "rm -rf /tmp/x"}) is False

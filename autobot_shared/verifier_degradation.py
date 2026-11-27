@@ -159,10 +159,14 @@ class VerifierObservation:
         return cls(probability=None, rationale=rationale, degradation=degradation)
 
 
-def failure_observation(exc: BaseException) -> VerifierObservation:
-    """The observation for a verifier call that raised: a timeout is its own class (#21844)."""
+def failure_observation(exc: BaseException, deadline_s: float | None = None) -> VerifierObservation:
+    """The observation for a verifier call that raised: a timeout is its own class (#21844).
+
+    *deadline_s* is the deadline that was hit; it goes into the rationale, which the audit event carries (#22254).
+    """
     if isinstance(exc, TimeoutError):  # asyncio.TimeoutError is TimeoutError from Python 3.11
-        return VerifierObservation.failed(VerifierDegradation.TIMEOUT, "Verifier LLM timed out.")
+        waited = "." if deadline_s is None else f" after {deadline_s:g}s."
+        return VerifierObservation.failed(VerifierDegradation.TIMEOUT, f"Verifier LLM timed out{waited}")
     return VerifierObservation.failed(VerifierDegradation.CALL_FAILED, f"Verifier LLM error: {exc!r}")
 
 

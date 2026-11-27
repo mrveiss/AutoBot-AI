@@ -32,64 +32,14 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from _real_orm_import import build_real_modules
 from fastapi import HTTPException
 
 _SLM_ROOT = Path(__file__).parent.parent.parent
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
 
-_SQLALCHEMY_MODULES = ("sqlalchemy", "sqlalchemy.ext", "sqlalchemy.ext.asyncio", "sqlalchemy.orm")
-
-
-def _is_sqlalchemy_key(name: str) -> bool:
-    return name == "sqlalchemy" or name.startswith("sqlalchemy.")
-
-
-def _load_real_module(name: str, path: Path):
-    """Exec *path* under canonical *name* (registered so relative imports work)."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    sys.modules[name] = module
-    spec.loader.exec_module(module)  # type: ignore[union-attr]
-    return module
-
-
-def _build_real_modules() -> dict:
-    """One-time real sqlalchemy + models.database/models.schemas snapshot.
-
-    Mirrors tests/services/code_version_test.py's module-level setup: the
-    root conftest stubs these as MagicMocks for import-time safety, so the
-    real packages are loaded once here and swapped in on demand.
-    """
-    saved = {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)}
-    saved.update({name: sys.modules.get(name) for name in ("models.database", "models.schemas")})
-    for name in list(saved):
-        sys.modules.pop(name, None)
-    try:
-        for name in _SQLALCHEMY_MODULES:
-            importlib.import_module(name)
-        importlib.import_module("sqlalchemy.dialects.sqlite")
-        _load_real_module("models.database", _SLM_ROOT / "models" / "database.py")
-        _load_real_module("models.schemas", _SLM_ROOT / "models" / "schemas.py")
-        return {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)} | {
-            "models.database": sys.modules["models.database"],
-            "models.schemas": sys.modules["models.schemas"],
-        }
-    finally:
-        for name in [n for n in sys.modules if _is_sqlalchemy_key(n)]:
-            del sys.modules[name]
-        sys.modules.pop("models.database", None)
-        sys.modules.pop("models.schemas", None)
-        for name, mod in saved.items():
-            if mod is not None:
-                sys.modules[name] = mod
-            else:
-                sys.modules.pop(name, None)
-
-
-_REAL_MODULES = _build_real_modules()
+_REAL_MODULES = build_real_modules(("models.database", "models.schemas"))
 
 
 @contextlib.contextmanager

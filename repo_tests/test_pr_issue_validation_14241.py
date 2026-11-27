@@ -17,6 +17,7 @@ present, passing locally, and never run where it matters.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -24,9 +25,10 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
-_WORKFLOW = (
-    repo_root() / ".github" / "workflows" / "pr-issue-validation.yml"
-)
+from tools.lint._comment_syntax import code_lines
+from tools.lint._scan_helpers import tracked_paths
+
+_WORKFLOW = repo_root() / ".github" / "workflows" / "pr-issue-validation.yml"
 
 
 _STEP_NAME = "Validate PR issue linkage"
@@ -121,9 +123,7 @@ def test_a_fork_branch_naming_the_wrong_issue_passes_on_an_explicit_close(tmp_pa
     """The reproduction: #14146's branch was `fix/issue-13162-...` while the PR
     actually fixed #14235. A maintainer cannot rename a fork branch, so the only
     green path was linking an issue the PR did not address."""
-    code, out = _decide(
-        tmp_path, branch="fix/issue-13162-1786528649", body="Closes #14235", is_fork="true"
-    )
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body="Closes #14235", is_fork="true")
 
     assert code == 0 and "status=success" in out
 
@@ -132,9 +132,7 @@ def test_a_fork_with_only_refs_does_not_qualify(tmp_path):
     """`Refs` alone must not open the gate — requirement (a) already accepts it,
     so any `Refs #1` would otherwise satisfy any branch. Overriding the branch
     takes an explicit claim of closure."""
-    code, out = _decide(
-        tmp_path, branch="fix/issue-13162-1786528649", body="Refs #14235", is_fork="true"
-    )
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body="Refs #14235", is_fork="true")
 
     assert code == 1 and "status=failure" in out
 
@@ -161,9 +159,7 @@ def test_a_fork_with_a_bare_closing_verb_does_not_qualify(tmp_path):
 def test_a_fork_naming_its_own_branch_issue_still_takes_the_normal_path(tmp_path):
     """The relaxation is a fallback, not a replacement — a correct fork PR must
     not start depending on it."""
-    code, out = _decide(
-        tmp_path, branch="fix/issue-14235-1", body="Closes #14235", is_fork="true"
-    )
+    code, out = _decide(tmp_path, branch="fix/issue-14235-1", body="Closes #14235", is_fork="true")
 
     assert code == 0 and "status=success" in out and "#14241" not in out
 
@@ -206,9 +202,7 @@ def test_a_superstring_does_not_count_as_the_issue(tmp_path):
 )
 def test_a_word_merely_containing_a_keyword_does_not_qualify(tmp_path, body):
     """No left word boundary meant `encloses` matched `closes` as a substring."""
-    code, out = _decide(
-        tmp_path, branch="fix/issue-13162-1786528649", body=body + " Refs #14235", is_fork="true"
-    )
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body=body + " Refs #14235", is_fork="true")
 
     assert code == 1 and "status=failure" in out
 
@@ -239,9 +233,7 @@ def test_issue_zero_does_not_qualify(tmp_path, body):
 
 def test_the_tightening_did_not_break_the_ordinary_case(tmp_path):
     """A keyword at the very start of the body has no character to its left."""
-    code, out = _decide(
-        tmp_path, branch="fix/issue-13162-1786528649", body="Closes #14235", is_fork="true"
-    )
+    code, out = _decide(tmp_path, branch="fix/issue-13162-1786528649", body="Closes #14235", is_fork="true")
 
     assert code == 0 and "status=success" in out
 
@@ -255,3 +247,88 @@ def test_a_keyword_after_punctuation_still_qualifies(tmp_path):
     )
 
     assert code == 0 and "status=success" in out
+
+
+# ---------------------------------------------------------------------------
+# A large body must not race the pipe (printf | grep -q under pipefail: SIGPIPE)
+# ---------------------------------------------------------------------------
+
+# One env var is capped at MAX_ARG_STRLEN (128 KiB) by the kernel, so this is the
+# largest body the gate can ever be handed; it is ~2x the 64 KiB pipe buffer.
+_LARGE_BODY_FILLER = "x" * 120_000
+
+
+def test_a_large_body_whose_link_is_on_the_first_line_passes_every_time(tmp_path):
+    """`grep -q` exits on the first match; a producer still writing gets SIGPIPE and
+    pipefail then reports no match. It was a race, so one run proves nothing."""
+    body = "Closes #14241\n" + _LARGE_BODY_FILLER
+    for attempt in range(25):
+        code, out = _decide(tmp_path, branch="issue-14241", body=body)
+        assert code == 0 and "status=success" in out, f"attempt {attempt}: {out[-200:]}"
+
+
+# A producer piped into an early-exiting grep: `grep -q` / `--quiet`, any producer.
+_PIPE_INTO_QUIET_GREP = re.compile(
+    r"(?<!\|)\|(?!\|)\s*(?:e|f)?grep\s+(?:[^|;&\n]*?\s)?(?:-[A-Za-z]*q[A-Za-z]*|--quiet)\b"
+)
+
+
+def _pipefail_active(document: dict, job: dict, step: dict) -> bool:
+    """GitHub's default `bash -e {0}` has no pipefail; `shell: bash` (or an
+    explicit `set -o pipefail` in the body) does."""
+    shell = step.get("shell") or job.get("defaults", {}).get("run", {}).get("shell")
+    shell = shell or document.get("defaults", {}).get("run", {}).get("shell") or ""
+    body = step["run"]
+    return "pipefail" in body or shell.strip() == "bash" or "pipefail" in shell
+
+
+def test_no_workflow_step_under_pipefail_pipes_a_producer_into_quiet_grep():
+    """The class, not the instance: any `producer | grep -q` in a run block whose
+    shell has pipefail. A step with no pipefail (the default shell) is exempt: there
+    the pipeline status is grep's alone, so an early exit cannot fail it."""
+    offenders = []
+    for path in (repo_root() / rel for rel in sorted(tracked_paths(repo_root(), ".github/workflows/*.y*ml"))):
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        for job_id, job in (document.get("jobs") or {}).items():
+            for step in job.get("steps", []) if isinstance(job, dict) else []:
+                if "run" not in step or not _pipefail_active(document, job, step):
+                    continue
+                code = "\n".join(c.text for c in code_lines(step["run"], name="step.sh"))
+                for line in code.replace("\\\n", " ").splitlines():
+                    if _PIPE_INTO_QUIET_GREP.search(line):
+                        offenders.append(f"{path.name}:{job_id}:{step.get('name')}: {line.strip()[:80]}")
+
+    assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"
+
+
+_SET_PIPEFAIL = re.compile(r"\bset\s+(?:-\w+\s+)*-\w*o\s+pipefail")
+
+
+# Piped input is a few bytes of fixed text, far below the pipe buffer, so the producer
+# cannot be mid-write when grep exits; the `$?` of the pipeline is what each case asserts.
+_FIXED_INPUT_SCRIPTS = {"fleet-ip-rule_test.sh"}
+
+
+def _logical_lines(text: str) -> list[str]:
+    """Join `\\` continuations and lines ending in a pipe, so `cmd \\ \\n | grep -q` is one line."""
+    joined = re.sub(r"\\\n\s*", " ", text)
+    joined = re.sub(r"(?<!\|)\|\s*\n\s*", "| ", joined)
+    return joined.splitlines()
+
+
+def test_no_shell_script_under_pipefail_pipes_a_producer_into_quiet_grep():
+    """The script half of the class: a file with `set -o pipefail` (any flag mix) must
+    not pipe a producer into `grep -q`, including across a continued line."""
+    offenders = []
+    for path in (repo_root() / rel for rel in sorted(tracked_paths(repo_root(), "scripts/*.sh"))):
+        if path.name in _FIXED_INPUT_SCRIPTS:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if not _SET_PIPEFAIL.search(text):
+            continue
+        code = "\n".join(c.text for c in code_lines(text, name=path.name))
+        for line in _logical_lines(code):
+            if _PIPE_INTO_QUIET_GREP.search(line):
+                offenders.append(f"{path.relative_to(repo_root())}: {line.strip()[:90]}")
+
+    assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"

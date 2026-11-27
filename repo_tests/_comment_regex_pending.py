@@ -4,21 +4,24 @@
 # Author: mrveiss
 """Files whose regex strips or reads a comment construct, pending migration (#21569).
 
-Measured with the guard's own detector over the tree it sweeps: **40 files** (plus
-`tools/lint/_comment_syntax.py`, the canonical exemption). **This list only ever shrinks.**
+Measured with the guard's own detector over the tree it sweeps: **40 files**, **38** since #22261 moved the
+two `<!--` entries (`pipeline-scripts/issue_structure.py`, `pipeline-scripts/landing_notes.py`) onto the shared
+`autobot_shared.html_comments` pattern (plus `tools/lint/_comment_syntax.py`, the canonical exemption).
+**This list only ever shrinks.**
 
 Not every entry is a source scanner. Some are format parsers where a trailing `#` is part of the
 format (`env_file_family_18555_test`, `service_units_set_logs_dir_20894_test`), one reads comments
 as data (`check_spdx_header`), and one strips Jinja comments (`tts_model_config_names_what_runs_19734_test`);
 the same argument as in the guard's own list applies: an entry leaving here must be argued.
-`<!--`: `tools/lint/_comment_syntax.py` already has `strip_html_comments` and
-`strip_html_and_block_comments`; the `<!--` entries below should adopt them.
+`<!--`: the pattern has ONE definition, `autobot_shared.html_comments.HTML_COMMENT_PATTERN`; the shared helper
+`tools/lint/_comment_syntax.py` builds `strip_html_comments` and `strip_html_and_block_comments` on it, and
+`code_lines` leaves `<!-- -->` in a `.vue` template on purpose (removing it would move the count of every guard
+that reads a commented-out element). The remaining `<!--` entries below are line-skip patterns shared with a `//`
+or `/*` opener; they leave with that opener, onto those helpers.
 """
 
 PENDING_REGEX_STRIPPERS = frozenset(
     {
-        "pipeline-scripts/issue_structure.py",
-        "pipeline-scripts/landing_notes.py",
         "repo_tests/_filter_entries.py",
         "repo_tests/_hardcoded_colour_detect.py",
         "repo_tests/_unconnected_clients.py",

@@ -126,6 +126,7 @@ async def _run_process_chat_message(kb_results: list, use_kb: bool = True, autho
 
     mock_history = MagicMock()
     mock_history.get_session_messages = AsyncMock(return_value=[])
+    mock_history.get_session = AsyncMock(return_value={})  # #20922: the stored thinking preferences
     mock_history.add_messages_batch = AsyncMock()
     mock_history.context_manager = None
 

@@ -253,8 +253,11 @@ def test_a_second_registration_never_moves_the_pinned_desktop():
 
 @pytest.mark.asyncio
 async def test_the_registered_desktop_origin_passes_the_egress_policy_and_others_do_not(monkeypatch):
-    from autobot_shared.egress_allowlist import is_internal_origin
+    from autobot_shared.egress_allowlist import is_internal_origin, register_internal_origin_provider
 
+    # Other egress tests call reset_internal_origin_state(), which drops the provider this module registers
+    # at import; register it again so the result never depends on which test file ran first.
+    register_internal_origin_provider(reg._registered_desktop_origins)
     request, _ = _fake(
         {
             ("GET", reg.ENDPOINTS_PATH): ENDPOINTS,

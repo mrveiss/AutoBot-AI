@@ -5,6 +5,7 @@
 """#22016 PR1: the prompt budget is the window the request sends, and a cut file is reported honestly."""
 
 import logging
+from contextvars import ContextVar
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -29,7 +30,7 @@ def declared_window(monkeypatch):
 
 @pytest.fixture
 def chat_model(monkeypatch):
-    monkeypatch.setattr(chat_model_context, "_last_turn_model", MODEL)
+    monkeypatch.setattr(chat_model_context, "_last_turn_model", ContextVar("t", default=MODEL))
     return MODEL
 
 
@@ -129,7 +130,7 @@ def test_prompt_eval_count_at_the_window_is_logged(chat_model, caplog):
 
 def test_any_ollama_bound_model_gets_the_sent_window_on_a_fresh_process(monkeypatch):
     """A non-default model, nothing noted as the chat model: the payload still sends CHAT_NUM_CTX, so the budget uses it."""
-    monkeypatch.setattr(chat_model_context, "_last_turn_model", None)
+    monkeypatch.setattr(chat_model_context, "_last_turn_model", ContextVar("t", default=None))
     cwm = get_context_window_manager()
     assert prompt_window.request_window_tokens(cwm, "some-other-model:7b") == ModelConfig.CHAT_NUM_CTX
     assert prompt_window.chat_request_options("some-other-model:7b")["num_ctx"] == ModelConfig.CHAT_NUM_CTX

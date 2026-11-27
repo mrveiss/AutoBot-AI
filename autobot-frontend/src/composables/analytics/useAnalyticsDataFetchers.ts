@@ -29,7 +29,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { readDuplicatePayload, type DuplicateScanState } from './duplicatePayload'
+import { clearDuplicateResults, duplicateSummary, readDuplicatePayload, type DuplicateScanState } from './duplicatePayload'
 import { useCodeSmellProblems } from './useCodeSmellProblems'
 import { toDeclarationPanelRows } from './declarationPanelRows'
 import { loadProjectRoot } from './projectRoot'
@@ -110,7 +110,6 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const scanRunner = useAnalyticsScanRunner()
 
   // --- Reactive state ---
-
   const codebaseStats = ref<Record<string, unknown> | null>(null)
   const problemsReport = ref<Problem[]>([])
   const duplicateAnalysis = ref<DuplicateCode[]>([])
@@ -120,6 +119,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     const reading = readDuplicatePayload(raw)
     duplicateAnalysis.value = reading.duplicates
     duplicateScanState.value = reading.state
+    duplicateSummary.value = reading.summary
   }
   const applyDuplicates = (raw: unknown) => { staleResults.clear('duplicates'); showDuplicates(raw) } // a full scan: never stale
   // #17983: the OTHER way a scan fails. `applyDuplicates` runs only on a 2xx,
@@ -129,7 +129,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   // renders, and they would survive behind the failure notice.
   const failDuplicates = () => {
     staleResults.clear('duplicates')
-    duplicateAnalysis.value = []
+    clearDuplicateResults(duplicateAnalysis)
     duplicateScanState.value = 'failed'
   }
   const declarationAnalysis = ref<Declaration[]>([])
@@ -311,7 +311,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     { path: '/api/analytics/codebase/duplicates/cached', scopeToSource: true, requireSource: true,
       label: 'Cached duplicates endpoint', pickData: (raw) => raw, onError: failDuplicates,
       onSuccess: (raw, _body, forSource) => { showDuplicates(raw); staleResults.markFromCached('duplicates', raw, forSource) },
-      onNoData: (forSource) => { duplicateAnalysis.value = []; duplicateScanState.value = 'not_scanned'; staleResults.clear('duplicates', forSource) } },
+      onNoData: (forSource) => { clearDuplicateResults(duplicateAnalysis); duplicateScanState.value = 'not_scanned'; staleResults.clear('duplicates', forSource) } },
     { withSourceId },
   )
 
@@ -463,7 +463,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
       async () => {
         await duplicatesSilent.load(undefined, deps.sourceIdParam.value)
         if (duplicatesSilent.error.value || duplicateScanState.value === 'failed') return null
-        return { count: duplicateAnalysis.value.length }
+        return { count: duplicateSummary.value?.totalCount ?? duplicateAnalysis.value.length }
       },
       'analytics.codebase.notify.duplicatesFound',
       'analytics.codebase.notify.duplicatesFailed',

@@ -189,3 +189,24 @@ async def test_the_error_codes_are_three_distinct_wire_values():
     codes = {SESSION_SETUP_FAILED_CODE, EXECUTION_FAILED_CODE, POST_EXECUTION_FAILED_CODE}
 
     assert len(codes) == 3, f"the outcome vocabulary collapsed: {codes}"
+
+
+# --- #22250: a failed PTY command reports its return code and output tail ----
+
+
+def test_a_failed_command_error_names_the_return_code_and_the_output_tail():
+    result = {"status": "error", "stdout": "\n\narp: command not found\n", "stderr": "", "return_code": 127}
+
+    assert TerminalTool._format_command_failure(result, "arp -a")["error"] == "exit 127: arp: command not found"
+
+
+def test_the_output_tail_is_bounded():
+    stdout = "\n".join(f"line {n}" for n in range(100))
+    error = TerminalTool._format_command_failure({"stdout": stdout, "return_code": 1}, "x")["error"]
+
+    assert error.endswith("line 99") and "line 94" not in error and len(error) < 700
+
+
+def test_the_placeholder_is_only_for_no_output_and_no_return_code():
+    assert TerminalTool._format_command_failure({}, "x")["error"] == "Command failed with no error detail"
+    assert TerminalTool._format_command_failure({"return_code": 2}, "x")["error"] == "exit 2"

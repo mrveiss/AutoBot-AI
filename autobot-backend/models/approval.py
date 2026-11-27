@@ -330,3 +330,15 @@ Index(
     unique=True,
     postgresql_where=text(PENDING_ENV_COPIES_WHERE),
 ).ddl_if(dialect="postgresql")
+
+
+#: One PENDING stale code-sync file cleanup proposal per old sync location per node, enforced by the database
+#: (#22033): the SLM's propose call can be retried or raced, and only a unique index makes the second insert fail.
+PENDING_STALE_SYNC_FILES_INDEX = "uq_approvals_pending_stale_sync_files_cleanup"
+PENDING_STALE_SYNC_FILES_WHERE = "status = 'pending' AND context ->> 'action' = 'slm_node_stale_sync_files_cleanup'"
+Index(
+    PENDING_STALE_SYNC_FILES_INDEX,
+    Approval.context["location"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_STALE_SYNC_FILES_WHERE),
+).ddl_if(dialect="postgresql")

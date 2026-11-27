@@ -18,7 +18,7 @@ Fix: ``get_node``/``list_nodes`` now derive the reported ``code_status`` on
 every read via ``_derive_code_status``/``_reported_code_status`` -- the same
 live signal, computed fresh instead of trusting the frozen stamp.
 
-Follows the real-module-swap pattern from test_nodes_list_timeout_10913.py
+Follows the real-module-swap pattern from test_nodes_list_timeout.py
 (#11737): the slm-backend root conftest stubs sqlalchemy/models.database/
 models.schemas as MagicMocks for import-time safety, so api.nodes is
 imported inside ``_real_modules_swapped()`` to get the real FastAPI/pydantic
@@ -36,75 +36,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _real_orm_import import build_real_modules
 
 _SLM_ROOT = Path(__file__).parent.parent.parent
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
 
-_SQLALCHEMY_MODULES = ("sqlalchemy", "sqlalchemy.ext", "sqlalchemy.ext.asyncio", "sqlalchemy.orm")
-
-
-def _is_sqlalchemy_key(name: str) -> bool:
-    return name == "sqlalchemy" or name.startswith("sqlalchemy.")
-
-
-def _load_real_module(name: str, path: Path):
-    """Exec *path* under canonical *name* (registered so relative imports work)."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    sys.modules[name] = module
-    spec.loader.exec_module(module)  # type: ignore[union-attr]
-    return module
-
-
-def _build_real_modules() -> dict:
-    """One-time real sqlalchemy + models.database/models.schemas/
-    services.code_status snapshot.
-
-    Mirrors tests/api/test_nodes_list_timeout_10913.py's setup: the root
-    conftest stubs these as MagicMocks for import-time safety, so the real
-    packages are loaded once here and swapped in on demand.
-
-    services.code_status (#12571) must be real-loaded AFTER the real
-    models.database, since api.nodes now imports its derive_code_status/
-    get_latest_code_version/reported_code_status from there instead of
-    defining them inline (#12428/#12570) -- a stub CodeStatus enum would
-    break the string comparisons the derivation logic depends on.
-    """
-    saved = {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)}
-    saved.update(
-        {name: sys.modules.get(name) for name in ("models.database", "models.schemas", "services.code_status")}
-    )
-    for name in list(saved):
-        sys.modules.pop(name, None)
-    try:
-        for name in _SQLALCHEMY_MODULES:
-            importlib.import_module(name)
-        importlib.import_module("sqlalchemy.dialects.sqlite")
-        _load_real_module("models.database", _SLM_ROOT / "models" / "database.py")
-        _load_real_module("models.schemas", _SLM_ROOT / "models" / "schemas.py")
-        _load_real_module("services.code_status", _SLM_ROOT / "services" / "code_status.py")
-        return {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)} | {
-            "models.database": sys.modules["models.database"],
-            "models.schemas": sys.modules["models.schemas"],
-            "services.code_status": sys.modules["services.code_status"],
-        }
-    finally:
-        for name in [n for n in sys.modules if _is_sqlalchemy_key(n)]:
-            del sys.modules[name]
-        sys.modules.pop("models.database", None)
-        sys.modules.pop("models.schemas", None)
-        sys.modules.pop("services.code_status", None)
-        for name, mod in saved.items():
-            if mod is not None:
-                sys.modules[name] = mod
-            else:
-                sys.modules.pop(name, None)
-
-
-_REAL_MODULES = _build_real_modules()
+_REAL_MODULES = build_real_modules(("models.database", "models.schemas", "services.code_status"))
 
 
 @contextlib.contextmanager

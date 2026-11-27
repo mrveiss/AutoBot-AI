@@ -90,7 +90,7 @@ class SessionManager:
                 )
                 simple_pty_manager.close_session(pty_session_id)
 
-            pty = simple_pty_manager.create_session(pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT))
+            pty = simple_pty_manager.create_session(pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT), pipefail=True)
             if pty:
                 logger.info(f"Created PTY session {pty_session_id} for agent terminal {session_id}")
                 return pty_session_id
