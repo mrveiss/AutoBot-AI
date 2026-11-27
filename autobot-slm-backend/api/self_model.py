@@ -35,13 +35,14 @@ from services.self_model_reconcile import (
     rows_for_response,
     unavailable_because,
 )
-from services.self_model_store import apply_observations, load_rows, revision, sweep_stale
+from services.self_model_store import apply_observations, load_page, load_rows, revision, sweep_stale
 
 router = APIRouter(prefix="/self-model", tags=["self-model"])
 
 MAX_ENTITIES = 500
 DEFAULT_ENTITIES = 100
 MAX_OBSERVATIONS = 20000
+MAX_VERSION_LENGTH = 128
 
 
 class ParentRef(BaseModel):
@@ -55,7 +56,7 @@ class ObservationIn(BaseModel):
     status: str
     parent: Optional[ParentRef] = None
     node_id: Optional[str] = None
-    version: Optional[str] = None
+    version: Optional[str] = Field(default=None, max_length=MAX_VERSION_LENGTH)  # the column is String(128)
     attrs: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("kind")
@@ -140,12 +141,12 @@ async def list_entities(
     ``total`` counts every match; ``offset`` pages through them, so a caller can tell a short page from a full set.
     """
     await sweep_stale(db, datetime.now(timezone.utc))
-    found = await load_rows(db, *_filters(kind, name, node_id, status))
-    rows = rows_for_response(found.values())[offset : offset + limit]
+    total, page = await load_page(db, _filters(kind, name, node_id, status), offset, limit)
+    rows = rows_for_response(page)
     needing = {entity_key("node", r["node_id"]) for r in rows if r["node_id"] and r["attrs"].get("requires")}
     commands = await load_rows(db, entities.c.parent_key.in_(needing)) if needing else {}
     for row in rows:
         missing = unavailable_because(row, commands)
         row["available"] = not missing
         row["unavailable_because"] = missing
-    return {"revision": await revision(db), "total": len(found), "entities": rows}
+    return {"revision": await revision(db), "total": total, "entities": rows}

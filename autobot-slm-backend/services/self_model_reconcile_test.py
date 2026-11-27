@@ -122,6 +122,17 @@ def test_a_declaration_does_not_downgrade_a_probed_entity():
     assert rows["service:backend"]["status"] == PROBED_OK
 
 
+def test_a_declaration_does_not_refresh_the_probe_freshness_it_preserves():
+    probed = Observation("service", "backend", PROBED_OK)
+    declared = Observation("service", "backend", DECLARED)
+    kwargs = {"source": "catalogue", "scope_kinds": ("service",)}
+    rows = _apply({}, reconcile_observations({}, [probed], T0, **kwargs))
+    rows = _apply(rows, reconcile_observations(rows, [declared], T1, **kwargs))
+    assert rows["service:backend"]["last_seen"] == T0  # only a probe is evidence of life
+    rows = _apply(rows, reconcile_observations(rows, [probed], T1, **kwargs))
+    assert rows["service:backend"]["last_seen"] == T1
+
+
 def test_a_batch_never_marks_absent_another_sources_entity():
     rows, _ = _run({}, [_cmd("git")], T0)
     other = reconcile_observations(rows, [], T1, source="catalogue", scope_kinds=("command",))

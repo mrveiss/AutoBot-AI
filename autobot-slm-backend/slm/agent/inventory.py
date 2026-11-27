@@ -7,7 +7,9 @@
 Every heartbeat carries ``inventory_hash``; the full ``inventory`` rides along only when the hash
 changed since the last report, plus once every ``INVENTORY_RESEND_S`` as a backstop for a lost
 report. The scan is cheap: it is repeated only when the mtime signature of the package database
-and of the ``PATH`` directories changed, so an unchanged node costs a handful of ``stat`` calls.
+and of the ``PATH`` directories changed (a handful of ``stat`` calls), plus once every
+``INVENTORY_RESCAN_S`` because a permission change moves a file's ctime and no directory mtime. A scan that
+fails keeps the last good snapshot and its old signature, so the next heartbeat retries it.
 """
 
 from __future__ import annotations
@@ -19,11 +21,12 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.self_model_constants import INVENTORY_RESEND_S
+from autobot_shared.self_model_constants import INVENTORY_RESCAN_S, INVENTORY_RESEND_S
 
 logger = get_logger(__name__)
 
 DPKG_STATUS_PATH = "/var/lib/dpkg/status"
+_ABSENT_OR_DENIED = (FileNotFoundError, NotADirectoryError, PermissionError)
 
 
 def _path_dirs() -> List[str]:
@@ -43,13 +46,13 @@ def signature() -> Tuple[Tuple[str, int], ...]:
 
 
 def scan_commands() -> List[str]:
-    """Sorted names of the executable files on ``PATH``."""
+    """Sorted names of the executable files on ``PATH``; any other ``OSError`` propagates (a failed scan)."""
     names = set()
     for directory in _path_dirs():
         try:
             with os.scandir(directory) as entries:
                 names.update(e.name for e in entries if e.is_file() and os.access(e.path, os.X_OK))
-        except OSError as exc:
+        except _ABSENT_OR_DENIED as exc:  # stable across rescans: skipping it is the honest answer
             logger.warning("inventory: cannot scan %s: %s", directory, exc)
     return sorted(names)
 
@@ -65,11 +68,14 @@ def _parse_dpkg(text: str) -> Dict[str, str]:
 
 
 def scan_packages() -> Dict[str, str]:
-    """Installed packages of a dpkg-based node; empty where there is no dpkg database."""
+    """Installed packages of a dpkg-based node; empty where there is no dpkg database.
+
+    Only a missing database is "no packages"; an unreadable one raises ``OSError`` so the caller keeps its snapshot.
+    """
     try:
         with open(DPKG_STATUS_PATH, encoding="utf-8", errors="replace") as handle:
             return _parse_dpkg(handle.read())
-    except OSError:
+    except FileNotFoundError:
         return {}
 
 
@@ -84,35 +90,44 @@ class InventoryReporter:
     def __init__(self, clock=time.monotonic) -> None:
         self._clock = clock
         self._scanned_mtimes: Optional[Tuple[Tuple[str, int], ...]] = None
+        self._scanned_at = 0.0
         self._inventory: Dict[str, Any] = {}
         self._hash: Optional[str] = None
         self._sent_hash: Optional[str] = None
         self._sent_at = 0.0
 
     def _refresh(self) -> None:
-        current = signature()
-        if current == self._scanned_mtimes:
+        current, now = signature(), self._clock()
+        if current == self._scanned_mtimes and now - self._scanned_at < INVENTORY_RESCAN_S:
             return
-        self._scanned_mtimes = current
-        self._inventory = {"packages": scan_packages(), "commands": scan_commands()}
-        self._hash = inventory_hash(self._inventory)
+        try:
+            inventory = {"packages": scan_packages(), "commands": scan_commands()}
+        except OSError as exc:
+            logger.warning("inventory: scan failed, keeping the last snapshot and retrying: %s", exc)
+            return
+        self._inventory, self._hash = inventory, inventory_hash(inventory)
+        self._scanned_mtimes, self._scanned_at = current, now
 
     def report(self) -> Dict[str, Any]:
         """The heartbeat ``extra_data`` fragment: always the hash, the full inventory when due."""
         self._refresh()
+        if self._hash is None:  # no scan has ever succeeded: nothing true to report yet
+            return {}
         now = self._clock()
         due = self._hash != self._sent_hash or now - self._sent_at >= INVENTORY_RESEND_S
         if not due:
             return {"inventory_hash": self._hash}
         return {"inventory_hash": self._hash, "inventory": self._inventory}
 
-    def confirm(self, extra: Dict[str, Any], delivered: bool) -> bool:
-        """Record a full report as sent only once the SLM acknowledged the heartbeat that carried it.
+    def confirm(self, extra: Dict[str, Any], delivered: bool, acknowledged: Optional[str] = None) -> bool:
+        """Record a full report as sent only once the SLM acknowledged both the heartbeat and the inventory.
 
-        A lost report leaves ``_sent_hash`` behind, so the next heartbeat carries the full list again
-        instead of waiting for the backstop while the node's entities go stale. Returns *delivered*.
+        *acknowledged* is the hash the SLM says it folded into the model. A lost report, or one the SLM
+        accepted as liveness but failed to persist, leaves ``_sent_hash`` behind, so the next heartbeat
+        carries the full list again instead of waiting for the backstop while the node's entities go stale.
+        Returns *delivered*.
         """
-        if delivered and "inventory" in extra:
+        if delivered and "inventory" in extra and acknowledged == extra["inventory_hash"]:
             self._sent_hash, self._sent_at = extra["inventory_hash"], self._clock()
         return delivered
 

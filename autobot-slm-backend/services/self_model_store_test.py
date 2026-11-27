@@ -99,6 +99,41 @@ def test_a_misshapen_inventory_does_not_advance_the_stored_hash(beat):
     assert beat({"inventory_hash": "h3", "inventory": {"packages": {}, "commands": "git"}}) == "h1"
 
 
+def test_inventory_members_must_be_strings_of_a_storable_length(beat):
+    beat({"inventory_hash": "h1", "inventory": FULL})
+    assert beat({"inventory_hash": "h2", "inventory": {"packages": {}, "commands": [None]}}) == "h1"
+    assert beat({"inventory_hash": "h3", "inventory": {"packages": {}, "commands": ["x" * 256]}}) == "h1"
+    assert beat({"inventory_hash": "h4", "inventory": {"packages": {}, "commands": ["  "]}}) == "h1"
+
+
+def test_the_ack_is_the_stored_hash_and_none_when_the_fold_failed(monkeypatch):
+    async def _stored(_db, *_conditions):
+        return {NODE: {"attrs": {"inventory_hash": "h1"}}}
+
+    monkeypatch.setattr(store, "load_rows", _stored)
+    assert asyncio.run(store.acknowledged_inventory_hash(None, "n1")) == "h1"
+
+    async def _unreadable(_db, *_conditions):
+        raise DataError("SELECT", {}, Exception("bad"))
+
+    monkeypatch.setattr(store, "load_rows", _unreadable)
+    assert asyncio.run(store.acknowledged_inventory_hash(None, "n1")) is None
+
+
+def test_the_sweep_reads_its_candidates_under_a_row_lock(monkeypatch):
+    monkeypatch.setattr(store, "_last_sweep", 0.0)
+    seen = {}
+
+    async def _load_rows(_db, *_conditions, lock=False):
+        seen["lock"] = lock
+        return {}
+
+    monkeypatch.setattr(store, "load_rows", _load_rows)
+    monkeypatch.setattr(store, "persist", AsyncMock())
+    asyncio.run(store.sweep_stale(None, NOW))
+    assert seen["lock"] is True
+
+
 def test_a_failed_self_model_fold_keeps_the_capability_profile(monkeypatch):
     """Each half runs in its own SAVEPOINT: a DataError in the fold rolls back the fold alone (#22280)."""
     capability = AsyncMock()

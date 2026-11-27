@@ -20,6 +20,7 @@ import platform
 import signal
 import socket
 import sys
+from typing import Optional
 
 import aiohttp
 from aiohttp import web
@@ -201,6 +202,8 @@ class SLMAgent:
 
     # Maximum registration-pending backoff in seconds (#9965).
     _REG_BACKOFF_CAP: float = 300
+    # The inventory hash the SLM stored for the heartbeat just sent (#22280); None when it did not say.
+    _inventory_ack: Optional[str] = None
 
     async def _send_heartbeat_request(self, payload: dict) -> bool:
         """
@@ -226,6 +229,7 @@ class SLMAgent:
                     # Issue #741: Process heartbeat response
                     response_data = await response.json()
                     self._process_heartbeat_response(response_data)
+                    self._inventory_ack = response_data.get("inventory_ack")  # #22280: stored, not merely accepted
                     if self._reg_backoff_seconds:
                         logger.info("Heartbeat accepted — node registration confirmed")
                         self._reg_backoff_seconds = 0
@@ -283,7 +287,9 @@ class SLMAgent:
         payload = build_heartbeat_payload(
             health, os_info, code_version, self.role_detector, self._role_definitions_loaded, self.heartbeat_interval
         )
-        return confirm_inventory(payload, await self._send_heartbeat_request(payload))
+        self._inventory_ack = None
+        delivered = await self._send_heartbeat_request(payload)
+        return confirm_inventory(payload, delivered, self._inventory_ack)
 
     async def prune_event_buffer(self) -> None:
         """Cap the buffer every cycle and never raise -- why: `event_buffer.prune` (#17647)."""

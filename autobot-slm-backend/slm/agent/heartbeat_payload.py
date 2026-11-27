@@ -16,7 +16,7 @@ what is now passed explicitly, which is what made the split safe.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .inventory import get_inventory_reporter
 from .port_scanner import get_listening_ports
@@ -115,6 +115,9 @@ def build_heartbeat_payload(
     }
 
 
-def confirm_inventory(payload: Dict[str, Any], delivered: bool) -> bool:
-    """Tell the inventory reporter whether the heartbeat *payload* reached the SLM (#22277); returns *delivered*."""
-    return get_inventory_reporter().confirm(payload["extra_data"], delivered)
+def confirm_inventory(payload: Dict[str, Any], delivered: bool, acknowledged: Optional[str] = None) -> bool:
+    """Tell the inventory reporter whether the heartbeat *payload* reached the SLM and its inventory was stored.
+
+    *acknowledged* is the response's ``inventory_ack`` (#22280). Returns *delivered*.
+    """
+    return get_inventory_reporter().confirm(payload["extra_data"], delivered, acknowledged)

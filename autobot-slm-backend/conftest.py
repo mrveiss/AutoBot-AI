@@ -314,8 +314,11 @@ if "services" not in sys.modules:
 for _m in sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES)):
     _stub(_m)
 
-# #22277: the heartbeat path awaits it, and a plain MagicMock child is not awaitable.
-sys.modules["services.self_model_store"].apply_heartbeat_extra_data = AsyncMock()
+# #22277: every binding the API and the heartbeat path await needs an AsyncMock; a plain MagicMock child is
+# not awaitable. The inventory ack is a response field, so it resolves to None (nothing acknowledged).
+for _awaited in ("apply_heartbeat_extra_data", "apply_observations", "revision", "sweep_stale", "load_rows", "load_page"):
+    setattr(sys.modules["services.self_model_store"], _awaited, AsyncMock())
+sys.modules["services.self_model_store"].acknowledged_inventory_hash = AsyncMock(return_value=None)
 
 # #16712/#16722 (#17133 review): pytest.ini's --import-mode=importlib collects a
 # services/*_test.py file as the dotted module services.<name>, and

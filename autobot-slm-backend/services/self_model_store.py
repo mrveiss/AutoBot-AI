@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
@@ -44,20 +45,42 @@ INVENTORY_SOURCE = "inventory"
 HEARTBEAT_SOURCE = "heartbeat"
 _INVENTORY_KINDS = ("command", "package")
 _SWEEP_MIN_GAP_S = 30.0
+MAX_NAME_LENGTH = 255  # entities.name
+MAX_VERSION_LENGTH = 128  # entities.version
 _last_sweep = 0.0
 
 
-async def load_rows(db: AsyncSession, *conditions: Any) -> Dict[str, Dict[str, Any]]:
-    """Entity rows matching *conditions*, keyed by entity key."""
-    result = await db.execute(select(entities).where(*conditions))
+async def load_rows(db: AsyncSession, *conditions: Any, lock: bool = False) -> Dict[str, Dict[str, Any]]:
+    """Entity rows matching *conditions*, keyed by entity key.
+
+    ``lock`` takes a row lock on each match until the transaction ends, in ``entity_key`` order (the order
+    ``persist`` writes in) and skipping rows another transaction holds: a row in someone else's write is being
+    refreshed by them, so it is not this caller's to rewrite from a snapshot.
+    """
+    query = select(entities).where(*conditions)
+    if lock:
+        query = query.order_by(entities.c.entity_key).with_for_update(skip_locked=True)
+    result = await db.execute(query)
     return {row.entity_key: dict(row._mapping) for row in result}
+
+
+async def load_page(
+    db: AsyncSession, conditions: List[Any], offset: int, limit: int
+) -> Tuple[int, List[Dict[str, Any]]]:
+    """``(total, rows)``: the match count and one ``entity_key``-ordered page, both counted and cut in the database.
+
+    The key is unique and a heartbeat never changes it, so ``offset`` paging neither repeats nor skips a row.
+    """
+    total = (await db.execute(select(func.count()).select_from(entities).where(*conditions))).scalar_one()
+    page = select(entities).where(*conditions).order_by(entities.c.entity_key).offset(offset).limit(limit)
+    return int(total), [dict(row._mapping) for row in await db.execute(page)]
 
 
 async def persist(db: AsyncSession, plan: InventoryPlan) -> None:
     """Upsert the plan's entity rows (one batched statement) and append its history rows."""
     by_key = {r["entity_key"]: {k: v for k, v in r.items() if k != "id"} for r in plan.upserts}
     if by_key:
-        rows = list(by_key.values())
+        rows = [by_key[k] for k in sorted(by_key)]  # one lock order for every writer: no deadlock between batches
         stmt = pg_insert(entities)
         update = {c: stmt.excluded[c] for c in rows[0] if c != "entity_key"}
         await db.execute(stmt.on_conflict_do_update(index_elements=["entity_key"], set_=update), rows)
@@ -93,7 +116,10 @@ async def apply_observations(
     """Fold one producer's complete batch into the model and persist the result."""
     kinds = tuple(scope_kinds)
     observed = rename_hosts(observed, await _node_ids_by_host(db, {o.node_id for o in observed if o.node_id}))
-    existing = await load_rows(db, entities.c.kind.in_(kinds))
+    # Rows of the removal scope, plus a row for every observed key: a declaration outside the scope must still
+    # meet the probed row it would otherwise overwrite.
+    keys = [o.key for o in observed]
+    existing = await load_rows(db, or_(entities.c.kind.in_(kinds), entities.c.entity_key.in_(keys)))
     plan = reconcile_observations(existing, observed, now, source=source, scope_kinds=kinds)
     await persist(db, plan)
     return plan
@@ -103,7 +129,15 @@ def _well_formed(inventory: Any) -> bool:
     """An inventory the fold can read: a mapping whose ``packages`` is a mapping and ``commands`` a list (#22280)."""
     if not isinstance(inventory, dict):
         return False
-    return isinstance(inventory.get("packages") or {}, dict) and isinstance(inventory.get("commands") or [], list)
+    packages, commands = inventory.get("packages") or {}, inventory.get("commands") or []
+    if not isinstance(packages, dict) or not isinstance(commands, list):
+        return False
+    return all(_is_name(n) for n in (*packages, *commands))
+
+
+def _is_name(name: Any) -> bool:
+    """A string the entity table can hold as a name: reconciliation strips it, and the column is bounded."""
+    return isinstance(name, str) and 0 < len(name.strip()) <= MAX_NAME_LENGTH
 
 
 def _inventory_observations(node_id: str, inventory: Dict[str, Any]) -> List[Observation]:
@@ -115,7 +149,7 @@ def _inventory_observations(node_id: str, inventory: Dict[str, Any]) -> List[Obs
             PROBED_OK,
             parent_key=parent,
             node_id=node_id,
-            version=str(version) if version is not None else None,
+            version=str(version)[:MAX_VERSION_LENGTH] if version is not None else None,
         )
         for name, version in (inventory.get("packages") or {}).items()
     ]
@@ -172,10 +206,26 @@ async def sweep_stale(db: AsyncSession, now: datetime) -> InventoryPlan:
         return InventoryPlan()
     _last_sweep = time.monotonic()
     probed = entities.c.status.in_((PROBED_OK, PROBED_FAILED))
-    rows = await load_rows(db, probed, entities.c.last_seen < now - STALE_AFTER)
+    # Locked, so a heartbeat committing a fresh ``last_seen`` between this read and the write is not overwritten:
+    # the lock re-checks the filter against the newest row, and a row mid-write is skipped.
+    rows = await load_rows(db, probed, entities.c.last_seen < now - STALE_AFTER, lock=True)
     plan = mark_stale(rows.values(), now, STALE_AFTER)
     await persist(db, plan)
     return plan
+
+
+async def acknowledged_inventory_hash(db: AsyncSession, node_id: str) -> Optional[str]:
+    """The inventory hash folded into the model for *node_id*: the agent's proof its full report landed (#22280).
+
+    Read separately from the heartbeat's own commit, so an inventory that failed to persist is simply not
+    acknowledged while liveness is. An unreadable row is not acknowledged either.
+    """
+    try:
+        rows = await load_rows(db, entities.c.entity_key == entity_key("node", node_id))
+    except SQLAlchemyError as exc:
+        logger.warning("cannot read the inventory ack of node %s: %r", node_id, exc)
+        return None
+    return rows.get(entity_key("node", node_id), {}).get("attrs", {}).get("inventory_hash")
 
 
 async def apply_heartbeat_extra_data(db: AsyncSession, node_id: str, extra_data: dict) -> None:

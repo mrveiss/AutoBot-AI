@@ -266,6 +266,9 @@ class HeartbeatResponse(BaseModel):
     update_available: bool = False
     latest_version: str | None = None
     update_url: str | None = None
+    # The inventory hash the SLM has folded into the self-model for this node; the agent treats a full
+    # inventory as delivered only when this equals the hash it sent (#22280).
+    inventory_ack: str | None = None
 
 
 class EnrollRequest(BaseModel):

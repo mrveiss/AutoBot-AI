@@ -118,12 +118,14 @@ def _updated(row: Mapping[str, Any], obs: Observation, source: str, now: datetim
     status = _next_status(row["status"], obs.status)
     owner = source if obs.status in _PROBED else row.get("attrs", {}).get("source", source)
     attrs = {**row.get("attrs", {}), **obs.attrs, "source": owner}
+    # Only a probe is evidence of life: a declaration that keeps a probed status must not postpone its staleness.
+    kept_probe = obs.status not in _PROBED and row["status"] in _PROBED
     return {
         **row,
         "node_id": obs.node_id or row.get("node_id"),
         "status": status,
         "version": obs.version if obs.version is not None else row.get("version"),
-        "last_seen": now,
+        "last_seen": row["last_seen"] if kept_probe else now,
         "removed_at": None if status != ABSENT else row.get("removed_at"),
         "attrs": attrs,
     }

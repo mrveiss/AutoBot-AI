@@ -12,6 +12,21 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_SELF_MODEL_INVENTORY_RESCAN_MINUTES",
+        type=int,
+        default=30,
+        description=(
+            "Minutes after which a node rescans its package and command lists even when the mtime signature "
+            "is unchanged: a permission change moves a file's ctime, not its directory's mtime "
+            "(autobot_shared/self_model_constants.py, #22280)."
+        ),
+        component="slm",
+        range=(1, 1440),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_SELF_MODEL_INVENTORY_RESEND_HOURS",
         type=int,
         default=6,
