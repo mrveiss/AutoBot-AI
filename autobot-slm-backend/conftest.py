@@ -186,8 +186,6 @@ for _m in [
     "models.self_model",  # #22277: Core tables; api/self_model.py and the store read it
 ]:
     _stub(_m)
-# Stubbed tables carry no column widths: these mirror models/self_model.py's name and version columns.
-sys.modules["models.self_model"].MAX_NAME_LENGTH, sys.modules["models.self_model"].MAX_VERSION_LENGTH = 255, 128
 
 # #16025: role_registry.seed_default_roles() now filters each DEFAULT_ROLES
 # entry through `Role.__table__.columns` before writing it. `__table__` is a

@@ -130,7 +130,7 @@ async def list_entities(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     kind: Annotated[Optional[str], Query(pattern="^(" + "|".join(KINDS) + ")$")] = None,
-    name: Annotated[Optional[str], Query(max_length=255)] = None,
+    name: Annotated[Optional[str], Query(max_length=MAX_NAME_LENGTH)] = None,
     node_id: Optional[str] = None,
     status: Annotated[Optional[str], Query(pattern="^(" + "|".join(STATUSES) + ")$")] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_ENTITIES)] = DEFAULT_ENTITIES,
