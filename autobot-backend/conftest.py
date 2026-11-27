@@ -42,8 +42,7 @@ sys.path.insert(0, str(backend_root))
 # ratchet without a raised ceiling every time a new module needs real-loading.
 from testkit.data_tree_isolation import isolate_chat_data_paths, pytest_sessionfinish, pytest_sessionstart  # noqa: F401
 from testkit.llm_failover_modules import load_coordinator as _load_coordinator
-from testkit.module_stubs import make_pkg_stub as _make_pkg_stub
-from testkit.module_stubs import real_load_and_bind as _real_load_and_bind
+from testkit.module_stubs import make_pkg_stub as _make_pkg_stub, real_load_and_bind as _real_load_and_bind
 from testkit.provider_key_vault_state import empty_reachable_provider_key_vault  # noqa: F401 -- autouse
 from testkit.singleton_state import fake_session_lease, reset_feature_flags_singleton  # noqa: F401 -- autouse
 
