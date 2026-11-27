@@ -1426,6 +1426,9 @@
     # #13069 pin kept the distro noVNC and its old websockify unit (--web=/usr/share/novnc)
     # forever. Only the pin and the unit that serves it -- not the provisioning half. Before the
     # backend restart below: VNCServerManager reads noVNC availability once, at init.
+    # #22262: the SLM provisions the node's pending vnc role BEFORE this playbook runs
+    # (services/pending_role_provisioning.py run_update_all_nodes), so the account exists here;
+    # the gate still fails a node whose provisioning failed, naming the account.
     - name: "[PLAY 2] VNC | Converge the pinned noVNC and its websockify unit (#22146)"
       ansible.builtin.include_role:
         name: vnc

@@ -1,9 +1,10 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""The fleet update provisions a newly assigned vnc role after update-all-nodes.yml (#22211).
+"""The fleet update provisions a newly assigned vnc role around update-all-nodes.yml (#22211, #22262).
 
-Covers the selection rule, the retry cooldown, the status transitions against a fake db session, and
-that a provisioning failure is a warning on a node whose code update succeeded.
+Covers the selection rule, the retry cooldown, the status transitions against a fake db session, that a
+provisioning failure is a warning that never fails the code update by itself, and (#22262) that provisioning
+runs BEFORE the play's vnc gate, including for a vnc role the node only detected.
 """
 
 from __future__ import annotations
@@ -104,16 +105,21 @@ def test_the_cooldown_is_registered_and_env_backed() -> None:
 # --------------------------------------------------------------------------
 # status transitions against a fake session
 # --------------------------------------------------------------------------
-def _fake_db(roles: list, creds: list[str] | None = None, node: object = "node"):
-    """A session whose three queries answer: the role rows, the credential types, the node."""
-    roles_res, creds_res, node_res = MagicMock(), MagicMock(), MagicMock()
-    roles_res.scalars.return_value.all.return_value = roles
+def _node(detected: tuple = ()):
+    return SimpleNamespace(node_id="n1", roles=[], detected_roles=list(detected))
+
+
+def _fake_db(roles: list, creds: list[str] | None = None, node: object = None, tracked: list | None = None):
+    """A session answering: the node, the tracked role names (only when given), the role rows, the credentials."""
+    roles_res, creds_res, node_res, tracked_res = MagicMock(), MagicMock(), MagicMock(), MagicMock()
+    roles_res.scalars.return_value.all.side_effect = lambda: list(roles)  # a row added later is seen too
     creds_res.all.return_value = [(c,) for c in (creds or [])]
-    node_res.scalar_one_or_none.return_value = node
-    db = MagicMock()
-    # select roles, select credentials, select node; the settle query (fresh session) re-reads the roles
-    db.execute = AsyncMock(side_effect=[roles_res, creds_res, node_res] + [roles_res] * 5)
-    db.commit = AsyncMock()
+    node_res.scalar_one_or_none.return_value = _node() if node is None else node
+    tracked_res.all.return_value = [(t,) for t in (tracked or [])]
+    first = [node_res] + ([tracked_res] if tracked is not None else [])
+    db = MagicMock(add=MagicMock(), flush=AsyncMock(), commit=AsyncMock())
+    # the settle query (fresh session) re-reads the roles
+    db.execute = AsyncMock(side_effect=first + [roles_res, creds_res] + [roles_res] * 5)
     return db
 
 
@@ -149,7 +155,7 @@ def test_failure_leaves_the_row_failed_and_is_a_warning(monkeypatch) -> None:
 
     _use(monkeypatch, _fake_db([role]), helper)
     message = asyncio.run(prp.provision_pending_roles("n1"))
-    assert role.status == "failed" and message.startswith("WARNING") and "code update succeeded" in message
+    assert role.status == "failed" and message.startswith("WARNING") and "does not fail the code update" in message
 
 
 def test_a_crash_never_leaves_the_row_at_installing(monkeypatch) -> None:
@@ -243,11 +249,11 @@ def _run(executor, monkeypatch, message, restart=True, **kwargs):
     return result, seen
 
 
-def test_pending_roles_are_provisioned_after_a_successful_update(monkeypatch) -> None:
+def test_pending_roles_are_provisioned_before_and_after_a_successful_update(monkeypatch) -> None:
     ex = _Executor()
     result, seen = _run(ex, monkeypatch, "provisioned newly assigned role(s) vnc", progress_callback="cb")
     assert ex.calls[0]["playbook_name"] == "update-all-nodes.yml" and ex.calls[0]["progress_callback"] == "cb"
-    assert seen == [("n1", {})], "exactly one provisioning call, for the updated node"
+    assert seen == [("n1", {})] * 2, "one call before the play's vnc gate (#22262), one after it"
     assert result["success"] is True and "provisioned newly assigned role(s) vnc" in result["output"]
 
 
@@ -255,21 +261,18 @@ def test_a_sync_without_restarts_provisions_without_restarts_too(monkeypatch) ->
     ex = _Executor()
     _, seen = _run(ex, monkeypatch, "", restart=False)
     assert ex.calls[0]["skip_tags"] == ["restart"] and ex.calls[0]["extra_vars"] == NO_RESTART["extra_vars"]
-    assert seen == [("n1", NO_RESTART)]
+    assert seen == [("n1", NO_RESTART)] * 2
 
 
 def test_a_provisioning_failure_does_not_fail_a_successful_code_update(monkeypatch) -> None:
-    result, _ = _run(_Executor(), monkeypatch, "WARNING: provisioning of role(s) vnc failed; the code update succeeded")
+    result, _ = _run(_Executor(), monkeypatch, "WARNING: provisioning of role(s) vnc failed; it does not fail")
     assert result["success"] is True and "WARNING" in result["output"]
 
 
-def test_a_failed_update_provisions_nothing(monkeypatch) -> None:
-    async def boom(node_id, **kwargs):
-        raise AssertionError("must not provision after a failed update")
-
-    monkeypatch.setattr(prp, "provision_pending_roles", boom)
-    result = asyncio.run(prp.run_update_all_nodes(_Executor(success=False), "n1", [], False))
-    assert result["success"] is False
+def test_a_failed_update_provisions_nothing_after_it(monkeypatch) -> None:
+    ex = _Executor(success=False)
+    result, seen = _run(ex, monkeypatch, "")
+    assert result["success"] is False and len(seen) == 1, "only the step before the play ran"
 
 
 def test_a_database_error_is_a_warning_not_a_failed_update(monkeypatch) -> None:
@@ -282,7 +285,7 @@ def test_a_database_error_is_a_warning_not_a_failed_update(monkeypatch) -> None:
 
     monkeypatch.setattr(prp, "db_service", SimpleNamespace(session=broken_session))
     message = asyncio.run(prp.provision_pending_roles("n1"))
-    assert message.startswith("WARNING") and "code update succeeded" in message
+    assert message.startswith("WARNING") and "does not fail the code update" in message
     result = asyncio.run(prp.run_update_all_nodes(_Executor(), "n1", ["localhost", "n1"], True))
     assert result["success"] is True and "WARNING" in result["output"]
 
@@ -355,7 +358,70 @@ def test_a_held_unprovisioned_vnc_role_is_selected_by_the_pending_step(monkeypat
     """run_update_all_nodes runs this step after update-all-nodes.yml; the vnc role then creates autobot-vnc."""
     role = _role("active", age=timedelta(seconds=1))
     db = _fake_db([role], creds=[])
+    next(db.execute.side_effect)  # pending_roles alone: skip the node answer
     assert asyncio.run(prp.pending_roles(db, "n1")) == [role]
+
+
+def test_the_pending_step_runs_before_the_play_for_every_targeted_node(monkeypatch) -> None:
+    """#22262: the play's vnc gate needs autobot-vnc, so provisioning precedes it; co-located nodes too (#15475)."""
+    events: list[str] = []
+
+    async def fake(node_id, **kwargs):
+        events.append(f"provision {node_id}")
+        return ""
+
+    class _Ordered(_Executor):
+        async def execute_playbook(self, **kwargs):
+            events.append("play")
+            return await super().execute_playbook(**kwargs)
+
+    monkeypatch.setattr(prp, "provision_pending_roles", fake)
+    asyncio.run(prp.run_update_all_nodes(_Ordered(), "n1", ["localhost", "n1", "n2"], True))
+    assert events == ["provision n1", "provision n2", "play", "provision n1"]
+
+
+def test_a_failed_early_provisioning_is_a_warning_and_the_play_still_gates(monkeypatch) -> None:
+    ex = _Executor()
+    result, _ = _run(ex, monkeypatch, "WARNING: provisioning of role(s) vnc failed")
+    assert len(ex.calls) == 1 and result["output"].startswith("WARNING"), "the gate, not this step, fails the node"
+
+
+def _row_class(monkeypatch):
+    class _Row(SimpleNamespace):
+        node_id, role_name = MagicMock(), MagicMock()
+
+    monkeypatch.setattr(prp, "NodeRole", _Row)
+    return _Row
+
+
+def test_a_detected_only_vnc_role_gets_a_row_and_is_provisioned(monkeypatch) -> None:
+    """#22262: the inventory reads detected roles as active; the heartbeat writes no row for an unassigned one."""
+    _row_class(monkeypatch)
+    added: list = []  # the flushed row is what the role query then returns
+    db = _fake_db(added, node=_node(detected=("vnc",)), tracked=[])
+    db.add.side_effect = added.append
+    names: list = []
+
+    async def helper(db_, node_id, node, roles, target_names, **kwargs):
+        names.extend(target_names)
+        roles[0].status = "installed"
+
+    _use(monkeypatch, db, helper)
+    message = asyncio.run(prp.provision_pending_roles("n1"))
+    assert [(r.role_name, r.assignment_type) for r in added] == [("vnc", "auto")] and names == ["vnc"]
+    assert "provisioned newly assigned role(s) vnc" in message
+
+
+def test_a_node_that_already_has_the_account_and_credential_is_left_alone(monkeypatch) -> None:
+    """#22262: the early step is a no-op for a provisioned node: no new row, no provisioning run."""
+    _row_class(monkeypatch)
+
+    async def helper(*a, **k):
+        raise AssertionError("must not provision")
+
+    db = _fake_db([_role("active")], creds=["vnc"], node=_node(detected=("vnc",)), tracked=["vnc"])
+    _use(monkeypatch, db, helper)
+    assert asyncio.run(prp.provision_pending_roles("n1")) == "" and not db.add.called
 
 
 # --------------------------------------------------------------------------
