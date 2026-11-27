@@ -181,6 +181,9 @@ async def test_list_system_services_returns_the_services_or_the_error_message(mo
     fake.list_services.return_value = {"status": "success", "services": services}
     assert (await registry.list_system_services())["result"] == services
 
+    fake.list_services.return_value = {"status": "success", "services": []}
+    assert (await registry.list_system_services())["result"] == []
+
     fake.list_services.return_value = {"status": "error", "message": "systemctl unavailable", "output": ""}
     assert (await registry.list_system_services())["result"] == "systemctl unavailable"
 

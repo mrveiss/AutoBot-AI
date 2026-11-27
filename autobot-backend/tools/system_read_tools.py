@@ -50,6 +50,6 @@ class SystemReadToolsMixin:
             "tool_args": {},
             # Local (system_handlers.py) and worker (worker_node.py) paths both answer {"status", "services"};
             # a failure carries "message"/"output" instead, so it must not reach chat as "" (#22280).
-            "result": result.get("services") or result.get("message") or result.get("output"),
+            "result": (result["services"] if "services" in result else (result.get("message") or result.get("output"))),
             "status": result.get("status", "success"),
         }
