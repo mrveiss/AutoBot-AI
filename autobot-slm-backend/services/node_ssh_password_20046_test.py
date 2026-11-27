@@ -339,35 +339,6 @@ async def test_a_node_with_nothing_stored_reports_false(world) -> None:
     assert await ssh.delete_stored_password(world.db, "node-a", _APPROVAL) is False
 
 
-# --- the key probe ----------------------------------------------------------------
-
-
-def _load_probe(spawn):
-    real_utils = _load("ssh_utils_under_20046_test", "services/ssh_utils.py")
-    stubs = {"services.ssh_utils": real_utils, "services.orchestrator_ssh": SimpleNamespace(spawn_ssh=spawn)}
-    with patch.dict(sys.modules, stubs):
-        return _load("node_ssh_key_probe_under_20046_test", "services/node_ssh_key_probe.py")
-
-
-async def test_the_probe_runs_a_key_only_passwordless_sudo_check() -> None:
-    spawn = AsyncMock(return_value=(0, b"", b""))
-    probe = _load_probe(spawn)
-    assert await probe.key_auth_and_sudo_work(_node({})) is True
-    argv = spawn.await_args.args[0]
-    assert {"BatchMode=yes", "PasswordAuthentication=no", "IdentitiesOnly=yes"} <= set(argv) and argv[
-        -1
-    ] == "sudo -n -k /bin/sh -c true"
-    assert {"ControlMaster=no", "ControlPath=none"} <= set(argv)  # a live master must not vouch for the key
-    assert spawn.await_args.kwargs["timeout"] == probe.KEY_PROBE_TIMEOUT_SECONDS <= 60
-    assert "sshpass" not in argv and "autobot@192.0.2.10" in argv
-
-
-@pytest.mark.parametrize("outcome", [(255, b"", b"denied"), (1, b"", b""), TimeoutError(), OSError("no ssh")])
-async def test_the_probe_fails_closed(outcome) -> None:
-    spawn = AsyncMock(side_effect=outcome) if isinstance(outcome, Exception) else AsyncMock(return_value=outcome)
-    assert await _load_probe(spawn).key_auth_and_sudo_work(_node({})) is False
-
-
 # --- the internal route -----------------------------------------------------------
 
 

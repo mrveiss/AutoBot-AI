@@ -31,7 +31,13 @@ from code_intelligence.cross_language_patterns import CrossLanguageAnalysis, Cro
 # Issue #208: Code Pattern Detection & Optimization
 from code_intelligence.pattern_analysis import CodePatternAnalyzer, PatternAnalysisReport
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
-from utils.cancel_tokens import new_cancel_token, run_cancellable
+from utils.cancel_tokens import (
+    CancelTokenSet,
+    new_cancel_token,
+    register_cancel_token,
+    run_cancellable,
+    signal_cancel_token,
+)
 from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
@@ -655,14 +661,22 @@ def _generate_duplicate_overview(analysis: DuplicateAnalysis) -> List[str]:
         "| Metric | Value |",
         "|--------|-------|",
         f"| Files Analyzed | {analysis.files_analyzed} |",
-        f"| Total Duplicate Pairs | {analysis.total_duplicates} |",
+        f"| Total Duplicate Clusters | {analysis.total_duplicates} ({analysis.total_locations} locations) |",
+        f"| Exact / Structural Clusters | {analysis.exact_cluster_count} / {analysis.structural_cluster_count} |",
         f"| High Similarity (90%+) | {analysis.high_similarity_count} |",
         f"| Medium Similarity (70-89%) | {analysis.medium_similarity_count} |",
         f"| Low Similarity (50-69%) | {analysis.low_similarity_count} |",
         f"| Total Duplicate Lines | {analysis.total_duplicate_lines} |",
         "",
     ]
+    if analysis.truncated:  # the analysis's own return cap, separate from each table's display limit
+        lines += [f"> Only {len(analysis.duplicates)} of {analysis.total_duplicates} clusters were returned.", ""]
     return lines
+
+
+def _cluster_locations(cluster) -> str:
+    """Every location of a duplicate cluster, ``file:start-end`` (#22157)."""
+    return "<br>".join(f"`{_shorten_path(loc.file)}`:{loc.start_line}-{loc.end_line}" for loc in cluster.locations)
 
 
 def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
@@ -676,21 +690,15 @@ def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[st
         "",
         "> These are exact or near-exact duplicates. Consider extracting to shared utility.",
         "",
-        "| File 1 | Lines | File 2 | Lines | Similarity |",
-        "|--------|-------|--------|-------|------------|",
+        "| Locations | Kind | Lines | Similarity |",
+        "|-----------|------|-------|------------|",
     ]
 
     for dup in high_similarity_dups[:15]:  # Limit to top 15
-        file1_short = _shorten_path(dup.file1)
-        file2_short = _shorten_path(dup.file2)
-        lines.append(
-            f"| `{file1_short}` | {dup.start_line1}-{dup.end_line1} | "
-            f"`{file2_short}` | {dup.start_line2}-{dup.end_line2} | "
-            f"{dup.similarity * 100:.0f}% |"
-        )
+        lines.append(f"| {_cluster_locations(dup)} | {dup.kind} | {dup.line_count} | {dup.similarity * 100:.0f}% |")
 
     if len(high_similarity_dups) > 15:
-        lines.append(f"| ... | *{len(high_similarity_dups) - 15} more* | | | |")
+        lines.append(f"| ... | *{len(high_similarity_dups) - 15} more* | | |")
 
     lines.append("")
     return lines
@@ -709,14 +717,12 @@ def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[
         "",
         "> Similar patterns that may benefit from consolidation.",
         "",
-        "| File 1 | File 2 | Similarity | Lines |",
-        "|--------|--------|------------|-------|",
+        "| Locations | Similarity | Lines |",
+        "|-----------|------------|-------|",
     ]
 
     for dup in medium_similarity_dups[:10]:  # Limit to top 10
-        file1_short = _shorten_path(dup.file1)
-        file2_short = _shorten_path(dup.file2)
-        lines.append(f"| `{file1_short}` | `{file2_short}` | " f"{dup.similarity * 100:.0f}% | {dup.line_count} |")
+        lines.append(f"| {_cluster_locations(dup)} | {dup.similarity * 100:.0f}% | {dup.line_count} |")
 
     if len(medium_similarity_dups) > 10:
         lines.append(f"| ... | *{len(medium_similarity_dups) - 10} more* | | |")
@@ -769,7 +775,7 @@ def _generate_duplicate_code_section(
                 "### Recommendations",
                 "",
                 "- **Extract common code** to shared utilities or base classes",
-                "- **Review high-similarity pairs** for potential consolidation",
+                "- **Review high-similarity clusters** for potential consolidation",
                 "- **Consider design patterns** like Template Method or Strategy for similar logic",
                 "",
             ]
@@ -1571,51 +1577,36 @@ async def _get_cross_language_analysis(
 async def _get_pattern_analysis(
     project_root: Path,
 ) -> PatternAnalysisReport | None:
-    """
-    Get code pattern analysis for the project (Issue #208).
+    """Code pattern analysis of the requested source's root, and nothing else (Issue #208).
 
-    #20513: the analysis scans the selected source's root and nothing else. The earlier #2655
-    shortcut (scan AutoBot's own backend directory when the root was the install's) is gone.
+    #12372/#20513: ``project_root`` is required and scanned as given; the analysis never substitutes AutoBot's own
+    backend directory, which answered every source with AutoBot's own findings (the #2655 shortcut is gone).
 
-    Bounds, as they are: only the clone-detection phase has a deadline of its own (``ANALYZER_TIMEOUT``).
-    The request is bounded at about 180 s by the outer ``wait_for`` below, which stops this coroutine from
-    waiting but not the executor threads, which keep walking the tree. A cooperative cancel token, like
-    ``_get_api_endpoint_analysis`` has, is #22094.
-
-    Issue #12372: When a distinct source is resolved, scan that source's root
-    instead of always defaulting to AutoBot's own backend directory --
-    otherwise a report requested for source A returned AutoBot's own
-    pattern-analysis findings for every source.
-
-    Args:
-        project_root: Resolved filesystem root for the requested source (required, #20513): the
-            analysis never substitutes AutoBot's own backend dir.
+    Bounds (#22094): the ``wait_for`` ends the wait after about 180 s and then sets the cancel token, which stops
+    the analyzer before its next file or phase and the clone thread before its next file. Stopped at its token
+    (``AnalysisCancelled``, a ``CancelTokenSet``) the analysis answers None; an outer cancel still propagates.
 
     Returns:
-        PatternAnalysisReport or None if analysis fails
+        PatternAnalysisReport, or None when the analysis fails, times out or stops at its cancel token.
     """
+    cancel_token = new_cancel_token()
+    register_cancel_token("pattern_analysis", cancel_token)  # /report's bounded() signals it (scope provider, #14256)
     try:
         scan_target = str(project_root)
 
         analyzer = CodePatternAnalyzer(
+            cancel_token=cancel_token,
             enable_clone_detection=True,
             enable_anti_pattern_detection=True,
             enable_regex_detection=True,
             enable_complexity_analysis=True,
             similarity_threshold=0.8,
-            # #12372: the report consumes the returned PatternAnalysisReport
-            # directly and never reads the ChromaDB cache, so disable embedding
-            # storage. Otherwise Phase 4 would persist THIS source's code into the
-            # global, source-unscoped `code_patterns` collection — re-introducing
-            # a cross-source write on the very path this PR scopes. The read-side
-            # source_id filter for that store is tracked separately in #12384.
+            # #12372: no embedding storage: Phase 4 would persist THIS source's code into the global,
+            # source-unscoped `code_patterns` collection (a cross-source write; read side: #12384).
             enable_embedding_storage=False,
         )
 
-        report = await asyncio.wait_for(
-            analyzer.analyze_directory(scan_target),
-            timeout=180.0,  # 3 minute timeout for comprehensive analysis
-        )
+        report = await asyncio.wait_for(analyzer.analyze_directory(scan_target), timeout=180.0)  # 3 minutes
 
         logger.info(
             "Pattern analysis: %d patterns, %d duplicates, %d complexity hotspots",
@@ -1625,7 +1616,14 @@ async def _get_pattern_analysis(
         )
         return report
     except asyncio.TimeoutError:
+        signal_cancel_token("pattern_analysis", cancel_token, "pattern analysis deadline")
         logger.warning("Pattern analysis timed out")
+        return None
+    except asyncio.CancelledError as cancelled:
+        signal_cancel_token("pattern_analysis", cancel_token, "pattern analysis cancelled")
+        if not isinstance(cancelled, CancelTokenSet) or asyncio.current_task().cancelling():
+            raise
+        logger.warning("Pattern analysis stopped at its cancel token: %s", cancelled)
         return None
     except Exception as e:
         logger.error("Pattern analysis failed: %s", e, exc_info=True)

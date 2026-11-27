@@ -1690,6 +1690,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/stale-files/{node_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Stale Files
+         * @description The node's stale files, read-only; ``error`` is set when the listing could not be trusted.
+         */
+        get: operations["get_stale_files_api_code_sync_stale_files__node_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/stale-files/{node_id}/proposal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Stale Files Removal
+         * @description Propose removing the node's stale files, one proposal per old sync location; 503 when the backend is down.
+         */
+        post: operations["propose_stale_files_removal_api_code_sync_stale_files__node_id__proposal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/status": {
         parameters: {
             query?: never;
@@ -2741,6 +2781,26 @@ export interface paths {
          * @description Delete the node's stored SSH password under a human's approval; ``deleted`` is False when it held none.
          */
         delete: operations["delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/nodes/{node_id}/stale-sync-files/removal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove Node Stale Sync Files
+         * @description Remove the approved stale files that are still byte-identical to what git tracked.
+         */
+        post: operations["remove_node_stale_sync_files_api_internal_nodes__node_id__stale_sync_files_removal_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -10446,6 +10506,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * KeptFileOut
+         * @description A file under an old target that is NOT offered, and why.
+         */
+        KeptFileOut: {
+            /** Old Target */
+            old_target: string;
+            /** Path */
+            path: string;
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * LDAPLoginRequest
          * @description Request model for LDAP login.
          */
@@ -14465,6 +14539,111 @@ export interface components {
              * @default OK
              */
             message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileOut
+         * @description A file offered for removal: byte-identical to a version git tracked at that path.
+         */
+        StaleFileOut: {
+            /** Blob */
+            blob: string;
+            /**
+             * Modified At
+             * Format: date-time
+             */
+            modified_at: string;
+            /** Old Target */
+            old_target: string;
+            /** Path */
+            path: string;
+            /** Role */
+            role: string;
+            /** Size Bytes */
+            size_bytes: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFileResult
+         * @description What happened to one approved file.
+         */
+        StaleFileResult: {
+            /** Old Target */
+            old_target: string;
+            /** Path */
+            path: string;
+            /** Result */
+            result: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFilesListing
+         * @description The read-only listing for one node; ``error`` set means it could not be trusted and nothing is offered.
+         */
+        StaleFilesListing: {
+            /** Commit */
+            commit: string | null;
+            /** Error */
+            error?: string | null;
+            /** Kept */
+            kept: components["schemas"]["KeptFileOut"][];
+            /** Node Id */
+            node_id: string;
+            /** Stale */
+            stale: components["schemas"]["StaleFileOut"][];
+            /** Total Stale */
+            total_stale: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFilesProposalResponse
+         * @description What the admin trigger did for a node; an empty list means nothing stale was found.
+         */
+        StaleFilesProposalResponse: {
+            /** Node Id */
+            node_id: string;
+            /** Proposals */
+            proposals: components["schemas"]["StaleFilesProposed"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFilesProposed
+         * @description One proposal per old sync location: the backend's approval, and how many of the found files it lists.
+         */
+        StaleFilesProposed: {
+            /** Approval Id */
+            approval_id: string;
+            /** Created */
+            created: boolean;
+            /** Old Target */
+            old_target: string;
+            /** Proposed */
+            proposed: number;
+            /** Status */
+            status: string;
+            /** Total Found */
+            total_found: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StaleFilesRemovalResponse
+         * @description The report of an approved removal.
+         */
+        StaleFilesRemovalResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Node Id */
+            node_id: string;
+            /** Removed */
+            removed: number;
+            /** Results */
+            results: components["schemas"]["StaleFileResult"][];
         } & {
             [key: string]: unknown;
         };
@@ -18662,6 +18841,72 @@ export interface operations {
             };
         };
     };
+    get_stale_files_api_code_sync_stale_files__node_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFilesListing"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_stale_files_removal_api_code_sync_stale_files__node_id__proposal_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFilesProposalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_sync_status_api_code_sync_status_get: {
         parameters: {
             query?: never;
@@ -20356,6 +20601,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NodeSshPasswordDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_node_stale_sync_files_api_internal_nodes__node_id__stale_sync_files_removal_post: {
+        parameters: {
+            query: {
+                approval_id: string;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFilesRemovalResponse"];
                 };
             };
             /** @description Validation Error */

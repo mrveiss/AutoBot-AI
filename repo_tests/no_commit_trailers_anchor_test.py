@@ -237,7 +237,7 @@ def test_the_workflow_scans_the_raw_final_block() -> None:
     So the application is pinned here, at the one line where it is expressed.
     """
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert re.search(r'\$\{trailers\}"\s*\|\s*grep\s+-iqE\s+"\$\{agent_re\}"', text), (
+    assert re.search(r'grep\s+-iqE\s+"\$\{agent_re\}"\s*<<<\s*"\$\{trailers\}"', text), (
         "the agent_re grep does not read ${trailers} -- it is scanning the whole "
         "commit body, so prose beginning a line is matched as a trailer (#15850)"
     )

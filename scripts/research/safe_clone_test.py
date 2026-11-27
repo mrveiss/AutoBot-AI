@@ -300,3 +300,9 @@ def test_strip_hidden_payloads_removes_every_kind():
     assert bidi_control not in stripped
     assert html_comment not in stripped
     assert base64_blob not in stripped
+
+
+def test_strip_hidden_payloads_removes_a_multi_line_html_comment_and_leaves_an_unclosed_one() -> None:
+    """#22261: the comment pattern is the shared one; a comment spanning lines goes, an unclosed opener stays."""
+    assert strip_hidden_payloads("a<!-- x\ny -->b") == "ab"
+    assert strip_hidden_payloads("a<!-- never closed") == "a<!-- never closed"

@@ -54,6 +54,8 @@ from .setup_wizard import router as setup_wizard_router
 from .slm_users import router as slm_users_router
 from .sso import router as sso_router
 from .sso_auth import router as sso_auth_router
+from .stale_sync_files import router as stale_sync_files_router
+from .stale_sync_files_internal import router as stale_sync_files_internal_router
 from .stateful import router as stateful_router
 from .tls import node_tls_router, tls_router
 from .update_report import router as update_report_router
@@ -95,6 +97,9 @@ nodes_router.include_router(node_post_sync_router)
 code_sync_router.include_router(post_sync_runs_router)
 code_sync_router.include_router(update_report_router)
 code_sync_router.include_router(code_rollback_router)  # #20214: rollback to a chosen commit
+code_sync_router.include_router(stale_sync_files_router)  # #22033: stale old-target files, admin trigger
+# #22033: the backend's approved-removal call; the router checks the internal key itself (as the first-admin one does)
+health_router.include_router(stale_sync_files_internal_router)
 
 __all__ = [
     "agents_router",
