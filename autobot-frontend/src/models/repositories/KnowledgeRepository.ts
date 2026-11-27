@@ -31,7 +31,10 @@ import type {
 } from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
 import apiClient from '@/utils/ApiClient'
-import { DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE, factByKeyUrl, factToDocument, type FactByKeyBody } from './knowledgeFactMapping'
+import {
+  DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE, ENTRIES_MAX_PAGES, ENTRIES_PAGE_SIZE, factByKeyUrl, factToDocument,
+  type FactByKeyBody, type KnowledgeEntriesPage, type KnowledgeEntryRecord,
+} from './knowledgeFactMapping'
 
 // Re-export types for convenience
 export type { KnowledgeDocument, SearchResult }
@@ -846,39 +849,22 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Get all knowledge entries with optional collection filter
+   * Get all knowledge entries, following the server's cursor until it reports no more (#17530:
+   * the Manage list is a projection of the whole knowledge base, never of its first page).
    */
-  async getAllEntries(collection?: string): Promise<{
-    success: boolean
-    entries: Array<{
-      id: string
-      fact_id?: string
-      fact?: string
-      content?: string
-      metadata?: Record<string, unknown>
-      created_at?: string
-      updated_at?: string
-    }>
-    total: number
-  }> {
-    const url = collection
-      ? `${getApiBase()}/knowledge_base/entries?collection=${encodeURIComponent(collection)}`
-      : `${getApiBase()}/knowledge_base/entries`
-    const response = await this.get(url)
-
-    // Normalize response format
-    const data = response.data as {
-      entries?: Array<{
-        id: string; fact_id?: string; fact?: string; content?: string
-        metadata?: Record<string, unknown>; created_at?: string; updated_at?: string
-      }>
-      total?: number
+  async getAllEntries(collection?: string): Promise<{ success: boolean; entries: KnowledgeEntryRecord[]; total: number }> {
+    const entries: KnowledgeEntryRecord[] = []
+    let cursor = '0'
+    for (let page = 0; page < ENTRIES_MAX_PAGES; page++) {
+      const params = new URLSearchParams({ limit: String(ENTRIES_PAGE_SIZE), cursor })
+      if (collection) params.set('collection', collection)
+      const response = await this.get(`${getApiBase()}/knowledge_base/entries?${params.toString()}`)
+      const data = response.data as KnowledgeEntriesPage
+      entries.push(...(data.entries || []))
+      if (!data.has_more || !data.next_cursor || data.next_cursor === cursor) break
+      cursor = data.next_cursor
     }
-    return {
-      success: true,
-      entries: data.entries || [],
-      total: data.total || data.entries?.length || 0
-    }
+    return { success: true, entries, total: entries.length }
   }
 }
 

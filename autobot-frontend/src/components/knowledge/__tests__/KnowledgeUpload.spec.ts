@@ -103,7 +103,8 @@ function makeControllerMock() {
     loadCategories: vi.fn().mockResolvedValue(undefined),
     addTextDocument: vi.fn().mockResolvedValue(undefined),
     addUrlDocument: vi.fn().mockResolvedValue(undefined),
-    addFileDocument: vi.fn().mockResolvedValue(undefined)
+    addFileDocument: vi.fn().mockResolvedValue(undefined),
+    loadAllDocuments: vi.fn().mockResolvedValue(undefined)
   }
 }
 

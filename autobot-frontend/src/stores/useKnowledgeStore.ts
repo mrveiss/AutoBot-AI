@@ -25,6 +25,8 @@ export interface KnowledgeDocument {
   category: string
   createdAt: Date
   updatedAt: Date
+  /** True only for a document read in full from the server; a preview never sets it (#17530). */
+  contentComplete?: boolean
   metadata?: {
     wordCount?: number
     fileSize?: number
@@ -327,18 +329,13 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     stats.value = { ...stats.value, ...newStats }
   }
 
-  function addDocument(document: Omit<KnowledgeDocument, 'id' | 'createdAt' | 'updatedAt'>) {
-    const newDocument: KnowledgeDocument = {
-      id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      ...document
-    }
-
-    documents.value.push(newDocument)
-    updateCategoryCount(document.category)
-
-    return newDocument.id
+  /**
+   * The one way documents enter the store: a server read (#17530). The list is a projection of
+   * the knowledge base, never accumulated locally, so ids and content are always the server's.
+   */
+  function setDocuments(serverDocuments: KnowledgeDocument[]) {
+    documents.value = serverDocuments
+    categories.value.forEach(category => updateCategoryCount(category.name))
   }
 
   function updateDocument(documentId: string, updates: Partial<KnowledgeDocument>) {
@@ -699,6 +696,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   return {
     // State
     documents,
+    setDocuments,
     categories,
     searchQuery,
     searchResults,
@@ -767,7 +765,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     updateRagSearchResult,
     refreshStats,
     updateStats,
-    addDocument,
     updateDocument,
     deleteDocument,
     selectDocument,
