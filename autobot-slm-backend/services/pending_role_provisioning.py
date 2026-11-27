@@ -262,9 +262,9 @@ async def provision_before_raw_update(playbook_file: str, limit_hosts: list[str]
     ``POST /infrastructure/execute`` runs ``update-all-nodes.yml`` through its own subprocess, so it takes this
     step before the play's vnc gate instead. Any other playbook is left alone.
     """
-    from services.rollback_target import ROLLBACK_PLAYBOOK  # the one name of the fleet update playbook
+    from services.rollback_target import FLEET_UPDATE_PLAYBOOK  # lazy, like api.nodes: keeps this import light
 
-    if playbook_file != ROLLBACK_PLAYBOOK:
+    if playbook_file != FLEET_UPDATE_PLAYBOOK:
         return []
     try:
         targets = await _raw_update_targets(limit_hosts)
@@ -285,19 +285,19 @@ async def run_update_all_nodes(
     """Provision the targets' pending roles, run ``update-all-nodes.yml``, then provision again (#22211, #22262).
 
     The first step creates what the play's vnc gate requires (#22262); the second, after a successful run only,
-    picks up anything still pending. Both use the run's restart policy, and a provisioning failure is a warning
-    in the output: it never fails the update by itself. ``resume_after_restart`` is for a run that restarts
-    THIS process (the SLM's own self-update): the node is marked first and, when the restart cuts the run, the
-    restarted process does the second step (``services/pending_role_resume.py``) instead of this one.
+    picks up anything still pending. Both use the run's restart policy; a provisioning failure is a warning in the
+    output, never a failed update. ``resume_after_restart`` (the SLM's own self-update) marks the node first; when
+    the restart cuts the run, the restarted process does the second step (``services/pending_role_resume.py``).
     """
     from services.pending_role_resume import clear_provision_marker, mark_provision_after_restart
+    from services.rollback_target import FLEET_UPDATE_PLAYBOOK
 
     restart_args = no_restart_args(restart)  # #20743
     early = await _provision_before_update(node_id, limit, restart_args)
     if resume_after_restart:
         await mark_provision_after_restart(node_id)
     result = await executor.execute_playbook(
-        playbook_name="update-all-nodes.yml", limit=limit, **playbook_kwargs, **restart_args
+        playbook_name=FLEET_UPDATE_PLAYBOOK, limit=limit, **playbook_kwargs, **restart_args
     )
     result = _with_messages(result, early, prepend=True)
     if resume_after_restart:
