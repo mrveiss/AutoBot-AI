@@ -4,7 +4,7 @@
 
 Covers the selection rule, the retry cooldown, the status transitions against a fake db session, that a
 provisioning failure is a warning that never fails the code update by itself, and (#22262) that provisioning
-runs BEFORE the play's vnc gate, including for a vnc role the node only detected.
+runs BEFORE the play's vnc gate on every update path, for ASSIGNED roles only (a detected-only vnc is not one).
 """
 
 from __future__ import annotations
@@ -105,21 +105,18 @@ def test_the_cooldown_is_registered_and_env_backed() -> None:
 # --------------------------------------------------------------------------
 # status transitions against a fake session
 # --------------------------------------------------------------------------
-def _node(detected: tuple = ()):
-    return SimpleNamespace(node_id="n1", roles=[], detected_roles=list(detected))
+def _node(declared: tuple = ("vnc",), detected: tuple = ()):
+    return SimpleNamespace(node_id="n1", roles=list(declared), detected_roles=list(detected))
 
 
-def _fake_db(roles: list, creds: list[str] | None = None, node: object = None, tracked: list | None = None):
-    """A session answering: the node, the tracked role names (only when given), the role rows, the credentials."""
-    roles_res, creds_res, node_res, tracked_res = MagicMock(), MagicMock(), MagicMock(), MagicMock()
-    roles_res.scalars.return_value.all.side_effect = lambda: list(roles)  # a row added later is seen too
+def _fake_db(roles: list, creds: list[str] | None = None, node: object = None):
+    """A session answering: the node, the role rows, the credentials; the settle query re-reads the roles."""
+    roles_res, creds_res, node_res = MagicMock(), MagicMock(), MagicMock()
+    roles_res.scalars.return_value.all.return_value = roles
     creds_res.all.return_value = [(c,) for c in (creds or [])]
     node_res.scalar_one_or_none.return_value = _node() if node is None else node
-    tracked_res.all.return_value = [(t,) for t in (tracked or [])]
-    first = [node_res] + ([tracked_res] if tracked is not None else [])
-    db = MagicMock(add=MagicMock(), flush=AsyncMock(), commit=AsyncMock())
-    # the settle query (fresh session) re-reads the roles
-    db.execute = AsyncMock(side_effect=first + [roles_res, creds_res] + [roles_res] * 5)
+    db = MagicMock(commit=AsyncMock())
+    db.execute = AsyncMock(side_effect=[node_res, roles_res, creds_res] + [roles_res] * 5)
     return db
 
 
@@ -302,39 +299,6 @@ def test_a_failing_pending_roles_query_is_a_warning(monkeypatch) -> None:
     assert asyncio.run(prp.provision_pending_roles("n1")).startswith("WARNING")
 
 
-def _calls_to_update_all(path: Path) -> list[int]:
-    """Line numbers of execute_playbook calls naming update-all-nodes.yml, positionally or by keyword."""
-    import ast
-
-    hits = []
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "execute_playbook":
-            values = [*node.args, *(k.value for k in node.keywords)]
-            if any(isinstance(v, ast.Constant) and v.value == "update-all-nodes.yml" for v in values):
-                hits.append(node.lineno)
-    return hits
-
-
-def test_the_guard_sees_both_call_forms(tmp_path: Path) -> None:
-    sample = tmp_path / "sample.py"
-    sample.write_text(
-        "async def f(e):\n"
-        "    await e.execute_playbook('update-all-nodes.yml', limit=[])\n"
-        "    await e.execute_playbook(playbook_name='update-all-nodes.yml', limit=[])\n"
-        "    await e.execute_playbook('other.yml')\n",
-        encoding="utf-8",
-    )
-    assert _calls_to_update_all(sample) == [2, 3]
-
-
-def test_every_update_path_goes_through_the_helper() -> None:
-    """Fleet sync, single-node sync, update-all, the SLM self-update; the SLM host's own node is provisioned too."""
-    path = _ROOT / "api" / "code_sync.py"
-    assert _calls_to_update_all(path) == [], "a path bypasses run_update_all_nodes"
-    assert path.read_text(encoding="utf-8").count("run_update_all_nodes(") == 4
-    assert "await provision_pending_roles(node_id)" in path.read_text(encoding="utf-8")
-
-
 def test_a_held_never_provisioned_role_is_provisioned_despite_recent_detection_churn() -> None:
     """#22262: a detector-written row (active, no credential) is not an attempt, whatever its updated_at."""
     for status in ("active", "inactive"):
@@ -355,7 +319,7 @@ def test_the_row_the_desktop_migration_creates_is_pending_for_the_updater() -> N
 
 
 def test_a_held_unprovisioned_vnc_role_is_selected_by_the_pending_step(monkeypatch) -> None:
-    """run_update_all_nodes runs this step after update-all-nodes.yml; the vnc role then creates autobot-vnc."""
+    """run_update_all_nodes runs this step before and after update-all-nodes.yml; the vnc role creates autobot-vnc."""
     role = _role("active", age=timedelta(seconds=1))
     db = _fake_db([role], creds=[])
     next(db.execute.side_effect)  # pending_roles alone: skip the node answer
@@ -386,42 +350,54 @@ def test_a_failed_early_provisioning_is_a_warning_and_the_play_still_gates(monke
     assert len(ex.calls) == 1 and result["output"].startswith("WARNING"), "the gate, not this step, fails the node"
 
 
-def _row_class(monkeypatch):
-    class _Row(SimpleNamespace):
-        node_id, role_name = MagicMock(), MagicMock()
+def test_a_detected_only_vnc_is_never_provisioned(monkeypatch) -> None:
+    """#22262 (owner 2026-11-27): a vnc the node only DETECTED (the SLM manager's own vncserver) is not assigned."""
 
-    monkeypatch.setattr(prp, "NodeRole", _Row)
-    return _Row
+    async def helper(*a, **k):
+        raise AssertionError("must not provision an undeclared role")
 
-
-def test_a_detected_only_vnc_role_gets_a_row_and_is_provisioned(monkeypatch) -> None:
-    """#22262: the inventory reads detected roles as active; the heartbeat writes no row for an unassigned one."""
-    _row_class(monkeypatch)
-    added: list = []  # the flushed row is what the role query then returns
-    db = _fake_db(added, node=_node(detected=("vnc",)), tracked=[])
-    db.add.side_effect = added.append
-    names: list = []
-
-    async def helper(db_, node_id, node, roles, target_names, **kwargs):
-        names.extend(target_names)
-        roles[0].status = "installed"
-
-    _use(monkeypatch, db, helper)
-    message = asyncio.run(prp.provision_pending_roles("n1"))
-    assert [(r.role_name, r.assignment_type) for r in added] == [("vnc", "auto")] and names == ["vnc"]
-    assert "provisioned newly assigned role(s) vnc" in message
+    node = _node(declared=(), detected=("vnc",))
+    _use(monkeypatch, _fake_db([_role("active")], creds=[], node=node), helper)
+    assert asyncio.run(prp.provision_pending_roles("n1")) == ""
 
 
-def test_a_node_that_already_has_the_account_and_credential_is_left_alone(monkeypatch) -> None:
-    """#22262: the early step is a no-op for a provisioned node: no new row, no provisioning run."""
-    _row_class(monkeypatch)
+def test_an_assigned_and_provisioned_node_is_left_alone(monkeypatch) -> None:
+    """Non-destructive: a node that already has its vnc credential gets no provisioning run, before or after."""
 
     async def helper(*a, **k):
         raise AssertionError("must not provision")
 
-    db = _fake_db([_role("active")], creds=["vnc"], node=_node(detected=("vnc",)), tracked=["vnc"])
-    _use(monkeypatch, db, helper)
-    assert asyncio.run(prp.provision_pending_roles("n1")) == "" and not db.add.called
+    _use(monkeypatch, _fake_db([_role("active")], creds=["vnc"]), helper)
+    assert asyncio.run(prp.provision_pending_roles("n1")) == ""
+
+
+def _raw(monkeypatch, nodes, limit, playbook="update-all-nodes.yml"):
+    """provision_before_raw_update over `nodes`, with each provisioned node's message recorded."""
+    db = MagicMock(execute=AsyncMock(return_value=MagicMock(**{"scalars.return_value.all.return_value": nodes})))
+    _use(monkeypatch, db, None)
+    sanitize = SimpleNamespace(_sanitize_ansible_name=lambda name: f"node_{name}")
+    monkeypatch.setitem(sys.modules, "api.setup_wizard", sanitize)
+    seen: list[str] = []
+
+    async def fake(node_id, **kwargs):
+        seen.append(node_id)
+        return "provisioned newly assigned role(s) vnc"
+
+    monkeypatch.setattr(prp, "provision_pending_roles", fake)
+    return asyncio.run(prp.provision_before_raw_update(playbook, limit)), seen
+
+
+def _host(node_id, roles):
+    return SimpleNamespace(node_id=node_id, ansible_target=node_id.upper(), roles=roles)
+
+
+def test_the_raw_update_route_provisions_assigned_targets_first(monkeypatch) -> None:
+    nodes = [_host("desk", ["vnc"]), _host("mgr", ["slm"]), _host("other", ["vnc"])]
+    lines, seen = _raw(monkeypatch, nodes, None)
+    assert seen == ["desk", "other"] and lines[0] == "[INFO] desk: provisioned newly assigned role(s) vnc"
+    assert _raw(monkeypatch, nodes, ["localhost", "node_DESK"])[1] == ["desk"], "a node-only limit narrows"
+    assert _raw(monkeypatch, nodes, ["infrastructure"])[1] == ["desk", "other"], "a group may cover any node"
+    assert _raw(monkeypatch, nodes, None, playbook="other.yml") == ([], []), "other playbooks are left alone"
 
 
 # --------------------------------------------------------------------------

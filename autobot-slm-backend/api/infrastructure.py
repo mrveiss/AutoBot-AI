@@ -20,11 +20,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from typing_extensions import Annotated
 
+from api.infrastructure_command import build_playbook_command
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.ssot_config import config
 from services.ansible_utils import _extract_failure_summary, ansible_run_failure
 from services.auth import get_current_user
+from services.pending_role_provisioning import provision_before_raw_update
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
 
 logger = logging.getLogger(__name__)
@@ -544,32 +546,6 @@ async def cancel_execution(
     return ExecutionResponse(execution=execution)
 
 
-def _build_playbook_command(
-    playbook_path: str,
-    inventory_path: str,
-    playbook: PlaybookInfo,
-    limit_hosts,
-    variables,
-):
-    """Build ansible-playbook command with arguments.
-
-    Helper for _run_playbook (Issue #665).
-    """
-    cmd = ["ansible-playbook", "-i", inventory_path, playbook_path]
-
-    if limit_hosts:
-        cmd.extend(["--limit", ",".join(limit_hosts)])
-
-    if playbook.tags:
-        cmd.extend(["--tags", ",".join(playbook.tags)])
-
-    merged_vars = {**playbook.variables, **variables}
-    for key, value in merged_vars.items():
-        cmd.extend(["-e", f"{key}={value}"])
-
-    return cmd
-
-
 def _ansible_dir() -> Path:
     """The repo ansible directory this stack must run from (#14351).
 
@@ -672,6 +648,8 @@ async def _run_playbook(
             logger.error("Dynamic inventory generation failed: no nodes in DB")
             return
         inventory_path = str(inventory_path_obj)
+        # #22262: this route runs update-all-nodes.yml raw, so its targets' assigned roles are provisioned here first
+        execution.output.extend(await provision_before_raw_update(playbook.playbook_file, limit_hosts))
 
         # Inject stored SLM secrets so standalone re-deploys receive the same
         # secrets as the full wizard provisioning flow (#3519, #3778).
@@ -681,7 +659,7 @@ async def _run_playbook(
         # Caller-supplied variables take precedence over stored secrets.
         merged_variables = {**deploy_secrets, **(variables or {})}
 
-        cmd = _build_playbook_command(playbook_path, inventory_path, playbook, limit_hosts, merged_variables)
+        cmd = build_playbook_command(playbook_path, inventory_path, playbook, limit_hosts, merged_variables)
 
         execution.output.append(f"[INFO] Running: {' '.join(cmd)}")
 

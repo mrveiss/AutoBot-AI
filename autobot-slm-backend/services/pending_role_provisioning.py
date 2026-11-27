@@ -16,9 +16,13 @@ via ``api.nodes._execute_provision_playbook``), and the row is left ``failed`` w
 Provisioning runs BEFORE ``update-all-nodes.yml`` (#22262): the play's vnc gate requires the
 ``autobot-vnc`` account on every node whose vnc role is active, and only provisioning creates it, so
 provisioning only after a successful update deadlocked a held-but-unprovisioned node (it failed the
-gate, so it was never provisioned, so it failed every later update). A role the inventory treats as
-active (declared or detected) without a ``NodeRole`` row gets one first, so the one rule
-``_needs_provisioning`` sees it. It runs again after a successful update, for the restart-resume path.
+gate, so it was never provisioned, so it failed every later update). It runs again after a successful
+update, for the restart-resume path.
+
+Only ASSIGNED roles are provisioned: a row whose role is declared on ``Node.roles``, the operator-intent
+record the inventory stamps as ``node_roles_declared`` (#14594), which is also what the vnc gate reads
+(owner, 2026-11-27: a role the node only DETECTED, e.g. a local vncserver on the SLM manager, is not a
+fleet vnc node and is never provisioned here).
 
 A node whose provisioning keeps failing is not retried on every update: a row attempted within
 ``SLM_ROLE_PROVISION_RETRY_COOLDOWN_HOURS`` is skipped. A provisioning failure is reported as a warning in the
@@ -58,7 +62,8 @@ _PROVISIONER_STATUSES = (_FAILED, _INSTALLING, _INSTALLED)
 #: row stays so, so its ``updated_at`` keeps marking the attempt and the retry cooldown holds (#22262).
 PROVISIONER_HELD_STATUSES = (_FAILED, _INSTALLING)
 #: The inventory host of the update's Play 0 (the archive build on the SLM, #1091): a play target, never a node.
-_ARCHIVE_BUILD_HOST = "localhost"
+#: Every ``update-all-nodes.yml`` limit starts with it; the one spelling of it.
+ARCHIVE_BUILD_HOST = "localhost"
 
 
 def is_provisioner_held(role) -> bool:
@@ -183,36 +188,6 @@ async def _settle_installing(node_id: str, names: list[str]) -> None:
         logger.error("Could not reset roles %s on %s from installing: %s", names, node_id, exc)
 
 
-async def _track_active_roles(db, node) -> None:
-    """Give an updater-provisioned role the inventory already treats as active a ``NodeRole`` row (#22262).
-
-    The update's ``role_vnc_active`` reads ``node_roles``, the union of declared and DETECTED roles
-    (``inventory_builder._union_roles``), but the heartbeat writes rows only for assigned roles. A node running
-    its own vncserver therefore held vnc with no row, and nothing ever provisioned it. The row is
-    ``not_installed`` (assigned, never attempted), so ``_needs_provisioning`` selects it at once.
-    """
-    from services.inventory_builder import _union_roles  # lazy, like api.nodes below: keeps this import light
-
-    active = [name for name in UPDATER_PROVISIONED_ROLES if name in _union_roles(node)]
-    if not active:
-        return
-    rows = await db.execute(
-        select(NodeRole.role_name).where(NodeRole.node_id == node.node_id, NodeRole.role_name.in_(active))
-    )
-    tracked = {r[0] for r in rows.all()}
-    for name in active:
-        if name not in tracked:
-            db.add(
-                NodeRole(
-                    node_id=node.node_id,
-                    role_name=name,
-                    assignment_type="auto",
-                    status=RoleStatus.NOT_INSTALLED.value,
-                )
-            )
-    await db.flush()
-
-
 async def _provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
     """Provision the node's pending roles; returns a message for the node's output ('' when none ran).
 
@@ -222,8 +197,8 @@ async def _provision_pending_roles(node_id: str, **playbook_kwargs: Any) -> str:
         node = (await db.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
         if node is None:
             return ""
-        await _track_active_roles(db, node)
-        roles = await pending_roles(db, node_id)
+        declared = set(node.roles or [])  # assigned only: what node_roles_declared is stamped from (#14594)
+        roles = [r for r in await pending_roles(db, node_id) if r.role_name in declared]
         if not roles:
             return ""
         for role in roles:
@@ -260,8 +235,48 @@ async def _provision_before_update(node_id: str, limit: list, restart_args: dict
     ``limit`` names the inventory hosts: the archive-build host, the node, and for the self-update the nodes
     co-located with the SLM (#15475), each gated by its own ``role_vnc_active``.
     """
-    targets = dict.fromkeys([node_id, *(host for host in limit if host != _ARCHIVE_BUILD_HOST)])
+    targets = dict.fromkeys([node_id, *(host for host in limit if host != ARCHIVE_BUILD_HOST)])
     return [await provision_pending_roles(target, **restart_args) for target in targets]
+
+
+async def _raw_update_targets(limit_hosts: list[str] | None) -> list[str]:
+    """Node ids an ``update-all-nodes.yml`` run over the setup-wizard inventory reaches that hold an assigned role.
+
+    A limit naming only nodes (node id or inventory host name) narrows the set; a group or pattern token may cover
+    any node, so then every node with an assigned updater-provisioned role is a target.
+    """
+    from api.setup_wizard import _sanitize_ansible_name  # lazy: the inventory's own host naming (#9283)
+
+    async with db_service.session() as db:
+        nodes = list((await db.execute(select(Node))).scalars().all())
+    names = {n.node_id: {n.node_id, _sanitize_ansible_name(n.ansible_target)} for n in nodes}
+    tokens = set(limit_hosts or []) - {ARCHIVE_BUILD_HOST}
+    narrow = bool(tokens) and tokens <= set().union(*names.values())
+    assigned = [n.node_id for n in nodes if set(n.roles or []) & set(UPDATER_PROVISIONED_ROLES)]
+    return [node_id for node_id in assigned if not narrow or names[node_id] & tokens]
+
+
+async def provision_before_raw_update(playbook_file: str, limit_hosts: list[str] | None) -> list[str]:
+    """Output lines of the pending-role step for a run that bypasses ``run_update_all_nodes`` (#22262).
+
+    ``POST /infrastructure/execute`` runs ``update-all-nodes.yml`` through its own subprocess, so it takes this
+    step before the play's vnc gate instead. Any other playbook is left alone.
+    """
+    from services.rollback_target import ROLLBACK_PLAYBOOK  # the one name of the fleet update playbook
+
+    if playbook_file != ROLLBACK_PLAYBOOK:
+        return []
+    try:
+        targets = await _raw_update_targets(limit_hosts)
+    except Exception as exc:  # noqa: BLE001 - the update goes on; the gate still fails an unprovisioned node
+        logger.error("Pending-role targets for a raw update could not be read: %s", exc)
+        return ["[WARNING] pending roles could not be provisioned (database error); it does not fail the update"]
+    lines = []
+    for node_id in targets:
+        message = await provision_pending_roles(node_id)
+        if message:
+            lines.append(f"[INFO] {node_id}: {message}")
+    return lines
 
 
 async def run_update_all_nodes(
