@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.exc import SQLAlchemyError
 
 from api import approval_gates, approval_gates_requester
 from api.schemas_approvals import CreateApprovalRequest
@@ -104,14 +105,29 @@ async def test_the_response_carries_the_requesters_name_for_a_known_id() -> None
     with patch.object(
         approval_gates_requester, "member_people", AsyncMock(return_value=({uuid.UUID(_ME): "Ada Admin"}, {}))
     ):
-        names = await approval_gates_requester.requester_names(AsyncMock(), [known, service, ghost])
+        names = await approval_gates_requester.requester_names(_session(), [known, service, ghost])
     assert names == {str(known.id): "Ada Admin"}
     built = [approval_gates_requester.display_requester(a, names) for a in (known, service, ghost)]
     assert built == ["Ada Admin", "service:slm-x", _VICTIM]
 
 
+def _session() -> MagicMock:
+    """A session whose SAVEPOINT (``begin_nested``) is an async context manager that records its exit."""
+    savepoint = MagicMock()
+    savepoint.__aenter__ = AsyncMock(return_value=None)
+    savepoint.__aexit__ = AsyncMock(return_value=False)  # does not swallow: the error propagates after rollback
+    session = MagicMock()
+    session.begin_nested = MagicMock(return_value=savepoint)
+    session.savepoint = savepoint
+    return session
+
+
 @pytest.mark.asyncio
-async def test_a_failed_name_lookup_never_fails_the_response() -> None:
+async def test_a_failed_name_lookup_rolls_back_only_its_savepoint_and_never_fails_the_response() -> None:
+    """#22222: the lookup runs in a SAVEPOINT, so the request's session stays usable after a DB error."""
     row = SimpleNamespace(id=uuid.uuid4(), requested_by_agent=_ME)
-    with patch.object(approval_gates_requester, "member_people", AsyncMock(side_effect=RuntimeError("db"))):
-        assert await approval_gates_requester.requester_names(AsyncMock(), [row]) == {}
+    session = _session()
+    with patch.object(approval_gates_requester, "member_people", AsyncMock(side_effect=SQLAlchemyError("db"))):
+        assert await approval_gates_requester.requester_names(session, [row]) == {}
+    session.begin_nested.assert_called_once()
+    session.savepoint.__aexit__.assert_awaited_once()  # the SAVEPOINT was exited (rolled back), not the outer transaction

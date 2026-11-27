@@ -67,7 +67,7 @@ def test_a_service_has_no_owner_scope_but_has_an_actor():
     assert require_audit_actor_id(_SERVICE) == "service:slm-x"
 
 
-def test_require_actor_id_refuses_a_username_only_caller():
+def test_require_audit_actor_id_refuses_a_username_only_caller():
     with pytest.raises(HTTPException) as refused:
         require_audit_actor_id({"username": "admin"})
     assert refused.value.status_code == 401

@@ -16,6 +16,7 @@ import uuid
 from typing import Any, Mapping, Sequence
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
@@ -70,9 +71,12 @@ async def requester_names(session: AsyncSession, approvals: Sequence[Any]) -> di
     """
     wanted = {str(a.id): _requester_user_id(str(getattr(a, "requested_by_agent", None) or "")) for a in approvals}
     ids = [uid for uid in wanted.values() if uid]
+    if not ids:
+        return {}
     try:
-        names, _active = await member_people(session, ids)
-    except Exception:
+        async with session.begin_nested():  # a failed lookup rolls back only itself, never the request's transaction
+            names, _active = await member_people(session, ids)
+    except SQLAlchemyError:
         logger.debug("requester names could not be resolved; showing the raw ids", exc_info=True)
         return {}
     return {aid: names[uid] for aid, uid in wanted.items() if uid in names}
