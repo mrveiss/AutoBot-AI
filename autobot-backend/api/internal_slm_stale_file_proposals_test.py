@@ -51,6 +51,12 @@ def _client(session: FakeAsyncSession | None = None) -> TestClient:
     app = FastAPI()
     app.include_router(route.router, prefix="/api")
     app.dependency_overrides[route.get_db_session] = lambda: session or FakeAsyncSession()
+    # the conftest auth stub answers every caller as a human; the real service_opt_in admission answers the key as this (#22222)
+    app.dependency_overrides[route.get_current_user] = lambda: {
+        "username": f"service:{route.SLM_CALLER}",
+        "role": "service",
+        "service": True,
+    }
     return TestClient(app)
 
 
