@@ -103,6 +103,9 @@ EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
     "/api/v2/secrets/system": "the SLM backend's vault client (user_management/services/vault_client.py), over HTTP",
     # #22212: the documented self-registration API (docs/developer/AUTHENTICATION_RBAC.md); no screen uses it.
     "/api/auth/signup": "self-registering clients of the documented signup API, over HTTP",
+    # #16905: the legacy-chat company proposer is an explicit admin trigger (owner decision 2026-11-23); no UI yet.
+    # A person approves each proposal in the Approvals inbox, which is the UI for the outcome.
+    "/api/chat-company-proposals": "an administrator, over HTTP (no UI yet)",
 }
 
 

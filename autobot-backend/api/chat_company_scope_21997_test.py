@@ -21,6 +21,7 @@ from fastapi import HTTPException
 from starlette.datastructures import State
 
 from api import chat_session_company, chat_sessions
+from autobot_shared.testfile_names import is_test_filename
 from chat_history.company_scope import ActiveCompany
 from security import session_company
 
@@ -410,7 +411,7 @@ class TestNothingRetagsAChatOnItsOwn:
         for path in root.rglob("*.py"):
             if path.name.startswith("session_scope_backfill") or path == pathlib.Path(__file__).resolve():
                 continue
-            if path.name.endswith("_test.py"):
+            if is_test_filename(path.name):
                 continue
             if "session_scope_backfill" in path.read_text(encoding="utf-8", errors="ignore"):
                 importers.append(path.relative_to(root).as_posix())
