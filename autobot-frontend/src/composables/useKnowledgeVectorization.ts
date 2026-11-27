@@ -17,6 +17,7 @@ import apiClient from '@/utils/ApiClient'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { vectorizableIds } from '@/composables/knowledge/vectorizable'
 
 // Create scoped logger for useKnowledgeVectorization
 
@@ -111,10 +112,7 @@ export function useKnowledgeVectorization() {
   const selectedDocumentsList = computed<string[]>(() => Array.from(selection.selected.value))
 
   const canVectorizeSelection = computed(() => {
-    return selectedDocumentsList.value.some(docId => {
-      const state = documentStates.value.get(docId)
-      return !state || state.status !== 'vectorized'
-    })
+    return vectorizableIds(selectedDocumentsList.value, documentStates.value).length > 0
   })
 
   // ==================== REQUEST DEDUPLICATION (Issue #4006) ====================

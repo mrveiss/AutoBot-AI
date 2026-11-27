@@ -20,7 +20,8 @@
  * VectorizationActionButton Component (Issue #3388)
  *
  * Action button to trigger vectorization for a single knowledge base document.
- * Disabled when the document is already vectorized or has a pending job in flight.
+ * Enabled for every status but `vectorized` (`pending` means not yet vectorized, #22332); the
+ * rule is `isVectorizable`, shared with every toolbar and count.
  */
 import Icon from '@/components/ui/Icon.vue'
 
@@ -28,6 +29,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import type { VectorizationStatus } from '@/composables/useKnowledgeVectorization'
+import { isVectorizable } from '@/composables/knowledge/vectorizable'
 
 const { t } = useI18n()
 const logger = createLogger('VectorizationActionButton')
@@ -59,9 +61,7 @@ const emit = defineEmits<{
 // Computed
 // =============================================================================
 
-const isDisabled = computed(() => {
-  return props.status === 'vectorized' || props.status === 'pending'
-})
+const isDisabled = computed(() => !isVectorizable(props.status))
 
 const isRetry = computed(() => props.status === 'failed')
 
@@ -82,21 +82,18 @@ const buttonClass = computed(() => {
 })
 
 const iconClass = computed(() => {
-  if (props.status === 'pending') return 'spinner'
   if (isRetry.value) return 'redo'
   return 'cube'
 })
 
 const labelText = computed(() => {
   if (props.status === 'vectorized') return t('knowledge.vectorization.actionAlreadyDone')
-  if (props.status === 'pending') return t('knowledge.vectorization.actionInProgress')
   if (isRetry.value) return t('knowledge.vectorization.actionRetry')
   return t('knowledge.vectorization.actionVectorize')
 })
 
 const tooltipText = computed(() => {
   if (props.status === 'vectorized') return t('knowledge.vectorization.tooltipAlreadyDone')
-  if (props.status === 'pending') return t('knowledge.vectorization.tooltipInProgress')
   if (isRetry.value) return t('knowledge.vectorization.tooltipRetry')
   return t('knowledge.vectorization.tooltipVectorize')
 })
@@ -155,7 +152,7 @@ function handleClick(): void {
   transform: scale(1.05);
 }
 
-/* Disabled (vectorized or pending) */
+/* Disabled (vectorized) */
 .vectorization-action-btn.is-disabled,
 .vectorization-action-btn:disabled {
   background: var(--bg-tertiary);
