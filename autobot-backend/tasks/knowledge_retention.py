@@ -20,7 +20,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
-from knowledge.fact_stream import is_fact_key, is_retention_exempt
+from knowledge.fact_stream import is_fact_key, is_retention_exempt, retention_exemption_rules
 from services.audit.audit import AuditCategory
 from tasks.retention_audit import emit_deletion_audit
 
@@ -35,6 +35,7 @@ _FACT_PATTERN = "fact:*"
 def _collect_expired_facts(redis_client, cutoff: datetime) -> Tuple[List[Tuple[str, int]], int]:
     """Scan fact hashes; return ``(fact_id, age_days)`` older than *cutoff* and the skipped count."""
     skipped = 0
+    retention_exemption_rules()  # outside the per-fact try: an unloadable exemption rule aborts the run, never deletes
     # Collect candidate fact IDs first (avoid mutating while scanning)
     candidates: List[Tuple[str, int]] = []
     cursor: int = 0
@@ -94,7 +95,13 @@ async def _async_cleanup_expired_kb_entries(retention_days: int, dry_run: bool =
     deleted_entries = 0
     errors = 0
 
-    candidates, skipped = _collect_expired_facts(redis_client, cutoff)
+    try:
+        candidates, skipped = _collect_expired_facts(redis_client, cutoff)
+    except ImportError:
+        logger.error(
+            "KB retention aborted: the Claude-memory/connector exemption rules could not be loaded; no deletes."
+        )
+        return {"deleted_entries": 0, "skipped": 0, "errors": 1}
 
     if not candidates:
         logger.info("KB retention: no entries older than %d days found.", retention_days)

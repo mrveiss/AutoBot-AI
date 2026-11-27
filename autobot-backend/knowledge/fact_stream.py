@@ -15,12 +15,36 @@ from typing import Any, AsyncIterator, Callable, Dict, List
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.fact_key_families import fact_keys_only, is_fact_key
+from autobot_shared.logging_manager import get_logger
 from knowledge.quarantine import not_quarantined
 
+logger = get_logger(__name__)
 FACT_KEY_PATTERN = "fact:*"
 FACT_SCAN_BATCH_SIZE: int = env_int("AUTOBOT_FACT_SCAN_BATCH_SIZE", 200)
 
 FactProcessor = Callable[[Any, Any, "str | None"], "Dict[str, Any] | None"]
+
+
+_exemption_load_logged = False
+
+
+def retention_exemption_rules() -> "tuple[str, str]":
+    """``(memory category, connector source_type)`` the retention exemption keys on.
+
+    The importer module is imported lazily (it pulls the PII pipeline). If that import fails the error is logged at
+    WARNING once per process and RE-RAISED: silently treating "memory" as "not memory" would let retention delete
+    Claude-memory facts the owner wants kept, so the retention task aborts its run on this error instead.
+    """
+    global _exemption_load_logged
+    try:
+        from knowledge.claude_memory_importer import CATEGORY
+        from knowledge.connectors.base import CONNECTOR_SOURCE_TYPE
+    except ImportError:
+        if not _exemption_load_logged:
+            _exemption_load_logged = True
+            logger.warning("Retention exemption rules cannot be loaded; retention will not delete", exc_info=True)
+        raise
+    return CATEGORY, CONNECTOR_SOURCE_TYPE
 
 
 def is_retention_exempt(raw_metadata: Any) -> bool:
@@ -31,10 +55,12 @@ def is_retention_exempt(raw_metadata: Any) -> bool:
     and a connector's own source ids), but every connector write goes through ``_ingest_content``, which stamps
     ``source_type`` (``CONNECTOR_SOURCE_TYPE``), and the importer stamps ``category`` (``CATEGORY``). That covers
     ``ext:`` and ``stream:`` facts too, since the external adapter ingests through the same path. One predicate for
-    the retention task and the admin count, so the preview matches what retention deletes.
+    the retention task and the admin count, so the count excludes exactly what retention keeps.
+
+    Fail-safe direction: if the rules cannot be loaded (:func:`retention_exemption_rules`) this raises
+    ``ImportError`` rather than answering "not exempt" -- an unloadable memory rule must never become a deletion.
     """
-    from knowledge.claude_memory_importer import CATEGORY  # lazy: pulls the PII pipeline
-    from knowledge.connectors.base import CONNECTOR_SOURCE_TYPE
+    CATEGORY, CONNECTOR_SOURCE_TYPE = retention_exemption_rules()
 
     if isinstance(raw_metadata, (bytes, str)):
         try:

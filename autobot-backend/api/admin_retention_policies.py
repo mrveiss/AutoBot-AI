@@ -243,14 +243,13 @@ async def _count_kb_facts() -> int:
                 pipe = redis.pipeline()
                 for key in keys:
                     pipe.hget(key, "metadata")
-                count += sum(
-                    1 for raw in await pipe.execute() if not is_retention_exempt(raw)
-                )  # same rule as retention
+                # same exemption rule as retention (no age filter: ``kb_entries`` counts eligible facts, not deletions)
+                count += sum(1 for raw in await pipe.execute() if not is_retention_exempt(raw))
             if cursor == 0:
                 break
         return count
     except Exception as exc:
-        logger.debug("_count_kb_facts failed: %s", exc)
+        logger.warning("_count_kb_facts failed: %s", exc)
         return 0
 
 

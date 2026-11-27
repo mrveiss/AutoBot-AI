@@ -172,3 +172,21 @@ def test_retention_keeps_memory_and_connector_facts_past_the_ttl_and_expires_an_
 
     assert [fact_id for fact_id, _ in candidates] == ["ordinary01"] and skipped == 0
     assert is_retention_exempt(rows["fact:ext:feed:abc123"][b"metadata"]) and not is_retention_exempt(None)
+
+
+def test_an_unloadable_exemption_rule_aborts_retention_instead_of_deleting_memory_facts(monkeypatch):
+    """Fail-safe: an import failure must not turn "memory" into "not memory" (it would expire memory facts)."""
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    import tasks.knowledge_retention as retention
+
+    def broken():
+        raise ImportError("claude_memory_importer unavailable")
+
+    monkeypatch.setattr(retention, "retention_exemption_rules", broken)
+    monkeypatch.setattr("knowledge.fact_stream.retention_exemption_rules", broken)
+    with pytest.raises(ImportError):
+        retention._collect_expired_facts(MagicMock(), datetime(2025, 1, 1, tzinfo=timezone.utc))
+    with pytest.raises(ImportError):
+        is_retention_exempt(b"{}")
