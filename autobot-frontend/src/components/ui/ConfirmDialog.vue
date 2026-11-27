@@ -139,7 +139,7 @@ watch(dialogVisible, (visible) => {
 
 .confirm-btn-confirm {
   background: var(--color-error, var(--color-primary));
-  color: var(--text-inverse);
+  color: var(--text-inverse, #fff);
 }
 
 .confirm-btn-confirm:hover {

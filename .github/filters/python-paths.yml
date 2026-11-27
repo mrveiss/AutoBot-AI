@@ -89,6 +89,8 @@ python:
   - 'autobot-backend/config/context_windows.yaml'
   - 'docs/developer/CLAUDE_WORKFLOW.md'
   - 'docs/api/USAGE_METERING_API.md'
+  # Read by repo_tests/env_registry_public_defaults_test.py: the generated env doc must carry no private address (#17440).
+  - 'docs/developer/ENV_VARS.md'
   - 'autobot-infrastructure/shared/config/permission_rules.yaml'
   # #18556: the guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
   # land anywhere: one glob per guarded basename, not just the listed trees.
@@ -124,10 +126,6 @@ python:
   # TOTAL (#17970), which a hook run against the diff cannot check.
   - 'autobot-frontend/src/**'
   - 'autobot-slm-frontend/src/**'
-  # Read by repo_tests/slm_token_vocabulary_test.py: the SLM-only token names are derived from these
-  # stylesheets and compared with the list documented in DESIGN_SYSTEM.md (#17566).
-  - 'libs/autobot-ui/src/**'
-  - 'docs/developer/DESIGN_SYSTEM.md'
   # Read by repo_tests/npm_audit_covers_its_workspaces_test.py, which asserts the
   # audit's workspace set against the tracked tree (#16131). Without this, a change
   # confined to _gate-security.yml takes the python-suite gate's "not affected" green

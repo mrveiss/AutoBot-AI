@@ -54,9 +54,9 @@ const fillClass = computed(() => {
   transition: width 0.3s ease;
 }
 
-.fill-ok { background: var(--color-success); }
-.fill-warning { background: var(--color-warning); }
-.fill-critical { background: var(--color-error); }
+.fill-ok { background: #22c55e; }
+.fill-warning { background: #f59e0b; }
+.fill-critical { background: #ef4444; }
 
 .hb-value {
   font-size: 0.68rem;

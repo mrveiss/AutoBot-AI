@@ -653,12 +653,6 @@
   --terminal-text-dim: #cccccc;           /* secondary body text */
   --terminal-text-dim-strong: #dddddd;    /* emphasis body text */
   --terminal-text-output: #d4d4d4;        /* default (non-ANSI) command-output text */
-  --terminal-xterm-bg: #1a1b26;           /* xterm.js canvas background (BaseXTerminal) */
-  --terminal-selection-bg: #264f78;       /* highlighted completion row */
-  --terminal-slider-track: #4a5568;       /* range-input track in the terminal settings */
-  --terminal-syntax-path: #98c379;        /* completion icon: path */
-  --terminal-syntax-history: #e5c07b;     /* completion icon: history */
-  --terminal-syntax-argument: #c678dd;    /* completion icon: argument */
 
   /* Connection status bar (SSHTerminal.vue) — same literal-hex rationale as
    * the rest of this block: a status bar showing the state of a live remote
