@@ -259,3 +259,16 @@ async def test_update_fact_also_redacts_a_credential_bearing_source_url():
 
     assert result["status"] == "success"
     assert "hunter2" not in written["metadata"]["source"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_id", ["collections:x", "a:b", ":", "origin:session:x"])
+async def test_a_caller_supplied_fact_id_with_a_colon_is_rejected_and_nothing_is_written(bad_id):
+    """#17530: ``fact:<id>`` must never alias another ``fact:`` key family (``fact:collections:<id>`` ...)."""
+    kb = FactsFakeKB()
+    store = AsyncMock()
+    with patch.object(FactsFakeKB, "_store_and_vectorize_fact", new=store):
+        result = await kb.store_fact("some content", {}, fact_id=bad_id)
+
+    assert result["status"] == "error" and "':'" in result["message"]
+    store.assert_not_awaited()

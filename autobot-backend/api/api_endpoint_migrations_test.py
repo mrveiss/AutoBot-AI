@@ -1616,7 +1616,7 @@ class TestGetDetailedStatsEndpoint:
         source = inspect.getsource(get_detailed_stats)
 
         assert "try:" not in source
-        assert "get_all_facts" in source
+        assert "fact_rows" in source
         assert "knowledge_base:facts" not in source
 
     def test_get_detailed_stats_preserves_inner_error_handling(self):

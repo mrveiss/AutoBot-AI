@@ -63,10 +63,10 @@ import { BaseBadge, BaseButton, BaseProgress } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { getFileExtension, truncateFileName } from '@/composables/knowledge/knowledgeUploadFileUtils'
-import type { FileItem } from '@/composables/knowledge/useKnowledgeUploadFiles'
+import type { UploadFileItem } from '@/composables/knowledge/useKnowledgeUploadFiles'
 import { formatFileSize } from '@/utils/formatHelpers'
 
-defineProps<{ item: FileItem; expanded: boolean }>()
+defineProps<{ item: UploadFileItem; expanded: boolean }>()
 const emit = defineEmits<{ toggle: [id: string]; remove: [] }>()
 
 const NAME_MAX = 35

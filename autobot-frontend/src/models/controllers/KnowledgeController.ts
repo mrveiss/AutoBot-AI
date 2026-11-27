@@ -415,10 +415,10 @@ export class KnowledgeController {
         listStatus.loaded(response.truncated)
         if (response.truncated) logger.warn('Knowledge entries list truncated; more entries exist on the server')
 
-        // Update categories based on documents
         await this.refreshStats()
+      } else {
+        listStatus.failed() // an unsuccessful read leaves the list stale, as a thrown one does
       }
-
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       logger.error('Failed to load documents:', error)

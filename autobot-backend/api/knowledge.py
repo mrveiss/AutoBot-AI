@@ -71,6 +71,7 @@ from autobot_shared.secret_redaction import redact_content
 from autobot_shared.ssot_constants import SecurityConstants
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
+from knowledge.fact_aggregate import fact_rows
 from knowledge.kb_ingest_result import ingest_in_kb, partial_note
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
@@ -460,11 +461,14 @@ async def get_knowledge_categories(
     stats = await kb_to_use.get_stats() if hasattr(kb_to_use, "get_stats") else {}
     categories_list = stats.get("categories", [])
 
-    # Count facts by category from the canonical fact:<id> store (#17530)
+    # Count facts by category from the fact:<id> store, metadata only, cached (#17530)
     category_counts = {}
-    for fact in await kb_to_use.get_all_facts():
-        category = (fact.get("metadata") or {}).get("category", "uncategorized")
-        category_counts[category] = category_counts.get(category, 0) + 1
+    try:
+        for fact in await fact_rows(kb_to_use):
+            category = (fact.get("metadata") or {}).get("category", "uncategorized")
+            category_counts[category] = category_counts.get(category, 0) + 1
+    except Exception as redis_err:
+        logger.debug("Redis error getting facts: %s", redis_err)
 
     # Format for frontend with counts
     categories = [{"name": cat, "count": category_counts.get(cat, 0), "id": cat} for cat in categories_list]
@@ -1605,7 +1609,7 @@ def _analyze_facts_for_stats(facts: list) -> tuple:
             source_counts[src] = source_counts.get(src, 0) + 1
             ft = metadata.get("type", "document")
             type_counts[ft] = type_counts.get(ft, 0) + 1
-            fact_sizes.append(len(fact.get("content", "")))
+            fact_sizes.append(fact.get("size", 0))
         except (KeyError, TypeError, AttributeError) as e:
             logger.warning("Error processing fact for size calculation: %s", e)
     return category_counts, source_counts, type_counts, fact_sizes
@@ -1657,7 +1661,12 @@ async def get_detailed_stats(
         return DetailedKnowledgeStats(**_create_offline_stats_response())
 
     basic_stats = await kb.get_stats()
-    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(await kb.get_all_facts())
+    try:
+        rows = await fact_rows(kb)
+    except Exception as redis_err:
+        logger.debug("Redis error getting facts: %s", redis_err)
+        rows = []
+    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(rows)
     return DetailedKnowledgeStats(
         status="online" if basic_stats.get("initialized") else "offline",
         basic_stats=basic_stats,
@@ -1755,7 +1764,7 @@ async def get_man_pages_summary(
 
     # Get all facts and count man pages - async operation
     try:
-        all_facts = await kb_to_use.get_all_facts()
+        all_facts = await fact_rows(kb_to_use)
 
         man_page_count = 0
         system_command_count = 0

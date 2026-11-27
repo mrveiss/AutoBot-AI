@@ -259,6 +259,7 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `AUTOBOT_FACTS_PRUNE_MAX_PER_RUN` | knowledge | int | `100` | Circuit breaker: a consolidation run that would prune more facts than this refuses and logs loudly (knowledge/facts.py). |
 | `AUTOBOT_FACTS_PRUNE_QUALITY_FLOOR` | knowledge | float | `0.1` | A fact is prunable only below this quality score (knowledge/facts.py consolidation). |
 | `AUTOBOT_FACTS_PRUNE_SCAN_LIMIT` | knowledge | int | `5000` | Most facts examined in one consolidation pass (knowledge/facts.py). |
+| `AUTOBOT_FACT_AGGREGATE_TTL_SECONDS` | knowledge | int | `30` | Seconds the category counts and detailed stats share one scan of the fact hashes (knowledge/fact_aggregate.py); 0 reads every request. |
 | `AUTOBOT_FACT_FORCING` | ai | bool | false | Enable the fact-forcing gate, which requires an answer to cite retrieved facts. |
 | `AUTOBOT_FACT_SCAN_BATCH_SIZE` | knowledge | int | `200` | Fact hashes read per round trip while get_all_facts streams the fact keyspace (knowledge/fact_stream.py). |
 | `AUTOBOT_FEATURE_FLAG_CACHE_TTL_SECONDS` | security | float | `5.0` | Seconds this process serves the access-control enforcement mode and per-endpoint overrides from memory (#18998). A write in the same process invalidates at once; a write from another process is seen within this window. 0 disables the cache. Clamped to 0-60. Range: 0–60. |

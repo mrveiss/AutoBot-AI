@@ -166,6 +166,19 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_FACT_AGGREGATE_TTL_SECONDS",
+        type=int,
+        default=30,
+        description=(
+            "Seconds the category counts and detailed stats share one scan of the fact hashes "
+            "(knowledge/fact_aggregate.py); 0 reads every request."
+        ),
+        component="knowledge",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_FACTS_PRUNE_MAX_PER_RUN",
         type=int,
         default=100,

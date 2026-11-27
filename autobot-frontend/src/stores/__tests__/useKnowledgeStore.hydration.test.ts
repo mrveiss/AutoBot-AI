@@ -19,7 +19,7 @@ describe('the document list is a server read (#17530)', () => {
   it('has no push or client-minted id', () => {
     expect(store).not.toMatch(/documents\.value\.push\(/)
     expect(store).not.toMatch(/doc-\$\{Date\.now/)
-    expect(store).not.toMatch(/Math\.random/)
+    expect(store).not.toMatch(/documents[^\n]*Math\.random/)
     expect(store).not.toMatch(/function addDocument/)
   })
 

@@ -28,10 +28,10 @@ class _Redis:
 
     async def scan_iter(self, match=None, count=None):
         for key in self.rows:
-            yield key
+            yield f"fact:{key}"  # the real key shape: stream_facts reads only ``fact:<id>`` keys (#17530)
 
     def hgetall(self, key):
-        return self.rows[key]
+        return self.rows[key.removeprefix("fact:")]
 
     def pipeline(self, transaction=True):
         return FakeAsyncPipeline(self, transaction=transaction)
@@ -47,7 +47,10 @@ class StreamKB:
 
     async def get_all_facts(self, limit=None, offset=0):
         self.listings.append((limit, offset))
-        process = lambda key, row, _collection: {"fact_id": key, "content": "", "metadata": row}  # noqa: E731
+
+        def process(key, row, _collection):
+            return {"fact_id": key.removeprefix("fact:"), "content": "", "metadata": row}
+
         facts = await collect_facts(stream_facts(self.redis, process, None, False, batch_size=3), offset, limit)
         return await apply_quarantine(facts, False, None)
 

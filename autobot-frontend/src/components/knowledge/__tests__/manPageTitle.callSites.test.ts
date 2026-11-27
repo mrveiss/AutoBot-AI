@@ -17,7 +17,8 @@ import TreeNodeComponent from '../TreeNodeComponent.vue'
 import KnowledgeContentViewer from '../KnowledgeContentViewer.vue'
 import KBSearchResultPanel from '../KBSearchResultPanel.vue'
 import KnowledgeEntries from '../KnowledgeEntries.vue'
-import { KnowledgeRepository, knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
+import apiClient from '@/utils/ApiClient'
+import { KnowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 
 vi.mock('vue-router', () => ({
@@ -84,9 +85,7 @@ describe('man-page titles at each call site (#21037)', () => {
   it('KnowledgeEntries: entries loaded from GET /entries; the stored title stays raw', async () => {
     // `_format_knowledge_entry` shape: the controller maps it into the store.
     const entry = { id: 'f1', content: 'GETTEXT(1)', title: RAW, source: 'man_page_parser', category: 'system_commands', type: 'man_page', metadata: FACT_META }
-    vi.spyOn(knowledgeRepository, 'get').mockImplementation(async (url: string) =>
-      ({ data: url.includes('/entries') ? { entries: [entry], total: 1 } : {} }) as never,
-    )
+    vi.spyOn(apiClient, 'call').mockResolvedValue({ entries: [entry], next_cursor: '0', count: 1, has_more: false } as never)
     const pinia = createPinia()
     const wrapper = mount(KnowledgeEntries, { global: { plugins: [pinia, i18n()] } })
     await flushPromises()

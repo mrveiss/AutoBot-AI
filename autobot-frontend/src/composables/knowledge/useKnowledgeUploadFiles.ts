@@ -24,7 +24,7 @@ const logger = createLogger('useKnowledgeUploadFiles')
 const PREVIEW_MAX_LENGTH = 2000
 const BYTES_PER_MB = 1048576
 
-export interface FileItem {
+export interface UploadFileItem {
   id: string
   file: File
   suggestedCategory: string | null
@@ -46,7 +46,7 @@ export function useKnowledgeUploadFiles(feedback: UploadFeedback, accept: string
   const { isExpanded, expand, collapseAll } = useExpansion<string>()
 
   const fileEntry = reactive({ category: '', tagsInput: '' })
-  const selectedFiles = ref<FileItem[]>([])
+  const selectedFiles = ref<UploadFileItem[]>([])
   const fileInput = ref<HTMLInputElement | null>(null)
   const isDragging = ref(false)
   const dragValid = ref(true)
@@ -110,7 +110,7 @@ export function useKnowledgeUploadFiles(feedback: UploadFeedback, accept: string
 
   const isDuplicate = (file: File) => selectedFiles.value.some((f) => f.file.name === file.name && f.file.size === file.size)
 
-  function toFileItem(file: File): FileItem {
+  function toFileItem(file: File): UploadFileItem {
     return {
       id: generateFileId(), file, suggestedCategory: detectCategory(file.name), preview: null,
       previewAvailable: isPreviewableFile(file.name), previewTruncated: false, fullContentLength: null,
@@ -130,7 +130,7 @@ export function useKnowledgeUploadFiles(feedback: UploadFeedback, accept: string
     }
   }
 
-  async function loadFilePreview(item: FileItem): Promise<void> {
+  async function loadFilePreview(item: UploadFileItem): Promise<void> {
     try {
       const content = await readFileAsText(item.file)
       item.fullContentLength = content.length
@@ -162,7 +162,7 @@ export function useKnowledgeUploadFiles(feedback: UploadFeedback, accept: string
   }
 
   // ---- upload ----
-  async function uploadOne(item: FileItem, tags: string[]): Promise<boolean> {
+  async function uploadOne(item: UploadFileItem, tags: string[]): Promise<boolean> {
     item.status = 'uploading'
     item.progress = 0
     try {

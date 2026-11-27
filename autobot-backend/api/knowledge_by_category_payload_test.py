@@ -291,10 +291,6 @@ class TestGetFactsByCategoryRoutePagination:
         assert result["has_more"] is False
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
-
-
 class _FactRedis:
     """Async Redis holding ``fact:<id>`` hashes (bytes, as the KB writes them) plus same-prefix non-fact keys.
 
@@ -305,6 +301,7 @@ class _FactRedis:
         self.hashes = hashes
         self.keys = list(hashes) + list(extra_keys)
         self.page = page
+        self.read = []  # every read command issued, so a test can assert what was (not) fetched
 
     async def scan(self, cursor=0, match=None, count=None):
         chunk = self.keys[cursor : cursor + self.page]
@@ -321,9 +318,22 @@ class _FactRedis:
         return FakeAsyncPipeline(self, transaction=transaction)
 
     async def hgetall(self, key):
+        self.read.append(("hgetall", key))
         if key not in self.hashes:
             raise TypeError("WRONGTYPE: not a hash")
         return self.hashes[key]
+
+    async def hget(self, key, field):
+        self.read.append(("hget", key, field))
+        if key not in self.hashes:
+            raise TypeError("WRONGTYPE: not a hash")
+        return self.hashes[key].get(field)
+
+    async def hstrlen(self, key, field):
+        self.read.append(("hstrlen", key, field))
+        if key not in self.hashes:
+            raise TypeError("WRONGTYPE: not a hash")
+        return len(self.hashes[key].get(field, ""))
 
 
 def _fact_kb(n: int, extra_keys=(), page: int = 3):
@@ -411,9 +421,10 @@ class TestWholeStoreReadersUseFactHashes:
     @pytest.mark.asyncio
     async def test_detailed_stats_counts_the_fact_hashes(self):
         import api.knowledge as kn
+        from knowledge.fact_aggregate import fact_rows
 
         kb = _fact_kb(5, extra_keys=["fact:collections:x"], page=2)
-        cats, srcs, types, sizes = kn._analyze_facts_for_stats(await kb.get_all_facts())
+        cats, srcs, types, sizes = kn._analyze_facts_for_stats(await fact_rows(kb))
         assert cats == {"even": 3, "odd": 2}
         assert types == {"note": 5} and len(sizes) == 5
 
@@ -434,7 +445,57 @@ class TestWholeStoreReadersUseFactHashes:
         assert sorted(f["fact_id"] for f in facts) == ["id-0", "id-1", "id-2"]
 
     @pytest.mark.asyncio
+    async def test_aggregate_reads_metadata_and_size_never_content_and_skips_non_hashes(self):
+        """#17530: the whole-store counts fetch no fact text, and never touch a non-hash ``fact:`` key."""
+        from knowledge.fact_aggregate import fact_rows
+
+        extra = ["fact:collections:id-0", "fact:origin:session:id-1"]
+        kb = _fact_kb(4, extra_keys=extra, page=2)
+        rows = await fact_rows(kb)
+        redis = kb.redis()
+        assert sorted(r["metadata"]["title"] for r in rows) == ["t0", "t1", "t2", "t3"]
+        assert [r["size"] for r in rows] == [2] * 4  # len("c<i>")
+        assert not [c for c in redis.read if c[0] == "hgetall" or (len(c) > 2 and c[2] == "content" and c[0] == "hget")]
+        assert not [c for c in redis.read if c[1] in extra]
+
+    @pytest.mark.asyncio
+    async def test_aggregate_is_cached_for_the_ttl(self, monkeypatch):
+        import knowledge.fact_aggregate as agg
+
+        kb = _fact_kb(2, page=10)
+        monkeypatch.setattr(agg, "FACT_AGGREGATE_TTL_SECONDS", 30)
+        await agg.fact_rows(kb)
+        reads = len(kb.redis().read)
+        await agg.fact_rows(kb)
+        assert len(kb.redis().read) == reads  # second call served from the cache
+        monkeypatch.setattr(agg, "FACT_AGGREGATE_TTL_SECONDS", 0)
+        await agg.fact_rows(kb)
+        assert len(kb.redis().read) > reads
+
+    @pytest.mark.asyncio
+    async def test_categories_degrade_to_zero_counts_when_redis_fails(self):
+        """#17530: a Redis error in the count read does not become a 500 (as before the move off the dead hash)."""
+        from unittest.mock import AsyncMock, patch
+
+        import api.knowledge as kn
+
+        kb = SimpleNamespace(
+            get_stats=AsyncMock(return_value={"categories": ["a"]}),
+            ensure_initialized=lambda: None,
+            redis=lambda: (_ for _ in ()).throw(ConnectionError("down")),
+        )
+        req = SimpleNamespace(app=object())
+        with patch.object(kn, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+            resp = await kn.get_knowledge_categories(admin_check=True, req=req)
+        dump = [c if isinstance(c, dict) else c.model_dump() for c in resp.categories]
+        assert [(c["name"], c["count"]) for c in dump] == [("a", 0)]
+
+    @pytest.mark.asyncio
     async def test_man_page_parser_reads_the_fact_dict(self):
         import api.knowledge as kn
 
         assert kn._parse_man_page_fact({"metadata": {"type": "manual_page", "created_at": "t"}}) == (True, False, "t")
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

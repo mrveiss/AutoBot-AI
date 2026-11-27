@@ -27,7 +27,7 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
     _decode_redis_hash,
 )
 from knowledge.fact_sharing import FactSharingMixin
-from knowledge.fact_stream import collect_facts, stream_facts
+from knowledge.fact_stream import collect_facts, is_fact_id, stream_facts
 from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_update_metadata
 from knowledge.long_fact_embedding import embed_in_windows, window_metadata, with_window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
@@ -756,13 +756,11 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
     async def store_fact(self, content: str, metadata: Dict[str, Any] = None, fact_id: str = None) -> Dict[str, Any]:
         """Store a new fact in Redis and vectorize it (Issue #398: refactored)."""
         self.ensure_initialized()
-        # #13708 round 4: the dedup content-hash must key on what the caller SUBMITTED,
-        # not the redacted text -- redact_content masks every credential to the same
-        # fixed placeholder, so two DIFFERENT secrets ("token: A", "token: B") redact
-        # to identical text and would otherwise collide, silently dropping the second,
-        # genuinely different fact as a "duplicate" of the first (#17005's own risk,
-        # reintroduced from the write side once redaction moved ahead of this check).
-        # Storage and embedding use the redacted `content` below; only the dedup hash keys off the raw original.
+        if fact_id is not None and not is_fact_id(fact_id):  # #17530: a colon would alias another fact: key family
+            return {"status": "error", "message": "fact_id must be non-empty and contain no ':'"}
+        # #13708: the dedup hash keys on what the caller SUBMITTED, not the redacted text (redaction masks every
+        # credential to one placeholder, so two different secrets would collide). Storage and embedding use the
+        # redacted `content`.
         raw_content = content
         content, metadata = sanitize_fact_content(content, guard_caller_metadata(metadata))  # #16770
 
