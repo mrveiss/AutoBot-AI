@@ -57,5 +57,9 @@ def crontab_from_string(cron_expr: str) -> crontab:
     try:
         return _build_crontab(parts)
     except Exception as exc:  # celery raises ValueError / its own ParseException for bad fields
-        logger.warning("Invalid cron expression %r (%s); falling back to '0 3 * * *'", cron_expr, exc)
+        # Never log the raw value or exc text: the schedule may come from a secret-bearing setting (CodeQL 1350).
+        logger.warning(
+            "Invalid configured schedule (%s); falling back to '0 3 * * *'",
+            type(exc).__name__,
+        )
         return _build_crontab(_FALLBACK_CRON_FIELDS)
