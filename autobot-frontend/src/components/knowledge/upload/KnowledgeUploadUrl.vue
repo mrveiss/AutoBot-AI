@@ -30,7 +30,7 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import { parseTags } from '@/utils/tagHelpers'
 import { resetFormFields } from '@/utils/formHelpers'
-import { isValidUrl } from '@/composables/knowledge/knowledgeUploadFileUtils'
+import { isValidUrl } from '@/composables/useNotificationConfig'
 import type { UploadFeedback } from '@/composables/knowledge/useKnowledgeUploadFeedback'
 
 const props = defineProps<{ feedback: UploadFeedback }>()

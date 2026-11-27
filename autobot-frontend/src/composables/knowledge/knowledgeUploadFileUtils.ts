@@ -20,15 +20,6 @@ const CATEGORY_PATTERNS: Record<string, RegExp[]> = {
   'Web Content': [/\.html$/i, /\.xml$/i, /web/i, /page/i],
 }
 
-export function isValidUrl(url: string): boolean {
-  try {
-    new URL(url)
-    return true
-  } catch {
-    return false
-  }
-}
-
 /** A dragged MIME type is acceptable when empty (the browser may not say) or a known document type. */
 export const isValidFileType = (mimeType: string): boolean => mimeType === '' || VALID_DROP_TYPES.includes(mimeType)
 
@@ -37,7 +28,7 @@ export function getFileExtension(filename: string): string {
   return lastDot >= 0 ? filename.substring(lastDot) : ''
 }
 
-export const isPreviewable = (filename: string): boolean =>
+export const isPreviewableFile = (filename: string): boolean =>
   PREVIEWABLE_EXTENSIONS.includes(getFileExtension(filename).toLowerCase())
 
 export function truncateFileName(name: string, maxLength: number): string {

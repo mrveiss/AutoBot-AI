@@ -17,7 +17,7 @@ import { useKnowledgeUploadLimit } from '@/composables/knowledge/useKnowledgeUpl
 import { useChunkedUpload } from '@/composables/knowledge/useChunkedUpload'
 import type { UploadFeedback } from '@/composables/knowledge/useKnowledgeUploadFeedback'
 import {
-  detectCategory, generateFileId, getFileExtension, isPreviewable, isValidFileType, readFileAsText,
+  detectCategory, generateFileId, getFileExtension, isPreviewableFile, isValidFileType, readFileAsText,
 } from '@/composables/knowledge/knowledgeUploadFileUtils'
 
 const logger = createLogger('useKnowledgeUploadFiles')
@@ -113,7 +113,7 @@ export function useKnowledgeUploadFiles(feedback: UploadFeedback, accept: string
   function toFileItem(file: File): FileItem {
     return {
       id: generateFileId(), file, suggestedCategory: detectCategory(file.name), preview: null,
-      previewAvailable: isPreviewable(file.name), previewTruncated: false, fullContentLength: null,
+      previewAvailable: isPreviewableFile(file.name), previewTruncated: false, fullContentLength: null,
       status: 'pending', progress: 0, errorMessage: null,
     }
   }
