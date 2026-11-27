@@ -16,6 +16,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -90,6 +91,13 @@ export function useTechnicalDebtData() {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const api = useApiClient()
+  // #22198: every debt route requires its source (the codebase/:sourceId parent); with none, no request is made
+  const route = useRoute()
+  const sourceId = computed(() => route.params.sourceId as string | undefined)
+  const withSourceId = (url: string) =>
+    `${url}${url.includes('?') ? '&' : '?'}source_id=${encodeURIComponent(sourceId.value ?? '')}`
+  const scoped = { scopeToSource: true, requireSource: true } as const
+  const deps = { withSourceId }
 
   // ---- Summary ------------------------------------------------------------
   // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
@@ -97,6 +105,7 @@ export function useTechnicalDebtData() {
   const summaryEndpoint = useFetchEndpoint<SummaryRaw, { summary: DebtSummary; rawResult: SummaryRaw }>(
     {
       path: '/api/debt/summary',
+      ...scoped,
       pickData: (raw) => ({ summary: (raw.summary ?? raw) as DebtSummary, rawResult: raw }),
       onError: (message, err) => {
         logger.error('Failed to load summary:', err)
@@ -104,9 +113,11 @@ export function useTechnicalDebtData() {
       },
       label: 'Debt summary',
     },
+    deps,
   )
 
   async function fetchSummary(): Promise<{ summary: DebtSummary; rawResult: Record<string, unknown> }> {
+    if (!sourceId.value) return { summary: {} as DebtSummary, rawResult: {} }
     isLoading.value = true
     error.value = null
     try {
@@ -129,6 +140,7 @@ export function useTechnicalDebtData() {
   const categoryEndpoint = useFetchEndpoint<SummaryRaw, CategoryBreakdown[]>(
     {
       path: '/api/debt/summary',
+      ...scoped,
       pickData: (raw) => {
         const nested = raw.summary as Record<string, unknown> | undefined
         return (nested?.by_category ?? raw.by_category ?? []) as CategoryBreakdown[]
@@ -139,6 +151,7 @@ export function useTechnicalDebtData() {
       fallbackData: () => [],
       label: 'Category breakdown',
     },
+    deps,
   )
 
   async function fetchCategoryBreakdown(): Promise<CategoryBreakdown[]> {
@@ -162,6 +175,7 @@ export function useTechnicalDebtData() {
   const roiEndpoint = useFetchEndpoint<RoiRaw, DebtItem[]>(
     {
       path: '/api/debt/roi-priorities',
+      ...scoped,
       pickData: (raw) => {
         roiTotal.value = raw.total_available ?? raw.priorities?.length ?? 0
         return (raw.priorities ?? raw) as DebtItem[]
@@ -172,6 +186,7 @@ export function useTechnicalDebtData() {
       },
       label: 'ROI priorities',
     },
+    deps,
   )
 
   /** The last list the server returned; a failed or empty reload keeps it instead of blanking the panel. */
@@ -203,10 +218,11 @@ export function useTechnicalDebtData() {
   // Backend returns {status, data: {items, summary, ...}} structure
 
   async function fetchDebtItems(): Promise<DebtItem[]> {
+    if (!sourceId.value) return []
     isLoading.value = true
     error.value = null
     try {
-      const result = await api.post<Record<string, unknown>>('/api/debt/calculate')
+      const result = await api.post<Record<string, unknown>>(withSourceId('/api/debt/calculate'))
       const data = result.data as Record<string, unknown> | undefined
       return ((data?.items ?? (result.items ?? [])) as DebtItem[])
     } catch (e) {
@@ -223,6 +239,7 @@ export function useTechnicalDebtData() {
   const trendsEndpoint = useFetchEndpoint<TrendsRaw, TrendPoint[]>(
     {
       path: '/api/debt/trends',
+      ...scoped,
       pickData: (raw) => (raw.trends ?? raw) as TrendPoint[],
       onError: (message, err) => {
         logger.error('Failed to load trends:', err)
@@ -230,6 +247,7 @@ export function useTechnicalDebtData() {
       fallbackData: () => [],
       label: 'Debt trends',
     },
+    deps,
   )
 
   async function fetchTrends(period: string): Promise<TrendPoint[]> {
@@ -249,6 +267,7 @@ export function useTechnicalDebtData() {
   const reportEndpoint = useFetchEndpoint<ReportRaw, string>(
     {
       path: '/api/debt/report',
+      ...scoped,
       pickData: (raw) => (raw.report as string) ?? '',
       onError: (message, err) => {
         logger.error('Failed to export report:', err)
@@ -256,6 +275,7 @@ export function useTechnicalDebtData() {
       },
       label: 'Debt report',
     },
+    deps,
   )
 
   async function fetchReportBlob(): Promise<string> {
