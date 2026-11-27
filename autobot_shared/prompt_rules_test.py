@@ -115,7 +115,7 @@ def test_text_frame_keeps_preamble_and_trailer_outside_the_frame():
     assert out == "PRE\n<o>\nbody\n<c>\nPOST"
 
 
-def test_neutralize_marker_names_leaves_unrelated_text_alone():
+def test_neutralize_untrusted_leaves_unrelated_text_alone():
     text = "a < b, <b>bold</b>, x <<< y"
     assert neutralize_untrusted(text, ("untrusted_x",)) == text
 
