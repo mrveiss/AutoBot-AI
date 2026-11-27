@@ -313,7 +313,7 @@ onMounted(loadAll)
               <td class="px-4 py-2 text-right">
                 <button :data-test="`terminate-${s.session_id}`" :disabled="busy.terminate === s.session_id"
                   @click="onTerminate(s.session_id)"
-                  class="px-3 py-1 text-xs font-medium rounded-lg bg-autobot-pill-bad-bg text-autobot-pill-bad-fg hover:bg-autobot-pill-bad-bg disabled:opacity-50 transition-colors">
+                  class="px-3 py-1 text-xs font-medium rounded-lg bg-autobot-pill-bad-bg text-autobot-pill-bad-fg hover:bg-(--bad-bg-hover) disabled:opacity-50 transition-colors">
                   {{ $t('tools.admin.advancedControlTool.terminate') }}
                 </button>
               </td>
@@ -400,7 +400,7 @@ onMounted(loadAll)
                   <button :data-test="`approve-${r.request_id}`"
                     :disabled="busy.approve === r.request_id || !operatorInputs[r.request_id]"
                     @click="onApprove(r.request_id)"
-                    class="px-3 py-1 text-xs font-medium rounded-lg bg-autobot-pill-ok-bg text-autobot-pill-ok-fg hover:bg-autobot-pill-ok-bg disabled:opacity-50 transition-colors">
+                    class="px-3 py-1 text-xs font-medium rounded-lg bg-autobot-pill-ok-bg text-autobot-pill-ok-fg hover:bg-(--ok-bg-hover) disabled:opacity-50 transition-colors">
                     {{ $t('tools.admin.advancedControlTool.approve') }}
                   </button>
                 </div>
@@ -439,13 +439,13 @@ onMounted(loadAll)
                   <button :data-test="`pause-${a.session_id}`"
                     :disabled="busy.session === a.session_id || a.status === 'paused'"
                     @click="onSessionAction(a.session_id, 'pause')"
-                    class="px-3 py-1 text-xs font-medium rounded-lg bg-autobot-pill-warn-bg text-autobot-pill-warn-fg hover:bg-autobot-pill-warn-bg disabled:opacity-50 transition-colors">
+                    class="px-3 py-1 text-xs font-medium rounded-lg bg-autobot-pill-warn-bg text-autobot-pill-warn-fg hover:bg-(--warn-bg-hover) disabled:opacity-50 transition-colors">
                     {{ $t('tools.admin.advancedControlTool.pause') }}
                   </button>
                   <button :data-test="`resume-${a.session_id}`"
                     :disabled="busy.session === a.session_id || a.status !== 'paused'"
                     @click="onSessionAction(a.session_id, 'resume')"
-                    class="px-3 py-1 text-xs font-medium rounded-lg bg-autobot-pill-ok-bg text-autobot-pill-ok-fg hover:bg-autobot-pill-ok-bg disabled:opacity-50 transition-colors">
+                    class="px-3 py-1 text-xs font-medium rounded-lg bg-autobot-pill-ok-bg text-autobot-pill-ok-fg hover:bg-(--ok-bg-hover) disabled:opacity-50 transition-colors">
                     {{ $t('tools.admin.advancedControlTool.resume') }}
                   </button>
                   <button :data-test="`complete-${a.session_id}`"

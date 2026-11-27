@@ -389,7 +389,7 @@ onMounted(async () => {
               <button
                 @click="serviceAction('stop')"
                 :disabled="loading || !selectedNode || !selectedService"
-                class="px-4 py-2 bg-autobot-error text-white rounded-lg hover:bg-autobot-error-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong"
+                class="px-4 py-2 bg-autobot-error-solid text-(--text-on-error) rounded-lg hover:bg-(--color-error-solid-hover) transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong"
                 :aria-label="$t('toolsView.stopServiceAria', { service: selectedService || 'service' })"
               >
                 {{ $t('toolsView.stop') }}

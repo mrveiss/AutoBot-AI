@@ -871,7 +871,7 @@ function getNodeHostname(nodeId: string): string {
                       v-if="deployment.status === 'failed'"
                       @click="handleRetry(deployment.deployment_id)"
                       :disabled="isRetrying === deployment.deployment_id"
-                      class="text-autobot-text-link hover:text-autobot-text-link disabled:opacity-50"
+                      class="text-autobot-text-link hover:text-(--text-link-hover) disabled:opacity-50"
                       :title="$t('deploymentsView.retryDeployment')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1098,7 +1098,7 @@ function getNodeHostname(nodeId: string): string {
                       v-if="deployment.status === 'failed'"
                       @click="handleBgRetry(deployment.bg_deployment_id)"
                       :disabled="isRetryingBg === deployment.bg_deployment_id"
-                      class="text-autobot-text-link hover:text-autobot-text-link disabled:opacity-50"
+                      class="text-autobot-text-link hover:text-(--text-link-hover) disabled:opacity-50"
                       :title="$t('deploymentsView.retryDeployment')"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1497,7 +1497,7 @@ function getNodeHostname(nodeId: string): string {
           v-if="selectedDeployment.status === 'completed'"
           @click="handleRollback(selectedDeployment.deployment_id); closeDetails()"
           :disabled="isRollingBack === selectedDeployment.deployment_id"
-          class="btn bg-autobot-warning-hover text-(--text-on-warning) hover:bg-autobot-warning-hover disabled:opacity-50"
+          class="btn bg-autobot-warning text-(--text-on-warning) hover:bg-autobot-warning-hover disabled:opacity-50"
         >
           {{ isRollingBack === selectedDeployment.deployment_id ? $t('deploymentsView.rollingBack') : $t('deploymentsView.rollback') }}
         </button>
@@ -1594,7 +1594,7 @@ function getNodeHostname(nodeId: string): string {
         <button
           v-if="selectedBgDeployment.status === 'active'"
           @click="handleBgRollback(selectedBgDeployment.bg_deployment_id); closeBgDetails()"
-          class="btn bg-autobot-warning-hover text-(--text-on-warning) hover:bg-autobot-warning-hover"
+          class="btn bg-autobot-warning text-(--text-on-warning) hover:bg-autobot-warning-hover"
         >{{ $t('deploymentsView.rollback') }}</button>
         <button
           v-if="selectedBgDeployment.status === 'failed'"

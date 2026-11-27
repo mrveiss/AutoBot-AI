@@ -364,6 +364,22 @@ other name that exists only in the SLM, and on a name here that no longer exists
 A new SLM-only name needs a row in this table (and an owner decision that the concept really has no user-frontend
 counterpart); otherwise declare the shared name with the SLM's value.
 
+**What the guard reads** (`repo_tests/slm_token_vocabulary_test.py`; a guard's scope is part of its claim):
+
+| Side | Sources read | Not read |
+|---|---|---|
+| SLM declarations | every `*.css` under `autobot-slm-frontend/src`; the `<style>` blocks and inline `style` values of every `*.vue`; `index.html`; `setProperty('--x')` and `{'--x': v}` in `*.ts` / `*.vue`. Same-line declarations count (`a{--x:1;--y:2}`). | declarations built from a runtime string (`setProperty(name, ...)` with a variable name) |
+| Shared names | the user frontend's `design-tokens.css`, `tailwind.css`, `themes/*.css`, and the kit's `tokens/contract.css` and `tokens/adapter.css` | a name declared only in some other user-frontend component or view is **not** shared |
+
+Three checks run over that population: an SLM-only name must be in the table above; every `var(--x)` in SLM source must
+resolve to a declared name; and no class list may give a state variant (`hover:`, `focus:`, `active:`,
+`enabled:hover:`) the same utility as its base, literally or through the alias chain to the same value. A state
+takes the base's own `-hover` step, or a hover tint (`--color-{success,warning,error,info,primary}-bg-hover`,
+`--{ok,warn,bad}-bg-hover`, `--i2t-hover`, declared in both frontends). Population floors fail the run when a source
+kind reads nothing, and planted samples prove each extractor. `LanguageSwitcher.vue` re-scopes the kit's
+`--aui-color-{surface,text,border}` to the identity bar inside its own `<style>`: those names are declared by the kit
+adapter, so they are shared names given a local value, not new SLM names.
+
 ## Canonical homes (#17571)
 
 Which module owns each design-system concept is declared in code, not here:

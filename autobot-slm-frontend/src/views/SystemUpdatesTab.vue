@@ -406,7 +406,7 @@ onMounted(async () => {
             @click="handleUpgradeAllForNode(group.node_id)"
             :disabled="systemUpdates.loading.value"
             class="px-2 py-1 text-xs bg-autobot-pill-warn-bg text-autobot-pill-warn-fg
-                   rounded hover:bg-autobot-pill-warn-bg disabled:opacity-50"
+                   rounded hover:bg-(--warn-bg-hover) disabled:opacity-50"
           >
             {{ $t('systemUpdatesTab.upgradeAll') }}
           </button>
@@ -598,7 +598,7 @@ onMounted(async () => {
                 @click="handleCancelJob(job.job_id)"
                 :disabled="cancellingJobId === job.job_id"
                 class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg
-                       rounded hover:bg-autobot-pill-bad-bg disabled:opacity-50"
+                       rounded hover:bg-(--bad-bg-hover) disabled:opacity-50"
               >
                 {{
                   cancellingJobId === job.job_id

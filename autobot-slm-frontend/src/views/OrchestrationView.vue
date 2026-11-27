@@ -1438,7 +1438,7 @@ onUnmounted(() => {
             <button
               @click="handleBulkAction('restart')"
               :disabled="orchestration.loading"
-              class="px-4 py-2 bg-autobot-warning-hover text-(--text-on-warning) rounded-lg hover:bg-autobot-warning-hover disabled:opacity-50"
+              class="px-4 py-2 bg-autobot-warning text-(--text-on-warning) rounded-lg hover:bg-autobot-warning-hover disabled:opacity-50"
             >
               {{ $t('orchestrationView.restartAllServices') }}
             </button>
@@ -1503,12 +1503,12 @@ onUnmounted(() => {
                     <div class="flex items-center justify-end gap-1">
                       <button
                         @click="handleFleetServiceAction(service.service_name, 'start')"
-                        class="px-2 py-1 text-xs bg-autobot-pill-ok-bg text-autobot-pill-ok-fg rounded-sm hover:bg-autobot-pill-ok-bg"
+                        class="px-2 py-1 text-xs bg-autobot-pill-ok-bg text-autobot-pill-ok-fg rounded-sm hover:bg-(--ok-bg-hover)"
                         :title="$t('orchestrationView.startOnAllNodes')"
                       >{{ $t('orchestrationView.start') }}</button>
                       <button
                         @click="handleFleetServiceAction(service.service_name, 'stop')"
-                        class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-autobot-pill-bad-bg"
+                        class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-(--bad-bg-hover)"
                         :title="$t('orchestrationView.stopOnAllNodes')"
                       >{{ $t('orchestrationView.stop') }}</button>
                       <button
@@ -1758,7 +1758,7 @@ onUnmounted(() => {
                   >{{ $t('orchestrationView.edit') }}</button>
                   <button
                     @click="deleteRole(role.name)"
-                    class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-autobot-pill-bad-bg"
+                    class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-(--bad-bg-hover)"
                   >{{ $t('orchestrationView.delete') }}</button>
                 </td>
               </tr>
@@ -1821,7 +1821,7 @@ onUnmounted(() => {
                   <button
                     v-else
                     @click="removeRoleFromNode(assignNodeId, role.name)"
-                    class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-autobot-pill-bad-bg whitespace-nowrap"
+                    class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-(--bad-bg-hover) whitespace-nowrap"
                   >{{ $t('orchestrationView.remove') }}</button>
                 </div>
               </div>

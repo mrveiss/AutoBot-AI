@@ -65,7 +65,7 @@ const emit = defineEmits<{
       <button
         @click="emit('confirm')"
         :disabled="isProcessing"
-        class="px-4 py-2 text-sm font-medium text-(--text-on-warning) bg-autobot-warning-hover rounded-lg hover:bg-autobot-warning-hover disabled:opacity-50 flex items-center gap-2"
+        class="px-4 py-2 text-sm font-medium text-(--text-on-warning) bg-autobot-warning rounded-lg hover:bg-autobot-warning-hover disabled:opacity-50 flex items-center gap-2"
       >
         <svg
           v-if="isProcessing"

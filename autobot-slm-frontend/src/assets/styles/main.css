@@ -43,7 +43,7 @@
 }
 
 @utility btn-success {
-  @apply bg-autobot-success text-(--text-on-success) enabled:hover:bg-autobot-success;
+  @apply bg-autobot-success text-(--text-on-success) enabled:hover:bg-autobot-success-hover;
 }
 
 @utility btn-error {

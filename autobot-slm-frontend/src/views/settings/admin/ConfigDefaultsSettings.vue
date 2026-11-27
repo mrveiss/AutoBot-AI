@@ -229,7 +229,7 @@ onMounted(() => { fetchDefaults() })
               <button @click="openEditForm(cfg)"
                 class="px-2 py-1 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm hover:bg-autobot-bg-active mr-1">{{ $t('settings.admin.configDefaultsSettings.edit') }}</button>
               <button @click="deleteConfig(cfg.config_key)"
-                class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-autobot-pill-bad-bg">{{ $t('settings.admin.configDefaultsSettings.delete') }}</button>
+                class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-(--bad-bg-hover)">{{ $t('settings.admin.configDefaultsSettings.delete') }}</button>
             </td>
           </tr>
         </tbody>

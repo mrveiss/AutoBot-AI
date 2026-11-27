@@ -13,7 +13,7 @@
     "color-no-hex": [
       true,
       {
-        "message": "Hardcoded hex color — use a design token, e.g. var(--color-…) / var(--text) / var(--surface) (tokenisation umbrella #11515). A var(--token, #fallback) fallback is still flagged here; migrate the raw value first."
+        "message": "Hardcoded hex color — use a design token, e.g. var(--color-…) / var(--a11y-…) (tokenisation umbrella #11515). A var(--token, #fallback) fallback is still flagged here; migrate the raw value first."
       }
     ]
   }
