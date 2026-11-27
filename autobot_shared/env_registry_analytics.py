@@ -56,8 +56,8 @@ register_env_var(
         type=int,
         default=5000,
         description=(
-            "Maximum duplicate pairs a scan RETURNS (0 = unlimited). The count and the "
-            "statistics always describe every pair found; the analysis reports "
+            "Maximum duplicate clusters a scan RETURNS (0 = unlimited). The count and the "
+            "statistics always describe every cluster found; the analysis reports "
             "`truncated` when the list is shorter (#18067)."
         ),
         component="backend",

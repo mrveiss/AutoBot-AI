@@ -10,6 +10,8 @@ analysis tools to provide comprehensive code pattern detection.
 """
 
 import asyncio
+import functools
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Set
@@ -17,8 +19,10 @@ from typing import Any, Dict, List, Set
 from api.source_scope import require_source_id
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files, discover_files
+from utils.cancel_tokens import new_cancel_token, run_cancellable
 from utils.io_executor import get_analytics_executor
 
+from .cancellation import CancellableAnalysis
 from .complexity_analyzer import ComplexityAnalyzer
 from .refactoring_generator import RefactoringSuggestionGenerator
 from .regex_detector import RegexPatternDetector
@@ -67,7 +71,7 @@ except ImportError:
 PATTERN_INDEX = "code_patterns"
 
 
-class CodePatternAnalyzer:
+class CodePatternAnalyzer(CancellableAnalysis):
     """Main orchestrator for code pattern detection and optimization.
 
     This analyzer combines:
@@ -107,8 +111,10 @@ class CodePatternAnalyzer:
         self.similarity_threshold = similarity_threshold
         self.exclude_dirs = exclude_dirs or ANALYSIS_EXCLUDE_DIRS
 
-    def _init_sub_analyzers(self, cc_threshold: int, mi_threshold: float) -> None:
-        """Initialize sub-analyzer instances based on feature flags. Issue #620."""
+    def _init_sub_analyzers(self, cc_threshold: int, mi_threshold: float, cancel_token: threading.Event | None) -> None:
+        """Initialize sub-analyzer instances based on feature flags (Issue #620) and keep the caller's cancel token."""
+        # Set by the caller when it stops waiting (#22094); checked per file and per report.
+        self.cancel_token = cancel_token
         self._clone_detector = (
             CloneDetector(exclude_dirs=list(self.exclude_dirs)) if self.enable_clone_detection else None
         )
@@ -141,6 +147,7 @@ class CodePatternAnalyzer:
         cc_threshold: int = 10,
         mi_threshold: float = 50,
         source_id: str | None = None,
+        cancel_token: threading.Event | None = None,
     ):
         """Initialize the code pattern analyzer. Issue #620.
 
@@ -161,12 +168,10 @@ class CodePatternAnalyzer:
             similarity_threshold,
             exclude_dirs,
         )
-        self._init_sub_analyzers(cc_threshold, mi_threshold)
+        self._init_sub_analyzers(cc_threshold, mi_threshold, cancel_token)
         self.source_id = self._source_tag = None if source_id is None else require_source_id(source_id, "analysis")
-        # Issue #12407: single reused EmbeddingCache instance (mirrors
-        # SemanticAnalysisMixin / CrossLanguagePatternDetector) so repeated
-        # calls to ``_generate_embedding`` actually benefit from the cache
-        # instead of instantiating a throwaway cache every call.
+        # Issue #12407: single reused EmbeddingCache (mirrors SemanticAnalysisMixin / CrossLanguagePatternDetector)
+        # so repeated ``_generate_embedding`` calls benefit from the cache instead of a throwaway one per call.
         self._embedding_cache = EmbeddingCache(maxsize=500, ttl_seconds=3600) if EMBEDDING_CACHE_AVAILABLE else None
 
     # Batch size for per-file analysis (tunable)
@@ -206,13 +211,10 @@ class CodePatternAnalyzer:
         """Run regex detection on a batch of files."""
         if not self._regex_detector:
             return []
-        executor = get_analytics_executor()
         results = []
         for fp in file_paths:
             try:
-                opps = await asyncio.get_running_loop().run_in_executor(
-                    executor, self._regex_detector.detect_in_file, fp
-                )
+                opps = await self._run_file(self._regex_detector.detect_in_file, fp)
                 results.extend(opps)
             except Exception as e:
                 logger.debug("Regex detection failed for %s: %s", fp, e)
@@ -222,13 +224,10 @@ class CodePatternAnalyzer:
         """Run complexity analysis on a batch of files."""
         if not self._complexity_analyzer:
             return []
-        executor = get_analytics_executor()
         modules = []
         for fp in file_paths:
             try:
-                module = await asyncio.get_running_loop().run_in_executor(
-                    executor, self._complexity_analyzer.analyze_file, fp
-                )
+                module = await self._run_file(self._complexity_analyzer.analyze_file, fp)
                 modules.append(module)
             except Exception as e:
                 logger.debug("Complexity analysis failed for %s: %s", fp, e)
@@ -238,16 +237,11 @@ class CodePatternAnalyzer:
         """Run anti-pattern detection on a batch of files."""
         if not self._anti_pattern_detector:
             return {"modularization": [], "other_patterns": []}
-        executor = get_analytics_executor()
         modularization: List = []
         other_patterns: List = []
         for fp in file_paths:
             try:
-                file_result = await asyncio.get_running_loop().run_in_executor(
-                    executor,
-                    self._anti_pattern_detector.analyze_file,
-                    fp,
-                )
+                file_result = await self._run_file(self._anti_pattern_detector.analyze_file, fp)
                 for pattern in file_result.get("anti_patterns", []):
                     if self._is_modularization_candidate(pattern):
                         mod = self._to_modularization_suggestion(pattern)
@@ -288,6 +282,7 @@ class CodePatternAnalyzer:
         start_time = time.time()
 
         async def _report(step: str, pct: float) -> None:
+            self._check_cancelled()  # every phase and batch reports first, so this is the per-phase and per-batch check
             if progress_callback:
                 await progress_callback(step, pct)
 
@@ -316,14 +311,7 @@ class CodePatternAnalyzer:
         start_batch = self._apply_resume_checkpoint(report, resume_from, total_batches)
 
         # Phase 2: Per-file analysis in batches (5% → 75%)
-        await self._process_file_batches(
-            batches,
-            start_batch,
-            report,
-            _report,
-            checkpoint_callback,
-            file_count,
-        )
+        await self._process_file_batches(batches, start_batch, report, _report, checkpoint_callback, file_count)
 
         # Phase 3: Clone detection (75% → 85%) — full directory, with timeout
         if self.enable_clone_detection:
@@ -537,35 +525,23 @@ class CodePatternAnalyzer:
         return file_count, line_count
 
     async def _run_clone_detection(self, directory: str) -> Dict[str, Any]:
-        """Run clone detection analysis.
-
-        Args:
-            directory: Path to directory
-
-        Returns:
-            Dictionary with clone detection results
-        """
+        """Clone detection over *directory* on the analytics executor (Issue #1233), as a result dict."""
         if not self._clone_detector:
             return {"type": "clone_detection", "patterns": []}
 
         try:
-            # Issue #1233: Use dedicated analytics executor
-            report = await asyncio.get_running_loop().run_in_executor(
-                get_analytics_executor(),
-                self._clone_detector.detect_clones,
-                directory,
+            # #22094: the thread checks both tokens per file; run_cancellable sets its own when this await is
+            # abandoned (this phase's timeout or the whole analysis's), the analysis token covers any other cancel.
+            phase_token = new_cancel_token()
+            tokens = (self.cancel_token, phase_token)
+            detect = functools.partial(self._clone_detector.detect_clones, directory, tokens)
+            report = await run_cancellable(
+                get_analytics_executor(), detect, operation="clone_detection", cancel_token=phase_token
             )
-
-            # Convert to our types
-            duplicate_patterns = []
-            for group in report.clone_groups:
-                duplicate = self._clone_group_to_duplicate(group)
-                if duplicate:
-                    duplicate_patterns.append(duplicate)
-
+            duplicates = [self._clone_group_to_duplicate(group) for group in report.clone_groups]
             return {
                 "type": "clone_detection",
-                "patterns": duplicate_patterns,
+                "patterns": [duplicate for duplicate in duplicates if duplicate],
                 "raw_report": report,
             }
 

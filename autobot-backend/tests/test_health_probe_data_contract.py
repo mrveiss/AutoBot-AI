@@ -133,20 +133,9 @@ if "autobot_shared.redis_client" not in sys.modules:
     sys.modules["autobot_shared.redis_client"] = _rc
 
 # --- autobot_shared.error_boundaries -----------------------------------------
-if "autobot_shared.error_boundaries" not in sys.modules:
+from testkit.module_stubs import install_error_boundaries_stub  # noqa: E402
 
-    class _ErrorCategory(Enum):
-        # #14881: CLIENT_ERROR removed -- production's ErrorCategory
-        # (utils/error_boundaries/types.py) has 18 members and that is not one
-        # of them; nothing referenced it. A minimal stub is fine, an invented
-        # member is not.
-        SERVER_ERROR = "server_error"
-
-    _eb = types.ModuleType("autobot_shared.error_boundaries")
-    _eb.__package__ = "autobot_shared"
-    _eb.ErrorCategory = _ErrorCategory  # type: ignore[attr-defined]
-    _eb.with_error_handling = lambda *a, **k: (lambda f: f)  # type: ignore[attr-defined]
-    sys.modules["autobot_shared.error_boundaries"] = _eb
+install_error_boundaries_stub()
 
 # --- autobot_shared.models.pagination ----------------------------------------
 _pkg_stub("autobot_shared.models")

@@ -350,8 +350,8 @@ else
     # `git worktree remove` — the pair that composes into silent data loss.
     idx_bits=$(git_tracked_files "$dir" -v 2>/dev/null | grep -c '^[a-zS]')
     locked=no
-    awk -v d="worktree $dir" '$0==d{f=1;next} /^worktree /{f=0} f&&/^locked/{print;exit}' \
-      <<< "$WT_LIST" | grep -q . && locked=yes
+    grep -q . < <(awk -v d="worktree $dir" '$0==d{f=1;next} /^worktree /{f=0} f&&/^locked/{print;exit}' \
+      <<< "$WT_LIST") && locked=yes
     merged_pr="(not queried)"
     if command -v gh >/dev/null 2>&1; then
       if pr=$(gh pr list --head "$wb" --state merged --limit 1 --json number --jq '.[0].number' 2>/dev/null); then

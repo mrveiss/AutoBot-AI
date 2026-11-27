@@ -19,7 +19,8 @@ Diff-scoped security review that emits before it explores. Deep PR review is
 4. **Verdict last.** `BLOCK` / `APPROVE-WITH-NITS` / `APPROVE`.
 
 Never reorder these. A finding stated with `CONFIDENCE: unverified` and corrected
-in step 3 is useful; a perfectly-verified finding that never gets printed is not.
+in step 3 is useful; a perfectly-verified finding that never gets printed is not —
+partial value in seconds beats total value in minutes, and an abandoned exploration delivers nothing.
 
 Before the verify step (step 3) read `references/verify-and-verdict.md`.
 

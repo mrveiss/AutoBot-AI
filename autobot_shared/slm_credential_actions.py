@@ -26,12 +26,16 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class CredentialAction:
-    """One kind of credential change: what an approval names, and who proposed it."""
+class SlmApprovalAction:
+    """One kind of SLM-proposed change: what an approval names, and who proposed it.
+
+    Named neutrally (#22033): it first described only credential changes (#20046, #20750), and the stale
+    code-sync file cleanup (``autobot_shared.slm_stale_file_actions``) reuses it unchanged for its claim.
+    """
 
     #: The ``context["action"]`` an approval names to route to its executor.
     name: str
-    #: The credential kind a proposal names (never the value).
+    #: The kind of thing changed that a proposal names (a credential kind, never its value).
     credential_kind: str
     #: ``requested_by_agent`` is ``<prefix>:<node_id>``; with the action it makes a node's proposal findable.
     proposer_prefix: str
@@ -44,12 +48,12 @@ class CredentialAction:
         return f"{self.proposer_prefix}:{node_id}"
 
 
-SSH_PASSWORD_DELETE = CredentialAction(
+SSH_PASSWORD_DELETE = SlmApprovalAction(
     name="slm_node_ssh_password_delete",
     credential_kind="ssh_password",  # nosec B106  # pragma: allowlist secret -- a kind label, not a password
     proposer_prefix="slm-enrollment",
 )
-INTERNAL_KEY_REALIGN = CredentialAction(
+INTERNAL_KEY_REALIGN = SlmApprovalAction(
     name="slm_backend_internal_key_realign",
     credential_kind="internal_api_key",  # nosec B106  # pragma: allowlist secret -- a kind label, not a key
     proposer_prefix="slm-update",

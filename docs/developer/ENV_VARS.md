@@ -225,7 +225,7 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `AUTOBOT_DOC_HASH_CACHE_TTL_SECONDS` | rag | float | `60.0` | Seconds the shared stale filter reuses the doc hash cache before re-reading it (#4723, #19280). |
 | `AUTOBOT_DOC_INDEX_PROGRESS_INTERVAL_S` | knowledge | float | `30.0` | Seconds between batch progress lines while the doc indexer embeds chunks (#20886). Range: 1.0–3600.0. |
 | `AUTOBOT_DUPLICATE_BACKGROUND_TIMEOUT_SECONDS` | backend | float | `3600.0` | Upper bound for a duplicate scan run by the background (Celery) task. Not the request deadline: the queued path exists to escape it (#18067). |
-| `AUTOBOT_DUPLICATE_MAX_RETURNED` | backend | int | `5000` | Maximum duplicate pairs a scan RETURNS (0 = unlimited). The count and the statistics always describe every pair found; the analysis reports `truncated` when the list is shorter (#18067). |
+| `AUTOBOT_DUPLICATE_MAX_RETURNED` | backend | int | `5000` | Maximum duplicate clusters a scan RETURNS (0 = unlimited). The count and the statistics always describe every cluster found; the analysis reports `truncated` when the list is shorter (#18067). |
 | `AUTOBOT_DUPLICATE_ORPHAN_LEASE_SECONDS` | backend | float | `300.0` | How long an abandoned duplicate scan may keep the single-flight lock after it was told to stop. Past this the lock is treated as leaked and replaced, so a scan thread that never exits cannot decline every later call (#18013). |
 | `AUTOBOT_EDIT_MISS_MAX_WINDOWS` | filesystem_mcp | int | `2000` | Most line windows that the edit_file closest-span search compares after a miss before it stops and reports that the search was capped (api/filesystem_edit.py, #19463). |
 | `AUTOBOT_EDIT_MISS_OLD_TEXT_MAX_CHARS` | filesystem_mcp | int | `2000` | Longest edit_file old_text that the closest-span search runs for after a miss. A longer old_text still fails as a miss, and the error says the search was capped (api/filesystem_edit.py, #19463). |
@@ -746,6 +746,8 @@ Unknown `AUTOBOT_*` keys in `.env` are refused at backend startup on and after 2
 | `SLM_ROLLBACK_STATEMENT_TIMEOUT_MS` | slm | int | `10000` | Server-side statement timeout (ms) for the rollback's migration reads (rollback_migrations.py). Range: 1000–300000. |
 | `SLM_SECRET_KEY` | slm | str | `""` | SLM JWT signing secret. Empty and unset are equivalent (both mean not configured). |
 | `SLM_STALE_COMPONENTS_SCAN_TIMEOUT_SECONDS` | slm | int | `300` | Seconds /code-sync/status waits on a drift scan before serving the last result (#20250). |
+| `SLM_STALE_SYNC_FILES_MAX_PER_PROPOSAL` | slm | int | `200` | Most files one stale-file cleanup proposal lists (one proposal per old sync location per node); the rest are proposed after this one is decided (slm_stale_file_actions.py, #22033). Range: 1–1000. |
+| `SLM_STALE_SYNC_FILES_SSH_TIMEOUT_SECONDS` | slm | float | `120.0` | Seconds one stale-file listing or removal over ssh may run (stale_sync_remote.py, #22033). Range: 5.0–900.0. |
 | `SLM_UPDATE_PROGRESS_STALL_SECONDS` | slm | int | `600` | Seconds a live self-update's log may stay still before the page reports it as quiet (#20254). |
 | `SLM_USERS_DATABASE_URL` | slm | str | *(none)* | SQLAlchemy DSN of the SLM admin-users database. Unset falls back to the slm_users database on the colocated PostgreSQL. |
 | `STABILITY_API_KEY` | image_generation | str | *(none)* | Stability AI API key for the image-generation plugin. Environment fallback only: credentials belong in the secrets service. |

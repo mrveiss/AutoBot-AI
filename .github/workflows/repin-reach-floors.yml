@@ -166,7 +166,7 @@ jobs:
           [ -n "${GH_TOKEN}" ] || exit 0
           OPEN="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
           [ -n "${OPEN}" ] || exit 0
-          if gh pr view "${OPEN}" --json comments --jq '.comments[].body' | grep -qF "${MARKER}"; then exit 0; fi
+          if grep -qF "${MARKER}" < <(gh pr view "${OPEN}" --json comments --jq '.comments[].body'); then exit 0; fi
           gh pr comment "${OPEN}" --body "${MARKER}
           Main no longer has a stale reach floor, so this re-pin is not needed. It is left open for a person to close or merge."
 

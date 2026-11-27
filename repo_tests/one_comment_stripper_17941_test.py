@@ -112,7 +112,7 @@ _MARKERS = frozenset({"#", "//", "/*"})
 _CANONICAL = frozenset({"tools/lint/_comment_syntax.py"})
 
 #: The regex-shaped strippers (#21569) are pending in `_comment_regex_pending`: 40 files measured when
-#: the regex shape was added, on top of the 9 below. Same rule: shrink only.
+#: the regex shape was added (38 since #22261), on top of the 9 below. Same rule: shrink only.
 _PENDING_PRIVATE_STRIPPERS = frozenset(
     {
         # BLOCKED BY THE SIZE RATCHET, not by the concept (#17941). The file
@@ -542,6 +542,16 @@ def test_the_pending_list_only_shrinks() -> None:
         ("a URL scheme is not a comment", 'import re\nx = re.match(r"https://example", s)\n', False),
         ("a division is not a comment", 'import re\nx = re.findall(r"(\\d+)/(\\d+)", s)\n', False),
         ("a CSS id selector is not a comment", 'import re\nx = re.split(r"#id", s)\n', False),
+        (
+            "the shared HTML pattern, used",
+            'from autobot_shared.html_comments import HTML_COMMENT\nx = HTML_COMMENT.sub("", s)\n',
+            False,
+        ),
+        (
+            "the shared HTML pattern, embedded",
+            'import re\nx = re.compile(HTML_COMMENT_PATTERN + r"|```.*?```")\n',
+            False,
+        ),
         ("a regex comment control under an assert", 'import re\nassert re.sub(r"//.*", "", s)\n', False),
     ],
 )
