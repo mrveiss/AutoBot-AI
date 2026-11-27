@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
+from knowledge.fact_aggregate import invalidates_fact_rows
 from knowledge.fact_key_families import FACT_COLLECTIONS_PREFIX
 
 if TYPE_CHECKING:
@@ -261,12 +262,12 @@ class CollectionsMixin:
             logger.error("Failed to update collection '%s': %s", collection_id, e)
             return {"success": False, "message": "Collection operation failed"}
 
+    @invalidates_fact_rows
     async def _remove_facts_from_deleted_collection(self, collection_id: str, fact_ids: set, delete_facts: bool) -> int:
         """Remove or delete facts when collection is deleted (Issue #398: extracted)."""
         facts_deleted = 0
         for fid in fact_ids:
-            if isinstance(fid, bytes):
-                fid = fid.decode("utf-8")
+            fid = fid.decode("utf-8") if isinstance(fid, bytes) else fid
             await self.redis().srem(f"{FACT_COLLECTIONS_PREFIX}{fid}", collection_id)
             if delete_facts:
                 await self.redis().delete(f"fact:{fid}")
@@ -638,14 +639,13 @@ class CollectionsMixin:
             "message": f"Set confirm=True to delete {fact_count} facts",
         }
 
+    @invalidates_fact_rows
     async def _delete_fact_completely(self, fid: str) -> None:
         """Delete a fact and remove from all collections (Issue #398: extracted)."""
-        if isinstance(fid, bytes):
-            fid = fid.decode("utf-8")
+        fid = fid.decode("utf-8") if isinstance(fid, bytes) else fid
         collections = await self.redis().smembers(f"{FACT_COLLECTIONS_PREFIX}{fid}")
         for cid in collections:
-            if isinstance(cid, bytes):
-                cid = cid.decode("utf-8")
+            cid = cid.decode("utf-8") if isinstance(cid, bytes) else cid
             await self.redis().srem(f"collection:facts:{cid}", fid)
         await self.redis().delete(f"fact:{fid}")
         await self.redis().delete(f"{FACT_COLLECTIONS_PREFIX}{fid}")

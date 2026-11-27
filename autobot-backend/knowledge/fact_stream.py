@@ -37,6 +37,17 @@ def is_fact_key(key: Any) -> bool:
     return text.startswith("fact:") and not text.startswith(NON_HASH_FACT_PREFIXES)
 
 
+def fact_keys_only(keys: Any) -> List[Any]:
+    """*keys* without the non-hash ``fact:`` families: the filter for a ``fact:*`` SCAN/KEYS that reads hashes."""
+    return [k for k in keys if is_fact_key(k)]
+
+
+def scan_fact_keys(client: Any, cursor: Any, count: int) -> "tuple[Any, List[Any]]":
+    """One sync ``SCAN`` step over ``fact:*``: ``(next_cursor, fact-hash keys only)``."""
+    next_cursor, keys = client.scan(cursor, match=FACT_KEY_PATTERN, count=count)
+    return next_cursor, fact_keys_only(keys)
+
+
 async def _read_batch(redis: Any, keys: List[Any]) -> List[Any]:
     """Fetch the hashes of *keys* in one round trip."""
     pipeline = redis.pipeline()
@@ -103,6 +114,6 @@ async def get_facts_page(
     kb.ensure_initialized()
     redis = kb.redis()
     next_cursor, raw = await redis.scan(cursor=cursor, match=FACT_KEY_PATTERN, count=count)
-    keys = [k for k in raw if is_fact_key(k)]
+    keys = fact_keys_only(raw)
     rows = await _read_batch(redis, keys) if keys else []
     return int(next_cursor), list(_eligible(keys, rows, kb._process_fact_data, collection, False))

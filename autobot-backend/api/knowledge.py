@@ -72,6 +72,7 @@ from autobot_shared.ssot_constants import SecurityConstants
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from knowledge.fact_aggregate import fact_rows
+from knowledge.fact_stream import fact_keys_only
 from knowledge.kb_ingest_result import ingest_in_kb, partial_note
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
@@ -2247,7 +2248,7 @@ async def _scan_all_fact_keys(kb) -> list:
     cursor = 0
     while True:
         cursor, keys = await asyncio.to_thread(kb.redis_client.scan, cursor, match="fact:*", count=1000)
-        all_fact_keys.extend(keys)
+        all_fact_keys.extend(fact_keys_only(keys))
         if cursor == 0:
             break
     return all_fact_keys

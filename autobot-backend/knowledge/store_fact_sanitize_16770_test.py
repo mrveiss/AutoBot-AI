@@ -259,3 +259,29 @@ async def test_update_fact_also_redacts_a_credential_bearing_source_url():
 
     assert result["status"] == "success"
     assert "hunter2" not in written["metadata"]["source"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("fact_id", "rejected"),
+    [
+        ("collections:x", True),
+        ("origin:session:x", True),
+        ("versions:x", True),
+        ("version:meta:x", True),
+        ("claude_memory:u1:slug", False),
+        ("gdrive:c1:file:/a.md", False),
+    ],
+)
+async def test_only_an_id_inside_a_reserved_fact_key_family_is_rejected(fact_id, rejected):
+    """#17530: ``fact:<id>`` must not key into another family; every other colon id stays valid."""
+    kb = FactsFakeKB()
+    store = AsyncMock(return_value={"status": "success", "fact_id": fact_id, "action": "created"})
+    with (
+        patch.object(FactsFakeKB, "_check_for_duplicates", new=AsyncMock(return_value=None)),
+        patch.object(FactsFakeKB, "_store_and_vectorize_fact", new=store),
+    ):
+        result = await kb.store_fact("some content", {}, fact_id=fact_id)
+
+    assert (result["status"] == "error") is rejected
+    assert store.await_count == (0 if rejected else 1)

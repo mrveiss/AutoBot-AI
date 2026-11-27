@@ -27,6 +27,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
+from knowledge.fact_stream import is_fact_key
 from user_management.models.retention_policy import RetentionPolicy
 from user_management.schemas.retention_policy import (
     PolicyType,
@@ -238,8 +239,7 @@ async def _count_kb_facts() -> int:
         while True:
             cursor, keys = await redis.scan(cursor, match="fact:*", count=500)
             for key in keys:
-                key_str = key.decode() if isinstance(key, bytes) else key
-                if len(key_str.split(":")) == 2:
+                if is_fact_key(key):
                     count += 1
             if cursor == 0:
                 break

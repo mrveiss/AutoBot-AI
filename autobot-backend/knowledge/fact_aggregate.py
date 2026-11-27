@@ -69,6 +69,7 @@ _GENERATION_ATTR = "_fact_rows_generation"
 def invalidate_fact_rows(kb: Any) -> None:
     """Drop *kb*'s cached rows; a scan already in flight will not store its (possibly stale) result."""
     setattr(kb, _CACHE_ATTR, None)
+    setattr(kb, _INFLIGHT_ATTR, None)  # a reader after the write starts a fresh scan, never joins a pre-write one
     setattr(kb, _GENERATION_ATTR, getattr(kb, _GENERATION_ATTR, 0) + 1)
 
 
@@ -94,7 +95,8 @@ async def _load_rows(kb: Any) -> Tuple[Dict[str, Any], ...]:
             setattr(kb, _CACHE_ATTR, (time.monotonic(), rows))
         return rows
     finally:
-        setattr(kb, _INFLIGHT_ATTR, None)
+        if getattr(kb, _INFLIGHT_ATTR, None) is asyncio.current_task():  # not a newer scan's slot
+            setattr(kb, _INFLIGHT_ATTR, None)
 
 
 async def fact_rows(kb: Any) -> Tuple[Dict[str, Any], ...]:

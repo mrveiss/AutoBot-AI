@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     import aioredis
     import redis
 from autobot_shared.logging_manager import get_logger
+from knowledge.fact_stream import fact_keys_only
 from utils.validators import validate_email
 
 logger = get_logger(__name__)
@@ -470,7 +471,7 @@ class MetadataMixin:
         fact_keys = await asyncio.to_thread(self.redis_client.keys, "fact:*")
         return [
             k
-            for k in fact_keys
+            for k in fact_keys_only(fact_keys)
             if not any(x in (k.decode() if isinstance(k, bytes) else k) for x in [":tags", ":category", ":all"])
         ]
 

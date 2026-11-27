@@ -18,3 +18,16 @@ NON_HASH_FACT_PREFIXES = (
     FACT_VERSIONS_PREFIX,
     FACT_VERSION_META_PREFIX,
 )
+
+_RESERVED_ID_PREFIXES = tuple(prefix.removeprefix("fact:") for prefix in NON_HASH_FACT_PREFIXES)
+
+
+def reserved_fact_id_error(fact_id: object) -> "dict | None":
+    """An error result when a caller-supplied *fact_id* would key into a non-hash family, else ``None``.
+
+    ``fact:<id>`` with an id starting ``collections:``, ``origin:session:``, ``versions:`` or ``version:meta:``
+    IS another family's key. Any other colon id is a legitimate fact id.
+    """
+    if fact_id is not None and str(fact_id).startswith(_RESERVED_ID_PREFIXES):
+        return {"status": "error", "message": "fact_id collides with a reserved fact: key family"}
+    return None

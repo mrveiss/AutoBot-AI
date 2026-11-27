@@ -22,7 +22,7 @@ from autobot_shared.logging_manager import get_logger
 from knowledge.category_quarantine import sync_fact_quarantine, unindex_deleted_fact
 from knowledge.embedding_space_binding import current_space
 from knowledge.fact_aggregate import invalidates_fact_rows
-from knowledge.fact_key_families import FACT_ORIGIN_SESSION_PREFIX
+from knowledge.fact_key_families import FACT_ORIGIN_SESSION_PREFIX, reserved_fact_id_error
 from knowledge.fact_projection import FactProjectionMixin
 from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable here
     _apply_usage_fields,
@@ -759,6 +759,8 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
     async def store_fact(self, content: str, metadata: Dict[str, Any] = None, fact_id: str = None) -> Dict[str, Any]:
         """Store a new fact in Redis and vectorize it (Issue #398: refactored)."""
         self.ensure_initialized()
+        if error := reserved_fact_id_error(fact_id):  # #17530: the only rejected ids; other colon ids are valid
+            return error
         # #13708: the dedup hash keys on what the caller SUBMITTED, not the redacted text (redaction masks every
         # credential to one placeholder, so two different secrets would collide). Storage and embedding use the
         # redacted `content`.
@@ -1161,11 +1163,9 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             metadata: Fact metadata for unique key cleanup
         """
         if content:
-            content_hash = fact_dedup_key(content)
-            await asyncio.to_thread(self.redis_client.delete, "content_hash:%s" % content_hash)
+            await asyncio.to_thread(self.redis_client.delete, "content_hash:%s" % fact_dedup_key(content))
 
-        unique_key = metadata.get("unique_key")
-        if unique_key:
+        if unique_key := metadata.get("unique_key"):
             await asyncio.to_thread(self.redis_client.delete, "unique_key:man_page:%s" % unique_key)
 
         await asyncio.to_thread(self.redis_client.delete, "%s%s" % (FACT_ORIGIN_SESSION_PREFIX, fact_id))

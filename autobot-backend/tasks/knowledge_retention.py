@@ -20,6 +20,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
+from knowledge.fact_stream import is_fact_key
 from services.audit.audit import AuditCategory
 from tasks.retention_audit import emit_deletion_audit
 
@@ -41,11 +42,9 @@ def _collect_expired_facts(redis_client, cutoff: datetime) -> Tuple[List[Tuple[s
         cursor, keys = redis_client.scan(cursor, match=_FACT_PATTERN, count=200)
         for key in keys:
             key_str = key.decode("utf-8") if isinstance(key, bytes) else key
-            # Only process bare fact:<id> hashes, not index/mapping keys
-            parts = key_str.split(":")
-            if len(parts) != 2:
+            if not is_fact_key(key_str):  # only fact hashes, not the other fact: key families
                 continue
-            fact_id = parts[1]
+            fact_id = key_str.split(":", 1)[1]
             try:
                 raw_ts = redis_client.hget(key, "timestamp")
                 if not raw_ts:

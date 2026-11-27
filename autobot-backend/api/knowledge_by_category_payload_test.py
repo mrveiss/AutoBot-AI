@@ -542,6 +542,40 @@ class TestWholeStoreReadersUseFactHashes:
         assert len(kb.redis().read) > reads
 
     @pytest.mark.asyncio
+    async def test_a_reader_after_a_write_never_joins_the_pre_write_scan(self, monkeypatch):
+        """#17530: invalidation clears the in-flight slot, so read-after-write sees the new fact."""
+        import asyncio
+
+        import knowledge.fact_aggregate as agg
+
+        kb = _fact_kb(2, page=10)
+        monkeypatch.setattr(agg, "FACT_AGGREGATE_TTL_SECONDS", 30)
+        release, scanned = asyncio.Event(), asyncio.Event()
+        real_scan = agg._scan_rows
+
+        async def slow_scan(target):
+            rows = await real_scan(target)
+            scanned.set()
+            await release.wait()  # the scan has read the old store and is held open
+            return rows
+
+        monkeypatch.setattr(agg, "_scan_rows", slow_scan)
+        before = asyncio.ensure_future(agg.fact_rows(kb))
+        await scanned.wait()
+        kb.redis().hashes["fact:id-9"] = {
+            "content": "c9",
+            "metadata": json.dumps({"category": "odd"}),
+            "timestamp": "t",
+        }
+        kb.redis().keys.append("fact:id-9")
+        agg.invalidate_fact_rows(kb)
+        monkeypatch.setattr(agg, "_scan_rows", real_scan)
+        after = await agg.fact_rows(kb)
+        release.set()
+        assert len(await before) == 2 and len(after) == 3
+        assert len(await agg.fact_rows(kb)) == 3  # the stale scan did not overwrite the cache
+
+    @pytest.mark.asyncio
     async def test_man_page_parser_reads_the_fact_dict(self):
         import api.knowledge as kn
 

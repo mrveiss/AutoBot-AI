@@ -24,6 +24,7 @@ from auth_middleware import get_current_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from knowledge.fact_aggregate import invalidates_fact_rows
 from knowledge.ownership import VisibilityLevel
 from knowledge.search_filters import parse_fact_metadata
 from knowledge_factory import get_or_create_knowledge_base
@@ -263,6 +264,7 @@ async def get_organization_knowledge_stats(request: Request, current_user: Dict 
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@invalidates_fact_rows
 async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
     """Delete facts whose creation date precedes cutoff_date.
 
