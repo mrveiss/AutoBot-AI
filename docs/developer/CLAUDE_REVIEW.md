@@ -96,7 +96,7 @@ Check each before sending the PR# and head:
 3. **Every cited owner decision is quoted on its issue,** with the date, before the PR cites it
    (#19216, #19259).
 4. **The whole-tree guards pass on the branch:** symbol forks, isolated-git, file size, reach.
-   Machine-checked: the pre-push hook runs them on every push (`ALWAYS_RUN` in
+   Machine-checked: the pre-push hook runs them on every push that does not skip it (`ALWAYS_RUN` in
    `tools/lint/prepush_selection.py`, #18808). The preboard guard lane runs the guard roots,
    which include them, only when dispatched (the coordinator dispatches it per head); a train
    boards a head only with a green lane result at that head. A new
@@ -104,7 +104,7 @@ Check each before sending the PR# and head:
 
 5. **Local checks:** see [`OWNER_RULES.md`](OWNER_RULES.md) row 32.
 
-Items 1 and 3 need a reader; 2 is caught when a reviewer diffs the comments; 4 is automatic.
+Items 1 and 3 need a reader; 2 is caught when a reviewer diffs the comments; 4 is automatic unless the push skips the hook.
 
 ## CodeRabbit and merge trains (#19284)
 
