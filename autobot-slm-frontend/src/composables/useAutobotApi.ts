@@ -143,8 +143,7 @@ export interface OrphanStorageListResponse {
 /**
  * Body of POST /approval-gates (`api/schemas_workflows.py::CreateApprovalRequest`).
  * Data Hygiene always sends `approval_type: 'destructive_action'` and a
- * `context` shaped exactly like `orphan_storage_cleanup_action.py`'s
- * docstring: `{ action: 'orphan_storage_delete', provider, candidate_id }`.
+ * `context` as in `orphan_storage_cleanup_action.py`'s docstring: `{ action: 'orphan_storage_delete', provider, candidate_id }`.
  */
 export interface CreateApprovalRequestBody {
   title: string

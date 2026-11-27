@@ -20,7 +20,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.principal import require_actor_id
+from autobot_shared.principal import require_audit_actor_id
 from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
@@ -43,7 +43,7 @@ def cleanup_proposal(
         "title": title,
         "approval_type": ApprovalType.DESTRUCTIVE_ACTION.value,
         "description": description,
-        "requested_by_agent": require_actor_id(current_user),
+        "requested_by_agent": require_audit_actor_id(current_user),
         "context": context,
         **({"approval_id": approval_id} if approval_id else {}),
     }
@@ -92,7 +92,7 @@ async def create_proposal_once(
 
 async def _record_lost_race(lost_id: uuid.UUID, winner_id: uuid.UUID, current_user: dict, resource: str) -> None:
     """Durable row saying the creation row naming *lost_id* never became an approval; *winner_id* did."""
-    actor = require_actor_id(current_user)  # outside the try: no identity is a 401, not a swallowed error
+    actor = require_audit_actor_id(current_user)  # outside the try: no identity is a 401, not a swallowed error
     try:
         written = await audit_log(
             AuditAction.CLEANUP_PROPOSAL_LOST_RACE,
@@ -114,7 +114,7 @@ async def record_cleanup_proposed(approval_id: uuid.UUID, current_user: dict, *,
 
     No row means no proposal: a failed or refused write is a 503 and nothing is created.
     """
-    actor = require_actor_id(current_user)  # the canonical id, never the mutable username; 401 if none
+    actor = require_audit_actor_id(current_user)  # the canonical id, never the mutable username; 401 if none
     try:
         written = await audit_log(
             operation,

@@ -55,7 +55,7 @@ def require_principal_id(current_user: Optional[Dict[str, Any]]) -> str:
     return owner
 
 
-def resolve_actor_id(current_user: Optional[Dict[str, Any]]) -> Optional[str]:
+def resolve_audit_actor_id(current_user: Optional[Dict[str, Any]]) -> Optional[str]:
     """The stable id to record as the *actor* of an audited action, or None when there is none.
 
     A human principal resolves to its owner id (``resolve_principal_id``). An admitted service principal
@@ -72,9 +72,9 @@ def resolve_actor_id(current_user: Optional[Dict[str, Any]]) -> Optional[str]:
     return None
 
 
-def require_actor_id(current_user: Optional[Dict[str, Any]]) -> str:
-    """``resolve_actor_id``, or a 401 when the caller is neither a human principal nor an admitted service."""
-    actor = resolve_actor_id(current_user)
+def require_audit_actor_id(current_user: Optional[Dict[str, Any]]) -> str:
+    """``resolve_audit_actor_id``, or a 401 when the caller is neither a human principal nor an admitted service."""
+    actor = resolve_audit_actor_id(current_user)
     if not actor:
         from fastapi import HTTPException  # lazy: keep this module import-free (see the module docstring)
 
@@ -82,4 +82,4 @@ def require_actor_id(current_user: Optional[Dict[str, Any]]) -> str:
     return actor
 
 
-__all__ = ["require_actor_id", "require_principal_id", "resolve_actor_id", "resolve_principal_id"]
+__all__ = ["require_audit_actor_id", "require_principal_id", "resolve_audit_actor_id", "resolve_principal_id"]

@@ -19,7 +19,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.principal import resolve_actor_id
+from autobot_shared.principal import resolve_audit_actor_id
 from llc.services.member_standing import member_people
 from services.approval_execution import REQUESTED_LABEL_KEY
 
@@ -47,7 +47,7 @@ def caller_identities(current_user: Mapping[str, Any]) -> set[str]:
     """Every value a stored requester may name for this caller: the canonical ids, the service name, the username."""
     claims = (
         *(current_user.get(c) for c in ("id", "user_id", "sub", "username")),
-        resolve_actor_id(dict(current_user)),
+        resolve_audit_actor_id(dict(current_user)),
     )
     return {str(v) for v in claims if v}
 

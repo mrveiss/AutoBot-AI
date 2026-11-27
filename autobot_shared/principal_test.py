@@ -7,7 +7,12 @@
 import pytest
 from fastapi import HTTPException
 
-from autobot_shared.principal import require_actor_id, require_principal_id, resolve_actor_id, resolve_principal_id
+from autobot_shared.principal import (
+    require_audit_actor_id,
+    require_principal_id,
+    resolve_audit_actor_id,
+    resolve_principal_id,
+)
 
 
 @pytest.mark.parametrize(
@@ -54,15 +59,15 @@ _SERVICE = {"username": "service:slm-x", "role": "service", "service": True}
 )
 def test_actor_is_the_id_or_the_admitted_service_name_never_a_username(user, expected):
     """#22222: the audit actor; a service is not a user, so ``resolve_principal_id`` still ignores it."""
-    assert resolve_actor_id(user) == expected
+    assert resolve_audit_actor_id(user) == expected
 
 
 def test_a_service_has_no_owner_scope_but_has_an_actor():
     assert resolve_principal_id(_SERVICE) is None
-    assert require_actor_id(_SERVICE) == "service:slm-x"
+    assert require_audit_actor_id(_SERVICE) == "service:slm-x"
 
 
 def test_require_actor_id_refuses_a_username_only_caller():
     with pytest.raises(HTTPException) as refused:
-        require_actor_id({"username": "admin"})
+        require_audit_actor_id({"username": "admin"})
     assert refused.value.status_code == 401
