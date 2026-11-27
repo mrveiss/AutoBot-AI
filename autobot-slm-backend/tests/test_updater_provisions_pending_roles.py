@@ -419,18 +419,17 @@ def test_the_raw_update_route_provisions_with_the_runs_restart_policy(monkeypatc
     assert seen == [{}, {}], "restarting (the default) passes no restart arguments"
 
 
-@pytest.mark.parametrize(
-    ("variables", "restarts"),
-    [
-        ({}, True), ({"autobot_restart_services": True}, True), ({"autobot_restart_services": False}, False),
-        ({"autobot_restart_services": "true"}, True), ({"autobot_restart_services": "yes"}, True),
-        ({"autobot_restart_services": "no"}, False), ({"autobot_restart_services": "off"}, False),
-        ({"autobot_restart_services": "0"}, False), ({"autobot_restart_services": ""}, False),
-        ({"autobot_restart_services": "garbage"}, False), ({"autobot_restart_services": "f"}, False),
-        ({"autobot_restart_services": "n"}, False), ({"autobot_restart_services": None}, False),
-    ],
+_UNSET = object()  # the key is absent from the role variables
+_RESTART_RULE_CASES = (
+    [(_UNSET, True)]
+    + [(v, True) for v in (True, "true", "yes")]
+    + [(v, False) for v in (False, "no", "off", "0", "", "garbage", "f", "n", None)]
 )
-def test_the_raw_route_restart_flag_follows_ansibles_bool_rules(monkeypatch, variables, restarts) -> None:
+
+
+@pytest.mark.parametrize(("value", "restarts"), _RESTART_RULE_CASES)
+def test_the_raw_route_restart_flag_follows_ansibles_bool_rules(monkeypatch, value, restarts) -> None:
+    variables = {} if value is _UNSET else {"autobot_restart_services": value}
     seen: list[dict] = []
     _raw(monkeypatch, [_host("desk", ["vnc"])], None, variables=variables, kwargs_seen=seen)
     assert seen == [{} if restarts else NO_RESTART]
