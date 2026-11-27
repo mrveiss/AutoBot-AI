@@ -454,7 +454,7 @@ onMounted(async () => {
         <button
           @click="cancelMFASetup"
           :disabled="loading"
-          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>
@@ -534,7 +534,7 @@ onMounted(async () => {
             (showDisableModal = false), (disablePassword = '')
           "
           :disabled="loading"
-          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>
@@ -577,7 +577,7 @@ onMounted(async () => {
               (regeneratePassword = '')
           "
           :disabled="loading"
-          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>
@@ -666,7 +666,7 @@ onMounted(async () => {
         <button
           @click="showCreateKeyModal = false"
           :disabled="loading"
-          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>

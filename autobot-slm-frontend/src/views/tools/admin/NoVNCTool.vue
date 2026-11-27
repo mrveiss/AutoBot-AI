@@ -131,7 +131,7 @@ onMounted(() => fetchDynamicEndpoints())
             :disabled="loading || !selectedHostId"
             :class="[
               'px-4 py-1.5 text-sm font-medium rounded-lg transition-colors',
-              isConnected ? 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg hover:bg-autobot-pill-bad-bg' : 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg hover:bg-autobot-pill-ok-bg'
+              isConnected ? 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg hover:bg-(--bad-bg-hover)' : 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg hover:bg-(--ok-bg-hover)'
             ]"
           >
             <span v-if="loading">{{ $t('tools.admin.noVNCTool.connecting') }}</span>

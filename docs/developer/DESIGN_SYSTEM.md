@@ -380,6 +380,17 @@ kind reads nothing, and planted samples prove each extractor. `LanguageSwitcher.
 `--aui-color-{surface,text,border}` to the identity bar inside its own `<style>`: those names are declared by the kit
 adapter, so they are shared names given a local value, not new SLM names.
 
+Class lists are read per element (a quote-aware tag scan that joins `class=` and `:class=`), not by pairing quotes
+across the file, so a stray apostrophe in text cannot shift the pairing; a floor test fails when the tag scan reads fewer
+`class` attributes than the file contains. A utility resolves through its `--color-*` alias chain, so two names for one
+value (`bg-autobot-bg-tertiary` and `bg-autobot-bg-hover` are both `--surface2`) count as a repeat; the hover step for
+that surface is `bg-autobot-bg-active`.
+
+**Twice-defined by the promote pattern:** `--ok-bg-hover`, `--warn-bg-hover`, `--bad-bg-hover` and `--i2t-hover` are
+declared in both `slm-scheme.css` and the user frontend's `design-tokens.css` with the same derivation (the theme's
+fill mixed 10% toward its text colour). The two apps share no stylesheet, so the pair must change together; the user
+frontend has no consumer of them yet.
+
 ## Canonical homes (#17571)
 
 Which module owns each design-system concept is declared in code, not here:
