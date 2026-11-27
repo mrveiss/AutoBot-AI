@@ -88,7 +88,7 @@ About half the PRs handed over on 2026-10-22/23 needed a fix-first round for one
 Check each before sending the PR# and head:
 
 1. **Every guard or test the body claims exists and runs.** Name it by file and test, and
-   confirm it ran in your pre-push or local run (#19257 claimed a smoke-credential guard that
+   confirm it ran in CI for this head (#19257 claimed a smoke-credential guard that
    did not exist).
 2. **Ceilings are met by splitting, never by trimming.** A file over its size ceiling gets a
    module or helper extracted; shortening comments, docstrings or log text to fit is a finding
@@ -96,16 +96,15 @@ Check each before sending the PR# and head:
 3. **Every cited owner decision is quoted on its issue,** with the date, before the PR cites it
    (#19216, #19259).
 4. **The whole-tree guards pass on the branch:** symbol forks, isolated-git, file size, reach.
-   Machine-checked: pre-push runs them on every push (`ALWAYS_RUN` in
-   `tools/lint/prepush_selection.py`, #18808), so a green pre-push covers item 4. A new
+   Machine-checked: the pre-push hook runs them on every push that does not skip it (`ALWAYS_RUN` in
+   `tools/lint/prepush_selection.py`, #18808). The preboard guard lane runs the guard roots,
+   which include them, only when dispatched (the coordinator dispatches it per head); a train
+   boards a head only with a green lane result at that head. A new
    symbol that reuses an existing name (#19205, #19215) is what the symbol-fork ratchet catches.
 
-5. **Local runs respect the shared machine (owner rule, 2026-10-23).** Only the test you changed
-   (owner, 2026-11-02), run under the `machine:heavy-run` lock with a hold of at most 20
-   minutes; never a full local `repo_tests` suite (CI is the full gate). Train pushes go first,
-   and a hold whose reason says "train push waiting" is released at the next test boundary.
+5. **Local checks:** see [`OWNER_RULES.md`](OWNER_RULES.md) row 32.
 
-Items 1 and 3 need a reader; 2 is caught when a reviewer diffs the comments; 4 is automatic.
+Items 1 and 3 need a reader; 2 is caught when a reviewer diffs the comments; 4 is automatic unless the push skips the hook.
 
 ## CodeRabbit and merge trains (#19284)
 
@@ -156,7 +155,7 @@ After agents complete:
    - Syntax: `npm run lint` / `python -m black --check`
    - Imports: `python -c 'import <module>'` for each modified file
    - Call sites: grep for removed/renamed functions
-4. **Merge:** each PR to `main` (approved PRs land via a train, see "Merge trains") — only with every required check green (see "Red CI Never Merges")
+4. **Merge:** each PR to `main` (the PR coordinator lands each PR, OWNER_RULES row 33; trains apply only while a trainmaster runs, see "Merge trains") — only with every required check green (see "Red CI Never Merges")
 5. **Verify count:** PR count should be 0 after all merges
 
 ---
@@ -308,13 +307,13 @@ After merging all PRs in a batch:
 
 ## Validation Gates Before Merging
 
-**Use `/autobot-dev-skills:review pre-merge-validate <PR>` before merging any code:**
+**Use `/autobot-dev-skills:review pre-merge-validate <PR>` before merging any code** (it reads CI's results for the head; local checks: [OWNER_RULES.md](OWNER_RULES.md) row 32):
 
 0. Squash-Duplicate Detection (Gate 0)
 1. Syntax + Imports
 2. Call-Site Impact
 3. Function Signatures
-4. Targeted Tests (only changed files)
+4. Tests (CI results for the head)
 5. Type Check (TypeScript)
 6. Linting (errors only, not warnings)
 
@@ -323,6 +322,8 @@ After merging all PRs in a batch:
 ---
 
 ## Merge trains
+
+*Applies only while a trainmaster session runs; otherwise the PR coordinator lands PRs individually ([`OWNER_RULES.md`](OWNER_RULES.md) row 33).*
 
 The trainmaster (PR-coordinator session) alone builds and lands trains: merge commits, never squash, two CI slots, two trains may run in CI, and only the one landing next is built and fixed. Authors send the PR number and head, then stop pushing to a queued head unless asked; a head moved only by merging main stays in line, and any other new commit needs a fresh look. CodeRabbit never blocks a first CI run; a relaunch answers open threads first. Full list: [`OWNER_RULES.md`](OWNER_RULES.md).
 

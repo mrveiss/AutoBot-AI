@@ -30,7 +30,7 @@ Checklist for starting and ending a session. Rules it points at are not restated
 
 ### Git
 
-- [ ] No local test runs: CI and merge trains are the gate ([`CLAUDE_REVIEW.md`](CLAUDE_REVIEW.md#merge-trains)).
+- [ ] Local checks: [`OWNER_RULES.md`](OWNER_RULES.md) row 32.
 - [ ] Everything finished is committed and pushed; no local-only work ([`CLAUDE_GIT.md`](CLAUDE_GIT.md#parallel-work-worktree-isolation-critical)).
 - [ ] Before removing each worktree, check it for a legacy `.session/HANDOFF-*.md` (gitignored, so removal will not refuse). If one exists, carry it as `<worktree>-<original file name>` the same way as at Start. Only then remove the worktree.
 - [ ] Remove every worktree you own once its branch is pushed, landed or not, never with `--force`, then `ledger release worktree <name>` ([claims](AGENT_COORDINATION.md#scope-grammar)). The pushed branch is the record and the takeover point; the worktree is disposable. Unlike a restart, an end-of-session release is final.
