@@ -571,7 +571,7 @@ onMounted(() => {
 .default-badge {
   font-size: 10px;
   background: var(--color-primary);
-  color: var(--color-white);
+  color: var(--text-on-primary);
   padding: 2px var(--spacing-2);
   border-radius: var(--radius-default);
   align-self: flex-start;
