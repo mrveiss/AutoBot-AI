@@ -32,9 +32,10 @@ from services.self_model_reconcile import (
     STATUSES,
     Observation,
     entity_key,
+    rows_for_response,
     unavailable_because,
 )
-from services.self_model_store import apply_observations, load_rows, revision, rows_for_response, sweep_stale
+from services.self_model_store import apply_observations, load_rows, revision, sweep_stale
 
 router = APIRouter(prefix="/self-model", tags=["self-model"])
 

@@ -31,7 +31,7 @@ import importlib.util as _ilu  # noqa: E402
 import sys
 import types
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 _ms_spec = _ilu.spec_from_file_location("_slm_module_stub", Path(__file__).parent / "tests" / "_module_stub.py")
 _ms_mod = _ilu.module_from_spec(_ms_spec)
@@ -183,6 +183,9 @@ for _m in [
     "models",
     "models.database",
     "models.schemas",
+    # #22277: SQLAlchemy Core tables (sqlalchemy.dialects.postgresql), which the
+    # non-package sqlalchemy stub above cannot import; api/self_model.py reads it.
+    "models.self_model",
 ]:
     _stub(_m)
 
@@ -285,6 +288,12 @@ _EXTRA_SERVICE_MODULES = (
     # (#16310 review round 10: moved out of services/ itself, see that
     # file's module docstring), not here.
     "services.full_tree_drift",
+    # #22277: reconciler.py imports apply_heartbeat_extra_data at module scope, and
+    # api/self_model.py the read/write helpers. The real module imports
+    # sqlalchemy.dialects.postgresql and models.self_model, which the stubbed
+    # sqlalchemy cannot provide, so every real-loaded reconciler failed to collect.
+    # Its pure decisions live in services/self_model_reconcile (real-loaded below).
+    "services.self_model_store",
 )
 
 # #16722: the parent is a hollow package over the real directory, not a MagicMock.
@@ -309,6 +318,9 @@ if "services" not in sys.modules:
 # Each child stub binds onto the parent as it is created (see _stub docstring).
 for _m in sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES)):
     _stub(_m)
+
+# #22277: the heartbeat path awaits it, and a plain MagicMock child is not awaitable.
+sys.modules["services.self_model_store"].apply_heartbeat_extra_data = AsyncMock()
 
 # #16712/#16722 (#17133 review): pytest.ini's --import-mode=importlib collects a
 # services/*_test.py file as the dotted module services.<name>, and

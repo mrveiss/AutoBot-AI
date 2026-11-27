@@ -230,3 +230,12 @@ def rename_hosts(observed: List[Observation], node_ids_by_host: Mapping[str, str
     keyed by the node's own id. A host the SLM does not manage keeps the address it was given.
     """
     return [replace(o, node_id=node_ids_by_host.get(o.node_id or "", o.node_id)) for o in observed]
+
+
+def rows_for_response(rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Entity rows without the surrogate id, in ``entity_key`` order.
+
+    The key is unique and a heartbeat never changes it, so ``offset`` paging neither repeats nor skips a row
+    when timestamps tie or move between page reads. A caller wanting newest-first sorts after the full read.
+    """
+    return sorted(({k: v for k, v in r.items() if k != "id"} for r in rows), key=lambda r: r["entity_key"])

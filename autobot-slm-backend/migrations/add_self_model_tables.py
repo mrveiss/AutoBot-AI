@@ -12,10 +12,11 @@ table. Reversible by removing the two tables; nothing else references them.
 import logging
 import sys
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_url_credentials
 from migrations.utils import get_connection, table_exists
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ENTITIES_DDL = """
     CREATE TABLE self_model_entities (

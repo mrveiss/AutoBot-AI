@@ -38,11 +38,14 @@ def test_parse_dpkg_keeps_only_installed_packages():
 def test_full_inventory_only_when_hash_changes_or_backstop_is_due(monkeypatch):
     clock, state = _Clock(), {"sig": (("p", 1),), "git": "2.43"}
     reporter = _reporter(monkeypatch, state, clock)
-    assert "inventory" in reporter.report()
+    first = reporter.report()
+    assert "inventory" in first
+    reporter.confirm(first, delivered=True)  # only an acknowledged report counts as sent
     assert "inventory" not in reporter.report()
     state["sig"], state["git"] = (("p", 2),), "2.44"
     changed = reporter.report()
     assert changed["inventory"]["packages"] == {"git": "2.44"}
+    reporter.confirm(changed, delivered=True)
     assert "inventory" not in reporter.report()
     clock.now = inventory.INVENTORY_RESEND_S + 1
     assert "inventory" in reporter.report()
@@ -51,7 +54,7 @@ def test_full_inventory_only_when_hash_changes_or_backstop_is_due(monkeypatch):
 def test_unchanged_signature_does_not_rescan(monkeypatch):
     clock, state = _Clock(), {"sig": (("p", 1),), "git": "2.43"}
     reporter = _reporter(monkeypatch, state, clock)
-    reporter.report()
+    reporter.confirm(reporter.report(), delivered=True)
     state["git"] = "9.9"  # a rescan would notice; an unchanged mtime signature must not rescan
     assert reporter.report()["inventory_hash"] == reporter.report()["inventory_hash"]
     assert "inventory" not in reporter.report()

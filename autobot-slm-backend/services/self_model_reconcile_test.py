@@ -147,7 +147,7 @@ def test_a_host_address_becomes_the_nodes_own_id_and_an_unmanaged_host_is_kept()
 
 
 def test_paging_order_is_stable_when_timestamps_tie_across_a_page_boundary():
-    from services.self_model_store import rows_for_response
+    from services.self_model_reconcile import rows_for_response
 
     rows = [{"id": i, "entity_key": f"tool:t{i}", "last_seen": T0} for i in (3, 1, 4, 0, 2)]
     ordered = rows_for_response(rows)

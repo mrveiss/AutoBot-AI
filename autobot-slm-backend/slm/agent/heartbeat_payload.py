@@ -116,5 +116,8 @@ def build_heartbeat_payload(
 
 
 def confirm_inventory(payload: Dict[str, Any], delivered: bool) -> bool:
-    """Tell the inventory reporter whether the heartbeat *payload* reached the SLM (#22277); returns *delivered*."""
-    return get_inventory_reporter().confirm(payload["extra_data"], delivered)
+    """Tell the inventory reporter whether the heartbeat *payload* reached the SLM (#22277); returns *delivered*.
+
+    A payload without ``extra_data`` carried no inventory, so there is nothing to confirm.
+    """
+    return get_inventory_reporter().confirm(payload.get("extra_data") or {}, delivered)

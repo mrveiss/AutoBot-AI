@@ -178,12 +178,3 @@ async def apply_heartbeat_extra_data(db: AsyncSession, node_id: str, extra_data:
     if plan.changed or swept.changed:
         moves = len(plan.history) + len(swept.history)
         logger.info("self-model changed by node %s heartbeat (%d transitions)", node_id, moves)
-
-
-def rows_for_response(rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Entity rows without the surrogate id, in ``entity_key`` order.
-
-    The key is unique and a heartbeat never changes it, so ``offset`` paging neither repeats nor skips a row
-    when timestamps tie or move between page reads. A caller wanting newest-first sorts after the full read.
-    """
-    return sorted(({k: v for k, v in r.items() if k != "id"} for r in rows), key=lambda r: r["entity_key"])
