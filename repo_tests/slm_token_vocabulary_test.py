@@ -171,9 +171,10 @@ _TOKEN = re.compile(r"""[^\s'"`,\[\]{};?:]+(?::[^\s'"`,\[\]{};?:]+)*""")
 _ALIAS = re.compile(r"^var\(\s*(--[\w-]+)\s*\)$")
 _ARBITRARY = re.compile(r"^\((--[\w-]+)\)$")
 # One element's opening tag, quote-aware: a `>` or an apostrophe inside a quoted attribute value never ends
-# or shifts it, which a whole-file quote pairing cannot promise.
+# or shifts it, which a whole-file quote pairing cannot promise. An unquoted value never holds `=`, so a name
+# and its value have exactly one split point (a value that could swallow `=` made the match ambiguous: CodeQL py/redos).
 _TAG = re.compile(
-    r"""<([a-zA-Z][\w.-]*)((?:\s+[^\s=>/"']+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']+))?)*)\s*/?>""",
+    r"""<([a-zA-Z][\w.-]*)((?:\s+[^\s=>/"']+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"'=]+))?)*)\s*/?>""",
 )
 _ATTR = re.compile(r"""\s([:@\w.-]*class)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
 _JS_STRING = re.compile(r"""'([^'\n]*)'|`([^`]*)`|"([^"\n]*)\"""")
