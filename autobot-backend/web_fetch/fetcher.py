@@ -40,6 +40,7 @@ import time
 from urllib.parse import urlparse
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from services import web_research_config
@@ -185,7 +186,7 @@ async def _fetch_jina_impl(url: str, timeout: float) -> str | None:
             "GET",
             jina_url,
             timeout=aio_timeout,
-            allow_redirects=True,
+            guard_egress=EGRESS_POLICY,  # server-chosen SSOT host; the page URL rides in the path (#21850)
             suppress_error_log=True,
         ) as resp:
             if resp.status == 200:

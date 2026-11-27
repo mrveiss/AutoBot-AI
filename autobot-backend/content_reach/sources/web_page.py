@@ -19,7 +19,7 @@ import httpx
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.ssrf_guard import SSRFError
 from autobot_shared.ssot_config import config
-from content_reach._http import http_get
+from content_reach._http import assert_server_chosen_egress, http_get
 from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
 from content_reach.backends.browser import BrowserContentBackend
 from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
@@ -141,6 +141,7 @@ class JinaReaderBackend(ContentBackend):
 
         url = f"{_JINA_READER_BASE}{request.url}"
         headers = {"Accept": "text/plain"}
+        await assert_server_chosen_egress(url, client=self._client)
 
         try:
             response = await http_get(url, client=self._client, headers=headers)

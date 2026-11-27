@@ -9,7 +9,7 @@ metadata:
 tools:
   - name: jina-reader
     type: web_content_extractor
-    purpose: Extract clean markdown content from any URL via Jina Reader API
+    purpose: Extract clean markdown content from any URL via a third-party reader service (opt-in)
     installation:
       system: No installation required — uses curl with r.jina.ai prefix
     usage:
@@ -35,7 +35,7 @@ tools:
         solution: "Use -k flag to skip verification only for trusted internal URLs"
     related_tools: ["wget", "httpx", "curl"]
     performance_notes:
-      - "Jina Reader is the preferred fast-path for text extraction from public URLs"
+      - "A third-party reader service is an opt-in fast-path for text extraction from public URLs (it receives every URL sent to it)"
       - "Response time is typically 1-3 seconds for most pages"
       - "Caches results; repeated requests for same URL are faster"
 

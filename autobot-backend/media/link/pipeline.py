@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 from urllib.parse import urljoin
 
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
@@ -218,8 +219,10 @@ class LinkPipeline(BasePipeline):
 
         jina_url = f"{_JINA_BASE_URL}{url}"
         try:
+            # Server-chosen SSOT host (the page URL rides in the path): EGRESS_POLICY, no redirects (#21850).
+            await assert_egress_policy(jina_url)
             async with _get_jina_session() as session:
-                async with session.get(jina_url, allow_redirects=True, timeout=_JINA_TIMEOUT) as response:
+                async with session.get(jina_url, allow_redirects=False, timeout=_JINA_TIMEOUT) as response:
                     if response.status == 200:
                         text = await response.text(encoding="utf-8", errors="replace")
                         _record_jina_success()

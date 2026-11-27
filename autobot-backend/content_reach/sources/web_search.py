@@ -19,7 +19,7 @@ import httpx
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-from content_reach._http import http_get
+from content_reach._http import assert_server_chosen_egress, http_get
 from content_reach.backends.browser import BrowserSearchBackend
 from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from content_reach.chain import ContentSourceChain
@@ -120,6 +120,7 @@ class JinaSearchBackend(ContentBackend):
         encoded_query = quote_plus(request.query)
         url = f"{_JINA_SEARCH_BASE}{encoded_query}"
         headers = {"Accept": "application/json"}
+        await assert_server_chosen_egress(url, client=self._client)
 
         try:
             response = await http_get(url, client=self._client, headers=headers)
