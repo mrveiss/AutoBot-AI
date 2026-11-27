@@ -28,6 +28,7 @@ here on purpose:
 
 import asyncio
 import re
+import shlex
 import time
 import uuid
 from typing import Awaitable, Callable
@@ -37,6 +38,9 @@ from utils.encoding_utils import strip_ansi_codes
 
 #: Return code reported for a command cancelled on timeout, as timeout(1) reports it.
 TIMED_OUT_RETURN_CODE = 124
+
+#: 128 + SIGPIPE: with ``pipefail`` a reader that closes early (``yes | head -1``, ``grep -q``) fails the writer.
+SIGPIPE_RETURN_CODE = 141
 
 #: Prefixed to output whose start the transcript cap had already dropped.
 TRUNCATED_NOTE = "[earlier output dropped: it exceeded the terminal transcript]\n"
@@ -120,3 +124,24 @@ async def await_exit_code(
         return return_code, False
     await on_timeout()
     return None, True
+
+
+def _has_pipeline(command: str) -> bool:
+    """Whether a ``|`` joins commands at the shell's top level: not one inside quotes, nor inside ``bash -c '...'``."""
+    try:
+        lexer = shlex.shlex(command, posix=False, punctuation_chars="|&;")
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:  # an unbalanced quote: the shell would not run it as a pipeline either
+        return False
+    return "|" in tokens
+
+
+def effective_exit_code(command: str, return_code: int) -> int:
+    """*return_code*, except that SIGPIPE (141) in a pipeline is the reader finishing early: success (#22252).
+
+    A command that is not a pipeline keeps 141, since nothing there explains a broken pipe as benign.
+    """
+    if return_code == SIGPIPE_RETURN_CODE and _has_pipeline(command):
+        return 0
+    return return_code

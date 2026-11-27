@@ -10,12 +10,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Mapping
 
 from langchain_core.runnables import RunnableConfig
 
 from autobot_shared.logging_manager import get_logger
 from chat_workflow import plan_runner
+
+if TYPE_CHECKING:
+    from chat_workflow.graph import ChatState
 
 logger = get_logger(__name__)
 
@@ -23,7 +26,7 @@ logger = get_logger(__name__)
 NO_PLAN: Dict[str, Any] = {"plan_id": None, "current_step_id": None, "plan_progress": {}}
 
 
-async def create_plan(state: Dict[str, Any], config: RunnableConfig) -> dict:
+async def create_plan(state: ChatState, config: RunnableConfig) -> dict:
     """Write the turn's plan, start step one and put its ids in state; no-op when planning is off."""
     if state.get("error") or not plan_runner.planner_enabled():
         return {}
@@ -41,15 +44,15 @@ async def create_plan(state: Dict[str, Any], config: RunnableConfig) -> dict:
     return tracker.state_update() if tracker else dict(NO_PLAN)
 
 
-async def advance_after_tools(manager, state: Dict[str, Any], new_entries: list) -> dict:
+async def advance_after_tools(manager, state: Mapping[str, Any], new_entries: list) -> dict:
     """Settle the current step from this pass's tool results; the state update ({} when the turn has no plan)."""
-    tracker = plan_runner.tracker_from_state(manager, state)
+    tracker = plan_runner.tracker_from_state(manager, dict(state))
     if tracker is None:
         return {}
     await tracker.advance(new_entries)
     return tracker.state_update()
 
 
-def with_plan_step(prompt: str, state: Dict[str, Any]) -> str:
+def with_plan_step(prompt: str, state: Mapping[str, Any]) -> str:
     """``prompt`` plus the current plan step, from the block already in state (no I/O)."""
     return plan_runner.with_guidance(prompt, (state.get("plan_progress") or {}).get("block", ""))

@@ -112,45 +112,6 @@ from pathlib import Path
 from typing import Dict, List
 
 import aiofiles
-
-from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
-from services.mcp_bridge_manifest import MCPBridgeManifest
-from type_defs.common import Metadata
-from utils.io_executor import run_in_file_executor
-
-MANIFEST = MCPBridgeManifest(
-    name="filesystem_mcp",
-    version="1.0.0",
-    description="Filesystem Operations - Secure File & Directory Access",
-    features=["read_files", "write_files", "directory_management", "search", "metadata"],
-    endpoint="/api/filesystem/mcp/tools",
-)
-
-# Issue #514: Per-file locking to prevent concurrent write corruption
-_file_locks: Dict[str, asyncio.Lock] = {}
-_file_locks_lock = asyncio.Lock()
-
-
-async def _get_file_lock(filepath: str) -> asyncio.Lock:
-    """
-    Get or create a lock for a specific file path (Issue #514).
-
-    Uses per-file locking to allow concurrent writes to different files
-    while preventing corruption from concurrent writes to the same file.
-
-    Args:
-        filepath: Absolute path to the file
-
-    Returns:
-        asyncio.Lock for the specified file
-    """
-    async with _file_locks_lock:
-        if filepath not in _file_locks:
-            _file_locks[filepath] = asyncio.Lock()
-        return _file_locks[filepath]
-
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.filesystem_edit import apply_edits_off_loop
@@ -194,9 +155,46 @@ from api.schemas_code import (
 from api.schemas_filesystem_edit import EditFileRequest
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
+from autobot_shared.ssot_config import config
 from constants.path_constants import PATH as LEGACY_DATA_ROOT
+from services.mcp_bridge_manifest import MCPBridgeManifest
+from type_defs.common import Metadata
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
+from utils.io_executor import run_in_file_executor
+
+MANIFEST = MCPBridgeManifest(
+    name="filesystem_mcp",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
+    description="Filesystem Operations - Secure File & Directory Access",
+    features=["read_files", "write_files", "directory_management", "search", "metadata"],
+    endpoint="/api/filesystem/mcp/tools",
+)
+
+# Issue #514: Per-file locking to prevent concurrent write corruption
+_file_locks: Dict[str, asyncio.Lock] = {}
+_file_locks_lock = asyncio.Lock()
+
+
+async def _get_file_lock(filepath: str) -> asyncio.Lock:
+    """
+    Get or create a lock for a specific file path (Issue #514).
+
+    Uses per-file locking to allow concurrent writes to different files
+    while preventing corruption from concurrent writes to the same file.
+
+    Args:
+        filepath: Absolute path to the file
+
+    Returns:
+        asyncio.Lock for the specified file
+    """
+    async with _file_locks_lock:
+        if filepath not in _file_locks:
+            _file_locks[filepath] = asyncio.Lock()
+        return _file_locks[filepath]
+
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["filesystem_mcp", "mcp"])

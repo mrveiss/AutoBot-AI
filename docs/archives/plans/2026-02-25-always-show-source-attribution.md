@@ -6,7 +6,7 @@
 
 **Architecture:** Add a `_build_source_list()` helper to `chat_workflow/manager.py` that always returns ≥1 source entry; the three existing `"citations": rag_citations if used_knowledge else []` lines call it instead. Then remove the `used_knowledge &&` gate from two frontend components and extend `CitationsDisplay.vue` to render icons, reliability badges, and clickable web URLs.
 
-**Tech Stack:** Python (chat_workflow/manager.py), Vue 3 + TypeScript (CitationsDisplay.vue, MessageItem.vue, ChatMessages.vue)
+**Tech Stack:** Python (chat_workflow/manager.py), Vue 3 + TypeScript (CitationsDisplay.vue, MessageItem.vue (removed in #22179; see ChatMessageContent.vue), ChatMessages.vue)
 
 **GitHub Issue:** #1186
 
@@ -336,10 +336,10 @@ git commit -m "feat(chat): extend CitationsDisplay for type/reliability/web (#11
 
 ---
 
-### Task 3: Remove `used_knowledge` gate from `MessageItem.vue`
+### Task 3: Remove `used_knowledge` gate from `MessageItem.vue` (removed in #22179; see ChatMessageContent.vue)
 
 **Files:**
-- Modify: `autobot-frontend/src/components/chat/MessageItem.vue:258–264`
+- Modify: `autobot-frontend/src/components/chat/MessageItem.vue:258–264` (removed in #22179; see ChatMessageContent.vue)
 
 **Context:**
 `hasCitations` computed currently reads:
@@ -384,7 +384,7 @@ Expected: no output.
 **Step 3: Commit**
 
 ```bash
-git add autobot-frontend/src/components/chat/MessageItem.vue
+git add autobot-frontend/src/components/chat/MessageItem.vue  # (removed in #22179; see ChatMessageContent.vue)
 git commit -m "feat(chat): show sources panel for all assistant messages (#1186)"
 ```
 
@@ -459,7 +459,7 @@ Expected: Sources panel shows 🌐 web entry with clickable URL + 🤖 LLM entry
 ```bash
 git add autobot-frontend/dist/
 git commit -m "build(frontend): rebuild for source attribution (#1186)"
-gh issue comment 1186 --body "All tasks complete. Sources panel now shows on every assistant message: KB entries (📚 High), web results (🌐 Medium, clickable URL), and LLM training data (🤖 Medium). Removed used_knowledge gate from MessageItem.vue and ChatMessages.vue. Backend always emits ≥1 citation via _build_source_list()."
+gh issue comment 1186 --body "All tasks complete. Sources panel now shows on every assistant message: KB entries (📚 High), web results (🌐 Medium, clickable URL), and LLM training data (🤖 Medium). Removed used_knowledge gate from MessageItem.vue (removed in #22179; see ChatMessageContent.vue) and ChatMessages.vue. Backend always emits ≥1 citation via _build_source_list()."
 gh issue close 1186
 ```
 

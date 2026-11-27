@@ -56,6 +56,19 @@ async def _create_session_via_rest() -> str | None:
         return None
 
 
+async def _delete_session_via_rest(session_id: str) -> None:
+    """Tear the session down so its PTY and threads do not outlive the test (#16828)."""
+    import aiohttp
+
+    try:
+        async with aiohttp.ClientSession(headers=_internal_api_key_headers()) as session:
+            async with session.delete(live_backend_url() + f"/api/terminal/sessions/{session_id}") as response:
+                if response.status != 200:
+                    print(f"⚠️ Terminal session {session_id} not deleted: {response.status}")  # noqa: print
+    except Exception as e:
+        print(f"⚠️ Terminal session {session_id} teardown failed: {e}")  # noqa: print
+
+
 async def test_simple_terminal():
     """Test the simple terminal WebSocket endpoint"""
     # This is a live e2e smoke test, not a unit test -- it needs a real
@@ -172,6 +185,8 @@ async def test_simple_terminal():
     except Exception as e:
         print(f"❌ Test failed: {e}")  # noqa: print
         return False
+    finally:
+        await _delete_session_via_rest(session_id)
 
 
 async def test_sessions_api():

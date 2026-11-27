@@ -111,6 +111,9 @@ class AuditAction(str, Enum):
     CONFIG_UPDATE = "config.update"  # #18716: was config.change; the writers and the dashboard say update
     ADMIN_ACTION = "admin.action"
     VERIFIER_DEGRADED = "verifier.degraded"  # #21844: an action ran with no verifier reading
+    CHAT_INVALID_TOOL_CALLS_ABORT = (
+        "chat.invalid_tool_calls_abort"  # #22249: a turn stopped after repeated invalid tool calls
+    )
     RUN_JWT_MINT = "run_jwt.mint"
     RUN_JWT_REVOKE = "run_jwt.revoke"
     RUN_JWT_REFRESH = "run_jwt.refresh"

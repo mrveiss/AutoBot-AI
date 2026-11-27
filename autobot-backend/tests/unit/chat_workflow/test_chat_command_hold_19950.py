@@ -135,8 +135,8 @@ async def test_a_refused_command_never_reaches_the_terminal():
     assert COMMAND_FORCE_APPROVAL_KEY not in tool_call
 
 
-async def _decide(outcome: Outcome, *, force: bool, rule: bool = False):
-    handler = MagicMock(check_auto_approve_rules=AsyncMock(return_value=rule))
+async def _decide(outcome: Outcome, *, force: bool):
+    handler = MagicMock()
     session = MagicMock(get_user_id=MagicMock(return_value="u"), has_pending_approval=MagicMock(return_value=False))
     with patch("services.agent_terminal.ai_line_gate.resolve_command_line", AsyncMock(return_value=_verdict(outcome))):
         return await decide_command(handler, session, "rm x", MagicMock(value="high"), force_approval=force)
@@ -145,7 +145,7 @@ async def _decide(outcome: Outcome, *, force: bool, rule: bool = False):
 @pytest.mark.asyncio
 async def test_force_approval_beats_line_1_and_a_learned_rule():
     assert await _decide(Outcome.RUN, force=True) == (False, None)
-    assert await _decide(Outcome.HOLD, force=True, rule=True) == (False, None)
+    assert await _decide(Outcome.HOLD, force=True) == (False, None)
 
 
 @pytest.mark.asyncio
@@ -154,9 +154,8 @@ async def test_force_approval_does_not_lift_a_refusal():
 
 
 @pytest.mark.asyncio
-async def test_without_force_the_lines_and_rules_decide():
+async def test_without_force_the_line_decides_and_the_rules_are_already_in_it():  # #16840
     assert await _decide(Outcome.RUN, force=False) == (True, None)
-    assert await _decide(Outcome.HOLD, force=False, rule=True) == (True, None)
     assert await _decide(Outcome.HOLD, force=False) == (False, None)
 
 
@@ -255,7 +254,7 @@ async def test_an_mcp_approval_request_ends_the_batch_too():
 @pytest.mark.asyncio
 async def test_a_second_command_cannot_replace_a_pending_approval():
     """A yes to the first card must run the first command, so the second is refused and never queued."""
-    handler = MagicMock(check_auto_approve_rules=AsyncMock(return_value=False))
+    handler = MagicMock()
     session = MagicMock(has_pending_approval=MagicMock(return_value=True))
     with patch(
         "services.agent_terminal.ai_line_gate.resolve_command_line", AsyncMock(return_value=_verdict(Outcome.HOLD))

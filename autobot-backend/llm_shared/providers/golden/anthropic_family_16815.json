@@ -77,6 +77,9 @@
    },
    "tools": [
     {
+     "cache_control": {
+      "type": "ephemeral"
+     },
      "description": "d",
      "input_schema": {
       "type": "object"
@@ -123,6 +126,9 @@
    },
    "tools": [
     {
+     "cache_control": {
+      "type": "ephemeral"
+     },
      "description": "d",
      "input_schema": {
       "type": "object"
@@ -159,6 +165,9 @@
    },
    "tools": [
     {
+     "cache_control": {
+      "type": "ephemeral"
+     },
      "description": "d",
      "input_schema": {
       "type": "object"
@@ -221,6 +230,9 @@
    },
    "tools": [
     {
+     "cache_control": {
+      "type": "ephemeral"
+     },
      "description": "d",
      "input_schema": {
       "type": "object"
@@ -301,6 +313,9 @@
    },
    "tools": [
     {
+     "cache_control": {
+      "type": "ephemeral"
+     },
      "description": "d",
      "input_schema": {
       "type": "object"
@@ -347,6 +362,9 @@
    },
    "tools": [
     {
+     "cache_control": {
+      "type": "ephemeral"
+     },
      "description": "d",
      "input_schema": {
       "type": "object"
@@ -411,6 +429,9 @@
    },
    "tools": [
     {
+     "cache_control": {
+      "type": "ephemeral"
+     },
      "description": "d",
      "input_schema": {
       "type": "object"
@@ -503,6 +524,9 @@
    },
    "tools": [
     {
+     "cache_control": {
+      "type": "ephemeral"
+     },
      "description": "d",
      "input_schema": {
       "type": "object"
@@ -567,6 +591,9 @@
    },
    "tools": [
     {
+     "cache_control": {
+      "type": "ephemeral"
+     },
      "description": "d",
      "input_schema": {
       "type": "object"

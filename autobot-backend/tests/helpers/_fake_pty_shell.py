@@ -93,7 +93,7 @@ class FakeManager:
     def get_session(self, session_id):
         return self.shell
 
-    def create_session(self, session_id, initial_cwd=None):
+    def create_session(self, session_id, initial_cwd=None, pipefail=False):
         self.created.append(session_id)
         self.shell = FakeShell()
         return self.shell

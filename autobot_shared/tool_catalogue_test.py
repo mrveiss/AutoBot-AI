@@ -74,7 +74,7 @@ def _orig_sensitive(name):
 
 def test_match_tool_name_parity_with_original_matchers():
     from agent_loop.loop import AgentLoop
-    from chat_workflow.tool_handler import _approval_category_for
+    from autobot_shared.tool_catalogue import approval_category_for
     from orchestration.agent_registry import match_forbidden_tool
 
     forbidden = frozenset(INFRA_AND_SHELL_TOOLS)
@@ -95,7 +95,7 @@ def test_match_tool_name_parity_with_original_matchers():
     ]
     for n in names:
         assert match_forbidden_tool(n, forbidden) == _orig_forbidden(n, forbidden), n
-        assert _approval_category_for(n, cats) == _orig_approval(n, cats), n
+        assert approval_category_for(n, cats) == _orig_approval(n, cats), n
         assert AgentLoop._sensitive_tool_name({"tool_name": n}) == _orig_sensitive(n), n
 
 

@@ -14,8 +14,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from autobot_shared.tool_catalogue import approval_category_for
 from chat_workflow.models import build_governed_identity
-from chat_workflow.tool_handler import ToolHandlerMixin, _approval_category_for
+from chat_workflow.tool_handler import ToolHandlerMixin
 from tests.unit.chat_workflow.test_ai_line_support import VERIFIED_COMPANY, ai_line_world, run_guard
 
 
@@ -54,17 +55,17 @@ def test_build_governed_identity_empty_when_absent():
 
 
 def test_approval_category_matches_exact_and_prefix():
-    assert _approval_category_for("git_push", ["pushing commits"]) == "pushing commits"
-    assert _approval_category_for("deploy_service", ["publishing"]) == "publishing"  # word-boundary prefix
-    assert _approval_category_for("web_search", ["pushing commits"]) is None
-    assert _approval_category_for("git_push", []) is None  # category not declared
-    assert _approval_category_for("bash", ["unknown category"]) is None
+    assert approval_category_for("git_push", ["pushing commits"]) == "pushing commits"
+    assert approval_category_for("deploy_service", ["publishing"]) == "publishing"  # word-boundary prefix
+    assert approval_category_for("web_search", ["pushing commits"]) is None
+    assert approval_category_for("git_push", []) is None  # category not declared
+    assert approval_category_for("bash", ["unknown category"]) is None
 
 
 def test_approval_category_requires_word_boundary():
     """A bare-token prefix without the ``_`` boundary must not match."""
-    assert _approval_category_for("deployment_status", ["publishing"]) is None
-    assert _approval_category_for("basha", ["destructive operations"]) is None
+    assert approval_category_for("deployment_status", ["publishing"]) is None
+    assert approval_category_for("basha", ["destructive operations"]) is None
 
 
 # --- #11159: governed identity → forbidden_work bites ----------------------

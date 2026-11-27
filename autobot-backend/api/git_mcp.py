@@ -62,7 +62,7 @@ from type_defs.common import Metadata
 
 MANIFEST = MCPBridgeManifest(
     name="git_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="Git Operations - Version Control Repository Management",
     features=["status", "log", "diff", "branch", "blame", "show", "repository_whitelist"],
     endpoint="/api/git/mcp/tools",
