@@ -261,8 +261,11 @@ async def _raw_update_targets(limit_hosts: list[str] | None) -> list[str]:
 
 def _raw_restart_args(variables: dict | None) -> dict:
     """The restart policy the raw run's extra vars carry, as ``run_update_all_nodes`` passes it (#20743)."""
-    value = (variables or {}).get(RESTART_VAR, True)
-    return no_restart_args(str(value).strip().lower() not in {"false", "no", "off", "0"})
+    value = (variables or {}).get(RESTART_VAR, True)  # missing → restart, as Ansible's default(true)
+    if isinstance(value, bool):
+        return no_restart_args(value)
+    # any other value is truthy only by Ansible's `| bool` rules; "", "garbage" and None are not restarts
+    return no_restart_args(str(value).strip().lower() in {"true", "yes", "on", "1", "t", "y"})
 
 
 async def provision_before_raw_update(

@@ -419,6 +419,23 @@ def test_the_raw_update_route_provisions_with_the_runs_restart_policy(monkeypatc
     assert seen == [{}, {}], "restarting (the default) passes no restart arguments"
 
 
+@pytest.mark.parametrize(
+    ("variables", "restarts"),
+    [
+        ({}, True), ({"autobot_restart_services": True}, True), ({"autobot_restart_services": False}, False),
+        ({"autobot_restart_services": "true"}, True), ({"autobot_restart_services": "yes"}, True),
+        ({"autobot_restart_services": "no"}, False), ({"autobot_restart_services": "off"}, False),
+        ({"autobot_restart_services": "0"}, False), ({"autobot_restart_services": ""}, False),
+        ({"autobot_restart_services": "garbage"}, False), ({"autobot_restart_services": "f"}, False),
+        ({"autobot_restart_services": "n"}, False), ({"autobot_restart_services": None}, False),
+    ],
+)
+def test_the_raw_route_restart_flag_follows_ansibles_bool_rules(monkeypatch, variables, restarts) -> None:
+    seen: list[dict] = []
+    _raw(monkeypatch, [_host("desk", ["vnc"])], None, variables=variables, kwargs_seen=seen)
+    assert seen == [{} if restarts else NO_RESTART]
+
+
 # --------------------------------------------------------------------------
 # the detector and the health poll leave a provisioner-owned status alone (#22262)
 # --------------------------------------------------------------------------
