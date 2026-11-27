@@ -44,6 +44,7 @@ def retention_exemption_rules() -> "tuple[str, str]":
             _exemption_load_logged = True
             logger.warning("Retention exemption rules cannot be loaded; retention will not delete", exc_info=True)
         raise
+    _exemption_load_logged = False  # a later outage logs again
     return CATEGORY, CONNECTOR_SOURCE_TYPE
 
 

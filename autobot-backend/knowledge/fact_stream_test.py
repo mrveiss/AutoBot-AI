@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -190,3 +190,41 @@ def test_an_unloadable_exemption_rule_aborts_retention_instead_of_deleting_memor
         retention._collect_expired_facts(MagicMock(), datetime(2025, 1, 1, tzinfo=timezone.utc))
     with pytest.raises(ImportError):
         is_retention_exempt(b"{}")
+
+
+@pytest.mark.asyncio
+async def test_retention_abort_reports_one_error_and_never_opens_the_knowledge_base():
+    """An unloadable exemption rule aborts the run with errors=1 before any delete path is reached (#17530)."""
+    import tasks.knowledge_retention as retention
+
+    get_kb = AsyncMock()
+    with (
+        patch.object(retention, "_collect_expired_facts", side_effect=ImportError("rules unavailable")),
+        patch("autobot_shared.redis_client.get_redis_client", return_value=MagicMock()),
+        patch("knowledge.get_knowledge_base", get_kb),
+    ):
+        result = await retention._async_cleanup_expired_kb_entries(30)
+    assert result == {"deleted_entries": 0, "skipped": 0, "errors": 1}
+    get_kb.assert_not_called()
+
+
+def test_the_exemption_load_failure_is_logged_again_after_a_successful_load(monkeypatch):
+    import builtins
+
+    import knowledge.fact_stream as fs
+
+    real_import = builtins.__import__
+
+    def failing(name, *a, **k):
+        if name == "knowledge.claude_memory_importer":
+            raise ImportError("down")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(fs, "_exemption_load_logged", False)
+    monkeypatch.setattr(builtins, "__import__", failing)
+    with pytest.raises(ImportError):
+        fs.retention_exemption_rules()
+    assert fs._exemption_load_logged is True
+    monkeypatch.setattr(builtins, "__import__", real_import)
+    fs.retention_exemption_rules()
+    assert fs._exemption_load_logged is False
