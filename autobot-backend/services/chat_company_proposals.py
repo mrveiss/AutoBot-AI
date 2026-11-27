@@ -54,7 +54,9 @@ def _title(chat_name: str) -> str:
     """The proposal title bounded to ``Approval.title``'s length; the full chat name stays in the description."""
     from models.approval import Approval
 
-    return f"{TITLE_PREFIX}{chat_name}"[: Approval.__table__.c.title.type.length]
+    limit = Approval.__table__.c.title.type.length
+    title = f"{TITLE_PREFIX}{chat_name}"
+    return title if len(title) <= limit else title[: limit - 1] + "…"
 
 
 async def _propose_one(db, service, candidate):

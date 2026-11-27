@@ -211,6 +211,7 @@ async def test_a_long_chat_name_is_bounded_to_the_title_column_and_kept_whole_in
     assert short == f"{chat_company_proposals.TITLE_PREFIX}holiday"
     long_title = chat_company_proposals._title("x" * 240)
     assert len(long_title) == limit and long_title.startswith(chat_company_proposals.TITLE_PREFIX)
+    assert long_title.endswith("…")
 
 
 async def test_the_full_chat_name_is_in_the_description(db, audit):

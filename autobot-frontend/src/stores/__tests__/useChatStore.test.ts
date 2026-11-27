@@ -330,4 +330,20 @@ describe('useChatStore', () => {
       expect(store.currentMessages).toHaveLength(2)
     })
   })
+
+  describe('importSession company fields - #16905', () => {
+    it('omitted fields keep the existing company', () => {
+      const store = useChatStore()
+      store.createNewSession('Chat', 'imp-1')
+      store.importSession({ ...store.exportSession('imp-1')!, companyId: 'c1', unassigned: false })
+      const omitting = { ...store.exportSession('imp-1')! } as Record<string, unknown>
+      delete omitting.companyId
+      delete omitting.unassigned
+      store.importSession(omitting as never)
+
+      const kept = store.exportSession('imp-1')!
+      expect(kept.companyId).toBe('c1')
+      expect(kept.unassigned).toBe(false)
+    })
+  })
 })

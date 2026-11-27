@@ -669,8 +669,9 @@ export const useChatStore = defineStore('chat', () => {
     const existingSession = sessions.value.find(s => s.id === session.id)
     if (existingSession) {
       // #16905: the server owns a chat's company, so a reload refreshes it; nothing else of a local session is touched.
-      existingSession.companyId = session.companyId
-      existingSession.unassigned = session.unassigned
+      // An import that omits a field (the public importChatSession) must not blank what is held.
+      if (session.companyId !== undefined) existingSession.companyId = session.companyId
+      if (session.unassigned !== undefined) existingSession.unassigned = session.unassigned
       return
     }
 
