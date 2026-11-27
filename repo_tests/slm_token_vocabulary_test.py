@@ -338,14 +338,15 @@ def _line_class_lists(text: str):
     """Quoted strings per line (script code, ``.ts``): a stray quote cannot shift pairing past its own line."""
     for number, line in enumerate(text.splitlines(), 1):
         for m in _JS_STRING.finditer(line):
-            text = next(g for g in m.groups() if g is not None)
-            if m.group(3) is not None and "'" in text and ("?" in text or ":" in text):
+            value = next(g for g in m.groups() if g is not None)
+            if m.group(3) is not None and "'" in value and ("?" in value or ":" in value):
                 # a double-quoted attribute value holding a ternary: its single-quoted strings are the
                 # alternatives, so each is read alone (never joined, as ``_bound_alternatives`` keeps them apart)
-                for inner in _SINGLE_QUOTED.finditer(text):
-                    yield number, inner.group(1)
+                alternatives = [inner.group(1) for inner in _SINGLE_QUOTED.finditer(value)]
+                for alternative in alternatives or [value]:
+                    yield number, alternative
             else:
-                yield number, text
+                yield number, value
     for m in _APPLY.finditer(text):
         yield text[: m.start()].count("\n") + 1, m.group(1)
 
@@ -405,6 +406,16 @@ def test_exclusive_ternary_branches_never_repeat_but_a_static_base_with_a_condit
     assert not [r for _, s in _element_class_lists(exclusive) for r in _state_repeats(s, v)]
     # the per-line scan splits a double-quoted ternary into its single-quoted branches, each read alone
     assert not [r for _, s in _line_class_lists(exclusive) for r in _state_repeats(s, v)]
+    # a quoted string earlier in a stylesheet must not hide a later ``@apply`` line (the file text stays the file text)
+    css = "a { content: 'x'; }\n.b {\n  @apply bg-autobot-primary hover:bg-autobot-primary;\n}\n"
+    assert [(n, r) for n, s in _line_class_lists(css) for r in _state_repeats(s, v)] == [
+        (3, "hover:bg-autobot-primary")
+    ]
+    # a double-quoted string with an apostrophe and a colon but no '...' pair is read whole, not dropped
+    lone = "\"don't bg-autobot-primary hover:bg-autobot-primary\"\n"
+    assert [(n, r) for n, s in _line_class_lists(lone) for r in _state_repeats(s, v)] == [
+        (1, "hover:bg-autobot-primary")
+    ]
     assert [r for _, s in _element_class_lists(together) for r in _state_repeats(s, v)] == [
         "hover:bg-autobot-primary"
     ]
