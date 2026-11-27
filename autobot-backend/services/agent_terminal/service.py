@@ -18,6 +18,7 @@ from monitoring.prometheus_metrics import get_metrics_manager
 from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
 from services.command_approval_manager import AgentRole, CommandApprovalManager
 from services.command_execution_queue import get_command_queue
+from services.command_line_risk import shared_approval_manager
 from type_defs.common import Metadata
 
 from .ai_line_gate import claim_pending, decide_command, permission_refusal, queue_reservation, settle_pending
@@ -69,7 +70,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
         # Use passed ChatWorkflowManager instead of creating new one
         self.chat_workflow_manager = chat_workflow_manager
 
-        self.approval_manager = CommandApprovalManager()
+        self.approval_manager = shared_approval_manager()  # #16840: one learned-rule set with chat
         self.command_queue = command_queue or get_command_queue()
 
         self.terminal_logger = TerminalLogger(redis_client=redis_client, data_dir="data/chats")
@@ -210,12 +211,11 @@ class AgentTerminalService(InterpretationOwnershipMixin):
 
         # #14955 review: session.pending_approval["risk"] (read back via
         # get_pending_risk_level()) feeds the auto-approve rules engine
-        # (store_auto_approve_rule / check_auto_approve_rules in
-        # approval_handler.py) and approval_memory.py's RISK_LEVELS table,
+        # (store_auto_approve_rule in approval_handler.py, matched in
+        # command_line_risk.py) and approval_memory.py's RISK_LEVELS table,
         # BOTH of which key on the 6-member CommandRisk vocabulary — the
-        # check site (_check_auto_approval_or_queue, below) was never
-        # touched and still compares against raw CommandRisk.value. Storing
-        # a converted RiskLevel here instead would silently break every
+        # check site was never touched and compares against raw CommandRisk.value.
+        # Storing a converted RiskLevel here instead would silently break every
         # "always allow" rule created after this point (RiskLevel != the
         # CommandRisk the check compares against) and would permanently
         # collapse the DANGEROUS/FORBIDDEN/CRITICAL distinction
@@ -386,9 +386,9 @@ class AgentTerminalService(InterpretationOwnershipMixin):
         user_id: str | None,
         comment: str | None,
         auto_approve_future: bool,
-    ) -> None:
+    ) -> bool:
         """
-        Perform all post-execution updates after command runs.
+        Perform all post-execution updates after command runs; True when an auto-approve rule was saved (#16840).
 
         Issue #665: Extracted from _execute_approved_command.
 
@@ -415,14 +415,15 @@ class AgentTerminalService(InterpretationOwnershipMixin):
 
         await settle_pending(session, self.session_manager)
 
-        if auto_approve_future and user_id:
-            await self.approval_handler.store_auto_approve_rule(
-                user_id=user_id,
-                command=command,
-                risk_level=risk_level,
+        stored = bool(
+            auto_approve_future
+            and user_id
+            and await self.approval_handler.store_auto_approve_rule(
+                user_id=user_id, command=command, risk_level=risk_level
             )
-
+        )
         await self._update_and_broadcast_approval_status(session, command, True, user_id, comment)
+        return stored
 
     async def _run_approved_command_body(
         self,
@@ -448,23 +449,20 @@ class AgentTerminalService(InterpretationOwnershipMixin):
                 return_code=result.get("return_code", 0),
             )
             await log_command_result(self.terminal_logger, session, command, result, user_id)
-            await self._post_execution_updates(
-                session,
-                command,
-                result,
-                risk_level,
-                user_id,
-                comment,
-                auto_approve_future,
+            stored = await self._post_execution_updates(
+                session, command, result, risk_level, user_id, comment, auto_approve_future
             )
 
-        return {
+        response = {
             "status": "approved",
             "command": command,
             "result": result,
             "comment": comment,
-            "auto_approve_stored": auto_approve_future,
+            "auto_approve_stored": stored is True,
         }
+        if auto_approve_future and stored is not True:
+            response["auto_approve_note"] = "The command ran, but the 'approve similar commands' rule was not saved."
+        return response
 
     async def _execute_approved_command(
         self,

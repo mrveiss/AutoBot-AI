@@ -1,6 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Rolling chat-history summary AUTOBOT_* registrations (#20852).
+"""Rolling chat-history summary (#20852) and chat-model GPU-layer (#22257) AUTOBOT_* registrations.
 
 A sibling of ``env_registry_chat_attachments`` (which imports this module, because
 ``env_registry.py`` is closed to new entries); the contract is ``env_registry``'s.
@@ -218,6 +218,21 @@ register_env_var(
             "Append topic guidance (installation, architecture, troubleshooting, API) to the chat system prompt when "
             "the message matches a topic keyword (intent_classifier.apply_topic_guidance, called from "
             "chat_workflow/llm_handler.py, #21678). Off by default: it changes the prompt of every matching turn."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_NUM_GPU",
+        type=str,
+        default=None,
+        description=(
+            "Ollama num_gpu (layers on the GPU) sent with every chat-model request. Unset: all layers when "
+            "this host has an NVIDIA GPU (nvidia-smi answers), else the option is left out. An integer >= 0 "
+            "is sent as is; 'off' or a negative number leaves the option out. Set it when Ollama runs on "
+            "another host than the backend (#22257)."
         ),
         component="chat",
     )

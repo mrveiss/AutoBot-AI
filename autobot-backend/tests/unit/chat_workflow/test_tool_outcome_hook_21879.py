@@ -123,3 +123,20 @@ async def test_end_to_end_a_failing_tool_is_logged_as_failed(logging_manager, ca
     line = _tool_line(caplog)
     duration = float(line.rsplit("(", 1)[1].rstrip("s)"))
     assert "FAILED" in line and "SUCCESS" not in line and duration > 0
+
+
+@pytest.mark.asyncio
+async def test_a_secret_in_a_tool_result_is_masked_through_the_real_hook_21884(monkeypatch):
+    """The masking extension reads the key the emit site writes, so the result the model sees is masked."""
+    from middleware.builtin.secret_masking import SecretMaskingExtension
+    from middleware.manager import ExtensionManager
+
+    real = ExtensionManager()
+    real.register(SecretMaskingExtension())
+    monkeypatch.setattr(llm_handler, "get_extension_manager", lambda: real)
+    # 48 characters: the shortest the OpenAI-key pattern masks
+    secret = "sk-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0u1V2w3X4"  # pragma: allowlist secret
+
+    out = await llm_handler._emit_after_tool_execute("web_search", f"key is {secret} ok", SESSION, {})
+
+    assert secret not in out

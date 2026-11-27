@@ -9,7 +9,7 @@ Default behavior:
 - All issues get their own worktree: `.worktrees/issue-XXXX/`
 - Main session stays on `main` — never switches
 - Agents commit locally; main session pushes and creates PRs
-- After each batch: review, hand each PR number and head to the trainmaster (it alone lands), file discovery issues, then next batch
+- After each batch: review, hand each PR number and head to the PR coordinator (it alone lands; OWNER_RULES row 33), file discovery issues, then next batch
 
 **Do NOT ask:** "Which issues?", "Parallel?", "How many?" — just run the pre-flight checklist and start.
 

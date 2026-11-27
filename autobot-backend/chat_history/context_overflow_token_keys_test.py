@@ -19,7 +19,7 @@ so any consumer of these counters saw a permanently empty session.
 
 import pytest
 
-from chat_history.context_overflow import _TOKEN_TRACKER_KEY_PREFIX, SessionTokenTracker
+from chat_history.session_token_tracker import _TOKEN_TRACKER_KEY_PREFIX, SessionTokenTracker
 from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 SESSION = "session-abc"
@@ -39,6 +39,10 @@ class _FakeAsyncRedis:
     async def hincrby(self, key, field, amount):
         self._hashes.setdefault(key, {})
         self._hashes[key][field] = int(self._hashes[key].get(field, 0)) + amount
+
+    async def hset(self, key, field, value):
+        self._hashes.setdefault(key, {})
+        self._hashes[key][field] = int(value)
 
     async def expire(self, key, ttl):
         return True
@@ -80,6 +84,7 @@ async def test_stored_counters_are_returned():
         "prompt_tokens": 900,
         "completion_tokens": 600,
         "message_count": 7,
+        "active_tokens": 1500,  # a counter written before active_tokens existed: its spend is the best it has
     }
 
 
@@ -126,4 +131,41 @@ async def test_unknown_session_returns_zeros():
         "prompt_tokens": 0,
         "completion_tokens": 0,
         "message_count": 0,
+        "active_tokens": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_active_tokens_follow_the_latest_turn_not_the_running_total():
+    """#17802: the same-size prompt sent repeatedly leaves the meter where it was; spend still accumulates."""
+    tracker = _tracker(_FakeAsyncRedis())
+
+    for _ in range(5):
+        await tracker.add_message_tokens(SESSION, prompt_tokens=2000, completion_tokens=0)
+    usage = await tracker.get_session_usage(SESSION)
+
+    assert usage["active_tokens"] == 2000
+    assert usage["total_tokens"] == 10000, "cumulative spend must stay available under its own field"
+
+
+@pytest.mark.asyncio
+async def test_active_tokens_grow_with_a_growing_conversation():
+    tracker = _tracker(_FakeAsyncRedis())
+
+    await tracker.add_message_tokens(SESSION, prompt_tokens=1000, completion_tokens=200)
+    first = (await tracker.get_session_usage(SESSION))["active_tokens"]
+    await tracker.add_message_tokens(SESSION, prompt_tokens=1400, completion_tokens=200)
+    second = (await tracker.get_session_usage(SESSION))["active_tokens"]
+
+    assert (first, second) == (1200, 1600)
+
+
+@pytest.mark.asyncio
+async def test_seed_session_sets_the_context_held_to_the_sum_of_retained_messages():
+    tracker = _tracker(_FakeAsyncRedis())
+
+    await tracker.seed_session(SESSION, [30, 50, 20])
+    usage = await tracker.get_session_usage(SESSION)
+
+    assert usage["active_tokens"] == 100
+    assert usage["message_count"] == 3

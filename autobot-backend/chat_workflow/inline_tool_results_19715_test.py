@@ -224,3 +224,38 @@ async def test_the_attachment_block_survives_a_second_pass_prompt() -> None:
         patch.object(attachment_context, "_resolve_turn", new=AsyncMock(return_value=SimpleNamespace(block="FILE\n"))),
     ):
         assert await attachment_context.attachment_prompt(manager, ctx) == "FILE\ncontinuation with results"
+
+
+@pytest.mark.asyncio
+async def test_a_tool_call_in_the_final_pass_is_never_shown_or_stored() -> None:
+    """#20720: the model ignored the instruction; the user sees the prose around the call, never the call."""
+    raw = 'Found it.\n<TOOL_CALL name="web_search" params=\'{"query": "x"}\'>again</TOOL_CALL>'
+    seen: list = []
+    state = _state(execution_history=[_search_summary()], iteration_count=5, should_continue=True)
+    config = _config(_final_manager())
+    config["configurable"]["stream_callback"] = seen.append
+    plan = AsyncMock(return_value=([{"type": "response", "content": raw}], raw, [], True))
+    with patch.object(graph, "_run_llm_iteration_plan", plan):
+        result = await graph.force_final_answer(state, config)
+    assert "TOOL_CALL" not in str(result["workflow_messages"]) and "TOOL_CALL" not in str(seen)
+    assert result["all_llm_responses"] == ["Found it."]
+
+
+@pytest.mark.asyncio
+async def test_a_final_pass_with_only_a_tool_call_uses_the_apology_and_fires_the_hooks() -> None:
+    raw = '<TOOL_CALL name="web_search" params=\'{"query": "x"}\'>again</TOOL_CALL>'
+    plan = AsyncMock(return_value=([{"type": "response", "content": raw}], raw, [], True))
+    state = _state(execution_history=[_search_summary()], iteration_count=5, should_continue=True)
+    with (
+        patch.object(graph, "_run_llm_iteration_plan", plan),
+        patch("chat_workflow.graph_hooks._emit_agent_execute_hook", AsyncMock()) as execute,
+        patch("chat_workflow.graph_hooks._emit_planned_agent_complete_hook", AsyncMock()) as complete,
+        patch("chat_workflow.cot_events.emit_step_start", return_value=0.0) as step_start,
+        patch("chat_workflow.cot_events.emit_step_complete") as step_complete,
+    ):
+        result = await graph.force_final_answer(state, _config(_final_manager()))
+    assert "ran out of steps" in result["workflow_messages"][-1]["content"]
+    execute.assert_awaited_once()
+    complete.assert_awaited_once()
+    step_start.assert_called_once()
+    step_complete.assert_called_once()

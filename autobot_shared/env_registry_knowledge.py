@@ -1,6 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Knowledge-component AUTOBOT_* environment variable registrations.
+"""Knowledge-component AUTOBOT_* environment variable registrations (sibling rationale recorded per #18571).
 
 Split out of ``env_registry_backend_services.py`` because adding these there
 would push it past the file-size ceiling (600 lines).

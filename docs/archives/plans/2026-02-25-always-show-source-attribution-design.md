@@ -98,7 +98,7 @@ The `used_knowledge` field stays in metadata for backwards compat.
 
 ## Frontend Changes
 
-### `MessageItem.vue` — citation panel visibility
+### `MessageItem.vue` (removed in #22179; see ChatMessageContent.vue) — citation panel visibility
 
 ```typescript
 // Before
@@ -124,7 +124,7 @@ v-if="message.sender === 'assistant' && message.metadata?.used_knowledge && mess
 v-if="message.sender === 'assistant' && message.metadata?.citations?.length > 0"
 ```
 
-### Source panel UI updates (ChatMessages.vue + MessageItem.vue)
+### Source panel UI updates (ChatMessages.vue + MessageItem.vue (removed in #22179; see ChatMessageContent.vue))
 
 - Panel header: "Knowledge Sources" → "Sources"
 - Per-source icon based on `type`:

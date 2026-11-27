@@ -21,7 +21,7 @@ from services.mcp_bridge_manifest import MCPBridgeManifest
 
 MANIFEST = MCPBridgeManifest(
     name="redis_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="Redis Data & Operations - Direct Redis access, vector search, server ops",
     features=[
         "data_access",

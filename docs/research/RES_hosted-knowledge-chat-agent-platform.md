@@ -79,7 +79,7 @@ comes from marketing and developer-overview pages and is self-reported.
 
 ### What We Already Do Better
 - **Action safety:** approval gates with HMAC-bound tool-call fingerprints (`chat_workflow/approval_binding.py`, `graph.py:143`), per-tool permission gate (`tool_permission_gate.py:62`), approve/deny UI (`ApprovalRequestCard.vue`). The reference work documents no confirmation step at all.
-- **Retrieval transparency:** cross-encoder rerank + MMR + recency/provenance/staleness blend (`reranking.py:375`), BM25+vector RRF hybrid (`hybrid_search.py:70`), stale-chunk filtering (`stale_filter.py:97`), ungrounded-answer badge (`MessageItem.vue:124`). The reference work discloses none of its retrieval internals.
+- **Retrieval transparency:** cross-encoder rerank + MMR + recency/provenance/staleness blend (`reranking.py:375`), BM25+vector RRF hybrid (`hybrid_search.py:70`), stale-chunk filtering (`stale_filter.py:97`), ungrounded-answer badge (`MessageItem.vue:124` (removed in #22179; see ChatMessageContent.vue)). The reference work discloses none of its retrieval internals.
 - **Self-hosted, no credit cliff:** local models; no "bot stops when credits run out" failure mode.
 - **Scheduled sync** already exists (`connectors/scheduler.py:91`, Redis leader lease, incremental sync).
 - **Embeddable widget** already exists (`embed/AutobotWidget.ts`, SRI build).
@@ -98,7 +98,7 @@ comes from marketing and developer-overview pages and is self-reported.
 ### Specific Code/Files Affected
 - `autobot-backend/api/chat_embed.py` — call `scan_chat_message` before both `llm_service.chat` sites.
 - `autobot-backend/api/schemas_mcp_external_servers.py`, `services/mcp_external_bridge.py`, `views/AdminMcpServersView.vue` — per-tool allowlist, default-deny new tools.
-- `autobot-frontend/src/components/chat/MessageItem.vue` + a chat rating route → `retrieval_learner.py` stream and `analytics_conversation.py`.
+- `autobot-frontend/src/components/chat/MessageItem.vue` (removed in #22179; see ChatMessageContent.vue) + a chat rating route → `retrieval_learner.py` stream and `analytics_conversation.py`.
 - `knowledge/connectors/scheduler.py`, `ConnectorStatusCard.vue` — overdue/failed alert.
 - `chat_workflow/*` + `skills/registry.py` — relevant-skill instruction loading.
 

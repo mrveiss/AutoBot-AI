@@ -25,5 +25,5 @@ class TracingSettings(BaseSettings):
     # case-insensitively by ``tracing._is_otel_enabled``.
     otel_enabled: str = Field(default="False", alias="AUTOBOT_OTEL_ENABLED")
     otel_endpoint: str = Field(default="", alias="AUTOBOT_OTEL_ENDPOINT")
-    otel_service_version: str = Field(default="1.5.0", alias="AUTOBOT_OTEL_SERVICE_VERSION")
+    otel_service_version: str = Field(default="", alias="AUTOBOT_OTEL_SERVICE_VERSION")
     trace_sample_rate: str | None = Field(default=None, alias="AUTOBOT_TRACE_SAMPLE_RATE")

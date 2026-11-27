@@ -739,7 +739,7 @@ async def agent_terminal_info(
     """
     return {
         "name": "Agent Terminal API",
-        "version": "1.0.0",
+        "version": "unknown",  # the repo declares no version; never an invented number (#17821)
         "description": ("Secure terminal access for AI agents with approval workflow and user control"),
         "features": [
             "Agent session management",

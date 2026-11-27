@@ -36,7 +36,7 @@ These compare the delivery against the ORIGINAL ISSUE BODY — implementation he
    - Is the feature/fix actually implemented? (check diff)
    - Does it work correctly? (test output, curl, UI verification)
    - All edge cases handled? (review code, error handling)
-   - Tests passing? (targeted local tests for changed modules; CI is the full gate, see [OWNER_RULES.md](OWNER_RULES.md))
+   - Tests passing? (CI is the gate; local checks: [OWNER_RULES.md](OWNER_RULES.md) row 32)
    - Documentation updated if needed?
    - **Integration check (#6836 gate):** for every NEW module added, at least one production caller must import it:
      ```bash

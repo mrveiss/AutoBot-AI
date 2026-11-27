@@ -25,6 +25,29 @@ from utils.response_helpers import create_success_response
 router = APIRouter(tags=["chat-thinking"])
 logger = get_logger(__name__)
 
+DEFAULT_THINKING_ENABLED = False
+DEFAULT_THINKING_BUDGET_TOKENS = 10000
+
+
+def stored_thinking_preferences(session_metadata: Dict | None) -> Dict[str, object]:
+    """A conversation's thinking toggle and budget, defaults applied: one answer for GUI and request (#22258)."""
+    prefs = (session_metadata or {}).get("thinking_preferences") or {}
+    return {
+        "enabled": prefs.get("enabled", DEFAULT_THINKING_ENABLED),
+        "budget_tokens": prefs.get("budget_tokens", DEFAULT_THINKING_BUDGET_TOKENS),
+    }
+
+
+def effective_thinking(
+    enabled: bool | None, budget_tokens: int | None, session_metadata: Dict | None
+) -> tuple[bool, int]:
+    """A request's thinking toggle and budget, each falling back to the conversation's stored one (#22258, #20922)."""
+    stored = stored_thinking_preferences(session_metadata)
+    return (
+        bool(stored["enabled"] if enabled is None else enabled),
+        int(stored["budget_tokens"] if budget_tokens is None else budget_tokens),  # type: ignore[call-overload]
+    )
+
 
 @router.get(
     "/sessions/{session_id}/thinking-preferences",
@@ -37,8 +60,8 @@ logger = get_logger(__name__)
 )
 async def get_thinking_preferences(
     session_id: str,
+    request: Request,
     current_user: Dict = Depends(get_current_user),
-    request: Request = None,
     ownership: Dict = Depends(validate_session_ownership),
 ):
     """Get thinking mode preferences for a conversation (#8993).
@@ -57,15 +80,10 @@ async def get_thinking_preferences(
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
 
     # Extract thinking preferences from session metadata
-    metadata = session_data.get("metadata", {})
-    thinking_prefs = metadata.get("thinking_preferences", {})
+    thinking_prefs = stored_thinking_preferences(session_data.get("metadata"))
 
     return create_success_response(
-        data={
-            "session_id": session_id,
-            "enabled": thinking_prefs.get("enabled", False),
-            "budget_tokens": thinking_prefs.get("budget_tokens", 10000),
-        },
+        data={"session_id": session_id, **thinking_prefs},
         message="Thinking preferences retrieved",
     )
 
@@ -82,8 +100,8 @@ async def get_thinking_preferences(
 async def update_thinking_preferences(
     session_id: str,
     preferences: ThinkingPreferences,
+    request: Request,
     current_user: Dict = Depends(get_current_user),
-    request: Request = None,
     ownership: Dict = Depends(validate_session_ownership),
 ):
     """Update thinking mode preferences for a conversation (#8993).

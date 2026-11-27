@@ -22,15 +22,16 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Resource, TextContent, Tool
 
-# Prometheus configuration - uses SSOT env var with fallback (#639)
-PROMETHEUS_URL = os.getenv("AUTOBOT_PROMETHEUS_URL", "http://10.0.0.4:9090")
-
 # The instant and range queries are the canonical client's (#18964); `autobot_shared` is the repo-root package.
 _REPO_ROOT = Path(__file__).resolve().parents[5]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from autobot_shared.monitoring.prometheus_query import query_instant, query_range_series  # noqa: E402
+from autobot_shared.network_constants import NetworkConstants  # noqa: E402
+
+# Prometheus configuration: the registry env var, else the SSOT monitoring node (#639, #17440).
+PROMETHEUS_URL = os.getenv("AUTOBOT_PROMETHEUS_URL", "") or NetworkConstants.PROMETHEUS_API
 
 _query_instant = partial(query_instant, base_url=PROMETHEUS_URL)
 _query_range_series = partial(query_range_series, base_url=PROMETHEUS_URL)

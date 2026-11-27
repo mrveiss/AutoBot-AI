@@ -33,6 +33,7 @@ __all__ = [
     "Outcome",
     "claim_pending",
     "decide_command",
+    "owner_user_id",
     "permission_refusal",
     "resolve_command_line",
     "settle_pending",
@@ -46,7 +47,7 @@ CLAIM_UNAVAILABLE_REFUSAL = "Could not reserve this command for your decision; i
 _CLEAR_RETRY_DELAYS_SECONDS = (1, 5, 30, 120)
 
 
-async def _owner_user_id(owner: str | None) -> str | None:
+async def owner_user_id(owner: str | None) -> str | None:
     """The verified creator's user id, from the username stamped on the session (#17053); ``None`` if unknown."""
     if not owner:
         return None
@@ -68,7 +69,7 @@ async def resolve_command_line(
         tool_name=TERMINAL_TOOL,
         params={"command": command},
         company_id=session.tenant_id,
-        user_id=None if session.tenant_id else await _owner_user_id(session.owner),
+        user_id=await owner_user_id(session.owner),  # the personal scope, and whose learned rules apply (#16840)
         requested_by=session.agent_id,
         surface="agent_terminal",
         role_requires_approval=approval_handler.needs_approval(session.agent_role, risk),
@@ -85,11 +86,12 @@ async def decide_command(
     force_approval: bool,
     person_approved: bool = False,
 ) -> tuple[bool, str | None]:
-    """``(runs without a person, refusal)``: line 3 refuses, line 1 runs, line 2 asks the user's rules.
+    """``(runs without a person, refusal)``: line 3 refuses, line 1 runs (a learned rule makes it so), line 2 asks.
 
     ``force_approval`` sends the command to a person whatever line 1 or a learned rule would say.
-    Nothing lifts line 3. ``person_approved``: a person said yes to exactly this command in the chat
-    graph's approval interrupt (#21959), so line 2 is satisfied and the command is not held a second time.
+    The learned rules are part of ``resolve_action_line`` (#16840): chat and terminal decide once. Nothing lifts
+    line 3. ``person_approved``: a person said yes to exactly this command in the chat graph's approval interrupt
+    (#21959), so line 2 is satisfied and the command is not held a second time.
     """
     verdict = await resolve_command_line(approval_handler, session, command, risk)
     if verdict.outcome is Outcome.REFUSE:
@@ -101,17 +103,7 @@ async def decide_command(
         return True, None
     if session.has_pending_approval():  # queueing would replace it, so a yes to its card would run this one
         return False, PENDING_APPROVAL_REFUSAL
-    if force_approval:
-        return False, None
-    user_id = session.get_user_id()
-    is_auto_approved = await approval_handler.check_auto_approve_rules(
-        user_id=user_id,
-        command=command,
-        risk_level=risk.value,
-    )
-    if is_auto_approved:
-        logger.info("Command auto-approved by rule: %s (user: %s, risk: %s)", command, user_id, risk.value)
-    return is_auto_approved, None
+    return False, None
 
 
 async def claim_pending(session: AgentTerminalSession, redis, command_id: str, command: str, risk) -> Metadata | None:

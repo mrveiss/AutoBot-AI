@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.schemas_common import DataResponse
 from api.schemas_system import ApplyPresetRequest, OnboardingStatus
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
 from onboarding.doctor import run_doctor
 from onboarding.presets import get_all_presets, get_preset
@@ -91,7 +92,7 @@ async def apply_preset(body: ApplyPresetRequest) -> DataResponse:
         logger.error("Skill activation failed for '%s': %s", body.preset_name, exc)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to activate skills for preset '{body.preset_name}': {exc}",
+            detail=safe_http_detail(exc, f"Failed to activate skills for preset '{body.preset_name}'"),
         ) from exc
 
     # --- Collect every Redis write in one dict (nothing written yet) ---
@@ -127,7 +128,7 @@ async def apply_preset(body: ApplyPresetRequest) -> DataResponse:
         await _rollback_skills(skill_rollback)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to apply preset '{body.preset_name}': {exc}",
+            detail=safe_http_detail(exc, f"Failed to apply preset '{body.preset_name}'"),
         ) from exc
 
     logger.info("Onboarding preset '%s' applied successfully", body.preset_name)

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from autobot_shared.chat_model_context import sent_num_ctx
+from autobot_shared.chat_model_context import chat_context_options, sent_num_ctx
 from autobot_shared.logging_manager import get_logger
 from chat_workflow import limits
 
@@ -51,6 +51,9 @@ def chat_request_options(model_name: str | None) -> Dict[str, Any]:
         "temperature": 0.7,
         "top_p": 0.9,
         "num_ctx": sent_num_ctx(),
+        **chat_context_options(
+            model_name, reuses_chat=True
+        ),  # num_ctx + num_gpu: the options the chat model is loaded with (#22257)
         "num_predict": output_reserve_tokens(get_context_window_manager(), model_name),
     }
 

@@ -279,6 +279,15 @@ DECLARED_SCOPES = {
     "docker-smoke-context-publishers": (".github/workflows",),
     "cache-never-in-repo": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "client-error-detail-sweep-21943": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "service-version-literals-17821": (
+        "autobot-backend/api/",
+        "autobot-backend/mcp_server/",
+        "autobot-backend/a2a/",
+        "autobot-backend/app_factory.py",
+        "autobot-backend/llm_self_awareness.py",
+        "autobot_shared/tracing.py",
+        "autobot_shared/ssot_tracing_settings.py",
+    ),
     "node-major-literals": (
         ".github",
         "autobot-slm-backend/ansible",

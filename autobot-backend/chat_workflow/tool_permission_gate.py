@@ -41,6 +41,11 @@ is readable in one place. Each handler carries a one-line pointer back.
     or a cross-session read — a different risk class, which RBAC would not
     address either, and the thing to re-check here.
 
+``command_manual``
+    Reads a manual page from the knowledge base, through the one ``CommandManualManager``; it executes nothing and
+    returns a bounded synopsis (#22253). The same text is already put in the prompt for a failed step, so a
+    permission would only gate what the model is shown anyway.
+
 ``respond``
     Loop-control, not an external effect: builds a ``WorkflowMessage`` from
     LLM-supplied text and returns ``(break_loop, respond_content)``. No dispatch,
