@@ -67,19 +67,24 @@
           data-testid="action-delete"
           @click="emit('delete')"
         />
-        <BaseDropdownMenu v-model:open="menuOpen" :items="menuItems" size="sm" align="end" @select="onMenuSelect">
-          <template #trigger>
-            <BaseButton
-              variant="ghost"
-              size="sm"
-              class="min-w-11 min-h-11 sm:min-w-8 sm:min-h-8"
-              :aria-label="$t('chat.filePanel.moreActions', { name: file.filename })"
-              data-testid="action-more"
-            >
-              <Icon name="ellipsis-h" />
-            </BaseButton>
+        <BaseTooltip :text="moreLabel">
+          <template #default="{ describedby }">
+            <BaseDropdownMenu v-model:open="menuOpen" :items="menuItems" size="sm" align="end" @select="onMenuSelect">
+              <template #trigger>
+                <BaseButton
+                  variant="ghost"
+                  size="sm"
+                  class="min-w-11 min-h-11 sm:min-w-8 sm:min-h-8"
+                  :aria-label="moreLabel"
+                  :aria-describedby="describedby"
+                  data-testid="action-more"
+                >
+                  <Icon name="ellipsis-h" />
+                </BaseButton>
+              </template>
+            </BaseDropdownMenu>
           </template>
-        </BaseDropdownMenu>
+        </BaseTooltip>
       </div>
     </div>
   </div>
@@ -88,7 +93,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseBadge, BaseButton, BaseDropdownMenu, BaseInput, createRecencyFormatter } from '@autobot/ui'
+import { BaseBadge, BaseButton, BaseDropdownMenu, BaseInput, BaseTooltip, createRecencyFormatter } from '@autobot/ui'
 import type { MenuItem } from '@autobot/ui'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import ChatHeaderIconButton from '@/components/chat/ChatHeaderIconButton.vue'
@@ -115,6 +120,7 @@ const emit = defineEmits<{
 const { t, locale } = useI18n()
 const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 
+const moreLabel = computed(() => t('chat.filePanel.moreActions', { name: props.file.filename }))
 const menuOpen = ref(false)
 const renaming = ref(false)
 const renameValue = ref('')

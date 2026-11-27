@@ -8,7 +8,7 @@
 -->
 <template>
   <aside
-    class="chat-file-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
+    class="chat-file-panel w-80 min-w-80 max-w-80 h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
     :aria-label="$t('chat.filePanel.title')"
     tabindex="-1"
     @keydown.escape.self="$emit('close')"
@@ -55,7 +55,7 @@
       @dismiss="clearError"
     />
 
-    <div class="flex-1 overflow-y-auto p-3 file-list" :class="viewMode === 'grid' ? 'grid grid-cols-1 gap-2' : 'space-y-2'">
+    <div class="flex-1 overflow-y-auto p-3 file-list [scrollbar-width:thin]" :class="viewMode === 'grid' ? 'grid grid-cols-1 gap-2' : 'space-y-2'">
       <EmptyState
         v-if="!hasFiles && !loading"
         compact
@@ -200,14 +200,3 @@ watch(() => props.sessionId, (newSessionId) => {
   if (newSessionId) loadFiles()
 })
 </script>
-
-<style scoped>
-.chat-file-panel {
-  width: 320px;
-  min-width: 320px;
-  max-width: 320px;
-}
-.file-list {
-  scrollbar-width: thin;
-}
-</style>

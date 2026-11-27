@@ -10,8 +10,8 @@
   <div class="p-3 border-b border-autobot-border shrink-0">
     <button
       type="button"
-      class="upload-area w-full rounded-lg p-3 text-center transition-colors"
-      :class="{ 'upload-area--dragging': isDragging }"
+      class="w-full rounded-lg p-3 text-center transition-colors border-2 border-dashed text-[var(--aui-color-text)] cursor-pointer hover:enabled:border-[var(--aui-color-primary)] hover:enabled:bg-[var(--aui-color-surface-raised)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--aui-color-focus-ring)] disabled:cursor-not-allowed disabled:opacity-60"
+      :class="isDragging ? 'border-[var(--aui-color-primary)] bg-[var(--aui-color-surface-raised)]' : 'border-[var(--aui-color-border)] bg-[var(--aui-color-surface-sunken)]'"
       :disabled="loading"
       data-testid="upload-target"
       @click="input?.click()"
@@ -59,25 +59,3 @@ function onDrop(event: DragEvent): void {
   if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) emit('files', Array.from(event.dataTransfer.files))
 }
 </script>
-
-<style scoped>
-.upload-area {
-  border: 2px dashed var(--aui-color-border);
-  background: var(--aui-color-surface-sunken);
-  color: var(--aui-color-text);
-  cursor: pointer;
-}
-.upload-area:hover:not(:disabled),
-.upload-area--dragging {
-  border-color: var(--aui-color-primary);
-  background: var(--aui-color-surface-raised);
-}
-.upload-area:focus-visible {
-  outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
-  outline-offset: 2px;
-}
-.upload-area:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-</style>

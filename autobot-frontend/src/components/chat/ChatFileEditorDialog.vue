@@ -28,7 +28,7 @@
     />
     <textarea
       v-model="draft"
-      class="editor-text w-full text-xs font-mono"
+      class="w-full min-h-48 p-2 text-xs font-mono border border-[var(--aui-color-border)] rounded-md bg-[var(--aui-color-surface)] text-[var(--aui-color-text)] resize-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--aui-color-focus-ring)]"
       rows="8"
       :aria-label="mode === 'create' ? $t('chat.filePanel.contentPlaceholder') : $t('chat.filePanel.editFileTitle', { name: filename })"
       :placeholder="mode === 'create' ? $t('chat.filePanel.contentPlaceholder') : undefined"
@@ -79,19 +79,3 @@ function submit(): void {
   emit('submit', { name: name.value.trim(), content: draft.value })
 }
 </script>
-
-<style scoped>
-.editor-text {
-  min-height: 12rem;
-  padding: var(--aui-space-2);
-  border: 1px solid var(--aui-color-border);
-  border-radius: var(--aui-radius-md);
-  background: var(--aui-color-surface);
-  color: var(--aui-color-text);
-  resize: none;
-}
-.editor-text:focus-visible {
-  outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
-  outline-offset: 1px;
-}
-</style>

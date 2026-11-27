@@ -20,7 +20,7 @@
     </p>
     <template v-else>
       <pre
-        class="preview-text text-xs font-mono whitespace-pre-wrap break-words"
+        class="overflow-auto max-h-[60vh] text-xs font-mono whitespace-pre-wrap break-words"
         tabindex="0"
         :aria-label="$t('chat.filePanel.previewContentLabel', { name: preview.filename })"
         data-testid="file-preview-content"
@@ -39,10 +39,3 @@ import type { PreviewPane } from '@/composables/useConversationFiles'
 defineProps<{ preview: PreviewPane | null }>()
 const emit = defineEmits<{ close: [] }>()
 </script>
-
-<style scoped>
-.preview-text {
-  overflow: auto;
-  max-height: 60vh;
-}
-</style>

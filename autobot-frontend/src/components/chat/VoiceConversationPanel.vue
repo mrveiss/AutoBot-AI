@@ -11,7 +11,7 @@
 <template>
   <aside
     ref="panelRef"
-    class="voice-panel adv h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
+    class="voice-panel adv w-80 min-w-80 max-w-80 h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
     tabindex="-1"
     :aria-label="$t('chat.voice.title')"
     @keydown.escape="close"
@@ -19,7 +19,7 @@
     <div class="flex flex-col gap-2 p-3 border-b border-autobot-border shrink-0">
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2 min-w-0">
-          <div class="voice-panel__tile"><Icon name="headset" /></div>
+          <div class="flex items-center justify-center shrink-0 size-7 rounded-md bg-[color-mix(in_srgb,var(--aui-color-primary)_15%,transparent)] text-[var(--aui-color-primary)]"><Icon name="headset" /></div>
           <div class="min-w-0">
             <h2 class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.voice.title') }}</h2>
             <p class="text-xs text-autobot-text-muted truncate" data-testid="voice-status">{{ voice.stateLabel.value }}</p>
@@ -37,7 +37,7 @@
 
     <div class="flex-1 flex flex-col items-center justify-center p-4 gap-4 overflow-y-auto">
       <VoiceStateRing :state="voice.state.value" :icon="view.stateIcon.value" :label="voice.stateLabel.value" />
-      <div v-if="voice.currentTranscript.value" class="voice-panel__transcript" data-testid="voice-transcript">
+      <div v-if="voice.currentTranscript.value" class="w-full px-3 py-2 border border-dashed border-[color-mix(in_srgb,var(--aui-color-info)_30%,transparent)] rounded-md bg-[color-mix(in_srgb,var(--aui-color-info)_8%,transparent)] text-[var(--aui-color-info)] text-xs italic break-words" data-testid="voice-transcript">
         <Icon name="ellipsis-h" class="animate-pulse me-1 text-xs" />
         {{ voice.currentTranscript.value }}
       </div>
@@ -58,7 +58,7 @@
       @update:silence-ms="voice.silenceThreshold.value = $event"
     />
     <VoiceMicButton
-      class="voice-panel__controls shrink-0"
+      class="shrink-0 pt-4 px-3 pb-5 border-t border-[var(--aui-color-border)]"
       :state="voice.state.value"
       :icon="view.micIcon.value"
       :label="voice.stateLabel.value"
@@ -100,37 +100,3 @@ onMounted(async () => {
   panelRef.value?.focus()
 })
 </script>
-
-<style scoped>
-.voice-panel {
-  width: 320px;
-  min-width: 320px;
-  max-width: 320px;
-}
-.voice-panel__tile {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: var(--aui-radius-md);
-  background: color-mix(in srgb, var(--aui-color-primary) 15%, transparent);
-  color: var(--aui-color-primary);
-}
-.voice-panel__transcript {
-  width: 100%;
-  padding: var(--aui-space-2) var(--aui-space-3);
-  border: 1px dashed color-mix(in srgb, var(--aui-color-info) 30%, transparent);
-  border-radius: var(--aui-radius-md);
-  background: color-mix(in srgb, var(--aui-color-info) 8%, transparent);
-  color: var(--aui-color-info);
-  font-size: var(--aui-text-xs);
-  font-style: italic;
-  word-break: break-word;
-}
-.voice-panel__controls {
-  padding: var(--aui-space-4) var(--aui-space-3) var(--aui-space-5);
-  border-top: 1px solid var(--aui-color-border);
-}
-</style>

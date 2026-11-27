@@ -28,10 +28,10 @@ describe('ChatFilePanelUpload (#22349)', () => {
     const wrapper = mountUpload()
     const target = wrapper.get('[data-testid="upload-target"]')
     await target.trigger('dragover')
-    expect(target.classes()).toContain('upload-area--dragging')
+    expect(target.classes()).toContain('border-[var(--aui-color-primary)]')
     await target.trigger('drop', { dataTransfer: { files: [file('a.txt')] } })
     expect(wrapper.emitted('files')?.[0]?.[0]).toHaveLength(1)
-    expect(target.classes()).not.toContain('upload-area--dragging')
+    expect(target.classes()).not.toContain('border-[var(--aui-color-primary)]')
   })
 
   it('emits nothing for an empty drop', async () => {

@@ -28,8 +28,8 @@
     <BaseTooltip v-if="connection" :text="connectionText">
       <template #default="{ describedby }">
         <span
-          class="voice-mode__dot"
-          :class="{ 'voice-mode__dot--connected': connection.connected }"
+          class="inline-block size-2 rounded-full transition-colors"
+          :class="connection.connected ? 'bg-[var(--aui-color-success)]' : 'bg-[color-mix(in_srgb,var(--aui-color-error)_60%,transparent)]'"
           role="img"
           :aria-label="$t('chat.voice.connectionLabel', { status: connectionText })"
           :aria-describedby="describedby"
@@ -61,17 +61,3 @@ const MODES: { value: ConversationMode; key: string }[] = [
 const options = computed(() => MODES.map((m) => ({ value: m.value, label: t(`chat.voice.${m.key}`) })))
 const connectionText = computed(() => (props.connection?.connected ? t('chat.voice.connected') : t('chat.voice.disconnected')))
 </script>
-
-<style scoped>
-.voice-mode__dot {
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: var(--aui-radius-full);
-  background: color-mix(in srgb, var(--aui-color-error) 60%, transparent);
-  transition: background-color var(--aui-transition);
-}
-.voice-mode__dot--connected {
-  background: var(--aui-color-success);
-}
-</style>
