@@ -598,7 +598,7 @@ onUnmounted(() => {
         <!-- Update Status -->
         <div class="flex items-center gap-3">
           <template v-if="updatesSummary && (updatesSummary.count > 0 || updatesSummary.codeUpdateAvailable)">
-            <div class="flex items-center gap-2 text-autobot-warning-hover">
+            <div class="flex items-center gap-2 text-autobot-pill-warn-fg">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
               </svg>
@@ -609,7 +609,7 @@ onUnmounted(() => {
             <span v-if="updatesSummary.critical > 0" class="bg-autobot-pill-bad-bg px-2 rounded-sm w-fit text-sm font-medium text-autobot-pill-bad-fg">{{ $t('fleet.nodeLifecyclePanel.value0Critical', { value0: updatesSummary.critical }) }}</span>
           </template>
           <template v-else-if="availableUpdates">
-            <div class="flex items-center gap-2 text-autobot-success-hover">
+            <div class="flex items-center gap-2 text-autobot-pill-ok-fg">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -626,7 +626,7 @@ onUnmounted(() => {
           <button
             @click="checkForUpdates"
             :disabled="isCheckingUpdates"
-            class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-secondary border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <svg
               :class="['w-4 h-4', isCheckingUpdates ? 'animate-spin' : '']"

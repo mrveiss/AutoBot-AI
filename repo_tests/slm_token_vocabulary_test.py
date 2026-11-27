@@ -108,11 +108,7 @@ def _slm_only() -> set[str]:
 
 def _documented() -> set[str]:
     """Backticked `--name` tokens in the table that follows the SLM-only marker, to the next heading."""
-    text = _read(_DOC)
-    body = text[text.index(_SECTION) :]
-    body = body[body.index(_ONLY) :]
-    table = body.split("\n## ", 1)[0]
-    rows = [ln for ln in table.splitlines() if ln.startswith("| `")]
+    rows = _documented_rows()
     return {name for ln in rows for name in re.findall(r"`(--[\w-]+)`", ln.split("|")[1])}
 
 
@@ -220,6 +216,7 @@ _TAG = re.compile(
 )
 _ATTR = re.compile(r"""\s([:@\w.-]*class)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
 _JS_STRING = re.compile(r"""'([^'\n]*)'|`([^`]*)`|"([^"\n]*)\"""")
+_SINGLE_QUOTED = re.compile(r"'([^'\n]*)'")
 _APPLY = re.compile(r"@apply\s+([^;]*);")
 _ATTR_NAIVE = re.compile(r"""[\s]:?class\s*=\s*["']""")
 
@@ -341,7 +338,14 @@ def _line_class_lists(text: str):
     """Quoted strings per line (script code, ``.ts``): a stray quote cannot shift pairing past its own line."""
     for number, line in enumerate(text.splitlines(), 1):
         for m in _JS_STRING.finditer(line):
-            yield number, next(g for g in m.groups() if g is not None)
+            text = next(g for g in m.groups() if g is not None)
+            if m.group(3) is not None and "'" in text and ("?" in text or ":" in text):
+                # a double-quoted attribute value holding a ternary: its single-quoted strings are the
+                # alternatives, so each is read alone (never joined, as ``_bound_alternatives`` keeps them apart)
+                for inner in _SINGLE_QUOTED.finditer(text):
+                    yield number, inner.group(1)
+            else:
+                yield number, text
     for m in _APPLY.finditer(text):
         yield text[: m.start()].count("\n") + 1, m.group(1)
 
@@ -361,7 +365,7 @@ def _lost_class_attributes() -> list[str]:
     lost = []
     for path in _slm_files(".vue") + [_SLM / "index.html"]:
         text = _read(path)
-        template = text.split("<script", 1)[0] if text.lstrip().startswith("<script") is False else text
+        template = text.split("<script", 1)[0] if not text.lstrip().startswith("<script") else text
         naive = len(_ATTR_NAIVE.findall(template))
         read = sum(len(_ATTR.findall(" " + t.group(2))) for t in _TAG.finditer(template))
         if read < naive:
@@ -399,7 +403,7 @@ def test_exclusive_ternary_branches_never_repeat_but_a_static_base_with_a_condit
     exclusive = "<i :class=\"ok ? 'bg-autobot-primary' : 'hover:bg-autobot-primary'\"></i>\n"
     together = "<i class=\"bg-autobot-primary\" :class=\"ok ? 'hover:bg-autobot-primary' : ''\"></i>\n"
     assert not [r for _, s in _element_class_lists(exclusive) for r in _state_repeats(s, v)]
-    # the per-line scan reads each string alone, so it cannot rejoin the branches either
+    # the per-line scan splits a double-quoted ternary into its single-quoted branches, each read alone
     assert not [r for _, s in _line_class_lists(exclusive) for r in _state_repeats(s, v)]
     assert [r for _, s in _element_class_lists(together) for r in _state_repeats(s, v)] == [
         "hover:bg-autobot-primary"
