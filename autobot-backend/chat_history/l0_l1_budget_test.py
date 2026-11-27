@@ -12,6 +12,7 @@ These assert the rendered output is within budget — not that a warning was
 logged.
 """
 
+from contextvars import ContextVar
 from unittest.mock import patch
 
 import pytest
@@ -210,7 +211,7 @@ class TestBudgetAtTheSentWindow:
         from chat_workflow import prompt_window
 
         model = "l0-l1-chat-model"
-        monkeypatch.setattr(chat_model_context, "_last_turn_model", model)
+        monkeypatch.setattr(chat_model_context, "_last_turn_model", ContextVar("t", default=model))
         cwm = get_context_window_manager()
         assert prompt_window.request_window_tokens(cwm, model) == ModelConfig.CHAT_NUM_CTX
         l0_target, l1_target = await _targets()

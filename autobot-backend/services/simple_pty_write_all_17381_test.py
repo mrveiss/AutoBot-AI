@@ -161,3 +161,21 @@ def test_a_descriptor_closed_mid_write_is_not_an_error(pipe_pty):
     pty, _, _ = pipe_pty
     pty.master_fd = None
     pty._write_all(b"anything")  # must return quietly, not raise
+
+
+def test_a_wedged_writer_is_visible_and_stops_taking_input(pipe_pty, monkeypatch):
+    """#17399: budget exhaustion ends the write thread, and a caller can SEE it: error event, no input accepted."""
+    pty, _, write_fd = pipe_pty
+    monkeypatch.setattr("services.simple_pty._WRITE_STALL_BUDGET_S", 0.2)
+    with pytest.raises(BlockingIOError):
+        while True:
+            os.write(write_fd, b"\xff" * 4096)
+
+    pty.input_queue.put("nobody is reading this")
+    writer = threading.Thread(target=pty._write_loop, daemon=True)
+    writer.start()
+    writer.join(timeout=10.0)
+
+    assert not writer.is_alive()
+    assert pty.output_queue.get(timeout=1.0)[0] == "error"
+    assert pty.write_input("more") is False

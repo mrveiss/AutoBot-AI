@@ -85,7 +85,7 @@ def _plugin_source_url(slug: str) -> str:
 _BUILTIN_CATALOG: list[dict[str, Any]] = [
     {
         "name": "hello-plugin",
-        "version": "1.0.0",
+        "version": "1.0.0",  # catalog version: the bundled plugin's own declared version
         "display_name": "Hello Plugin",
         "description": "Simple example plugin demonstrating basic plugin structure.",
         "author": "AutoBot Team",
@@ -100,7 +100,7 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
     },
     {
         "name": "kb-event-plugin",
-        "version": "1.0.0",
+        "version": "1.0.0",  # catalog version: the bundled plugin's own declared version
         "display_name": "Knowledge Base Event Plugin",
         "description": (
             "Hooks into chat and KB events for analytics and audit logging. "
@@ -118,7 +118,7 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
     },
     {
         "name": "logger-plugin",
-        "version": "1.0.0",
+        "version": "1.0.0",  # catalog version: the bundled plugin's own declared version
         "display_name": "Logger Plugin",
         "description": "Structured JSON logging for all hook events. Useful for debugging and observability.",
         "author": "mrveiss",
@@ -133,7 +133,7 @@ _BUILTIN_CATALOG: list[dict[str, Any]] = [
     },
     {
         "name": "mcp-wrapper-plugin",
-        "version": "1.0.0",
+        "version": "1.0.0",  # catalog version: the bundled plugin's own declared version
         "display_name": "MCP Wrapper Plugin",
         "description": "Wraps MCP tools as AutoBot plugin hooks for seamless tool integration.",
         "author": "mrveiss",

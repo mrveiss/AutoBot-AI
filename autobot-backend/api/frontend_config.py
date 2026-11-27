@@ -42,7 +42,7 @@ def _build_project_config() -> Dict[str, Any]:
     return {
         "root_path": str(PathConstants.PROJECT_ROOT),
         "name": "AutoBot",
-        "version": "1.5.0",
+        "version": "unknown",  # the repo declares no version (#17821)
     }
 
 

@@ -44,7 +44,7 @@ _UNIT_DIRS = (
 )
 _UNIT_SUFFIXES = (".service", ".service.j2")
 _ENV_SUFFIXES = (".env", ".env.j2")
-_MIN_PYTHON_UNITS = 15  # live count when written: 15; a drop below this means discovery broke
+_MIN_PYTHON_UNITS = 14  # live count: 14 (was 15 until #14590 removed the dead duplicate autobot-user-backend.service, owner-approved 2026-11-26); a drop below this means discovery broke
 _MIN_COLLISION_CHECKED = 6  # live count when written: 8 units set the variable AND append output, both resolved
 
 

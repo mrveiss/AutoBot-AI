@@ -15,16 +15,6 @@ from typing import List
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
 
-from services.mcp_bridge_manifest import MCPBridgeManifest
-
-MANIFEST = MCPBridgeManifest(
-    name="vnc_mcp",
-    version="1.0.0",
-    description="VNC Observation and Browser Context",
-    features=["vnc_status", "observe_activity", "browser_context"],
-    endpoint="/api/vnc/mcp/tools",
-)
-
 from api.desktop_control_lock import get_control_lock_state, is_human_active
 from api.schemas_system import (
     BrowserVncContextResponse,
@@ -55,7 +45,16 @@ from autobot_shared.ssot_config import config
 from autobot_shared.temp_files import temporary_file_path
 from autobot_shared.time_utils import parse_utc_iso
 from constants.network_constants import NetworkConstants
+from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
+
+MANIFEST = MCPBridgeManifest(
+    name="vnc_mcp",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
+    description="VNC Observation and Browser Context",
+    features=["vnc_status", "observe_activity", "browser_context"],
+    endpoint="/api/vnc/mcp/tools",
+)
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["vnc_mcp", "mcp", "vnc"], dependencies=[Depends(check_admin_mcp_tool_permission)])

@@ -25,7 +25,7 @@ async def _emit_planned_agent_error_hooks(session_id, iteration, exc: Exception)
             error=str(exc),
         )
     except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_ERROR failed (non-fatal): %s", _hook_exc)
+        logger.warning("Plugin hook ON_AGENT_ERROR failed (non-fatal): %s", _hook_exc)
 
 
 async def _emit_planned_agent_complete_hook(session_id, iteration, llm_response: str) -> None:
@@ -40,7 +40,7 @@ async def _emit_planned_agent_complete_hook(session_id, iteration, llm_response:
             response=llm_response or "",
         )
     except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
+        logger.warning("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
 
 
 async def _emit_agent_execute_hook(session_id, iteration) -> None:
@@ -52,7 +52,7 @@ async def _emit_agent_execute_hook(session_id, iteration) -> None:
             Hook.ON_AGENT_EXECUTE.value,
             session_id=session_id,
             iteration=iteration,
-            agent_type="chat_workflow",
+            agent_name="chat_workflow",  # the declared contract (HOOK_REGISTRY) (#20888)
         )
     except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)
+        logger.warning("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)

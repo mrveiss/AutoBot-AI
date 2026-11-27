@@ -112655,7 +112655,7 @@ export interface operations {
             content: {
                 "application/json": {
                     [key: string]: unknown;
-                };
+                } | null;
             };
         };
         responses: {
