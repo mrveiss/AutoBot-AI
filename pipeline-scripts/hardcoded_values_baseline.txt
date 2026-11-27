@@ -221,13 +221,6 @@
 1|other|autobot-backend/content_reach/sources/reddit.py|https://reddit.com.evil.com/
 1|other|autobot-backend/content_reach/sources/reddit.py|https://www.reddit.com
 1|other|autobot-backend/content_reach/sources/reddit.py|https://www.reddit.com/search.json
-2|other|autobot-backend/content_reach/sources/web_page.py|https://r.jina.ai/
-2|other|autobot-backend/content_reach/sources/web_page.py|https://r.jina.ai/<url>
-1|other|autobot-backend/content_reach/sources/web_page.py|https://r.jina.ai/<url>;
-2|other|autobot-backend/content_reach/sources/web_search.py|https://s.jina.ai/
-1|other|autobot-backend/content_reach/sources/web_search.py|https://s.jina.ai/<query>
-1|other|autobot-backend/content_reach/sources/web_search.py|https://s.jina.ai/<query>;
-1|other|autobot-backend/content_reach/sources/web_search.py|https://s.jina.ai/<urlencoded
 1|other|autobot-backend/conversation_context.py|"assistant"
 1|other|autobot-backend/conversation_context.py|"user"
 1|other|autobot-backend/conversation_file_manager.py|50
@@ -370,7 +363,6 @@
 1|other|autobot-backend/llm_shared/tiered_routing/complexity_router.py|"system"
 1|other|autobot-backend/llm_shared/tiered_routing/complexity_scorer.py|"user"
 1|other|autobot-backend/media/document/extraction.py|offset=0
-1|other|autobot-backend/media/link/pipeline.py|https://r.jina.ai/
 1|other|autobot-backend/memory/compat.py|100
 3|other|autobot-backend/memory/manager.py|100
 1|other|autobot-backend/memory/storage/general_storage.py|100
@@ -564,7 +556,6 @@
 1|other|autobot-backend/voice_processing/providers/cloud/assemblyai_provider.py|https://api.assemblyai.com/v2
 1|other|autobot-backend/voice_processing/providers/cloud/deepgram_provider.py|https://api.deepgram.com/v1/listen
 1|other|autobot-backend/voice_processing/realtime/openai_provider.py|https://api.openai.com/v1/realtime/sessions
-1|other|autobot-backend/web_fetch/fetcher.py|https://r.jina.ai/
 1|other|autobot-backend/web_fetch/site_mapper.py|http://www.sitemaps.org/schemas/sitemap/0.9
 1|other|autobot-backend/workers/audit_tasks.py|60
 1|ssot|autobot-frontend/cypress.config.ts|:5173
