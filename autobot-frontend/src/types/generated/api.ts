@@ -83282,7 +83282,9 @@ export interface components {
          * KnowledgeEntriesResponse
          * @description Shape of ``GET /api/knowledge_base/entries``.
          *
-         *     Cursor-paginated list. ``next_cursor`` is a stringified integer;
+         *     Cursor-paginated list. A page returns every fact the underlying SCAN step
+         *     yielded, so it may exceed ``limit`` (``limit`` is the SCAN count hint);
+         *     ``next_cursor`` is a stringified integer;
          *     ``has_more`` flips to False when the SCAN cursor wraps to 0.
          *     Error branches populate ``error`` instead of raising.
          */
@@ -83314,10 +83316,13 @@ export interface components {
         /**
          * KnowledgeEntry
          * @description Single row inside ``KnowledgeEntriesResponse.entries``.
+         *
+         *     Mirrors ``api.knowledge._format_knowledge_entry`` exactly: ``id`` is the
+         *     server identity (the Redis hash field), there is no ``key`` (#17530).
          */
         KnowledgeEntry: {
-            /** Key */
-            key: string;
+            /** Id */
+            id: string;
             /**
              * Title
              * @default Untitled
@@ -83329,13 +83334,18 @@ export interface components {
              */
             content: string;
             /**
+             * Source
+             * @default unknown
+             */
+            source: string;
+            /**
              * Category
-             * @default
+             * @default general
              */
             category: string;
             /**
              * Type
-             * @default unknown
+             * @default document
              */
             type: string;
             /** Created At */

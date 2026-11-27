@@ -15,6 +15,9 @@
       <template #panel-connectors><ConnectorManager /></template>
       <template #panel-manage>
         <div class="flex flex-col gap-4">
+          <BaseAlert v-if="listStatus.stale" variant="warning">{{ $t('knowledge.entries.listStale') }}</BaseAlert>
+          <BaseAlert v-if="listStatus.truncated" variant="warning">{{ $t('knowledge.entries.listTruncated') }}</BaseAlert>
+
           <KnowledgeEntriesFilters
             v-model:search="list.searchQuery.value"
             v-model:category="list.filterCategory.value"
@@ -89,12 +92,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { BaseTabs } from '@autobot/ui'
+import { BaseAlert, BaseTabs } from '@autobot/ui'
 import type { TabItem } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { useKnowledgeListStatus } from '@/stores/useKnowledgeListStatus'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import { MANAGE_PAGE_SIZE, useKnowledgeManageList } from '@/composables/knowledge/useKnowledgeManageList'
@@ -121,6 +125,7 @@ const logger = createLogger('KnowledgeEntries')
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()
 const store = useKnowledgeStore()
+const listStatus = useKnowledgeListStatus()
 const controller = useKnowledgeController()
 const route = useRoute()
 

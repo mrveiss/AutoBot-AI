@@ -19,15 +19,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class KnowledgeEntry(BaseModel):
-    """Single row inside ``KnowledgeEntriesResponse.entries``."""
+    """Single row inside ``KnowledgeEntriesResponse.entries``.
+
+    Mirrors ``api.knowledge._format_knowledge_entry`` exactly: ``id`` is the
+    server identity (the Redis hash field), there is no ``key`` (#17530).
+    """
 
     model_config = ConfigDict(extra="allow")
 
-    key: str
+    id: str
     title: str = "Untitled"
     content: str = ""
-    category: str = ""
-    type: str = "unknown"
+    source: str = "unknown"
+    category: str = "general"
+    type: str = "document"
     created_at: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -35,7 +40,9 @@ class KnowledgeEntry(BaseModel):
 class KnowledgeEntriesResponse(BaseModel):
     """Shape of ``GET /api/knowledge_base/entries``.
 
-    Cursor-paginated list. ``next_cursor`` is a stringified integer;
+    Cursor-paginated list. A page returns every fact the underlying SCAN step
+    yielded, so it may exceed ``limit`` (``limit`` is the SCAN count hint);
+    ``next_cursor`` is a stringified integer;
     ``has_more`` flips to False when the SCAN cursor wraps to 0.
     Error branches populate ``error`` instead of raising.
     """

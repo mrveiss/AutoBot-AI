@@ -10,6 +10,7 @@
  */
 import type { VectorizationStatus } from '@/composables/useKnowledgeVectorization'
 
+// NB: VectorizationProgressModal uses `pending` for IN-FLIGHT; here it means not yet vectorized (two meanings, #22332).
 export function isVectorizable(status: VectorizationStatus | undefined): boolean {
   return status !== 'vectorized'
 }

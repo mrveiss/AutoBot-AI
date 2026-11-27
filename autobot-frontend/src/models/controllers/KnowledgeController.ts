@@ -9,6 +9,7 @@
  * @author mrveiss
  */
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { useKnowledgeListStatus } from '@/stores/useKnowledgeListStatus'
 import { useAppStore } from '@/stores/useAppStore'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import { DEFAULT_FACT_CATEGORY } from '@/models/repositories/knowledgeFactMapping'
@@ -380,16 +381,39 @@ export class KnowledgeController {
     }
   }
 
-  // Load all documents
-  async loadAllDocuments(): Promise<void> {
+  // Load all documents. Reads never overlap: a call made while one is in flight queues ONE
+  // follow-up read that starts after it settles (so it sees any write made since), and every
+  // queued caller shares it. A slow earlier response therefore cannot overwrite a later one.
+  private documentsRead: Promise<void> | null = null
+  private documentsReread: Promise<void> | null = null
+
+  loadAllDocuments(): Promise<void> {
+    if (this.documentsRead) {
+      this.documentsReread ??= this.documentsRead.then(() => {
+        this.documentsReread = null
+        return this.loadAllDocuments()
+      })
+      return this.documentsReread
+    }
+    this.documentsRead = this.readAllDocuments().finally(() => {
+      this.documentsRead = null
+    })
+    return this.documentsRead
+  }
+
+  private async readAllDocuments(): Promise<void> {
     this.knowledgeStore.isLoading = true
+    const listStatus = useKnowledgeListStatus()
     try {
       const response = await knowledgeRepository.getAllEntries()
       logger.debug('Knowledge entries response:', response)
 
       if (response.success && response.entries) {
         // The one write to the document list: a server read (#17530)
-        this.knowledgeStore.setDocuments(response.entries.map(entryToDocument).filter((d): d is KnowledgeDocument => d !== null))
+        const documents = response.entries.map(entryToDocument).filter((d): d is KnowledgeDocument => d !== null)
+        this.knowledgeStore.setDocuments(documents)
+        listStatus.loaded(response.truncated)
+        if (response.truncated) logger.warn('Knowledge entries list truncated; more entries exist on the server')
 
         // Update categories based on documents
         await this.refreshStats()
@@ -398,7 +422,8 @@ export class KnowledgeController {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       logger.error('Failed to load documents:', error)
-      this.appStore.setGlobalError(`Failed to load documents: ${errorMessage}`)
+      listStatus.failed()
+      this.appStore.setGlobalError(i18n.global.t('knowledge.entries.loadFailed', { error: errorMessage }))
     } finally {
       this.knowledgeStore.isLoading = false
     }

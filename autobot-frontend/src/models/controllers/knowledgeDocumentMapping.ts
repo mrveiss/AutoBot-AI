@@ -5,7 +5,8 @@
  * holds, so the id is the server's (an entry without one is dropped, never given a made-up id)
  * and `contentComplete` is set only here, where the full content was read.
  */
-import { DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE, type KnowledgeEntryRecord } from '@/models/repositories/knowledgeFactMapping'
+import { DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE } from '@/models/repositories/knowledgeFactMapping'
+import type { KnowledgeEntry } from '@/types/api-contract'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 
 type DocumentType = KnowledgeDocument['type']
@@ -20,24 +21,28 @@ export function determineDocumentType(metadata: Record<string, unknown>): Docume
   return DEFAULT_FACT_TYPE
 }
 
-const asDate = (value: unknown): Date => (value ? new Date(value as string) : new Date())
+/** A missing or unparseable date is the epoch, never "now" (a made-up date sorts as the newest entry). */
+const asDate = (value: unknown): Date => {
+  const parsed = typeof value === 'string' && value ? new Date(value) : null
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date(0)
+}
 
 /** Null when the server entry carries no id: it cannot be updated or deleted, so it is not listed. */
-export function entryToDocument(entry: KnowledgeEntryRecord): KnowledgeDocument | null {
-  const id = entry.id || entry.fact_id
-  if (!id) return null
+export function entryToDocument(entry: KnowledgeEntry): KnowledgeDocument | null {
+  if (!entry.id) return null
   const metadata = entry.metadata || {}
+  const created = asDate(entry.created_at || metadata.created_at)
   return {
-    id,
-    title: (metadata.title as string) || entry.fact || 'Untitled',
-    content: entry.fact || entry.content || '',
+    id: entry.id,
+    title: entry.title || (metadata.title as string) || 'Untitled',
+    content: entry.content || '',
     contentComplete: true,
-    source: (metadata.source as string) || (metadata.url as string) || 'Unknown',
+    source: entry.source || (metadata.url as string) || 'Unknown',
     type: determineDocumentType(metadata),
     tags: (metadata.tags as string[]) || [],
-    category: (metadata.category as string) || DEFAULT_FACT_CATEGORY,
-    createdAt: asDate(metadata.created_at || entry.created_at),
-    updatedAt: asDate(metadata.updated_at || entry.updated_at),
+    category: entry.category || DEFAULT_FACT_CATEGORY,
+    createdAt: created,
+    updatedAt: metadata.updated_at ? asDate(metadata.updated_at) : created,
     metadata: {
       wordCount: metadata.word_count as number | undefined,
       fileSize: metadata.file_size as number | undefined,

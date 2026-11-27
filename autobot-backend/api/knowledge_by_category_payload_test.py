@@ -212,7 +212,11 @@ class TestGetFactsByCategoryRoutePagination:
         async def _fake_get_or_create_knowledge_base(_app, **_kwargs):
             return kb
 
-        monkeypatch.setattr(knowledge_module, "get_or_create_knowledge_base", _fake_get_or_create_knowledge_base)
+        monkeypatch.setattr(
+            knowledge_module,
+            "get_or_create_knowledge_base",
+            _fake_get_or_create_knowledge_base,
+        )
 
         req = SimpleNamespace(app=MagicMock())
         result = await knowledge_module.get_facts_by_category(
@@ -238,7 +242,11 @@ class TestGetFactsByCategoryRoutePagination:
         async def _fake_get_or_create_knowledge_base(_app, **_kwargs):
             return kb
 
-        monkeypatch.setattr(knowledge_module, "get_or_create_knowledge_base", _fake_get_or_create_knowledge_base)
+        monkeypatch.setattr(
+            knowledge_module,
+            "get_or_create_knowledge_base",
+            _fake_get_or_create_knowledge_base,
+        )
 
         req = SimpleNamespace(app=MagicMock())
         result = await knowledge_module.get_facts_by_category(
@@ -266,7 +274,11 @@ class TestGetFactsByCategoryRoutePagination:
         async def _fail_if_called(*_args, **_kwargs):
             raise AssertionError("legacy SCAN fallback must not run when a category index exists")
 
-        monkeypatch.setattr(knowledge_module, "get_or_create_knowledge_base", _fake_get_or_create_knowledge_base)
+        monkeypatch.setattr(
+            knowledge_module,
+            "get_or_create_knowledge_base",
+            _fake_get_or_create_knowledge_base,
+        )
         monkeypatch.setattr(knowledge_module, "_get_facts_by_category_legacy", _fail_if_called)
 
         req = SimpleNamespace(app=MagicMock())
@@ -281,3 +293,56 @@ class TestGetFactsByCategoryRoutePagination:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestEntriesEndpointServesWhatItDeclares:
+    """Issue #17530: ``GET /entries`` validates against its response model and pages without loss."""
+
+    @staticmethod
+    def _client(store):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        import api.knowledge as kn
+        from auth_middleware import check_admin_permission
+
+        kb = SimpleNamespace(redis_client=SimpleNamespace(hscan=lambda _k, cursor=0, count=10: (7, store)))
+        app = FastAPI()
+        app.include_router(kn.router, prefix="/api/knowledge_base")
+        app.dependency_overrides[check_admin_permission] = lambda: True
+        return TestClient(app), kn, kb
+
+    @staticmethod
+    def _store(n):
+        return {
+            f"fact:{i}".encode(): json.dumps(
+                {
+                    "content": f"c{i}",
+                    "metadata": {
+                        "title": f"t{i}",
+                        "created_at": None if i % 2 else f"2026-01-{i + 1:02d}",
+                    },
+                }
+            ).encode()
+            for i in range(n)
+        }
+
+    def test_non_empty_page_is_200_and_carries_id(self):
+        from unittest.mock import AsyncMock, patch
+
+        client, kn, kb = self._client(self._store(2))
+        with patch.object(kn, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+            resp = client.get("/api/knowledge_base/entries")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert {e["id"] for e in body["entries"]} == {"fact:0", "fact:1"}
+        assert all("source" in e and "key" not in e for e in body["entries"])
+
+    def test_scan_yielding_more_than_limit_drops_nothing(self):
+        from unittest.mock import AsyncMock, patch
+
+        client, kn, kb = self._client(self._store(5))
+        with patch.object(kn, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+            body = client.get("/api/knowledge_base/entries?limit=2").json()
+        assert body["count"] == 5 == len(body["entries"])
+        assert body["next_cursor"] == "7" and body["has_more"] is True

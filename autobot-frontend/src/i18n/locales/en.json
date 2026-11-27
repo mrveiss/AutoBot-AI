@@ -3547,7 +3547,10 @@
       "nextPage": "Next page",
       "paginationLabel": "Entries pages",
       "contentNotLoaded": "The full content of this entry was not loaded, so it cannot be saved. Reload the list and try again.",
-      "exportBtn": "Export"
+      "exportBtn": "Export",
+      "loadFailed": "Failed to load documents: {error}",
+      "listStale": "The list below could not be refreshed and may be out of date.",
+      "listTruncated": "Only the first part of the knowledge base is listed; more entries exist on the server."
     },
     "graphView": {
       "title": "Knowledge Graph",

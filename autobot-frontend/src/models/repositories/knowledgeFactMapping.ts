@@ -60,23 +60,6 @@ export function factToDocument(documentId: string, fact: FactByKeyBody): Knowled
   }
 }
 
-/** One fact as `GET /knowledge_base/entries` returns it. */
-export interface KnowledgeEntryRecord {
-  id: string
-  fact_id?: string
-  fact?: string
-  content?: string
-  metadata?: Record<string, unknown>
-  created_at?: string
-  updated_at?: string
-}
-
-export interface KnowledgeEntriesPage {
-  entries?: KnowledgeEntryRecord[]
-  next_cursor?: string
-  has_more?: boolean
-}
-
 // The endpoint accepts limit <= 1000; the page bound stops a cursor that never ends.
 export const ENTRIES_PAGE_SIZE = 1000
 export const ENTRIES_MAX_PAGES = 200

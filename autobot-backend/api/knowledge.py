@@ -1523,8 +1523,12 @@ def _empty_entries_response(message: str = "", error: str = "") -> dict:
     return resp
 
 
-def _parse_and_filter_facts(items: dict, category: str | None, limit: int) -> list:
-    """Parse and filter facts from HSCAN results (Issue #398: extracted)."""
+def _parse_and_filter_facts(items: dict, category: str | None) -> list:
+    """Parse and filter facts from HSCAN results (Issue #398: extracted).
+
+    Returns every matching fact the scan step yielded. Truncating here would
+    drop the remainder while the cursor advances past it (#17530).
+    """
     entries = []
     for fact_id, fact_json in items.items():
         try:
@@ -1532,8 +1536,6 @@ def _parse_and_filter_facts(items: dict, category: str | None, limit: int) -> li
             if category and fact.get("metadata", {}).get("category", "") != category:
                 continue
             entries.append(_format_knowledge_entry(fact_id, fact))
-            if len(entries) >= limit:
-                break
         except Exception as e:
             logger.warning("Error parsing fact %s: %s", fact_id, e)
     return entries
@@ -1571,15 +1573,15 @@ async def get_knowledge_entries(
     try:
 
         def _hscan():
-            return kb.redis_client.hscan("knowledge_base:facts", cursor=current_cursor, count=limit * 2)
+            return kb.redis_client.hscan("knowledge_base:facts", cursor=current_cursor, count=limit)
 
         next_cursor, items = await asyncio.to_thread(_hscan)
-        entries = _parse_and_filter_facts(items, category, limit)
-        entries.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        entries = _parse_and_filter_facts(items, category)
+        entries.sort(key=lambda x: x.get("created_at") or "", reverse=True)
         return {
-            "entries": entries[:limit],
+            "entries": entries,
             "next_cursor": str(next_cursor),
-            "count": len(entries[:limit]),
+            "count": len(entries),
             "has_more": next_cursor != 0,
         }
     except Exception as e:

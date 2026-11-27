@@ -26,6 +26,7 @@ import type {
   CreateConnectorRequest,
   UpdateConnectorRequest,
   KnowledgeStatsBasic,
+  KnowledgeEntry, KnowledgeEntriesResponse,
   KnowledgeCategoryEntry as ApiKnowledgeCategoryEntry,
   DetailedKnowledgeStats as ApiDetailedKnowledgeStats
 } from '@/types/api-contract'
@@ -33,7 +34,7 @@ import { getApiBase } from '@/config/ssot-config'
 import apiClient from '@/utils/ApiClient'
 import {
   DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE, ENTRIES_MAX_PAGES, ENTRIES_PAGE_SIZE, factByKeyUrl, factToDocument,
-  type FactByKeyBody, type KnowledgeEntriesPage, type KnowledgeEntryRecord,
+  type FactByKeyBody,
 } from './knowledgeFactMapping'
 
 // Re-export types for convenience
@@ -852,19 +853,18 @@ export class KnowledgeRepository extends ApiRepository {
    * Get all knowledge entries, following the server's cursor until it reports no more (#17530:
    * the Manage list is a projection of the whole knowledge base, never of its first page).
    */
-  async getAllEntries(): Promise<{ success: boolean; entries: KnowledgeEntryRecord[]; total: number }> {
-    const entries: KnowledgeEntryRecord[] = []
+  async getAllEntries(): Promise<{ success: boolean; entries: KnowledgeEntry[]; total: number; truncated: boolean }> {
+    const byId = new Map<string, KnowledgeEntry>()
     let cursor = '0'
-    for (let page = 0; page < ENTRIES_MAX_PAGES; page++) {
-      // The served rows carry `id` (api/knowledge.py _format_knowledge_entry); the declared row model says `key`.
-      const data = (await apiClient.call('get', '/api/knowledge_base/entries', {
-        query: { limit: ENTRIES_PAGE_SIZE, cursor },
-      })) as unknown as KnowledgeEntriesPage
-      entries.push(...(data.entries || []))
-      if (!data.has_more || !data.next_cursor || data.next_cursor === cursor) break
+    let hasMore = true
+    for (let page = 0; page < ENTRIES_MAX_PAGES && hasMore; page++) {
+      const data: KnowledgeEntriesResponse = await apiClient.call('get', '/api/knowledge_base/entries', { query: { limit: ENTRIES_PAGE_SIZE, cursor } })
+      // A cursor scan can return one id on two pages; the id is the identity, so the last read wins.
+      for (const entry of data.entries ?? []) byId.set(entry.id, entry)
+      hasMore = Boolean(data.has_more && data.next_cursor && data.next_cursor !== cursor)
       cursor = data.next_cursor
     }
-    return { success: true, entries, total: entries.length }
+    return { success: true, entries: [...byId.values()], total: byId.size, truncated: hasMore }
   }
 }
 
