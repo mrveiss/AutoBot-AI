@@ -725,7 +725,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
       # Has main already merged a commit citing this issue?
       git fetch origin main --quiet 2>/dev/null || true
-      if grep -qE "#${issue_num}\\b" <<<"$(git log origin/main --oneline -50 2>/dev/null)"; then
+      if main_log=$(git log origin/main --oneline -50 2>/dev/null) && grep -qE "#${issue_num}\\b" <<<"${main_log}"; then
         warn "origin/main already has a commit citing #$issue_num:"
         git log origin/main --oneline -50 2>/dev/null \
           | grep -E "#${issue_num}\\b" \
