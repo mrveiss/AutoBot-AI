@@ -9,6 +9,7 @@ import type { ChatMessage } from '@/types/api'
 import { buildVncClientUrl, type VncClientHost } from '@/config/vnc-client'
 import apiClient from '@/utils/ApiClient'
 import type { SecretType } from '@/types/secretKind'
+import { refreshExistingCompany } from './chatSessionCompany'
 import { usePendingApproval } from './chatPendingApproval'
 import { debugPersistenceState as debugPersistenceStateCheck } from './chatPersistenceDebug'
 
@@ -667,13 +668,7 @@ export const useChatStore = defineStore('chat', () => {
   function importSession(session: ChatSession) {
     // Skip if session already exists (prevent duplicate imports)
     const existingSession = sessions.value.find(s => s.id === session.id)
-    if (existingSession) {
-      // #16905: the server owns a chat's company, so a reload refreshes it; nothing else of a local session is touched.
-      // An import that omits a field (the public importChatSession) must not blank what is held.
-      if (session.companyId !== undefined) existingSession.companyId = session.companyId
-      if (session.unassigned !== undefined) existingSession.unassigned = session.unassigned
-      return
-    }
+    if (existingSession) return refreshExistingCompany(existingSession, session)
 
     sessions.value.push(session)
   }

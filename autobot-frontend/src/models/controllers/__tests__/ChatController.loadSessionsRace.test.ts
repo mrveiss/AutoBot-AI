@@ -57,4 +57,18 @@ describe('loadChatSessions sequencing (#21997)', () => {
     await controller.loadChatSessions(true)
     expect(controller.switchToSession).not.toHaveBeenCalled()
   })
+
+  it('discards a list requested under the previous company and reloads for the current one (#16905)', async () => {
+    const first = deferred<ReturnType<typeof entry>[]>()
+    getChatList.mockReturnValueOnce(first.promise).mockResolvedValueOnce([entry('company-b')])
+    const controller = new ChatController()
+    const store = useChatStore()
+    store.setActiveChatContext({ company_id: 'a' })
+    const pending = controller.loadChatSessions()
+    store.setActiveChatContext({ company_id: 'b' })
+    first.resolve([entry('company-a')])
+    await pending
+    expect(getChatList.mock.calls.map((c) => c[0])).toEqual(['a', 'b'])
+    expect(store.sessions.map((x) => x.id)).toEqual(['company-b'])
+  })
 })

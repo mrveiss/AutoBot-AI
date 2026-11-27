@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { HttpError } from '@autobot/ui'
-import { toSessionDate, withUnassigned, type BackendSessionList, type ChatListEntry } from './sessionDates'
+import { toSessionDate, withUnassigned, type BackendSessionList, type ChatListEntry, type ChatListReply } from './sessionDates'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'
+import apiClient from '@/utils/ApiClient'
 import { orgScope } from '@/utils/orgContext'
 import { storedMessageText } from '@/utils/attachmentNotice'
 import { toSource, type StoredSource } from '@/utils/messageCitations'
@@ -18,7 +19,6 @@ import type { ChatMessage } from '@/types/api'
  */
 interface RequestConfig {
   params?: Record<string, string>
-  headers?: Record<string, string>
   timeout?: number
 }
 
@@ -324,13 +324,10 @@ export class ChatRepository {
   }
 
   // Get list of all chat sessions (for compatibility with controller)
-  /** `companyId` names the company the list is for (Company OS); the server checks the caller's membership (#16905). */
-  async getChatList(companyId?: string): Promise<ChatListEntry[]> {
+  async getChatList(companyId?: unknown): Promise<ChatListEntry[]> {
     try {
-      const response = await this.get<BackendSessionList<BackendSessionEntry> & {
-        data?: BackendSessionList<BackendSessionEntry>
-      }>(`${getApiBase()}/chat/sessions`, companyId ? orgScope(companyId) : undefined)
-      const body = response.data?.data ?? response.data // the list is { sessions } or { data: { sessions } }
+      const reply = await apiClient.call('get', '/api/chat/sessions', { headers: typeof companyId === 'string' && companyId ? orgScope(companyId).headers : undefined }) as ChatListReply<BackendSessionEntry>
+      const body = reply.data ?? reply // { sessions } or { data: { sessions } }; companyId scopes it via X-Organization-Id (#16905)
       const sessions = withUnassigned(body?.sessions || [], body?.unassigned || [])
 
       // Transform backend session format to frontend store format.
@@ -587,7 +584,7 @@ export class ChatRepository {
     try {
       const init: RequestInit = {
         method,
-        headers: { 'Content-Type': 'application/json', ...config?.headers },
+        headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
       }
       if (data !== undefined) {

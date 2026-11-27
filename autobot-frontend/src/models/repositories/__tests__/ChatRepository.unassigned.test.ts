@@ -6,11 +6,12 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: vi.fn() }))
 vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api', getBackendUrl: () => 'http://backend' }))
 
+import apiClient from '@/utils/ApiClient'
 import { ChatRepository } from '../ChatRepository'
 
 async function list(data: unknown) {
   const repo = new ChatRepository()
-  vi.spyOn(repo as unknown as { get: () => Promise<unknown> }, 'get').mockResolvedValue({ data })
+  vi.spyOn(apiClient, 'call').mockResolvedValue(data as never)
   return repo.getChatList()
 }
 

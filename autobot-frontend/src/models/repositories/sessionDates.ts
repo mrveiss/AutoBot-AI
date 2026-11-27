@@ -37,6 +37,9 @@ export interface BackendSessionList<T> {
   unassigned?: T[]
 }
 
+/** The list reply as the API sends it: the list itself, or wrapped in `data` (#16905). */
+export type ChatListReply<T> = BackendSessionList<T> & { data?: BackendSessionList<T> }
+
 /**
  * The company's chats plus the Unassigned set, each chat once (#21997). With no active company the
  * backend returns the same untagged chats in both lists, so an id in `unassigned` is flagged and
