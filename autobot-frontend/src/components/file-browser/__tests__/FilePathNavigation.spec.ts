@@ -30,7 +30,7 @@ describe('FilePathNavigation (#22349)', () => {
 
   it('Enter in the path field and the Go button emit the typed path', async () => {
     const wrapper = mountNav('/')
-    const input = wrapper.get('[data-testid="path-input"]')
+    const input = wrapper.get('[data-testid="path-input"] input')
     await input.setValue('/x/y')
     await input.trigger('keyup', { key: 'Enter' })
     expect(wrapper.emitted('navigate-to-path')?.[0]).toEqual(['/x/y'])
@@ -41,6 +41,6 @@ describe('FilePathNavigation (#22349)', () => {
   it('follows an external path change', async () => {
     const wrapper = mountNav('/')
     await wrapper.setProps({ currentPath: '/moved' })
-    expect((wrapper.get('[data-testid="path-input"]').element as HTMLInputElement).value).toBe('/moved')
+    expect((wrapper.get('[data-testid="path-input"] input').element as HTMLInputElement).value).toBe('/moved')
   })
 })

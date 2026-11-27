@@ -976,7 +976,7 @@
       "message": "Message",
       "noEventsMatchTheCurrentFilters": "No events match the current filters.",
       "noLifecycleEventsRecordedYet": "No lifecycle events recorded yet.",
-      "selectAll": "Select all",
+      "selectAll": "تحديد الكل",
       "severity": "Severity:",
       "showingCountOfValue1": "(showing {count} of {value1})",
       "systemUpToDate": "System up to date",

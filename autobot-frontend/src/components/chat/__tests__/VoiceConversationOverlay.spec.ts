@@ -59,7 +59,7 @@ describe('VoiceConversationOverlay (#22349)', () => {
 
   it('Close deactivates the session and emits close; Escape does the same', async () => {
     const wrapper = mountOverlay()
-    find('[data-testid="voice-close"]')!.click()
+    find('[data-testid="voice-close"] button')!.click()
     expect(fake.deactivate).toHaveBeenCalledTimes(1)
     find('#chat-overlay-voice')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(fake.deactivate).toHaveBeenCalledTimes(2)
@@ -84,7 +84,9 @@ describe('VoiceConversationOverlay (#22349)', () => {
   })
 
   it('holds no hex or rgb colour literal and no raw palette class', () => {
-    expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
-    expect(source).not.toMatch(/\b(?:text|bg|border)-(?:red|green|blue|black|white)\b/)
+    // comments cite issue numbers (#22349 reads as a hex colour); only code is checked
+    const code = source.replace(/<!--[\s\S]*?-->|\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm, '')
+    expect(code).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
+    expect(code).not.toMatch(/\b(?:text|bg|border)-(?:red|green|blue|black|white)\b/)
   })
 })

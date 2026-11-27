@@ -120,7 +120,7 @@ describe('VoiceModeControls (#22349)', () => {
     expect(mountModes().find('[data-testid="voice-connection"]').exists()).toBe(false)
     const dot = mountModes({ connected: true }).get('[data-testid="voice-connection"]')
     expect(dot.attributes('role')).toBe('img')
-    expect(dot.attributes('aria-label')).toContain('chat.voice.connected')
+    expect(dot.attributes('aria-label')).toBe('chat.voice.connectionLabel')
     expect(dot.classes()).toContain('bg-[var(--aui-color-success)]')
   })
 })
