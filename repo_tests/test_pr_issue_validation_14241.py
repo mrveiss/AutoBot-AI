@@ -267,9 +267,13 @@ def test_a_large_body_whose_link_is_on_the_first_line_passes_every_time(tmp_path
         assert code == 0 and "status=success" in out, f"attempt {attempt}: {out[-200:]}"
 
 
-# A producer piped into an early-exiting grep: `grep -q` / `--quiet`, any producer.
+# A producer piped (`|` or `|&`) into an early-exiting grep: `grep -q` / `--quiet`, any
+# producer, behind wrappers (sudo, xargs, timeout N, env A=b, ...), with -q before or after
+# the pattern. Quoted pattern text may itself contain `|`, `;` or `&`.
+_WRAPPERS = r"(?:(?:sudo|xargs|timeout|env|nice|nohup|stdbuf|command|exec)\b(?:\s+(?:-\S+|\w+=\S*|\d+[smhd]?))*\s+)*"
+_GREP_ARG = r"""(?:"[^"]*"|'[^']*'|[^|;&\n"'])"""
 _PIPE_INTO_QUIET_GREP = re.compile(
-    r"(?<!\|)\|(?!\|)\s*(?:e|f)?grep\s+(?:[^|;&\n]*?\s)?(?:-[A-Za-z]*q[A-Za-z]*|--quiet)\b"
+    r"(?<!\|)\|&?(?!\|)\s*" + _WRAPPERS + r"(?:e|f)?grep\s+(?:" + _GREP_ARG + r"*?\s)?(?:-[A-Za-z]*q[A-Za-z]*|--quiet)\b"
 )
 
 
@@ -301,19 +305,28 @@ def test_no_workflow_step_under_pipefail_pipes_a_producer_into_quiet_grep():
     assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"
 
 
-_SET_PIPEFAIL = re.compile(r"\bset\s+(?:-\w+\s+)*-\w*o\s+pipefail")
+# `set -euo pipefail`, `set -o errexit -o pipefail`, `set -e -o nounset -o pipefail`, ...
+_SET_PIPEFAIL = re.compile(r"\bset\s+(?:-o\s+\w+\s+|-\w+\s+)*-\w*o\s+pipefail")
 
 
-# Every tracked shell script, plus the extensionless git hooks (no suffix to glob on).
-_SHELL_GLOBS = (
-    "*.sh",
-    "tools/git-hooks/pre-commit",
-    "tools/git-hooks/pre-push",
-    "tools/git-hooks/commit-msg",
-    "autobot-infrastructure/shared/scripts/hooks/*",
-)
-# Floor: a glob that collapses to a handful of files must fail, not pass vacuously.
-_MIN_SHELL_SCRIPTS_UNDER_PIPEFAIL = 80
+# Every tracked shell script: by suffix (`*.sh`, Ansible `*.sh.j2`) or, for extensionless
+# files (git hooks, wrappers), by a bash/sh shebang, so a new script cannot dodge a glob.
+_SHELL_SUFFIX_GLOBS = ("*.sh", "*.sh.j2")
+_SHEBANG = re.compile(rb"#!\s*(?:/usr/bin/env\s+(?:-S\s+)?)?\S*?(?:ba)?sh\b")
+# Floor: a scan that collapses to a handful of files must fail, not pass vacuously.
+_MIN_SHELL_SCRIPTS_UNDER_PIPEFAIL = 100
+
+
+def _shell_script_paths() -> list[Path]:
+    root = repo_root()
+    rels = set(tracked_paths(root, *_SHELL_SUFFIX_GLOBS))
+    for rel in tracked_paths(root, "*", exclude=("node_modules",)):
+        if "." in Path(rel).name or rel in rels:
+            continue
+        path = root / rel
+        if path.is_file() and not path.is_symlink() and _SHEBANG.match(path.read_bytes()[:200]):
+            rels.add(rel)
+    return [root / rel for rel in sorted(rels)]
 
 
 def _logical_lines(text: str) -> list[str]:
@@ -328,7 +341,7 @@ def test_no_shell_script_under_pipefail_pipes_a_producer_into_quiet_grep():
     not pipe a producer into `grep -q`, including across a continued line."""
     offenders = []
     under_pipefail = 0
-    for path in (repo_root() / rel for rel in sorted(set(tracked_paths(repo_root(), *_SHELL_GLOBS)))):
+    for path in _shell_script_paths():
         text = path.read_text(encoding="utf-8", errors="replace")
         if not _SET_PIPEFAIL.search(text):
             continue
