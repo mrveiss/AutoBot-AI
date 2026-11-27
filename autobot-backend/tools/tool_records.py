@@ -80,8 +80,9 @@ REGISTRY_TOOLS: Dict[str, Tuple[str, str, Optional[Permission]]] = {
     "content_reach": ("web", LOCATION_BACKEND, None),  # #10932
 }
 
-#: SDK ``ToolPermission`` level -> the canonical ``Permission`` a role must hold to see the tool. ``role_has_permission``
-#: knows only dot-style Permission values, so storing the bare level would hide every SDK tool from every role.
+#: SDK ``ToolPermission`` level -> the canonical ``Permission`` a role must hold to see the tool.
+#: ``role_has_permission`` knows only dot-style Permission values, so storing the bare level
+#: would hide every SDK tool from every role.
 _SDK_PERMISSIONS: Dict[ToolPermission, Optional[Permission]] = {
     ToolPermission.PUBLIC: None,
     ToolPermission.AUTHENTICATED: Permission.API_READ,

@@ -36,7 +36,8 @@ _SERVICE_KIND = (
 _TOOL_KIND = "tool"
 _FILTERS = ("name", "node_id", "status")
 
-#: Re-reads of one filter set after the SLM's ``revision`` moved between its pages, before the read is flagged incomplete.
+#: Re-reads of one filter set after the SLM's ``revision`` moved between its pages,
+#: before the read is flagged incomplete.
 MAX_REVISION_RESTARTS = 2
 _DONE, _TRUNCATED, _REVISION_CHANGED = "done", "truncated", "revision_changed"
 
