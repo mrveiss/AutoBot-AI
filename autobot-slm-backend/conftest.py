@@ -170,6 +170,9 @@ for _m in [
     "sqlalchemy",
     "sqlalchemy.ext",
     "sqlalchemy.ext.asyncio",
+    # #22280: models/self_model.py and services/self_model_store.py import from here.
+    "sqlalchemy.dialects",
+    "sqlalchemy.dialects.postgresql",
     "sqlalchemy.orm",
 ]:
     _stub(_m)
@@ -183,9 +186,7 @@ for _m in [
     "models",
     "models.database",
     "models.schemas",
-    # #22277: SQLAlchemy Core tables (sqlalchemy.dialects.postgresql), which the
-    # non-package sqlalchemy stub above cannot import; api/self_model.py reads it.
-    "models.self_model",
+    "models.self_model",  # #22277: Core tables; api/self_model.py and the store read it
 ]:
     _stub(_m)
 
@@ -288,11 +289,8 @@ _EXTRA_SERVICE_MODULES = (
     # (#16310 review round 10: moved out of services/ itself, see that
     # file's module docstring), not here.
     "services.full_tree_drift",
-    # #22277: reconciler.py imports apply_heartbeat_extra_data at module scope, and
-    # api/self_model.py the read/write helpers. The real module imports
-    # sqlalchemy.dialects.postgresql and models.self_model, which the stubbed
-    # sqlalchemy cannot provide, so every real-loaded reconciler failed to collect.
-    # Its pure decisions live in services/self_model_reconcile (real-loaded below).
+    # #22277: reconciler.py and api/self_model.py import it at module scope; its own
+    # test real-loads it by path, and its pure decisions are self_model_reconcile.
     "services.self_model_store",
 )
 

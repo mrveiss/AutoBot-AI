@@ -146,7 +146,8 @@ async def apply_heartbeat_inventory(
     plan = await _inventory_plan(db, node_id, extra, previous, now)
     # The stored hash advances only when the inventory it describes was actually folded in.
     reported = extra.get("inventory_hash")
-    folded = "inventory" in extra or reported == previous
+    # A malformed inventory is ignored by _inventory_plan, so it is not folded either (#22280).
+    folded = isinstance(extra.get("inventory"), dict) or reported == previous
     attrs = {"inventory_hash": reported} if folded and reported else {}
     node_obs = Observation("node", node_id, PROBED_OK, node_id=node_id, attrs=attrs)
     node_plan = reconcile_observations(node_rows, [node_obs], now, source=HEARTBEAT_SOURCE, scope_kinds=())

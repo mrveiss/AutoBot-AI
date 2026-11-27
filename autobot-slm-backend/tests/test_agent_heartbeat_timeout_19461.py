@@ -132,7 +132,7 @@ async def test_run_loop_continues_after_a_timeout_without_the_catch_all(tmp_path
     agent.collector = type("C", (), {"collect": lambda self: {}})()
     agent.version_manager = type("V", (), {"get_version": lambda self: "v"})()
     agent.role_detector = None
-    monkeypatch.setattr(agent_mod, "build_heartbeat_payload", lambda *a, **k: {"x": 1})
+    monkeypatch.setattr(agent_mod, "build_heartbeat_payload", lambda *a, **k: {"extra_data": {}})
     sleeps = 0
 
     async def _sleep(_s):

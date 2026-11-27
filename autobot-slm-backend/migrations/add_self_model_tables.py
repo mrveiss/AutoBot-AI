@@ -14,7 +14,7 @@ import sys
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_url_credentials
-from migrations.utils import get_connection, table_exists
+from migrations.utils import defer, get_connection, table_exists
 
 logger = get_logger(__name__)
 
@@ -67,7 +67,9 @@ def migrate(db_url: str) -> None:
         return
 
     if not table_exists(cursor, "nodes"):
-        logger.error("nodes table does not exist. Database may not be initialized.")
+        # Deferred, not done: the runner leaves the migration pending and retries it (#14300).
+        defer("nodes")
+        logger.warning("Deferring add_self_model_tables: nodes table does not exist yet")
         conn.close()
         return
 

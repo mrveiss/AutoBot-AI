@@ -39,7 +39,7 @@ from models.database import (
     Setting,
     SystemdState,
 )
-from services.db_transaction_errors import is_connection_level_db_error
+from services.db_transaction_errors import is_connection_level_db_error, write_in_savepoint
 from services.node_health_status import (
     LEVEL_DEGRADED,
     LEVEL_ERROR,
@@ -1767,7 +1767,7 @@ class ReconcilerService:
             return False
 
         node.extra_data = {**(node.extra_data or {}), **extra_data}
-        await apply_heartbeat_extra_data(db, node.node_id, extra_data)
+        await write_in_savepoint(db, node.node_id, apply_heartbeat_extra_data, extra_data)
         services_data = extra_data.get("discovered_services") or extra_data.get("services")
         if not services_data:
             return False
