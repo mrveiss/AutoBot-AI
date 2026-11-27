@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, BaseSwitch, formatBytes } from '@autobot/ui'
+import { BaseAlert, BaseButton, BaseSwitch, formatBytes } from '@autobot/ui'
 /**
  * CacheSettings - Cache Management Component
  *
@@ -293,20 +293,14 @@ onMounted(async () => {
         </div>
 
         <div class="mt-6 flex justify-end">
-          <button
-            @click="saveCacheConfig"
-            :disabled="saving"
-            class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
+          <BaseButton :disabled="saving" :loading="saving" @click="saveCacheConfig">
+            <template #icon-left>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </template>
             {{ $t('settings.admin.cacheSettings.saveConfiguration') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
 

@@ -381,7 +381,7 @@ onMounted(async () => {
               <button
                 @click="serviceAction('start')"
                 :disabled="loading || !selectedNode || !selectedService"
-                class="px-4 py-2 bg-autobot-success text-white rounded-lg hover:bg-autobot-success-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong"
+                class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong"
                 :aria-label="$t('toolsView.startServiceAria', { service: selectedService || 'service' })"
               >
                 {{ $t('toolsView.start') }}
@@ -397,7 +397,7 @@ onMounted(async () => {
               <button
                 @click="serviceAction('restart')"
                 :disabled="loading || !selectedNode || !selectedService"
-                class="px-4 py-2 bg-autobot-warning text-white rounded-lg hover:bg-autobot-warning-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong"
+                class="px-4 py-2 bg-autobot-warning text-(--text-on-warning) rounded-lg hover:bg-autobot-warning-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-autobot-border-strong"
                 :aria-label="$t('toolsView.restartServiceAria', { service: selectedService || 'service' })"
               >
                 {{ $t('toolsView.restart') }}
