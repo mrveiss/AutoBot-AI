@@ -362,7 +362,7 @@ onMounted(() => {
     <div
       v-if="logLoadError"
       role="alert"
-      class="bg-autobot-error-bg text-autobot-error-hover border border-autobot-error-bg rounded-lg px-4 py-2 mb-4 text-sm"
+      class="bg-autobot-error-bg text-autobot-error-hover border border-autobot-error-light rounded-lg px-4 py-2 mb-4 text-sm"
     >
       {{ $t('monitoring.logViewer.loadError', { error: logLoadError }) }}
     </div>
@@ -505,7 +505,7 @@ onMounted(() => {
       <div
         v-if="appLogError"
         role="alert"
-        class="bg-autobot-error-bg text-autobot-error-hover border border-autobot-error-bg rounded-lg px-4 py-2 mb-4 text-sm"
+        class="bg-autobot-error-bg text-autobot-error-hover border border-autobot-error-light rounded-lg px-4 py-2 mb-4 text-sm"
       >
         {{ $t('monitoring.logViewer.appLogs.fetchError', { error: appLogError }) }}
       </div>

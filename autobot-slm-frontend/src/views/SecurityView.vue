@@ -576,7 +576,7 @@ const scoreColor = computed(() => {
     </div>
 
     <!-- Error Alert -->
-    <div v-if="error" class="mb-4 p-4 bg-autobot-error-bg border border-autobot-error-bg rounded-lg" role="alert">
+    <div v-if="error" class="mb-4 p-4 bg-autobot-error-bg border border-autobot-error-light rounded-lg" role="alert">
       <p class="text-autobot-error-hover">{{ error }}</p>
     </div>
 
@@ -682,7 +682,7 @@ const scoreColor = computed(() => {
       <!-- Result Alert -->
       <div
         v-if="tlsEnableResult"
-        :class="['mb-6 p-4 rounded-lg border', tlsEnableResult.success ? 'bg-autobot-success-bg border-autobot-success-bg' : 'bg-autobot-error-bg border-autobot-error-bg']"
+        :class="['mb-6 p-4 rounded-lg border', tlsEnableResult.success ? 'bg-autobot-success-bg border-autobot-success-light' : 'bg-autobot-error-bg border-autobot-error-light']"
         :role="tlsEnableResult.success ? 'status' : 'alert'"
       >
         <div class="flex items-start gap-3">
