@@ -167,10 +167,18 @@ def test_every_var_use_resolves_to_a_declared_name() -> None:
 
 _STATES = ("hover", "focus", "active", "focus-visible")
 _UTILITY = re.compile(r"^(bg|text|border|ring)-(.+)$")
-_CLASS_STRING = re.compile(r'"([^"]*)"|\'([^\']*)\'|`([^`]*)`|@apply ([^;]*);')
-_TOKEN = re.compile(r"""[^\s'"`,\[\];]+""")
+_TOKEN = re.compile(r"""[^\s'"`,\[\]{};?:]+(?::[^\s'"`,\[\]{};?:]+)*""")
 _ALIAS = re.compile(r"^var\(\s*(--[\w-]+)\s*\)$")
 _ARBITRARY = re.compile(r"^\((--[\w-]+)\)$")
+# One element's opening tag, quote-aware: a `>` or an apostrophe inside a quoted attribute value never ends
+# or shifts it, which a whole-file quote pairing cannot promise.
+_TAG = re.compile(
+    r"""<([a-zA-Z][\w.-]*)((?:\s+[^\s=>/"']+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']+))?)*)\s*/?>""",
+)
+_ATTR = re.compile(r"""\s([:@\w.-]*class)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
+_JS_STRING = re.compile(r"""'([^'\n]*)'|`([^`]*)`|"([^"\n]*)\"""")
+_APPLY = re.compile(r"@apply\s+([^;]*);")
+_ATTR_NAIVE = re.compile(r"""[\s]:?class\s*=\s*["']""")
 
 
 def _declaration_values() -> dict[str, list[str]]:
@@ -194,9 +202,13 @@ def _leaf(name: str, values: dict[str, list[str]]) -> str:
 
 
 def _resolve(utility_body: str, values: dict[str, list[str]]) -> str:
-    """The value a utility's colour part stands for: the leaf custom property, else the literal text."""
+    """The value a utility's colour part stands for: the leaf custom property, else the literal text.
+
+    ``bg-autobot-primary`` is Tailwind's ``--color-autobot-primary`` (the utility body already carries the
+    ``autobot-`` namespace), and ``bg-(--x)`` names ``--x`` directly.
+    """
     arb = _ARBITRARY.match(utility_body)
-    var = arb.group(1) if arb else f"--color-autobot-{utility_body}"
+    var = arb.group(1) if arb else f"--color-{utility_body}"
     if arb or var in values:
         return _leaf(var, values)
     return utility_body
@@ -204,7 +216,7 @@ def _resolve(utility_body: str, values: dict[str, list[str]]) -> str:
 
 def _state_repeats(class_list: str, values: dict[str, list[str]]) -> list[str]:
     toks = _TOKEN.findall(class_list)
-    base = {}
+    base: dict[str, set[str]] = {}
     for t in toks:
         m = _UTILITY.match(t)
         if m:
@@ -220,14 +232,50 @@ def _state_repeats(class_list: str, values: dict[str, list[str]]) -> list[str]:
     return repeats
 
 
+def _element_class_lists(text: str):
+    """(line, joined class text) per element: ``class=`` and ``:class=`` strings of one tag are read together."""
+    for tag in _TAG.finditer(text):
+        parts = []
+        for attr in _ATTR.finditer(" " + tag.group(2)):
+            value = attr.group(2) if attr.group(2) is not None else attr.group(3)
+            if attr.group(1).startswith(":"):
+                parts += [next(g for g in m.groups() if g is not None) for m in _JS_STRING.finditer(value)]
+            else:
+                parts.append(value)
+        if parts:
+            yield text[: tag.start()].count("\n") + 1, " ".join(parts)
+
+
+def _line_class_lists(text: str):
+    """Quoted strings per line (script code, ``.ts``): a stray quote cannot shift pairing past its own line."""
+    for number, line in enumerate(text.splitlines(), 1):
+        for m in _JS_STRING.finditer(line):
+            yield number, next(g for g in m.groups() if g is not None)
+    for m in _APPLY.finditer(text):
+        yield text[: m.start()].count("\n") + 1, m.group(1)
+
+
 def _all_class_lists():
     for path in _slm_files(".css", ".vue", ".ts") + [_SLM / "index.html"]:
         text = _read(path)
-        for m in _CLASS_STRING.finditer(text):
-            s = next(g for g in m.groups() if g is not None)
-            if "<" in s or "{{" in s:  # markup between two stray quotes, not a class list
-                continue
-            yield path, text[: m.start()].count("\n") + 1, s
+        if path.suffix in (".vue", ".html"):
+            for line, s in _element_class_lists(text):
+                yield path, line, s
+        for line, s in _line_class_lists(text):
+            yield path, line, s
+
+
+def _lost_class_attributes() -> list[str]:
+    """Files whose tag scan read fewer ``class`` / ``:class`` attributes than the naive text count finds."""
+    lost = []
+    for path in _slm_files(".vue") + [_SLM / "index.html"]:
+        text = _read(path)
+        template = text.split("<script", 1)[0] if text.lstrip().startswith("<script") is False else text
+        naive = len(_ATTR_NAIVE.findall(template))
+        read = sum(len(_ATTR.findall(" " + t.group(2))) for t in _TAG.finditer(template))
+        if read < naive:
+            lost.append(f"{path.relative_to(_ROOT)}: read {read} of {naive}")
+    return lost
 
 
 def test_the_state_guard_sees_a_repeat_and_a_distinct_step() -> None:
@@ -235,10 +283,29 @@ def test_the_state_guard_sees_a_repeat_and_a_distinct_step() -> None:
     assert _state_repeats("bg-autobot-primary hover:bg-autobot-primary", v) == ["hover:bg-autobot-primary"]
     assert _state_repeats("bg-autobot-primary enabled:hover:bg-autobot-primary", v)
     assert _state_repeats("text-autobot-text-link hover:text-autobot-text-link", v)
+    # two names, one value (both resolve to --surface2): an alias pair is a repeat too
+    assert _state_repeats("bg-autobot-bg-tertiary hover:bg-autobot-bg-hover", v) == ["hover:bg-autobot-bg-hover"]
     assert not _state_repeats("bg-autobot-primary hover:bg-autobot-primary-hover", v)
     assert not _state_repeats("bg-autobot-success enabled:hover:bg-autobot-success-hover", v)
     assert not _state_repeats("text-autobot-text-link hover:text-(--text-link-hover)", v)
+    assert not _state_repeats("bg-autobot-bg-tertiary hover:bg-autobot-bg-active", v)
     assert len(v) > 200, "the declaration values are not being read"
+
+
+def test_the_element_scan_survives_a_stray_apostrophe_and_reads_both_class_attributes() -> None:
+    v = _declaration_values()
+    sample = (
+        "<p>it's here</p>\n"
+        "<button class=\"px-2 bg-autobot-pill-bad-bg\" :class=\"[ok ? 'x' : 'hover:bg-autobot-pill-bad-bg']\">"
+        "don't</button>\n"
+    )
+    hits = [(n, r) for n, s in _element_class_lists(sample) for r in _state_repeats(s, v)]
+    assert hits == [(2, "hover:bg-autobot-pill-bad-bg")], hits
+
+
+def test_no_class_attribute_is_lost_to_quote_mispairing() -> None:
+    lost = _lost_class_attributes()
+    assert not lost, f"the tag scan read fewer class attributes than the file holds: {lost[:10]}"
 
 
 def test_no_state_variant_resolves_to_its_base() -> None:

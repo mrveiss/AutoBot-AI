@@ -213,6 +213,8 @@
   --primary: #2CC5A8;
   --primary-h: #4FD3BA;
   --on-primary: #06201D;
+  /* Role-inverted on purpose: the primary here is bright, so -light is the deeper edge/fill step and -dark the
+     lighter one that stays readable as text on this dark surface. */
   --color-primary-light: color-mix(in srgb, var(--color-primary) 70%, black);
   --color-primary-dark: color-mix(in srgb, var(--color-primary) 70%, white);
   --accent: #2CC5A8;
