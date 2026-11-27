@@ -852,14 +852,14 @@ export class KnowledgeRepository extends ApiRepository {
    * Get all knowledge entries, following the server's cursor until it reports no more (#17530:
    * the Manage list is a projection of the whole knowledge base, never of its first page).
    */
-  async getAllEntries(collection?: string): Promise<{ success: boolean; entries: KnowledgeEntryRecord[]; total: number }> {
+  async getAllEntries(): Promise<{ success: boolean; entries: KnowledgeEntryRecord[]; total: number }> {
     const entries: KnowledgeEntryRecord[] = []
     let cursor = '0'
     for (let page = 0; page < ENTRIES_MAX_PAGES; page++) {
-      const params = new URLSearchParams({ limit: String(ENTRIES_PAGE_SIZE), cursor })
-      if (collection) params.set('collection', collection)
-      const response = await this.get(`${getApiBase()}/knowledge_base/entries?${params.toString()}`)
-      const data = response.data as KnowledgeEntriesPage
+      // The served rows carry `id` (api/knowledge.py _format_knowledge_entry); the declared row model says `key`.
+      const data = (await apiClient.call('get', '/api/knowledge_base/entries', {
+        query: { limit: ENTRIES_PAGE_SIZE, cursor },
+      })) as unknown as KnowledgeEntriesPage
       entries.push(...(data.entries || []))
       if (!data.has_more || !data.next_cursor || data.next_cursor === cursor) break
       cursor = data.next_cursor

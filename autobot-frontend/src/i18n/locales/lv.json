@@ -2615,7 +2615,6 @@
       "addToKnowledgeBase": "Add to knowledge base",
       "browse": "Browse",
       "categoryForAll": "Category for all",
-      "characters": "Characters",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear all title",
       "contentLabel": "Content label",
@@ -3015,19 +3014,12 @@
       "searchPlaceholder": "Meklēt ierakstus...",
       "searchAriaLabel": "Meklēt zināšanu bāzes ierakstus",
       "entries": "ieraksti",
-      "categoryLabel": "Kategorija:",
       "allCategories": "Visas kategorijas",
-      "typeLabel": "Tips:",
       "allTypes": "Visi tipi",
       "documents": "Dokumenti",
       "webPages": "Tīmekļa lapas",
       "apiDocs": "API dokumenti",
       "uploads": "Augšupielādes",
-      "sortBy": "Kārtot pēc:",
-      "lastUpdated": "Pēdējā atjaunināšana",
-      "dateCreated": "Izveides datums",
-      "titleSort": "Nosaukums",
-      "categorySort": "Kategorija",
       "clearFilters": "Notīrīt filtrus",
       "loadingEntries": "Ielādē ierakstus...",
       "noEntriesFound": "Ieraksti nav atrasti",
@@ -3070,7 +3062,6 @@
       "rejected": "Noraidīts",
       "filterByCategoryAria": "Filtrēt pēc kategorijas",
       "filterByTypeAria": "Filtrēt pēc ieraksta tipa",
-      "sortByAria": "Kārtot ierakstus pēc",
       "unknown": "Nezināms"
     },
     "graphView": {
@@ -3793,11 +3784,9 @@
     "vectorization": {
       "actionVectorize": "Vektorizēt",
       "actionRetry": "Mēģināt vēlreiz",
-      "actionInProgress": "Apstrādā...",
       "actionAlreadyDone": "Vektorizēts",
       "tooltipVectorize": "Vektorizēt šo dokumentu",
       "tooltipRetry": "Atkārtot vektorizāciju",
-      "tooltipInProgress": "Vektorizācija notiek",
       "tooltipAlreadyDone": "Jau vektorizēts",
       "cancelButton": "Cancel button",
       "completed": "Completed",
@@ -3818,16 +3807,7 @@
       "tooltipVectorized": "Document has been vectorized and is searchable via RAG"
     },
     "batchSelection": {
-      "selected": "Izvēlēti {count}",
-      "eligible": "Derīgi {count}",
-      "vectorizeSelected": "Vektorizēt {count}",
-      "vectorizing": "Vektorizē...",
-      "noneEligible": "Nav derīgu",
-      "vectorizeSelectedTooltip": "Vektorizēt {count} izvēlētos dokumentus",
-      "vectorizingTooltip": "Vektorizācija notiek",
-      "noneEligibleTooltip": "Visi izvēlētie dokumenti jau ir vektorizēti vai gaida",
-      "clearSelection": "Notīrīt",
-      "clearSelectionTitle": "Notīrīt izvēli"
+      "eligible": "Derīgi {count}"
     },
     "treeNode": {
       "itemsCount": "Items count",

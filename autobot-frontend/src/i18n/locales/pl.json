@@ -2615,7 +2615,6 @@
       "addToKnowledgeBase": "Add to knowledge base",
       "browse": "Browse",
       "categoryForAll": "Category for all",
-      "characters": "Characters",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear all title",
       "contentLabel": "Content label",
@@ -3015,19 +3014,12 @@
       "searchPlaceholder": "Szukaj wpisów...",
       "searchAriaLabel": "Szukaj wpisów bazy wiedzy",
       "entries": "wpisów",
-      "categoryLabel": "Kategoria:",
       "allCategories": "Wszystkie kategorie",
-      "typeLabel": "Typ:",
       "allTypes": "Wszystkie typy",
       "documents": "Dokumenty",
       "webPages": "Strony internetowe",
       "apiDocs": "Dokumentacja API",
       "uploads": "Przesłane",
-      "sortBy": "Sortuj wg:",
-      "lastUpdated": "Ostatnio zaktualizowane",
-      "dateCreated": "Data utworzenia",
-      "titleSort": "Tytuł",
-      "categorySort": "Kategoria",
       "clearFilters": "Wyczyść filtry",
       "loadingEntries": "Ładowanie wpisów...",
       "noEntriesFound": "Nie znaleziono wpisów",
@@ -3070,7 +3062,6 @@
       "rejected": "Odrzucony",
       "filterByCategoryAria": "Filtruj według kategorii",
       "filterByTypeAria": "Filtruj według typu wpisu",
-      "sortByAria": "Sortuj wpisy według",
       "unknown": "Nieznany"
     },
     "graphView": {
@@ -3793,11 +3784,9 @@
     "vectorization": {
       "actionVectorize": "Wektoryzuj",
       "actionRetry": "Spróbuj ponownie",
-      "actionInProgress": "Przetwarzanie...",
       "actionAlreadyDone": "Zwektoryzowano",
       "tooltipVectorize": "Wektoryzuj ten dokument",
       "tooltipRetry": "Ponów wektoryzację",
-      "tooltipInProgress": "Wektoryzacja w toku",
       "tooltipAlreadyDone": "Już zwektoryzowano",
       "cancelButton": "Cancel button",
       "completed": "Completed",
@@ -3818,16 +3807,7 @@
       "tooltipVectorized": "Document has been vectorized and is searchable via RAG"
     },
     "batchSelection": {
-      "selected": "Wybrano {count}",
-      "eligible": "Kwalifikuje się {count}",
-      "vectorizeSelected": "Wektoryzuj {count}",
-      "vectorizing": "Wektoryzowanie...",
-      "noneEligible": "Brak kwalifikujących się",
-      "vectorizeSelectedTooltip": "Wektoryzuj {count} wybranych dokumentów",
-      "vectorizingTooltip": "Wektoryzacja w toku",
-      "noneEligibleTooltip": "Wszystkie wybrane dokumenty są już zwektoryzowane lub oczekują",
-      "clearSelection": "Wyczyść",
-      "clearSelectionTitle": "Wyczyść zaznaczenie"
+      "eligible": "Kwalifikuje się {count}"
     },
     "treeNode": {
       "itemsCount": "Items count",
