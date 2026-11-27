@@ -57,9 +57,9 @@
 
     <div class="flex-1 overflow-y-auto p-3 file-list [scrollbar-width:thin]" :class="viewMode === 'grid' ? 'grid grid-cols-1 gap-2' : 'space-y-2'">
       <EmptyState
-        v-if="!hasFiles && !loading"
+        v-if="sortedFiles.length === 0 && !loading"
         compact
-        :description="searchQuery.trim() ? $t('chat.filePanel.noMatches') : $t('chat.filePanel.noFiles')"
+        :description="hasFiles && searchQuery.trim() ? $t('chat.filePanel.noMatches') : $t('chat.filePanel.noFiles')"
       >
         <template #icon><Icon name="folder-open" size="xl" /></template>
       </EmptyState>

@@ -40,6 +40,15 @@ describe('ChatFilePanelUpload (#22349)', () => {
     expect(wrapper.emitted('files')).toBeUndefined()
   })
 
+  it('ignores a drop while loading', async () => {
+    const wrapper = mountUpload({ loading: true })
+    const target = wrapper.get('[data-testid="upload-target"]')
+    await target.trigger('dragover')
+    await target.trigger('drop', { dataTransfer: { files: [file('a.txt')] } })
+    expect(wrapper.emitted('files')).toBeUndefined()
+    expect(target.classes()).not.toContain('border-[var(--aui-color-primary)]')
+  })
+
   it('is disabled while loading', () => {
     expect(mountUpload({ loading: true }).get('[data-testid="upload-target"]').attributes('disabled')).toBeDefined()
   })

@@ -40,7 +40,7 @@ import { ref } from 'vue'
 import { BaseProgress } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 
-defineProps<{ loading: boolean; progress: number }>()
+const props = defineProps<{ loading: boolean; progress: number }>()
 const emit = defineEmits<{ files: [files: File[]] }>()
 
 const input = ref<HTMLInputElement>()
@@ -56,6 +56,7 @@ function onSelect(event: Event): void {
 
 function onDrop(event: DragEvent): void {
   isDragging.value = false
+  if (props.loading) return
   if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) emit('files', Array.from(event.dataTransfer.files))
 }
 </script>

@@ -76,7 +76,15 @@ async function uploadOne(file: File, path: string, overwrite: boolean): Promise<
   }
 }
 
+/** A request token: only the newest request may write its result; `cancel` makes every pending one stale. */
+export function latestToken() {
+  let current = 0
+  return { next: () => ++current, isLatest: (id: number) => id === current, cancel: () => { current++ } }
+}
+
 export function useFileBrowser() {
+  const listToken = latestToken()
+  const previewToken = latestToken()
   const files = ref<FileBrowserItem[]>([])
   const directoryTree = ref<FileBrowserTreeNode[]>([])
   const previewFile = ref<FilePreviewData | null>(null)
@@ -84,10 +92,11 @@ export function useFileBrowser() {
   // ---- GET /files/list ----
   const { execute: fetchFiles, loading: isLoadingFiles } = useAsyncHandler(
     async (path: string) => {
+      const id = listToken.next()
       const data = await apiClient.get<{ files?: FileBrowserItem[] }>(
         `${getApiBase()}/files/list?path=${encodeURIComponent(path)}`
       )
-      files.value = data.files ?? []
+      if (listToken.isLatest(id)) files.value = data.files ?? []
     },
     {
       onError: () => { files.value = [] },
@@ -131,10 +140,12 @@ export function useFileBrowser() {
 
   // ---- GET /files/preview ----
   const { execute: fetchPreview, loading: isLoadingPreview } = useAsyncHandler(
-    async (file: FileBrowserItem, getFileType: (name: string) => string) => {
+    async (file: FileBrowserItem, getFileType: (name: string) => string): Promise<boolean> => {
+      const id = previewToken.next()
       const data = await apiClient.get<{ type?: string; url?: string; content?: string }>(
         `${getApiBase()}/files/preview?path=${encodeURIComponent(file.path)}`
       )
+      if (!previewToken.isLatest(id)) return false
       previewFile.value = {
         name: file.name,
         type: data.type ?? '',
@@ -143,6 +154,7 @@ export function useFileBrowser() {
         fileType: getFileType(file.name),
         size: file.size
       }
+      return true
     },
     {
       logErrors: true,
@@ -157,7 +169,8 @@ export function useFileBrowser() {
     },
     {
       logErrors: true,
-      errorPrefix: '[useFileBrowser]'
+      errorPrefix: '[useFileBrowser]',
+      throwOnError: true
     }
   )
 
@@ -175,7 +188,8 @@ export function useFileBrowser() {
     },
     {
       logErrors: true,
-      errorPrefix: '[useFileBrowser]'
+      errorPrefix: '[useFileBrowser]',
+      throwOnError: true
     }
   )
 
@@ -193,7 +207,8 @@ export function useFileBrowser() {
     },
     {
       logErrors: true,
-      errorPrefix: '[useFileBrowser]'
+      errorPrefix: '[useFileBrowser]',
+      throwOnError: true
     }
   )
 
@@ -217,6 +232,7 @@ export function useFileBrowser() {
     fetchTree,
     uploadFiles,
     fetchPreview,
+    cancelPreview: previewToken.cancel,
     deleteFileOrFolder,
     renameFileOrFolder,
     createDirectory

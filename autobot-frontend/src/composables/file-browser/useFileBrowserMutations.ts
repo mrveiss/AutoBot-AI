@@ -29,11 +29,12 @@ function useUpload(browser: FileBrowser, log: FileLog, where: Where) {
   const { t } = useI18n()
   const { showToast } = useToast()
   const { execute } = useAsyncHandler(async (fileList: FileList) => {
-    const outcome = await browser.uploadFiles(fileList, where.currentPath.value)
+    const destination = where.currentPath.value
+    const outcome = await browser.uploadFiles(fileList, destination)
     await where.refreshFiles()
     const reasons = uploadFailureText(outcome, t('fileBrowser.browser.uploadFailedHint'))
     if (reasons) showToast(t('fileBrowser.browser.uploadFailed', { error: reasons }), 'error')
-    if (outcome?.uploaded.length) logUploaded(outcome, fileList, where.currentPath.value, log)
+    if (outcome?.uploaded.length) logUploaded(outcome, fileList, destination, log)
   }, ERROR_OPTS)
   return execute
 }

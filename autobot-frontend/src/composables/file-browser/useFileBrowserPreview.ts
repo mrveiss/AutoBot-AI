@@ -18,12 +18,14 @@ export function useFileBrowserPreview(browser: FileBrowser, log: FileLog) {
   const typeOf = (name: string) => getFileType(name, t)
 
   const { execute: viewFile } = useAsyncHandler(async (file: FileBrowserItem) => {
-    await browser.fetchPreview(file, typeOf)
+    // false: a newer view or a close superseded this request, so it neither opens the preview nor logs a view
+    if (!(await browser.fetchPreview(file, typeOf))) return
     showPreview.value = true
     log('view', file.path, { fileName: file.name, fileType: typeOf(file.name), size: file.size })
   }, ERROR_OPTS)
 
   const closePreview = () => {
+    browser.cancelPreview()
     showPreview.value = false
     browser.previewFile.value = null
   }

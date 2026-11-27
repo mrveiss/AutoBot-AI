@@ -12,7 +12,8 @@ const browser = {
   fetchFiles: vi.fn().mockResolvedValue(undefined),
   fetchTree: vi.fn().mockResolvedValue(undefined),
   uploadFiles: vi.fn(),
-  fetchPreview: vi.fn().mockResolvedValue(undefined),
+  fetchPreview: vi.fn().mockResolvedValue(true),
+  cancelPreview: vi.fn(),
   deleteFileOrFolder: vi.fn().mockResolvedValue(undefined),
   renameFileOrFolder: vi.fn().mockResolvedValue(undefined),
   createDirectory: vi.fn().mockResolvedValue(undefined),
@@ -57,6 +58,10 @@ describe('useFileBrowserActions (#22349)', () => {
     expect(a.sortOrder.value).toBe('desc')
     a.sortBy('size')
     expect([a.sortField.value, a.sortOrder.value]).toEqual(['size', 'asc'])
+  })
+
+  it('the Files tab starts in the flat list view', () => {
+    expect(useFileBrowserActions({ chatContext: false }).viewMode.value).toBe('list')
   })
 
   it('switching to the tree view loads the tree', () => {
@@ -120,6 +125,26 @@ describe('useFileBrowserActions (#22349)', () => {
     a.closePreview()
     expect(a.showPreview.value).toBe(false)
     expect(browser.previewFile.value).toBeNull()
+    expect(browser.cancelPreview).toHaveBeenCalledTimes(1)
+  })
+
+  it('a superseded preview request neither opens the preview nor logs a view', async () => {
+    browser.fetchPreview.mockResolvedValueOnce(false)
+    const a = useFileBrowserActions({ chatContext: true })
+    await a.viewFile(file())
+    expect(a.showPreview.value).toBe(false)
+    expect(logFileActivity).not.toHaveBeenCalledWith('view', expect.anything(), expect.anything())
+  })
+
+  it('an upload logs the folder it went to, even if the user navigated meanwhile', async () => {
+    const a = useFileBrowserActions({ chatContext: true })
+    browser.uploadFiles.mockImplementationOnce(async () => {
+      a.navigateToPath('/elsewhere')
+      return { uploaded: ['a.txt'], failed: [] }
+    })
+    await a.uploadFiles([new File(['x'], 'a.txt')] as unknown as FileList)
+    expect(browser.uploadFiles).toHaveBeenCalledWith(expect.anything(), '/')
+    expect(logFileActivity).toHaveBeenCalledWith('upload', '/', expect.objectContaining({ fileCount: 1 }))
   })
 
   it('expand all and collapse all walk the whole tree', () => {

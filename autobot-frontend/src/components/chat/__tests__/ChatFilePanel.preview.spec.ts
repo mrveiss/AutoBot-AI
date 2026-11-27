@@ -162,4 +162,13 @@ describe('ChatFilePanel preview (#20906)', () => {
     expect(wrapper.text()).not.toContain('notes.txt')
     wrapper.unmount()
   })
+
+  it('a search with no match shows the no-matches empty state over the loaded files (#22349)', async () => {
+    const wrapper = await open()
+    wrapper.findComponent({ name: 'ChatFilePanelToolbar' }).vm.$emit('update:search', 'missing')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('notes.txt')
+    expect(wrapper.find('empty-state-stub').attributes('description')).toBe('chat.filePanel.noMatches')
+    wrapper.unmount()
+  })
 })

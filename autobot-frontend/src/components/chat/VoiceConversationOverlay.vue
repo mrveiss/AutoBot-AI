@@ -303,6 +303,8 @@ onBeforeUnmount(() => voice.cleanup())
 @media (prefers-reduced-motion: reduce) {
   .voice-overlay-enter-active,
   .voice-overlay-leave-active,
+  .voice-overlay-enter-active .voice-overlay__panel,
+  .voice-overlay-leave-active .voice-overlay__panel,
   .bubble-enter-active,
   .fade-enter-active,
   .fade-leave-active {

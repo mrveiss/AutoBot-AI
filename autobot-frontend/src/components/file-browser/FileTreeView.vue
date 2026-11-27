@@ -17,7 +17,7 @@
 
     <div class="tree-content">
       <div
-        v-for="item in directoryTree"
+        v-for="{ item, depth } in rows"
         :key="item.path"
         class="tree-node"
         :class="{ expanded: item.expanded, selected: selectedPath === item.path }"
@@ -26,7 +26,7 @@
           variant="ghost"
           size="sm"
           class="tree-node-content"
-          :style="{ paddingInlineStart: ((item.level ?? 0) * 20) + 'px' }"
+          :style="{ paddingInlineStart: (depth * 20) + 'px' }"
           :aria-expanded="item.is_dir ? !!item.expanded : undefined"
           :aria-current="selectedPath === item.path ? 'true' : undefined"
           data-testid="tree-node"
@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import { BaseButton, EmptyState } from '@autobot/ui'
 import { getFileIconName } from '@/utils/iconMappings'
@@ -72,8 +73,21 @@ interface Emits {
   (e: 'collapse-all'): void
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 defineEmits<Emits>()
+
+interface TreeRow { item: TreeItem; depth: number }
+
+// An expanded folder shows its nested children (the tree endpoint returns them nested); a flat list that already
+// carries `level` keeps it. Collapsed folders hide their children, so `aria-expanded` always matches what is visible.
+function flatten(nodes: TreeItem[], depth: number, out: TreeRow[]): TreeRow[] {
+  for (const item of nodes) {
+    out.push({ item, depth: item.level ?? depth })
+    if (item.expanded && item.children) flatten(item.children, depth + 1, out)
+  }
+  return out
+}
+const rows = computed(() => flatten(props.directoryTree, 0, []))
 
 // Icon mapping centralized in @/utils/iconMappings; an open folder shows the open-folder icon.
 const iconFor = (item: TreeItem): IconName =>
@@ -135,10 +149,21 @@ const iconFor = (item: TreeItem): IconName =>
 .tree-icon--dir {
   color: var(--aui-color-primary);
 }
+/* BaseButton wraps the slot in its label span: make that span shrinkable so the label can truncate */
+.tree-node :deep(.tree-node-content .aui-btn__label) {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--aui-space-2);
+  min-width: 0;
+}
 .tree-label {
+  flex: 1;
+  min-width: 0;
   font-size: var(--aui-text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: start;
 }
 </style>

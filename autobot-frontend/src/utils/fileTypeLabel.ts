@@ -29,7 +29,8 @@ const TYPE_LABEL_KEYS: Record<string, string> = {
 
 /** A readable type for a file name: a known label, else the upper-cased extension, else "Unknown". */
 export function getFileType(filename: string, t: Translate): string {
-  const extension = filename.split('.').pop()?.toLowerCase()
+  const dot = filename.lastIndexOf('.')
+  const extension = dot >= 0 ? filename.slice(dot + 1).toLowerCase() : ''
   if (!extension) return t('fileBrowser.fileType.unknown')
   const key = Object.hasOwn(TYPE_LABEL_KEYS, extension) ? TYPE_LABEL_KEYS[extension] : null
   return key ? t(key) : t('fileBrowser.fileType.extension', { ext: extension.toUpperCase() })

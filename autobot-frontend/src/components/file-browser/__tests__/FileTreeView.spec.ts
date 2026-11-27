@@ -25,6 +25,12 @@ describe('FileTreeView (#22349)', () => {
     expect(nodes[1].attributes('aria-expanded')).toBeUndefined()
   })
 
+  it('shows nested children only while the folder is expanded', () => {
+    const nested = (expanded: boolean) => [{ name: 'src', path: '/src', is_dir: true, expanded, children: [{ name: 'lib', path: '/src/lib', is_dir: true }] }]
+    expect(mountTree(nested(false)).findAll('[data-testid="tree-node"]')).toHaveLength(1)
+    expect(mountTree(nested(true)).findAll('[data-testid="tree-node"]')).toHaveLength(2)
+  })
+
   it('a node click emits toggle-node with the node', async () => {
     const wrapper = mountTree()
     await wrapper.findAll('[data-testid="tree-node"]')[0].trigger('click')
