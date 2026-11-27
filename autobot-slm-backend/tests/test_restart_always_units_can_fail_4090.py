@@ -254,4 +254,5 @@ def test_the_slm_bootstrap_unit_and_the_role_unit_share_one_start_limit():
 def test_the_static_units_are_read():
     """Control: the widened glob reaches the static files, so the checks above are not vacuous for them."""
     static = [p for p in _restart_always_units() if p.suffix == ".service"]
-    assert len(static) >= 13, f"expected the 13 static restarting units (#20620), found {len(static)}"
+    # 13 at #20620; #14590 removed the dead autobot-user-backend.service duplicate of the backend role unit.
+    assert len(static) >= 12, f"expected the 12 static restarting units (#20620, #14590), found {len(static)}"

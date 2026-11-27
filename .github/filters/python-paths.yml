@@ -89,6 +89,8 @@ python:
   - 'autobot-backend/config/context_windows.yaml'
   - 'docs/developer/CLAUDE_WORKFLOW.md'
   - 'docs/api/USAGE_METERING_API.md'
+  # Read by repo_tests/env_registry_public_defaults_test.py: the generated env doc must carry no private address (#17440).
+  - 'docs/developer/ENV_VARS.md'
   - 'autobot-infrastructure/shared/config/permission_rules.yaml'
   # #18556: the guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
   # land anywhere: one glob per guarded basename, not just the listed trees.

@@ -14,7 +14,7 @@
  * strippers matched lowercase CASE-SENSITIVELY:
  *
  *   ChatMessages.vue:908        /<tool_call…>/gs    lowercase, no `i`  -> MISSED
- *   MessageItem.vue:360         /<tool_call…>/gs    lowercase, no `i`  -> MISSED
+ *   MessageItem.vue:360 (file removed in #22179) /<tool_call…>/gs    lowercase, no `i`  -> MISSED
  *   ChatController.ts:553-554   two replaces, one per case
  *   useVoiceConversation.ts:152 /gi
  *

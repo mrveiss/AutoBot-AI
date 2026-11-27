@@ -19,6 +19,8 @@ _STILL_ALLOWED = frozenset(
     {
         "web_search",
         "read_spilled_output",
+        # #22253: reads a manual synopsis from the knowledge base; a READ in the catalogue, executes nothing.
+        "command_manual",
         "scrape_url",
         "crawl_site",
         "map_site",

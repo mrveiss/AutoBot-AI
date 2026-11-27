@@ -15,23 +15,20 @@ Consolidated from chat.py and chat_enhanced.py per Issue #708.
 
 import asyncio
 import json
+import logging
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List
 from uuid import uuid4
-
-from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
-
-# Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on.
-# Reads env at import time (process restart required to change).
-_CHAT_SSOT_STRICT = config.chat_ssot_strict.lower() == "true"
-
-import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.chat_citations import retrieve_citations
+from api.chat_sessions import delete_session as _canonical_delete_session
+from api.chat_sessions import list_user_sessions, log_request_context, resolve_company_scope
+from api.chat_sessions import router as sessions_router
+from api.chat_sessions_thinking import effective_thinking
 from api.chat_streaming import (
     _stream_chat_workflow_messages,
     _stream_direct_response,
@@ -63,6 +60,10 @@ from api.user_management.dependencies import require_org_context
 from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail, user_facing_detail
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
+from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from chat_history.deduplication import parse_message_timestamp, timestamp_sort_key
 from chat_history.message_schema import llm_role, message_text, message_type
@@ -70,6 +71,7 @@ from chat_history.message_schema import llm_role, message_text, message_type
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
 from chat_history.session_merge import dropped_keys
+from chat_workflow.reasoning_kwargs import hosted_request_extras, resolve_reasoning_effort
 from chat_workflow.session_work_item import SessionWorkItemService
 from chat_workflow.stall_pending import guarded_resume
 from constants.threshold_constants import TimingConstants
@@ -314,20 +316,15 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
 # Router Configuration
 # ====================================================================
 
+# Phase 4 (#7590): feature flag — default-off; enable in staging then flip to default-on.
+# Reads env at import time (process restart required to change).
+_CHAT_SSOT_STRICT = config.chat_ssot_strict.lower() == "true"
+
 router = APIRouter(tags=["chat"])
 logger = get_logger(__name__)
 
-# Phase 4 (#7590): log feature flag state at startup so operators know which mode is active
-logger.info(
-    "AUTOBOT_CHAT_SSOT_STRICT=%s",
-    "true" if _CHAT_SSOT_STRICT else "false (default — session_id enforcement via schema only)",
-)
 
 # Include session management router
-from api.chat_sessions import delete_session as _canonical_delete_session
-from api.chat_sessions import list_user_sessions, log_request_context, resolve_company_scope
-from api.chat_sessions import router as sessions_router
-
 router.include_router(sessions_router)
 
 # ====================================================================
@@ -366,6 +363,14 @@ def _validate_session_id(session_id: str | None) -> None:
         get_error_code,
     ) = get_exceptions_lazy()
 
+    # Phase 4 (#7590): tell operators which mode is active, on first use — never at import (#21264)
+    log_once(
+        logger,
+        logging.INFO,
+        "chat-ssot-mode",
+        "AUTOBOT_CHAT_SSOT_STRICT=%s",
+        "true" if _CHAT_SSOT_STRICT else "false (default — session_id enforcement via schema only)",
+    )
     if _CHAT_SSOT_STRICT and not session_id:
         raise ValidationError("session_id is required (AUTOBOT_CHAT_SSOT_STRICT)")
 
@@ -596,6 +601,7 @@ async def _generate_ai_response(
     reasoning_effort: str | None = None,
     model: str | None = None,
     provider: str | None = None,
+    thinking: tuple[bool, int] = (False, 0),
 ) -> tuple[Dict, Any]:
     """
     Generate AI response using LLM service with fallback handling.
@@ -612,9 +618,7 @@ async def _generate_ai_response(
         # #11585: conversation_id lets the registry apply the per-conversation
         # provider pin; explicit model_name/provider_name (per-request override)
         # take priority over it. request_id flows through **kwargs for tracing.
-        extra_kwargs: Dict[str, Any] = {}
-        if reasoning_effort and reasoning_effort != "auto":
-            extra_kwargs["metadata"] = {"api_kwargs": {"reasoning_effort": reasoning_effort}}
+        extra_kwargs = hosted_request_extras(reasoning_effort, *thinking)  # #20922: thinking reaches the provider
         response = await llm_service.chat(
             messages=llm_context,
             conversation_id=session_id,
@@ -725,22 +729,9 @@ def _validate_and_pin_provider(provider: str | None, session_id: str | None) -> 
 
 
 async def _resolve_chat_reasoning_effort(message: "ChatMessage", user_id: str | None) -> str:
-    """Resolve reasoning effort for /chat endpoint (#9017).
-
-    Priority: per-message field > user-default from Redis > 'auto'.
-    'auto' and None are both treated as inert (no extra params).
-    """
-    if message.reasoning_effort and message.reasoning_effort != "auto":
-        return message.reasoning_effort
-    if user_id:
-        try:
-            from api.users import _get_user_preferences_from_redis
-
-            prefs = await _get_user_preferences_from_redis(user_id)
-            return prefs.reasoning_effort
-        except Exception as exc:
-            logger.warning("[#9017] Failed to load user reasoning_effort pref: %s", exc)
-    return "auto"
+    """Resolve reasoning effort for /chat endpoint (#9017): per-message field > user default > 'auto' (inert)."""
+    requested = message.reasoning_effort if message.reasoning_effort != "auto" else None
+    return await resolve_reasoning_effort({"reasoning_effort": requested, "user_id": user_id})
 
 
 def _context_warning(overflow_status: Dict[str, Any]) -> Dict[str, Any]:
@@ -755,6 +746,29 @@ def _context_warning(overflow_status: Dict[str, Any]) -> Dict[str, Any]:
         # earlier turns once history is eventually trimmed.
         "compaction_failed": bool(overflow_status.get("summary_error")),
     }
+
+
+async def _apply_context_overflow(chat_history_manager, session_id, model_name, llm_response, chat_context) -> Dict:
+    """Run overflow protection for a finished turn and persist the summary it created (Issue #9043)."""
+    overflow_status = await handle_message_completion(
+        session_id=session_id,
+        # #19760: the model that answered, else the configured one — never a vendor name that is not in use.
+        model_name=model_name or getattr(llm_response, "model", "") or provide_config_manager().get_selected_model(),
+        llm_response=llm_response,
+        messages=chat_context,  # Full history for summarization
+    )
+    if overflow_status.get("summary_created"):
+        summary_msg = await create_summary_message(overflow_status["summary_text"])
+        if hasattr(chat_history_manager, "add_messages_batch"):
+            await chat_history_manager.add_messages_batch(
+                session_id, [_to_persisted_message(summary_msg, "context_summary")]
+            )
+        logger.info(
+            "Context overflow: auto-summarized session %s (%d%% full)",
+            session_id,
+            int(overflow_status.get("current_fill_percentage", 0) * 100),
+        )
+    return overflow_status
 
 
 async def process_chat_message(
@@ -792,6 +806,12 @@ async def process_chat_message(
     # #9017: Resolve reasoning effort: per-message > user-default > 'auto' (inert).
     resolved_effort = await _resolve_chat_reasoning_effort(message, author_id)
 
+    # #20922: the toggle and budget of this request, else the conversation's stored ones.
+    stored_session = await chat_history_manager.get_session(session_id)
+    thinking = effective_thinking(
+        message.thinking_mode_enabled, message.thinking_budget_tokens, (stored_session or {}).get("metadata")
+    )
+
     # Generate AI response (Issue #281: uses helper, Issue #9043: returns LLMResponse for token tracking)
     ai_response, llm_response = await _generate_ai_response(
         llm_service,
@@ -801,31 +821,16 @@ async def process_chat_message(
         reasoning_effort=resolved_effort,
         model=message.model,
         provider=message.provider,
+        thinking=thinking,
     )
 
     # Store AI response (Issue #281: uses helper)
     ai_message_id = await _store_and_log_ai_response(ai_response, session_id, request_id, chat_history_manager)
 
     # Issue #9043: Check for context overflow and handle auto-summarization
-    overflow_status = await handle_message_completion(
-        session_id=session_id,
-        model_name=model_name or "gpt-4",  # Fallback to default if not specified
-        llm_response=llm_response,
-        messages=chat_context,  # Full history for summarization
+    overflow_status = await _apply_context_overflow(
+        chat_history_manager, session_id, model_name, llm_response, chat_context
     )
-
-    # Handle context overflow summary injection
-    if overflow_status.get("summary_created"):
-        summary_msg = await create_summary_message(overflow_status["summary_text"])
-        if hasattr(chat_history_manager, "add_messages_batch"):
-            await chat_history_manager.add_messages_batch(
-                session_id, [_to_persisted_message(summary_msg, "context_summary")]
-            )
-        logger.info(
-            "Context overflow: auto-summarized session %s (%d%% full)",
-            session_id,
-            int(overflow_status.get("current_fill_percentage", 0) * 100),
-        )
 
     # Add overflow warning to metadata if triggered
     metadata = ai_response.get("metadata", {})
@@ -837,23 +842,13 @@ async def process_chat_message(
 
     grounding = GroundingStatus(grounded=bool(citations), strategy="rag" if citations else None)
     # Surface citations in metadata so CitationsDisplay.vue can consume them
-    # (MessageItem.vue reads message.metadata.citations).
+    # (ChatMessageContent.vue reads message.metadata.citations).
     if citations:
         metadata = {**(metadata or {}), "citations": [c.model_dump() for c in citations]}
 
-    # MVA-3090: Extract thinking metadata from LLM response
-    thinking_metadata = None
-    if llm_response and llm_response.usage:
-        # Check for thinking_tokens in usage dict (Anthropic extended thinking)
-        thinking_tokens = llm_response.usage.get("thinking_tokens") or llm_response.usage.get("cache_read_input_tokens")
-        if thinking_tokens and thinking_tokens > 0:
-            from api.schemas_chat import ThinkingMetadata
+    from api.chat_response_metadata import thinking_metadata_of
 
-            thinking_metadata = ThinkingMetadata(used=True, tokens_used=thinking_tokens)
-        else:
-            from api.schemas_chat import ThinkingMetadata
-
-            thinking_metadata = ThinkingMetadata(used=False, tokens_used=None)
+    thinking_metadata = thinking_metadata_of(llm_response)  # MVA-3090
 
     return ChatMessageData(
         content=ai_response.get("content", ""),
@@ -1135,7 +1130,7 @@ async def set_session_role(
     try:
         await SessionRoleService().set_role(session_id, role)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=user_facing_detail(exc))
     return DataResponse(data={"session_id": session_id, "role": role})
 
 
@@ -1284,7 +1279,7 @@ async def set_session_approval_categories(
     try:
         await SessionRoleService().set_approval_categories(session_id, categories)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=user_facing_detail(exc))
     return DataResponse(data={"session_id": session_id, "approval_categories": categories})
 
 
@@ -1513,12 +1508,11 @@ async def send_chat_message_by_id(
     if language:
         context["language"] = language
 
-    thinking_mode_enabled = request_data.get("thinking_mode_enabled")
-    thinking_budget_tokens = request_data.get("thinking_budget_tokens")
-    if thinking_mode_enabled is not None:
-        context["thinking_mode_enabled"] = thinking_mode_enabled
-    if thinking_budget_tokens is not None:
-        context["thinking_budget_tokens"] = thinking_budget_tokens
+    # #22258: a request that carries no toggle gets the conversation's stored one (default off, as the GUI shows).
+    session_metadata = ((await chat_history_manager.get_session(chat_id)) or {}).get("metadata")
+    context["thinking_mode_enabled"], context["thinking_budget_tokens"] = effective_thinking(
+        request_data.get("thinking_mode_enabled"), request_data.get("thinking_budget_tokens"), session_metadata
+    )
 
     # #9017: per-conversation reasoning effort — inject into context for workflow resolution.
     reasoning_effort = request_data.get("reasoning_effort")
@@ -1717,7 +1711,7 @@ async def _durable_owner_metadata(chat_history_manager, session_id: str, ownersh
 async def save_chat_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
-    request_data: dict = None,
+    request_data: dict | None = None,
     request: Request = None,
     ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
 ):
@@ -1738,7 +1732,7 @@ async def save_chat_by_id(
             status_code=503,
         )
 
-    save_data = request_data.get("data", {})
+    save_data = (request_data or {}).get("data", {})
     merged_messages, discard = await _merge_chat_messages(
         chat_history_manager, chat_id, save_data.get("messages", []), request_id
     )
@@ -2601,7 +2595,7 @@ async def summarize_conversation(
         )
     except Exception as e:
         logger.exception("[%s] Failed to generate summary", request_id)
-        raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=safe_http_detail(e, "Summarization failed"))
     summary_text, summary_tokens = summary.text, summary.total_tokens  # provider usage when reported
 
     result_data = ConversationSummarizeData(

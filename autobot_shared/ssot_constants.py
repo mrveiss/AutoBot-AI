@@ -193,11 +193,11 @@ class ModelConfig:
     DEFAULT_MAX_TOKENS: int = 2048
     DEFAULT_NUM_CTX: int = 4096
     CHAT_NUM_CTX: int = 8192
+    CHAT_NUM_GPU_ALL_LAYERS: int = 99  # num_gpu on a GPU host: every layer, none left on the CPU (#22257)
 
     # Timeouts (seconds)
     DEFAULT_TIMEOUT: int = 120
     LONG_GENERATION_TIMEOUT: int = 120
-
     # Retry settings
     MAX_RETRIES: int = 3
     RETRY_DELAY: int = 2

@@ -122,3 +122,16 @@ class TestKwargsMatchRealSdkSignature:
         call_kwargs = self._call_kwargs(request, model="claude-opus-4-6")
         sig = inspect.signature(anthropic.resources.messages.messages.AsyncMessages.create)
         sig.bind(self=object(), **call_kwargs)
+
+    @pytest.mark.parametrize("model", ["claude-opus-4-6", "claude-sonnet-4-6"])
+    def test_thinking_request_ships_no_sampling_param_anywhere(self, model):
+        """#15042: thinking active (with the temperature=1 reasoning_kwargs adds) sends no sampling value."""
+        request = LLMRequest(
+            messages=[{"role": "user", "content": "hi"}],
+            metadata={"api_kwargs": {"thinking_tokens": 8000, "temperature": 1, "top_p": 0.9, "top_k": 40}},
+        )
+        call_kwargs = self._call_kwargs(request, model=model)
+        assert "thinking" in call_kwargs
+        for key in ("temperature", "top_p", "top_k"):
+            assert key not in call_kwargs
+            assert key not in call_kwargs.get("extra_body", {})

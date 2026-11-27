@@ -5,7 +5,8 @@
 """The stall question a paused chat graph is waiting on, read from its checkpoint (#21022).
 
 One reader (``pending_stall_question``) serves both consumers: ``POST /chats/{id}/resume`` binds a request to the
-question it answers, and ``GET /chat/sessions/{id}`` restores the card for a person who reloaded while it was open.
+question it answers, and ``GET /chat/sessions/{id}`` restores the card (stall question or approval, #21237) for a
+person who reloaded while it was open.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from autobot_shared.time_utils import utc_timestamp
 logger = get_logger(__name__)
 
 QUESTION_TYPE = "human_question"
+APPROVAL_TYPE = "command_approval_request"  # the graph's request_approval interrupt (#21237)
 NOTHING_TO_RESUME_CODE = "nothing_to_resume"  # the client keys on this; the other 409s of the route differ
 NOTHING_TO_RESUME = {"code": NOTHING_TO_RESUME_CODE, "message": "Nothing to resume"}
 
@@ -158,20 +160,44 @@ def _reopen(message: Dict[str, Any], qid: Any) -> bool:
     return True
 
 
+def _approval_card(interrupts: List[Any]) -> Dict[str, Any] | None:
+    return next((v for v in interrupts if isinstance(v, dict) and v.get("type") == APPROVAL_TYPE), None)
+
+
+def _approval_message(card: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+    """The history entry of an approval card the graph is paused on (#21237): the shape the live stream builds."""
+    return {
+        "id": f"approval-{card.get('id')}",
+        "sender": "assistant",
+        "type": APPROVAL_TYPE,
+        "messageType": APPROVAL_TYPE,
+        "text": card.get("content") or "Command approval required",
+        "timestamp": utc_timestamp(),
+        "metadata": {**(card.get("metadata") or {}), "requires_approval": True, "session_id": session_id},
+    }
+
+
 async def with_pending_question(request: Any, session_id: str, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """*messages* plus the open stall question's card when history lacks it; a stale ``answered`` card is reopened."""
+    """*messages* plus the card the paused graph waits on, when history lacks it (#21022, #21237).
+
+    One checkpoint read serves both interrupts: the stall question (a stale ``answered`` card is reopened) and the
+    approval card of ``request_approval``, which the graph path never persists.
+    """
     manager = getattr(request.app.state, "chat_workflow_manager", None)
     if manager is None:
         return messages
     try:
-        question = await pending_stall_question(manager, session_id)
+        interrupts = (await read_pause(manager, session_id)).interrupts
     except Exception as exc:  # noqa: BLE001 -- history still loads without the card
-        logger.debug("No stall question restored for chat %s...: %s", session_id[:8], type(exc).__name__)
+        logger.debug("No pending card restored for chat %s...: %s", session_id[:8], type(exc).__name__)
         return messages
-    if question is None:
-        return messages
-    found = [_reopen(m, question.get("question_id")) for m in messages]
-    return messages if any(found) else [*messages, _question_message(question, session_id)]
+    if (question := _stall_question(interrupts)) is not None:
+        found = [_reopen(m, question.get("question_id")) for m in messages]
+        return messages if any(found) else [*messages, _question_message(question, session_id)]
+    if (card := _approval_card(interrupts)) is not None:
+        message = _approval_message(card, session_id)
+        return messages if any(m.get("id") == message["id"] for m in messages) else [*messages, message]
+    return messages
 
 
 async def guarded_resume(chat_id: str, request_data: dict, manager: Any, open_stream: Any) -> Any:

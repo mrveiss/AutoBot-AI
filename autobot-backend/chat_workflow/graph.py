@@ -50,8 +50,9 @@ from chat_workflow.graph_tool_dispatch import (
     send_denied_message,
     split_refused,
 )
+from chat_workflow.invalid_call_abort import abort_invalid_tools, should_abort
+from chat_workflow.manual_lookup import with_command_manuals
 from chat_workflow.reflection_gate import (
-    NO_ANSWER_FALLBACK,
     evaluate_with_one_retry,
     reflection_update,
     wants_another_pass,
@@ -61,7 +62,6 @@ from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
 from chat_workflow.state_messages import workflow_message_from_state
 from chat_workflow.tool_call_loop import (
     _LOOP_ABORT_THRESHOLD,
-    FINAL_ANSWER_INSTRUCTION,
     _append_loop_abort_message,
     _inline_loop_update,
     are_already_executed,
@@ -160,6 +160,7 @@ class ChatState(TypedDict, total=False):
     tool_call_fingerprints: List[str]
     tool_loop_count: int
     tool_loop_warning: str
+    consecutive_invalid_tool_calls: int  # #20848: unknown-tool calls in a row; the streaming loop's ctx counter
 
     stall_question: Dict[str, Any] | None  # #21022: the pending human question; None when nothing is asked
 
@@ -380,6 +381,7 @@ def _build_llm_iteration_context(state: ChatState):
         initial_prompt = _inject_mid_conversation_warning(loop_warning, initial_prompt)
 
     initial_prompt = with_plan_step(initial_prompt, state)  # #21023: the current plan step, if the turn has a plan
+    initial_prompt = with_command_manuals(initial_prompt, state)  # #22253: manuals of the commands it names
 
     # GH#11159/#11160: carry governed identity from the request context bag.
     agent_context, work_item_id, approval_cats = build_governed_identity(
@@ -416,6 +418,7 @@ def _build_llm_iteration_context(state: ChatState):
     # #18430: a person's yes covers exactly the calls request_approval bound it to; line 3 never is.
     decision = state.get("approval_decision") or {}
     ctx.approved_fingerprints = frozenset(decision.get("bound") or ()) if decision.get("approved") else frozenset()
+    ctx.consecutive_invalid_tool_calls = state.get("consecutive_invalid_tool_calls", 0)  # #20848
     return ctx
 
 
@@ -598,7 +601,7 @@ def _carry_tool_results_into_prompt(manager, ctx, state: ChatState) -> None:
     for warning in (state.get("rlm_refinement_hint", ""), state.get("tool_loop_warning", "")):
         if warning:
             prompt = _inject_mid_conversation_warning(warning, prompt)
-    ctx.initial_prompt = with_plan_step(prompt, state)  # #21023
+    ctx.initial_prompt = with_command_manuals(with_plan_step(prompt, state), state, ctx.execution_history)  # #22253
 
 
 async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
@@ -899,8 +902,9 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
 
     await emit_tool_call_hook(state.get("session_id"), tool_calls)
 
+    exec_ctx = _build_llm_iteration_context(state)
     exec_history, break_loop = await dispatch_approved_calls(
-        manager, _build_llm_iteration_context(state), state, tool_calls, iteration, messages, stream_cb
+        manager, exec_ctx, state, tool_calls, iteration, messages, stream_cb
     )
 
     # Issue #3254: tell the user why the assistant stopped.
@@ -926,6 +930,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         "workflow_messages": messages,
         "tool_calls": [],  # Clear after execution
         "approval_decision": None,  # #19957: a yes covers its batch only
+        "consecutive_invalid_tool_calls": exec_ctx.consecutive_invalid_tool_calls,  # #20848
         **loop_state,
         **plan_update,
     }
@@ -989,7 +994,7 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
             # Allow extensions to inspect/modify the query
             user_query = await _emit_before_rag_query(
                 user_query,
-                state.get("session_id"),
+                state.get("session_id") or "",
                 {},
             )
         except Exception as hook_exc:  # noqa: BLE001
@@ -1067,7 +1072,7 @@ async def _emit_before_response_send_safe(combined_response: str, session_id: st
     from chat_workflow.llm_handler import _emit_before_response_send
 
     try:
-        return await _emit_before_response_send(combined_response, session_id, {})
+        return await _emit_before_response_send(combined_response, session_id or "", {})
     except Exception as hook_exc:  # noqa: BLE001
         logger.debug("BEFORE_RESPONSE_SEND hook failed (non-fatal): %s", hook_exc)
         return combined_response
@@ -1078,7 +1083,7 @@ async def _emit_after_response_send_safe(combined_response: str, session_id: str
     from chat_workflow.llm_handler import _emit_after_response_send
 
     try:
-        await _emit_after_response_send(combined_response, session_id, {})
+        await _emit_after_response_send(combined_response, session_id or "", {})
     except Exception as hook_exc:  # noqa: BLE001
         logger.debug("AFTER_RESPONSE_SEND hook failed (non-fatal): %s", hook_exc)
 
@@ -1209,36 +1214,10 @@ def route_after_reflection(state: ChatState) -> str:
 
 
 async def force_final_answer(state: ChatState, config: RunnableConfig) -> dict:
-    """At the iteration cap: one last LLM pass that dispatches nothing, to answer from the results (#19715)."""
-    manager = config["configurable"]["manager"]
-    stream_cb = config["configurable"].get("stream_callback")
-    messages = list(state.get("workflow_messages", []))
-    iteration = state.get("iteration_count", 0) + 1
-    ctx = _build_llm_iteration_context(state)
-    _carry_tool_results_into_prompt(manager, ctx, state)
-    ctx.initial_prompt = _inject_mid_conversation_warning(FINAL_ANSWER_INSTRUCTION, ctx.initial_prompt)
-    try:
-        messages, llm_response, _unused_calls, _stop = await _run_llm_iteration_plan(
-            manager, ctx, iteration, messages, stream_cb
-        )
-    except aiohttp.ClientError as exc:
-        logger.error("Final answer call failed: %s", exc)
-        llm_response = None
-    if not llm_response:
-        fallback = {
-            "type": "response",
-            "content": NO_ANSWER_FALLBACK,
-            "metadata": {"iteration": iteration},
-        }
-        messages.append(fallback)
-        if stream_cb:
-            stream_cb(fallback)
-    return {
-        "workflow_messages": messages,
-        "all_llm_responses": [*state.get("all_llm_responses", []), llm_response or ""],
-        "iteration_count": iteration,
-        "should_continue": False,
-    }
+    """At the iteration cap: one last LLM pass that dispatches nothing, to answer from the results (#19715, #20720)."""
+    from chat_workflow.final_pass import run_final_pass
+
+    return await run_final_pass(state, config)
 
 
 def route_after_execution(state: ChatState) -> str:
@@ -1260,6 +1239,8 @@ def route_after_execution(state: ChatState) -> str:
         return "announce_stall" if stall_mode(state) == "ask" else "persist_conversation"  # #21022
 
     if state.get("should_continue"):
+        if should_abort(state.get("consecutive_invalid_tool_calls", 0)):  # #20848: the streaming loop's rule
+            return "abort_invalid_tools"
         if state.get("iteration_count", 0) < limits.MAX_CONTINUATION_ITERATIONS:
             return "generate_response"
         return "force_final_answer"  # #19715: the transcript must not end on a tool's output
@@ -1308,6 +1289,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("execute_tools", execute_tools)
     add_stall_nodes(builder)  # Issue #21022
     builder.add_node("force_final_answer", force_final_answer)
+    builder.add_node("abort_invalid_tools", abort_invalid_tools)  # Issue #20848
     builder.add_node("persist_conversation", persist_conversation)
 
     # Wire edges
@@ -1323,6 +1305,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_edge("request_approval", "execute_tools")
     builder.add_conditional_edges("execute_tools", route_after_execution)
     builder.add_edge("force_final_answer", "persist_conversation")
+    builder.add_edge("abort_invalid_tools", "persist_conversation")
     builder.add_edge("persist_conversation", END)
 
     return builder

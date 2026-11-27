@@ -93,6 +93,10 @@ Parameters:
 
 **IMPORTANT**: Prefer `web_search` over manually navigating to a search engine. It handles the browser steps automatically.
 
+To read a command's manual before using it (usage, options), call `command_manual`:
+
+<TOOL_CALL name="command_manual" params='{"command":"ping"}'>Read the ping manual</TOOL_CALL>
+
 ### Browser Tools (Web Browsing)
 
 {{ browser_tools_section }}

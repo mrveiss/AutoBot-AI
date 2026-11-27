@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Transcriber AUTOBOT_* environment variable registrations.
 
-Split out of ``env_registry.py``, which sits at its grandfathered file-size ceiling.
+Split out of ``env_registry.py``, which sits at its grandfathered file-size ceiling (#14236); the transcriber
+component arrived with the recording-progress route (#20910).
 Imported by ``env_registry`` itself, so registration happens whenever it loads.
 """
 

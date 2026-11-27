@@ -60,7 +60,7 @@ from .schemas_code import (
 
 MANIFEST = MCPBridgeManifest(
     name="database_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="Database Operations - SQLite Query and Management",
     features=["query", "execute", "schema", "tables", "statistics", "sql_injection_prevention"],
     endpoint="/api/database/mcp/tools",

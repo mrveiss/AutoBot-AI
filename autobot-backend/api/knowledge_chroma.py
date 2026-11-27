@@ -25,6 +25,7 @@ from api.schemas_knowledge_chroma import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
 from utils.async_chromadb_client import get_async_chromadb_client
 
@@ -107,7 +108,7 @@ async def list_collections(
         logger.error(f"Failed to list ChromaDB collections: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"ChromaDB connection error: {str(e)}",
+            detail=safe_http_detail(e, "ChromaDB connection error"),
         )
 
 
@@ -158,7 +159,7 @@ async def get_collection_detail(
         logger.error(f"Failed to get collection {name}: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"ChromaDB error: {str(e)}",
+            detail=safe_http_detail(e, "ChromaDB error"),
         )
 
 
@@ -247,7 +248,7 @@ async def list_documents(
         logger.error(f"Failed to list documents in collection {name}: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"ChromaDB error: {str(e)}",
+            detail=safe_http_detail(e, "ChromaDB error"),
         )
 
 
@@ -339,5 +340,5 @@ async def search_collection(
         logger.error(f"Search failed in collection {name}: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"ChromaDB search error: {str(e)}",
+            detail=safe_http_detail(e, "ChromaDB search error"),
         )
