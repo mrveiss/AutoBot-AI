@@ -4,9 +4,8 @@
 import { computed, ref, type Ref } from 'vue'
 import type { FileBrowserItem } from '@/composables/file-browser/useFileBrowser'
 import { useI18n } from 'vue-i18n'
+import type { SortOrder } from '@autobot/ui'
 import { getFileType, type Translate } from '@/utils/fileTypeLabel'
-
-export type SortOrder = 'asc' | 'desc'
 
 function sortValue(file: FileBrowserItem, field: string, t: Translate): string | number {
   if (field === 'size') return file.size || 0

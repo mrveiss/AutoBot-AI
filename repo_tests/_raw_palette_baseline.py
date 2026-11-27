@@ -71,7 +71,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-purple-900": 1,
     "bg-red-100": 9,
     "bg-red-400/10": 1,
-    "bg-red-50": 2,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 3)
+    "bg-red-50": 1,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 3)
     "bg-red-500": 9,
     "bg-red-500/10": 5,
     "bg-red-500/20": 1,
@@ -127,14 +127,13 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-amber-950": 1,
     "text-blue-200": 3,
     "text-blue-300": 1,
-    "text-blue-400": 14,  # #22179 chat stream restyled onto tokens (15 -> 14)
-    "text-blue-500": 3,
+    "text-blue-400": 13,  # #22179 chat stream restyled onto tokens (15 -> 14)
+    "text-blue-500": 1,  # #22349 chat panels onto tokens (3 -> 1)
     "text-blue-600": 4,  # #22179 chat stream restyled onto tokens (8 -> 4)
     "text-blue-700": 4,  # #22179 chat stream restyled onto tokens (6 -> 4)
     "text-blue-800": 3,
     "text-cyan-200": 1,
     "text-cyan-800": 1,
-    "text-emerald-400": 1,
     "text-emerald-600": 1,
     "text-gray-100": 2,
     "text-gray-200": 1,
@@ -147,8 +146,8 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-green-200": 2,
     "text-green-300": 2,
     "text-green-400": 11,  # #22179 chat stream restyled onto tokens (12 -> 11)
-    "text-green-500": 13,
-    "text-green-600": 14,  # #22179 chat stream restyled onto tokens (16 -> 14)
+    "text-green-500": 4,  # #22349 chat panels onto tokens (13 -> 4)
+    "text-green-600": 13,  # #22179 chat stream restyled onto tokens (16 -> 14)
     "text-green-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "text-green-800": 4,
     "text-green-900": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
@@ -156,21 +155,20 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-indigo-600": 2,
     "text-indigo-700": 2,
     "text-orange-400": 2,
-    "text-orange-500": 4,
     "text-orange-600": 2,
     "text-purple-200": 1,
     "text-purple-400": 4,  # #22179 chat stream restyled onto tokens (5 -> 4)
-    "text-purple-500": 7,
+    "text-purple-500": 1,  # #22349 chat panels onto tokens (7 -> 1)
     "text-purple-600": 4,
     "text-purple-700": 3,
     "text-purple-800": 1,
     "text-red-200": 2,
     "text-red-300": 3,
-    "text-red-400": 15,  # #22179 chat stream restyled onto tokens (16 -> 15)
-    "text-red-500": 6,  # #18243: 7 -> 6; #18819: 9 -> 8, hand-rolled notices moved to the kit BaseAlert
-    "text-red-600": 18,  # #18243: 19 -> 18, composer rewrite; #22179 chat stream restyled onto tokens (21 -> 19)
+    "text-red-400": 13,  # #22179 chat stream restyled onto tokens (16 -> 15)
+    "text-red-500": 5,  # #18243: 7 -> 6; #18819: 9 -> 8, hand-rolled notices moved to the kit BaseAlert
+    "text-red-600": 15,  # #18243: 19 -> 18, composer rewrite; #22179 chat stream restyled onto tokens (21 -> 19)
     "text-red-700": 5,  # #16253 SystemStatusNotification severities onto theme tokens (6 -> 5)
-    "text-red-800": 4,  # #18243: 5 -> 4, composer rewrite
+    "text-red-800": 3,  # #18243: 5 -> 4, composer rewrite
     "text-yellow-200": 2,
     "text-yellow-300": 1,
     "text-yellow-400": 6,  # #16253 SystemStatusNotification severities onto theme tokens (7 -> 6)
