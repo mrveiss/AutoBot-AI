@@ -10,7 +10,7 @@ proposal only asks. It writes no chat, cannot approve itself and never expires i
 happens only if a person approves it (``services/chat_company_assignment_action.py``), through the audited assign
 path. A chat with a pending, rejected or revision-requested proposal is not proposed again, so a re-run adds
 nothing and a denial stays one. Two concurrent runs are settled by the partial unique index
-``uq_approvals_pending_chat_company`` (migration 20261124_123): the loser's ``IntegrityError`` reads as "already
+``uq_approvals_pending_chat_company`` (migration 20261124_124): the loser's ``IntegrityError`` reads as "already
 proposed".
 """
 
