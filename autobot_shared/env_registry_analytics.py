@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Codebase-analytics AUTOBOT_* environment variables.
+"""Codebase-analytics AUTOBOT_* environment variables (added with #18013; sibling rationale recorded per #18571).
 
 A new ``env_registry_<component>.py`` sibling rather than an addition to
 ``env_registry_backend.py``, which sits 5 lines under the 600-line ceiling.
@@ -56,8 +56,8 @@ register_env_var(
         type=int,
         default=5000,
         description=(
-            "Maximum duplicate pairs a scan RETURNS (0 = unlimited). The count and the "
-            "statistics always describe every pair found; the analysis reports "
+            "Maximum duplicate clusters a scan RETURNS (0 = unlimited). The count and the "
+            "statistics always describe every cluster found; the analysis reports "
             "`truncated` when the list is shorter (#18067)."
         ),
         component="backend",

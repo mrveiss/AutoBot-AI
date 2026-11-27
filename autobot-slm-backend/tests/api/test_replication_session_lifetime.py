@@ -18,10 +18,10 @@ closing the session and awaiting the coroutine proves nothing; it passes against
 the buggy code. The property that separates fixed from broken is *ownership*:
 the job's session must not be the request's. Both tests assert that directly.
 
-Own file rather than an addition to ``test_slm_endpoints_12515.py``: that module
+Own file rather than an addition to ``test_slm_endpoints.py``: that module
 sits exactly on the 600-line limit the Python file-size ratchet enforces
 (#14236), so it cannot grow. It carries a near-identical real-module harness;
-the duplication is the ratchet's price, and ``test_nodes_list_timeout_10913.py``
+the duplication is the ratchet's price, and ``test_nodes_list_timeout.py``
 already carries a third copy.
 """
 
@@ -36,16 +36,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from _real_orm_import import build_real_modules
 
 _SLM_ROOT = Path(__file__).resolve().parents[2]
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
-
-_SQLALCHEMY_MODULES = ("sqlalchemy", "sqlalchemy.ext", "sqlalchemy.ext.asyncio", "sqlalchemy.orm")
-
-
-def _is_sqlalchemy_key(name: str) -> bool:
-    return name == "sqlalchemy" or name.startswith("sqlalchemy.")
 
 
 def _load_real_module(name: str, path: Path):
@@ -57,40 +52,7 @@ def _load_real_module(name: str, path: Path):
     return module
 
 
-def _build_real_modules() -> dict:
-    """One-time real sqlalchemy + models.database/models.schemas snapshot.
-
-    The root conftest stubs these as MagicMocks for import-time safety. The
-    real packages are loaded once here and swapped in on demand, so the router
-    is exercised against genuine ORM machinery rather than mock identity.
-    """
-    saved = {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)}
-    saved.update({name: sys.modules.get(name) for name in ("models.database", "models.schemas")})
-    for name in list(saved):
-        sys.modules.pop(name, None)
-    try:
-        for name in _SQLALCHEMY_MODULES:
-            importlib.import_module(name)
-        importlib.import_module("sqlalchemy.dialects.sqlite")
-        _load_real_module("models.database", _SLM_ROOT / "models" / "database.py")
-        _load_real_module("models.schemas", _SLM_ROOT / "models" / "schemas.py")
-        return {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)} | {
-            "models.database": sys.modules["models.database"],
-            "models.schemas": sys.modules["models.schemas"],
-        }
-    finally:
-        for name in [n for n in sys.modules if _is_sqlalchemy_key(n)]:
-            del sys.modules[name]
-        sys.modules.pop("models.database", None)
-        sys.modules.pop("models.schemas", None)
-        for name, mod in saved.items():
-            if mod is not None:
-                sys.modules[name] = mod
-            else:
-                sys.modules.pop(name, None)
-
-
-_REAL_MODULES = _build_real_modules()
+_REAL_MODULES = build_real_modules(("models.database", "models.schemas"))
 
 
 @contextlib.contextmanager
@@ -222,10 +184,14 @@ class _JobSessionFactory:
 async def replication_env():
     """Real engine + a request-scoped session proxy + a job session factory."""
     with _real_modules_swapped():
-        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
+            "sqlite+aiosqlite:///:memory:"
+        )
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
+    maker = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local factory)
+        engine, expire_on_commit=False
+    )
     request_session = _RequestScopedSession(maker())
     try:
         yield request_session, _JobSessionFactory(maker), maker

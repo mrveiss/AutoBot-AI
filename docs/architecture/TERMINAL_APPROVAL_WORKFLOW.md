@@ -16,7 +16,7 @@ The Chat Terminal implements a sophisticated command approval workflow that ensu
 
 ### **1. Agent Terminal Session**
 
-Located in: `backend/services/agent_terminal_service.py`
+Located in: `autobot-backend/services/agent_terminal/service.py`
 
 ```python
 @dataclass
@@ -34,7 +34,7 @@ class AgentTerminalSession:
 
 ### **2. Command Risk Levels**
 
-Located in: `src/secure_command_executor.py`
+Located in: `autobot-backend/secure_command_executor.py` (risk lists in `autobot-backend/security/command_patterns.py`: `FORBIDDEN_COMMANDS`, `HIGH_RISK_COMMANDS`)
 
 ```python
 class CommandRisk(Enum):
@@ -56,7 +56,7 @@ class CommandRisk(Enum):
 │  (LLM)      │  Example: "I'll check the files: ls -la"
 └──────┬──────┘
        │
-       │ POST /api/agent-terminal/sessions/{id}/execute
+       │ POST /api/agent-terminal/execute
        │ {
        │   "command": "ls -la",
        │   "description": "List all files in current directory",
@@ -65,9 +65,9 @@ class CommandRisk(Enum):
        ▼
 ```
 
-**Endpoint**: `POST /api/agent-terminal/sessions/{session_id}/execute`
+**Endpoint**: `POST /api/agent-terminal/execute`
 
-**Handler**: `agent_terminal.py:execute_agent_command()`
+**Handler**: `autobot-backend/api/agent_terminal.py:execute_agent_command()`
 
 ```python
 async def execute_agent_command(
@@ -122,7 +122,7 @@ async def execute_agent_command(
          ▼
 ```
 
-**Code Flow**: `agent_terminal_service.py:execute_command()`
+**Code Flow**: `autobot-backend/services/agent_terminal/service.py:execute_command()`
 
 ```python
 async def execute_command(
@@ -349,7 +349,7 @@ const approveCommand = async () => {
 }
 ```
 
-**Backend Code**: `agent_terminal.py:approve_pending_command()`
+**Backend Code**: `autobot-backend/api/agent_terminal.py:approve_agent_command()`
 
 ```python
 @router.post("/sessions/{session_id}/approve")
@@ -371,6 +371,10 @@ async def approve_pending_command(
 ---
 
 ### **Phase 4b: Direct Execution Path**
+
+A command runs without approval only when the single AI-line decision (`services/ai_line_enforcement.py`, `resolve_action_line`) resolves to line 1. That decision is shared with the chat graph's approval interrupt (`call_needs_approval`), so a command is never held in one path and run in the other. A read-only command rated SAFE is unmanaged and runs; any other command follows its stored line (an unset line counts as line 2) and the approval baseline. The agent role's `auto_approve_safe` / `auto_approve_moderate` can only tighten it. Anything not run here waits in the terminal's approval queue unless a learned rule matches.
+
+**Learned rules are part of the line decision (#16840, owner decision 2026-11-26).** The per-user "approve similar commands in future" rules are ONE set shared by chat and the terminal (`command_line_risk.shared_approval_manager`) and are read inside `resolve_action_line`, so `call_needs_approval`, the chat dispatch seam and the terminal's `decide_command` all get the same answer; the terminal no longer consults the rules separately. Each rule belongs to the user who created it, keyed by the verified user id (the terminal resolves the approving username to that id when it stores the rule); another user's command still gets the approval card. A rule only turns a line-2 hold into line 1, and only for a SAFE or MODERATE command: a destructive (HIGH, DANGEROUS, CRITICAL) or unknown-risk command always asks, line 3 is never lifted, a forced approval and the attachment-turn floor (#20195) are never lifted, and a stored `never` stays `never`. A rule lifts only an UNSET line (a line-2 default): an approval-baseline hold ("never autonomous"), a role hold (role policy only tightens) and an explicitly stored line 2 stay held, so a saved rule never overrides a decision someone made on purpose (#16840). The rule belongs to the approver and applies to no one else; one rule is kept per command pattern and risk. If the approving username does not resolve to a user id, no rule is saved and the approval response says so (`auto_approve_stored: false` plus `auto_approve_note`). Rules are kept in process memory, so they do not survive a restart or reach other workers; that is tracked in #22314.
 
 ```
 ┌──────────────────┐
@@ -437,7 +441,7 @@ async def approve_pending_command(
          ▼
 ```
 
-**Code**: `agent_terminal_service.py:_execute_approved_command()`
+**Code**: `autobot-backend/services/agent_terminal/service.py:_execute_approved_command()`
 
 ```python
 async def _execute_approved_command(
@@ -563,7 +567,7 @@ async def _execute_approved_command(
                       ...
 ```
 
-**Code**: Output buffering in `terminal.py:send_output()`
+**Code**: Output buffering in `autobot-backend/api/terminal_handlers.py:send_output()`
 
 ```python
 async def send_output(self, content: str):
@@ -727,7 +731,7 @@ State Permissions:
 
 ### **Risk Thresholds**
 
-Located in: `src/secure_command_executor.py`
+Located in: `autobot-backend/secure_command_executor.py` (risk lists in `autobot-backend/security/command_patterns.py`: `FORBIDDEN_COMMANDS`, `HIGH_RISK_COMMANDS`)
 
 ```python
 # Forbidden patterns (never execute)
@@ -776,8 +780,8 @@ auto_approve_future: bool  # In ApproveCommandRequest
 ### **Test 1: Safe Command (No Approval)**
 
 ```bash
-Command: ls -la
-Expected: Executes immediately
+Command: ls -la (read-only, rated SAFE; the role allows auto-approving SAFE)
+Expected: Executes immediately. `touch f` or an unrecognised command is held, even though SAFE
 Result: ✅ Pass
 ```
 
@@ -833,7 +837,7 @@ Result: ✅ Pass
 ### **Execute Command**
 
 ```
-POST /api/agent-terminal/sessions/{session_id}/execute
+POST /api/agent-terminal/execute
 
 Request Body:
 {

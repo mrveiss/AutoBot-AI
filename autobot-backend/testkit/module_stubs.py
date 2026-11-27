@@ -57,6 +57,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import types
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 from unittest.mock import MagicMock
@@ -499,3 +500,26 @@ def real_load_and_bind(name: str, path: Path) -> None:
     parent, _, child = name.rpartition(".")
     if parent and parent in sys.modules:
         setattr(sys.modules[parent], child, mod)
+
+
+def install_error_boundaries_stub() -> None:
+    """Install a minimal ``autobot_shared.error_boundaries`` unless one is already loaded (#22157).
+
+    Moved unchanged from ``api/batch_jobs_schedules_test.py`` and
+    ``tests/test_health_probe_data_contract.py``, which each carried a copy.
+    """
+    if "autobot_shared.error_boundaries" in sys.modules:
+        return
+
+    class _ErrorCategory(Enum):
+        # #14881: CLIENT_ERROR removed -- production's ErrorCategory
+        # (utils/error_boundaries/types.py) has 18 members and that is not one
+        # of them; nothing referenced it. A minimal stub is fine, an invented
+        # member is not.
+        SERVER_ERROR = "server_error"
+
+    _eb = types.ModuleType("autobot_shared.error_boundaries")
+    _eb.__package__ = "autobot_shared"
+    _eb.ErrorCategory = _ErrorCategory  # type: ignore[attr-defined]
+    _eb.with_error_handling = lambda *a, **k: (lambda f: f)  # type: ignore[attr-defined]
+    sys.modules["autobot_shared.error_boundaries"] = _eb

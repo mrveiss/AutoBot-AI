@@ -88,7 +88,7 @@ jobs:
             body=$(gh issue view "$n" --repo "$REPO" --json body --jq '.body' 2>/dev/null || echo "")
             # Require an EXACT reference (#NNNN / pull/NNNN), word-bounded so
             # #1234 does not match #12340.
-            if printf '%s' "$body" | grep -qE "(#${PR_NUMBER}([^0-9]|$)|/pull/${PR_NUMBER}([^0-9]|$))"; then
+            if grep -qE "(#${PR_NUMBER}([^0-9]|$)|/pull/${PR_NUMBER}([^0-9]|$))" <<<"$body"; then
               blocking+=("$n")
             fi
           done

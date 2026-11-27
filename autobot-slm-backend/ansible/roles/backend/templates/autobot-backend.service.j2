@@ -25,7 +25,7 @@ Type=simple
 User={{ backend_user }}
 Group={{ backend_group }}
 WorkingDirectory={{ backend_code_dir | default(backend_install_dir) }}
-Environment="PATH={{ backend_code_dir | default(backend_install_dir) }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PATH={{ backend_code_dir | default(backend_install_dir) }}/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(backend_install_dir) }}:{{ backend_install_dir | dirname }}/autobot_shared:{{ backend_install_dir | dirname }}"
 # #12777: the backend SIGABRTs every ~25-55 min and leaves ZERO diagnostics.
 # Without faulthandler a fatal signal raised inside a C extension (uvloop,

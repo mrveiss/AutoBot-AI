@@ -189,7 +189,7 @@ class AppFactory:
     def create_fastapi_app(
         title: str = "AutoBot - Distributed Autonomous Agent",
         description: str = "AI-powered autonomous Linux administration with distributed VMs",
-        version: str = "1.5.0",
+        version: str = "unknown",  # the repo declares no version; never an invented number (#17821)
         allow_origins: List[str] | None = None,
     ) -> FastAPI:
         """
@@ -246,7 +246,7 @@ def create_app(**kwargs) -> FastAPI:
     Example:
         ```python
         app = create_app()
-        app = create_app(title="My App", version="2.0.0")
+        app = create_app(title="My App")
         ```
     """
     # #18554: the shared boundaries get cancel scopes and error metrics only by registration.

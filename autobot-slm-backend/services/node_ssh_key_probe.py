@@ -18,6 +18,7 @@ It uses the existing argv builder (``ssh_utils.build_ssh_base_cmd``) and runner 
 from __future__ import annotations
 
 import asyncio
+import os
 
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
@@ -35,22 +36,44 @@ KEY_PROBE_TIMEOUT_SECONDS = env_float_clamped("AUTOBOT_SLM_KEY_PROBE_TIMEOUT_SEC
 _REMOTE_CHECK = "sudo -n -k /bin/sh -c true"
 
 
+class SlmKeyUnusable(Exception):
+    """The SLM's own key is missing or unreadable, so no key-only login can be built (never another identity)."""
+
+
+def key_only_ssh_command(node: Node) -> list:
+    """The ssh argv to *node* that may use the SLM's key and nothing else.
+
+    Raises ``InvalidSshDestination`` for a bad destination and ``SlmKeyUnusable`` when the builder had to leave
+    out ``-i`` -- ssh would then offer its default identities. ``-F`` with the null device drops every
+    ``IdentityFile`` an ssh_config could add for the host, so ``IdentitiesOnly`` leaves the SLM key alone; the
+    connection itself needs nothing from that config (the destination is the node's address, the fleet config
+    only names hosts by alias, and no proxy is configured anywhere in the SLM). The one builder of the key-only
+    options: the key probe and the stale-file cleanup (#22033) both run through it.
+    """
+    cmd = build_ssh_base_cmd(node.ip_address, node.ssh_user or "autobot", node.ssh_port or 22, ssot_config.path.ssh_key)
+    if "-i" not in cmd:
+        raise SlmKeyUnusable("the SLM's SSH key is missing or unreadable")
+    cmd[1:1] = [
+        "-F",
+        os.devnull,
+        *ssh_options(
+            "BatchMode=yes",
+            "PasswordAuthentication=no",
+            "IdentitiesOnly=yes",
+            "ControlMaster=no",  # a live master connection would let a stale key pass: test the key itself
+            "ControlPath=none",
+        ),
+    ]
+    return cmd
+
+
 async def key_auth_and_sudo_work(node: Node) -> bool:
     """True when key-only SSH to *node* works and that login has passwordless sudo; never raises."""
     try:
-        cmd = build_ssh_base_cmd(
-            node.ip_address, node.ssh_user or "autobot", node.ssh_port or 22, ssot_config.path.ssh_key
-        )
-    except InvalidSshDestination:
-        logger.warning("Key probe of node %s skipped: its SSH destination is invalid", node.node_id)
+        cmd = key_only_ssh_command(node)
+    except (InvalidSshDestination, SlmKeyUnusable) as exc:
+        logger.warning("Key probe of node %s skipped: %s", node.node_id, type(exc).__name__)
         return False
-    cmd[1:1] = ssh_options(
-        "BatchMode=yes",
-        "PasswordAuthentication=no",
-        "IdentitiesOnly=yes",
-        "ControlMaster=no",  # a live master connection would let a stale key pass: test the key itself
-        "ControlPath=none",
-    )
     try:
         returncode, _stdout, _stderr = await spawn_ssh([*cmd, _REMOTE_CHECK], timeout=KEY_PROBE_TIMEOUT_SECONDS)
     except (OSError, asyncio.TimeoutError) as exc:

@@ -228,7 +228,7 @@ class TestToolResultsAreClipped:
         protection = ContextOverflowProtection()
         protection.summarizer.summarize_messages = AsyncMock(return_value="S")
         protection.tracker.reset_session = AsyncMock()
-        protection.tracker.add_message_tokens = AsyncMock()
+        protection.tracker.seed_session = AsyncMock()
 
         await protection._create_summary("session-1", history, "gpt-4")
 
@@ -253,7 +253,7 @@ class TestTheComposedSummaryCarriesAllThree:
         protection = ContextOverflowProtection()
         protection.summarizer.summarize_messages = AsyncMock(return_value=summary_text)
         protection.tracker.reset_session = AsyncMock()
-        protection.tracker.add_message_tokens = AsyncMock()
+        protection.tracker.seed_session = AsyncMock()
         return await protection._create_summary("session-1", history, "gpt-4")
 
     @pytest.mark.asyncio
@@ -347,7 +347,7 @@ class TestTheComposedSummaryCarriesAllThree:
         protection = ContextOverflowProtection()
         protection.summarizer.summarize_messages = AsyncMock(return_value="S")
         protection.tracker.reset_session = AsyncMock()
-        protection.tracker.add_message_tokens = AsyncMock()
+        protection.tracker.seed_session = AsyncMock()
 
         await protection._create_summary("session-1", history, "gpt-4")
 
@@ -358,7 +358,7 @@ class TestTheComposedSummaryCarriesAllThree:
         assert len(sent) == expected, "summarizer was given the raw-index region, not the snapped one"
         # One refill per retained message: the kept half is everything after the
         # boundary the production path actually used.
-        assert protection.tracker.add_message_tokens.await_count == len(history) - expected
+        assert len(protection.tracker.seed_session.await_args.args[1]) == len(history) - expected
 
     @pytest.mark.asyncio
     async def test_the_kept_half_of_a_real_compaction_has_no_orphaned_tool_message(self):
@@ -367,11 +367,11 @@ class TestTheComposedSummaryCarriesAllThree:
         protection = ContextOverflowProtection()
         protection.summarizer.summarize_messages = AsyncMock(return_value="S")
         protection.tracker.reset_session = AsyncMock()
-        protection.tracker.add_message_tokens = AsyncMock()
+        protection.tracker.seed_session = AsyncMock()
 
         await protection._create_summary("session-1", history, "gpt-4")
 
-        retained = protection.tracker.add_message_tokens.await_count
+        retained = len(protection.tracker.seed_session.await_args.args[1])
         kept = history[len(history) - retained :]
         in_batch = False
         for msg in kept:
@@ -407,7 +407,7 @@ class TestCompositionRunsBeforeTheReset:
         protection = ContextOverflowProtection()
         protection.summarizer.summarize_messages = AsyncMock(return_value="S")
         protection.tracker.reset_session = AsyncMock(side_effect=lambda session_id: call_order.append("reset"))
-        protection.tracker.add_message_tokens = AsyncMock()
+        protection.tracker.seed_session = AsyncMock()
 
         real_compose_summary = context_overflow_module._compose_summary
 
@@ -452,7 +452,7 @@ class TestCompactedViewIsSmallerThanWhatItReplaced:
         protection = ContextOverflowProtection()
         protection.summarizer.summarize_messages = AsyncMock(return_value="A short summary.")
         protection.tracker.reset_session = AsyncMock()
-        protection.tracker.add_message_tokens = AsyncMock()
+        protection.tracker.seed_session = AsyncMock()
 
         boundary = _pick_boundary(history, len(history) // 2)
         replaced_tokens = sum(estimate_fast(str(m.get("content", ""))) for m in history[:boundary])
@@ -491,7 +491,7 @@ class TestExistingBehaviourIsPreserved:
         protection = ContextOverflowProtection()
         protection.summarizer.summarize_messages = AsyncMock(return_value="summary")
         protection.tracker.reset_session = AsyncMock()
-        protection.tracker.add_message_tokens = AsyncMock()
+        protection.tracker.seed_session = AsyncMock()
 
         history = [
             {"role": "user", "content": "a"},
@@ -501,7 +501,7 @@ class TestExistingBehaviourIsPreserved:
         ]
         await protection._create_summary("session-1", history, "gpt-4")
         protection.tracker.reset_session.assert_awaited_once_with("session-1")
-        assert protection.tracker.add_message_tokens.await_count > 0
+        assert len(protection.tracker.seed_session.await_args.args[1]) > 0
 
 
 class TestClippingLandsWhereTheSummarizerReads:

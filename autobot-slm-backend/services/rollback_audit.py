@@ -34,12 +34,29 @@ PHASE_REQUESTED = "requested"
 PHASE_FINISHED = "finished"
 
 
+class AuditRowUnavailable(Exception):
+    """An ``audit_logs`` row could not be made durable."""
+
+
 class RollbackAuditUnavailable(Exception):
     """The entry could not be made durable."""
 
 
-async def record_rollback(*, actor: str | None, commit: str | None, outcome: str, phase: str, **details: Any) -> None:
-    """Commit one audit entry; raises ``RollbackAuditUnavailable`` when it cannot be stored."""
+async def record_audit_step(
+    *,
+    action: str,
+    resource_type: str,
+    resource: str | None,
+    actor: str | None,
+    outcome: str,
+    phase: str,
+    **details: Any,
+) -> None:
+    """Commit one ``audit_logs`` row through ``audit_row``; the SLM's one writer of that table (#20214, #22033).
+
+    Raises ``ValueError`` for an outcome outside ``OUTCOMES`` and ``AuditRowUnavailable`` when the row
+    cannot be stored; each caller turns the latter into its own "refuse, nothing was done" error.
+    """
     if outcome not in OUTCOMES:
         raise ValueError(f"unknown audit outcome: {outcome!r}")
     from autobot_shared.user_management.audit_rows import audit_row
@@ -49,14 +66,30 @@ async def record_rollback(*, actor: str | None, commit: str | None, outcome: str
         async with get_slm_session() as session:
             session.add(
                 audit_row(
-                    action=ACTION,
-                    resource_type=RESOURCE_TYPE,
-                    resource=commit,
+                    action=action,
+                    resource_type=resource_type,
+                    resource=resource,
                     actor=actor,
                     outcome=outcome,
                     details={"phase": phase, **details},
                 )
             )
     except Exception as exc:
-        logger.error("rollback: audit entry could not be stored (%s)", type(exc).__name__)
-        raise RollbackAuditUnavailable(type(exc).__name__) from exc
+        logger.error("%s: audit entry could not be stored (%s)", action, type(exc).__name__)
+        raise AuditRowUnavailable(type(exc).__name__) from exc
+
+
+async def record_rollback(*, actor: str | None, commit: str | None, outcome: str, phase: str, **details: Any) -> None:
+    """Commit one audit entry; raises ``RollbackAuditUnavailable`` when it cannot be stored."""
+    try:
+        await record_audit_step(
+            action=ACTION,
+            resource_type=RESOURCE_TYPE,
+            resource=commit,
+            actor=actor,
+            outcome=outcome,
+            phase=phase,
+            **details,
+        )
+    except AuditRowUnavailable as exc:
+        raise RollbackAuditUnavailable(str(exc)) from exc

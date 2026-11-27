@@ -3,7 +3,7 @@
     <h3>
       <Icon name="copy" /> {{ $t('analytics.duplicates.title') }}
       <span v-if="duplicates && duplicates.length > 0" class="total-count">
-        ({{ duplicates.length.toLocaleString() }} {{ $t('analytics.duplicates.pairs') }})
+        ({{ totalCount.toLocaleString() }} {{ $t('analytics.duplicates.clusters') }})
       </span>
       <div v-if="duplicates && duplicates.length > 0" class="section-export-buttons">
         <button @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
@@ -23,8 +23,8 @@
       <!-- Similarity Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card total">
-          <div class="summary-value">{{ duplicates.length.toLocaleString() }}</div>
-          <div class="summary-label">{{ $t('analytics.duplicates.totalPairs') }}</div>
+          <div class="summary-value">{{ totalCount.toLocaleString() }}</div>
+          <div class="summary-label">{{ $t('analytics.duplicates.totalClusters') }}</div>
         </div>
         <div class="summary-card high">
           <div class="summary-value">{{ duplicatesBySimilarity.high?.length || 0 }}</div>
@@ -43,6 +43,17 @@
           <div class="summary-label">{{ $t('analytics.duplicates.totalLines') }}</div>
         </div>
       </div>
+
+      <!-- #22157: the true size of the scan; the rows below are only what the server returned -->
+      <div v-if="summary" class="header-info">
+        <span class="header-count">{{ $t('analytics.duplicates.exactClusters', { count: summary.exactCount }) }}</span>
+        <span class="header-count">{{ $t('analytics.duplicates.structuralClusters', { count: summary.structuralCount }) }}</span>
+        <span v-if="summary.totalLocations !== null" class="header-count">{{ $t('analytics.duplicates.totalLocations', { count: summary.totalLocations }) }}</span>
+        <span v-if="summary.excludedDirs.length" class="header-count">
+          {{ $t('analytics.duplicates.excluded', { dirs: summary.excludedDirs.join(', ') }) }}
+        </span>
+      </div>
+      <TruncationNotice v-if="summary" :shown="duplicates.length" :total="summary.totalCount" server-limited />
 
       <!-- Duplicates by Similarity Group -->
       <div class="accordion-groups">
@@ -77,11 +88,11 @@
               >
                 <div class="item-header">
                   <span class="item-similarity" :class="similarity">{{ duplicate.similarity }}% {{ $t('analytics.duplicates.similar') }}</span>
+                  <span v-if="duplicate.kind" class="item-lines">{{ $t(`analytics.duplicates.kind.${duplicate.kind}`) }}</span>
                   <span class="item-lines">{{ duplicate.lines }} {{ $t('analytics.duplicates.lines') }}</span>
                 </div>
                 <div class="item-files">
-                  <div class="item-file">{{ duplicate.file1 }}</div>
-                  <div class="item-file">{{ duplicate.file2 }}</div>
+                  <div v-for="place in rowPlaces(duplicate)" :key="place" class="item-file">{{ place }}</div>
                 </div>
               </div>
               <TruncationNotice :shown="shown(similarity, group.length)" :total="group.length" :step="20" @show-more="showMore(similarity)" />
@@ -136,6 +147,8 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import type { DuplicateScanState } from '@/composables/analytics/duplicatePayload'
 import { useAggregationMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
+import { duplicateSummary as summary, rowPlaces } from '@/composables/analytics/duplicatePayload'
+import type { DuplicateLocation } from '@/composables/analytics/analyticsTypes'
 
 const { t } = useI18n()
 
@@ -144,6 +157,12 @@ interface Duplicate {
   lines: number
   file1: string
   file2: string
+  kind?: string
+  locations?: DuplicateLocation[]
+  start_line1?: number
+  end_line1?: number
+  start_line2?: number
+  end_line2?: number
 }
 
 interface Props {
@@ -155,6 +174,9 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+// #22157: the count is the scan's true total; `duplicates.length` is only the rows returned.
+const totalCount = computed(() => summary.value?.totalCount ?? props.duplicates.length)
 
 // #12741: a capped list is expandable; the notice below it is the control.
 const PAGE_SIZE = 20

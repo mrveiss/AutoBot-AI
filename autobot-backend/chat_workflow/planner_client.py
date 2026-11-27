@@ -11,6 +11,7 @@ registry -- the route ``llm_failover`` uses -- so planning needs no second model
 
 from __future__ import annotations
 
+from autobot_shared.chat_model_context import chat_think_options
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 from llm_shared import get_provider_registry
@@ -40,7 +41,11 @@ class PlannerLLMClient:
             provider=configured_provider(),
             model_name=self.model_name,
             temperature=temperature,
-            metadata={"conversation_id": self.session_id, "purpose": "chat_planner"},
+            metadata={
+                "conversation_id": self.session_id,
+                "purpose": "chat_planner",
+                **chat_think_options(self.model_name),  # the turn's thinking toggle (#22258)
+            },
         )
         registry = get_provider_registry()
         provider = await registry.get_provider_for_request(provider_name=request.provider.value, request=request)

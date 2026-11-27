@@ -10,7 +10,9 @@ Issue #551: Added proper async cancellation handling and timeout fixes.
 """
 
 import asyncio
+import os
 import time
+import traceback
 import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -27,6 +29,17 @@ from ..streaming import StreamingManager
 from .message_formatting import openai_function_tool_schemas
 
 logger = get_logger(__name__)
+
+_CALLER_FRAMES = 4
+
+
+def _caller_chain() -> str:
+    """The nearest awaiting frames outside ``llm_shared``: who started this request (#22254)."""
+    frames = [f for f in traceback.extract_stack() if f"{os.sep}llm_shared{os.sep}" not in f.filename]
+    return " <- ".join(
+        f"{os.path.basename(f.filename)}:{f.lineno} {f.name}" for f in reversed(frames[-_CALLER_FRAMES:])
+    )
+
 
 _OLLAMA_TOOL_CAPABLE_MODELS: frozenset[str] = frozenset(
     {
@@ -120,8 +133,12 @@ class OllamaRequestExecutor:
                 "num_ctx": request.metadata.get("num_ctx", self.settings.num_ctx),
             },
         }
+        if "num_gpu" in request.metadata:  # the chat model's layer count, same as every chat caller (#22257)
+            data["options"]["num_gpu"] = request.metadata["num_gpu"]
+        if "think" in request.metadata:  # Ollama's top-level thinking switch, not an option (#22258)
+            data["think"] = request.metadata["think"]
         if tools_will_be_sent:
-            data["tools"] = openai_function_tool_schemas(request.tools)
+            data["tools"] = openai_function_tool_schemas(request.tools or [])
             if request.tool_choice:
                 data["tool_choice"] = request.tool_choice
         return data
@@ -403,7 +420,8 @@ class OllamaRequestExecutor:
             Response dictionary with accumulated content
         """
         start_time = time.time()
-        logger.info("[%s] Starting protected streaming for model %s", request_id, model)
+        caller = _caller_chain()
+        logger.info("[%s] Starting protected streaming for model %s (started by %s)", request_id, model, caller)
 
         try:
             async with self._get_session() as session:
@@ -414,7 +432,15 @@ class OllamaRequestExecutor:
                     return await self._process_stream_response(response, request_id)
         except asyncio.CancelledError:
             duration = time.time() - start_time
-            logger.info("[%s] Stream cancelled by user after %.2fs", request_id, duration)
+            task = asyncio.current_task()
+            logger.info(
+                "[%s] Stream cancelled after %.2fs: task=%s started by %s (the cancelling side is the task's "
+                "owner, not necessarily a user)",
+                request_id,
+                duration,
+                task.get_name() if task else "?",
+                caller,
+            )
             raise
         except Exception as e:
             duration = time.time() - start_time

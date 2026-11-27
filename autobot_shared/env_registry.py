@@ -330,8 +330,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_OTEL_SERVICE_VERSION",
         type=str,
-        default="1.5.0",
-        description="Service version tag attached to all OTel spans.",
+        default="",
+        description="Service version tag attached to all OTel spans; unset omits `service.version` (#17821).",
         component="otel",
     )
 )
@@ -342,8 +342,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_PROMETHEUS_URL",
         type=str,
-        default="http://10.0.0.4:9090",
-        description="Base URL of the Prometheus metrics server.",
+        default="",
+        description="Base URL of the Prometheus metrics server (unset: the SSOT monitoring node).",
         component="monitoring",
     )
 )
@@ -1037,8 +1037,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_BACKEND_URL",
         type=str,
-        default="http://10.255.255.254:8001",
-        description="Full base URL of the AutoBot backend service (overrides HOST+PORT).",
+        default="",
+        description="Full base URL of the AutoBot backend service (overrides HOST+PORT; unset: built from those two).",
         component="backend",
     )
 )

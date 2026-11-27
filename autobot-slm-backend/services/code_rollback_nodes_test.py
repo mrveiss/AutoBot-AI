@@ -6,7 +6,7 @@
 
 The suite stubs sqlalchemy and ``models.database``; a query is only worth testing against the real
 ones, so this file loads them for the length of each test (the harness of
-``tests/api/test_replication_session_lifetime_15549.py``, which carries the full explanation).
+``tests/api/test_replication_session_lifetime.py``, which carries the full explanation).
 """
 
 from __future__ import annotations

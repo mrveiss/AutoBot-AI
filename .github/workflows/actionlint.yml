@@ -8,6 +8,8 @@ on:
       - ".github/workflows/**"
       - ".github/actions/release-promotion-base/**"  # #21713
       - "repo_tests/release_promotion_base_wiring_21713_test.py"  # #21713
+      - "scripts/**"  # #22195: the pipefail guard reads every script
+      - "repo_tests/test_pr_issue_validation_14241.py"  # #22195
   pull_request:
     # ready_for_review is REQUIRED here: the jobs below are gated on
     # draft == false, and marking a PR ready fires ONLY this event. Without
@@ -17,6 +19,8 @@ on:
       - ".github/workflows/**"
       - ".github/actions/release-promotion-base/**"  # #21713
       - "repo_tests/release_promotion_base_wiring_21713_test.py"  # #21713
+      - "scripts/**"  # #22195: the pipefail guard reads every script
+      - "repo_tests/test_pr_issue_validation_14241.py"  # #22195
 
 # Least privilege (#15331). Lints workflow files; no token writes.
 permissions:
@@ -67,3 +71,8 @@ jobs:
 
       - name: Every base-reading job takes the release-promotion base
         run: python3 -m pytest repo_tests/release_promotion_base_wiring_21713_test.py -q
+
+      # #22195: the pipefail-grep guard reads every workflow and script, so it runs here on a change to either
+      # (GLOB_RUN_BY_A_DEDICATED_WORKFLOW in repo_tests/_glob_declared_uncovered.py).
+      - name: No producer is piped into grep -q under pipefail
+        run: python3 -m pytest repo_tests/test_pr_issue_validation_14241.py -k pipes_a_producer_into_quiet_grep -q

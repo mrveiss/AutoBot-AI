@@ -344,10 +344,10 @@ async def enforce_ai_line(
 ) -> WorkflowMessage | None:
     """Resolve the tool action's AI line at the live seam (#18430; subsumes GH#11160's work-item hold).
 
-    The three lines, the approval baseline (#18294) and the work item's ``requires_approval_before``
-    (GH#11160) are one decision in ``services.ai_line_enforcement`` -- this seam adds none of its own.
-    Line 1 -> ``None`` (the call runs; the point reports it). Line 2 -> held with a pending approval.
-    Line 3 -> refused. A missing ``ctx`` still enforces, with no company and no declared categories.
+    Lines, approval baseline (#18294), ``requires_approval_before`` (GH#11160), learned rules (#16840): one
+    decision in ``services.ai_line_enforcement`` -- this seam adds none.
+    Line 1 -> ``None`` (the call runs; the point reports it). Line 2 -> held with a pending approval. Line 3 ->
+    refused. A missing ``ctx`` still enforces, with no company and no declared categories.
     """
     from services.ai_line_enforcement import TERMINAL_TOOL, Outcome, enforce_line, turn_requires_approval
 
@@ -364,6 +364,7 @@ async def enforce_ai_line(
         surface="chat_tool",
         declared_categories=declared_categories_of(ctx),
         role_requires_approval=turn_requires_approval(tool_name, ctx),  # #20195: an attachment turn gates every call
+        learned_rules_apply=not turn_requires_approval(tool_name, ctx),  # a learned rule never lifts it (#16840)
         approved_fingerprints=getattr(ctx, "approved_fingerprints", frozenset()),
         hold_in_approvals=not is_command,
         floor_waived=bool(getattr(ctx, "attachment_floor_waived", False)),  # #20195: the trail names the setting
@@ -373,9 +374,8 @@ async def enforce_ai_line(
             _carry_person_approval(tool_call, ctx)
         return None
     if is_command and verdict.outcome is Outcome.HOLD:
-        # #19951: the terminal's queue is the hold that can run the command: its approval card, its
-        # execution, its output back to the model. This key can only tighten, so a model setting it
-        # itself merely asks for a person.
+        # #19951: the terminal's queue is the hold that can run the command: its approval card, its execution,
+        # its output back to the model. This key can only tighten, so a model setting it merely asks for a person.
         tool_call[COMMAND_FORCE_APPROVAL_KEY] = True
         return None
     refused = verdict.outcome is Outcome.REFUSE

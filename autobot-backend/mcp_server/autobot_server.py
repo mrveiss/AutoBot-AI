@@ -547,7 +547,7 @@ class AutoBotMCPServer(MemoryToolsMixin, MemorySessionToolsMixin, CodeGraphTools
             return _ok(
                 {
                     "protocolVersion": "2024-11-05",
-                    "serverInfo": {"name": "autobot-mcp", "version": "1.0.0"},
+                    "serverInfo": {"name": "autobot-mcp", "version": "unknown"},
                     "tools": [
                         {"name": name, **meta} for name, meta in self.TOOLS.items() if self._check_scope(scopes, name)
                     ],
