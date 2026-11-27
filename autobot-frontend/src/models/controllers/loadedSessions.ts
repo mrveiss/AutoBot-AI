@@ -12,8 +12,11 @@ interface SessionImporter {
  * repository mapped them (#20865): re-deriving them from snake_case fields it does not return produced
  * Invalid Date.
  */
-export function importLoadedSessions(store: SessionImporter, sessions: Array<Partial<ChatSession>>): void {
-  sessions.forEach(session => {
+export function importLoadedSessions(
+  store: SessionImporter,
+  sessions: Array<Partial<ChatSession>>,
+): void {
+  sessions.forEach((session) => {
     store.importSession({ ...session, title: session.title ?? '', isActive: false } as ChatSession)
   })
 }

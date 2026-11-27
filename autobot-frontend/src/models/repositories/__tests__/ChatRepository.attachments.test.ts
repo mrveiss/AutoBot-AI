@@ -7,8 +7,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fetchWithAuth = vi.fn()
-vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: (...args: unknown[]) => fetchWithAuth(...args) }))
-vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api', getBackendUrl: () => 'http://backend' }))
+vi.mock('@/utils/fetchWithAuth', () => ({
+  fetchWithAuth: (...args: unknown[]) => fetchWithAuth(...args),
+}))
+vi.mock('@/config/ssot-config', () => ({
+  getApiBase: () => '/api',
+  getBackendUrl: () => 'http://backend',
+}))
 vi.mock('@/utils/ApiClient', () => ({ default: { call: vi.fn() } }))
 
 import { ChatRepository } from '../ChatRepository'
@@ -34,7 +39,9 @@ describe('ChatRepository.sendMessage attachments (#20195)', () => {
   })
 
   it('never forwards an object (a browser File stand-in) as an attachment', async () => {
-    const options = { attachments: ['file-a', { id: 'x', name: 'n.txt', data: {} }] } as unknown as { attachments: string[] }
+    const options = {
+      attachments: ['file-a', { id: 'x', name: 'n.txt', data: {} }],
+    } as unknown as { attachments: string[] }
     await new ChatRepository().sendMessage('hi', 'chat-1', options)
     expect(sentContext().attachments).toEqual(['file-a'])
   })

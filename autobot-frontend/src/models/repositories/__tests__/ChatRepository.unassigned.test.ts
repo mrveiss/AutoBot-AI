@@ -4,7 +4,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: vi.fn() }))
-vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api', getBackendUrl: () => 'http://backend' }))
+vi.mock('@/config/ssot-config', () => ({
+  getApiBase: () => '/api',
+  getBackendUrl: () => 'http://backend',
+}))
 vi.mock('@/utils/ApiClient', () => ({ default: { call: vi.fn() } }))
 
 import apiClient from '@/utils/ApiClient'
@@ -18,12 +21,21 @@ async function list(data: unknown) {
 
 describe('ChatRepository.getChatList Unassigned (#21997)', () => {
   it('flags the unassigned chats and keeps the company chats unflagged', async () => {
-    const out = await list({ sessions: [{ id: 'a1', title: 'A' }], unassigned: [{ id: 'u1', title: 'U' }] })
-    expect(out.map((c) => [c.id, c.unassigned])).toEqual([['a1', undefined], ['u1', true]])
+    const out = await list({
+      sessions: [{ id: 'a1', title: 'A' }],
+      unassigned: [{ id: 'u1', title: 'U' }],
+    })
+    expect(out.map((c) => [c.id, c.unassigned])).toEqual([
+      ['a1', undefined],
+      ['u1', true],
+    ])
   })
 
   it('lists a chat once when the backend returns it in both lists (no active company)', async () => {
-    const out = await list({ sessions: [{ id: 'u1' }, { id: 'u2' }], unassigned: [{ id: 'u1' }, { id: 'u2' }] })
+    const out = await list({
+      sessions: [{ id: 'u1' }, { id: 'u2' }],
+      unassigned: [{ id: 'u1' }, { id: 'u2' }],
+    })
     expect(out.map((c) => c.id)).toEqual(['u1', 'u2'])
     expect(out.every((c) => c.unassigned === true)).toBe(true)
   })

@@ -8,7 +8,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: vi.fn() }))
-vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api', getBackendUrl: () => 'http://backend' }))
+vi.mock('@/config/ssot-config', () => ({
+  getApiBase: () => '/api',
+  getBackendUrl: () => 'http://backend',
+}))
 vi.mock('@/utils/ApiClient', () => ({ default: { call: vi.fn() } }))
 
 import { ChatRepository } from '../ChatRepository'
@@ -19,13 +22,13 @@ const entry = (id: string, timestamp: string, messageType = 'response') => ({
   text: id,
   messageType,
   timestamp,
-  metadata: {}
+  metadata: {},
 })
 
 async function load(entries: ReturnType<typeof entry>[]) {
   const repo = new ChatRepository()
   vi.spyOn(repo as unknown as { get: () => Promise<unknown> }, 'get').mockResolvedValue({
-    data: { messages: entries }
+    data: { messages: entries },
   })
   return repo.getChatMessages('chat-1')
 }
@@ -39,7 +42,7 @@ describe('ChatRepository.getChatMessages timestamps (#21846)', () => {
   it('reads an offset form as the same instant as its UTC form', async () => {
     const [utc, riga] = await load([
       entry('a', '2026-11-20T19:34:41.981705+00:00'),
-      entry('b', '2026-11-20T21:34:41.981705+02:00')
+      entry('b', '2026-11-20T21:34:41.981705+02:00'),
     ])
     expect(riga.timestamp.getTime()).toBe(utc.timestamp.getTime())
   })
@@ -48,7 +51,7 @@ describe('ChatRepository.getChatMessages timestamps (#21846)', () => {
     const messages = await load([
       entry('late', '2026-11-20T19:34:41.003000+00:00'),
       entry('early', '2026-11-20T19:34:41.001000+00:00'),
-      entry('mid', '2026-11-20T19:34:41.002000+00:00')
+      entry('mid', '2026-11-20T19:34:41.002000+00:00'),
     ])
     const sorted = [...messages].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
     expect(sorted.map((m) => m.id)).toEqual(['early', 'mid', 'late'])

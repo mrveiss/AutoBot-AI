@@ -8,19 +8,21 @@ import { setActivePinia, createPinia } from 'pinia'
 const getChatList = vi.fn()
 vi.mock('@/utils/ApiClient', () => ({ default: { invalidateCache: vi.fn() } }))
 vi.mock('@/composables/useRequestQueue', () => ({
-  requestQueue: { enqueue: vi.fn(({ fn }: { fn: () => unknown }) => fn()) }
+  requestQueue: { enqueue: vi.fn(({ fn }: { fn: () => unknown }) => fn()) },
 }))
 vi.mock('@/models/repositories', () => ({
-  chatRepository: { getChatList: (...a: unknown[]) => getChatList(...a), getChatMessages: vi.fn() }
+  chatRepository: { getChatList: (...a: unknown[]) => getChatList(...a), getChatMessages: vi.fn() },
 }))
 
 import { ChatController } from '../ChatController'
 import { useChatStore } from '@/stores/useChatStore'
 
 const entry = (id: string) => ({ id, title: id, messages: [], isActive: false })
-const deferred = <T,>() => {
+const deferred = <T>() => {
   let resolve!: (v: T) => void
-  const promise = new Promise<T>((r) => { resolve = r })
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
   return { promise, resolve }
 }
 

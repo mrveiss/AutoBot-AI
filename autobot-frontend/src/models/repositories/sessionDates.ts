@@ -51,5 +51,8 @@ export function withUnassigned<T extends { id?: string; chatId?: string }>(
 ): Array<T & { unassigned?: boolean }> {
   const idOf = (s: T) => s.id || s.chatId
   const loose = new Set(unassigned.map(idOf))
-  return [...sessions.filter((s) => !loose.has(idOf(s))), ...unassigned.map((s) => ({ ...s, unassigned: true }))]
+  return [
+    ...sessions.filter((s) => !loose.has(idOf(s))),
+    ...unassigned.map((s) => ({ ...s, unassigned: true })),
+  ]
 }

@@ -42,19 +42,25 @@ export function useChatSidebarSessions() {
   const searchQuery = ref('')
   // #16905: inside Company OS (CeoChatView sets activeChatContext.company_id) the list is a positive filter on
   // that company's chats and there is no Unassigned group; the general chat sidebar sets no context and is unchanged.
-  const companyOsId = computed(() => String(store.activeChatContext?.company_id ?? '').toLowerCase())
+  const companyOsId = computed(() =>
+    String(store.activeChatContext?.company_id ?? '').toLowerCase(),
+  )
   const inSurface = (s: ChatSession): boolean =>
-    !companyOsId.value || (!s.unassigned && String(s.companyId ?? '').toLowerCase() === companyOsId.value)
+    !companyOsId.value ||
+    (!s.unassigned && String(s.companyId ?? '').toLowerCase() === companyOsId.value)
   const filteredSessions = computed(() => {
     const q = searchQuery.value.trim().toLowerCase()
-    const matches = (s: ChatSession) => !q || (s.title || getSessionPreview(s)).toLowerCase().includes(q)
+    const matches = (s: ChatSession) =>
+      !q || (s.title || getSessionPreview(s)).toLowerCase().includes(q)
     return store.sessions.filter((s) => !s.unassigned && inSurface(s) && matches(s))
   })
   // #21997: chats that carry no company stay apart, in the Unassigned group, until a person assigns one.
   const unassignedSessions = computed(() => {
     if (companyOsId.value) return []
     const q = searchQuery.value.trim().toLowerCase()
-    return store.sessions.filter((s) => s.unassigned && (!q || (s.title || getSessionPreview(s)).toLowerCase().includes(q)))
+    return store.sessions.filter(
+      (s) => s.unassigned && (!q || (s.title || getSessionPreview(s)).toLowerCase().includes(q)),
+    )
   })
   const clearSearch = (): void => {
     searchQuery.value = ''
@@ -107,7 +113,8 @@ export function useChatSidebarSessions() {
     editingName.value = ''
   }
   function saveSessionName(): void {
-    if (editingSession.value) controller.updateSessionTitle(editingSession.value.id, editingName.value)
+    if (editingSession.value)
+      controller.updateSessionTitle(editingSession.value.id, editingName.value)
     cancelEdit()
   }
 
@@ -148,9 +155,9 @@ export function useChatSidebarSessions() {
     deleteKBFacts.value = null
     const [files, facts] = await Promise.allSettled([
       // #20195: the list response is adapted to the dialog's stats shape
-      ApiClient.call('get', '/api/conversation-files/conversation/{session_id}/list', { path: { session_id: sessionId } }).then(
-        (data) => (data ? mapFileList(data as BackendFileList, '').stats : null),
-      ),
+      ApiClient.call('get', '/api/conversation-files/conversation/{session_id}/list', {
+        path: { session_id: sessionId },
+      }).then((data) => (data ? mapFileList(data as BackendFileList, '').stats : null)),
       controller.getSessionFacts(sessionId),
     ])
     // A newer deleteSession retargeted the dialog while this one loaded: its previews are not ours to publish.
@@ -163,7 +170,8 @@ export function useChatSidebarSessions() {
     files: PromiseSettledResult<FileStats | null>,
     facts: PromiseSettledResult<{ facts?: SessionFact[] } | null | undefined>,
   ): void {
-    if (files.status === 'rejected') logger.warn('Failed to fetch file stats, proceeding without file info:', files.reason)
+    if (files.status === 'rejected')
+      logger.warn('Failed to fetch file stats, proceeding without file info:', files.reason)
     if (facts.status === 'rejected') logger.warn('Failed to fetch KB facts:', facts.reason)
     deletePreviewFailed.value = files.status === 'rejected' || facts.status === 'rejected'
     if (deletePreviewFailed.value) showToast(t('chat.sidebar.previewFailed'), 'warning')
@@ -183,7 +191,8 @@ export function useChatSidebarSessions() {
     if (factIds.length === 0) return 0
     try {
       const result = await controller.preserveSessionFacts(sessionId, factIds, true)
-      if (result.updated_count > 0) logger.debug(`Preserved ${result.updated_count} facts before deletion`)
+      if (result.updated_count > 0)
+        logger.debug(`Preserved ${result.updated_count} facts before deletion`)
       if (result.errors) logger.warn('Some facts could not be preserved:', result.errors)
       return result.updated_count ?? 0
     } catch (error) {
@@ -225,11 +234,33 @@ export function useChatSidebarSessions() {
 
   return {
     getSessionPreview,
-    searchQuery, filteredSessions, unassignedSessions, clearSearch,
-    selectionMode, sessionSelection, enableSelectionMode, cancelSelection, deleteSelectedSessions,
-    showEditModal, editingName, editSessionName, saveSessionName, cancelEdit,
-    showShareDialog, shareTargetSessionId, openShareDialog, handleShareComplete,
-    showDeleteDialog, deleteTargetSessionId, deleteFileStats, deleteKBFacts, kbFactsLoading, deletePreviewFailed,
-    deleteSession, deleteCurrentSession, handleDeleteConfirm, handleDeleteCancel: resetDeleteDialog,
+    searchQuery,
+    filteredSessions,
+    unassignedSessions,
+    clearSearch,
+    selectionMode,
+    sessionSelection,
+    enableSelectionMode,
+    cancelSelection,
+    deleteSelectedSessions,
+    showEditModal,
+    editingName,
+    editSessionName,
+    saveSessionName,
+    cancelEdit,
+    showShareDialog,
+    shareTargetSessionId,
+    openShareDialog,
+    handleShareComplete,
+    showDeleteDialog,
+    deleteTargetSessionId,
+    deleteFileStats,
+    deleteKBFacts,
+    kbFactsLoading,
+    deletePreviewFailed,
+    deleteSession,
+    deleteCurrentSession,
+    handleDeleteConfirm,
+    handleDeleteCancel: resetDeleteDialog,
   }
 }

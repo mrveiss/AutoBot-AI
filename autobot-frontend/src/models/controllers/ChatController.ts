@@ -617,10 +617,12 @@ export class ChatController {
   async loadChatSessions(keepOpen = false): Promise<void> {
     const seq = ++this._listSeq
     try {
-      const named = this.chatStore.activeChatContext?.company_id // Company OS names its company; /chat sets none
+      const named = this.chatStore.activeChatContext?.company_id
       const sessions = await chatRepository.getChatList(named)
       if (seq !== this._listSeq) return // a newer load started: this response is stale, never clear for it
-      if (this.chatStore.activeChatContext?.company_id !== named) return this.loadChatSessions(keepOpen) // scope changed mid-request: this is another company's list (#16905)
+      // #16905: the scope (Company OS names one; /chat none) changed mid-request, so this is another list
+      if (this.chatStore.activeChatContext?.company_id !== named)
+        return this.loadChatSessions(keepOpen)
       const open = keepOpen ? this.chatStore.currentSessionId : null
 
       // FIXED: Clear existing sessions before loading to prevent duplicates
