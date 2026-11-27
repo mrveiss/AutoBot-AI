@@ -10,11 +10,31 @@ Secrets-page bridge (``store_refreshable_oauth``, #22234). No I/O happens here.
 """
 
 from datetime import timedelta
+from urllib.parse import urlparse
 
+from autobot_shared.security.ssrf_guard import SSRFError, pinned_connector, resolve_safe_ip
 from autobot_shared.time_utils import now_utc
 
 # Fields an OAuthRefreshAuth bundle must carry to be refreshable (#22234).
 REFRESHABLE_REQUIRED_FIELDS = ("client_id", "client_secret", "refresh_token", "token_url")
+
+
+async def require_public_https_url(url: str) -> None:
+    """Refuse a token URL that is not HTTPS to a public host (#22234, THREAT_MODEL).
+
+    Uses the guarded-fetch primitives (``ssrf_guard.resolve_safe_ip``) so the
+    create-time check and the refresh-time pin agree. Raises ValueError
+    (``SSRFError`` is one), which the Secrets route maps to 400.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise SSRFError("token_url must be an https URL")
+    await resolve_safe_ip(parsed.hostname)
+
+
+async def pinned_token_connector(token_url: str, provider):
+    """SSRF-pinned connector for the URL a refresh will really POST to (#22234)."""
+    return await pinned_connector((provider.refresh_url if provider else "") or token_url)
 
 
 class OAuthBundleMixin:
@@ -80,14 +100,17 @@ class OAuthBundleMixin:
         Carries ``client_id``/``client_secret``/``token_url`` itself -- the shape
         ``_resolve_app_credentials`` reads as its stored copy -- and no access
         token, so the first ``get_access_token`` refreshes. Raises ValueError for
-        a missing or empty required field: refused at create, not at refresh.
+        a missing, empty or mistyped field: refused at create, not at refresh.
         """
         missing = [f for f in REFRESHABLE_REQUIRED_FIELDS if not config.get(f)]
         if missing:
             raise ValueError("missing required auth field: %s" % ", ".join(missing))
-        bundle = cls._oauth_bundle(
-            {"refresh_token": config["refresh_token"]}, config["token_url"], list(config.get("scopes") or []), ""
-        )
+        scopes = config.get("scopes") or []
+        if not all(isinstance(config[f], str) for f in REFRESHABLE_REQUIRED_FIELDS):
+            raise ValueError("auth fields must be strings")
+        if not isinstance(scopes, list) or not all(isinstance(x, str) for x in scopes):
+            raise ValueError("scopes must be a list of strings")
+        bundle = cls._oauth_bundle({"refresh_token": config["refresh_token"]}, config["token_url"], scopes, "")
         bundle["client_id"] = config["client_id"]
         bundle["client_secret"] = config["client_secret"]
         return bundle

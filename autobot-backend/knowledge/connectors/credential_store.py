@@ -25,7 +25,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from knowledge.connectors.oauth_bundle import OAuthBundleMixin
+from knowledge.connectors.oauth_bundle import OAuthBundleMixin, pinned_token_connector, require_public_https_url
 from services.credential_read import load_imported_credential
 from services.credential_write import connector_secret_name, delete_credential_from_vault, mirror_credential_to_vault
 
@@ -324,6 +324,8 @@ class ConnectorCredentialStore(OAuthBundleMixin):
 
         current_creds = json.loads(existing["value"])
         current_creds.update(new_credentials)
+        if "token_url" in new_credentials:  # #22234: a PUT must not redirect refreshes to an attacker URL
+            await require_public_https_url(current_creds["token_url"])
 
         auth_type_name = (existing.get("metadata") or {}).get("auth_type")
         if auth_type_name:
@@ -405,7 +407,9 @@ class ConnectorCredentialStore(OAuthBundleMixin):
         ValueError for a missing/empty required field, at create time.
         """
         metadata = {"auth_type": "OAuthRefreshAuth", "connector_id": connector_id}
-        return await self._persist_oauth_bundle(connector_id, owner_id, self._refreshable_bundle(config), metadata)
+        bundle = self._refreshable_bundle(config)
+        await require_public_https_url(bundle["token_url"])
+        return await self._persist_oauth_bundle(connector_id, owner_id, bundle, metadata)
 
     async def store_bridged(self, connector_id: str, owner_id: str, auth_cls: type, config: dict) -> str:
         """Store a Secrets-page credential in the shape its auth type reads back (#22234)."""
@@ -578,12 +582,15 @@ class ConnectorCredentialStore(OAuthBundleMixin):
         from knowledge.connectors import oauth_flow
 
         token_url, client_id, client_secret = self._resolve_app_credentials(creds)
+        provider = oauth_flow.find_provider(creds.get("provider"))
         token_response = await oauth_flow.refresh_access_token(
             token_url,
             client_id,
             client_secret,
             refresh_token,
-            provider=oauth_flow.find_provider(creds.get("provider")),
+            # #22234: every refresh is pinned to a public IP, whoever wrote the credential.
+            connector=await pinned_token_connector(token_url, provider),
+            provider=provider,
         )
         creds["access_token"] = token_response["access_token"]
         # #13626: ``expires_in`` is RECOMMENDED, not REQUIRED, on a refresh
