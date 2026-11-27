@@ -1,14 +1,17 @@
+<!-- Copyright 2025-2026 mrveiss -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- The Files tab folder tree on the kit and tokens (#22349); a node is a real button, so it is keyboard-reachable. -->
 <template>
   <div class="tree-panel">
     <div class="tree-header">
       <h3><Icon name="folder" /> {{ $t('fileBrowser.treeView.title') }}</h3>
       <div class="tree-controls">
-        <button @click="$emit('expand-all')" :title="$t('fileBrowser.treeView.expandAll')" :aria-label="$t('fileBrowser.treeView.expandAll')">
+        <BaseButton variant="ghost" size="sm" :aria-label="$t('fileBrowser.treeView.expandAll')" data-testid="tree-expand-all" @click="$emit('expand-all')">
           <Icon name="expand-alt" />
-        </button>
-        <button @click="$emit('collapse-all')" :title="$t('fileBrowser.treeView.collapseAll')" :aria-label="$t('fileBrowser.treeView.collapseAll')">
+        </BaseButton>
+        <BaseButton variant="ghost" size="sm" :aria-label="$t('fileBrowser.treeView.collapseAll')" data-testid="tree-collapse-all" @click="$emit('collapse-all')">
           <Icon name="compress-alt" />
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -17,39 +20,35 @@
         v-for="item in directoryTree"
         :key="item.path"
         class="tree-node"
-        :class="{
-          expanded: item.expanded,
-          selected: selectedPath === item.path
-        }"
+        :class="{ expanded: item.expanded, selected: selectedPath === item.path }"
       >
-        <div
+        <BaseButton
+          variant="ghost"
+          size="sm"
           class="tree-node-content"
-          @click="$emit('toggle-node', item)"
           :style="{ paddingLeft: ((item.level ?? 0) * 20) + 'px' }"
+          :aria-expanded="item.is_dir ? !!item.expanded : undefined"
+          :aria-current="selectedPath === item.path ? 'true' : undefined"
+          data-testid="tree-node"
+          @click="$emit('toggle-node', item)"
         >
-          <Icon
-            v-if="item.is_dir"
-            :name="item.expanded ? 'chevron-down' : 'chevron-right'"
-            class="tree-toggle"
-          />
-          <i :class="getFileIcon(item)" class="tree-icon" />
+          <Icon v-if="item.is_dir" :name="item.expanded ? 'chevron-down' : 'chevron-right'" class="tree-toggle" />
+          <Icon :name="iconFor(item)" class="tree-icon" :class="item.is_dir ? 'tree-icon--dir' : ''" />
           <span class="tree-label">{{ item.name }}</span>
-        </div>
+        </BaseButton>
       </div>
 
-      <EmptyState
-        v-if="directoryTree.length === 0"
-        icon="folder-open"
-        :message="$t('fileBrowser.treeView.noStructure')"
-      />
+      <EmptyState v-if="directoryTree.length === 0" compact :description="$t('fileBrowser.treeView.noStructure')">
+        <template #icon><Icon name="folder-open" size="xl" /></template>
+      </EmptyState>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import Icon from '@/components/ui/Icon.vue'
-import { getFileIcon as getFileIconUtil } from '@/utils/iconMappings'
-import EmptyState from '@/components/ui/EmptyState.vue'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import { BaseButton, EmptyState } from '@autobot/ui'
+import { getFileIconName } from '@/utils/iconMappings'
 
 // #9724: aligned with FileBrowserTreeNode (useFileBrowser) — is_dir/level
 // are optional in the backend payload and nodes carry nested children.
@@ -76,95 +75,70 @@ interface Emits {
 defineProps<Props>()
 defineEmits<Emits>()
 
-// Icon mapping centralized in @/utils/iconMappings
-// Color classes added for visual distinction
-const getFileIcon = (item: TreeItem): string => {
-  if (item.is_dir) {
-    return item.expanded ? 'fas fa-folder-open text-blue-500' : 'fas fa-folder text-blue-500'
-  }
-
-  const icon = getFileIconUtil(item.name, false)
-  const extension = item.name.split('.').pop()?.toLowerCase()
-
-  // Map extensions to color classes for visual distinction
-  const colorMap: Record<string, string> = {
-    'txt': 'text-autobot-text-muted',
-    'md': 'text-autobot-text-muted',
-    'readme': 'text-autobot-text-muted',
-    'js': 'text-green-500',
-    'ts': 'text-green-500',
-    'jsx': 'text-green-500',
-    'tsx': 'text-green-500',
-    'html': 'text-green-500',
-    'css': 'text-green-500',
-    'vue': 'text-green-500',
-    'json': 'text-green-500',
-    'py': 'text-green-500',
-    'jpg': 'text-purple-500',
-    'jpeg': 'text-purple-500',
-    'png': 'text-purple-500',
-    'gif': 'text-purple-500',
-    'svg': 'text-purple-500',
-    'webp': 'text-purple-500',
-    'pdf': 'text-red-500',
-    'zip': 'text-orange-500',
-    'tar': 'text-orange-500',
-    'gz': 'text-orange-500',
-    'rar': 'text-orange-500'
-  }
-
-  const color = colorMap[extension || ''] || 'text-autobot-text-muted'
-  return `${icon} ${color}`
-}
+// Icon mapping centralized in @/utils/iconMappings; an open folder shows the open-folder icon.
+const iconFor = (item: TreeItem): IconName =>
+  item.is_dir && item.expanded ? 'folder-open' : getFileIconName(item.name, item.is_dir)
 </script>
 
 <style scoped>
-@reference "../../assets/tailwind.css";
 .tree-panel {
-  @apply bg-autobot-bg-card border border-autobot-border rounded-lg flex flex-col h-full;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--aui-color-surface-raised);
+  border: 1px solid var(--aui-color-border);
+  border-radius: var(--aui-radius-lg);
 }
-
 .tree-header {
-  @apply flex justify-between items-center p-4 border-b border-autobot-border bg-autobot-bg-tertiary flex-shrink-0;
+  display: flex;
+  flex-shrink: 0;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--aui-space-4);
+  border-bottom: 1px solid var(--aui-color-border);
+  background: var(--aui-color-surface-sunken);
 }
-
 .tree-header h3 {
-  @apply text-lg font-semibold text-autobot-text-primary flex items-center gap-2;
+  display: flex;
+  align-items: center;
+  gap: var(--aui-space-2);
+  font-size: var(--aui-text-lg);
+  font-weight: var(--aui-font-weight-semibold);
+  color: var(--aui-color-text);
 }
-
 .tree-controls {
-  @apply flex gap-1;
+  display: flex;
+  gap: var(--aui-space-1);
 }
-
-.tree-controls button {
-  @apply w-8 h-8 flex items-center justify-center rounded text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary;
-}
-
 .tree-content {
-  @apply flex-1 overflow-y-auto p-2 min-h-0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--aui-space-2);
 }
-
 .tree-node {
-  @apply select-none;
+  user-select: none;
 }
-
-.tree-node-content {
-  @apply flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-autobot-bg-secondary;
+.tree-node :deep(.tree-node-content) {
+  width: 100%;
+  justify-content: flex-start;
+  gap: var(--aui-space-2);
 }
-
-.tree-node.selected .tree-node-content {
-  @apply bg-blue-50 text-blue-900;
+.tree-node.selected :deep(.tree-node-content) {
+  background: var(--aui-color-surface-sunken);
+  box-shadow: inset 2px 0 0 var(--aui-color-primary);
+  color: var(--aui-color-text);
 }
-
 .tree-toggle {
-  @apply w-4 text-xs text-autobot-text-muted;
+  color: var(--aui-color-text-muted);
 }
-
-.tree-icon {
-  @apply w-4;
+.tree-icon--dir {
+  color: var(--aui-color-primary);
 }
-
 .tree-label {
-  @apply text-sm truncate;
+  font-size: var(--aui-text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

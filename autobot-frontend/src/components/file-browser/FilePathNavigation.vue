@@ -1,3 +1,5 @@
+<!-- Copyright 2025-2026 mrveiss -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <template>
   <div class="path-navigation">
     <!-- Breadcrumb Navigation: the kit trail (#17563); the last part is the current folder -->
@@ -15,15 +17,24 @@
 
     <!-- Path Input -->
     <div class="path-input">
-      <input
+      <BaseInput
         v-model="pathInput"
-        @keyup.enter="$emit('navigate-to-path', pathInput)"
-        :placeholder="$t('fileBrowser.pathNavigation.pathPlaceholder')"
+        size="sm"
         class="path-field"
+        :aria-label="$t('fileBrowser.pathNavigation.pathLabel')"
+        :placeholder="$t('fileBrowser.pathNavigation.pathPlaceholder')"
+        data-testid="path-input"
+        @keyup.enter="$emit('navigate-to-path', pathInput)"
       />
-      <button @click="$emit('navigate-to-path', pathInput)" class="path-go-btn">
+      <BaseButton
+        variant="primary"
+        size="sm"
+        :aria-label="$t('fileBrowser.header.goToPath')"
+        data-testid="path-go"
+        @click="$emit('navigate-to-path', pathInput)"
+      >
         <Icon name="arrow-right" />
-      </button>
+      </BaseButton>
     </div>
   </div>
 </template>
@@ -32,7 +43,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Breadcrumb, type BreadcrumbItem } from '@autobot/ui'
+import { BaseButton, BaseInput, Breadcrumb, type BreadcrumbItem } from '@autobot/ui'
 
 interface Props {
   currentPath: string
@@ -70,32 +81,21 @@ const pathForCrumb = (index: number): string => '/' + pathParts.value.slice(0, i
 </script>
 
 <style scoped>
-@reference "../../assets/tailwind.css";
 .path-navigation {
-  @apply flex flex-wrap items-center gap-4 flex-1 min-w-0;
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--aui-space-4);
+  min-width: 0;
 }
-
 .breadcrumb {
-  @apply flex-1 min-w-0;
+  flex: 1;
+  min-width: 0;
 }
-
 .path-input {
-  @apply flex gap-2 flex-shrink-0;
-}
-
-.path-field {
-  @apply flex-1 px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2;
-  --tw-ring-color: var(--color-primary);
-}
-
-.path-go-btn {
-  @apply px-4 py-2 rounded-md focus:outline-none focus:ring-2;
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  --tw-ring-color: var(--color-primary);
-}
-
-.path-go-btn:hover {
-  filter: brightness(1.1);
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--aui-space-2);
 }
 </style>

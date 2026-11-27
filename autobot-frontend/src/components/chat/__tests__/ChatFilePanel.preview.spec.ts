@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 // #20906: opening a preview from a listed attachment calls the preview route and renders its response.
+// #22349: the pane is the kit BaseModal; the close button is the kit's, found by its accessible name.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
@@ -29,20 +30,22 @@ const pane = () => document.body.querySelector('[data-testid="file-preview-pane"
 
 describe('ChatFilePanel preview (#20906)', () => {
   let list: typeof listing
-  const open = async (props = { sessionId: 's1' }) => {
+  // `realTransition` runs the modal's enter transition so its initial-focus hook fires (VTU stubs <Transition>);
+  // the other tests keep it stubbed so a closed pane leaves the DOM at once.
+  const open = async (props = { sessionId: 's1' }, realTransition = false) => {
     const wrapper = mount(ChatFilePanel, {
       props,
       attachTo: document.body,
       global: {
         mocks: { $t: (k: string) => k },
-        stubs: { Icon: true, EmptyState: true, StatusBadge: true, BaseAlert: true },
+        stubs: { Icon: true, EmptyState: true, BaseAlert: true, ...(realTransition ? { transition: false } : {}) },
       },
     })
     await flushPromises()
     return wrapper
   }
   const clickPreview = async (wrapper: Awaited<ReturnType<typeof open>>) => {
-    await wrapper.find('button[title="chat.filePanel.preview"]').trigger('click')
+    await wrapper.find('button[aria-label="chat.filePanel.previewFile"]').trigger('click')
     await flushPromises()
   }
 
@@ -63,21 +66,21 @@ describe('ChatFilePanel preview (#20906)', () => {
   })
 
   it('is a modal dialog with a focusable, labelled content area, and focus moves into it', async () => {
-    const wrapper = await open()
+    const wrapper = await open({ sessionId: 's1' }, true)
     await clickPreview(wrapper)
     const dialog = document.body.querySelector('[role="dialog"]')
     expect(dialog?.getAttribute('aria-modal')).toBe('true')
     const content = document.body.querySelector('[data-testid="file-preview-content"]')
     expect(content?.getAttribute('tabindex')).toBe('0')
     expect(content?.getAttribute('aria-label')).toBe('chat.filePanel.previewContentLabel')
-    expect(dialog?.contains(document.activeElement)).toBe(true)
+    await vi.waitFor(() => expect(dialog?.contains(document.activeElement)).toBe(true))
     wrapper.unmount()
   })
 
   it('the close button closes the pane and Escape closes it too', async () => {
     const wrapper = await open()
     await clickPreview(wrapper)
-    ;(document.body.querySelector('[data-testid="file-preview-close"]') as HTMLElement).click()
+    ;(document.body.querySelector('button[aria-label="chat.filePanel.closePreview"]') as HTMLElement).click()
     await flushPromises()
     expect(pane()).toBeNull()
     await clickPreview(wrapper)
@@ -90,10 +93,10 @@ describe('ChatFilePanel preview (#20906)', () => {
 
   it('returns focus to the trigger when the pane closes', async () => {
     const wrapper = await open()
-    const trigger = wrapper.find('button[title="chat.filePanel.preview"]').element as HTMLElement
+    const trigger = wrapper.find('button[aria-label="chat.filePanel.previewFile"]').element as HTMLElement
     trigger.focus()
     await clickPreview(wrapper)
-    ;(document.body.querySelector('[data-testid="file-preview-close"]') as HTMLElement).click()
+    ;(document.body.querySelector('button[aria-label="chat.filePanel.closePreview"]') as HTMLElement).click()
     await flushPromises()
     expect(document.activeElement).toBe(trigger)
     wrapper.unmount()

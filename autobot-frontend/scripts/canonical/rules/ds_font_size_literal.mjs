@@ -50,8 +50,6 @@ const WAIVED_FILES = new Map([
   ["autobot-frontend/src/components/chat/DocumentationSuggestionChip.vue", { count: 2, pr: "#19907" }],
   ["autobot-frontend/src/components/chat/MultiModelChat.vue", { count: 6, pr: "#19907" }],
   ["autobot-frontend/src/components/chat/ReasoningTrace.vue", { count: 6, pr: "#19907" }],
-  ["autobot-frontend/src/components/chat/VoiceConversationOverlay.vue", { count: 9, pr: "#19907" }],
-  ["autobot-frontend/src/components/chat/VoiceConversationPanel.vue", { count: 5, pr: "#19907" }],
   ["autobot-frontend/src/components/documents/AIDocumentEditor.vue", { count: 5, pr: "#19907" }],
   ["autobot-frontend/src/components/feature-flags/AccessMetrics.vue", { count: 1, pr: "#19907" }],
   ["autobot-frontend/src/components/feature-flags/EndpointEnforcement.vue", { count: 1, pr: "#19907" }],
