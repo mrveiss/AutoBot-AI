@@ -203,3 +203,19 @@ async def test_a_lost_race_at_write_time_is_recorded_failed_and_stale(db, audit,
 async def test_the_action_is_server_only_and_admin_only(audit):
     assert approval_execution.is_server_only_action(chat_company_assignment_action.ACTION)
     assert approval_execution.action_needs_elevated_approver(chat_company_assignment_action.ACTION)
+
+
+async def test_a_long_chat_name_is_bounded_to_the_title_column_and_kept_whole_in_the_description():
+    limit = Approval.__table__.c.title.type.length
+    short = chat_company_proposals._title("holiday")
+    assert short == f"{chat_company_proposals.TITLE_PREFIX}holiday"
+    long_title = chat_company_proposals._title("x" * 240)
+    assert len(long_title) == limit and long_title.startswith(chat_company_proposals.TITLE_PREFIX)
+
+
+async def test_the_full_chat_name_is_in_the_description(db, audit):
+    name = f"CEO · {CO_A}" + "y" * 240
+    candidate = MagicMock(session_id="s", name="n", company_id=CO_A)
+    candidate.name = name
+    approval = await chat_company_proposals._propose_one(db, ApprovalGateService(db), candidate)
+    assert len(approval.title) <= Approval.__table__.c.title.type.length and name in approval.description

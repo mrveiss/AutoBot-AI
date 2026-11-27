@@ -616,7 +616,8 @@ export class ChatController {
   async loadChatSessions(keepOpen = false): Promise<void> {
     const seq = ++this._listSeq
     try {
-      const sessions = await chatRepository.getChatList()
+      const named = this.chatStore.activeChatContext?.company_id // Company OS names its company; /chat sets none
+      const sessions = await chatRepository.getChatList(typeof named === 'string' && named ? named : undefined)
       if (seq !== this._listSeq) return // a newer load started: this response is stale, never clear for it
       const open = keepOpen ? this.chatStore.currentSessionId : null
 

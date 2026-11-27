@@ -28,6 +28,7 @@ from services.chat_company_assignment_action import ACTION, register_chat_compan
 logger = get_logger(__name__)
 
 REQUESTED_BY = "chat-company-backfill"
+TITLE_PREFIX = "Assign legacy Company OS chat to its company: "
 
 # Registered at import, so the handler is in place before any approve() can reach a proposal raised here.
 register_chat_company_assignment_action()
@@ -49,16 +50,23 @@ async def _already_proposed(db) -> set[str]:
     return {str(c["session_id"]) for c in contexts if c and c.get("action") == ACTION and c.get("session_id")}
 
 
+def _title(chat_name: str) -> str:
+    """The proposal title bounded to ``Approval.title``'s length; the full chat name stays in the description."""
+    from models.approval import Approval
+
+    return f"{TITLE_PREFIX}{chat_name}"[: Approval.__table__.c.title.type.length]
+
+
 async def _propose_one(db, service, candidate):
     """Create the proposal, or ``None`` when another run's pending one won the unique index."""
     from models.approval import ApprovalType
 
     try:
         return await service.create_approval(
-            title=f"Assign legacy Company OS chat to its company: {candidate.name}",
+            title=_title(candidate.name),
             approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
             description=(
-                f"The chat is named for company {candidate.company_id} and carries no company. "
+                f'The chat "{candidate.name}" is named for company {candidate.company_id} and carries no company. '
                 "Approving writes that company onto the chat; rejecting leaves it Unassigned."
             ),
             requested_by_agent=REQUESTED_BY,

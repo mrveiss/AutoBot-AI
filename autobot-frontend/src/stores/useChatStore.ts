@@ -668,7 +668,9 @@ export const useChatStore = defineStore('chat', () => {
     // Skip if session already exists (prevent duplicate imports)
     const existingSession = sessions.value.find(s => s.id === session.id)
     if (existingSession) {
-      logger.debug(`Session ${session.id} already exists, skipping import`)
+      // #16905: the server owns a chat's company, so a reload refreshes it; nothing else of a local session is touched.
+      existingSession.companyId = session.companyId
+      existingSession.unassigned = session.unassigned
       return
     }
 

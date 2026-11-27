@@ -6,6 +6,7 @@ import { toSessionDate, withUnassigned, type BackendSessionList, type ChatListEn
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'
+import { orgScope } from '@/utils/orgContext'
 import { storedMessageText } from '@/utils/attachmentNotice'
 import { toSource, type StoredSource } from '@/utils/messageCitations'
 import type { ApiResponse } from '@/types/models'
@@ -17,6 +18,7 @@ import type { ChatMessage } from '@/types/api'
  */
 interface RequestConfig {
   params?: Record<string, string>
+  headers?: Record<string, string>
   timeout?: number
 }
 
@@ -322,11 +324,12 @@ export class ChatRepository {
   }
 
   // Get list of all chat sessions (for compatibility with controller)
-  async getChatList(): Promise<ChatListEntry[]> {
+  /** `companyId` names the company the list is for (Company OS); the server checks the caller's membership (#16905). */
+  async getChatList(companyId?: string): Promise<ChatListEntry[]> {
     try {
       const response = await this.get<BackendSessionList<BackendSessionEntry> & {
         data?: BackendSessionList<BackendSessionEntry>
-      }>(`${getApiBase()}/chat/sessions`)
+      }>(`${getApiBase()}/chat/sessions`, companyId ? orgScope(companyId) : undefined)
       const body = response.data?.data ?? response.data // the list is { sessions } or { data: { sessions } }
       const sessions = withUnassigned(body?.sessions || [], body?.unassigned || [])
 
@@ -584,7 +587,7 @@ export class ChatRepository {
     try {
       const init: RequestInit = {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...config?.headers },
         signal: controller.signal,
       }
       if (data !== undefined) {
