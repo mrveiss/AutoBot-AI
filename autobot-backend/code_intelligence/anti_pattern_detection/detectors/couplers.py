@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import read_source_text
 
 from ..models import AntiPatternResult
 from ..severity_utils import get_feature_envy_severity, get_message_chain_severity
@@ -120,8 +121,7 @@ class CouplerDetector:
             file_path: Path to the source file to analyze
         """
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                source = f.read()
+            source = read_source_text(file_path)
 
             tree = ast.parse(source, filename=file_path)
             module_name = self._file_to_module(file_path)

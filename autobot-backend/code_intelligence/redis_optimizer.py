@@ -25,7 +25,7 @@ from typing import Any, Dict, FrozenSet, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
-from code_intelligence.python_files import TEST_FILE_PATTERN, discover_files, matches_exclusion
+from code_intelligence.python_files import TEST_FILE_PATTERN, discover_files, matches_exclusion, read_source_text
 
 logger = get_logger(__name__)
 
@@ -403,9 +403,8 @@ class RedisOptimizer:
             List of optimization results found in the file
         """
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                source = f.read()
-                source_lines = source.split("\n")
+            source = read_source_text(file_path)
+            source_lines = source.split("\n")
 
             tree = ast.parse(source)
             visitor = RedisASTVisitor(source_lines)

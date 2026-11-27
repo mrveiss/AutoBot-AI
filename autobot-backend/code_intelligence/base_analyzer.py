@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Pattern, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity as IssueSeverity  # noqa: F401  # #6689 consolidation
-from code_intelligence.python_files import discover_files, matches_exclusion
+from code_intelligence.python_files import discover_files, matches_exclusion, read_source_text
 
 logger = get_logger(__name__)
 
@@ -358,7 +358,7 @@ class BaseLanguageAnalyzer(ABC):
         """Load file content for analysis."""
         try:
             self.file_path = str(file_path)
-            self.source_code = file_path.read_text(encoding="utf-8")
+            self.source_code = read_source_text(file_path)
             self.lines = self.source_code.splitlines()
             self.issues = []
             self._issue_counter = 0

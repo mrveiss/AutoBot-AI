@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Set
 
 from api.source_scope import require_source_id
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files, discover_files
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files, discover_files, read_source_text
 from utils.cancel_tokens import new_cancel_token, run_cancellable
 from utils.io_executor import get_analytics_executor
 
@@ -493,8 +493,7 @@ class CodePatternAnalyzer(CancellableAnalysis):
         total = 0
         for fp in file_paths:
             try:
-                with open(fp, "r", encoding="utf-8") as f:
-                    total += sum(1 for _ in f)
+                total += len(read_source_text(fp).splitlines())
             except Exception:
                 pass
         return total
@@ -514,10 +513,9 @@ class CodePatternAnalyzer(CancellableAnalysis):
 
         for py_file in discover_files(dir_path, ("*.py",), self.exclude_dirs):
             try:
-                with open(py_file, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                    file_count += 1
-                    line_count += len(lines)
+                lines = read_source_text(py_file).splitlines(keepends=True)
+                file_count += 1
+                line_count += len(lines)
             # File read errors are ignored: an unreadable file is skipped, not fatal.
             except Exception:  # nosec B110
                 logger.debug("Suppressed exception in try block", exc_info=True)

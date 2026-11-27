@@ -17,6 +17,7 @@ import re
 from typing import FrozenSet, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import read_source_text
 
 # Issue #380: Module-level frozenset for enum base class checking
 ENUM_BASE_CLASSES: FrozenSet[str] = frozenset({"Enum", "IntEnum", "StrEnum"})
@@ -453,8 +454,7 @@ def read_and_parse_module(file_path: str) -> Tuple[str, ast.Module] | None:
     logger = get_logger(__name__)
 
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            source = f.read()
+        source = read_source_text(file_path)
     except OSError as e:
         logger.error("Failed to read file %s: %s", file_path, e)
         return None

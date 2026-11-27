@@ -27,6 +27,7 @@ from typing import Any, Dict, List
 from autobot_shared.code_review_enums import CheckCategory, CheckSeverity
 from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import read_source_text
 from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
@@ -383,9 +384,7 @@ class PrecommitAnalyzer:
 
             # Fall back to file system
             path = self.project_root / filepath
-            if path.exists():
-                return path.read_text(encoding="utf-8")
-            return None
+            return read_source_text(path) if path.exists() else None
         except Exception as e:
             logger.warning("Failed to read file %s: %s", filepath, e)
             return None

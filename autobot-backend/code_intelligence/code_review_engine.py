@@ -35,6 +35,7 @@ from autobot_shared.code_review_enums import ReviewCategory, ReviewSeverity
 from autobot_shared.git_probe import run_git
 from autobot_shared.git_refs import is_safe_range
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import read_source_text
 from constants.threshold_constants import TimingConstants
 from utils.line_index import LineIndex  # #12884
 
@@ -567,10 +568,9 @@ class CodeReviewEngine(_BaseClass):
             List of review comments
         """
         path = Path(file_path)
-
         if content is None:
             try:
-                content = path.read_text(encoding="utf-8", errors="ignore")
+                content = read_source_text(path, errors="ignore")
             except Exception as e:
                 logger.warning("Failed to read %s: %s", file_path, e)
                 return []

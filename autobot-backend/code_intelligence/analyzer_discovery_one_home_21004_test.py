@@ -518,3 +518,38 @@ def test_base_analyzer_and_multi_language_scanner_walks_reach_a_non_python_backu
     assert ("src/backup/view.ts" in files) == ("src/plain/view.ts" in files)
     assert {p.name for p in _load_real_module().discover_files(tmp_path, ("*",))} == {"view.ts"}
     assert len(_load_real_module().discover_files(tmp_path, ("*",))) == 2
+
+
+def test_directory_swapped_for_an_outside_link_after_discovery_is_never_read(tmp_path: Path):
+    """#21289: the read walks from the root by descriptor, so a swapped component is refused, not followed."""
+    import shutil
+
+    module = _load_real_module()
+    root = tmp_path / "project"
+    (root / "pkg").mkdir(parents=True)
+    (root / "pkg" / "mod.py").write_text("inside = 1\n", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "mod.py").write_text("SECRET = 1\n", encoding="utf-8")
+    found = module.discover_files(root)
+    assert module.read_source_text(found[0]) == "inside = 1\n"
+    shutil.rmtree(root / "pkg")
+    (root / "pkg").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(OSError):
+        module.read_source_text(found[0])
+
+
+def test_leaf_swapped_for_an_outside_link_after_discovery_is_never_read(tmp_path: Path):
+    module = _load_real_module()
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "a.py").write_text("inside = 1\n", encoding="utf-8")
+    (root / "kept.py").symlink_to(root / "a.py")
+    outside = tmp_path / "outside.py"
+    outside.write_text("SECRET = 1\n", encoding="utf-8")
+    found = module.discover_files(root)
+    assert [module.read_source_text(p) for p in found] == ["inside = 1\n"] * 2
+    (root / "a.py").unlink()
+    (root / "a.py").symlink_to(outside)
+    with pytest.raises(ValueError):
+        module.read_source_text(root / "a.py")

@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Pattern, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.vue_sfc import vue_script_body
+from code_intelligence.python_files import read_source_text
 
 from .models import CrossLangPatternCategory, CrossLangPatternType, PatternLocation
 
@@ -105,10 +106,9 @@ class BasePatternExtractor(ABC):
     def _load_file(self, file_path: Path) -> bool:
         """Load file content."""
         try:
-            self.current_file = str(file_path)
-            self.source_code = file_path.read_text(encoding="utf-8")
+            self.current_file, self.patterns_found = str(file_path), []
+            self.source_code = read_source_text(file_path)
             self.lines = self.source_code.splitlines()
-            self.patterns_found = []
             return True
         except Exception as e:
             logger.error("Failed to load file %s: %s", file_path, e)

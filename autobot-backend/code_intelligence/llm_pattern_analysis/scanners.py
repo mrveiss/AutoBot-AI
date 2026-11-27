@@ -34,6 +34,7 @@ from code_intelligence.llm_pattern_analysis.types import (
     OptimizationPriority,
     UsagePatternType,
 )
+from code_intelligence.python_files import read_source_text
 
 logger = get_logger(__name__)
 
@@ -159,7 +160,7 @@ class CodePatternScanner:
             Tuple of (usage_patterns, retry_patterns)
         """
         try:
-            content = file_path.read_text(encoding="utf-8")
+            content = read_source_text(file_path)
         except (OSError, UnicodeDecodeError) as e:
             logger.warning("Could not read %s: %s", file_path, e)
             return [], []

@@ -33,6 +33,7 @@ from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tupl
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.safe_open import open_under_root
 from autobot_shared.ssot_constants import CategoryDefaults
 
 logger = get_logger(__name__)
@@ -371,17 +372,7 @@ def _open_walked(safe: Path, allowed_roots: Sequence[str]) -> int:
     root, parts = _root_and_parts(safe, allowed_roots)
     if not parts:
         raise ValueError("not a regular file")
-    dir_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    dir_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        for part in parts[:-1]:
-            child = os.open(part, dir_flags, dir_fd=dir_fd)
-            os.close(dir_fd)
-            dir_fd = child
-        # ``O_NONBLOCK`` keeps a FIFO swapped in after validation from hanging the open; no effect on regular files.
-        return os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
-    finally:
-        os.close(dir_fd)
+    return open_under_root(root, parts, follow_links=False)[0]
 
 
 def _open_regular_fd(safe: Path, allowed_roots: Sequence[str]) -> int:

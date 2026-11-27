@@ -47,6 +47,7 @@ from typing import Dict, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
+from code_intelligence.python_files import read_source_text
 
 logger = get_logger(__name__)
 
@@ -213,8 +214,7 @@ class ASTCache:
                     return entry.content
 
         # Read file
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = read_source_text(file_path)
 
         # Cache content (skip if cache capacity is zero)
         if self._content_cache_size > 0:

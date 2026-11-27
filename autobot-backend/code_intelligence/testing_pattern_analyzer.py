@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Set
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.testfile_names import is_test_filename
-from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files, read_source_text
 
 logger = get_logger(__name__)
 
@@ -695,8 +695,7 @@ class TestPatternAnalyzer:
             return gaps
 
         try:
-            with open(source_file, "r", encoding="utf-8") as f:
-                content = f.read()
+            content = read_source_text(source_file)
             tree = ast.parse(content)
 
             for node in ast.walk(tree):
@@ -750,8 +749,7 @@ class TestPatternAnalyzer:
 
         for test_file in test_files:
             try:
-                with open(test_file, "r", encoding="utf-8") as f:
-                    content = f.read()
+                content = read_source_text(test_file)
                 tree = ast.parse(content)
                 tests = self._extract_test_functions(tree)
                 total_tests += len(tests)
@@ -1018,8 +1016,7 @@ class TestPatternAnalyzer:
         assertion_count = 0
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            content = read_source_text(file_path)
 
             tree = ast.parse(content)
             tests = self._extract_test_functions(tree)
