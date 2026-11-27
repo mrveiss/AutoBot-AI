@@ -4,13 +4,15 @@
 # Author: mrveiss
 """A concurrent loser of the pending-proposal insert returns the winner's proposal (#20992)."""
 
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
-from services.kb_cleanup_proposals import create_proposal_once
+from services.kb_cleanup_proposals import cleanup_proposal, create_proposal_once, record_cleanup_proposed
 
 
 def _service(found: list, session):
@@ -21,7 +23,7 @@ def _lost() -> IntegrityError:
     return IntegrityError("insert", {}, Exception("unique"))
 
 
-_USER = {"username": "admin"}
+_USER = {"username": "admin", "user_id": "user-id-1"}
 
 
 async def _once(found: list, session, create, audit):
@@ -108,3 +110,38 @@ def test_the_model_where_text_equals_the_migrations():
     }
     for _index, action, _key in migration._INDEXES:
         assert migration._where(action) == expected[action]
+
+
+@pytest.mark.asyncio
+async def test_the_lost_race_row_records_the_principal_id_not_the_username():
+    """#22222: the audit actor is the canonical id, which a user cannot rename."""
+    audit = AsyncMock(return_value=True)
+    await _once(
+        [[], [SimpleNamespace(id="w")]], SimpleNamespace(rollback=AsyncMock()), AsyncMock(side_effect=_lost()), audit
+    )
+    assert audit.await_args.kwargs["user_id"] == "user-id-1"
+
+
+@pytest.mark.asyncio
+async def test_the_proposed_row_records_the_principal_id_not_the_username():
+    """#22222: ``record_cleanup_proposed`` writes the id as ``user_id``."""
+    audit = AsyncMock(return_value=True)
+    with patch("services.kb_cleanup_proposals.audit_log", audit):
+        await record_cleanup_proposed(uuid.uuid4(), _USER, operation="op", resource="r:v")
+    assert audit.await_args.kwargs["user_id"] == "user-id-1"
+
+
+def test_the_approval_requester_is_the_principal_id_not_the_username():
+    """#22222: ``requested_by_agent`` carries the id."""
+    kwargs = cleanup_proposal(_USER, title="t", description="d", context={})
+    assert kwargs["requested_by_agent"] == "user-id-1"
+
+
+@pytest.mark.asyncio
+async def test_a_caller_without_an_identity_is_refused_and_nothing_is_audited():
+    """#22222: a username alone is not an identity."""
+    audit = AsyncMock(return_value=True)
+    with patch("services.kb_cleanup_proposals.audit_log", audit), pytest.raises(HTTPException) as refused:
+        await record_cleanup_proposed(uuid.uuid4(), {"username": "admin"}, operation="op", resource="r:v")
+    assert refused.value.status_code == 401
+    audit.assert_not_awaited()

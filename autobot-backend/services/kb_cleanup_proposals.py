@@ -20,6 +20,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import require_principal_id
 from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
@@ -42,7 +43,7 @@ def cleanup_proposal(
         "title": title,
         "approval_type": ApprovalType.DESTRUCTIVE_ACTION.value,
         "description": description,
-        "requested_by_agent": current_user.get("username"),
+        "requested_by_agent": require_principal_id(current_user),
         "context": context,
         **({"approval_id": approval_id} if approval_id else {}),
     }
@@ -95,7 +96,7 @@ async def _record_lost_race(lost_id: uuid.UUID, winner_id: uuid.UUID, current_us
         written = await audit_log(
             AuditAction.CLEANUP_PROPOSAL_LOST_RACE,
             result="success",
-            user_id=current_user.get("username"),
+            user_id=require_principal_id(current_user),
             resource=resource,
             details={"approval_id": str(lost_id), "winner_approval_id": str(winner_id)},
             durable=True,
@@ -116,7 +117,7 @@ async def record_cleanup_proposed(approval_id: uuid.UUID, current_user: dict, *,
         written = await audit_log(
             operation,
             result="success",
-            user_id=current_user.get("username"),
+            user_id=require_principal_id(current_user),
             resource=resource,
             details={"approval_id": str(approval_id)},
             durable=True,
