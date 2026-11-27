@@ -418,6 +418,22 @@ class TestWholeStoreReadersUseFactHashes:
         assert types == {"note": 5} and len(sizes) == 5
 
     @pytest.mark.asyncio
+    async def test_get_all_facts_survives_same_prefix_non_hash_keys(self):
+        """#17530: a ``fact:collections:<id>`` set (and the other ``fact:`` families) must not fail the read."""
+        kb = _fact_kb(
+            3,
+            extra_keys=[
+                "fact:collections:id-0",
+                "fact:origin:session:id-1",
+                "fact:versions:id-2",
+                "fact:version:meta:id-2",
+            ],
+            page=2,
+        )
+        facts = await kb.get_all_facts()
+        assert sorted(f["fact_id"] for f in facts) == ["id-0", "id-1", "id-2"]
+
+    @pytest.mark.asyncio
     async def test_man_page_parser_reads_the_fact_dict(self):
         import api.knowledge as kn
 

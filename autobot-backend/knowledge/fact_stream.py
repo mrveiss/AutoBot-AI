@@ -21,6 +21,19 @@ FACT_SCAN_BATCH_SIZE: int = env_int("AUTOBOT_FACT_SCAN_BATCH_SIZE", 200)
 FactProcessor = Callable[[Any, Any, "str | None"], "Dict[str, Any] | None"]
 
 
+def is_fact_key(key: Any) -> bool:
+    """True for a real ``fact:<id>`` hash; the other ``fact:`` key families share the scan prefix and are not hashes.
+
+    Families the code writes (``git grep`` of ``fact:`` key builders, #17530): ``fact:<id>`` (hash, the fact itself);
+    ``fact:collections:<id>`` (set, ``knowledge/collections.py``); ``fact:origin:session:<id>`` (string,
+    ``knowledge/facts.py``); ``fact:versions:<id>`` and ``fact:version:meta:<id>`` (``knowledge/versioning.py``).
+    Fact ids are UUIDs and carry no colon, so every other family has a colon after the prefix. A WRONGTYPE
+    ``hgetall`` on one of them would fail the whole pipelined batch.
+    """
+    text = key.decode("utf-8") if isinstance(key, bytes) else key
+    return text.startswith("fact:") and ":" not in text[len("fact:") :]
+
+
 async def _read_batch(redis: Any, keys: List[Any]) -> List[Any]:
     """Fetch the hashes of *keys* in one round trip."""
     pipeline = redis.pipeline()
@@ -48,6 +61,8 @@ async def stream_facts(
     batch_size = batch_size or FACT_SCAN_BATCH_SIZE
     batch: List[Any] = []
     async for key in redis.scan_iter(match=FACT_KEY_PATTERN, count=batch_size):
+        if not is_fact_key(key):
+            continue
         batch.append(key)
         if len(batch) >= batch_size:
             for fact in _eligible(batch, await _read_batch(redis, batch), process, collection, include_quarantined):
@@ -72,12 +87,6 @@ async def collect_facts(stream: AsyncIterator[Dict[str, Any]], offset: int, limi
         if limit is not None and len(facts) >= limit:
             break
     return facts
-
-
-def is_fact_key(key: Any) -> bool:
-    """True for a real ``fact:<id>`` hash; ``fact:collections:<id>`` and similar keys share the prefix."""
-    text = key.decode("utf-8") if isinstance(key, bytes) else key
-    return text.startswith("fact:") and ":" not in text[len("fact:") :]
 
 
 async def get_facts_page(
