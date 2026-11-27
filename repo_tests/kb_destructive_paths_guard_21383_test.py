@@ -92,7 +92,7 @@ REACH = declare(
     "kb-destructive-paths",
     discover=_discover,
     roots=_ROOTS,
-    floor=7800,
+    floor=7988,  # mid-window: population 8188, window (7788, 8188)
     growth=400,
     what="tracked .py/.sh files outside repo_tests/, docs/ and tools/",
 )
