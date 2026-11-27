@@ -276,7 +276,11 @@ _WRAPPER_ARG = r"(?:-\S+(?:\s+[^\s|;&-]\S*)?|\w+=\S*|\d+[smhd]?)"
 _WRAPPERS = r"(?:(?:sudo|xargs|timeout|env|nice|nohup|stdbuf|command|exec)\b(?:\s+" + _WRAPPER_ARG + r")*\s+)*"
 _GREP_ARG = r"""(?:"[^"]*"|'[^']*'|[^|;&\n"'])"""
 _PIPE_INTO_QUIET_GREP = re.compile(
-    r"(?<!\|)\|&?(?!\|)\s*" + _WRAPPERS + r"(?:e|f)?grep\s+(?:" + _GREP_ARG + r"*?\s)?(?:-[A-Za-z]*q[A-Za-z]*|--quiet)\b"
+    r"(?<!\|)\|&?(?!\|)\s*"
+    + _WRAPPERS
+    + r"(?:e|f)?grep\s+(?:"
+    + _GREP_ARG
+    + r"*?\s)?(?:-[A-Za-z]*q[A-Za-z]*|--quiet)\b"
 )
 
 
