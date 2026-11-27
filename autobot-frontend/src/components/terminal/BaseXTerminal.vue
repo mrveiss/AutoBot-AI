@@ -800,7 +800,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: var(--terminal-bg, #1a1b26);
+  background-color: var(--terminal-xterm-bg);
 }
 
 .xterm-wrapper {

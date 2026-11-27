@@ -53,12 +53,12 @@
 }
 
 .action-btn.primary {
-  background: var(--accent-color, #3b82f6);
+  background: var(--accent-color);
   color: white;
 }
 
 .action-btn.primary:hover:not(:disabled) {
-  background: var(--accent-color-hover, #2563eb);
+  background: var(--color-primary-hover);
 }
 
 .action-btn.secondary {

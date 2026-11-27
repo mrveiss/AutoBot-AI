@@ -645,6 +645,7 @@
   --terminal-border-subtle: #333333;      /* status/footer separators */
   --terminal-border-strong: #666666;      /* button outlines */
   --terminal-btn-hover-bg: #555555;       /* button + scrollbar-thumb base */
+  --terminal-text-faint: #555555;         /* hint text: the completion list's type and path labels */
   --terminal-scrollbar-thumb-hover: #777777;
 
   /* Chrome text */
