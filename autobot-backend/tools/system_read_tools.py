@@ -48,6 +48,7 @@ class SystemReadToolsMixin:
         return {
             "tool_name": "list_system_services",
             "tool_args": {},
-            "result": result.get("output", result.get("message", "Services listed")),
+            # SystemIntegration answers {"status", "services"}; a worker node answers "output" (#22280).
+            "result": result.get("output", result.get("services", result.get("message", "Services listed"))),
             "status": result.get("status", "success"),
         }

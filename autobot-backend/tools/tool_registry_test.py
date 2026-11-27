@@ -163,7 +163,9 @@ async def test_system_read_tools_work_through_get_tool_registry_without_worker_n
 
     assert info["status"] == "success"
     assert "os_type" in info["result"]
-    assert services["result"] != "Worker node not available"
+    assert services["status"] == "success"
+    assert isinstance(services["result"], list) and services["result"], "no service records came back"
+    assert all("Name" in record for record in services["result"])
 
 
 # ---------------------------------------------------------------------------
