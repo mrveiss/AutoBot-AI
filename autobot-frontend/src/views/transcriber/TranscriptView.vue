@@ -134,19 +134,19 @@ onMounted(load)
   align-items: center;
   gap: 0.75rem;
   padding: 2rem;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #6b7280);
   text-align: center;
 }
 
 .transcript-error {
-  color: var(--color-danger);
+  color: var(--color-danger-600, #dc2626);
 }
 
 .transcript-spinner {
   width: 1.5rem;
   height: 1.5rem;
-  border: 2px solid var(--color-primary-light);
-  border-top-color: var(--color-primary-hover);
+  border: 2px solid var(--color-primary-300, #93c5fd);
+  border-top-color: var(--color-primary-600, #2563eb);
   border-radius: 50%;
   animation: transcript-spin 0.8s linear infinite;
 }

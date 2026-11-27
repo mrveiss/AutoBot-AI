@@ -393,7 +393,7 @@ function getNodeHostname(nodeId: string): string {
                   <!-- Verify Sync -->
                   <button
                     @click="handleVerifySync(replication)"
-                    class="text-autobot-text-link hover:text-autobot-text-link"
+                    class="text-autobot-text-link hover:text-(--text-link-hover)"
                     :title="$t('replicationView.verifySyncStatus')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

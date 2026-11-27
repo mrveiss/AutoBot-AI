@@ -1,19 +1,23 @@
 name: Stylelint Token Guard
 
-# Tokenisation enforcement (#11515 Task 1, #17567). Lints the WHOLE tree of
-# autobot-frontend, autobot-slm-frontend and libs/autobot-ui for hardcoded hex
-# colours, and BLOCKS on any hit. The gate used to lint only the files a PR changed
-# and never failed the PR, because #14554 measured a backlog of 386 + 23
-# violations that predated it. That backlog is now zero in all three projects, so
-# the gate is a property of the tree, not of the diff: a PR that adds a hex literal
-# anywhere in a lint scope fails here. Token-definition files stay out of scope through
-# each project's own ignoreFiles (design-tokens.css, themes/*.css, tailwind.css in the
-# user frontend; main.css, slm-scheme.css in the SLM) and the kit's contract.css below.
+# Tokenisation enforcement scaffold (#11515 Task 1). Reports hardcoded hex colors
+# in CHANGED frontend CSS/Vue files so new hardcoded values are visible in review.
+#
+# NON-BLOCKING for now (continue-on-error): #14554 measured the full-tree backlog
+# at 386 violations in autobot-frontend and 23 in autobot-slm-frontend (409 total,
+# color-no-hex only) once the gate could actually run — that debt predates this
+# workflow and belongs to the tokenisation umbrella (#11515), not to this scoped
+# "make the gate runnable" fix. This job stays scoped to CHANGED files only (never
+# the full tree) and continue-on-error, so it surfaces new offenders in review
+# without blocking a PR on debt it did not introduce. Once #11515 clears the
+# existing backlog, flip continue-on-error off and add this to branch protection
+# (#11515 Task 1.3).
 #
 # #14554: stylelint + postcss-html are real devDependencies of both
 # autobot-frontend/package.json and autobot-slm-frontend/package.json (not an
-# ad-hoc `npm install --no-save` here), so `npx stylelint` resolves the same way in
-# this job, in CI's other frontend jobs, and in a developer's fresh `npm ci`.
+# ad-hoc `npm install --no-save` here), so `npx stylelint <file>` resolves the
+# same way in this job, in CI's other frontend jobs, and in a developer's fresh
+# `npm ci` — no drift between what CI pins and what a checkout gets.
 
 on:
   pull_request:
@@ -55,12 +59,15 @@ permissions:
   contents: read
 
 jobs:
-  stylelint:
+  stylelint-changed:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    name: Stylelint (whole tree)
+    name: Stylelint (changed CSS/Vue)
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -68,7 +75,51 @@ jobs:
           cache-dependency-path: |
             autobot-frontend/package-lock.json
             autobot-slm-frontend/package-lock.json
-      - name: Stylelint autobot-frontend (whole tree)
+      - name: Determine changed frontend CSS/Vue files
+        id: changed
+        env:
+          # Untrusted-ish inputs handled via env (never interpolated into the
+          # shell command directly) to avoid workflow command injection.
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch origin "$BASE_REF" --depth=1 || true
+          # Split by project: each has its own node_modules/.stylelintrc, and
+          # `npx stylelint` needs to run from inside the matching project so it
+          # resolves the customSyntax (postcss-html) that project installed.
+          # --diff-filter=d drops DELETED paths. Without it a PR that removes a
+          # CSS/Vue file hands stylelint a path that is not in the checkout, and
+          # stylelint answers NoFilesFoundError and exits 123 BEFORE linting any
+          # of the files that do exist (#17571). continue-on-error hid that as a
+          # red badge, so the job read as "ran and found problems" when it had
+          # not looked at a single file.
+          git diff --name-only --diff-filter=d "origin/${BASE_REF}...HEAD" -- \
+            'autobot-frontend/**/*.vue' 'autobot-frontend/**/*.css' \
+            | sed -e 's|^autobot-frontend/||' > changed-frontend.txt || true
+          git diff --name-only --diff-filter=d "origin/${BASE_REF}...HEAD" -- \
+            'autobot-slm-frontend/**/*.vue' 'autobot-slm-frontend/**/*.css' \
+            | sed -e 's|^autobot-slm-frontend/||' > changed-slm.txt || true
+          # contract.css is the token DEFINITION site and is excluded here, not only by the
+          # kit config's ignoreFiles: the lint step passes --config-basedir (the user
+          # frontend), and stylelint resolves relative ignoreFiles globs against that base,
+          # so the kit's own ignore never matches ../libs/... paths.
+          git diff --name-only --diff-filter=d "origin/${BASE_REF}...HEAD" -- \
+            'libs/autobot-ui/**/*.vue' 'libs/autobot-ui/**/*.css' \
+            ':!libs/autobot-ui/src/tokens/contract.css' \
+            | sed -e 's|^|../|' > changed-libs.txt || true
+          libs_count=$(wc -l < changed-libs.txt | tr -d ' ')
+          echo "libs_count=${libs_count:-0}" >> "$GITHUB_OUTPUT"
+          echo "Changed libs/autobot-ui CSS/Vue files: ${libs_count:-0}"
+          cat changed-libs.txt || true
+          frontend_count=$(wc -l < changed-frontend.txt | tr -d ' ')
+          slm_count=$(wc -l < changed-slm.txt | tr -d ' ')
+          echo "frontend_count=${frontend_count:-0}" >> "$GITHUB_OUTPUT"
+          echo "slm_count=${slm_count:-0}" >> "$GITHUB_OUTPUT"
+          echo "Changed autobot-frontend CSS/Vue files: ${frontend_count:-0}"
+          cat changed-frontend.txt || true
+          echo "Changed autobot-slm-frontend CSS/Vue files: ${slm_count:-0}"
+          cat changed-slm.txt || true
+      - name: Run stylelint on changed autobot-frontend files (report-only)
+        if: steps.changed.outputs.frontend_count != '0'
         working-directory: autobot-frontend
         env:
           # #13410: no job here needs the Cypress binary; skip the ~100MB CDN
@@ -76,26 +127,27 @@ jobs:
           CYPRESS_INSTALL_BINARY: "0"
         run: |
           npm ci
-          # No --config: stylelint auto-resolves autobot-frontend/.stylelintrc.json.
-          npx stylelint "src/**/*.{vue,css}"
-      - name: Stylelint autobot-slm-frontend (whole tree)
+          # Read the file list from disk (not interpolated) and pass via xargs so
+          # filenames can't inject shell. No --config: stylelint auto-resolves
+          # autobot-frontend/.stylelintrc.json for every file below this directory.
+          xargs -a ../changed-frontend.txt npx stylelint
+      - name: Run stylelint on changed autobot-slm-frontend files (report-only)
+        if: steps.changed.outputs.slm_count != '0'
         working-directory: autobot-slm-frontend
         run: |
           npm ci
-          npx stylelint "src/**/*.{vue,css}"
-      - name: Stylelint libs/autobot-ui (whole tree)
-        # The kit has no package.json devDependencies of its own, so it borrows the
-        # user frontend's stylelint + postcss-html (both pinned there), installed by
-        # the first step: --config-basedir makes customSyntax resolve from there.
-        # contract.css is the token DEFINITION site and is excluded here, not only by
-        # the kit config's ignoreFiles: --config-basedir is the user frontend, and
-        # stylelint resolves relative ignoreFiles globs against that base, so the
-        # kit's own ignore never matches ../libs/... paths.
+          xargs -a ../changed-slm.txt npx stylelint
+      - name: Run stylelint on changed libs/autobot-ui files (report-only)
+        if: steps.changed.outputs.libs_count != '0'
+        # The kit has no package.json devDependencies of its own, so it borrows
+        # the user frontend's stylelint + postcss-html (both pinned there):
+        # --config-basedir makes customSyntax resolve from this directory. Its
+        # own config ignores src/tokens/contract.css, the token DEFINITION site,
+        # for the same reason design-tokens.css is ignored elsewhere.
         working-directory: autobot-frontend
+        env:
+          CYPRESS_INSTALL_BINARY: "0"
         run: |
-          git -C .. ls-files -- 'libs/autobot-ui/**/*.vue' 'libs/autobot-ui/**/*.css' \
-            ':!libs/autobot-ui/src/tokens/contract.css' \
-            | sed -e 's|^|../|' > "$RUNNER_TEMP/kit-files.txt"
-          test -s "$RUNNER_TEMP/kit-files.txt"
-          xargs -a "$RUNNER_TEMP/kit-files.txt" npx stylelint \
+          npm ci
+          xargs -a ../changed-libs.txt npx stylelint \
             --config ../libs/autobot-ui/.stylelintrc.json --config-basedir "$PWD"

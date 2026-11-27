@@ -284,7 +284,7 @@ onMounted(() => {
             <td class="px-4 py-3">
               <div class="flex items-center gap-2">
                 <button
-                  class="text-xs text-autobot-primary-light hover:text-autobot-primary-light disabled:opacity-50"
+                  class="text-xs text-autobot-primary hover:text-autobot-primary-hover disabled:opacity-50"
                   :disabled="verifyingId === agent.id"
                   @click="verifyAgent(agent)"
                 >
@@ -304,7 +304,7 @@ onMounted(() => {
                   {{ $t('externalAgentsView.edit') }}
                 </button>
                 <button
-                  class="text-xs text-autobot-error-light hover:text-autobot-error-light"
+                  class="text-xs text-autobot-alert-text hover:text-autobot-text-primary"
                   @click="deleteAgent(agent)"
                 >
                   {{ $t('externalAgentsView.delete') }}

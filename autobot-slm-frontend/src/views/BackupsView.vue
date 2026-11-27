@@ -214,7 +214,7 @@ function getNodeHostname(nodeId: string): string {
               <button
                 v-if="backup.status === 'completed' && backup.restorable"
                 @click="handleRestore(backup.backup_id)"
-                class="text-autobot-text-link hover:text-autobot-text-link font-medium"
+                class="text-autobot-text-link hover:text-(--text-link-hover) font-medium"
               >
                 {{ $t('backupsView.restore') }}
               </button>

@@ -168,7 +168,7 @@ const progressBarClasses = computed(() => {
 
 /* Tailwind-like utility classes */
 .bg-green-500 {
-  background-color: var(--color-success);
+  background-color: #22c55e;
 }
 
 .bg-red-500 {
@@ -176,19 +176,19 @@ const progressBarClasses = computed(() => {
 }
 
 .bg-yellow-500 {
-  background-color: var(--color-warning);
+  background-color: #eab308;
 }
 
 .bg-purple-500 {
-  background-color: var(--color-purple-light);
+  background-color: #a855f7;
 }
 
 .bg-blue-500 {
-  background-color: var(--color-info);
+  background-color: #3b82f6;
 }
 
 .bg-autobot-text-muted {
-  background-color: var(--text-muted);
+  background-color: var(--text-muted, #9ca3af);
 }
 
 .animate-pulse {

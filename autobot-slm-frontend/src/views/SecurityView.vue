@@ -962,7 +962,7 @@ const scoreColor = computed(() => {
                   <button
                     @click="rotateTlsCertificate(endpoint.credential_id)"
                     :disabled="rotatingCredentialId === endpoint.credential_id"
-                    class="px-2 py-1 rounded-sm text-xs bg-autobot-illus-2-tint hover:bg-autobot-illus-2-tint text-autobot-text-primary disabled:opacity-50"
+                    class="px-2 py-1 rounded-sm text-xs bg-autobot-illus-2-tint hover:bg-(--i2t-hover) text-autobot-text-primary disabled:opacity-50"
                     :aria-label="$t('securityView.rotateCertificateFor', { hostname: endpoint.hostname })"
                   >
                     {{ rotatingCredentialId === endpoint.credential_id ? '...' : $t('securityView.rotate') }}
@@ -973,7 +973,7 @@ const scoreColor = computed(() => {
                       'px-2 py-1 rounded-sm text-xs',
                       endpoint.is_active
                         ? 'bg-autobot-bg-tertiary hover:bg-autobot-bg-active text-autobot-text-secondary'
-                        : 'bg-autobot-success-bg hover:bg-autobot-success-bg text-autobot-success-hover'
+                        : 'bg-autobot-success-bg hover:bg-(--color-success-bg-hover) text-autobot-pill-ok-fg'
                     ]"
                     :aria-label="endpoint.is_active ? $t('securityView.disableCertificateFor', { hostname: endpoint.hostname }) : $t('securityView.enableCertificateFor', { hostname: endpoint.hostname })"
                   >
@@ -981,7 +981,7 @@ const scoreColor = computed(() => {
                   </button>
                   <button
                     @click="deleteTlsCertificate(endpoint.credential_id)"
-                    class="px-2 py-1 rounded-sm text-xs bg-autobot-error-bg hover:bg-autobot-error-bg text-autobot-error-hover"
+                    class="px-2 py-1 rounded-sm text-xs bg-autobot-error-bg hover:bg-(--color-error-bg-hover) text-autobot-alert-text"
                     :aria-label="$t('securityView.deleteCertificateFor', { hostname: endpoint.hostname })"
                   >{{ $t('securityView.delete') }}</button>
                 </div>
@@ -1172,7 +1172,7 @@ const scoreColor = computed(() => {
                   >{{ $t('securityView.ack') }}</button>
                   <button
                     @click="resolveEvent(event.event_id)"
-                    class="px-2 py-1 text-xs bg-autobot-success-bg hover:bg-autobot-success-bg text-autobot-success-hover rounded-sm"
+                    class="px-2 py-1 text-xs bg-autobot-success-bg hover:bg-(--color-success-bg-hover) text-autobot-text-primary rounded-sm"
                     :aria-label="$t('securityView.resolveEvent', { title: event.title })"
                   >{{ $t('securityView.resolve') }}</button>
                 </div>
@@ -1240,8 +1240,8 @@ const scoreColor = computed(() => {
                   :class="[
                     'px-3 py-1 text-xs rounded-sm',
                     policy.is_enforced
-                      ? 'bg-autobot-error-bg hover:bg-autobot-error-bg text-autobot-error-hover'
-                      : 'bg-autobot-success-bg hover:bg-autobot-success-bg text-autobot-success-hover'
+                      ? 'bg-autobot-error-bg hover:bg-(--color-error-bg-hover) text-autobot-pill-bad-fg'
+                      : 'bg-autobot-success-bg hover:bg-(--color-success-bg-hover) text-autobot-pill-ok-fg'
                   ]"
                   :aria-label="policy.is_enforced ? $t('securityView.disablePolicy', { name: policy.name }) : $t('securityView.enablePolicy', { name: policy.name })"
                 >

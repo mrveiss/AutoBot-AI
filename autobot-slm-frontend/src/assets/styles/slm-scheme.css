@@ -57,7 +57,7 @@
   --text-on-info: var(--color-white);
   --color-error-solid: var(--color-error-hover);
   --color-error-solid-hover: var(--color-error-dark);
-  --color-info-solid: var(--color-primary-dark);
+  --color-info-solid: #0369a1;
   --border-strong: var(--muted);
   --border-focus: var(--focus);
   --focus-ring-width: 3px;
@@ -84,8 +84,6 @@
   /* The rest of the contract: names the user frontend defines and the SLM did
      not, with SLM values derived from its own palette (#14775, #17566). */
   --bg-active: color-mix(in srgb, var(--text) 8%, transparent);
-  --color-primary-light: #7dd3fc;
-  --color-primary-dark: #0369a1;
   --color-primary-bg: color-mix(in srgb, var(--color-primary) 10%, transparent);
   --color-secondary: #6b7280;
   --color-secondary-hover: #374151;
@@ -93,16 +91,27 @@
   --color-success-hover: #16a34a;
   --color-success-light: color-mix(in srgb, var(--color-success) 60%, white);
   --color-success-bg: color-mix(in srgb, var(--color-success) 10%, transparent);
+  --color-success-bg-hover: color-mix(in srgb, var(--color-success) 20%, transparent);
   --color-warning-hover: #ca8a04;
   --color-warning-light: color-mix(in srgb, var(--color-warning) 60%, white);
   --color-warning-bg: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  --color-warning-bg-hover: color-mix(in srgb, var(--color-warning) 20%, transparent);
   --color-error-hover: #dc2626;
   --color-error-dark: #b91c1c;
   --color-error-light: color-mix(in srgb, var(--color-error) 60%, white);
   --color-error-bg: color-mix(in srgb, var(--color-error) 10%, transparent);
+  --color-error-bg-hover: color-mix(in srgb, var(--color-error) 20%, transparent);
   --color-info-hover: var(--color-primary-hover);
   --color-info-light: color-mix(in srgb, var(--color-primary) 60%, white);
   --color-info-bg: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --color-info-bg-hover: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  --color-primary-bg-hover: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  /* Opaque pill and tile fills get one hover step each, derived from the theme's own
+     fill and text so it holds in every theme (#17566). */
+  --ok-bg-hover: color-mix(in srgb, var(--ok-bg) 90%, var(--text));
+  --warn-bg-hover: color-mix(in srgb, var(--warn-bg) 90%, var(--text));
+  --bad-bg-hover: color-mix(in srgb, var(--bad-bg) 90%, var(--text));
+  --i2t-hover: color-mix(in srgb, var(--i2t) 90%, var(--text));
   --chart-1: var(--color-primary);
   --chart-2: var(--color-success);
   --chart-3: var(--color-warning);
@@ -142,6 +151,8 @@
   --primary: #0D5C55;
   --primary-h: #0A4A44;
   --on-primary: #FFFFFF;
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 60%, white);
+  --color-primary-dark: color-mix(in srgb, var(--color-primary) 80%, black);
   --accent: #14A38B;
   --focus: #2563EB;
   --brand-bg: #0D5C55;
@@ -202,6 +213,8 @@
   --primary: #2CC5A8;
   --primary-h: #4FD3BA;
   --on-primary: #06201D;
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 70%, black);
+  --color-primary-dark: color-mix(in srgb, var(--color-primary) 70%, white);
   --accent: #2CC5A8;
   --focus: #7FD8FF;
   --brand-bg: #2CC5A8;
@@ -272,6 +285,8 @@
   --primary: #003D36;
   --primary-h: #002420;
   --on-primary: #FFFFFF;
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 60%, white);
+  --color-primary-dark: color-mix(in srgb, var(--color-primary) 80%, black);
   --accent: #00695C;
   --focus: #0033CC;
   --brand-bg: #003D36;
@@ -342,6 +357,8 @@
   --primary: #18181B;
   --primary-h: #27272A;
   --on-primary: #FFFFFF;
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 60%, white);
+  --color-primary-dark: color-mix(in srgb, var(--color-primary) 80%, black);
   --accent: #18181B;
   --focus: #18181B;
   --brand-bg: #18181B;

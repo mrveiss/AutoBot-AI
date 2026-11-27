@@ -60,8 +60,8 @@ const typeIcon = (type: string): string => {
   right: 0;
   max-height: 200px;
   overflow-y: auto;
-  background-color: var(--terminal-chrome-bg-alt);
-  border: 1px solid var(--terminal-border);
+  background-color: #1e1e1e;
+  border: 1px solid #444;
   border-bottom: none;
   border-radius: var(--radius-default) 4px 0 0;
   z-index: var(--z-popover);
@@ -80,29 +80,29 @@ const typeIcon = (type: string): string => {
 
 .completion-item:hover,
 .completion-item.selected {
-  background-color: var(--terminal-selection-bg);
+  background-color: #264f78;
 }
 
 .item-icon {
-  color: var(--terminal-text-muted);
+  color: #888;
   width: 16px;
   text-align: center;
   flex-shrink: 0;
   font-weight: bold;
 }
 
-.type-command .item-icon { color: var(--terminal-ansi-cyan); }
-.type-path .item-icon { color: var(--terminal-syntax-path); }
-.type-history .item-icon { color: var(--terminal-syntax-history); }
-.type-argument .item-icon { color: var(--terminal-syntax-argument); }
+.type-command .item-icon { color: #87ceeb; }
+.type-path .item-icon { color: #98c379; }
+.type-history .item-icon { color: #e5c07b; }
+.type-argument .item-icon { color: #c678dd; }
 
 .item-value {
-  color: var(--terminal-text);
+  color: #ffffff;
   flex-shrink: 0;
 }
 
 .item-desc {
-  color: var(--terminal-border-strong);
+  color: #666;
   margin-left: auto;
   font-size: var(--text-xs);
   white-space: nowrap;
@@ -113,8 +113,8 @@ const typeIcon = (type: string): string => {
 .completion-hint {
   padding: var(--spacing-0-5) var(--spacing-3);
   font-size: var(--text-xs);
-  color: var(--terminal-btn-hover-bg);
-  border-top: 1px solid var(--terminal-border-subtle);
+  color: #555;
+  border-top: 1px solid #333;
   text-align: center;
 }
 
@@ -124,11 +124,11 @@ const typeIcon = (type: string): string => {
 }
 
 .completion-suggestions::-webkit-scrollbar-track {
-  background: var(--terminal-chrome-bg-alt);
+  background: #1e1e1e;
 }
 
 .completion-suggestions::-webkit-scrollbar-thumb {
-  background: var(--terminal-btn-hover-bg);
+  background: #555;
   border-radius: var(--radius-default);
 }
 </style>
