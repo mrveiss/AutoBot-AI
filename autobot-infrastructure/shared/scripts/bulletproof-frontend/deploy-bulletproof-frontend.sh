@@ -266,7 +266,7 @@ verify_deployment() {
     log_info "Verifying router-view presence in DOM..."
     local html_content=$(curl -s "http://$FRONTEND_VM:5173" 2>/dev/null || echo "")
 
-    if echo "$html_content" | grep -q "router-view\|<router-view"; then
+    if grep -q "router-view\|<router-view" <<<"$html_content"; then
         log_info "✓ Router-view found in DOM"
     else
         log_warn "⚠ Router-view not found in initial DOM (may be loaded dynamically)"

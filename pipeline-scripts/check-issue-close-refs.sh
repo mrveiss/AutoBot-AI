@@ -44,7 +44,7 @@ historical=""
 while IFS= read -r f; do
   [ "$f" = "./$SELF" ] && continue
   # Classify on whitespace-normalized content so wrapped phrases still match.
-  if tr '\n' ' ' < "$f" | grep -qE "$FORWARD"; then
+  if grep -qE "$FORWARD" <<<"$(tr '\n' ' ' < "$f")"; then
     if [ "$blocked" -eq 0 ]; then
       echo "❌ Forward-tracking references to #${N} — CLOSURE BLOCKED:"
       blocked=1

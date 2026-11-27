@@ -261,7 +261,7 @@ preflight_checks() {
 
     # Test sudo access
     info "Testing sudo access..."
-    if ! remote_exec_sudo "whoami" 2>/dev/null | grep -q root; then
+    if ! grep -q root <<<"$(remote_exec_sudo "whoami" 2>/dev/null)"; then
         error "User ${SSH_USER} does not have sudo access"
         exit 1
     fi

@@ -545,7 +545,7 @@ run_fast_guards() {
   out=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check --changed-since origin/main 2>&1) || rc=$?
   if [ "$rc" = "124" ]; then
     did_not_run "repin_reach_floors.py --check" "$MAX_BUDGET"
-  elif printf '%s\n' "$out" | grep -qE '^(STALE|PIN)'; then
+  elif grep -qE '^(STALE|PIN)' <<<"$out"; then
     fail "reach floors are stale -- run scripts/repin_reach_floors.py and commit:"
     printf '%s\n' "$out" | grep -E '^(STALE|PIN)' | head -20 >&2
     EXIT_CODE=1
@@ -561,7 +561,7 @@ run_fast_guards() {
     ok "reach floors: nothing stale among the guards that imported"
   else ok "reach floors: repin_reach_floors.py --check reports nothing stale"; fi
   # #20050: stale from growth on main, in a guard this push left alone. A train's audit repins these.
-  if printf '%s\n' "$out" | grep -q '^BASE-STALE'; then
+  if grep -q '^BASE-STALE' <<<"$out"; then
     warn "reach floors stale on main, not blocking this push: $(printf '%s\n' "$out" | grep -c '^BASE-STALE')"
   fi
 }
@@ -572,7 +572,7 @@ run_fast_guards() {
 # A " FAIL " line also counts as having run: a crash after some tests failed (OOM, a
 # killed worker) can lose the summary, and that must stay a failure, not become allowable.
 vitest_ran_nothing() {
-  ! printf '%s\n' "$1" | grep -qE "Test Files| FAIL "
+  ! grep -qE "Test Files| FAIL " <<<"$1"
 }
 
 # #19130: a changeset that ADDS a JS dependency cannot have it in the linked node_modules
@@ -725,7 +725,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
       # Has main already merged a commit citing this issue?
       git fetch origin main --quiet 2>/dev/null || true
-      if git log origin/main --oneline -50 2>/dev/null | grep -qE "#${issue_num}\\b"; then
+      if grep -qE "#${issue_num}\\b" <<<"$(git log origin/main --oneline -50 2>/dev/null)"; then
         warn "origin/main already has a commit citing #$issue_num:"
         git log origin/main --oneline -50 2>/dev/null \
           | grep -E "#${issue_num}\\b" \
@@ -782,7 +782,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       else
         ok "PR body satisfies both gates"
       fi
-    elif echo "$gh_view_output" | grep -qi "no pull requests found"; then
+    elif grep -qi "no pull requests found" <<<"$gh_view_output"; then
       # #16859: stated rather than silent. A hook cannot see a body that has
       # no PR yet, so this is the limit of what pre-push can cover -- not a
       # skip that looks identical to "nothing to check".
@@ -945,7 +945,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
       if [ "$tsc_exit" = "124" ]; then
         did_not_run "vue-tsc (${project})" "${TYPE_CHECK_TIMEOUT}"
-      elif [ "$tsc_exit" != "0" ] && ! echo "$tsc_output" | grep -q "error TS"; then
+      elif [ "$tsc_exit" != "0" ] && ! grep -q "error TS" <<<"$tsc_output"; then
         # A non-zero exit with no diagnostic at all is a broken invocation, not a
         # clean tree. Reporting it as "no errors in changed files" below would be
         # a verdict from a check that never produced one.
@@ -1290,9 +1290,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
           # block. A new floor symptom is one more branch here, not a looser
           # pattern.
           floor_symptom=""
-          if printf '%s' "$group_output" | grep -q 'requires asyncio.Task.cancelling()'; then
+          if grep -q 'requires asyncio.Task.cancelling()' <<<"$group_output"; then
             floor_symptom="llc/scheduler/base.py requires asyncio.Task.cancelling()"
-          elif printf '%s' "$group_output" | grep -q "cannot import name 'StrEnum' from 'enum'"; then
+          elif grep -q "cannot import name 'StrEnum' from 'enum'" <<<"$group_output"; then
             floor_symptom="enum.StrEnum is 3.11+"
           fi
           if [ -n "$floor_symptom" ]; then

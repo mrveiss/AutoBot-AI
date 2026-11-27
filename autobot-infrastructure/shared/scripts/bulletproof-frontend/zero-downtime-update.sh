@@ -110,7 +110,7 @@ setup_blue_green_environment() {
         elif [ -L "/opt/autobot/src/autobot-slm-frontend" ]; then
             # Symbolic link exists, determine target
             current_target=$(readlink /opt/autobot/src/autobot-slm-frontend)
-            if echo "$current_target" | grep -q "staging"; then
+            if grep -q "staging" <<<"$current_target"; then
                 echo "SECONDARY" > /tmp/current-deployment
                 next_dir="/opt/autobot/src/autobot-slm-frontend-primary"
             else
@@ -257,7 +257,7 @@ test_staging_service() {
 
         # Test 2: Check for critical content
         html_content=$(curl -s "$staging_url")
-        if ! echo "$html_content" | grep -q "AutoBot"; then
+        if ! grep -q "AutoBot" <<<"$html_content"; then
             echo "ERROR: AutoBot branding not found in staging"
             exit 1
         fi
@@ -425,7 +425,7 @@ verify_production_service() {
     # Additional verification tests
     local html_content=$(curl -s "$frontend_url" 2>/dev/null || echo "")
 
-    if echo "$html_content" | grep -q "AutoBot"; then
+    if grep -q "AutoBot" <<<"$html_content"; then
         log_info "✓ Application branding verified"
     else
         log_warn "⚠ Application branding not found"

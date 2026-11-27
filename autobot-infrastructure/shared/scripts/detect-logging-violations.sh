@@ -110,7 +110,7 @@ for file in $PY_FILES; do
     # If has __main__ that calls main(), prints in main() are acceptable
     if [[ -n "$has_main_block" ]] && [[ -n "$main_func_line" ]]; then
         # Check if __main__ block calls main()
-        calls_main=$(sed -n "${has_main_block},\$p" "$file" | grep -q 'main()' && echo "yes" || true)
+        calls_main=$(grep -q 'main()' <<<"$(sed -n "${has_main_block},\$p" "$file")" && echo "yes" || true)
     else
         calls_main=""
     fi
@@ -120,7 +120,7 @@ for file in $PY_FILES; do
         [[ -z "$line_num" ]] && continue
 
         # Skip if in docstring or doctest (line starts with """, #, *, >>>, ...)
-        if echo "$line_content" | grep -qE '^[[:space:]]*("""|\x27\x27\x27|#|\*|>>>|\.\.\.)'; then
+        if grep -qE '^[[:space:]]*("""|\x27\x27\x27|#|\*|>>>|\.\.\.)' <<<"$line_content"; then
             continue
         fi
 
@@ -135,17 +135,17 @@ for file in $PY_FILES; do
         fi
 
         # Skip if line is a comment
-        if echo "$line_content" | grep -qE '^[[:space:]]*#'; then
+        if grep -qE '^[[:space:]]*#' <<<"$line_content"; then
             continue
         fi
 
         # Skip if print is in a string (e.g., template code, examples)
-        if echo "$line_content" | grep -qE '(["'"'"'].*print\(|snippet.*=|template.*=|example.*=|code.*=)'; then
+        if grep -qE '(["'"'"'].*print\(|snippet.*=|template.*=|example.*=|code.*=)' <<<"$line_content"; then
             continue
         fi
 
         # Skip noqa exemption
-        echo "$line_content" | grep -qE '# noqa(: print)?($| )' && continue
+        grep -qE '# noqa(: print)?($| )' <<<"$line_content" && continue
 
         report_violation "$file" "$line_num" "$line_content" \
             "Use logger.info/debug/warning/error() instead of print()"
@@ -191,17 +191,17 @@ for file in $FE_FILES; do
         [[ -z "$line_num" ]] && continue
 
         # Skip if in JSDoc comment (line starts with * or spaces + *)
-        if echo "$line_content" | grep -qE '^[[:space:]]*\*'; then
+        if grep -qE '^[[:space:]]*\*' <<<"$line_content"; then
             continue
         fi
 
         # Skip if in code block within documentation (after ```)
-        if echo "$line_content" | grep -qE '^\s*\*.*console\.'; then
+        if grep -qE '^\s*\*.*console\.' <<<"$line_content"; then
             continue
         fi
 
         # Skip if it's in a string (example data)
-        if echo "$line_content" | grep -qE "(snippet.*=|template.*=|example.*=|'.*console\.)"; then
+        if grep -qE "(snippet.*=|template.*=|example.*=|'.*console\.)" <<<"$line_content"; then
             continue
         fi
 

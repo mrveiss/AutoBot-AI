@@ -77,7 +77,7 @@ fi
 echo "🧪 Testing sandbox image..."
 docker run -d --rm --name autobot-sandbox-test "${IMAGE}" sleep 10 >/dev/null
 
-if docker ps --format '{{.Names}}' | grep -qx autobot-sandbox-test; then
+if grep -qx autobot-sandbox-test <<<"$(docker ps --format '{{.Names}}')"; then
     echo "✅ Sandbox container started successfully"
     docker stop autobot-sandbox-test >/dev/null 2>&1 || true
 else

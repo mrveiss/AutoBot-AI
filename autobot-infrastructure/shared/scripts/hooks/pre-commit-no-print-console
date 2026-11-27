@@ -174,7 +174,7 @@ suppressed_in_multiline_call() {
         balance=$((balance + $(_paren_balance "$("$balance_fn" "$candidate")")))
         if [ "$balance" -le 0 ]; then
             LAST_CALL_CLOSE_LINE="$candidate_line"
-            "$noqa_fn" "$candidate" | grep -qE "$noqa_regex" && return 0
+            grep -qE "$noqa_regex" <<<"$("$noqa_fn" "$candidate")" && return 0
         fi
         j=$((j + 1))
         scanned=$((scanned + 1))

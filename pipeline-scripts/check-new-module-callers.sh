@@ -60,7 +60,7 @@ while IFS= read -r module; do
   STEM=$(basename "$module" | sed 's/\.[^.]*$//')
 
   # Check if this is deferred (tracked in a follow-up issue)
-  if [ -n "$DEFERRED_ISSUES" ] && echo "$module" | grep -qE "$DEFERRED_ISSUES"; then
+  if [ -n "$DEFERRED_ISSUES" ] && grep -qE "$DEFERRED_ISSUES" <<<"$module"; then
     echo "⏭️  $module — wiring deferred (issue referenced)"
     continue
   fi

@@ -197,7 +197,7 @@ validate_deployment() {
     fi
 
     # Database check
-    if redis-cli -h ${AUTOBOT_REDIS_HOST:-localhost} ping | grep -q PONG; then
+    if grep -q PONG <<<"$(redis-cli -h ${AUTOBOT_REDIS_HOST:-localhost} ping)"; then
         success "Database service is healthy"
     else
         warn "Database service health check failed"

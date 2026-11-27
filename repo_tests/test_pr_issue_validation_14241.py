@@ -304,9 +304,16 @@ def test_no_workflow_step_under_pipefail_pipes_a_producer_into_quiet_grep():
 _SET_PIPEFAIL = re.compile(r"\bset\s+(?:-\w+\s+)*-\w*o\s+pipefail")
 
 
-# Piped input is a few bytes of fixed text, far below the pipe buffer, so the producer
-# cannot be mid-write when grep exits; the `$?` of the pipeline is what each case asserts.
-_FIXED_INPUT_SCRIPTS = {"fleet-ip-rule_test.sh"}
+# Every tracked shell script, plus the extensionless git hooks (no suffix to glob on).
+_SHELL_GLOBS = (
+    "*.sh",
+    "tools/git-hooks/pre-commit",
+    "tools/git-hooks/pre-push",
+    "tools/git-hooks/commit-msg",
+    "autobot-infrastructure/shared/scripts/hooks/*",
+)
+# Floor: a glob that collapses to a handful of files must fail, not pass vacuously.
+_MIN_SHELL_SCRIPTS_UNDER_PIPEFAIL = 80
 
 
 def _logical_lines(text: str) -> list[str]:
@@ -320,15 +327,16 @@ def test_no_shell_script_under_pipefail_pipes_a_producer_into_quiet_grep():
     """The script half of the class: a file with `set -o pipefail` (any flag mix) must
     not pipe a producer into `grep -q`, including across a continued line."""
     offenders = []
-    for path in (repo_root() / rel for rel in sorted(tracked_paths(repo_root(), "scripts/*.sh"))):
-        if path.name in _FIXED_INPUT_SCRIPTS:
-            continue
+    under_pipefail = 0
+    for path in (repo_root() / rel for rel in sorted(set(tracked_paths(repo_root(), *_SHELL_GLOBS)))):
         text = path.read_text(encoding="utf-8", errors="replace")
         if not _SET_PIPEFAIL.search(text):
             continue
+        under_pipefail += 1
         code = "\n".join(c.text for c in code_lines(text, name=path.name))
         for line in _logical_lines(code):
             if _PIPE_INTO_QUIET_GREP.search(line):
                 offenders.append(f"{path.relative_to(repo_root())}: {line.strip()[:90]}")
 
+    assert under_pipefail >= _MIN_SHELL_SCRIPTS_UNDER_PIPEFAIL, under_pipefail
     assert not offenders, f"producer piped into grep -q under pipefail: {offenders}"

@@ -165,7 +165,7 @@ test_cache_busting() {
     # Check for cache-busting headers
     local headers=$(curl -I -s "http://$FRONTEND_VM:5173" 2>/dev/null || echo "")
 
-    if echo "$headers" | grep -q "Cache-Control.*no-cache"; then
+    if grep -q "Cache-Control.*no-cache" <<<"$headers"; then
         return 0
     else
         echo "Cache-busting headers not found"
@@ -180,7 +180,7 @@ test_router_health() {
     local html_content=$(curl -s "http://$FRONTEND_VM:5173" 2>/dev/null || echo "")
 
     # Check for router-view presence
-    if echo "$html_content" | grep -q "router-view\|<router-view"; then
+    if grep -q "router-view\|<router-view" <<<"$html_content"; then
         return 0
     else
         echo "Router-view not found in DOM"
@@ -253,7 +253,7 @@ test_cache_poisoning_recovery() {
     local html_content=$(curl -s "http://$FRONTEND_VM:5173" 2>/dev/null || echo "")
 
     # Check if AutoBot content is present (indicating no cache poisoning)
-    if echo "$html_content" | grep -q "AutoBot"; then
+    if grep -q "AutoBot" <<<"$html_content"; then
         return 0
     else
         echo "AutoBot content not found - possible cache poisoning"

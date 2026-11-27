@@ -775,7 +775,7 @@ verify_installation() {
     fi
 
     # Check Redis
-    if redis-cli ping 2>/dev/null | grep -q PONG; then
+    if grep -q PONG <<<"$(redis-cli ping 2>/dev/null)"; then
         log_info "Redis: OK"
     else
         log_warn "Redis: not responding"
