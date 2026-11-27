@@ -73,7 +73,7 @@ function getStatusColor(status: string): string {
 }
 
 function getMetricColor(value: number): string {
-  if (value >= 90) return 'text-autobot-error font-semibold'
+  if (value >= 90) return 'text-autobot-error-hover font-semibold'
   if (value >= 70) return 'text-autobot-warning'
   return 'text-autobot-text-primary'
 }
@@ -167,7 +167,7 @@ function getSortIcon(key: SortKey): string {
               <div class="text-sm text-autobot-text-primary">
                 {{ node.services_running }} / {{ node.services_running + node.services_failed }}
               </div>
-              <div v-if="node.services_failed > 0" class="text-xs text-autobot-error">{{ $t('monitoring.nodeMetricsGrid.value0Failed', { value0: node.services_failed }) }}</div>
+              <div v-if="node.services_failed > 0" class="text-xs text-autobot-error-hover">{{ $t('monitoring.nodeMetricsGrid.value0Failed', { value0: node.services_failed }) }}</div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
               <span v-if="node.last_heartbeat">

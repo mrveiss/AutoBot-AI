@@ -21,6 +21,7 @@ component of the user frontend is not shared. Population floors fail when a sour
 
 from __future__ import annotations
 
+import itertools
 import re
 
 from repo_tests._paths import repo_root
@@ -43,6 +44,10 @@ _OBJECT_KEY = re.compile(r"""['"](--[\w-]+)['"]\s*:""")
 _STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL)
 _STYLE_ATTR = re.compile(r"""\bstyle\s*=\s*"([^"]*)"|\bstyle\s*=\s*'([^']*)'""")
 _VAR_USE = re.compile(r"var\(\s*(--[\w-]+)")
+# A CSS comment, lazily to the first `*/`: one quantifier, no nesting, so it is linear. A declaration after one
+# (`a{color:red; /* note */ --x:1}`) is still a declaration, and a declaration-like text inside one is not.
+_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_DECLARATION_PROBE = re.compile(r"--[\w-]+\s*:")
 
 
 def _read(path) -> str:
@@ -53,15 +58,19 @@ def _slm_files(*suffixes: str) -> list:
     return sorted(p for p in _SLM_SRC.rglob("*") if p.suffix in suffixes and "node_modules" not in p.parts)
 
 
+def _strip_css_comments(text: str) -> str:
+    return _CSS_COMMENT.sub(" ", text)
+
+
 def _names_in(kind: str, text: str) -> set[str]:
     """The custom properties ``text`` (a file of ``kind``) declares. ``kind`` is the suffix, without the dot."""
     if kind == "css":
-        return set(_DECLARATION.findall(text))
+        return set(_DECLARATION.findall(_strip_css_comments(text)))
     names: set[str] = set()
     for block in _STYLE_BLOCK.findall(text):
-        names.update(_DECLARATION.findall(block))
+        names.update(_DECLARATION.findall(_strip_css_comments(block)))
     for attr in _STYLE_ATTR.findall(text):
-        names.update(_DECLARATION.findall("".join(attr)))
+        names.update(_DECLARATION.findall(_strip_css_comments("".join(attr))))
     names.update(_SET_PROPERTY.findall(text))
     if kind in ("ts", "vue"):
         names.update(_OBJECT_KEY.findall(text))
@@ -116,16 +125,44 @@ def test_every_extractor_reads_its_source_kind() -> None:
     assert _names_in("html", '<style>:root{--h1:1}</style><p style="--h2:2">') == {"--h1", "--h2"}
 
 
+def test_the_extractor_reads_past_a_comment_and_ignores_one() -> None:
+    """Contrast pair: a declaration after a comment is read; declaration-like text inside a comment is not."""
+    assert _names_in("css", "a{color:red; /* local token */ --new-token:1}") == {"--new-token"}
+    assert _names_in("css", "a{/* --ghost: 1; */ --real:2}\n/*\n  --multi: 3;\n*/") == {"--real"}
+    assert _names_in("vue", "<style>.x { color: red; /* n */ --v1: 1; /* --v2: 2 */ }</style>") == {"--v1"}
+    assert _names_in("vue", '<i style="color:red;/* n */--v3:1"></i>') == {"--v3"}
+    assert _declaration_values_in("a{/* --ghost: 1 */ --real: 2}") == {"--real": ["2"]}
+
+
+def _unread_stylesheets(paths) -> list[str]:
+    """Stylesheets whose text holds a ``--x:`` candidate (comments aside) but from which the extractor read none."""
+    return [
+        path.name
+        for path in paths
+        if _DECLARATION_PROBE.search(_strip_css_comments(_read(path))) and not _names_in("css", _read(path))
+    ]
+
+
+def _documented_rows() -> list[str]:
+    text = _read(_DOC)
+    body = text[text.index(_SECTION) :]
+    body = body[body.index(_ONLY) :].split("\n## ", 1)[0]
+    return [ln for ln in body.splitlines() if ln.startswith("| `")]
+
+
 def test_the_population_is_measured() -> None:
-    """A derivation that finds nothing would pass the other tests for the wrong reason."""
-    found = _slm_declarations()
-    assert len(found["css"]) > 200, "the SLM stylesheets are not being read"
-    assert found["vue"], "no <style>/inline-style declaration read from any .vue (LanguageSwitcher.vue declares some)"
+    """The floors bind to the sweep's reach (files walked, candidates read), not to how many names came out."""
+    css_files = _slm_files(".css")
+    assert css_files, "no SLM stylesheet is being walked"
+    unread = _unread_stylesheets(css_files)
+    assert not unread, f"stylesheets with declaration candidates read as empty: {unread}"
+    assert _slm_declarations()["vue"], "no <style>/inline-style declaration read from any .vue"
     assert len(_slm_files(".vue")) > 50 and len(_slm_files(".ts")) > 20, "the SLM sources are not being walked"
     assert (_SLM / "index.html").is_file(), "index.html is not where the guard reads it"
-    assert len(_shared()) > 400, "the shared token files are not being read"
     assert all(p.is_file() for p in _shared_files()), "a shared token file moved; update _shared_files"
-    assert len(_documented()) >= 10
+    assert not _unread_stylesheets(_shared_files()), "a shared token file with declaration candidates read as empty"
+    rows = _documented_rows()
+    assert rows and len(_documented()) >= len(rows), "a documented SLM-only row yielded no backticked name"
 
 
 def test_every_slm_only_name_is_documented() -> None:
@@ -152,10 +189,15 @@ def _used_names() -> dict[str, set[str]]:
     return used
 
 
+def _files_with_unread_uses() -> list[str]:
+    paths = _slm_files(".css", ".vue", ".ts") + [_SLM / "index.html"]
+    return [str(p.relative_to(_ROOT)) for p in paths if "var(--" in _read(p) and not _VAR_USE.search(_read(p))]
+
+
 def test_every_var_use_resolves_to_a_declared_name() -> None:
     declared = _slm_declared() | _shared()
     used = _used_names()
-    assert len(used) > 100, "var() uses are not being read"
+    assert not _files_with_unread_uses(), f"files holding var(--x) read as having none: {_files_with_unread_uses()}"
     dangling = {n: sorted(f)[:3] for n, f in sorted(used.items()) if n not in declared}
     assert not dangling, (
         f"var() uses with no declaration in the SLM or the shared token files: {dangling}. "
@@ -182,11 +224,18 @@ _APPLY = re.compile(r"@apply\s+([^;]*);")
 _ATTR_NAIVE = re.compile(r"""[\s]:?class\s*=\s*["']""")
 
 
+def _declaration_values_in(text: str, values: dict[str, list[str]] | None = None) -> dict[str, list[str]]:
+    values = {} if values is None else values
+    pattern = r"(?:^|[;{])\s*(--[\w-]+)\s*:\s*([^;}]+)"
+    for name, value in re.findall(pattern, _strip_css_comments(text), re.MULTILINE):
+        values.setdefault(name, []).append(value.strip())
+    return values
+
+
 def _declaration_values() -> dict[str, list[str]]:
     values: dict[str, list[str]] = {}
     for path in _slm_files(".css"):
-        for name, value in re.findall(r"(?:^|[;{])\s*(--[\w-]+)\s*:\s*([^;}]+)", _read(path), re.MULTILINE):
-            values.setdefault(name, []).append(value.strip())
+        _declaration_values_in(_read(path), values)
     return values
 
 
@@ -233,18 +282,59 @@ def _state_repeats(class_list: str, values: dict[str, list[str]]) -> list[str]:
     return repeats
 
 
+_MAX_BRANCH_COMBINATIONS = 256
+
+
+def _bound_alternatives(value: str) -> tuple[list[str], list[list[str]]]:
+    """Split a ``:class`` expression into always-applied strings and ternary branch groups.
+
+    A string straight after ``?`` opens a group and one straight after ``:`` joins the latest group, so the
+    branches of ``ok ? 'a' : 'b'`` are alternatives; every other string (array item, object key) applies together.
+    """
+    always: list[str] = []
+    groups: list[list[str]] = []
+    for m in _JS_STRING.finditer(value):
+        text = next(g for g in m.groups() if g is not None)
+        lead = value[: m.start()].rstrip()[-1:]
+        if lead == "?":
+            groups.append([text])
+        elif lead == ":" and groups:
+            groups[-1].append(text)
+        else:
+            always.append(text)
+    return always, groups
+
+
+def _branch_choices(groups: list[list[str]]):
+    """One tuple per way the ternaries can resolve; past the cap, every branch counts as applied (a superset)."""
+    size = 1
+    for g in groups:
+        size *= len(g)
+    if size > _MAX_BRANCH_COMBINATIONS:
+        return [tuple(t for g in groups for t in g)]
+    return itertools.product(*groups)
+
+
 def _element_class_lists(text: str):
-    """(line, joined class text) per element: ``class=`` and ``:class=`` strings of one tag are read together."""
+    """(line, joined class text) per element and branch resolution; one tag's ``class`` and ``:class`` read together.
+
+    Mutually exclusive ternary branches never share a list, so only classes that can apply at once are compared.
+    """
     for tag in _TAG.finditer(text):
-        parts = []
+        static: list[str] = []
+        groups: list[list[str]] = []
         for attr in _ATTR.finditer(" " + tag.group(2)):
             value = attr.group(2) if attr.group(2) is not None else attr.group(3)
             if attr.group(1).startswith(":"):
-                parts += [next(g for g in m.groups() if g is not None) for m in _JS_STRING.finditer(value)]
+                always, found = _bound_alternatives(value)
+                static += always
+                groups += found
             else:
-                parts.append(value)
-        if parts:
-            yield text[: tag.start()].count("\n") + 1, " ".join(parts)
+                static.append(value)
+        if static or groups:
+            line = text[: tag.start()].count("\n") + 1
+            for choice in _branch_choices(groups):
+                yield line, " ".join([*static, *choice])
 
 
 def _line_class_lists(text: str):
@@ -304,6 +394,18 @@ def test_the_element_scan_survives_a_stray_apostrophe_and_reads_both_class_attri
     assert hits == [(2, "hover:bg-autobot-pill-bad-bg")], hits
 
 
+def test_exclusive_ternary_branches_never_repeat_but_a_static_base_with_a_conditional_state_does() -> None:
+    v = _declaration_values()
+    exclusive = "<i :class=\"ok ? 'bg-autobot-primary' : 'hover:bg-autobot-primary'\"></i>\n"
+    together = "<i class=\"bg-autobot-primary\" :class=\"ok ? 'hover:bg-autobot-primary' : ''\"></i>\n"
+    assert not [r for _, s in _element_class_lists(exclusive) for r in _state_repeats(s, v)]
+    # the per-line scan reads each string alone, so it cannot rejoin the branches either
+    assert not [r for _, s in _line_class_lists(exclusive) for r in _state_repeats(s, v)]
+    assert [r for _, s in _element_class_lists(together) for r in _state_repeats(s, v)] == [
+        "hover:bg-autobot-primary"
+    ]
+
+
 def test_no_class_attribute_is_lost_to_quote_mispairing() -> None:
     lost = _lost_class_attributes()
     assert not lost, f"the tag scan read fewer class attributes than the file holds: {lost[:10]}"
@@ -312,11 +414,9 @@ def test_no_class_attribute_is_lost_to_quote_mispairing() -> None:
 def test_no_state_variant_resolves_to_its_base() -> None:
     values = _declaration_values()
     found = []
-    seen = 0
     for path, line, s in _all_class_lists():
-        seen += 1
         found += [f"{path.relative_to(_SLM_SRC)}:{line} {t}" for t in _state_repeats(s, values)]
-    assert seen > 1000, "class lists are not being read"
+    assert not _lost_class_attributes(), "a template read fewer class attributes than it holds"
     assert not found, (
         f"{len(found)} class lists give a state the same utility as its base, so the state shows no change: "
         f"{found[:20]}. Use the -hover step of the base, or a hover tint token (--ok-bg-hover, --color-*-bg-hover)."

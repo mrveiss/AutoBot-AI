@@ -26,15 +26,15 @@ const healthPercentage = computed(() => {
 
 const healthColor = computed(() => {
   const pct = healthPercentage.value
-  if (pct >= 90) return 'text-autobot-success'
+  if (pct >= 90) return 'text-autobot-success-hover'
   if (pct >= 70) return 'text-autobot-warning'
-  return 'text-autobot-error'
+  return 'text-autobot-error-hover'
 })
 
 function getMetricColor(value: number): string {
-  if (value >= 90) return 'text-autobot-error'
+  if (value >= 90) return 'text-autobot-error-hover'
   if (value >= 70) return 'text-autobot-warning'
-  return 'text-autobot-success'
+  return 'text-autobot-success-hover'
 }
 
 const formatTimestamp = createDateFormatter({ kind: 'time' })
@@ -91,8 +91,8 @@ const formatTimestamp = createDateFormatter({ kind: 'time' })
           {{ metrics.running_services }}/{{ metrics.total_services }}
         </div>
         <div class="text-xs text-autobot-text-secondary">
-          <span v-if="metrics.failed_services > 0" class="text-autobot-error">{{ $t('monitoring.fleetMetricsCard.value0Failed', { value0: metrics.failed_services }) }}</span>
-          <span v-else class="text-autobot-success">{{ $t('monitoring.fleetMetricsCard.allHealthy') }}</span>
+          <span v-if="metrics.failed_services > 0" class="text-autobot-error-hover">{{ $t('monitoring.fleetMetricsCard.value0Failed', { value0: metrics.failed_services }) }}</span>
+          <span v-else class="text-autobot-success-hover">{{ $t('monitoring.fleetMetricsCard.allHealthy') }}</span>
         </div>
       </div>
     </div>
@@ -101,7 +101,7 @@ const formatTimestamp = createDateFormatter({ kind: 'time' })
     <div v-if="metrics" class="mt-6 pt-6 border-t border-autobot-border">
       <div class="grid grid-cols-3 gap-4 text-center">
         <div>
-          <div class="text-2xl font-bold text-autobot-success">{{ metrics.online_nodes }}</div>
+          <div class="text-2xl font-bold text-autobot-success-hover">{{ metrics.online_nodes }}</div>
           <div class="text-xs text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.online') }}</div>
         </div>
         <div>

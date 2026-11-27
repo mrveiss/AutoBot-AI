@@ -384,7 +384,7 @@ const formatTime = createDateFormatter({ emptyText: '—' })
 .time-cell { font-size: var(--text-xs); color: var(--text-secondary); }
 .status-badge { font-size: 10px; padding: 2px var(--spacing-2); border-radius: var(--radius-default); font-weight: 600; text-transform: uppercase; }
 .badge-gray { background: var(--bg-tertiary); color: var(--muted); }
-.badge-blue { background: var(--color-info-bg); color: var(--color-info-hover); }
+.badge-blue { background: var(--info-bg); color: var(--info-fg); }
 .badge-green { background: var(--color-success-bg); color: var(--color-success-hover); }
 .badge-red { background: var(--color-error-bg); color: var(--color-error-hover); }
 .badge-orange { background: var(--color-warning-bg); color: var(--color-warning-hover); }

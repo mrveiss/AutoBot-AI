@@ -781,7 +781,7 @@ const scoreColor = computed(() => {
           @click="enableTlsOnSelectedServices"
           :disabled="tlsEnabling || selectedTlsServices.length === 0"
           :class="[
-            'px-6 py-3 rounded-lg font-medium text-white transition-colors flex items-center gap-2',
+            'px-6 py-3 rounded-lg font-medium text-autobot-text-on-primary transition-colors flex items-center gap-2',
             tlsEnabling || selectedTlsServices.length === 0
               ? 'bg-autobot-dot-idle cursor-not-allowed'
               : 'bg-autobot-primary hover:bg-autobot-primary-hover'
@@ -973,7 +973,7 @@ const scoreColor = computed(() => {
                       'px-2 py-1 rounded-sm text-xs',
                       endpoint.is_active
                         ? 'bg-autobot-bg-tertiary hover:bg-autobot-bg-active text-autobot-text-secondary'
-                        : 'bg-autobot-success-bg hover:bg-(--color-success-bg-hover) text-autobot-pill-ok-fg'
+                        : 'bg-autobot-pill-ok-bg hover:bg-(--ok-bg-hover) text-autobot-pill-ok-fg'
                     ]"
                     :aria-label="endpoint.is_active ? $t('securityView.disableCertificateFor', { hostname: endpoint.hostname }) : $t('securityView.enableCertificateFor', { hostname: endpoint.hostname })"
                   >
@@ -1240,7 +1240,7 @@ const scoreColor = computed(() => {
                   :class="[
                     'px-3 py-1 text-xs rounded-sm',
                     policy.is_enforced
-                      ? 'bg-autobot-error-bg hover:bg-(--color-error-bg-hover) text-autobot-pill-bad-fg'
+                      ? 'bg-autobot-pill-bad-bg hover:bg-(--bad-bg-hover) text-autobot-pill-bad-fg'
                       : 'bg-autobot-success-bg hover:bg-(--color-success-bg-hover) text-autobot-pill-ok-fg'
                   ]"
                   :aria-label="policy.is_enforced ? $t('securityView.disablePolicy', { name: policy.name }) : $t('securityView.enablePolicy', { name: policy.name })"
