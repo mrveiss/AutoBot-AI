@@ -19,7 +19,13 @@ describe('the document list is a server read (#17530)', () => {
   it('has no push or client-minted id', () => {
     expect(store).not.toMatch(/documents\.value\.push\(/)
     expect(store).not.toMatch(/doc-\$\{Date\.now/)
-    expect(store).not.toMatch(/documents[^\n]*Math\.random/)
+    // Any client-minted id (Math.random / Date.now) anywhere in the store or controller fails, except the one
+    // category id line (`cat-`), which names a category, not a document.
+    const controller = read('../../models/controllers/KnowledgeController.ts')
+    const minted = [...store.split('\n'), ...controller.split('\n')].filter(
+      (line) => /Math\.random|Date\.now/.test(line) && !/`cat-\$\{Date\.now\(\)\}-/.test(line),
+    )
+    expect(minted).toEqual([])
     expect(store).not.toMatch(/function addDocument/)
   })
 

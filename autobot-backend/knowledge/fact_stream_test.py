@@ -10,6 +10,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from autobot_shared.ssot_config import config
+from knowledge.fact_key_families import (
+    FACT_COLLECTIONS_PREFIX,
+    FACT_ORIGIN_SESSION_PREFIX,
+    FACT_VERSION_META_PREFIX,
+    FACT_VERSIONS_PREFIX,
+)
+from knowledge.fact_stream import get_facts_page, is_fact_key
 from knowledge.facts import FactsMixin
 
 _RESEARCH = config.research_quarantine_collection
@@ -24,6 +31,9 @@ def fake_fact_redis(rows: dict, scanned: list | None = None):
                 scanned.append(key)
             yield key
 
+    async def scan(cursor=0, match=None, count=None):
+        return 0, list(rows)
+
     def pipeline():
         queued: list = []
         pipe = MagicMock()
@@ -33,6 +43,7 @@ def fake_fact_redis(rows: dict, scanned: list | None = None):
 
     client = MagicMock()
     client.scan_iter = scan_iter
+    client.scan = scan
     client.pipeline = pipeline
     return client
 
@@ -84,3 +95,51 @@ async def test_scan_stops_once_the_page_is_full(monkeypatch):
     store = _Store({"fact:g%02d" % i: _row() for i in range(50)}, scanned)
     await store.get_all_facts(limit=2)
     assert len(scanned) < 50
+
+
+#: Real producers' ids: the Claude-memory importer, a connector source id, the external adapter families.
+_COLON_IDS = ["claude_memory:u1:slug", "gdrive:conn1:file:/docs/a.md", "ext:feed:42", "stream:s1:7"]
+_NON_HASH_PREFIXES = [
+    FACT_COLLECTIONS_PREFIX,
+    FACT_ORIGIN_SESSION_PREFIX,
+    FACT_VERSIONS_PREFIX,
+    FACT_VERSION_META_PREFIX,
+]
+
+
+class _HashesOnly(dict):
+    """Rows keyed by fact key; reading a non-hash family (Redis WRONGTYPE) fails the whole batch."""
+
+    def __getitem__(self, key):
+        if key.startswith(tuple(_NON_HASH_PREFIXES)):
+            raise AssertionError("a non-hash fact: key was read as a hash: %s" % key)
+        return super().__getitem__(key)
+
+
+def _mixed_rows() -> dict:
+    rows = _HashesOnly({"fact:plain01": _row()})
+    rows.update({"fact:" + fid: _row() for fid in _COLON_IDS})
+    rows.update({p + "plain01": _row() for p in _NON_HASH_PREFIXES})
+    return rows
+
+
+@pytest.mark.parametrize("fid", _COLON_IDS)
+def test_a_fact_with_a_colon_id_is_a_fact_key(fid):
+    assert is_fact_key("fact:" + fid) and is_fact_key(("fact:" + fid).encode())
+
+
+@pytest.mark.parametrize("prefix", _NON_HASH_PREFIXES)
+def test_each_non_hash_fact_family_is_not_a_fact_key(prefix):
+    assert not is_fact_key(prefix + "abc") and not is_fact_key((prefix + "abc:def").encode())
+
+
+@pytest.mark.asyncio
+async def test_facts_already_stored_under_colon_ids_are_listed_with_their_full_id():
+    facts = await _Store(_mixed_rows()).get_all_facts()
+    assert sorted(f["fact_id"] for f in facts) == sorted(["plain01", *_COLON_IDS])
+
+
+@pytest.mark.asyncio
+async def test_a_scan_page_lists_colon_ids_and_skips_every_non_hash_family():
+    cursor, facts = await get_facts_page(_Store(_mixed_rows()), 0, 100)
+    assert cursor == 0 and sorted(f["fact_id"] for f in facts) == sorted(["plain01", *_COLON_IDS])

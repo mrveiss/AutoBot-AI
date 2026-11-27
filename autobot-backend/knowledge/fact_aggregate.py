@@ -14,8 +14,10 @@ free-text ``metadata.category`` every fact carries, so the two disagree for any 
 
 from __future__ import annotations
 
+import asyncio
+import functools
 import time
-from typing import Any, Dict, List
+from typing import Any, Awaitable, Callable, Dict, List, Tuple
 
 from autobot_shared.env_utils import env_int
 from knowledge.fact_redis_codec import _decode_redis_hash
@@ -60,14 +62,53 @@ async def _scan_rows(kb: Any) -> List[Dict[str, Any]]:
     return rows
 
 
-async def fact_rows(kb: Any) -> List[Dict[str, Any]]:
+_INFLIGHT_ATTR = "_fact_rows_inflight"
+_GENERATION_ATTR = "_fact_rows_generation"
+
+
+def invalidate_fact_rows(kb: Any) -> None:
+    """Drop *kb*'s cached rows; a scan already in flight will not store its (possibly stale) result."""
+    setattr(kb, _CACHE_ATTR, None)
+    setattr(kb, _GENERATION_ATTR, getattr(kb, _GENERATION_ATTR, 0) + 1)
+
+
+def invalidates_fact_rows(method: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+    """Decorate a KB write (``store_fact``/``update_fact``/``delete_fact``) so the cached rows never outlive it."""
+
+    @functools.wraps(method)
+    async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return await method(self, *args, **kwargs)
+        finally:
+            invalidate_fact_rows(self)
+
+    return wrapper
+
+
+async def _load_rows(kb: Any) -> Tuple[Dict[str, Any], ...]:
+    """One scan; stores the result unless a write invalidated the cache meanwhile. Always frees the in-flight slot."""
+    generation = getattr(kb, _GENERATION_ATTR, 0)
+    try:
+        rows = tuple(await _scan_rows(kb))
+        if getattr(kb, _GENERATION_ATTR, 0) == generation:
+            setattr(kb, _CACHE_ATTR, (time.monotonic(), rows))
+        return rows
+    finally:
+        setattr(kb, _INFLIGHT_ATTR, None)
+
+
+async def fact_rows(kb: Any) -> Tuple[Dict[str, Any], ...]:
     """Every non-quarantined fact as ``{metadata, size}``, cached on *kb* for ``FACT_AGGREGATE_TTL_SECONDS``.
 
-    Errors propagate: the callers decide how their endpoint degrades.
+    Concurrent cold callers share ONE scan through a per-KB in-flight task (a cancelled caller does not cancel the
+    others: the task is shielded). The tuple is immutable, so one caller cannot corrupt the shared cache. Errors
+    propagate: the callers decide how their endpoint degrades.
     """
     cached = getattr(kb, _CACHE_ATTR, None)
     if cached and FACT_AGGREGATE_TTL_SECONDS > 0 and time.monotonic() - cached[0] < FACT_AGGREGATE_TTL_SECONDS:
         return cached[1]
-    rows = await _scan_rows(kb)
-    setattr(kb, _CACHE_ATTR, (time.monotonic(), rows))
-    return rows
+    task = getattr(kb, _INFLIGHT_ATTR, None)
+    if task is None:
+        task = asyncio.ensure_future(_load_rows(kb))
+        setattr(kb, _INFLIGHT_ATTR, task)
+    return await asyncio.shield(task)

@@ -600,7 +600,8 @@ class AbstractConnector(ABC):
             self.logger.debug("Skipping empty content for source %s", content.source_id)
             return
 
-        await kb.store_fact(text, ingest_metadata, fact_id=content.source_id)
+        if (stored := await kb.store_fact(text, ingest_metadata, fact_id=content.source_id)).get("status") == "error":
+            raise RuntimeError("store_fact failed for source %s: %s" % (content.source_id, stored.get("message")))
         self.logger.debug("Ingested source %s into KB (connector=%s)", content.source_id, self.config.connector_id)
 
     # ------------------------------------------------------------------

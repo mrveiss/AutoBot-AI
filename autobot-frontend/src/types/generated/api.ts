@@ -5117,6 +5117,9 @@ export interface paths {
          *
          *     Issue #744: Requires admin authentication.
          *     Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
+         *     Issue #17530: ``size_metrics`` sizes are the content field's byte length (``HSTRLEN``), read without the
+         *     content text; they were character counts of the full content before. ``degraded`` is true when the fact store
+         *     could not be read, so empty breakdowns are not mistaken for an empty KB.
          */
         get: operations["get_detailed_stats_api_knowledge_base_detailed_stats_get"];
         put?: never;
@@ -75020,6 +75023,12 @@ export interface components {
             rag_available: boolean;
             /** Message */
             message?: string | null;
+            /**
+             * Degraded
+             * @description True when the fact store could not be read; breakdowns are then empty, not zero
+             * @default false
+             */
+            degraded: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -82786,6 +82795,12 @@ export interface components {
              * @default 0
              */
             total: number;
+            /**
+             * Degraded
+             * @description True when the fact store could not be read; counts are then unknown, not zero
+             * @default false
+             */
+            degraded: boolean;
         } & {
             [key: string]: unknown;
         };

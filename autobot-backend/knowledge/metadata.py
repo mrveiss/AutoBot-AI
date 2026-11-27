@@ -502,7 +502,7 @@ class MetadataMixin:
                         continue
 
                     if self._match_metadata_value(field_value, value, operator):
-                        matching_facts.append(key_str.split(":")[-1])
+                        matching_facts.append(key_str.split(":", 1)[-1])
                         if len(matching_facts) >= limit:
                             break
                 except (json.JSONDecodeError, TypeError):

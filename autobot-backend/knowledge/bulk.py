@@ -1237,7 +1237,7 @@ class BulkOperationsMixin:
         raw_pairs = await asyncio.to_thread(_pipeline_hmget, fact_keys)
 
         for key_str, pair in zip(fact_keys, raw_pairs):
-            fact_id = key_str.split(":")[-1]
+            fact_id = key_str.split(":", 1)[-1]
             content_raw = pair[0] or b""
             if isinstance(content_raw, bytes):
                 content_raw = content_raw.decode("utf-8", errors="replace")

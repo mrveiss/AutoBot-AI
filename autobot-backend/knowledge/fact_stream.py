@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any, AsyncIterator, Callable, Dict, List
 
 from autobot_shared.env_utils import env_int
+from knowledge.fact_key_families import NON_HASH_FACT_PREFIXES
 from knowledge.quarantine import not_quarantined
 
 FACT_KEY_PATTERN = "fact:*"
@@ -21,23 +22,19 @@ FACT_SCAN_BATCH_SIZE: int = env_int("AUTOBOT_FACT_SCAN_BATCH_SIZE", 200)
 FactProcessor = Callable[[Any, Any, "str | None"], "Dict[str, Any] | None"]
 
 
-def is_fact_id(fact_id: Any) -> bool:
-    """A fact id is non-empty and colon-free, so ``fact:<id>`` is never mistaken for another ``fact:`` key family."""
-    return bool(fact_id) and ":" not in str(fact_id)
-
-
 def is_fact_key(key: Any) -> bool:
     """True for a real ``fact:<id>`` hash; the other ``fact:`` key families share the scan prefix and are not hashes.
 
-    Families the code writes (``git grep`` of ``fact:`` key builders, #17530): ``fact:<id>`` (hash, the fact itself);
-    ``fact:collections:<id>`` (set, ``knowledge/collections.py``); ``fact:origin:session:<id>`` (string,
-    ``knowledge/facts.py``); ``fact:versions:<id>`` and ``fact:version:meta:<id>`` (``knowledge/versioning.py``).
-    ``store_fact`` rejects a colon in a caller-supplied id (:func:`is_fact_id`), so every other family has a
-    colon after the prefix. A WRONGTYPE
-    ``hgetall`` on one of them would fail the whole pipelined batch.
+    Fact ids legitimately contain ``:`` (``claude_memory:<owner>:<slug>``, connector ``<src>:<id>:file:<path>``,
+    ``ext:...``, ``stream:...``), so a colon cannot be the discriminator. A key is a fact hash unless it starts
+    with one of :data:`NON_HASH_FACT_PREFIXES` (``fact:collections:``, ``fact:origin:session:``,
+    ``fact:versions:``, ``fact:version:meta:``), defined once in ``fact_key_families`` and imported by their
+    writers. A prefix test is chosen over a pipelined ``TYPE`` check because it costs no round trip and no
+    production id starts with one of those four namespaced prefixes. A WRONGTYPE ``hgetall`` on a non-hash
+    family would fail the whole pipelined batch.
     """
     text = key.decode("utf-8") if isinstance(key, bytes) else key
-    return text.startswith("fact:") and is_fact_id(text[len("fact:") :])
+    return text.startswith("fact:") and not text.startswith(NON_HASH_FACT_PREFIXES)
 
 
 async def _read_batch(redis: Any, keys: List[Any]) -> List[Any]:

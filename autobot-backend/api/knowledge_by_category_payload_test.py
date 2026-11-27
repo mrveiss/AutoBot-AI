@@ -489,6 +489,57 @@ class TestWholeStoreReadersUseFactHashes:
             resp = await kn.get_knowledge_categories(admin_check=True, req=req)
         dump = [c if isinstance(c, dict) else c.model_dump() for c in resp.categories]
         assert [(c["name"], c["count"]) for c in dump] == [("a", 0)]
+        assert resp.degraded is True  # a failed read is flagged, never a confident zero
+
+    @pytest.mark.asyncio
+    async def test_detailed_stats_flags_a_failed_fact_read_as_degraded(self, caplog):
+        from unittest.mock import AsyncMock, patch
+
+        import api.knowledge as kn
+
+        kb = SimpleNamespace(
+            get_stats=AsyncMock(return_value={"initialized": True}),
+            ensure_initialized=lambda: None,
+            redis=lambda: (_ for _ in ()).throw(ConnectionError("down")),
+        )
+        with patch.object(kn, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+            with caplog.at_level("WARNING"):
+                resp = await kn.get_detailed_stats(admin_check=True, req=SimpleNamespace(app=object()))
+        assert resp.degraded is True and resp.category_breakdown == {}
+        assert any(r.levelname == "WARNING" and "Redis read failed" in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_aggregate_and_listing_show_facts_stored_under_colon_ids(self):
+        """#17530: ids such as ``claude_memory:<owner>:<slug>`` are real; the readers must list them whole."""
+        import knowledge.fact_aggregate as agg
+        from knowledge.fact_stream import get_facts_page
+
+        kb = _fact_kb(1, extra_keys=["fact:collections:id-0"], page=10)
+        meta = json.dumps({"title": "m", "category": "memory", "type": "note"})
+        for fid in ("claude_memory:u1:slug", "gdrive:c1:file:/a.md"):
+            kb.redis().hashes["fact:" + fid] = {"content": "xy", "metadata": meta, "timestamp": "2026-01-01"}
+            kb.redis().keys.append("fact:" + fid)
+        assert len(await agg.fact_rows(kb)) == 3
+        _, page = await get_facts_page(kb, 0, 10)
+        assert sorted(f["fact_id"] for f in page) == ["claude_memory:u1:slug", "gdrive:c1:file:/a.md", "id-0"]
+
+    @pytest.mark.asyncio
+    async def test_concurrent_cold_requests_share_one_scan_and_a_write_invalidates_the_cache(self, monkeypatch):
+        import asyncio
+
+        import knowledge.fact_aggregate as agg
+
+        kb = _fact_kb(3, page=10)
+        monkeypatch.setattr(agg, "FACT_AGGREGATE_TTL_SECONDS", 30)
+        first = await asyncio.gather(*[agg.fact_rows(kb) for _ in range(5)])
+        assert len({id(r) for r in first}) == 1 and isinstance(first[0], tuple)
+        assert len([c for c in kb.redis().read if c[0] == "hget" and c[2] == "metadata"]) == 3  # ONE scan, not five
+        reads = len(kb.redis().read)
+        await agg.fact_rows(kb)
+        assert len(kb.redis().read) == reads
+        agg.invalidate_fact_rows(kb)
+        await agg.fact_rows(kb)
+        assert len(kb.redis().read) > reads
 
     @pytest.mark.asyncio
     async def test_man_page_parser_reads_the_fact_dict(self):

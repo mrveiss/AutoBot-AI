@@ -463,12 +463,14 @@ async def get_knowledge_categories(
 
     # Count facts by category from the fact:<id> store, metadata only, cached (#17530)
     category_counts = {}
+    degraded = False
     try:
         for fact in await fact_rows(kb_to_use):
             category = (fact.get("metadata") or {}).get("category", "uncategorized")
             category_counts[category] = category_counts.get(category, 0) + 1
     except Exception as redis_err:
-        logger.debug("Redis error getting facts: %s", redis_err)
+        degraded = True
+        logger.warning("categories: fact counts unavailable, Redis read failed: %s", redis_err)
 
     # Format for frontend with counts
     categories = [{"name": cat, "count": category_counts.get(cat, 0), "id": cat} for cat in categories_list]
@@ -492,6 +494,7 @@ async def get_knowledge_categories(
     return KnowledgeCategoriesResponse(
         categories=categories,
         total=len(categories),
+        degraded=degraded,
     )
 
 
@@ -1650,6 +1653,9 @@ async def get_detailed_stats(
 
     Issue #744: Requires admin authentication.
     Issue #5248: response typed as Pydantic model so OpenAPI captures schema.
+    Issue #17530: ``size_metrics`` sizes are the content field's byte length (``HSTRLEN``), read without the
+    content text; they were character counts of the full content before. ``degraded`` is true when the fact store
+    could not be read, so empty breakdowns are not mistaken for an empty KB.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
@@ -1661,10 +1667,12 @@ async def get_detailed_stats(
         return DetailedKnowledgeStats(**_create_offline_stats_response())
 
     basic_stats = await kb.get_stats()
+    degraded = False
     try:
         rows = await fact_rows(kb)
     except Exception as redis_err:
-        logger.debug("Redis error getting facts: %s", redis_err)
+        degraded = True
+        logger.warning("detailed_stats: fact breakdowns unavailable, Redis read failed: %s", redis_err)
         rows = []
     cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(rows)
     return DetailedKnowledgeStats(
@@ -1675,6 +1683,7 @@ async def get_detailed_stats(
         type_breakdown=type_counts,
         size_metrics=_compute_size_metrics(sizes),
         rag_available=RAG_AVAILABLE,
+        degraded=degraded,
     )
 
 

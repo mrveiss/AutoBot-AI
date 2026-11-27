@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import utc_timestamp
+from knowledge.fact_key_families import FACT_VERSION_META_PREFIX, FACT_VERSIONS_PREFIX
 
 if TYPE_CHECKING:
     import aioredis
@@ -51,8 +52,8 @@ class VersioningMixin:
     _aioredis_client: "aioredis.Redis"
 
     # Redis key patterns
-    VERSION_PREFIX = "fact:versions:"
-    VERSION_META = "fact:version:meta:"
+    VERSION_PREFIX = FACT_VERSIONS_PREFIX
+    VERSION_META = FACT_VERSION_META_PREFIX
 
     async def _get_next_version_number(self, version_meta_key: str) -> int:
         """Get next version number for a fact (Issue #398: extracted)."""

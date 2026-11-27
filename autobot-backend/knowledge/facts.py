@@ -21,13 +21,15 @@ from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from knowledge.category_quarantine import sync_fact_quarantine, unindex_deleted_fact
 from knowledge.embedding_space_binding import current_space
+from knowledge.fact_aggregate import invalidates_fact_rows
+from knowledge.fact_key_families import FACT_ORIGIN_SESSION_PREFIX
 from knowledge.fact_projection import FactProjectionMixin
 from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable here
     _apply_usage_fields,
     _decode_redis_hash,
 )
 from knowledge.fact_sharing import FactSharingMixin
-from knowledge.fact_stream import collect_facts, is_fact_id, stream_facts
+from knowledge.fact_stream import collect_facts, stream_facts
 from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_update_metadata
 from knowledge.long_fact_embedding import embed_in_windows, window_metadata, with_window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
@@ -753,11 +755,10 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         # original may carry a credential this call just redacted out.
         return {"status": "success", "fact_id": fact_id, "action": "created", "content": content}
 
+    @invalidates_fact_rows
     async def store_fact(self, content: str, metadata: Dict[str, Any] = None, fact_id: str = None) -> Dict[str, Any]:
         """Store a new fact in Redis and vectorize it (Issue #398: refactored)."""
         self.ensure_initialized()
-        if fact_id is not None and not is_fact_id(fact_id):  # #17530: a colon would alias another fact: key family
-            return {"status": "error", "message": "fact_id must be non-empty and contain no ':'"}
         # #13708: the dedup hash keys on what the caller SUBMITTED, not the redacted text (redaction masks every
         # credential to one placeholder, so two different secrets would collide). Storage and embedding use the
         # redacted `content`.
@@ -946,7 +947,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             return None
 
         # Extract fact_id from key
-        fact_id = key.split(":")[-1] if isinstance(key, str) else key.decode("utf-8").split(":")[-1]
+        fact_id = key.split(":", 1)[-1] if isinstance(key, str) else key.decode("utf-8").split(":", 1)[-1]
 
         # Decode data using helper
         decoded = _decode_redis_hash(fact_data)
@@ -1080,6 +1081,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         new_hash = fact_dedup_key(new_content)
         await asyncio.to_thread(self.redis_client.set, "content_hash:%s" % new_hash, fact_id)
 
+    @invalidates_fact_rows
     async def update_fact(self, fact_id: str, content: str = None, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
         """Update an existing fact (Issue #398: refactored)."""
         self.ensure_initialized()
@@ -1166,8 +1168,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         if unique_key:
             await asyncio.to_thread(self.redis_client.delete, "unique_key:man_page:%s" % unique_key)
 
-        await asyncio.to_thread(self.redis_client.delete, "fact:origin:session:%s" % fact_id)
-
+        await asyncio.to_thread(self.redis_client.delete, "%s%s" % (FACT_ORIGIN_SESSION_PREFIX, fact_id))
         # Issue #688: Clean up ownership indexes
         if getattr(self, "ownership_manager", None):  # #16685: None when not initialised -- skip, never crash
             await self.ownership_manager.cleanup_ownership_indexes(fact_id, metadata)
@@ -1184,6 +1185,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             except Exception as e:
                 logger.warning("Could not delete vector for fact %s: %s", fact_id, e)
 
+    @invalidates_fact_rows
     async def delete_fact(self, fact_id: str, *, _skip_bm25_refresh: bool = False) -> dict:
         """Delete a fact from Redis and ChromaDB. Issue #620.
 
@@ -1268,7 +1270,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             await asyncio.to_thread(self.redis_client.sadd, "session:facts:%s" % session_id, fact_id)
 
             # Store reverse lookup (fact -> session)
-            await asyncio.to_thread(self.redis_client.set, "fact:origin:session:%s" % fact_id, session_id)
+            await asyncio.to_thread(self.redis_client.set, "%s%s" % (FACT_ORIGIN_SESSION_PREFIX, fact_id), session_id)
 
             logger.debug(
                 "Tracked session-fact relationship: session=%s, fact=%s",
@@ -1319,7 +1321,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             Session ID or None if not tracked
         """
         try:
-            session_id = await asyncio.to_thread(self.redis_client.get, "fact:origin:session:%s" % fact_id)
+            session_id = await asyncio.to_thread(self.redis_client.get, "%s%s" % (FACT_ORIGIN_SESSION_PREFIX, fact_id))
 
             if session_id:
                 return session_id.decode("utf-8") if isinstance(session_id, bytes) else session_id
@@ -1695,7 +1697,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
 
             # Delete reverse lookup keys for each fact
             for fact_id in fact_ids:
-                await asyncio.to_thread(self.redis_client.delete, "fact:origin:session:%s" % fact_id)
+                await asyncio.to_thread(self.redis_client.delete, "%s%s" % (FACT_ORIGIN_SESSION_PREFIX, fact_id))
 
             logger.debug("Cleaned up tracking for session %s", session_id)
 
