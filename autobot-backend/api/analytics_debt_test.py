@@ -14,17 +14,7 @@ import pytest
 from api import analytics_debt as mod
 from api import analytics_debt_store as store
 from api.codebase_analytics.endpoints.shared import UnresolvedSourceError
-
-
-class _Pipe:
-    def __init__(self, redis):
-        self._redis, self._keys = redis, []
-
-    def get(self, key):
-        self._keys.append(key)
-
-    def execute(self):
-        return [self._redis.data.get(k) for k in self._keys]
+from testkit.fake_redis_pipeline import FakePipeline
 
 
 class _FakeRedis:
@@ -44,13 +34,17 @@ class _FakeRedis:
         return [k for k in list(self.data) if k.startswith(prefix)]
 
     def pipeline(self):
-        return _Pipe(self)
+        return FakePipeline(self)
 
 
 def _result(total_items: int) -> dict:
     return {
         "timestamp": f"2026-11-28T10:00:0{total_items}+00:00",
-        "summary": {"total_items": total_items, "total_hours": 1.0, "total_cost_usd": 75.0},
+        "summary": {
+            "total_items": total_items,
+            "total_hours": 1.0,
+            "total_cost_usd": 75.0,
+        },
         "top_files": [],
         "roi_ranking": [],
         "items": [],
@@ -118,7 +112,11 @@ def test_the_store_refuses_an_unscoped_or_malformed_source(bad):
 
 @pytest.mark.asyncio
 async def test_an_unresolvable_source_is_a_404_and_never_the_install_tree(fake_redis):
-    with patch.object(mod, "resolve_scan_root", new=AsyncMock(side_effect=UnresolvedSourceError("src-x"))):
+    with patch.object(
+        mod,
+        "resolve_scan_root",
+        new=AsyncMock(side_effect=UnresolvedSourceError("src-x")),
+    ):
         with pytest.raises(UnresolvedSourceError):
             await mod.get_debt_summary(source_id="src-x", admin_check=True)
 
@@ -135,3 +133,64 @@ async def test_calculate_stores_under_the_requesting_source_only(fake_redis):
         response = await mod.calculate_technical_debt(request, source_id="src-a", admin_check=True)
     assert _body(response)["status"] == "success"
     assert fake_redis.data and all(k.startswith("debt:source_id:src-a:") for k in fake_redis.data)
+
+
+# --- review (#22198): per-source access on top of the admin gate (#12358), as the evolution router does ---
+
+
+def _private_source():
+    from api.codebase_analytics.source_models import CodeSource, SourceAccess
+
+    return CodeSource(
+        name="proj",
+        clone_path="/tmp/proj",
+        owner_id="alice",
+        access=SourceAccess.PRIVATE,
+    )
+
+
+def _debt_client():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from auth_middleware import check_admin_permission
+
+    app = FastAPI()
+    app.include_router(mod.router)  # require_source_access is NOT overridden
+    app.dependency_overrides[check_admin_permission] = lambda: True
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.mark.parametrize("route", ["summary", "by-category/code_smell", "roi-priorities", "trends", "report"])
+def test_a_foreign_private_source_is_a_404_on_every_debt_read(route):
+    with (
+        patch(
+            "auth_middleware.get_current_user",
+            AsyncMock(return_value={"id": "mallory"}),
+        ),
+        patch(
+            "api.codebase_analytics.source_storage.get_source",
+            AsyncMock(return_value=_private_source()),
+        ),
+    ):
+        assert _debt_client().get(f"/{route}", params={"source_id": "b"}).status_code == 404
+
+
+def test_a_foreign_private_source_cannot_be_calculated_either():
+    with (
+        patch(
+            "auth_middleware.get_current_user",
+            AsyncMock(return_value={"id": "mallory"}),
+        ),
+        patch(
+            "api.codebase_analytics.source_storage.get_source",
+            AsyncMock(return_value=_private_source()),
+        ),
+    ):
+        assert _debt_client().post("/calculate", params={"source_id": "b"}, json={}).status_code == 404
+
+
+def test_the_debt_router_carries_the_source_access_dependency():
+    from api.codebase_analytics.endpoints.shared import require_source_access
+
+    assert any(d.dependency is require_source_access for d in mod.router.dependencies)

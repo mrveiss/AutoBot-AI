@@ -68,7 +68,11 @@ def get_problems_from_chromadb(code_collection, source_id: str) -> List[Dict[str
 
 
 async def get_antipatterns_from_redis(redis_client, source_id: str) -> List[Dict[str, Any]]:
-    """Get ONE source's anti-patterns from Redis (Issue #315, #22198)."""
+    """Get ONE source's anti-patterns from Redis (Issue #315, #22198).
+
+    #22359: nothing writes `antipattern:source_id:{id}:latest_results`; the analyzer caches under
+    `anti_pattern_analysis` keyed by directory content hash, so this is [] until that issue wires it.
+    """
     if not redis_client:
         return []
     try:

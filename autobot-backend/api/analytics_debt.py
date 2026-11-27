@@ -36,7 +36,10 @@ from api.analytics_debt_store import (
     store_debt_result,
 )
 from api.analytics_shared import no_data_response
-from api.codebase_analytics.endpoints.shared import resolve_scan_root
+from api.codebase_analytics.endpoints.shared import (
+    require_source_access,
+    resolve_scan_root,
+)
 from api.schemas_analytics import (
     AnalyticsDebtByCategoryResponse,
     AnalyticsDebtCalculateResponse,
@@ -53,7 +56,11 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
-router = APIRouter(tags=["technical-debt", "analytics"])  # Prefix set in router_registry
+router = APIRouter(
+    tags=["technical-debt", "analytics"],
+    dependencies=[Depends(require_source_access)],  # per-source authorization on top of the admin gate (#12358)
+)  # Prefix set in router_registry
+
 
 async def calculate_debt_from_analysis(analysis_data: Dict[str, Any], hourly_rate: float = 75.0) -> Dict[str, Any]:
     """
@@ -227,7 +234,9 @@ def _process_complexity(complexity_data: Dict[str, Any]) -> List[DebtItem]:
             severity = (
                 DebtSeverity.CRITICAL
                 if complexity > 20
-                else DebtSeverity.HIGH if complexity > 15 else DebtSeverity.MEDIUM
+                else DebtSeverity.HIGH
+                if complexity > 15
+                else DebtSeverity.MEDIUM
             )
             debt_items.append(
                 DebtItem(
@@ -314,6 +323,20 @@ async def _require_scoped_source(source_id: str) -> str:
     return source_id
 
 
+async def _gather_debt_inputs(source_id: str) -> Dict[str, Any]:
+    """The anti-pattern and problem inputs for ONE source's debt calculation (#22198)."""
+    from api.codebase_analytics import get_code_collection, get_redis_connection
+
+    code_collection = get_code_collection()
+    redis_client = await get_redis_connection()
+    return {
+        "anti_patterns": await get_antipatterns_from_redis(redis_client, source_id),
+        "problems": get_problems_from_chromadb(code_collection, source_id),
+        "hardcodes": [],
+        "complexity": {},
+    }
+
+
 @router.post("/calculate", response_model=DataResponse[AnalyticsDebtCalculateResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -333,17 +356,7 @@ async def calculate_technical_debt(
     """
     await _require_scoped_source(source_id)
     try:
-        from api.codebase_analytics import get_code_collection, get_redis_connection
-
-        code_collection = get_code_collection()
-        redis_client = await get_redis_connection()
-
-        analysis_data = {
-            "anti_patterns": await get_antipatterns_from_redis(redis_client, source_id),
-            "problems": get_problems_from_chromadb(code_collection, source_id),
-            "hardcodes": [],
-            "complexity": {},
-        }
+        analysis_data = await _gather_debt_inputs(source_id)
 
         debt_result = await calculate_debt_from_analysis(analysis_data, request.hourly_rate)
         store_debt_result(debt_result, source_id)
@@ -402,14 +415,19 @@ async def get_debt_summary(source_id: SourceIdQuery, admin_check: bool = Depends
     )
 
 
-@router.get("/by-category/{category}", response_model=DataResponse[AnalyticsDebtByCategoryResponse])
+@router.get(
+    "/by-category/{category}",
+    response_model=DataResponse[AnalyticsDebtByCategoryResponse],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_by_category",
     error_code_prefix="ANALYTICS_DEBT",
 )
 async def get_debt_by_category(
-    category: str, source_id: SourceIdQuery, admin_check: bool = Depends(check_admin_permission)
+    category: str,
+    source_id: SourceIdQuery,
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get technical debt items filtered by category (Issue #315 - refactored).

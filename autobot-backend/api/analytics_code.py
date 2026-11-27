@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.codebase_analytics.endpoints.shared import require_source_access
 from api.schemas_analytics import (
     AnalyticsCodeCommunicationChainsResponse,
     AnalyticsCodeIndexResponse,
@@ -23,6 +24,7 @@ from api.schemas_analytics import (
     AnalyticsCodeStatusResponse,
     CodeAnalysisRequest,
 )
+from api.source_scope import SourceIdQuery
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -307,7 +309,10 @@ def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> lis
     return insights
 
 
-@router.get("/code/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
+@router.get(
+    "/code/communication-chains",
+    response_model=AnalyticsCodeCommunicationChainsResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_chains",
@@ -421,7 +426,10 @@ def _generate_communication_chain_insights(
     return insights
 
 
-@router.post("/code/analyze/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
+@router.post(
+    "/code/analyze/communication-chains",
+    response_model=AnalyticsCodeCommunicationChainsResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_communication_chains_detailed",
@@ -456,14 +464,17 @@ async def analyze_communication_chains_detailed(
     return results
 
 
-def _calculate_security_score(cached_analysis: dict) -> float:
+def _calculate_security_score(cached_analysis: dict, source_id: str) -> float:
     """
     Calculate security score from ChromaDB problems (Issue #665: extracted).
 
     Issue #543: Calculate security score from actual problems.
 
+    Only ONE source's problems count (#22198): the read carries the source_id filter.
+
     Args:
         cached_analysis: Cached code analysis data
+        source_id: The code source whose problems are scored
 
     Returns:
         Security score (0-100)
@@ -477,8 +488,11 @@ def _calculate_security_score(cached_analysis: dict) -> float:
 
         security_results = code_collection.get(
             where={
-                "type": "problem",
-                "problem_type": {"$in": ["security", "hardcode", "vulnerability"]},
+                "$and": [
+                    {"type": "problem"},
+                    {"source_id": source_id},
+                    {"problem_type": {"$in": ["security", "hardcode", "vulnerability"]}},
+                ]
             },
             include=["metadatas"],
         )
@@ -497,12 +511,13 @@ def _calculate_security_score(cached_analysis: dict) -> float:
         return 0.0  # Unknown when can't calculate
 
 
-def _calculate_quality_factors(cached_analysis: dict) -> dict:
+def _calculate_quality_factors(cached_analysis: dict, source_id: str) -> dict:
     """
     Calculate quality factors from cached analysis (Issue #665: extracted).
 
     Args:
         cached_analysis: Cached code analysis data
+        source_id: The code source the security factor is scoped to
 
     Returns:
         Dict of quality factor scores
@@ -541,18 +556,23 @@ def _calculate_quality_factors(cached_analysis: dict) -> dict:
     quality_factors["maintainability"] = maintainability_scores.get(maintainability, 40)
 
     # Security score
-    quality_factors["security"] = _calculate_security_score(cached_analysis)
+    quality_factors["security"] = _calculate_security_score(cached_analysis, source_id)
 
     return quality_factors
 
 
-@router.get("/code/metrics/quality-score", response_model=AnalyticsCodeQualityScoreResponse)
+@router.get(
+    "/code/metrics/quality-score",
+    response_model=AnalyticsCodeQualityScoreResponse,
+    dependencies=[Depends(require_source_access)],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_score",
     error_code_prefix="ANALYTICS_CODE",
 )
 async def get_code_quality_score(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
@@ -569,7 +589,7 @@ async def get_code_quality_score(
         cached_analysis = await analytics_controller.perform_code_analysis(analysis_request)
 
     # Calculate quality factors (Issue #665: uses helper)
-    quality_factors = _calculate_quality_factors(cached_analysis)
+    quality_factors = _calculate_quality_factors(cached_analysis, source_id)
 
     # Calculate overall score
     overall_score = sum(quality_factors.values()) / len(quality_factors)
