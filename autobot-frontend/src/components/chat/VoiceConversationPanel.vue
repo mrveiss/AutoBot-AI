@@ -11,7 +11,7 @@
 <template>
   <aside
     ref="panelRef"
-    class="voice-panel adv w-70 min-w-70 max-w-70 h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
+    class="voice-panel adv w-70 min-w-70 max-w-70 h-full flex flex-col bg-autobot-bg-card border-s border-autobot-border"
     tabindex="-1"
     :aria-label="$t('chat.voice.title')"
     @keydown.escape="close"

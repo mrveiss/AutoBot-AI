@@ -95,7 +95,7 @@ describe('FileListTable (#22349)', () => {
     wrapper.unmount()
   })
 
-  it('Enter and Space on a name button activate its row (the button click)', async () => {
+  it('a name button click is the activation path: keydown alone emits nothing, the click emits view-file', async () => {
     const wrapper = mountTable()
     const button = wrapper.get('[data-testid="file-row-a.txt"]')
     ;(button.element as HTMLElement).focus()
@@ -107,10 +107,18 @@ describe('FileListTable (#22349)', () => {
     wrapper.unmount()
   })
 
-  it('resolves a row by its path, not its position', async () => {
-    const wrapper = mountTable([files[2], files[0]])
-    await wrapper.get('[data-testid="file-row-b.json"]').trigger('click')
-    expect(wrapper.emitted('view-file')?.[0]).toEqual([files[2]])
+  it('resolves a row by its path, not its DOM position or name', async () => {
+    const twins = [
+      { name: 'same.txt', path: '/one/same.txt', is_dir: false },
+      { name: 'same.txt', path: '/two/same.txt', is_dir: false },
+    ]
+    const wrapper = mountTable(twins)
+    const body = wrapper.get('tbody').element
+    body.insertBefore(body.children[1], body.children[0]) // DOM order now differs from props.files order
+    const first = wrapper.findAll('tbody tr')[0]
+    expect(first.get('[data-row-primary]').attributes('data-path')).toBe('/two/same.txt')
+    await first.get('[data-row-primary]').trigger('click')
+    expect(wrapper.emitted('view-file')?.[0]).toEqual([twins[1]]) // index- or name-based lookup yields twins[0]
     wrapper.unmount()
   })
 
