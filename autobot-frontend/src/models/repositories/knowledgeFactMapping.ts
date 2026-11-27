@@ -12,6 +12,7 @@
 import type { components } from '@/types/generated/api'
 import { getApiBase } from '@/config/ssot-config'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
+import type { KnowledgeEntry, KnowledgeEntriesResponse } from '@/types/api-contract'
 
 /** GET /api/knowledge_base/fact/{fact_key} body, from the generated contract. */
 export type FactByKeyBody = components['schemas']['FactByKeyResponse']
@@ -63,3 +64,29 @@ export function factToDocument(documentId: string, fact: FactByKeyBody): Knowled
 // The endpoint accepts limit <= 1000; the page bound stops a cursor that never ends.
 export const ENTRIES_PAGE_SIZE = 1000
 export const ENTRIES_MAX_PAGES = 200
+
+export interface AllEntriesResult {
+  success: boolean
+  entries: KnowledgeEntry[]
+  total: number
+  truncated: boolean
+}
+
+/**
+ * Follow the server's cursor until it reports no more pages, de-duplicated by entry id (#17530).
+ * A cursor scan can return one id on two pages; the id is the identity, so the last read wins.
+ */
+export async function collectAllEntries(
+  fetchPage: (query: { limit: number; cursor: string }) => Promise<KnowledgeEntriesResponse>,
+): Promise<Omit<AllEntriesResult, 'success' | 'total'>> {
+  const byId = new Map<string, KnowledgeEntry>()
+  let cursor = '0'
+  let hasMore = true
+  for (let page = 0; page < ENTRIES_MAX_PAGES && hasMore; page++) {
+    const data = await fetchPage({ limit: ENTRIES_PAGE_SIZE, cursor })
+    for (const entry of data.entries ?? []) byId.set(entry.id, entry)
+    hasMore = Boolean(data.has_more && data.next_cursor && data.next_cursor !== cursor)
+    cursor = data.next_cursor
+  }
+  return { entries: [...byId.values()], truncated: hasMore }
+}
