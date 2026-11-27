@@ -212,7 +212,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         variables={},
         estimated_duration="1-2 minutes",
         # Confirmation required: deploy-slm-agent.yml has `hosts: slm_nodes`
-        # and NO `serial:`, unlike update-all-nodes.yml (`serial: 3`). With
+        # and NO `serial:`, unlike the fleet-update playbook (`serial: 3`). With
         # limit_hosts omitted, one click restarts every agent in the fleet
         # concurrently with no rolling or health-gated pacing (#14351 review).
         requires_confirmation=True,
@@ -648,7 +648,7 @@ async def _run_playbook(
             logger.error("Dynamic inventory generation failed: no nodes in DB")
             return
         inventory_path = str(inventory_path_obj)
-        # #22262: this route runs update-all-nodes.yml raw, so its targets' assigned roles are provisioned here first
+        # #22262: this route runs the fleet-update playbook raw, so its targets' roles are provisioned here first
         execution.output.extend(await provision_before_raw_update(playbook.playbook_file, limit_hosts))
 
         # Inject stored SLM secrets so standalone re-deploys receive the same
