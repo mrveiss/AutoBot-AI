@@ -173,7 +173,7 @@ const handleGroupChange = () => {
 }
 
 .label-help:hover {
-  color: var(--color-electric-500, #3b82f6);
+  color: var(--color-electric-500);
 }
 
 .scope-dropdown {
@@ -193,7 +193,7 @@ const handleGroupChange = () => {
 
 .scope-dropdown:focus {
   outline: none;
-  border-color: var(--color-electric-500, #3b82f6);
+  border-color: var(--color-electric-500);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 .scope-dropdown:focus-visible {

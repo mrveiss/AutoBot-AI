@@ -64,8 +64,8 @@ function toggleSort(key: SortKey) {
 function getStatusColor(status: string): string {
   switch (status.toLowerCase()) {
     case 'online':
-    case 'healthy': return 'bg-success-100 text-success-800'
-    case 'degraded': return 'bg-warning-100 text-warning-800'
+    case 'healthy': return 'bg-autobot-success-bg text-autobot-success-hover'
+    case 'degraded': return 'bg-autobot-warning-bg text-autobot-warning-hover'
     case 'offline':
     case 'unhealthy': return 'bg-autobot-bg-tertiary text-autobot-text-primary'
     default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
@@ -73,8 +73,8 @@ function getStatusColor(status: string): string {
 }
 
 function getMetricColor(value: number): string {
-  if (value >= 90) return 'text-error-600 font-semibold'
-  if (value >= 70) return 'text-warning-600'
+  if (value >= 90) return 'text-autobot-error font-semibold'
+  if (value >= 70) return 'text-autobot-warning'
   return 'text-autobot-text-primary'
 }
 
@@ -93,7 +93,7 @@ function getSortIcon(key: SortKey): string {
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-autobot-primary"></div>
     </div>
 
     <div v-else-if="!nodes || nodes.length === 0" class="text-center py-12 text-autobot-text-tertiary">
@@ -167,7 +167,7 @@ function getSortIcon(key: SortKey): string {
               <div class="text-sm text-autobot-text-primary">
                 {{ node.services_running }} / {{ node.services_running + node.services_failed }}
               </div>
-              <div v-if="node.services_failed > 0" class="text-xs text-error-600">{{ $t('monitoring.nodeMetricsGrid.value0Failed', { value0: node.services_failed }) }}</div>
+              <div v-if="node.services_failed > 0" class="text-xs text-autobot-error">{{ $t('monitoring.nodeMetricsGrid.value0Failed', { value0: node.services_failed }) }}</div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
               <span v-if="node.last_heartbeat">

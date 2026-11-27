@@ -441,7 +441,7 @@ onMounted(() => {
 
       <div class="mt-4">
         <button
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 text-sm"
           :disabled="selectedCandidates.length === 0"
           data-testid="storage-preview-button"
           @click="openPreview"
@@ -565,7 +565,7 @@ onMounted(() => {
               </td>
               <td class="px-3 py-2">
                 <button
-                  class="px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 text-xs"
+                  class="px-3 py-1.5 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 text-xs"
                   :disabled="repairingResource[o.resource_id]"
                   data-testid="resource-repair-button"
                   @click="repairResource(o)"

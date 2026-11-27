@@ -165,9 +165,9 @@ function skillCountLabel(agent: ExternalAgent): string {
 
 function statusClass(agent: ExternalAgent): string {
   if (!agent.enabled) return 'text-autobot-text-tertiary'
-  if (agent.verified) return 'text-success-500'
-  if (agent.card_error) return 'text-error-500'
-  return 'text-warning-500'
+  if (agent.verified) return 'text-autobot-success'
+  if (agent.card_error) return 'text-autobot-error'
+  return 'text-autobot-warning'
 }
 
 function statusLabel(agent: ExternalAgent): string {
@@ -200,7 +200,7 @@ onMounted(() => {
         </p>
       </div>
       <button
-        class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
+        class="px-4 py-2 bg-autobot-primary hover:bg-autobot-primary-hover text-autobot-text-on-primary rounded-lg text-sm font-medium transition-colors"
         @click="openCreate"
       >
         {{ $t('externalAgentsView.registerAgent') }}
@@ -210,7 +210,7 @@ onMounted(() => {
     <!-- Error banner -->
     <div
       v-if="registry.error"
-      class="p-3 bg-error-900/30 border border-error-700 rounded-lg text-error-300 text-sm"
+      class="p-3 bg-autobot-error-bg border border-autobot-error-hover rounded-lg text-autobot-error-light text-sm"
     >
       {{ registry.error }}
     </div>
@@ -249,7 +249,7 @@ onMounted(() => {
           >
             <td class="px-4 py-3">
               <button
-                class="font-medium text-autobot-text-primary hover:text-primary-400 transition-colors text-left"
+                class="font-medium text-autobot-text-primary hover:text-autobot-primary-light transition-colors text-left"
                 @click="openDetail(agent)"
               >
                 {{ agent.name }}
@@ -265,7 +265,7 @@ onMounted(() => {
               <span :class="['font-medium', statusClass(agent)]">
                 {{ statusLabel(agent) }}
               </span>
-              <div v-if="agent.card_error" class="text-xs text-error-400 mt-0.5">
+              <div v-if="agent.card_error" class="text-xs text-autobot-error-light mt-0.5">
                 {{ agent.card_error }}
               </div>
             </td>
@@ -284,7 +284,7 @@ onMounted(() => {
             <td class="px-4 py-3">
               <div class="flex items-center gap-2">
                 <button
-                  class="text-xs text-primary-400 hover:text-primary-300 disabled:opacity-50"
+                  class="text-xs text-autobot-primary-light hover:text-autobot-primary-light disabled:opacity-50"
                   :disabled="verifyingId === agent.id"
                   @click="verifyAgent(agent)"
                 >
@@ -304,7 +304,7 @@ onMounted(() => {
                   {{ $t('externalAgentsView.edit') }}
                 </button>
                 <button
-                  class="text-xs text-error-400 hover:text-error-300"
+                  class="text-xs text-autobot-error-light hover:text-autobot-error-light"
                   @click="deleteAgent(agent)"
                 >
                   {{ $t('externalAgentsView.delete') }}
@@ -330,7 +330,7 @@ onMounted(() => {
             <label class="block text-xs text-autobot-text-tertiary mb-1">{{ $t('externalAgentsView.name1') }}</label>
             <input
               v-model="form.name"
-              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-primary-500"
+              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-autobot-primary"
               :placeholder="$t('externalAgentsView.myExternalAgent')"
             />
           </div>
@@ -338,7 +338,7 @@ onMounted(() => {
             <label class="block text-xs text-autobot-text-tertiary mb-1">{{ $t('externalAgentsView.baseURL') }}</label>
             <input
               v-model="form.base_url"
-              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-primary-500 font-mono"
+              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-autobot-primary font-mono"
               :placeholder="$t('externalAgentsView.httpsAgentExampleCom')"
               :disabled="modalMode === 'edit'"
             />
@@ -347,7 +347,7 @@ onMounted(() => {
             <label class="block text-xs text-autobot-text-tertiary mb-1">{{ $t('externalAgentsView.description') }}</label>
             <input
               v-model="form.description"
-              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-primary-500"
+              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-autobot-primary"
               :placeholder="$t('externalAgentsView.optionalDescription')"
             />
           </div>
@@ -355,7 +355,7 @@ onMounted(() => {
             <label class="block text-xs text-autobot-text-tertiary mb-1">{{ $t('externalAgentsView.tagsCommaSeparated') }}</label>
             <input
               v-model="form.tags"
-              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-primary-500"
+              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-autobot-primary"
               :placeholder="$t('externalAgentsView.financeAnalysis')"
             />
           </div>
@@ -367,17 +367,17 @@ onMounted(() => {
             <input
               v-model="form.api_key"
               type="password"
-              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-primary-500 font-mono"
+              class="w-full bg-autobot-bg-primary border border-autobot-border-strong rounded-lg px-3 py-2 text-sm text-autobot-text-primary focus:outline-hidden focus:border-autobot-primary font-mono"
               :placeholder="$t('externalAgentsView.sk')"
             />
           </div>
           <div class="flex items-center gap-6">
             <label class="flex items-center gap-2 text-sm text-autobot-text-secondary cursor-pointer">
-              <input v-model="form.enabled" type="checkbox" class="accent-primary-500" />
+              <input v-model="form.enabled" type="checkbox" class="accent-autobot-primary" />
               {{ $t('externalAgentsView.enabled') }}
             </label>
             <label class="flex items-center gap-2 text-sm text-autobot-text-secondary cursor-pointer">
-              <input v-model="form.ssl_verify" type="checkbox" class="accent-primary-500" />
+              <input v-model="form.ssl_verify" type="checkbox" class="accent-autobot-primary" />
               {{ $t('externalAgentsView.verifySSL') }}
             </label>
           </div>
@@ -385,7 +385,7 @@ onMounted(() => {
 
         <div
           v-if="saveError"
-          class="p-2 bg-error-900/30 border border-error-700 rounded-sm text-error-300 text-xs"
+          class="p-2 bg-autobot-error-bg border border-autobot-error-hover rounded-sm text-autobot-error-light text-xs"
         >
           {{ saveError }}
         </div>
@@ -398,7 +398,7 @@ onMounted(() => {
           {{ $t('externalAgentsView.cancel') }}
         </button>
         <button
-          class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          class="px-4 py-2 bg-autobot-primary hover:bg-autobot-primary-hover text-autobot-text-on-primary rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           :disabled="isSaving || !form.name || !form.base_url"
           @click="saveAgent"
         >
@@ -463,7 +463,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <div v-if="detailAgent.card_error" class="p-2 bg-error-900/30 border border-error-700 rounded-sm text-error-300 text-xs">{{ $t('externalAgentsView.cardErrorValue0', { value0: detailAgent.card_error }) }}</div>
+          <div v-if="detailAgent.card_error" class="p-2 bg-autobot-error-bg border border-autobot-error-hover rounded-sm text-autobot-error-light text-xs">{{ $t('externalAgentsView.cardErrorValue0', { value0: detailAgent.card_error }) }}</div>
 
           <div v-if="detailCardJson">
             <div class="text-xs text-autobot-text-tertiary mb-1">{{ $t('externalAgentsView.agentCardJSON') }}</div>

@@ -79,11 +79,11 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   font-size: var(--text-sm);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .vbi-error {
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
 }
 
 .vbi-content {
@@ -97,7 +97,7 @@ onMounted(() => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .vbi-value {
@@ -109,17 +109,17 @@ onMounted(() => {
 .vbi-bundle-name {
   font-size: var(--text-base);
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 
 .vbi-tool-count {
   font-size: var(--text-sm);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .vbi-resolution {
   font-size: var(--text-xs);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: var(--spacing-1);
@@ -134,17 +134,17 @@ onMounted(() => {
 }
 
 .vbi-res--user_override {
-  background: var(--color-warning-bg, #fffbeb);
-  color: var(--color-warning, #d97706);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .vbi-res--role_default {
-  background: var(--color-info-bg, #eff6ff);
-  color: var(--color-info, #2563eb);
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .vbi-res--global_env {
-  background: var(--color-surface-alt, #f9fafb);
-  color: var(--text-secondary, #6b7280);
+  background: var(--surface2);
+  color: var(--text-secondary);
 }
 </style>

@@ -455,7 +455,7 @@ function getNodeHostname(nodeId: string): string {
 
     <!-- Loading -->
     <div v-if="isLoading" class="flex items-center justify-center py-12">
-      <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+      <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full"></div>
     </div>
 
     <!-- Create Dialog -->
@@ -479,7 +479,7 @@ function getNodeHostname(nodeId: string): string {
           </label>
           <select
             v-model="newReplication.source_node_id"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
           >
             <option value="">{{ $t('replicationView.selectPrimaryNode') }}</option>
             <option v-for="opt in redisNodes" :key="opt.value" :value="opt.value">
@@ -499,7 +499,7 @@ function getNodeHostname(nodeId: string): string {
           <select
             v-model="newReplication.target_node_id"
             :disabled="!newReplication.source_node_id"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500 disabled:bg-autobot-bg-tertiary"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary disabled:bg-autobot-bg-tertiary"
           >
             <option value="">{{ $t('replicationView.selectReplicaNode') }}</option>
             <option v-for="opt in availableTargets" :key="opt.value" :value="opt.value">
@@ -513,7 +513,7 @@ function getNodeHostname(nodeId: string): string {
           <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('replicationView.serviceType') }}</label>
           <select
             v-model="newReplication.service_type"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
           >
             <option value="redis">{{ $t('replicationView.redis') }}</option>
           </select>
@@ -536,7 +536,7 @@ function getNodeHostname(nodeId: string): string {
         <button
           @click="handleCreateReplication"
           :disabled="!newReplication.source_node_id || !newReplication.target_node_id || isCreating"
-          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-md hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           <div v-if="isCreating" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
           {{ $t('replicationView.startReplication') }}
@@ -589,7 +589,7 @@ function getNodeHostname(nodeId: string): string {
 
       <!-- Sync Verification Results -->
       <div v-if="isVerifying" class="mb-6 flex items-center justify-center py-8">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+        <div class="animate-spin w-8 h-8 border-4 border-autobot-primary border-t-transparent rounded-full"></div>
         <span class="ml-3 text-autobot-text-secondary">{{ $t('replicationView.verifyingSyncStatus') }}</span>
       </div>
 

@@ -44,9 +44,9 @@ const combinedUpdateCount = computed(() =>
 
 const hasCombinedUpdates = computed(() => combinedUpdateCount.value > 0)
 
-// Badge color: orange when system updates present, amber when only code sync
+// Badge color: the bar accent when system updates present, warning when only code sync
 const badgeColor = computed(() =>
-  systemUpdates.updateCount.value > 0 ? 'var(--slm-orange-500)' : 'var(--slm-amber-500)',
+  systemUpdates.updateCount.value > 0 ? 'var(--slm-bar-on)' : 'var(--color-warning)',
 )
 
 interface NavItem {
@@ -103,9 +103,9 @@ function isItemActive(itemPath: string): boolean {
 
 const healthClass = computed(() => {
   switch (fleetStore.overallHealth) {
-    case 'healthy': return 'bg-success-500'
-    case 'degraded': return 'bg-warning-500'
-    case 'unhealthy': return 'bg-error-500'
+    case 'healthy': return 'bg-autobot-success'
+    case 'degraded': return 'bg-autobot-warning'
+    case 'unhealthy': return 'bg-autobot-error'
     default: return 'bg-autobot-dot-idle'
   }
 })
@@ -199,15 +199,15 @@ onMounted(() => {
           <span>{{ fleetStore.fleetSummary.total_nodes }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-success-500">{{ $t('common.sidebar.healthy') }}</span>
+          <span class="text-autobot-success">{{ $t('common.sidebar.healthy') }}</span>
           <span>{{ fleetStore.fleetSummary.healthy_nodes }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-warning-500">{{ $t('common.sidebar.degraded') }}</span>
+          <span class="text-autobot-warning">{{ $t('common.sidebar.degraded') }}</span>
           <span>{{ fleetStore.fleetSummary.degraded_nodes }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-error-500">{{ $t('common.sidebar.unhealthy') }}</span>
+          <span class="text-autobot-error">{{ $t('common.sidebar.unhealthy') }}</span>
           <span>{{ fleetStore.fleetSummary.unhealthy_nodes }}</span>
         </div>
       </div>
@@ -228,7 +228,7 @@ onMounted(() => {
             :class="[
               'w-full flex items-center gap-3 px-3 py-2 rounded-lg border-l-(length:--nav-on-bw) transition-colors',
               isItemActive(item.path)
-                ? 'bg-primary-600 text-white border-(--slm-bar-on)'
+                ? 'bg-autobot-primary text-autobot-text-on-primary border-(--slm-bar-on)'
                 : 'text-(--slm-bar-fg) border-transparent hover:bg-(--slm-bar-hover)'
             ]"
           >
@@ -346,7 +346,7 @@ onMounted(() => {
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
           <div
-            class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-sm font-medium"
+            class="w-8 h-8 bg-autobot-primary rounded-full flex items-center justify-center text-sm font-medium"
             aria-hidden="true"
           >
             {{ authStore.user?.username?.charAt(0).toUpperCase() || $t('common.sidebar.user').charAt(0) }}

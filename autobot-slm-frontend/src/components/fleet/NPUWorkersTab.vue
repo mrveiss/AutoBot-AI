@@ -193,7 +193,7 @@ watch(() => fleetStore.nodeList, () => {
           :class="[
             'px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px',
             activeTab === tab.key
-              ? 'border-primary-600 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >
@@ -206,7 +206,7 @@ watch(() => fleetStore.nodeList, () => {
           v-if="activeTab === 'overview'"
           @click="showAssignModal = true"
           :disabled="nonNpuNodes.length === 0"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -251,7 +251,7 @@ watch(() => fleetStore.nodeList, () => {
         <button
           @click="showAssignModal = true"
           :disabled="nonNpuNodes.length === 0"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors disabled:opacity-50"
         >
           {{ $t('fleet.nPUWorkersTab.assignNPURole') }}
         </button>

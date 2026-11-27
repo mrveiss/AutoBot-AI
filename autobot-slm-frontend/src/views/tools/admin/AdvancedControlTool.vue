@@ -203,7 +203,7 @@ onMounted(loadAll)
         data-test="refresh"
         @click="loadAll"
         :disabled="loading"
-        class="px-4 py-2 text-sm font-medium rounded-lg bg-primary-100 text-primary-700 hover:bg-primary-200 disabled:opacity-50 transition-colors"
+        class="px-4 py-2 text-sm font-medium rounded-lg bg-autobot-primary-bg text-autobot-primary-hover hover:bg-autobot-primary-light disabled:opacity-50 transition-colors"
       >
         {{ loading ? $t('tools.admin.advancedControlTool.refreshing') : $t('tools.admin.advancedControlTool.refresh') }}
       </button>
@@ -258,22 +258,22 @@ onMounted(loadAll)
             <div>
               <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.advancedControlTool.userId') }}</label>
               <input v-model.trim="createForm.user_id" required
-                class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+                class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.advancedControlTool.resolution') }}</label>
                 <input v-model.trim="createForm.resolution" placeholder="1024x768"
-                  class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+                  class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
               </div>
               <div>
                 <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.advancedControlTool.depth') }}</label>
                 <input v-model.number="createForm.depth" type="number" placeholder="24"
-                  class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+                  class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
               </div>
             </div>
             <button data-test="create" type="submit" :disabled="busy.create || !createForm.user_id"
-              class="px-4 py-1.5 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 transition-colors">
+              class="px-4 py-1.5 text-sm font-medium rounded-lg bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover disabled:opacity-50 transition-colors">
               {{ busy.create ? $t('tools.admin.advancedControlTool.creating') : $t('tools.admin.advancedControlTool.create') }}
             </button>
           </form>
@@ -334,30 +334,30 @@ onMounted(loadAll)
           <div>
             <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.advancedControlTool.trigger') }}</label>
             <select v-model="requestForm.trigger"
-              class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500">
+              class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary">
               <option v-for="trg in TRIGGERS" :key="trg" :value="trg">{{ trg }}</option>
             </select>
           </div>
           <div>
             <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.advancedControlTool.priority') }}</label>
             <select v-model="requestForm.priority"
-              class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500">
+              class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary">
               <option v-for="p in PRIORITIES" :key="p" :value="p">{{ p }}</option>
             </select>
           </div>
           <div>
             <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.advancedControlTool.reason') }}</label>
             <input v-model.trim="requestForm.reason" required
-              class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+              class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
           </div>
           <div>
             <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('tools.admin.advancedControlTool.requestingAgent') }}</label>
             <input v-model.trim="requestForm.requesting_agent" :placeholder="$t('tools.admin.advancedControlTool.requestingAgentPlaceholder')"
-              class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+              class="w-full text-sm px-3 py-1.5 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
           </div>
           <div class="sm:col-span-2">
             <button data-test="request" type="submit" :disabled="busy.request || !requestForm.reason"
-              class="px-4 py-1.5 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 transition-colors">
+              class="px-4 py-1.5 text-sm font-medium rounded-lg bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover disabled:opacity-50 transition-colors">
               {{ busy.request ? $t('tools.admin.advancedControlTool.requesting') : $t('tools.admin.advancedControlTool.requestBtn') }}
             </button>
           </div>
@@ -396,7 +396,7 @@ onMounted(loadAll)
                 <div class="flex items-center justify-end gap-2">
                   <input v-model.trim="operatorInputs[r.request_id]"
                     :placeholder="$t('tools.admin.advancedControlTool.operatorPlaceholder')"
-                    class="w-32 text-xs px-2 py-1 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500" />
+                    class="w-32 text-xs px-2 py-1 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary" />
                   <button :data-test="`approve-${r.request_id}`"
                     :disabled="busy.approve === r.request_id || !operatorInputs[r.request_id]"
                     @click="onApprove(r.request_id)"

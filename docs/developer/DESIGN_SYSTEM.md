@@ -162,7 +162,7 @@ five forms, each caught by exactly one check, so a sixth found later has an obvi
 
 | Form | Owner check | Mode |
 |---|---|---|
-| hex in a `<style>` block | stylelint `color-no-hex` (`.stylelintrc.json` in each app and in `libs/autobot-ui`; `stylelint-tokens.yml`) | changed files, report-only |
+| hex in a `<style>` block | stylelint `color-no-hex` (`.stylelintrc.json` in each app and in `libs/autobot-ui`; `stylelint-tokens.yml`) | whole tree of both apps and the kit, blocking (#17567) |
 | hex in `<script>` / a template attribute | `repo_tests/hardcoded_colour_ratchet_17560_test.py` (#17560) | whole tree, shrink-only |
 | raw Tailwind palette class in a template (`bg-red-50`) | `repo_tests/raw_palette_class_ratchet_14580_test.py` (#14580) | whole tree, both apps, shrink-only |
 | `!important` in a component `<style>` | the same file as hex-in-script, `TestTheImportantPopulationOnlyShrinks` (#17567) | whole tree, both apps, shrink-only |
@@ -176,8 +176,14 @@ Each ratchet freezes the measured population in a baseline module and fails only
 a message that names the token to use. Baselines move one way: when a count falls, lower its
 entry. The SLM control plane is the exception: its raw-palette count reached zero (#17566) and
 `raw_palette_class_ratchet_14580_test.py` holds it there for `.vue`, `.ts` and `.css` sources alike, `<style>`
-blocks and `@apply` lines included (#17567); no baseline entry or allowlist is allowed for it. The stylelint step is not yet whole-tree: that switch waits until the `<style>` hex
-population reaches zero (#17567).
+blocks and `@apply` lines included (#17567); no baseline entry or allowlist is allowed for it.
+
+The stylelint step is whole-tree and blocking (#17567): the `<style>` hex population is zero in
+`autobot-frontend/src`, `autobot-slm-frontend/src` and `libs/autobot-ui`, so a hex literal anywhere in
+those scopes fails the PR that adds it, not only a PR that happens to touch the file. Token-definition files
+(`design-tokens.css`, `themes/*.css`, `tailwind.css`, the SLM's `main.css` and `slm-scheme.css`, the kit's
+`contract.css`) are out of scope because they are where values are declared. An exemption or a baseline raise
+for this gate is not available; fix the literal with a token.
 
 ## Palette-step to token mapping for the SLM frontend (#17566)
 
@@ -330,6 +336,39 @@ Judgement calls, stated once:
 Totals: 105 rows; 14 rows have no token for any of their roles (every `pink` and `purple` step, plus the
 dark status fills `amber-900` and `red-900`); 6 more have no token for one role (the solid mid-grey fills
 `gray-400` to `gray-700`, and the dark fills of `blue-900` and `red-800`). Rebuild the table with the snippet above when the baseline moves.
+
+## SLM token vocabulary (#17566)
+
+One canonical name per concept: the SLM declares the **same custom-property names** as the user frontend and
+supplies its own values (`slm-scheme.css`, `main.css`); it does not keep a parallel set. The names that used to
+exist only in the SLM were folded onto the shared ones:
+
+| Was (SLM only) | Now |
+|---|---|
+| `--a11y-bg`, `-bg-surface`, `-bg-muted` | `--bg`, `--surface`, `--surface2` |
+| `--a11y-text`, `-text-muted`, `-border` | `--text`, `--muted`, `--border` |
+| `--a11y-focus-ring`, `-focus-width` | `--focus`, `--focus-ring-width` |
+| `--a11y-sidebar-*` (unused) | removed; the identity bar below owns the sidebar |
+| `--color-{primary,success,warning,error}-{50..900}` scale, `bg-primary-600` etc. | `--color-primary`, `-hover`, `-light`, `-dark`, `-bg` (and the same four for success, warning, error); the utilities became `bg-autobot-primary` etc. by the step map: 500/600 base, 700 `-hover`, 800/900 `-dark` (primary) or `-hover` (status), 300/400 `-light`, 50 to 200 `-bg` |
+| `--color-error-solid-hover` | kept: promoted to the user frontend (`design-tokens.css`), where it is `--color-error-dark`; `scripts/check_token_contrast.py` measures it in every theme |
+| `--success-bg`, `--warning-bg`, `--error-bg` | `--color-success-bg`, `--color-warning-bg`, `--color-error-bg` |
+| `--content-padding` | `--content-padding-x`, `--content-padding-y` |
+| `--slm-{gray,red,blue,indigo,emerald,orange}-N` | `--surface2`, `--bg-tertiary`, `--border`, `--border-strong`, `--muted`, `--color-error-bg`, `--color-error-dark`, `--color-info*`, `--color-primary*`, `--color-success*`, `--color-warning*` by role |
+| `--slm-violet-*`, `--slm-slate-*` | `--chart-5`; `--terminal-chrome-bg-alt`, `--terminal-text-output` |
+| `--slm-amber-500` / `--slm-orange-500` (sidebar update badge) | `--color-warning` / `--slm-bar-on` |
+| `--color-log-*` (setup wizard log) | `--terminal-chrome-bg-alt`, `--terminal-text-output`, `--terminal-ansi-{red,purple,cyan}`, `--color-{success,warning}-light` |
+
+**What is still SLM-only, on purpose** (the whole list; `repo_tests/slm_token_vocabulary_test.py` fails on any
+other name that exists only in the SLM, and on a name here that no longer exists):
+
+| Name | Why it is not shared |
+|---|---|
+| `--slm-bar`, `--slm-bar-fg`, `--slm-bar-muted`, `--slm-bar-hover`, `--slm-bar-line`, `--slm-bar-on` | The SLM control plane always wears a dark identity bar in every theme so it is told apart from the user frontend. The user frontend has no such surface, so there is nothing to share. Read by `Sidebar.vue` and the language picker. |
+| `--slm-stripe`, `--slm-badge-bg`, `--slm-badge-fg` | The same identity: stripe and badge accents of that bar. Declared per scheme and not yet read by a component; kept, not deleted, because the bar is where they are meant to be applied. |
+| `--color-white`, `--color-black` | Tailwind's own theme variables, restated so the scheme has them when the build tree-shakes the theme. Framework names, not tokens. |
+
+A new SLM-only name needs a row in this table (and an owner decision that the concept really has no user-frontend
+counterpart); otherwise declare the shared name with the SLM's value.
 
 ## Canonical homes (#17571)
 

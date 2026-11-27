@@ -273,7 +273,7 @@ onMounted(async () => {
         <button
           @click="startMFASetup"
           :disabled="loading"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
         >
           {{ $t('settings.securitySettings.enable2FA') }}
         </button>
@@ -285,7 +285,7 @@ onMounted(async () => {
         <h2 class="text-xl font-semibold text-autobot-text-primary">{{ $t('settings.securitySettings.aPIKeys') }}</h2>
         <button
           @click="openCreateKeyModal"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover"
         >
           {{ $t('settings.securitySettings.createAPIKey') }}
         </button>
@@ -414,7 +414,7 @@ onMounted(async () => {
             </p>
             <button
               @click="copyToClipboard(setupData?.secret || '')"
-              class="text-xs text-primary-600 hover:text-primary-700"
+              class="text-xs text-autobot-primary hover:text-autobot-primary-hover"
             >
               {{ $t('settings.securitySettings.copySecret') }}
             </button>
@@ -438,7 +438,7 @@ onMounted(async () => {
             type="text"
             inputmode="numeric"
             maxlength="6"
-            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             placeholder="000000"
           />
         </div>
@@ -447,7 +447,7 @@ onMounted(async () => {
         <button
           @click="verifyMFASetup"
           :disabled="loading || mfaSetupCode.length < 6"
-          class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+          class="flex-1 px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
         >
           {{ $t('settings.securitySettings.verifyAndEnable') }}
         </button>
@@ -490,7 +490,7 @@ onMounted(async () => {
         </button>
         <button
           @click="showBackupCodes = false"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover"
         >
           {{ $t('settings.securitySettings.done') }}
         </button>
@@ -516,7 +516,7 @@ onMounted(async () => {
           <input
             v-model="disablePassword"
             type="password"
-            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             :placeholder="$t('settings.securitySettings.enterYourPassword')"
           />
         </div>
@@ -558,7 +558,7 @@ onMounted(async () => {
           <input
             v-model="regeneratePassword"
             type="password"
-            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             :placeholder="$t('settings.securitySettings.enterYourPassword')"
           />
         </div>
@@ -567,7 +567,7 @@ onMounted(async () => {
         <button
           @click="regenerateBackupCodes"
           :disabled="loading || !regeneratePassword"
-          class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+          class="flex-1 px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
         >
           {{ $t('settings.securitySettings.regenerate') }}
         </button>
@@ -598,7 +598,7 @@ onMounted(async () => {
           <input
             v-model="newKeyForm.name"
             type="text"
-            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             :placeholder="$t('settings.securitySettings.myAPIKey')"
           />
         </div>
@@ -610,7 +610,7 @@ onMounted(async () => {
           <input
             v-model="newKeyForm.description"
             type="text"
-            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             :placeholder="$t('settings.securitySettings.whatThisKeyIsFor')"
           />
         </div>
@@ -645,7 +645,7 @@ onMounted(async () => {
           </label>
           <select
             v-model="newKeyForm.expires_days"
-            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           >
             <option :value="undefined">{{ $t('settings.securitySettings.never') }}</option>
             <option :value="30">{{ $t('settings.securitySettings.30Days') }}</option>
@@ -659,7 +659,7 @@ onMounted(async () => {
         <button
           @click="createAPIKey"
           :disabled="loading || !newKeyForm.name || newKeyForm.scopes.length === 0"
-          class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+          class="flex-1 px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
         >
           {{ $t('settings.securitySettings.createKey') }}
         </button>
@@ -696,7 +696,7 @@ onMounted(async () => {
         </button>
         <button
           @click="showKeyCreatedModal = false"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover"
         >
           {{ $t('settings.securitySettings.done') }}
         </button>

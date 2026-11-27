@@ -368,26 +368,26 @@ const formatTime = createDateFormatter({ emptyText: '—' })
 .controls-bar { display: flex; align-items: flex-end; gap: var(--spacing-3); margin-bottom: var(--spacing-5); background: white; padding: var(--spacing-4) var(--spacing-5); border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex-wrap: wrap; }
 .control-group { display: flex; flex-direction: column; gap: var(--spacing-1); }
 .control-group label { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
-.control-group input, .control-group select { padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--slm-gray-300); border-radius: var(--radius-lg); font-size: var(--text-sm); min-width: 160px; }
+.control-group input, .control-group select { padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); font-size: var(--text-sm); min-width: 160px; }
 .spawn-form-panel { background: white; border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: var(--spacing-5); margin-bottom: var(--spacing-5); }
 .spawn-form-panel h4 { font-size: var(--text-base); font-weight: 600; margin: 0 0 var(--spacing-4) 0; color: var(--text-primary); }
 .spawn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--spacing-3); margin-bottom: var(--spacing-4); }
 .spawn-actions { display: flex; gap: var(--spacing-2); }
 .process-table-wrapper { background: white; border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
 .process-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
-.process-table th { text-align: left; padding: var(--spacing-3) var(--spacing-4); background: var(--slm-gray-50); color: var(--text-secondary); font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; border-bottom: 1px solid var(--slm-gray-200); }
-.process-table td { padding: var(--spacing-3) var(--spacing-4); border-bottom: 1px solid var(--slm-gray-100); color: var(--text-primary); }
+.process-table th { text-align: left; padding: var(--spacing-3) var(--spacing-4); background: var(--surface2); color: var(--text-secondary); font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; border-bottom: 1px solid var(--border); }
+.process-table td { padding: var(--spacing-3) var(--spacing-4); border-bottom: 1px solid var(--bg-tertiary); color: var(--text-primary); }
 .process-table tr { cursor: pointer; }
-.process-table tr:hover { background: var(--slm-gray-50); }
-.process-table tr.selected { background: var(--slm-indigo-100); }
+.process-table tr:hover { background: var(--surface2); }
+.process-table tr.selected { background: var(--color-primary-bg); }
 .command-cell { font-family: 'IBM Plex Mono', monospace; font-size: var(--text-xs); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .time-cell { font-size: var(--text-xs); color: var(--text-secondary); }
 .status-badge { font-size: 10px; padding: 2px var(--spacing-2); border-radius: var(--radius-default); font-weight: 600; text-transform: uppercase; }
-.badge-gray { background: var(--slm-gray-100); color: var(--slm-gray-500); }
-.badge-blue { background: var(--slm-blue-100); color: var(--slm-blue-600); }
-.badge-green { background: var(--slm-emerald-100); color: var(--slm-emerald-600); }
-.badge-red { background: var(--slm-red-100); color: var(--color-error-600); }
-.badge-orange { background: var(--slm-orange-100); color: var(--slm-orange-600); }
+.badge-gray { background: var(--bg-tertiary); color: var(--muted); }
+.badge-blue { background: var(--color-info-bg); color: var(--color-info-hover); }
+.badge-green { background: var(--color-success-bg); color: var(--color-success-hover); }
+.badge-red { background: var(--color-error-bg); color: var(--color-error-hover); }
+.badge-orange { background: var(--color-warning-bg); color: var(--color-warning-hover); }
 .badge-pulse { animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 .kill-confirm { display: flex; gap: var(--spacing-1); align-items: center; }
@@ -395,9 +395,9 @@ const formatTime = createDateFormatter({ emptyText: '—' })
 .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-3); }
 .log-header h4 { font-size: var(--text-base); font-weight: 600; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-2); }
 .log-actions { display: flex; gap: var(--spacing-2); }
-.streaming-badge { font-size: 10px; padding: 2px var(--spacing-2); border-radius: var(--radius-default); font-weight: 600; background: var(--color-error-600); color: white; animation: pulse 1.5s ease-in-out infinite; }
-.log-content { background: var(--slm-slate-800); color: var(--slm-slate-200); border-radius: var(--radius-lg); padding: var(--spacing-4); font-family: 'IBM Plex Mono', monospace; font-size: var(--text-xs); line-height: 1.6; overflow-x: auto; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
-.error-banner { background: var(--slm-red-100); border: 1px solid var(--color-error-500); color: var(--slm-red-700); padding: var(--spacing-3) var(--spacing-4); border-radius: var(--radius-lg); margin-bottom: var(--spacing-4); display: flex; justify-content: space-between; align-items: center; }
+.streaming-badge { font-size: 10px; padding: 2px var(--spacing-2); border-radius: var(--radius-default); font-weight: 600; background: var(--color-error-hover); color: white; animation: pulse 1.5s ease-in-out infinite; }
+.log-content { background: var(--terminal-chrome-bg-alt); color: var(--terminal-text-output); border-radius: var(--radius-lg); padding: var(--spacing-4); font-family: 'IBM Plex Mono', monospace; font-size: var(--text-xs); line-height: 1.6; overflow-x: auto; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+.error-banner { background: var(--color-error-bg); border: 1px solid var(--color-error); color: var(--color-error-dark); padding: var(--spacing-3) var(--spacing-4); border-radius: var(--radius-lg); margin-bottom: var(--spacing-4); display: flex; justify-content: space-between; align-items: center; }
 .loading { text-align: center; color: var(--text-secondary); padding: 60px; }
 .empty-state { text-align: center; color: var(--text-secondary); padding: 60px; }
 </style>

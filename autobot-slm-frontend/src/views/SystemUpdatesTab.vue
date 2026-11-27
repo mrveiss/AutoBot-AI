@@ -251,7 +251,7 @@ onMounted(async () => {
         <select
           v-model="selectedNodeFilter"
           class="px-3 py-2 border border-autobot-border-strong rounded-lg text-sm
-                 bg-white focus:ring-2 focus:ring-primary-500"
+                 bg-white focus:ring-2 focus:ring-autobot-primary"
         >
           <option value="">{{ $t('systemUpdatesTab.allNodes') }}</option>
           <option

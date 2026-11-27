@@ -584,7 +584,7 @@ onUnmounted(() => {
   <div class="flex flex-col h-full">
     <PollingPausedAlert :poller="eventsPoller" :message="$t('common.polling.paused')" :retry-label="$t('common.polling.retry')" @retry="restartEvents" />
     <!-- Operation status indicator (shown when an operation is in progress) -->
-    <div v-if="currentOperation" class="flex items-center gap-2 text-sm text-primary-600 px-4 py-2 border-b border-autobot-border bg-primary-50">
+    <div v-if="currentOperation" class="flex items-center gap-2 text-sm text-autobot-primary px-4 py-2 border-b border-autobot-border bg-autobot-primary-bg">
       <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -598,7 +598,7 @@ onUnmounted(() => {
         <!-- Update Status -->
         <div class="flex items-center gap-3">
           <template v-if="updatesSummary && (updatesSummary.count > 0 || updatesSummary.codeUpdateAvailable)">
-            <div class="flex items-center gap-2 text-warning-600">
+            <div class="flex items-center gap-2 text-autobot-warning">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
               </svg>
@@ -609,7 +609,7 @@ onUnmounted(() => {
             <span v-if="updatesSummary.critical > 0" class="bg-autobot-pill-bad-bg px-2 rounded-sm w-fit text-sm font-medium text-autobot-pill-bad-fg">{{ $t('fleet.nodeLifecyclePanel.value0Critical', { value0: updatesSummary.critical }) }}</span>
           </template>
           <template v-else-if="availableUpdates">
-            <div class="flex items-center gap-2 text-success-600">
+            <div class="flex items-center gap-2 text-autobot-success">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -656,7 +656,7 @@ onUnmounted(() => {
             v-if="updatesSummary && updatesSummary.count > 0"
             @click="installUpdates"
             :disabled="isInstallingUpdates"
-            class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-md hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <svg
               :class="['w-4 h-4', isInstallingUpdates ? 'animate-spin' : '']"
@@ -689,7 +689,7 @@ onUnmounted(() => {
         <div class="flex items-center gap-3">
           <div class="flex-1 bg-autobot-bg-active rounded-full h-2">
             <div
-              class="bg-primary-600 h-2 rounded-full transition-all duration-300"
+              class="bg-autobot-primary h-2 rounded-full transition-all duration-300"
               :style="{ width: `${updateProgress}%` }"
             ></div>
           </div>
@@ -707,7 +707,7 @@ onUnmounted(() => {
           <div class="flex gap-2">
             <button
               @click="selectAllUpdates"
-              class="text-primary-600 hover:text-primary-700"
+              class="text-autobot-primary hover:text-autobot-primary-hover"
             >{{ $t('fleet.nodeLifecyclePanel.selectAll') }}</button>
             <span class="text-autobot-text-tertiary">|</span>
             <button
@@ -726,7 +726,7 @@ onUnmounted(() => {
               type="checkbox"
               :checked="selectedUpdateIds.includes(update.id)"
               @change="toggleUpdateSelection(update.id)"
-              class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+              class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
@@ -748,7 +748,7 @@ onUnmounted(() => {
         <label class="text-sm text-autobot-text-secondary">{{ $t('fleet.nodeLifecyclePanel.type') }}</label>
         <select
           v-model="eventTypeFilter"
-          class="text-sm border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+          class="text-sm border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
         >
           <option v-for="option in eventTypeOptions" :key="option.value" :value="option.value">
             {{ option.label }}
@@ -760,7 +760,7 @@ onUnmounted(() => {
         <label class="text-sm text-autobot-text-secondary">{{ $t('fleet.nodeLifecyclePanel.severity') }}</label>
         <select
           v-model="severityFilter"
-          class="text-sm border-autobot-border-strong rounded-md focus:ring-primary-500 focus:border-primary-500"
+          class="text-sm border-autobot-border-strong rounded-md focus:ring-autobot-primary focus:border-autobot-primary"
         >
           <option v-for="option in severityOptions" :key="option.value" :value="option.value">
             {{ option.label }}
@@ -902,7 +902,7 @@ onUnmounted(() => {
         <button
           @click="loadMoreEvents"
           :disabled="isLoadingMore"
-          class="inline-flex items-center gap-2 px-4 py-2 text-sm text-primary-600 hover:text-primary-700 disabled:opacity-50"
+          class="inline-flex items-center gap-2 px-4 py-2 text-sm text-autobot-primary hover:text-autobot-primary-hover disabled:opacity-50"
         >
           <svg
             v-if="isLoadingMore"
@@ -924,7 +924,7 @@ onUnmounted(() => {
         <input
           type="checkbox"
           v-model="autoRefresh"
-          class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+          class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
         />{{ $t('fleet.nodeLifecyclePanel.autoRefreshEveryValue0S', { value0: Math.round(autoRefreshInterval / 1000) }) }}</label>
       <span v-if="lastRefresh" class="text-xs text-autobot-text-tertiary">{{ $t('fleet.nodeLifecyclePanel.lastUpdatedValue0', { value0: formatCompactRelativeTime(lastRefresh) }) }}</span>
     </div>

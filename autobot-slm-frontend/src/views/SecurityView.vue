@@ -559,9 +559,9 @@ onMounted(() => {
 const scoreColor = computed(() => {
   if (!overview.value) return 'text-autobot-text-tertiary'
   const score = overview.value.security_score
-  if (score >= 90) return 'text-success-600'
-  if (score >= 70) return 'text-warning-600'
-  return 'text-error-600'
+  if (score >= 90) return 'text-autobot-success'
+  if (score >= 70) return 'text-autobot-warning'
+  return 'text-autobot-error'
 })
 </script>
 
@@ -576,8 +576,8 @@ const scoreColor = computed(() => {
     </div>
 
     <!-- Error Alert -->
-    <div v-if="error" class="mb-4 p-4 bg-error-50 border border-error-200 rounded-lg" role="alert">
-      <p class="text-error-700">{{ error }}</p>
+    <div v-if="error" class="mb-4 p-4 bg-autobot-error-bg border border-autobot-error-bg rounded-lg" role="alert">
+      <p class="text-autobot-error-hover">{{ error }}</p>
     </div>
 
     <!-- Tab Navigation -->
@@ -593,7 +593,7 @@ const scoreColor = computed(() => {
           :class="[
             'px-1 py-3 text-sm font-medium border-b-2 transition-colors',
             activeTab === tab.id
-              ? 'border-primary-600 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
@@ -604,7 +604,7 @@ const scoreColor = computed(() => {
 
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center py-12" role="status" :aria-label="$t('securityView.loadingSecurityData')">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" aria-hidden="true"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-autobot-primary" aria-hidden="true"></div>
     </div>
 
     <!-- Security Overview -->
@@ -618,19 +618,19 @@ const scoreColor = computed(() => {
           </div>
           <div class="card p-4">
             <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('securityView.activeThreats') }}</div>
-            <div :class="['text-3xl font-bold', overview.active_threats > 0 ? 'text-error-600' : 'text-autobot-text-primary']">
+            <div :class="['text-3xl font-bold', overview.active_threats > 0 ? 'text-autobot-error' : 'text-autobot-text-primary']">
               {{ overview.active_threats }}
             </div>
           </div>
           <div class="card p-4">
             <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('securityView.failedLogins24h') }}</div>
-            <div :class="['text-3xl font-bold', overview.failed_logins_24h > 5 ? 'text-warning-600' : 'text-autobot-text-primary']">
+            <div :class="['text-3xl font-bold', overview.failed_logins_24h > 5 ? 'text-autobot-warning' : 'text-autobot-text-primary']">
               {{ overview.failed_logins_24h }}
             </div>
           </div>
           <div class="card p-4">
             <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('securityView.policyViolations') }}</div>
-            <div :class="['text-3xl font-bold', overview.policy_violations > 0 ? 'text-warning-600' : 'text-autobot-text-primary']">
+            <div :class="['text-3xl font-bold', overview.policy_violations > 0 ? 'text-autobot-warning' : 'text-autobot-text-primary']">
               {{ overview.policy_violations }}
             </div>
           </div>
@@ -682,18 +682,18 @@ const scoreColor = computed(() => {
       <!-- Result Alert -->
       <div
         v-if="tlsEnableResult"
-        :class="['mb-6 p-4 rounded-lg border', tlsEnableResult.success ? 'bg-success-50 border-success-200' : 'bg-error-50 border-error-200']"
+        :class="['mb-6 p-4 rounded-lg border', tlsEnableResult.success ? 'bg-autobot-success-bg border-autobot-success-bg' : 'bg-autobot-error-bg border-autobot-error-bg']"
         :role="tlsEnableResult.success ? 'status' : 'alert'"
       >
         <div class="flex items-start gap-3">
-          <svg v-if="tlsEnableResult.success" class="w-5 h-5 text-success-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <svg v-if="tlsEnableResult.success" class="w-5 h-5 text-autobot-success mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <svg v-else class="w-5 h-5 text-error-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <svg v-else class="w-5 h-5 text-autobot-error mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div>
-            <p :class="tlsEnableResult.success ? 'text-success-700' : 'text-error-700'">
+            <p :class="tlsEnableResult.success ? 'text-autobot-success-hover' : 'text-autobot-error-hover'">
               {{ tlsEnableResult.message }}
             </p>
             <details v-if="tlsEnableResult.details" class="mt-2">
@@ -720,14 +720,14 @@ const scoreColor = computed(() => {
               v-for="service in tlsServices"
               :key="service.name"
               class="flex items-center justify-between p-4 rounded-lg border hover:bg-autobot-bg-hover cursor-pointer"
-              :class="selectedTlsServices.includes(service.name) ? 'border-primary-300 bg-primary-50' : 'border-autobot-border'"
+              :class="selectedTlsServices.includes(service.name) ? 'border-autobot-primary-light bg-autobot-primary-bg' : 'border-autobot-border'"
               @click="toggleTlsService(service.name)"
             >
               <div class="flex items-center gap-4">
                 <input
                   type="checkbox"
                   :checked="selectedTlsServices.includes(service.name)"
-                  class="h-5 w-5 text-primary-600 rounded-sm border-autobot-border-strong focus:ring-primary-500"
+                  class="h-5 w-5 text-autobot-primary rounded-sm border-autobot-border-strong focus:ring-autobot-primary"
                   :aria-label="$t('securityView.enableTlsForService', { name: service.displayName })"
                   @click.stop
                   @change="toggleTlsService(service.name)"
@@ -738,7 +738,7 @@ const scoreColor = computed(() => {
                     <span
                       :class="[
                         'px-2 py-0.5 rounded-full text-xs',
-                        service.enabled ? 'bg-success-100 text-success-700' : 'bg-autobot-bg-tertiary text-autobot-text-secondary'
+                        service.enabled ? 'bg-autobot-success-bg text-autobot-success-hover' : 'bg-autobot-bg-tertiary text-autobot-text-secondary'
                       ]"
                     >
                       {{ service.enabled ? $t('securityView.tLSEnabled') : $t('securityView.hTTP') }}
@@ -765,7 +765,7 @@ const scoreColor = computed(() => {
             <input
               v-model="deployCertsFirst"
               type="checkbox"
-              class="h-5 w-5 text-primary-600 rounded-sm border-autobot-border-strong focus:ring-primary-500"
+              class="h-5 w-5 text-autobot-primary rounded-sm border-autobot-border-strong focus:ring-autobot-primary"
             />
             <div>
               <span class="font-medium text-autobot-text-primary">{{ $t('securityView.deployCertificatesFirst') }}</span>
@@ -784,7 +784,7 @@ const scoreColor = computed(() => {
             'px-6 py-3 rounded-lg font-medium text-white transition-colors flex items-center gap-2',
             tlsEnabling || selectedTlsServices.length === 0
               ? 'bg-autobot-dot-idle cursor-not-allowed'
-              : 'bg-primary-600 hover:bg-primary-700'
+              : 'bg-autobot-primary hover:bg-autobot-primary-hover'
           ]"
         >
           <svg v-if="tlsEnabling" class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -875,13 +875,13 @@ const scoreColor = computed(() => {
         </div>
         <div class="card p-4">
           <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('securityView.active') }}</div>
-          <div class="text-3xl font-bold text-success-600">
+          <div class="text-3xl font-bold text-autobot-success">
             {{ tlsEndpoints.filter(e => e.is_active).length }}
           </div>
         </div>
         <div class="card p-4">
           <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('securityView.expiringSoon30d') }}</div>
-          <div :class="['text-3xl font-bold', tlsExpiringSoon > 0 ? 'text-warning-600' : 'text-autobot-text-primary']">
+          <div :class="['text-3xl font-bold', tlsExpiringSoon > 0 ? 'text-autobot-warning' : 'text-autobot-text-primary']">
             {{ tlsExpiringSoon }}
           </div>
         </div>
@@ -943,7 +943,7 @@ const scoreColor = computed(() => {
                 <span
                   :class="[
                     'px-2 py-1 rounded-full text-xs',
-                    endpoint.is_active ? 'bg-success-100 text-success-700' : 'bg-autobot-bg-tertiary text-autobot-text-secondary'
+                    endpoint.is_active ? 'bg-autobot-success-bg text-autobot-success-hover' : 'bg-autobot-bg-tertiary text-autobot-text-secondary'
                   ]"
                 >
                   {{ endpoint.is_active ? $t('securityView.active') : $t('securityView.inactive') }}
@@ -973,7 +973,7 @@ const scoreColor = computed(() => {
                       'px-2 py-1 rounded-sm text-xs',
                       endpoint.is_active
                         ? 'bg-autobot-bg-tertiary hover:bg-autobot-bg-active text-autobot-text-secondary'
-                        : 'bg-success-100 hover:bg-success-200 text-success-700'
+                        : 'bg-autobot-success-bg hover:bg-autobot-success-bg text-autobot-success-hover'
                     ]"
                     :aria-label="endpoint.is_active ? $t('securityView.disableCertificateFor', { hostname: endpoint.hostname }) : $t('securityView.enableCertificateFor', { hostname: endpoint.hostname })"
                   >
@@ -981,7 +981,7 @@ const scoreColor = computed(() => {
                   </button>
                   <button
                     @click="deleteTlsCertificate(endpoint.credential_id)"
-                    class="px-2 py-1 rounded-sm text-xs bg-error-100 hover:bg-error-200 text-error-700"
+                    class="px-2 py-1 rounded-sm text-xs bg-autobot-error-bg hover:bg-autobot-error-bg text-autobot-error-hover"
                     :aria-label="$t('securityView.deleteCertificateFor', { hostname: endpoint.hostname })"
                   >{{ $t('securityView.delete') }}</button>
                 </div>
@@ -1001,7 +1001,7 @@ const scoreColor = computed(() => {
           id="audit-category-filter"
           v-model="auditCategoryFilter"
           @change="onAuditCategoryChange()"
-          class="rounded-md border-autobot-border-strong shadow-xs focus:border-primary-500 focus:ring-primary-500 text-sm"
+          class="rounded-md border-autobot-border-strong shadow-xs focus:border-autobot-primary focus:ring-autobot-primary text-sm"
         >
           <option value="">{{ $t('securityView.allCategories') }}</option>
           <option value="authentication">{{ $t('securityView.authentication') }}</option>
@@ -1051,7 +1051,7 @@ const scoreColor = computed(() => {
                 <span
                   :class="[
                     'px-2 py-1 rounded-full text-xs',
-                    log.success ? 'bg-success-100 text-success-700' : 'bg-error-100 text-error-700'
+                    log.success ? 'bg-autobot-success-bg text-autobot-success-hover' : 'bg-autobot-error-bg text-autobot-error-hover'
                   ]"
                 >
                   {{ log.success ? $t('securityView.success') : $t('securityView.failed') }}
@@ -1091,7 +1091,7 @@ const scoreColor = computed(() => {
         </div>
         <div class="card p-4">
           <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('securityView.critical') }}</div>
-          <div class="text-2xl font-bold text-error-600">{{ threatSummary.critical }}</div>
+          <div class="text-2xl font-bold text-autobot-error">{{ threatSummary.critical }}</div>
         </div>
         <div class="card p-4">
           <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('securityView.high') }}</div>
@@ -1099,11 +1099,11 @@ const scoreColor = computed(() => {
         </div>
         <div class="card p-4">
           <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('securityView.medium') }}</div>
-          <div class="text-2xl font-bold text-warning-600">{{ threatSummary.medium }}</div>
+          <div class="text-2xl font-bold text-autobot-warning">{{ threatSummary.medium }}</div>
         </div>
         <div class="card p-4">
           <div class="text-sm text-autobot-text-tertiary mb-1">{{ $t('securityView.resolved') }}</div>
-          <div class="text-2xl font-bold text-success-600">{{ threatSummary.resolved }}</div>
+          <div class="text-2xl font-bold text-autobot-success">{{ threatSummary.resolved }}</div>
         </div>
       </div>
 
@@ -1114,7 +1114,7 @@ const scoreColor = computed(() => {
           id="event-severity-filter"
           v-model="eventSeverityFilter"
           @change="onEventSeverityChange()"
-          class="rounded-md border-autobot-border-strong shadow-xs focus:border-primary-500 focus:ring-primary-500 text-sm"
+          class="rounded-md border-autobot-border-strong shadow-xs focus:border-autobot-primary focus:ring-autobot-primary text-sm"
         >
           <option value="">{{ $t('securityView.allSeverities') }}</option>
           <option value="critical">{{ $t('securityView.critical') }}</option>
@@ -1155,9 +1155,9 @@ const scoreColor = computed(() => {
                   :class="[
                     'px-2 py-1 rounded-sm text-xs',
                     event.is_resolved
-                      ? 'bg-success-100 text-success-700'
+                      ? 'bg-autobot-success-bg text-autobot-success-hover'
                       : event.is_acknowledged
-                      ? 'bg-warning-100 text-warning-700'
+                      ? 'bg-autobot-warning-bg text-autobot-warning-hover'
                       : 'bg-autobot-bg-tertiary text-autobot-text-secondary'
                   ]"
                 >
@@ -1172,7 +1172,7 @@ const scoreColor = computed(() => {
                   >{{ $t('securityView.ack') }}</button>
                   <button
                     @click="resolveEvent(event.event_id)"
-                    class="px-2 py-1 text-xs bg-success-100 hover:bg-success-200 text-success-700 rounded-sm"
+                    class="px-2 py-1 text-xs bg-autobot-success-bg hover:bg-autobot-success-bg text-autobot-success-hover rounded-sm"
                     :aria-label="$t('securityView.resolveEvent', { title: event.title })"
                   >{{ $t('securityView.resolve') }}</button>
                 </div>
@@ -1219,7 +1219,7 @@ const scoreColor = computed(() => {
                 <div class="flex items-center gap-4 mt-2 text-xs text-autobot-text-tertiary">
                   <span>{{ $t('securityView.categoryValue0', { value0: policy.category }) }}</span>
                   <span v-if="policy.compliance_score !== null">{{ $t('securityView.complianceValue0', { value0: policy.compliance_score?.toFixed(1) }) }}</span>
-                  <span v-if="policy.violations_count > 0" class="text-warning-600">{{ $t('securityView.value0Violations', { value0: policy.violations_count }) }}</span>
+                  <span v-if="policy.violations_count > 0" class="text-autobot-warning">{{ $t('securityView.value0Violations', { value0: policy.violations_count }) }}</span>
                 </div>
               </div>
               <div class="flex items-center gap-2">
@@ -1227,10 +1227,10 @@ const scoreColor = computed(() => {
                   :class="[
                     'px-2 py-1 rounded-sm text-xs',
                     policy.status === 'active'
-                      ? 'bg-success-100 text-success-700'
+                      ? 'bg-autobot-success-bg text-autobot-success-hover'
                       : policy.status === 'inactive'
                       ? 'bg-autobot-bg-tertiary text-autobot-text-secondary'
-                      : 'bg-warning-100 text-warning-700'
+                      : 'bg-autobot-warning-bg text-autobot-warning-hover'
                   ]"
                 >
                   {{ policy.status }}
@@ -1240,8 +1240,8 @@ const scoreColor = computed(() => {
                   :class="[
                     'px-3 py-1 text-xs rounded-sm',
                     policy.is_enforced
-                      ? 'bg-error-100 hover:bg-error-200 text-error-700'
-                      : 'bg-success-100 hover:bg-success-200 text-success-700'
+                      ? 'bg-autobot-error-bg hover:bg-autobot-error-bg text-autobot-error-hover'
+                      : 'bg-autobot-success-bg hover:bg-autobot-success-bg text-autobot-success-hover'
                   ]"
                   :aria-label="policy.is_enforced ? $t('securityView.disablePolicy', { name: policy.name }) : $t('securityView.enablePolicy', { name: policy.name })"
                 >
@@ -1287,7 +1287,7 @@ const scoreColor = computed(() => {
             v-model="selectedNodeId"
             type="text"
             :placeholder="$t('securityView.enterNodeID')"
-            class="w-full rounded-md border-autobot-border-strong shadow-xs focus:border-primary-500 focus:ring-primary-500"
+            class="w-full rounded-md border-autobot-border-strong shadow-xs focus:border-autobot-primary focus:ring-autobot-primary"
           />
         </div>
 
@@ -1298,7 +1298,7 @@ const scoreColor = computed(() => {
             v-model="uploadForm.name"
             type="text"
             :placeholder="$t('securityView.eGRedisServerApiClient')"
-            class="w-full rounded-md border-autobot-border-strong shadow-xs focus:border-primary-500 focus:ring-primary-500"
+            class="w-full rounded-md border-autobot-border-strong shadow-xs focus:border-autobot-primary focus:ring-autobot-primary"
           />
         </div>
 
@@ -1309,7 +1309,7 @@ const scoreColor = computed(() => {
             v-model="uploadForm.ca_cert"
             rows="4"
             :placeholder="$t('securityView.pemCertificateHint')"
-            class="w-full rounded-md border-autobot-border-strong shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
+            class="w-full rounded-md border-autobot-border-strong shadow-xs focus:border-autobot-primary focus:ring-autobot-primary font-mono text-xs"
           ></textarea>
         </div>
 
@@ -1320,7 +1320,7 @@ const scoreColor = computed(() => {
             v-model="uploadForm.server_cert"
             rows="4"
             :placeholder="$t('securityView.pemCertificateHint')"
-            class="w-full rounded-md border-autobot-border-strong shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
+            class="w-full rounded-md border-autobot-border-strong shadow-xs focus:border-autobot-primary focus:ring-autobot-primary font-mono text-xs"
           ></textarea>
         </div>
 
@@ -1331,7 +1331,7 @@ const scoreColor = computed(() => {
             v-model="uploadForm.server_key"
             rows="4"
             :placeholder="$t('securityView.pemKeyHint')"
-            class="w-full rounded-md border-autobot-border-strong shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
+            class="w-full rounded-md border-autobot-border-strong shadow-xs focus:border-autobot-primary focus:ring-autobot-primary font-mono text-xs"
           ></textarea>
           <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('securityView.thePrivateKeyWillBeEncrypted') }}</p>
         </div>

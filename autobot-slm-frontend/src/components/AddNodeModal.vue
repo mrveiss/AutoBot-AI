@@ -21,7 +21,7 @@
       <!-- Connection Information Section -->
       <fieldset class="space-y-4">
         <legend class="flex items-center gap-2 text-sm font-semibold text-autobot-text-secondary border-b border-autobot-border-subtle pb-2">
-          <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <svg class="h-4 w-4 text-autobot-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
           </svg>
           {{ $t('addNodeModal.connectionInformation') }}
@@ -31,41 +31,41 @@
           <!-- Hostname -->
           <div class="sm:col-span-1">
             <label for="hostname" class="block text-sm font-medium text-autobot-text-secondary mb-1">
-              {{ $t('addNodeModal.hostname') }} <span class="text-error-500" aria-hidden="true">*</span>
+              {{ $t('addNodeModal.hostname') }} <span class="text-autobot-error" aria-hidden="true">*</span>
               <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
             </label>
             <input
               v-model="formData.hostname"
               type="text"
               id="hostname"
-              :class="['input', { 'border-error-500 focus:ring-error-500 focus:border-error-500': errors.hostname }]"
+              :class="['input', { 'border-autobot-error focus:ring-autobot-error focus:border-autobot-error': errors.hostname }]"
               :placeholder="$t('addNodeModal.placeholderHostname')"
               aria-required="true"
               :aria-invalid="!!errors.hostname"
               :aria-describedby="errors.hostname ? 'hostname-error' : undefined"
               @blur="validateField('hostname')"
             />
-            <p v-if="errors.hostname" id="hostname-error" class="mt-1 text-xs text-error-500" role="alert">{{ errors.hostname }}</p>
+            <p v-if="errors.hostname" id="hostname-error" class="mt-1 text-xs text-autobot-error" role="alert">{{ errors.hostname }}</p>
           </div>
 
           <!-- IP Address -->
           <div class="sm:col-span-1">
             <label for="ip_address" class="block text-sm font-medium text-autobot-text-secondary mb-1">
-              {{ $t('addNodeModal.iPAddress') }} <span class="text-error-500" aria-hidden="true">*</span>
+              {{ $t('addNodeModal.iPAddress') }} <span class="text-autobot-error" aria-hidden="true">*</span>
               <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
             </label>
             <input
               v-model="formData.ip_address"
               type="text"
               id="ip_address"
-              :class="['input', { 'border-error-500 focus:ring-error-500 focus:border-error-500': errors.ip_address }]"
+              :class="['input', { 'border-autobot-error focus:ring-autobot-error focus:border-autobot-error': errors.ip_address }]"
               :placeholder="$t('addNodeModal.placeholderIpAddress')"
               aria-required="true"
               :aria-invalid="!!errors.ip_address"
               :aria-describedby="errors.ip_address ? 'ip-error' : undefined"
               @blur="validateField('ip_address')"
             />
-            <p v-if="errors.ip_address" id="ip-error" class="mt-1 text-xs text-error-500" role="alert">{{ errors.ip_address }}</p>
+            <p v-if="errors.ip_address" id="ip-error" class="mt-1 text-xs text-autobot-error" role="alert">{{ errors.ip_address }}</p>
           </div>
 
           <!-- SSH Port -->
@@ -89,7 +89,7 @@
       <!-- Authentication Method Section -->
       <fieldset class="space-y-4">
         <legend class="flex items-center gap-2 text-sm font-semibold text-autobot-text-secondary border-b border-autobot-border-subtle pb-2">
-          <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <svg class="h-4 w-4 text-autobot-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
           </svg>
           {{ $t('addNodeModal.authenticationMethod') }}
@@ -101,7 +101,7 @@
             :class="[
               'flex-1 flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all',
               formData.auth_method === 'password'
-                ? 'border-primary-500 bg-primary-50'
+                ? 'border-autobot-primary bg-autobot-primary-bg'
                 : 'border-autobot-border hover:border-autobot-border-strong bg-white'
             ]"
           >
@@ -111,8 +111,8 @@
               value="password"
               class="sr-only"
             />
-            <div class="flex items-center justify-center w-10 h-10 bg-primary-100 rounded-lg" aria-hidden="true">
-              <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="flex items-center justify-center w-10 h-10 bg-autobot-primary-bg rounded-lg" aria-hidden="true">
+              <svg class="h-5 w-5 text-autobot-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
@@ -126,7 +126,7 @@
             :class="[
               'flex-1 flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all',
               formData.auth_method === 'pki'
-                ? 'border-primary-500 bg-primary-50'
+                ? 'border-autobot-primary bg-autobot-primary-bg'
                 : 'border-autobot-border hover:border-autobot-border-strong bg-white'
             ]"
           >
@@ -136,8 +136,8 @@
               value="pki"
               class="sr-only"
             />
-            <div class="flex items-center justify-center w-10 h-10 bg-primary-100 rounded-lg" aria-hidden="true">
-              <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="flex items-center justify-center w-10 h-10 bg-autobot-primary-bg rounded-lg" aria-hidden="true">
+              <svg class="h-5 w-5 text-autobot-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
@@ -154,7 +154,7 @@
             <!-- SSH User -->
             <div>
               <label for="ssh_user" class="block text-sm font-medium text-autobot-text-secondary mb-1">
-                {{ $t('addNodeModal.username') }} <span class="text-error-500" aria-hidden="true">*</span>
+                {{ $t('addNodeModal.username') }} <span class="text-autobot-error" aria-hidden="true">*</span>
                 <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
               </label>
               <input
@@ -171,7 +171,7 @@
             <div>
               <label for="ssh_password" class="block text-sm font-medium text-autobot-text-secondary mb-1">
                 {{ $t('addNodeModal.password') }}
-                <span v-if="!isEditMode || needsCredentialsForEdit" class="text-error-500" aria-hidden="true">*</span>
+                <span v-if="!isEditMode || needsCredentialsForEdit" class="text-autobot-error" aria-hidden="true">*</span>
                 <span v-if="!isEditMode || needsCredentialsForEdit" class="sr-only">{{ $t('addNodeModal.required') }}</span>
                 <span v-else class="text-autobot-text-tertiary text-xs ml-1">{{ $t('addNodeModal.optional') }}</span>
               </label>
@@ -180,7 +180,7 @@
                   v-model="formData.ssh_password"
                   :type="showPassword ? 'text' : 'password'"
                   id="ssh_password"
-                  :class="['input pr-10', { 'border-error-500 focus:ring-error-500 focus:border-error-500': errors.ssh_password }]"
+                  :class="['input pr-10', { 'border-autobot-error focus:ring-autobot-error focus:border-autobot-error': errors.ssh_password }]"
                   :placeholder="isEditMode && !needsCredentialsForEdit ? $t('addNodeModal.placeholderLeaveEmptyForEdit') : $t('addNodeModal.placeholderEnterPassword')"
                   :aria-required="!isEditMode || needsCredentialsForEdit ? 'true' : undefined"
                   :aria-invalid="!!errors.ssh_password"
@@ -203,7 +203,7 @@
                   </svg>
                 </button>
               </div>
-              <p v-if="errors.ssh_password" id="password-error" class="mt-1 text-xs text-error-500" role="alert">{{ errors.ssh_password }}</p>
+              <p v-if="errors.ssh_password" id="password-error" class="mt-1 text-xs text-autobot-error" role="alert">{{ errors.ssh_password }}</p>
             </div>
           </div>
 
@@ -212,7 +212,7 @@
             <input
               type="checkbox"
               v-model="formData.has_sudo"
-              class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+              class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
             />
             <span class="text-sm text-autobot-text-secondary">{{ $t('addNodeModal.userHasSudoPrivileges') }}</span>
           </label>
@@ -223,7 +223,7 @@
           <!-- SSH User -->
           <div>
             <label for="ssh_user_pki" class="block text-sm font-medium text-autobot-text-secondary mb-1">
-              {{ $t('addNodeModal.username') }} <span class="text-error-500" aria-hidden="true">*</span>
+              {{ $t('addNodeModal.username') }} <span class="text-autobot-error" aria-hidden="true">*</span>
               <span class="sr-only">{{ $t('addNodeModal.required') }}</span>
             </label>
             <input
@@ -246,7 +246,7 @@
                 :class="[
                   'flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all',
                   keySource === option.value
-                    ? 'border-primary-500 bg-primary-50'
+                    ? 'border-autobot-primary bg-autobot-primary-bg'
                     : 'border-autobot-border hover:border-autobot-border-strong'
                 ]"
               >
@@ -254,7 +254,7 @@
                   type="radio"
                   v-model="keySource"
                   :value="option.value"
-                  class="w-4 h-4 text-primary-600 border-autobot-border-strong focus:ring-primary-500"
+                  class="w-4 h-4 text-autobot-primary border-autobot-border-strong focus:ring-autobot-primary"
                 />
                 <span class="text-sm text-autobot-text-secondary">{{ option.label }}</span>
               </label>
@@ -284,13 +284,13 @@
               v-model="formData.ssh_key"
               id="ssh_key"
               rows="5"
-              :class="['input font-mono text-xs', { 'border-error-500 focus:ring-error-500 focus:border-error-500': errors.ssh_key }]"
+              :class="['input font-mono text-xs', { 'border-autobot-error focus:ring-autobot-error focus:border-autobot-error': errors.ssh_key }]"
               :placeholder="$t('addNodeModal.sshKeyPemHint')"
               :aria-invalid="!!errors.ssh_key"
               :aria-describedby="errors.ssh_key ? 'ssh-key-error' : undefined"
               @blur="validateField('ssh_key')"
             ></textarea>
-            <p v-if="errors.ssh_key" id="ssh-key-error" class="mt-1 text-xs text-error-500" role="alert">{{ errors.ssh_key }}</p>
+            <p v-if="errors.ssh_key" id="ssh-key-error" class="mt-1 text-xs text-autobot-error" role="alert">{{ errors.ssh_key }}</p>
           </div>
         </div>
       </fieldset>
@@ -298,7 +298,7 @@
       <!-- Role Assignment Section -->
       <fieldset class="space-y-4">
         <legend class="flex items-center gap-2 text-sm font-semibold text-autobot-text-secondary border-b border-autobot-border-subtle pb-2">
-          <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <svg class="h-4 w-4 text-autobot-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
           </svg>
           {{ $t('addNodeModal.roleAssignment') }}
@@ -311,7 +311,7 @@
             :class="[
               'flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-all',
               formData.roles.includes(role.id)
-                ? 'border-primary-500 bg-primary-50'
+                ? 'border-autobot-primary bg-autobot-primary-bg'
                 : 'border-autobot-border hover:border-autobot-border-strong'
             ]"
           >
@@ -319,7 +319,7 @@
               type="checkbox"
               :value="role.id"
               v-model="formData.roles"
-              class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+              class="mt-0.5 w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
               :aria-label="`${role.name}: ${role.description}`"
             />
             <div>
@@ -328,14 +328,14 @@
             </div>
           </label>
         </div>
-        <p v-if="errors.roles" class="text-xs text-error-500" role="alert">{{ errors.roles }}</p>
+        <p v-if="errors.roles" class="text-xs text-autobot-error" role="alert">{{ errors.roles }}</p>
 
         <!-- Selected Roles Details -->
         <div v-if="selectedRolesDetails.length > 0" class="p-3 bg-autobot-bg-secondary rounded-lg" role="status">
           <p class="text-xs font-medium text-autobot-text-secondary mb-2">{{ $t('addNodeModal.selectedRolesWillConfigure') }}</p>
           <div class="space-y-1">
             <div v-for="role in selectedRolesDetails" :key="role.id" class="flex items-center gap-2 text-xs">
-              <span class="w-2 h-2 bg-primary-500 rounded-full" aria-hidden="true"></span>
+              <span class="w-2 h-2 bg-autobot-primary rounded-full" aria-hidden="true"></span>
               <span class="text-autobot-text-secondary">{{ role.name }}: {{ role.services?.join(', ') || $t('addNodeModal.noServices') }}</span>
               <span v-if="role.default_port" class="text-autobot-text-tertiary">{{ $t('addNodeModal.portValue0', { value0: role.default_port }) }}</span>
             </div>
@@ -346,7 +346,7 @@
       <!-- Enrollment Options Section -->
       <fieldset class="space-y-4">
         <legend class="flex items-center gap-2 text-sm font-semibold text-autobot-text-secondary border-b border-autobot-border-subtle pb-2">
-          <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <svg class="h-4 w-4 text-autobot-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
@@ -360,7 +360,7 @@
             <input
               type="checkbox"
               v-model="formData.import_existing"
-              class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+              class="mt-0.5 w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
             />
             <div>
               <span class="text-sm text-autobot-text-secondary font-medium">{{ $t('addNodeModal.importExistingNodeNo') }}</span>
@@ -375,7 +375,7 @@
               <input
                 type="checkbox"
                 v-model="formData.auto_enroll"
-                class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+                class="mt-0.5 w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
               />
               <div>
                 <span class="text-sm text-autobot-text-secondary">{{ $t('addNodeModal.startEnrollmentImmediatelyAfter') }}</span>
@@ -389,7 +389,7 @@
               <input
                 type="checkbox"
                 v-model="formData.deploy_pki"
-                class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+                class="mt-0.5 w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
               />
               <div>
                 <span class="text-sm text-autobot-text-secondary">{{ $t('addNodeModal.deployPKICertificatesDuring') }}</span>
@@ -414,7 +414,7 @@
             <input
               type="checkbox"
               v-model="formData.deploy_pki"
-              class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+              class="mt-0.5 w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
             />
             <div>
               <span class="text-sm text-autobot-text-secondary">{{ $t('addNodeModal.deployPKICertificatesAfter') }}</span>
@@ -428,7 +428,7 @@
             <input
               type="checkbox"
               v-model="formData.run_enrollment"
-              class="mt-0.5 w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+              class="mt-0.5 w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
             />
             <div>
               <span class="text-sm text-autobot-text-secondary">{{ $t('addNodeModal.reRunEnrollmentTasks') }}</span>
@@ -449,7 +449,7 @@
           <input
             type="checkbox"
             v-model="replaceConfirmed"
-            class="mt-0.5 w-4 h-4 text-error-500 border-autobot-border-strong rounded-sm focus:ring-error-500"
+            class="mt-0.5 w-4 h-4 text-autobot-error border-autobot-border-strong rounded-sm focus:ring-autobot-error"
           />
           <div>
             <span class="text-sm text-autobot-text-secondary font-medium">

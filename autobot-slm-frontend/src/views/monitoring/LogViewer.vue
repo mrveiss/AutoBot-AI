@@ -255,11 +255,11 @@ onMounted(() => {
           :class="[
             'px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
             isAutoRefresh
-              ? 'bg-success-100 text-success-700'
+              ? 'bg-autobot-success-bg text-autobot-success-hover'
               : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
           ]"
         >
-          <span :class="['w-2 h-2 rounded-full', isAutoRefresh ? 'bg-success-500 animate-pulse' : 'bg-autobot-dot-idle']"></span>
+          <span :class="['w-2 h-2 rounded-full', isAutoRefresh ? 'bg-autobot-success animate-pulse' : 'bg-autobot-dot-idle']"></span>
           {{ isAutoRefresh ? $t('monitoring.logViewer.live') : $t('monitoring.logViewer.paused') }}
         </button>
         <button
@@ -295,7 +295,7 @@ onMounted(() => {
         :class="[
           'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
           activeSubTab === 'fleetEvents'
-            ? 'border-primary-500 text-primary-600'
+            ? 'border-autobot-primary text-autobot-primary'
             : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary'
         ]"
       >
@@ -308,7 +308,7 @@ onMounted(() => {
         :class="[
           'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
           activeSubTab === 'appLogs'
-            ? 'border-primary-500 text-primary-600'
+            ? 'border-autobot-primary text-autobot-primary'
             : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary'
         ]"
       >
@@ -326,7 +326,7 @@ onMounted(() => {
             v-model="searchQuery"
             type="text"
             :placeholder="$t('monitoring.logViewer.searchLogs')"
-            class="w-full px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
           />
         </div>
 
@@ -335,7 +335,7 @@ onMounted(() => {
           <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.logViewer.level') }}</label>
           <select
             v-model="selectedLevel"
-            class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           >
             <option v-for="level in logLevels" :key="level" :value="level">
               {{ level === 'all' ? $t('monitoring.logViewer.allLevels') : level.charAt(0).toUpperCase() + level.slice(1) }}
@@ -348,7 +348,7 @@ onMounted(() => {
           <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.logViewer.source') }}</label>
           <select
             v-model="selectedSource"
-            class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
           >
             <option v-for="source in logSources" :key="source" :value="source">
               {{ source === 'all' ? $t('monitoring.logViewer.allSources') : source }}
@@ -362,7 +362,7 @@ onMounted(() => {
     <div
       v-if="logLoadError"
       role="alert"
-      class="bg-error-50 text-error-700 border border-error-200 rounded-lg px-4 py-2 mb-4 text-sm"
+      class="bg-autobot-error-bg text-autobot-error-hover border border-autobot-error-bg rounded-lg px-4 py-2 mb-4 text-sm"
     >
       {{ $t('monitoring.logViewer.loadError', { error: logLoadError }) }}
     </div>
@@ -432,7 +432,7 @@ onMounted(() => {
             <select
               v-model="appLogNodeId"
               @change="applyAppLogFilters"
-              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 min-w-[180px]"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary min-w-[180px]"
             >
               <option value="">{{ $t('monitoring.logViewer.appLogs.selectNode') }}</option>
               <option v-for="node in fleetStore.nodeList" :key="node.node_id" :value="node.node_id">
@@ -446,7 +446,7 @@ onMounted(() => {
             <select
               v-model="appLogService"
               @change="applyAppLogFilters"
-              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option v-for="svc in appLogServices" :key="svc" :value="svc">{{ svc }}</option>
             </select>
@@ -459,7 +459,7 @@ onMounted(() => {
               type="text"
               :placeholder="$t('monitoring.logViewer.appLogs.mcpInstancePlaceholder')"
               @change="applyAppLogFilters"
-              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 w-32"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary w-32"
             />
           </div>
 
@@ -468,7 +468,7 @@ onMounted(() => {
             <select
               v-model="appLogSeverity"
               @change="applyAppLogFilters"
-              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="">{{ $t('monitoring.logViewer.appLogs.allSeverities') }}</option>
               <option v-for="sev in appLogSeverities" :key="sev" :value="sev">{{ severityLabel(sev) }}</option>
@@ -483,7 +483,7 @@ onMounted(() => {
               min="1"
               max="168"
               @change="applyAppLogFilters"
-              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 w-24"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary w-24"
             />
           </div>
 
@@ -495,7 +495,7 @@ onMounted(() => {
               :placeholder="$t('monitoring.logViewer.appLogs.search')"
               @keyup.enter="applyAppLogFilters"
               @blur="applyAppLogFilters"
-              class="w-full px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              class="w-full px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary"
             />
           </div>
         </div>
@@ -505,7 +505,7 @@ onMounted(() => {
       <div
         v-if="appLogError"
         role="alert"
-        class="bg-error-50 text-error-700 border border-error-200 rounded-lg px-4 py-2 mb-4 text-sm"
+        class="bg-autobot-error-bg text-autobot-error-hover border border-autobot-error-bg rounded-lg px-4 py-2 mb-4 text-sm"
       >
         {{ $t('monitoring.logViewer.appLogs.fetchError', { error: appLogError }) }}
       </div>

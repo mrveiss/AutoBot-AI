@@ -1022,7 +1022,7 @@ onUnmounted(() => {
             type="checkbox"
             :checked="autoRefresh"
             @change="toggleAutoRefresh"
-            class="w-4 h-4 text-primary-600 border-autobot-border-strong rounded-sm focus:ring-primary-500"
+            class="w-4 h-4 text-autobot-primary border-autobot-border-strong rounded-sm focus:ring-autobot-primary"
           />
           {{ $t('orchestrationView.autoRefresh') }}
         </label>
@@ -1084,7 +1084,7 @@ onUnmounted(() => {
           :class="[
             'py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap',
             activeTab === tab.id
-              ? 'border-primary-500 text-primary-600'
+              ? 'border-autobot-primary text-autobot-primary'
               : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong'
           ]"
         >
@@ -1117,7 +1117,7 @@ onUnmounted(() => {
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-lg',
                   categoryFilter === 'autobot'
-                    ? 'bg-primary-100 text-primary-700'
+                    ? 'bg-autobot-primary-bg text-autobot-primary-hover'
                     : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
                 ]"
               >{{ $t('orchestrationView.autoBotValue0', { value0: categoryCounts.autobot }) }}</button>
@@ -1126,7 +1126,7 @@ onUnmounted(() => {
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-lg',
                   categoryFilter === 'system'
-                    ? 'bg-primary-100 text-primary-700'
+                    ? 'bg-autobot-primary-bg text-autobot-primary-hover'
                     : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
                 ]"
               >{{ $t('orchestrationView.systemValue0', { value0: categoryCounts.system }) }}</button>
@@ -1135,7 +1135,7 @@ onUnmounted(() => {
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-lg',
                   categoryFilter === 'all'
-                    ? 'bg-primary-100 text-primary-700'
+                    ? 'bg-autobot-primary-bg text-autobot-primary-hover'
                     : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
                 ]"
               >{{ $t('orchestrationView.allValue0', { value0: categoryCounts.all }) }}</button>
@@ -1146,7 +1146,7 @@ onUnmounted(() => {
               <label class="text-sm text-autobot-text-secondary">{{ $t('orchestrationView.status') }}</label>
               <select
                 v-model="statusFilter"
-                class="border-autobot-border-strong rounded-lg text-sm focus:ring-primary-500 focus:border-primary-500"
+                class="border-autobot-border-strong rounded-lg text-sm focus:ring-autobot-primary focus:border-autobot-primary"
               >
                 <option v-for="option in statusFilterOptions" :key="option.value" :value="option.value">
                   {{ option.label }}
@@ -1156,11 +1156,11 @@ onUnmounted(() => {
 
             <!-- Expand/Collapse -->
             <div class="flex items-center gap-2">
-              <button @click="expandAll" class="text-sm text-primary-600 hover:text-primary-800">
+              <button @click="expandAll" class="text-sm text-autobot-primary hover:text-autobot-primary-dark">
                 {{ $t('orchestrationView.expandAll') }}
               </button>
               <span class="text-autobot-text-tertiary">|</span>
-              <button @click="collapseAll" class="text-sm text-primary-600 hover:text-primary-800">
+              <button @click="collapseAll" class="text-sm text-autobot-primary hover:text-autobot-primary-dark">
                 {{ $t('orchestrationView.collapseAll') }}
               </button>
             </div>
@@ -1328,7 +1328,7 @@ onUnmounted(() => {
           </p>
           <button
             @click="restartRefresh"
-            class="px-4 py-2 text-sm bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200"
+            class="px-4 py-2 text-sm bg-autobot-primary-bg text-autobot-primary-hover rounded-lg hover:bg-autobot-primary-light"
           >
             {{ $t('orchestrationView.refresh') }}
           </button>
@@ -1391,7 +1391,7 @@ onUnmounted(() => {
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-lg',
                   fleetCategoryFilter === 'autobot'
-                    ? 'bg-primary-100 text-primary-700'
+                    ? 'bg-autobot-primary-bg text-autobot-primary-hover'
                     : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
                 ]"
               >{{ $t('orchestrationView.autoBotValue0', { value0: categoryCounts.autobot }) }}</button>
@@ -1400,7 +1400,7 @@ onUnmounted(() => {
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-lg',
                   fleetCategoryFilter === 'system'
-                    ? 'bg-primary-100 text-primary-700'
+                    ? 'bg-autobot-primary-bg text-autobot-primary-hover'
                     : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
                 ]"
               >{{ $t('orchestrationView.systemValue0', { value0: categoryCounts.system }) }}</button>
@@ -1409,7 +1409,7 @@ onUnmounted(() => {
                 :class="[
                   'px-3 py-1.5 text-sm font-medium rounded-lg',
                   fleetCategoryFilter === 'all'
-                    ? 'bg-primary-100 text-primary-700'
+                    ? 'bg-autobot-primary-bg text-autobot-primary-hover'
                     : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
                 ]"
               >{{ $t('orchestrationView.allValue0', { value0: categoryCounts.all }) }}</button>

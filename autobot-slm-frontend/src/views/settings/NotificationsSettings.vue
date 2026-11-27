@@ -90,7 +90,7 @@ onMounted(fetchSettings)
   <div class="p-6">
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-8">
-      <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+      <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
@@ -178,7 +178,7 @@ onMounted(fetchSettings)
               v-model="notifications.email_address"
               type="email"
               :placeholder="$t('settings.notificationsSettings.adminExampleCom')"
-              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             />
           </div>
         </div>
@@ -188,7 +188,7 @@ onMounted(fetchSettings)
           <button
             @click="saveSettings"
             :disabled="saving"
-            class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+            class="px-6 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
           >
             <svg v-if="saving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
