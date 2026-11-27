@@ -35,6 +35,6 @@
 # Measured 2026-11-16 (#21471): 84 pairs compared, 3 declare differently. The CI plane now
 # lists every constrained package bare under `-c ../constraints/shared.txt`, so 38 entries
 # agreed and left. What remains is outside constraints/shared.txt by design (EXEMPT in
-# scripts/check_constraint_drift.py): websockets on both backends (SLM redis left at #22120: both now cap <8.2).
+# scripts/check_constraint_drift.py): websockets on both backends (SLM redis cap <8.2 lifted at #22120).
 autobot-backend/requirements.txt::websockets
 autobot-slm-backend/requirements.txt::websockets
