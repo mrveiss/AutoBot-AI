@@ -111,7 +111,7 @@
       <button
         data-testid="btn-accept"
         aria-label="Accept agent cell (⌥Enter)"
-        class="px-2 py-1 text-xs rounded bg-autobot-success text-white hover:opacity-90"
+        class="px-2 py-1 text-xs rounded bg-autobot-success text-(--text-on-success) hover:opacity-90"
         @click.stop="$emit('accept')"
       >
         ✓ Accept
