@@ -16,7 +16,9 @@ from typing import Any, Dict, List
 
 import aiofiles
 
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 from llm_self_awareness_render import render_awareness_block
@@ -73,7 +75,7 @@ class LLMSelfAwareness:
         """
         return {
             "name": "AutoBot",
-            "version": "1.0.0",
+            "version": "unknown",  # the repo declares no version; never an invented number (#17821)
             "description": ("Advanced AI-powered automation and development assistant"),
             "current_phase": project_status["current_phase"],
             "system_maturity": capabilities["system_maturity"],
@@ -127,7 +129,7 @@ class LLMSelfAwareness:
         return {
             "system_identity": {
                 "name": "AutoBot",
-                "version": "1.0.0",
+                "version": "unknown",  # the repo declares no version; never an invented number (#17821)
                 "error": "Failed to load complete context",
             },
             "current_capabilities": {"active": [], "error": str(error)},
@@ -607,7 +609,7 @@ class LLMSelfAwareness:
         export_data = {
             "export_metadata": {
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                "version": "1.0.0",
+                "version": "unknown",  # the repo declares no version; never an invented number (#17821)
                 "type": "system_awareness_export",
             },
             "system_context": context,
@@ -629,11 +631,7 @@ class LLMSelfAwareness:
         return output_path
 
 
-from autobot_shared.async_compat import run_or_schedule
-
 # Global instance (thread-safe)
-from autobot_shared.singleton_factory import lazy_singleton
-
 _llm_self_awareness = lazy_singleton(LLMSelfAwareness)
 
 

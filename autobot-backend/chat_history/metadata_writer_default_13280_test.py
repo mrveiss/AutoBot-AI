@@ -23,7 +23,7 @@ flips (``if (!msg.metadata) return false``), and it reaches the same verdict for
 every non-empty criteria object. ``ChatRepository.ts``'s
 ``msg.metadata || msg.rawData || {}`` is keyed on the legacy ``rawData`` field,
 which the current writer never emits beside a freshly built message, so a newly
-written ``{}`` cannot shadow it. ``MessageItem.vue`` already length-checks.
+written ``{}`` cannot shadow it. ``ChatMessageContent.vue`` already length-checks (``MessageItem.vue`` was removed in #22179).
 No frontend change is required.
 """
 

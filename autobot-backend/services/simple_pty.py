@@ -22,6 +22,18 @@ from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)
 
+#: Standard FHS system-binary directories the shell must always search (#22251): a service unit's PATH often
+#: omits them, and ``arp``/``ip``/``ss`` then read as "not installed" to the agent.
+_SBIN_DIRS = ("/usr/local/sbin", "/usr/sbin", "/sbin")
+
+
+def with_sbin_on_path(env: dict) -> dict:
+    """*env* with the standard sbin directories appended to ``PATH`` when missing (#22251)."""
+    parts = [p for p in env.get("PATH", "").split(os.pathsep) if p]
+    env["PATH"] = os.pathsep.join(parts + [d for d in _SBIN_DIRS if d not in parts])
+    return env
+
+
 # Issue #380: Module-level frozenset for PTY event types
 _PTY_OUTPUT_EVENTS = frozenset({"output", "eof"})
 
@@ -92,6 +104,8 @@ class SimplePTY:
         use_login_shell: If True, starts bash as login shell (--login flag)
                         Login shells load profile files like ~/.bash_profile
         custom_ps1: Optional custom PS1 prompt (e.g., r"\\u@\\h:\\w\\$ ")
+        pipefail: If True, the shell runs with ``-o pipefail`` (#22252). Only the agent-command path sets it: a
+                  user's interactive shell keeps ``cmd | head`` and ``grep -q`` exiting 0.
     """
 
     def __init__(
@@ -99,23 +113,25 @@ class SimplePTY:
         session_id: str,
         use_login_shell: bool = False,
         custom_ps1: str | None = None,
+        pipefail: bool = False,
     ) -> None:
         """Initialize SimplePTY with session ID and optional shell configuration."""
         self.session_id = session_id
         self.use_login_shell = use_login_shell
         self.custom_ps1 = custom_ps1
-        self.master_fd = None
-        self.process = None
-        self.output_queue = queue.Queue()
-        self.input_queue = queue.Queue()
+        self.pipefail = pipefail
+        self.master_fd: int | None = None
+        self.process: subprocess.Popen[bytes] | None = None
+        self.output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
+        self.input_queue: queue.Queue[str | None] = queue.Queue()
         # #17074: a bounded copy of the output, addressed by absolute offset.
         self._transcript: collections.deque[str] = collections.deque()
         self._transcript_len = 0  # characters currently held
         self._transcript_base = 0  # absolute offset of the first held character
         self._transcript_lock = threading.Lock()
         self.running = False
-        self.reader_thread = None
-        self.writer_thread = None
+        self.reader_thread: threading.Thread | None = None
+        self.writer_thread: threading.Thread | None = None
 
     @staticmethod
     def configure_terminal_echo(fd: int, enable: bool = True) -> bool:
@@ -167,12 +183,14 @@ class SimplePTY:
             logger.warning("Failed to configure terminal echo: %s", e)
             return False
 
-    def _spawn_bash_process(self, slave_fd, env: dict, initial_cwd: str) -> None:
+    def _spawn_bash_process(self, slave_fd, env: dict, initial_cwd: str | None) -> None:
         """Helper for start. Ref: #1088. Spawns the bash subprocess and sets fd state."""
         bash_cmd = ["/bin/bash"]
         if self.use_login_shell:
             bash_cmd.append("--login")
             logger.info(f"Starting login shell for session {self.session_id} (loads profile files)")
+        if self.pipefail:  # #22252: agent commands only; a failing stage is not masked by the last one's 0
+            bash_cmd += ["-o", "pipefail"]
         self.process = (
             subprocess.Popen(  # nosec B603  # bash_cmd is ["/bin/bash"] with optional --login; fixed absolute path
                 bash_cmd,
@@ -185,10 +203,11 @@ class SimplePTY:
             )
         )
         os.close(slave_fd)
-        os.set_blocking(self.master_fd, False)
+        if self.master_fd is not None:
+            os.set_blocking(self.master_fd, False)
         self.running = True
 
-    def start(self, initial_cwd: str = None):
+    def start(self, initial_cwd: str | None = None):
         """Start the PTY. Ref: #1088."""
         try:
             self.master_fd, slave_fd = pty.openpty()
@@ -201,7 +220,7 @@ class SimplePTY:
                     f"Terminal echo configuration failed for PTY session {self.session_id} (continuing anyway)"
                 )
 
-            env = os.environ.copy()
+            env = with_sbin_on_path(os.environ.copy())
             env["TERM"] = "xterm-256color"
             if self.custom_ps1:
                 env["PS1"] = self.custom_ps1
@@ -209,12 +228,14 @@ class SimplePTY:
 
             self._spawn_bash_process(slave_fd, env, initial_cwd)
 
-            self.reader_thread = threading.Thread(target=self._read_loop, daemon=True)
-            self.writer_thread = threading.Thread(target=self._write_loop, daemon=True)
-            self.reader_thread.start()
-            self.writer_thread.start()
+            reader = threading.Thread(target=self._read_loop, daemon=True)
+            writer = threading.Thread(target=self._write_loop, daemon=True)
+            self.reader_thread, self.writer_thread = reader, writer
+            reader.start()
+            writer.start()
 
-            logger.info(f"PTY started successfully for session {self.session_id}, PID: {self.process.pid}")
+            pid = self.process.pid if self.process else None
+            logger.info(f"PTY started successfully for session {self.session_id}, PID: {pid}")
             return True
 
         except Exception as e:
@@ -337,9 +358,15 @@ class SimplePTY:
 
             except Exception as e:
                 logger.error("Error in PTY write loop: %s", e)
+                self._write_loop_failed()
                 break
 
         logger.info("PTY write loop ended for session %s", self.session_id)
+
+    def _write_loop_failed(self) -> None:
+        """The writer thread is gone: the session is not alive and says why; no input is queued for nobody (#17399)."""
+        self.running = False
+        self.output_queue.put(("error", "PTY write failed; the session can no longer take input"))
 
     def write_input(self, text: str) -> bool:
         """Write input to PTY"""
@@ -455,7 +482,7 @@ class SimplePTY:
 
     def is_alive(self) -> bool:
         """Check if PTY is alive"""
-        return self.running and self.process and self.process.poll() is None and self.master_fd is not None
+        return bool(self.running and self.process and self.process.poll() is None and self.master_fd is not None)
 
     def cleanup(self) -> None:
         """Clean up PTY"""
@@ -513,11 +540,13 @@ class SimplePTYManager:
 
     def __init__(self) -> None:
         """Initialize PTY manager with empty sessions dict and thread lock."""
-        self.sessions = {}
+        self.sessions: dict[str, SimplePTY] = {}
         self._lock = threading.Lock()  # CRITICAL: Protect concurrent session access
 
-    def create_session(self, session_id: str, initial_cwd: str = None) -> SimplePTY:
-        """Create PTY session"""
+    def create_session(
+        self, session_id: str, initial_cwd: str | None = None, pipefail: bool = False
+    ) -> SimplePTY | None:
+        """Create PTY session; ``pipefail`` is set by the agent-command callers only (#22252)."""
         # CRITICAL: Atomic check-and-create with lock
         with self._lock:
             if session_id in self.sessions:
@@ -526,7 +555,7 @@ class SimplePTYManager:
                 old_pty.cleanup()
                 del self.sessions[session_id]
 
-            pty = SimplePTY(session_id)
+            pty = SimplePTY(session_id, pipefail=pipefail)
             if pty.start(initial_cwd):
                 self.sessions[session_id] = pty
                 return pty

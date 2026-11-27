@@ -18,6 +18,7 @@ from typing import Any, Iterable
 from async_chat_workflow import WorkflowMessage
 
 _MARKER_TYPE = "segment_complete"
+USAGE_COMPLETED_TYPE = "usage"
 
 
 def stream_identity_marker(chunk: Any, iteration: int, existing: list) -> WorkflowMessage | None:
@@ -69,6 +70,37 @@ def streamed_prose_model(iter_messages: Iterable[WorkflowMessage]) -> str | None
         if msg.type == _MARKER_TYPE and meta.get("internal") and meta.get("completed_type") == "response":
             found = meta.get("model") or found
     return found
+
+
+def streamed_prose_usage(iter_messages: Iterable[WorkflowMessage]) -> dict | None:
+    """The token usage the iteration's final chunk reported (#21880), or None when the provider reported none."""
+    found: dict | None = None
+    for msg in iter_messages:
+        meta = msg.metadata or {}
+        if msg.type == _MARKER_TYPE and meta.get("internal") and meta.get("completed_type") == USAGE_COMPLETED_TYPE:
+            found = meta.get("usage") or found
+    return found
+
+
+def usage_marker(chunk: dict, model: str) -> WorkflowMessage | None:
+    """Internal marker carrying a final chunk's token counts, OpenAI-shaped like every other usage reader (#21880).
+
+    Ollama's ``prompt_eval_count`` / ``eval_count`` are mapped as ``llm_shared/providers/ollama_provider.py`` maps
+    them. None when the chunk reports neither: nothing is invented.
+    """
+    prompt, completion = chunk.get("prompt_eval_count"), chunk.get("eval_count")
+    if prompt is None and completion is None:
+        return None
+    usage = {
+        "prompt_tokens": int(prompt or 0),
+        "completion_tokens": int(completion or 0),
+        "total_tokens": int(prompt or 0) + int(completion or 0),
+    }
+    return WorkflowMessage(
+        type=_MARKER_TYPE,
+        content="",
+        metadata={"completed_type": USAGE_COMPLETED_TYPE, "internal": True, "usage": usage, "model": model},
+    )
 
 
 def prose_time_before(iter_messages: Iterable[WorkflowMessage]) -> float | None:

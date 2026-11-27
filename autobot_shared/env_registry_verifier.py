@@ -50,6 +50,40 @@ for _spec in (
         range=(0.1, 600.0),
     ),
     EnvVarSpec(
+        name="AUTOBOT_VERIFIER_TIMEOUT_MAX_S",
+        type=float,
+        default=512.0,
+        description=(
+            "Ceiling in seconds on the verifier deadline that is scaled from the model's measured speed (#22254); "
+            "an explicit VERIFIER_TIMEOUT_S still wins. Default: VERIFIER_MAX_TOKENS (512) at 2 tokens/s is 256 s, "
+            "doubled for headroom (HEADROOM_FACTOR in verifier_deadline.py), so a ~2 tok/s local model fits."
+        ),
+        component=_COMPONENT,
+        range=(0.1, 3600.0),
+    ),
+    EnvVarSpec(
+        name="AUTOBOT_VERIFIER_RATE_MAX_AGE_S",
+        type=float,
+        default=900.0,
+        description=(
+            "Seconds a measured generation rate stays usable for sizing the verifier deadline (#22254): a model's "
+            "speed changes with load, offload and thermal state."
+        ),
+        component=_COMPONENT,
+        range=(1.0, 86400.0),
+    ),
+    EnvVarSpec(
+        name="AUTOBOT_VERIFIER_HEADROOM_FACTOR",
+        type=float,
+        default=2.0,
+        description=(
+            "Multiplier over the time the verifier reply needs at the measured rate (#22254); prompt evaluation "
+            "and model load are not in the rate."
+        ),
+        component=_COMPONENT,
+        range=(1.0, 20.0),
+    ),
+    EnvVarSpec(
         name="AUTOBOT_VERIFIER_ARG_MAX_CHARS",
         type=int,
         default=2000,

@@ -555,10 +555,11 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_DOCKER_MGMT_POOL",
         type=str,
-        default="10.128.0.0/9",
+        default="",
         description=(
             "Private IPv4 block (/24 or larger) that docker/pick_mgmt_prefix.py draws the "
-            "compose management /24 from, skipping any range a host route or Docker network uses (#16833)."
+            "compose management /24 from, skipping any range a host route or Docker network uses; "
+            "unset: the script's built-in private block (#16833)."
         ),
         component="slm",
     )

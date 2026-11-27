@@ -51,7 +51,7 @@ def _verdict(outcome: Outcome) -> SimpleNamespace:
 async def _terminal_execute(*, command, force_approval=False, person_approved=False, **_):
     """The real terminal decision, with the role policy holding a MEDIUM command (the live case)."""
     session = MagicMock(has_pending_approval=MagicMock(return_value=False))
-    handler = MagicMock(check_auto_approve_rules=AsyncMock(return_value=False))
+    handler = MagicMock()
     with patch(_GATE, AsyncMock(return_value=_verdict(Outcome.HOLD))):
         runs, refusal = await decide_command(
             handler,
@@ -128,9 +128,7 @@ async def test_the_same_approved_call_dispatched_twice_is_held_the_second_time()
 @pytest.mark.asyncio
 async def test_a_yes_satisfies_the_roles_hold_on_a_high_risk_command_but_not_the_checks_around_it():
     """A human yes on the exact command satisfies a "needs a human yes" hold; REFUSE and permissions still block."""
-    handler = MagicMock(
-        needs_approval=MagicMock(return_value=True), check_auto_approve_rules=AsyncMock(return_value=False)
-    )
+    handler = MagicMock(needs_approval=MagicMock(return_value=True))
     session = MagicMock(has_pending_approval=MagicMock(return_value=True), agent_role="chat_agent", tenant_id=None)
     high = MagicMock(value="high")
     with patch(_GATE, AsyncMock(return_value=_verdict(Outcome.HOLD))):

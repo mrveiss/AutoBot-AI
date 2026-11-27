@@ -119,6 +119,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Non-test modules of both backends and autobot_shared, against all tracked .py under them; "
         "the test-file share drifts.",
     ),
+    "service-version-literals-17821": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The API, MCP, A2A and tracing modules that report a version, against all tracked .py under their roots; "
+        "the test-file share drifts.",
+    ),
     "generated-type-redeclarations": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

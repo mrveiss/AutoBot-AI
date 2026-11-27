@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import httpx
 
-from autobot_shared.chat_model_context import num_ctx_for_model
+from autobot_shared.chat_model_context import chat_context_options
 from autobot_shared.ollama_urls import ollama_generate_url
 
 
@@ -51,10 +51,7 @@ async def call_ollama_generate(
     """
     url = ollama_generate_url(base_url)
     options = {"temperature": temperature, "num_predict": max_tokens}
-    if (
-        num_ctx := num_ctx_for_model(model)
-    ) is not None:  # the chat model's context size, or Ollama reloads it (#21878)
-        options["num_ctx"] = num_ctx
+    options.update(chat_context_options(model))  # the chat model's num_ctx/num_gpu, or Ollama reloads it (#21878)
     payload = {"model": model, "prompt": prompt, "stream": False, "options": options}
     timeout = httpx.Timeout(timeout_ms / 1000.0)
     async with httpx.AsyncClient(timeout=timeout) as client:

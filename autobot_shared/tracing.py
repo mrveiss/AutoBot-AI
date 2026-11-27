@@ -29,7 +29,7 @@ Configuration via environment variables:
     AUTOBOT_TRACE_CONSOLE=true            # Also print spans to the console
     AUTOBOT_OTEL_PROTOCOL=grpc            # Export protocol (grpc|http)
     AUTOBOT_OTEL_SAMPLE_RATE=0.1          # Sampling rate (0.0-1.0)
-    AUTOBOT_OTEL_SERVICE_VERSION=1.5.0    # Service version tag
+    AUTOBOT_OTEL_SERVICE_VERSION=<release> # Service version tag; unset omits service.version
 """
 
 import logging
@@ -168,14 +168,14 @@ def _create_tracer_provider(service_name: str, service_version: str | None):
     from autobot_shared.ssot_config import config
 
     version = service_version or config.misc.otel_service_version
-    resource = Resource.create(
-        {
-            "service.name": service_name,
-            "service.version": version,  # type: ignore[dict-item]  # GH#7105: OTel stubs expect int|float|Sequence; str valid at runtime  # noqa: E501
-            "deployment.environment": environment_name(),  # #19315: the one environment setting
-            "service.namespace": "autobot",
-        }
-    )
+    attributes = {
+        "service.name": service_name,
+        "deployment.environment": environment_name(),  # #19315: the one environment setting
+        "service.namespace": "autobot",
+    }
+    if version:  # #17821: no release configured means no service.version, never an invented one
+        attributes["service.version"] = version
+    resource = Resource.create(attributes)
 
     sample_rate = _get_sample_rate()
     sampler = _sampler_for(sample_rate)

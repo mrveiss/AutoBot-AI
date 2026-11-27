@@ -54,7 +54,7 @@ from user_management.database import get_async_session_factory
 
 MANIFEST = MCPBridgeManifest(
     name="knowledge_mcp",
-    version="1.0.0",
+    version="unknown",  # the repo declares no version; never an invented number (#17821)
     description="Knowledge Base Operations (LlamaIndex + Redis Vectors)",
     features=["search", "add_documents", "vector_similarity", "statistics"],
     endpoint="/api/knowledge/mcp/tools",
@@ -974,7 +974,7 @@ async def get_mcp_schema(
     """
     return {
         "name": "autobot-knowledge-base",
-        "version": "2.0.0",
+        "version": "unknown",  # the repo declares no version; never an invented number (#17821)
         "description": ("MCP tools for accessing AutoBot's knowledge base via LangChain, LlamaIndex, and Redis"),
         "tools": await get_mcp_tools(),
         "backends": {
