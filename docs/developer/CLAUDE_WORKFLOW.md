@@ -311,7 +311,7 @@ comment body is literal markdown, never raw JSON or a file path.
 
 Run these gates before creating a PR or merging any branch. Gates are ordered by cost — cheapest first.
 
-**No local test, suite or guard runs; CI is the gate ([OWNER_RULES.md](OWNER_RULES.md) row 32).** The commands below are reference for what the checks do, not a per-push step; pre-commit hooks stay on, and a push may skip pre-push.
+**Local runs: see [OWNER_RULES.md](OWNER_RULES.md) row 32.** The commands below are reference for what the checks do, not a per-push step.
 
 *Local runs of these checks are superseded by [`OWNER_RULES.md`](OWNER_RULES.md) row 32 (2026-11-27): CI runs them; the commands stay as a reference for what CI checks.*
 

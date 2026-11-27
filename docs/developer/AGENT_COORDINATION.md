@@ -201,8 +201,7 @@ first. Owner rule 17 in [`OWNER_RULES.md`](OWNER_RULES.md). Procedure: #19452.
 
 **Before a restart, each session:**
 
-1. Commits and pushes every branch. Nothing stays local-only. A commit never skips hooks; a push may skip the
-   pre-push hook (`git push --no-verify`, [`OWNER_RULES.md`](OWNER_RULES.md) row 32). A branch whose push is blocked stays committed in a worktree under
+1. Commits and pushes every branch. Nothing stays local-only. Hook rules: [`OWNER_RULES.md`](OWNER_RULES.md) row 32. A branch whose push is blocked stays committed in a worktree under
    `$HOME`, and the resume note says so.
 2. Checks every branch for local == origin and every worktree for an empty
    `git status --porcelain`, and records the result.

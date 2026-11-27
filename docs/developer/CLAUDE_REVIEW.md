@@ -96,12 +96,13 @@ Check each before sending the PR# and head:
 3. **Every cited owner decision is quoted on its issue,** with the date, before the PR cites it
    (#19216, #19259).
 4. **The whole-tree guards pass on the branch:** symbol forks, isolated-git, file size, reach.
-   Machine-checked: CI's preboard guard lane runs them on every head (`ALWAYS_RUN` in
-   `tools/lint/prepush_selection.py`, #18808); a green lane covers item 4. A new
+   Machine-checked: the pre-push hook runs them on every push (`ALWAYS_RUN` in
+   `tools/lint/prepush_selection.py`, #18808). The preboard guard lane runs the guard roots,
+   which include them, only when dispatched (the coordinator dispatches it per head); a train
+   boards a head only with a green lane result at that head. A new
    symbol that reuses an existing name (#19205, #19215) is what the symbol-fork ratchet catches.
 
-5. **No local test or guard runs** ([`OWNER_RULES.md`](OWNER_RULES.md) row 32): CI is the gate.
-   Fix what reading the diff shows, push once, and CI returns failures as one batch.
+5. **Local checks:** see [`OWNER_RULES.md`](OWNER_RULES.md) row 32.
 
 Items 1 and 3 need a reader; 2 is caught when a reviewer diffs the comments; 4 is automatic.
 
@@ -306,7 +307,7 @@ After merging all PRs in a batch:
 
 ## Validation Gates Before Merging
 
-**Use `/autobot-dev-skills:review pre-merge-validate <PR>` before merging any code** (it reads CI's results for the head; no local runs, [OWNER_RULES.md](OWNER_RULES.md) row 32):
+**Use `/autobot-dev-skills:review pre-merge-validate <PR>` before merging any code** (it reads CI's results for the head; local checks: [OWNER_RULES.md](OWNER_RULES.md) row 32):
 
 0. Squash-Duplicate Detection (Gate 0)
 1. Syntax + Imports
