@@ -14,7 +14,8 @@ vi.mock('@/config/ssot-config', async importOriginal => ({
   ...(await importOriginal<typeof import('@/config/ssot-config')>()),
   getApiBase: () => '/api'
 }))
-vi.mock('@/utils/ApiClient', () => ({ default: { invalidateCache: vi.fn() } }))
+// getChatList reads the list through the typed client: it returns the payload the endpoint sends
+vi.mock('@/utils/ApiClient', () => ({ default: { invalidateCache: vi.fn(), call: vi.fn(async () => backendPayload) } }))
 vi.mock('@/composables/useRequestQueue', () => ({
   requestQueue: { enqueue: vi.fn(({ fn }: { fn: () => unknown }) => fn()) }
 }))

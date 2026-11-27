@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const fetchWithAuth = vi.fn()
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: (...args: unknown[]) => fetchWithAuth(...args) }))
 vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api', getBackendUrl: () => 'http://backend' }))
+vi.mock('@/utils/ApiClient', () => ({ default: { call: vi.fn() } }))
 vi.mock('@/i18n', () => ({
   default: {
     global: {

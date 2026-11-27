@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { HttpError } from '@autobot/ui'
-import { toSessionDate, withUnassigned, type BackendSessionList, type ChatListEntry, type ChatListReply } from './sessionDates'
+import { toSessionDate, withUnassigned, type ChatListEntry, type ChatListReply } from './sessionDates'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'

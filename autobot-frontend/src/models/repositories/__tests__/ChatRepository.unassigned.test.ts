@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: vi.fn() }))
 vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api', getBackendUrl: () => 'http://backend' }))
+vi.mock('@/utils/ApiClient', () => ({ default: { call: vi.fn() } }))
 
 import apiClient from '@/utils/ApiClient'
 import { ChatRepository } from '../ChatRepository'
