@@ -4,7 +4,8 @@
 
   ChatFilePanelItem -- one file card of the Chat files panel (#22349): a selection checkbox, the name (or the
   inline rename field), size and age, the "AI generated" badge, the Preview / Download / Delete icon buttons and
-  a "More" menu holding Edit, Rename and Duplicate. A right-click on the card opens the same menu. Preview is
+  a "More" menu holding Preview, Edit, Download, Rename, Duplicate and Delete (the icon buttons are always visible).
+  A right-click on the card opens the same menu, as the old context menu did. Preview is
   offered only for previewable files and Edit only for editable ones; the caller decides and passes the flags.
   Presentational: it emits intents and keeps only the rename draft.
 -->
@@ -31,6 +32,7 @@
             size="sm"
             :aria-label="$t('chat.filePanel.rename')"
             data-testid="rename-input"
+            @contextmenu.stop
             @keyup.enter="commitRename"
             @keyup.escape="renaming = false"
           />
@@ -126,14 +128,20 @@ const renaming = ref(false)
 const renameValue = ref('')
 
 const menuItems = computed<MenuItem[]>(() => [
+  ...(props.previewable ? [{ key: 'preview', label: t('chat.filePanel.preview') }] : []),
   ...(props.editable ? [{ key: 'edit', label: t('common.edit') }] : []),
+  { key: 'download', label: t('common.download') },
   { key: 'rename', label: t('chat.filePanel.rename') },
   { key: 'duplicate', label: t('chat.filePanel.duplicate') },
+  { key: 'delete', label: t('common.delete') },
 ])
 
 function onMenuSelect(key: string): void {
-  if (key === 'edit') emit('edit')
+  if (key === 'preview') emit('preview')
+  else if (key === 'edit') emit('edit')
+  else if (key === 'download') emit('download')
   else if (key === 'duplicate') emit('duplicate')
+  else if (key === 'delete') emit('delete')
   else if (key === 'rename') {
     renameValue.value = props.file.filename
     renaming.value = true
@@ -154,14 +162,6 @@ function commitRename(): void {
 }
 .file-item__check {
   accent-color: var(--aui-color-primary);
-}
-.file-item__actions {
-  opacity: 0;
-  transition: opacity var(--aui-transition);
-}
-.file-item:hover .file-item__actions,
-.file-item:focus-within .file-item__actions {
-  opacity: 1;
 }
 @keyframes slideInFromRight {
   from {

@@ -52,12 +52,12 @@ const props = defineProps<{ mode: ConversationMode; language: string; connection
 const emit = defineEmits<{ 'update:mode': [mode: ConversationMode] }>()
 
 const { t } = useI18n()
-const MODES: { value: ConversationMode; key: string }[] = [
-  { value: 'walkie-talkie', key: 'walkieTalkie' },
-  { value: 'hands-free', key: 'handsFree' },
-  { value: 'full-duplex', key: 'fullDuplex' },
-  { value: 'realtime-webrtc', key: 'realtimeWebrtc' },
+const MODES: { value: ConversationMode; label: string }[] = [
+  { value: 'walkie-talkie', label: 'chat.voice.walkieTalkie' },
+  { value: 'hands-free', label: 'chat.voice.handsFree' },
+  { value: 'full-duplex', label: 'chat.voice.fullDuplex' },
+  { value: 'realtime-webrtc', label: 'chat.voice.realtimeWebrtc' },
 ]
-const options = computed(() => MODES.map((m) => ({ value: m.value, label: t(`chat.voice.${m.key}`) })))
+const options = computed(() => MODES.map((m) => ({ value: m.value, label: t(m.label) })))
 const connectionText = computed(() => (props.connection?.connected ? t('chat.voice.connected') : t('chat.voice.disconnected')))
 </script>

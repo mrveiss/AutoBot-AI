@@ -18,12 +18,12 @@
       @sort="(key: string) => emit('sort', key)"
     >
       <template #cell-name="{ row }">
-        <BaseButton variant="link" size="sm" class="file-name-cell" data-row-primary :data-testid="`file-row-${row.name}`">
+        <BaseButton variant="link" size="sm" class="file-name-cell" data-row-primary :data-path="String(row.path)" :data-testid="`file-row-${row.name}`">
           <Icon :name="getFileIcon(row as unknown as FileItem)" />
           <span class="file-name" :class="{ clickable: row.is_dir }">{{ row.name }}</span>
         </BaseButton>
       </template>
-      <template #cell-type="{ row }">{{ row.is_dir ? $t('fileBrowser.fileList.directory') : getFileType(String(row.name)) }}</template>
+      <template #cell-type="{ row }">{{ row.is_dir ? $t('fileBrowser.fileList.directory') : getFileType(String(row.name), t) }}</template>
       <template #cell-size="{ row }">{{ row.is_dir ? '-' : formatFileSize(row.size as number | undefined, sizeOptions) }}</template>
       <template #cell-modified="{ row }">{{ formatDateTime(row.last_modified as string | undefined) }}</template>
       <template #actions="{ row }">
@@ -125,12 +125,11 @@ const columns = computed<BaseTableColumn[]>(() => [
 // #9724: consumed by <Icon :name="..."> — must return an SVG IconName.
 const getFileIcon = (file: FileItem): IconName => getFileIconName(file.name, file.is_dir)
 
-/** The file behind a click: the Nth body row of the table is the Nth file (the table is neither paged nor filtered). */
+/** The file behind a click: the row's name button carries the file's path, so no table internals are read. */
 function fileOfRow(target: EventTarget | null): FileItem | null {
-  const row = (target as HTMLElement | null)?.closest?.('tbody tr[data-slot="table-row"]')
-  if (!row) return null
-  const index = Array.from(row.parentElement?.children ?? []).indexOf(row)
-  return props.files[index] ?? null
+  const row = (target as HTMLElement | null)?.closest?.('tr')
+  const path = row?.querySelector<HTMLElement>('[data-row-primary]')?.dataset.path
+  return path === undefined ? null : props.files.find((file) => file.path === path) ?? null
 }
 
 function onTableClick(event: MouseEvent): void {

@@ -178,12 +178,18 @@ async function handleSaveEdit(draft: { content: string }): Promise<void> {
 }
 
 // Keyboard shortcuts: Ctrl+N opens the create dialog, Delete removes the selection.
+/** True while the user is typing: Delete there edits text, it must never delete files. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+}
+
 function handleKeydown(event: KeyboardEvent): void {
   if (event.ctrlKey && event.key === 'n') {
     event.preventDefault()
     showCreateDialog.value = true
   }
-  if (event.key === 'Delete' && selectedCount.value > 0) handleBulkDelete()
+  if (event.key === 'Delete' && selectedCount.value > 0 && !isTypingTarget(event.target)) handleBulkDelete()
 }
 
 onMounted(() => {

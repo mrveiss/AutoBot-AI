@@ -101,7 +101,7 @@ defineExpose({
   color: var(--aui-color-text-muted);
 }
 .visible-file-input::file-selector-button {
-  margin-right: var(--aui-space-2);
+  margin-inline-end: var(--aui-space-2);
   padding: var(--aui-space-1) var(--aui-space-3);
   border: 0;
   border-radius: var(--aui-radius-md);

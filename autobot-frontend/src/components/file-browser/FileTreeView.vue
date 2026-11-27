@@ -26,7 +26,7 @@
           variant="ghost"
           size="sm"
           class="tree-node-content"
-          :style="{ paddingLeft: ((item.level ?? 0) * 20) + 'px' }"
+          :style="{ paddingInlineStart: ((item.level ?? 0) * 20) + 'px' }"
           :aria-expanded="item.is_dir ? !!item.expanded : undefined"
           :aria-current="selectedPath === item.path ? 'true' : undefined"
           data-testid="tree-node"

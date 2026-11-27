@@ -10,11 +10,11 @@
 import { computed, type ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { IconName } from '@/components/ui/Icon.vue'
-import type { useVoiceConversation } from '@/composables/useVoiceConversation'
+import type { ConversationState, useVoiceConversation } from '@/composables/useVoiceConversation'
 
 type VoiceConversation = ReturnType<typeof useVoiceConversation>
 
-/** The two hints the placements word differently; the other hints are shared. */
+/** The two hints the placements word differently (full i18n keys); the other hints are shared. */
 export interface VoiceHintKeys {
   /** Listening in an auto mode: the panel is brief, the overlay is a sentence. */
   autoListening: string
@@ -22,8 +22,50 @@ export interface VoiceHintKeys {
   processing: string
 }
 
+/** Every voice hint as a full key, so a key scan finds each one (no `chat.voice.${...}` lookups). */
+export const VOICE_HINT_KEYS = {
+  panel: { autoListening: 'chat.voice.hintAutoDetects', processing: 'chat.voice.hintProcessing' },
+  overlay: { autoListening: 'chat.voice.hintAutoListening', processing: 'chat.voice.hintWaitingResponse' },
+} as const satisfies Record<string, VoiceHintKeys>
+
+const SHARED_HINTS = {
+  tapToStop: 'chat.voice.hintTapToStop',
+  transcribing: 'chat.voice.hintTranscribing',
+  interrupt: 'chat.voice.hintInterrupt',
+  autoStart: 'chat.voice.hintAutoStart',
+  tapToSpeak: 'chat.voice.hintTapToSpeak',
+} as const
+
 export interface VoiceConnection {
   connected: boolean
+}
+
+export function stateIconFor(state: ConversationState): IconName {
+  switch (state) {
+    case 'listening': return 'microphone'
+    case 'processing': return 'spinner'
+    case 'speaking': return 'volume-up'
+    default: return 'microphone-slash'
+  }
+}
+
+export function micIconFor(state: ConversationState, isAutoMode: boolean): IconName {
+  switch (state) {
+    case 'listening': return isAutoMode ? 'microphone' : 'stop'
+    case 'processing': return 'spinner'
+    case 'speaking': return 'stop'
+    default: return 'microphone'
+  }
+}
+
+/** The i18n key of the mic hint for a state; the caller translates it. */
+export function micHintFor(state: ConversationState, isAutoMode: boolean, isHandsFree: boolean, keys: VoiceHintKeys): string {
+  switch (state) {
+    case 'listening': return isAutoMode ? keys.autoListening : SHARED_HINTS.tapToStop
+    case 'processing': return isHandsFree ? SHARED_HINTS.transcribing : keys.processing
+    case 'speaking': return SHARED_HINTS.interrupt
+    default: return isAutoMode ? SHARED_HINTS.autoStart : SHARED_HINTS.tapToSpeak
+  }
 }
 
 export function useVoiceConversationView(voice: VoiceConversation, hintKeys: VoiceHintKeys) {
@@ -35,36 +77,9 @@ export function useVoiceConversationView(voice: VoiceConversation, hintKeys: Voi
   // A mic-dependent mode is selected but the browser cannot provide getUserMedia (#1059).
   const showInsecureContextWarning = computed(() => isAutoMode.value && !voice.micAccessAvailable.value)
 
-  const stateIcon = computed<IconName>(() => {
-    switch (voice.state.value) {
-      case 'listening': return 'microphone'
-      case 'processing': return 'spinner'
-      case 'speaking': return 'volume-up'
-      default: return 'microphone-slash'
-    }
-  })
-
-  const micIcon = computed<IconName>(() => {
-    switch (voice.state.value) {
-      case 'listening': return isAutoMode.value ? 'microphone' : 'stop'
-      case 'processing': return 'spinner'
-      case 'speaking': return 'stop'
-      default: return 'microphone'
-    }
-  })
-
-  const micHint = computed(() => {
-    switch (voice.state.value) {
-      case 'listening':
-        return isAutoMode.value ? t(`chat.voice.${hintKeys.autoListening}`) : t('chat.voice.hintTapToStop')
-      case 'processing':
-        return isHandsFree.value ? t('chat.voice.hintTranscribing') : t(`chat.voice.${hintKeys.processing}`)
-      case 'speaking':
-        return t('chat.voice.hintInterrupt')
-      default:
-        return isAutoMode.value ? t('chat.voice.hintAutoStart') : t('chat.voice.hintTapToSpeak')
-    }
-  })
+  const stateIcon = computed(() => stateIconFor(voice.state.value))
+  const micIcon = computed(() => micIconFor(voice.state.value, isAutoMode.value))
+  const micHint = computed(() => t(micHintFor(voice.state.value, isAutoMode.value, isHandsFree.value, hintKeys)))
 
   // The dot is shown for the two transports that have a connection to report.
   const connection: ComputedRef<VoiceConnection | null> = computed(() => {

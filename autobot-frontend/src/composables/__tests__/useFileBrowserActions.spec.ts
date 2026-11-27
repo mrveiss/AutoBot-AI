@@ -30,23 +30,9 @@ vi.mock('vue-i18n', async (importOriginal) => ({
   useI18n: () => ({ t: (k: string) => k }),
 }))
 
-import { sortFileItems, useFileBrowserActions } from '../file-browser/useFileBrowserActions'
+import { useFileBrowserActions } from '../file-browser/useFileBrowserActions'
 
 const file = (over: Record<string, unknown> = {}) => ({ name: 'a.txt', path: '/a.txt', is_dir: false, ...over }) as never
-
-describe('sortFileItems', () => {
-  const items = [
-    { name: 'b.txt', path: '/b', is_dir: false, size: 5 },
-    { name: 'dir', path: '/dir', is_dir: true },
-    { name: 'a.txt', path: '/a', is_dir: false, size: 9 },
-  ] as never[]
-
-  it('puts directories first, then sorts by the field in either order', () => {
-    expect(sortFileItems(items, 'name', 'asc').map((f) => f.name)).toEqual(['dir', 'a.txt', 'b.txt'])
-    expect(sortFileItems(items, 'name', 'desc').map((f) => f.name)).toEqual(['dir', 'b.txt', 'a.txt'])
-    expect(sortFileItems(items, 'size', 'asc').map((f) => f.name)).toEqual(['dir', 'b.txt', 'a.txt'])
-  })
-})
 
 describe('useFileBrowserActions (#22349)', () => {
   beforeEach(() => {

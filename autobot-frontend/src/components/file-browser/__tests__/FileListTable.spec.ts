@@ -69,6 +69,51 @@ describe('FileListTable (#22349)', () => {
     wrapper.unmount()
   })
 
+  it('ArrowUp moves focus back, Home and End jump to the first and last name button', async () => {
+    const wrapper = mountTable()
+    const btn = (name: string) => wrapper.get(`[data-testid="file-row-${name}"]`)
+    ;(btn('b.json').element as HTMLElement).focus()
+    await btn('b.json').trigger('keydown', { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(btn('a.txt').element)
+    await btn('a.txt').trigger('keydown', { key: 'End' })
+    expect(document.activeElement).toBe(btn('b.json').element)
+    await btn('b.json').trigger('keydown', { key: 'Home' })
+    expect(document.activeElement).toBe(btn('docs').element)
+    await btn('docs').trigger('keydown', { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(btn('docs').element)
+    wrapper.unmount()
+  })
+
+  it('marks the sorted column ascending and every other sortable column none', () => {
+    const wrapper = mountTable()
+    const heads = wrapper.findAll('thead th').filter((th) => th.attributes('aria-sort'))
+    const active = heads.filter((th) => th.attributes('aria-sort') !== 'none')
+    expect(heads.length).toBeGreaterThan(1)
+    expect(active).toHaveLength(1)
+    expect(active[0].text()).toContain('Name')
+    expect(active[0].attributes('aria-sort')).toBe('ascending')
+    wrapper.unmount()
+  })
+
+  it('Enter and Space on a name button activate its row (the button click)', async () => {
+    const wrapper = mountTable()
+    const button = wrapper.get('[data-testid="file-row-a.txt"]')
+    ;(button.element as HTMLElement).focus()
+    await button.trigger('keydown', { key: 'Enter' })
+    await button.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('view-file')).toBeUndefined()
+    await button.trigger('click')
+    expect(wrapper.emitted('view-file')?.[0]).toEqual([files[1]])
+    wrapper.unmount()
+  })
+
+  it('resolves a row by its path, not its position', async () => {
+    const wrapper = mountTable([files[2], files[0]])
+    await wrapper.get('[data-testid="file-row-b.json"]').trigger('click')
+    expect(wrapper.emitted('view-file')?.[0]).toEqual([files[2]])
+    wrapper.unmount()
+  })
+
   it('shows the empty message when there are no files', () => {
     const wrapper = mountTable([])
     expect(wrapper.text()).toContain('No files')

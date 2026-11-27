@@ -39,10 +39,18 @@ describe('ChatFilePanelItem (#22349)', () => {
     expect(mountItem({ previewable: false }).find('[data-testid="action-preview"]').exists()).toBe(false)
   })
 
-  it('offers Edit in the More menu only for an editable file; Rename and Duplicate always', () => {
+  it('offers Preview and Edit in the More menu only when allowed; Download, Rename, Duplicate and Delete always', () => {
     const keys = (w: ReturnType<typeof mountItem>) => (menu(w).props('items') as { key: string }[]).map((i) => i.key)
-    expect(keys(mountItem())).toEqual(['edit', 'rename', 'duplicate'])
-    expect(keys(mountItem({ editable: false }))).toEqual(['rename', 'duplicate'])
+    expect(keys(mountItem())).toEqual(['preview', 'edit', 'download', 'rename', 'duplicate', 'delete'])
+    expect(keys(mountItem({ editable: false }))).toEqual(['preview', 'download', 'rename', 'duplicate', 'delete'])
+  })
+
+  it('emits preview, download and delete from the More menu', async () => {
+    const wrapper = mountItem()
+    for (const key of ['preview', 'download', 'delete']) menu(wrapper).vm.$emit('select', key)
+    expect(wrapper.emitted('preview')).toHaveLength(1)
+    expect(wrapper.emitted('download')).toHaveLength(1)
+    expect(wrapper.emitted('delete')).toHaveLength(1)
   })
 
   it('shows the AI generated badge only for generated files', () => {

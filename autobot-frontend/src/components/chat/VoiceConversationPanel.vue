@@ -11,7 +11,7 @@
 <template>
   <aside
     ref="panelRef"
-    class="voice-panel adv w-80 min-w-80 max-w-80 h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
+    class="voice-panel adv w-70 min-w-70 max-w-70 h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
     tabindex="-1"
     :aria-label="$t('chat.voice.title')"
     @keydown.escape="close"
@@ -77,13 +77,13 @@ import VoiceHandsFreeControls from '@/components/chat/VoiceHandsFreeControls.vue
 import VoiceMicButton from '@/components/chat/VoiceMicButton.vue'
 import VoiceModeControls from '@/components/chat/VoiceModeControls.vue'
 import VoiceStateRing from '@/components/chat/VoiceStateRing.vue'
-import { useVoiceConversationView } from '@/composables/chat/useVoiceConversationView'
+import { useVoiceConversationView, VOICE_HINT_KEYS } from '@/composables/chat/useVoiceConversationView'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const voice = useVoiceConversation()
-const view = useVoiceConversationView(voice, { autoListening: 'hintAutoDetects', processing: 'hintProcessing' })
+const view = useVoiceConversationView(voice, VOICE_HINT_KEYS.panel)
 const panelRef = ref<HTMLElement | null>(null)
 const origin = window.location.origin
 

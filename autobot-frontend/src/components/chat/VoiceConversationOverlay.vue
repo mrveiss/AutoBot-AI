@@ -18,6 +18,9 @@
         tabindex="-1"
         @keydown.escape="close"
       >
+        <!-- Backdrop grain texture -->
+        <div class="voice-overlay__grain" aria-hidden="true"></div>
+
         <div class="voice-overlay__panel" role="dialog" aria-modal="true" :aria-label="$t('chat.voice.title')">
           <header class="voice-overlay__header">
             <div class="flex items-center gap-3">
@@ -105,13 +108,13 @@ import VoiceConversationNotices from '@/components/chat/VoiceConversationNotices
 import VoiceHandsFreeControls from '@/components/chat/VoiceHandsFreeControls.vue'
 import VoiceMicButton from '@/components/chat/VoiceMicButton.vue'
 import VoiceModeControls from '@/components/chat/VoiceModeControls.vue'
-import { useVoiceConversationView } from '@/composables/chat/useVoiceConversationView'
+import { useVoiceConversationView, VOICE_HINT_KEYS } from '@/composables/chat/useVoiceConversationView'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const voice = useVoiceConversation()
-const view = useVoiceConversationView(voice, { autoListening: 'hintAutoListening', processing: 'hintWaitingResponse' })
+const view = useVoiceConversationView(voice, VOICE_HINT_KEYS.overlay)
 const overlayRef = ref<HTMLElement | null>(null)
 const conversationRef = ref<HTMLElement | null>(null)
 const origin = window.location.origin
@@ -148,6 +151,14 @@ onBeforeUnmount(() => voice.cleanup())
   background: var(--aui-color-overlay);
   backdrop-filter: blur(12px);
   outline: none;
+}
+/* Subtle noise grain for depth: a colourless fractal-noise SVG, as before the restyle. */
+.voice-overlay__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
 }
 .voice-overlay__panel {
   position: relative;

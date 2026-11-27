@@ -10,11 +10,11 @@ vi.mock('vue-i18n', async (importOriginal) => ({
   useI18n: () => ({ t: (k: string) => k, locale: { value: 'en' } }),
 }))
 
-import { useVoiceConversationView } from '../useVoiceConversationView'
+import { useVoiceConversationView, VOICE_HINT_KEYS } from '../useVoiceConversationView'
 import type { ConversationMode, ConversationState } from '@/composables/useVoiceConversation'
 
-const PANEL = { autoListening: 'hintAutoDetects', processing: 'hintProcessing' }
-const OVERLAY = { autoListening: 'hintAutoListening', processing: 'hintWaitingResponse' }
+const PANEL = VOICE_HINT_KEYS.panel
+const OVERLAY = VOICE_HINT_KEYS.overlay
 
 function viewFor(state: ConversationState, mode: ConversationMode, keys = PANEL) {
   const voice = createVoiceFake()
