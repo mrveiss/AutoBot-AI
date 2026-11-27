@@ -72,3 +72,25 @@ async def collect_facts(stream: AsyncIterator[Dict[str, Any]], offset: int, limi
         if limit is not None and len(facts) >= limit:
             break
     return facts
+
+
+def is_fact_key(key: Any) -> bool:
+    """True for a real ``fact:<id>`` hash; ``fact:collections:<id>`` and similar keys share the prefix."""
+    text = key.decode("utf-8") if isinstance(key, bytes) else key
+    return text.startswith("fact:") and ":" not in text[len("fact:") :]
+
+
+async def get_facts_page(
+    kb: Any, cursor: int = 0, count: int = 100, collection: str | None = None
+) -> tuple[int, List[Dict[str, Any]]]:
+    """One SCAN step over the ``fact:<id>`` hashes: ``(next_cursor, eligible facts)``; cursor 0 means done (#17530).
+
+    Every fact the step touched is returned, so the cursor never advances past a fact the caller did not get.
+    Quarantined facts are excluded, as in ``get_all_facts``. A fact is ``{fact_id, content, metadata, timestamp}``.
+    """
+    kb.ensure_initialized()
+    redis = kb.redis()
+    next_cursor, raw = await redis.scan(cursor=cursor, match=FACT_KEY_PATTERN, count=count)
+    keys = [k for k in raw if is_fact_key(k)]
+    rows = await _read_batch(redis, keys) if keys else []
+    return int(next_cursor), list(_eligible(keys, rows, kb._process_fact_data, collection, False))

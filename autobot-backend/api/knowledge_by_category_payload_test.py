@@ -295,54 +295,130 @@ if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 
 
+class _FactRedis:
+    """Async Redis holding ``fact:<id>`` hashes (bytes, as the KB writes them) plus same-prefix non-fact keys.
+
+    ``scan`` walks the key list ``page`` keys at a time and returns an integer cursor, as SCAN does.
+    """
+
+    def __init__(self, hashes: dict, extra_keys=(), page: int = 3):
+        self.hashes = hashes
+        self.keys = list(hashes) + list(extra_keys)
+        self.page = page
+
+    async def scan(self, cursor=0, match=None, count=None):
+        chunk = self.keys[cursor : cursor + self.page]
+        nxt = cursor + self.page
+        return (0 if nxt >= len(self.keys) else nxt), chunk
+
+    async def scan_iter(self, match=None, count=None):
+        for key in self.keys:
+            yield key
+
+    def pipeline(self, transaction=True):
+        from testkit.fake_redis_pipeline import FakeAsyncPipeline
+
+        return FakeAsyncPipeline(self, transaction=transaction)
+
+    async def hgetall(self, key):
+        if key not in self.hashes:
+            raise TypeError("WRONGTYPE: not a hash")
+        return self.hashes[key]
+
+
+def _fact_kb(n: int, extra_keys=(), page: int = 3):
+    """A KB whose readers are the real ``FactsMixin`` ones over fact hashes shaped as ``store_fact`` writes them."""
+    from knowledge.facts import FactsMixin
+
+    hashes = {
+        f"fact:id-{i}": {
+            "content": f"c{i}",
+            "metadata": json.dumps({"title": f"t{i}", "category": "even" if i % 2 == 0 else "odd", "type": "note"}),
+            "timestamp": f"2026-01-{i + 1:02d}",
+        }
+        for i in range(n)
+    }
+    redis = _FactRedis(hashes, extra_keys, page)
+    kb = SimpleNamespace(
+        redis=lambda: redis,
+        ensure_initialized=lambda: None,
+        redis_client=SimpleNamespace(hscan=None, hgetall=None),  # the removed knowledge_base:facts hash: not read
+    )
+    kb._process_fact_data = lambda key, data, coll=None: FactsMixin._process_fact_data(kb, key, data, coll)
+    kb.get_all_facts = lambda **kw: FactsMixin.get_all_facts(kb, **kw)
+    return kb
+
+
 class TestEntriesEndpointServesWhatItDeclares:
-    """Issue #17530: ``GET /entries`` validates against its response model and pages without loss."""
+    """Issue #17530: ``GET /entries`` lists the ``fact:<id>`` store by bare id and pages without loss."""
 
     @staticmethod
-    def _client(store):
+    def _client(kb):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
         import api.knowledge as kn
         from auth_middleware import check_admin_permission
 
-        kb = SimpleNamespace(redis_client=SimpleNamespace(hscan=lambda _k, cursor=0, count=10: (7, store)))
         app = FastAPI()
         app.include_router(kn.router, prefix="/api/knowledge_base")
         app.dependency_overrides[check_admin_permission] = lambda: True
-        return TestClient(app), kn, kb
+        return TestClient(app), kn
 
-    @staticmethod
-    def _store(n):
-        return {
-            f"fact:{i}".encode(): json.dumps(
-                {
-                    "content": f"c{i}",
-                    "metadata": {
-                        "title": f"t{i}",
-                        "created_at": None if i % 2 else f"2026-01-{i + 1:02d}",
-                    },
-                }
-            ).encode()
-            for i in range(n)
-        }
-
-    def test_non_empty_page_is_200_and_carries_id(self):
+    def test_fact_hashes_are_listed_by_bare_id_not_the_dead_hash(self):
         from unittest.mock import AsyncMock, patch
 
-        client, kn, kb = self._client(self._store(2))
+        kb = _fact_kb(2, page=10)
+        client, kn = self._client(kb)
         with patch.object(kn, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
             resp = client.get("/api/knowledge_base/entries")
         assert resp.status_code == 200
         body = resp.json()
-        assert {e["id"] for e in body["entries"]} == {"fact:0", "fact:1"}
+        assert {e["id"] for e in body["entries"]} == {"id-0", "id-1"}  # the id kb.update_fact/delete_fact key on
+        assert {e["content"] for e in body["entries"]} == {"c0", "c1"}
         assert all("source" in e and "key" not in e for e in body["entries"])
 
-    def test_scan_yielding_more_than_limit_drops_nothing(self):
+    def test_cursor_walk_over_more_than_limit_loses_nothing_and_skips_non_facts(self):
         from unittest.mock import AsyncMock, patch
 
-        client, kn, kb = self._client(self._store(5))
+        extra = ["fact:collections:id-0", "fact:versions:id-1", "fact:origin:session:id-2"]
+        kb = _fact_kb(7, extra_keys=extra, page=3)
+        client, kn = self._client(kb)
+        seen, cursor = [], "0"
         with patch.object(kn, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
-            body = client.get("/api/knowledge_base/entries?limit=2").json()
-        assert body["count"] == 5 == len(body["entries"])
-        assert body["next_cursor"] == "7" and body["has_more"] is True
+            for _ in range(10):
+                body = client.get(f"/api/knowledge_base/entries?limit=2&cursor={cursor}").json()
+                seen += [e["id"] for e in body["entries"]]
+                cursor = body["next_cursor"]
+                if not body["has_more"]:
+                    break
+        assert sorted(seen) == sorted(f"id-{i}" for i in range(7))
+        assert len(seen) == len(set(seen))
+
+    def test_category_filter_applies_to_the_page(self):
+        from unittest.mock import AsyncMock, patch
+
+        kb = _fact_kb(4, page=10)
+        client, kn = self._client(kb)
+        with patch.object(kn, "get_or_create_knowledge_base", AsyncMock(return_value=kb)):
+            body = client.get("/api/knowledge_base/entries?category=odd").json()
+        assert {e["id"] for e in body["entries"]} == {"id-1", "id-3"}
+
+
+class TestWholeStoreReadersUseFactHashes:
+    """Issue #17530: categories / detailed stats read ``fact:<id>``, never ``knowledge_base:facts``."""
+
+    @pytest.mark.asyncio
+    async def test_detailed_stats_counts_the_fact_hashes(self):
+        import api.knowledge as kn
+
+        kb = _fact_kb(5, extra_keys=["fact:collections:x"], page=2)
+        cats, srcs, types, sizes = kn._analyze_facts_for_stats(await kb.get_all_facts())
+        assert cats == {"even": 3, "odd": 2}
+        assert types == {"note": 5} and len(sizes) == 5
+
+    @pytest.mark.asyncio
+    async def test_man_page_parser_reads_the_fact_dict(self):
+        import api.knowledge as kn
+
+        assert kn._parse_man_page_fact({"metadata": {"type": "manual_page", "created_at": "t"}}) == (True, False, "t")

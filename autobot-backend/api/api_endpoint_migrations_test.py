@@ -1575,7 +1575,7 @@ class TestGetKnowledgeEntriesEndpoint:
         # Verify pagination parameters preserved
         assert "cursor" in source
         assert "limit" in source
-        assert "hscan" in source  # Redis HSCAN method
+        assert "get_facts_page" in source  # SCAN over fact:<id> (#17530)
 
     def test_get_knowledge_entries_preserves_category_filtering(self):
         """Test GET /entries preserves category filtering logic"""
@@ -1608,39 +1608,25 @@ class TestGetDetailedStatsEndpoint:
         assert 'operation="get_detailed_stats"' in source
 
     def test_get_detailed_stats_no_outer_try_catch(self):
-        """Test GET /detailed_stats outer try-catch removed (decorator handles it)"""
+        """GET /detailed_stats has no try-catch of its own (decorator handles it); facts come from the KB reader (#17530)"""
         import inspect
 
         from api.knowledge import get_detailed_stats
 
         source = inspect.getsource(get_detailed_stats)
 
-        # Count try blocks (should only be inner ones)
-        try_count = source.count("try:")
-
-        # Should have 2 inner try blocks:
-        # 1. Redis HGETALL operation
-        # 2. JSON parsing in loop
-        assert try_count >= 2, f"Expected 2+ inner try blocks, found {try_count}"
-
-        # Verify no outer try-catch wrapping entire function
-        lines = source.split("\n")
-        first_try_line = next((i for i, line in enumerate(lines) if "try:" in line), -1)
-        assert first_try_line > 5, "First try should not be at function start"
+        assert "try:" not in source
+        assert "get_all_facts" in source
+        assert "knowledge_base:facts" not in source
 
     def test_get_detailed_stats_preserves_inner_error_handling(self):
-        """Test GET /detailed_stats preserves inner try-catches for Redis and JSON"""
+        """Per-fact parse errors are still logged and skipped, now in the analysis helper (#17530)"""
         import inspect
 
-        from api.knowledge import get_detailed_stats
+        from api.knowledge import _analyze_facts_for_stats
 
-        source = inspect.getsource(get_detailed_stats)
+        source = inspect.getsource(_analyze_facts_for_stats)
 
-        # Verify Redis error handling preserved
-        assert "Exception" in source
-        assert "hgetall" in source
-
-        # Verify JSON parsing error handling preserved
         assert "KeyError" in source or "TypeError" in source or "AttributeError" in source
         assert "logger.warning" in source
 
