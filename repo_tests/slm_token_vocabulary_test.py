@@ -80,7 +80,7 @@ def _slm_declarations() -> dict[str, set[str]]:
 
 def _shared_files() -> list:
     files = [_USER_CSS / "css" / "design-tokens.css", _USER_CSS / "tailwind.css"]
-    files += sorted((_USER_CSS / "css" / "themes").glob("*.css"))
+    files += sorted(p for p in (_USER_CSS / "css" / "themes").iterdir() if p.suffix == ".css")
     files += [_KIT_TOKENS / "contract.css", _KIT_TOKENS / "adapter.css"]
     return files
 
