@@ -13,7 +13,7 @@ conversation that carried it.
 
 **Framing is the primary defence.** Every transcript that is summarised goes
 through the one summariser (#20852), which frames it with ``frame_untrusted_block``
-after ``neutralize_frame_markers`` (content cannot forge the delimiters), under a
+after ``neutralize_untrusted`` (applied inside the frame) (content cannot forge the delimiters), under a
 preamble saying it is data -- the #15651 convention and its shared helpers. A long
 chat is summarised in chunks rather than cut at a size limit.
 

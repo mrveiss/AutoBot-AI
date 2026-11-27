@@ -15,6 +15,7 @@ Issue #15651: the untrusted-text sanitize/frame pair, moved here from
 """
 
 import re
+from functools import lru_cache
 from typing import Any, List, Tuple
 
 LEDGER_VS_EXECUTOR_RULE = """
@@ -48,55 +49,50 @@ def sanitize_injected(text: Any, limit: int) -> str:
     return collapsed[:limit]
 
 
-#: Characters a reader skips over: zero-width space/joiners, word joiner, BOM.
-_INVISIBLE_CHARS = "\u200b-\u200d\u2060\ufeff"
+#: Characters a reader skips over: soft hyphen, combining grapheme joiner, zero-width space/joiners, LRM/RLM,
+#: word joiner, BOM.
+_INVISIBLE_CHARS = "\u00ad\u034f\u200b-\u200f\u2060\ufeff"
+#: ``<`` and its lookalikes: fullwidth, small, single angle quotation mark, CJK angle bracket.
+_BRACKETS = "<\uff1c\ufe64\u2039\u3008"
 #: Possessive (``*+``): a run is consumed once and never re-split, so matching stays linear in the input.
 _INVISIBLE = f"[{_INVISIBLE_CHARS}]*+"
 _GAP = rf"[\s{_INVISIBLE_CHARS}]*+"
 
 
 def _spelled(word: str) -> str:
-    """``word`` as a pattern that tolerates invisible characters between its letters."""
-    return _INVISIBLE.join(word)
+    """``word`` as a pattern that tolerates invisible characters between its (escaped) letters."""
+    return _INVISIBLE.join(re.escape(char) for char in word)
 
 
-#: ``<<<`` (ASCII or fullwidth ``<``, invisibles between), then whitespace incl. newlines or invisibles, then
-#: ``BEGIN_`` / ``END_`` in any case. Only the ``<<<`` is matched; the lookahead leaves the rest untouched.
-_FRAME_MARKER_RE = re.compile(
-    rf"[<\uff1c](?:{_INVISIBLE}[<\uff1c]){{2}}(?={_GAP}(?:{_spelled('BEGIN')}|{_spelled('END')}){_INVISIBLE}_)",
-    re.IGNORECASE,
-)
-
-
-def neutralize_frame_markers(text: str) -> str:
-    """Defuse the ``<<<BEGIN_`` / ``<<<END_`` markers of :func:`frame_untrusted_block`; keep everything else.
-
-    Variant spellings a model may still read as a delimiter are caught too (#20062): any case, whitespace or a
-    newline after the ``<<<``, invisible characters inside, and fullwidth ``<``. This is defence in depth, so it also
-    rewrites harmless lookalikes such as ``cat <<< END_OF_FILE`` or ``x <<< end_time``.
-
-    For untrusted text whose shape matters (code, logs): newlines, indentation and other ``<<<`` / ``>>>``
-    (heredocs, REPL prompts) survive, while the text cannot forge a closing delimiter. Unlike
-    :func:`sanitize_injected` it neither flattens whitespace nor truncates; callers cap size themselves.
-    """
-    return _FRAME_MARKER_RE.sub("&lt;&lt;&lt;", text)
-
-
-def neutralize_marker_names(text: str, names: Tuple[str, ...]) -> str:
-    """Defuse any delimiter that names one of ``names``: ``<tag>``, ``</tag>`` or ``<<<[BEGIN_|END_]NAME``.
-
-    Case-insensitive, tolerant of whitespace and invisible characters, and of fullwidth ``<`` (#22285). The
-    leading brackets become ``&lt;`` so the text stays readable but can no longer open or close a frame.
-    """
+@lru_cache(maxsize=64)
+def _marker_re(names: Tuple[str, ...]) -> "re.Pattern[str]":
+    """One pattern for every opener/closer: the ``<<<BEGIN_``/``<<<END_`` family plus any tag naming ``names``."""
+    keyword = f"(?:{_spelled('BEGIN')}|{_spelled('END')}){_INVISIBLE}_"
+    generic = rf"(?P<tri>[{_BRACKETS}](?:{_INVISIBLE}[{_BRACKETS}]){{2}})(?={_GAP}{keyword})"
     if not names:
-        return text
-    alternatives = "|".join(_spelled(name) for name in names)
-    prefix = f"(?:(?:{_spelled('BEGIN')}|{_spelled('END')}){_INVISIBLE}_)?"
-    pattern = re.compile(
-        rf"[<\uff1c]++(?={_GAP}/?{_GAP}{prefix}(?:{alternatives}))",
-        re.IGNORECASE,
-    )
-    return pattern.sub("&lt;", text)
+        return re.compile(generic, re.IGNORECASE)
+    named = "|".join(_spelled(name) for name in names)
+    tagged = rf"(?P<run>[{_BRACKETS}]++)(?={_GAP}/?{_GAP}(?:{keyword})?(?:{named}))"
+    return re.compile(f"{generic}|{tagged}", re.IGNORECASE)
+
+
+def _defuse(match: "re.Match[str]") -> str:
+    """``<<<`` -> ``&lt;&lt;&lt;`` for a framing marker, one ``&lt;`` per bracket for a named tag."""
+    return "&lt;&lt;&lt;" if match.group("tri") else "&lt;" * len(match.group("run"))
+
+
+def neutralize_untrusted(text: str, names: Tuple[str, ...] = ()) -> str:
+    """The single neutralizer: defuse every delimiter untrusted ``text`` could forge; keep everything else.
+
+    Always defuses the ``<<<BEGIN_`` / ``<<<END_`` framing markers (#20062: any case, whitespace or a newline
+    after the ``<<<``, invisible characters inside, lookalike ``<`` brackets). With ``names`` it also defuses
+    ``<tag>``, ``</tag>`` and ``<<<NAME`` openers/closers naming any of them (#22285). Defence in depth, so it
+    also rewrites harmless lookalikes such as ``cat <<< END_OF_FILE``.
+
+    For text whose shape matters (code, logs): newlines, indentation and other ``<<<`` / ``>>>`` (heredocs, REPL
+    prompts) survive. Unlike :func:`sanitize_injected` it neither flattens whitespace nor truncates.
+    """
+    return _marker_re(tuple(names)).sub(_defuse, text)
 
 
 def frame_untrusted_text(
@@ -105,19 +101,21 @@ def frame_untrusted_text(
     text: str,
     *,
     names: Tuple[str, ...],
+    source: str = "",
     preamble: str = "",
     trailer: str = "",
 ) -> str:
     """Frame ``text`` between caller-chosen markers; the single injection-safe framing path (#22285).
 
-    ``text`` is neutralized here, never by the caller: every marker naming one of ``names`` (any case, spacing,
-    bracket style) and every ``<<<BEGIN_``/``<<<END_`` marker is defused first, so no content can forge the
-    close marker and end the frame early. ``names`` must hold the tag/label words used in the two markers.
+    ``text``, ``source`` (flattened to one line), ``preamble`` and ``trailer`` are neutralized here, never by
+    the caller, so none can forge the close marker and end the frame. ``names`` holds the tag/label words of
+    the two markers; ``open_marker``/``close_marker`` themselves are emitted verbatim.
     """
-    safe = neutralize_marker_names(neutralize_frame_markers(text), names)
-    head = f"{preamble}\n" if preamble else ""
-    tail = f"\n{trailer}" if trailer else ""
-    return f"{head}{open_marker}\n{safe}\n{close_marker}{tail}"
+    safe = neutralize_untrusted(text, names)
+    attr = f" source={neutralize_untrusted(' '.join(source.split()), names)}" if source else ""
+    head = f"{neutralize_untrusted(preamble, names)}\n" if preamble else ""
+    tail = f"\n{neutralize_untrusted(trailer, names)}" if trailer else ""
+    return f"{head}{open_marker}{attr}\n{safe}\n{close_marker}{tail}"
 
 
 def frame_untrusted_block(label: str, warning_lines: List[str], body_lines: List[str]) -> str:
@@ -135,7 +133,7 @@ def frame_untrusted_block(label: str, warning_lines: List[str], body_lines: List
     private cross-package import.
     """
     indent = "        "
-    joined = neutralize_marker_names(neutralize_frame_markers("\n".join(body_lines)), (label,))
+    joined = neutralize_untrusted("\n".join(body_lines), (label,))
     safe_body = joined.split("\n") if body_lines else []
     rows = [*warning_lines, f"<<<BEGIN_{label}>>>", *safe_body, f"<<<END_{label}>>>"]
     return "\n" + "\n".join(f"{indent}{row}" for row in rows) + "\n"

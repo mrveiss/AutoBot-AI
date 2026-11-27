@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Tuple
 
 from pydantic import BaseModel, Field
 
-from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers
+from autobot_shared.prompt_rules import frame_untrusted_block
 from autobot_shared.secret_redaction import redact_content, redact_text
 from mcp_server.principal import current_owner
 from memory.verbatim_sessions import SESSION_LIST_DEFAULT_LIMIT, SESSION_READ_MAX_BYTES
@@ -91,7 +91,7 @@ def present_chunks(chunks: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], 
     out: List[Dict[str, Any]] = []
     used = 0
     for chunk in chunks:
-        body = neutralize_frame_markers(redact_content(redact_text(str(chunk.get("text") or ""))))
+        body = redact_content(redact_text(str(chunk.get("text") or "")))
         room = SESSION_READ_MAX_BYTES - used
         if len(body.encode("utf-8")) > room:
             if not out:  # always return something of the first chunk

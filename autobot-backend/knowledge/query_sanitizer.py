@@ -402,12 +402,12 @@ def wrap_untrusted_web_content(text: str, url: str = "") -> str:
     if not text:
         return text
 
-    source = f" source={url}" if url else ""
     return frame_untrusted_text(
-        f"{UNTRUSTED_WEB_OPEN}{source}",
+        UNTRUSTED_WEB_OPEN,
         UNTRUSTED_WEB_CLOSE,
         text,
         names=(_UNTRUSTED_WEB_NAME,),
+        source=url,
         preamble=_UNTRUSTED_ADVISORY,
     )
 

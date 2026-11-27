@@ -24,7 +24,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers
+from autobot_shared.prompt_rules import frame_untrusted_block
 from chat_workflow import limits
 from events.bus import PersistStrategy
 from events.bus import publish_event as _bus_publish_event
@@ -45,7 +45,7 @@ def _guidance(answer: str) -> str:
     block = frame_untrusted_block(
         "USER_ANSWER",
         ["The user's own words, supplied in reply to your question. Use them as guidance for the task."],
-        neutralize_frame_markers(answer).splitlines() or [""],
+        answer.splitlines() or [""],
     )
     return _GUIDANCE_INTRO + block
 

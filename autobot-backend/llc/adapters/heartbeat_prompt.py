@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers
+from autobot_shared.prompt_rules import frame_untrusted_block
 
 from .subprocess_support import AGENT_API_KEY_PLACEHOLDER, render_context_sections
 
@@ -151,7 +151,7 @@ def _framed_context(context: Dict[str, Any]) -> str:
     body = render_context_sections({k: v for k, v in context.items() if k not in _IDENTITY_KEYS})
     if not body:
         return ""
-    return frame_untrusted_block(_FRAME_LABEL, list(_FRAME_WARNING), neutralize_frame_markers(body).splitlines())
+    return frame_untrusted_block(_FRAME_LABEL, list(_FRAME_WARNING), body.splitlines())
 
 
 def build_heartbeat_prompt(context: Dict[str, Any]) -> str:
