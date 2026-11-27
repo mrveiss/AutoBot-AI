@@ -352,5 +352,26 @@ def test_nothing_is_cached_for_a_file_that_fails_containment(tmp_path):
     ASTCache.reset_instance()
 
 
+def test_nothing_is_cached_for_a_leaf_swapped_for_an_outside_link(tmp_path):
+    """#21289: a LEAF swapped for an out-of-root link after discovery is refused as OSError; nothing is cached."""
+    from code_intelligence.python_files import discover_files
+
+    ASTCache.reset_instance()
+    root, outside = tmp_path / "project", tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (root / "mod.py").write_text("inside = 1\n", encoding="utf-8")
+    (outside / "mod.py").write_text("SECRET = 1\n", encoding="utf-8")
+    found = str(discover_files(root)[0])
+    (root / "mod.py").unlink()
+    (root / "mod.py").symlink_to(outside / "mod.py")
+    tree, content = get_ast_with_content(found)
+    cache = get_ast_cache()
+    assert (tree, content) == (None, "")
+    assert found not in cache._content_cache
+    assert found not in cache._ast_cache
+    ASTCache.reset_instance()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

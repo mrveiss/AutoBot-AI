@@ -12,7 +12,7 @@ fails (``OSError`` ELOOP/ENOTDIR) instead of being followed.
 
 A symlinked leaf is resolved by hand, one ``readlink`` at a time, and each target is
 re-walked from the root with the same rules, so a link may point elsewhere *inside*
-the root but never out of it (``ValueError``). Only the root itself is opened by
+the root but never out of it (:class:`ContainmentError`). Only the root itself is opened by
 realpath: its own ancestors are trusted configuration. Linux/POSIX ``openat``
 semantics (``dir_fd``, ``O_DIRECTORY``, ``O_NOFOLLOW``) are assumed.
 """
@@ -27,8 +27,19 @@ _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
 _LEAF_FLAGS = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
 
 
+class ContainmentError(OSError):
+    """A path left the root, is not a regular file, or chained too many links.
+
+    An ``OSError`` so the one ``except OSError`` a caller already has around a read covers it, like
+    the ELOOP/ENOTDIR a swapped directory raises.
+    """
+
+
 def open_dir_no_follow(root: str) -> int:
-    """A directory descriptor on *root*, opened by realpath (the root is trusted configuration)."""
+    """A directory descriptor on *root*: the ROOT is resolved by realpath (trusted configuration).
+
+    Every component below it is opened no-follow by :func:`open_under_root`, not here.
+    """
     return os.open(os.path.realpath(root), os.O_RDONLY | os.O_DIRECTORY)
 
 
@@ -47,7 +58,7 @@ def _walk_parents(root_fd: int, parts: Sequence[str]) -> int:
 
 
 def _link_target(root_fd: int, parts: Tuple[str, ...]) -> Tuple[str, ...]:
-    """The root-relative parts a symlink at *parts* points to; ``ValueError`` if it leaves the root."""
+    """The root-relative parts a symlink at *parts* points to; ``ContainmentError`` if it leaves the root."""
     parent = _walk_parents(root_fd, parts[:-1])
     try:
         target = os.readlink(parts[-1], dir_fd=parent)
@@ -55,7 +66,7 @@ def _link_target(root_fd: int, parts: Tuple[str, ...]) -> Tuple[str, ...]:
         os.close(parent)
     joined = posixpath.normpath(posixpath.join(*parts[:-1], target)) if parts[:-1] else posixpath.normpath(target)
     if target.startswith("/") or joined == ".." or joined.startswith("../"):
-        raise ValueError("symlink target is outside the root")
+        raise ContainmentError("symlink target is outside the root")
     return tuple(p for p in joined.split("/") if p and p != ".")
 
 
@@ -64,8 +75,9 @@ def open_under_root(root: str, parts: Sequence[str], follow_links: bool = True) 
 
     *final_parts* is where an in-root symlink chain ended (equal to *parts* for a plain file), so
     a caller can apply its exclusion rules to the real location. The caller closes the fd.
-    ``OSError`` when a component was swapped for a symlink or is gone, ``ValueError`` when a
-    link leads out of the root or the target is not a regular file. ``follow_links=False`` refuses a
+    ``OSError`` when a component was swapped for a symlink or is gone, its subclass
+    ``ContainmentError`` when a link leads out of the root, the target is not a regular file or the
+    chain is too long. ``follow_links=False`` refuses a
     symlinked leaf (``OSError`` ELOOP) instead of resolving it.
     """
     root_fd = open_dir_no_follow(root)
@@ -73,12 +85,12 @@ def open_under_root(root: str, parts: Sequence[str], follow_links: bool = True) 
         current = tuple(parts)
         for _ in range(MAX_LINK_HOPS + 1):
             if not current:
-                raise ValueError("not a regular file")
+                raise ContainmentError("not a regular file")
             fd = _open_leaf(root_fd, current, follow_links)
             if fd is not None:
                 return fd, current
             current = _link_target(root_fd, current)
-        raise ValueError("too many symlink hops")
+        raise ContainmentError("too many symlink hops")
     finally:
         os.close(root_fd)
 
@@ -101,7 +113,7 @@ def _open_leaf(root_fd: int, parts: Tuple[str, ...], follow_links: bool) -> int 
         os.close(parent)
     if not stat.S_ISREG(os.fstat(fd).st_mode):
         os.close(fd)
-        raise ValueError("not a regular file")
+        raise ContainmentError("not a regular file")
     return fd
 
 

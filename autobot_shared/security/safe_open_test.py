@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.security.safe_open import open_under_root, read_text_under_root
+from autobot_shared.security.safe_open import ContainmentError, open_under_root, read_text_under_root
 
 
 def test_plain_file_and_in_root_link_are_read(tmp_path: Path):
@@ -38,7 +38,7 @@ def test_leaf_link_leaving_the_root_is_refused(tmp_path: Path, target: str):
     root.mkdir()
     (tmp_path / "out.txt").write_text("secret", encoding="utf-8")
     (root / "l.txt").symlink_to(str(tmp_path / "out.txt") if target.startswith("/") else target)
-    with pytest.raises(ValueError):
+    with pytest.raises(ContainmentError):
         read_text_under_root(str(root), ("l.txt",))
 
 
@@ -52,5 +52,5 @@ def test_follow_links_false_refuses_a_leaf_link(tmp_path: Path):
 def test_link_loop_is_bounded(tmp_path: Path):
     (tmp_path / "a").symlink_to("b")
     (tmp_path / "b").symlink_to("a")
-    with pytest.raises(ValueError):
+    with pytest.raises(ContainmentError):
         open_under_root(str(tmp_path), ("a",))

@@ -16,8 +16,9 @@ import re
 import threading
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable, Iterable, Iterator, List, Set, Tuple
+from typing import Callable, Dict, Iterable, Iterator, List, Set, Tuple
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.safe_open import open_under_root, read_text_under_root
 from autobot_shared.testfile_names import is_test_filename
 from utils.file_categorization import ALL_CODE_EXTENSIONS, PYTHON_EXTENSIONS, SKIP_DIRS
@@ -182,7 +183,7 @@ def _leaf_location(real_root: Path, root: Path, dirpath: str, name: str, exclude
     parts = path.relative_to(root).parts
     try:
         fd, final = open_under_root(str(real_root), parts)
-    except (OSError, ValueError):
+    except OSError:
         return None
     os.close(fd)
     # The directory prune is only "may hold wanted files"; whether THIS file is excluded is
@@ -262,24 +263,27 @@ def cache_covers_exclusions(exclude_dirs: Iterable[str]) -> bool:
 # read is refused rather than followed. Discovery has no per-file handle to give back: callers receive
 # plain ``Path``/``str`` values (the API stays compatible), so containment is re-established per read
 # from the root, and no file descriptor outlives a call (no leaks on large trees).
-_DISCOVERY_ROOTS: Set[str] = set()
+_DISCOVERY_ROOTS: Dict[str, str] = {}  # a root as named (abspath) or resolved (realpath) -> its realpath
+logger = get_logger(__name__)
 _ROOTS_LOCK = threading.Lock()
 
 
 def register_discovery_root(root: str | Path) -> None:
     """Remember *root* as a tree whose discovered files are read root-relative."""
     with _ROOTS_LOCK:
-        _DISCOVERY_ROOTS.add(os.path.abspath(root))
+        real = os.path.realpath(root)
+        _DISCOVERY_ROOTS[os.path.abspath(root)] = real
+        _DISCOVERY_ROOTS[real] = real
 
 
 def _locate(path: str | Path) -> Tuple[str, Tuple[str, ...]] | None:
     """``(root, parts)`` for the longest registered root containing *path*, or ``None`` if none does."""
     text = os.path.abspath(path)
     with _ROOTS_LOCK:
-        roots = sorted(_DISCOVERY_ROOTS, key=len, reverse=True)
-    for root in roots:
-        if text.startswith(root.rstrip(os.sep) + os.sep):
-            return root, Path(text).relative_to(root).parts
+        roots = sorted(_DISCOVERY_ROOTS.items(), key=lambda kv: len(kv[0]), reverse=True)
+    for named, real in roots:
+        if text.startswith(named.rstrip(os.sep) + os.sep):
+            return real, Path(text).relative_to(named).parts
     return None
 
 
@@ -287,10 +291,11 @@ def read_source_text(path: str | Path, encoding: str = "utf-8", errors: str = "s
     """The one read of a source file for the code-intelligence detectors (#21289).
 
     A path below a root ``discover_files`` walked is read descriptor-relative from that root (see above);
-    ``OSError``/``ValueError`` when a component was swapped for an out-of-root link. A path no discovery
+    ``OSError`` (``ContainmentError`` for an out-of-root link) when a component was swapped. A path no discovery
     covers (a file the caller named directly) is read by name, as ``Path.read_text`` always did.
     """
     located = _locate(path)
     if located is None:
+        logger.debug("read_source_text: reading %s by name (no registered discovery root)", path)
         return Path(path).read_text(encoding=encoding, errors=errors)
     return read_text_under_root(located[0], located[1], encoding, errors)
