@@ -74,20 +74,19 @@ def test_run_capability_audit_report_shape():
 
 
 def test_scheduled_task_runs_the_audit_and_is_on_the_beat_schedule():
-    """#22271: the Celery task is the scheduled entry point for the audit."""
-    from celery_app import celery_app
+    """#22271: the Celery task is the scheduled entry point for the audit (schedule read from source, #22280)."""
     from tasks.capability_audit_task import run_capability_audit_task
+    from testkit.beat_schedule import beat_schedule_entries
 
     report = run_capability_audit_task()
     assert report["error_count"] == 0
-    scheduled = {entry["task"] for entry in celery_app.conf.beat_schedule.values()}
-    assert "tasks.run_capability_audit" in scheduled
+    assert run_capability_audit_task.name == "tasks.run_capability_audit"
+    assert beat_schedule_entries()["capability-manifest-audit-daily"]["task"] == "tasks.run_capability_audit"
 
 
 def test_audit_schedule_comes_from_the_env_backed_constant():
     """#22271/#22273: the beat entry's hour and minute are not literals in celery_app."""
-    from celery_app import celery_app
-    from utils.celery_schedules import CAPABILITY_AUDIT_SCHEDULE, crontab_from_string
+    from testkit.beat_schedule import beat_schedule_entries
 
-    entry = celery_app.conf.beat_schedule["capability-manifest-audit-daily"]
-    assert entry["schedule"] == crontab_from_string(CAPABILITY_AUDIT_SCHEDULE)
+    entry = beat_schedule_entries()["capability-manifest-audit-daily"]
+    assert entry["schedule"] == "crontab_from_string(CAPABILITY_AUDIT_SCHEDULE)"

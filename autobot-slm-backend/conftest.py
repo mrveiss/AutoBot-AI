@@ -170,9 +170,6 @@ for _m in [
     "sqlalchemy",
     "sqlalchemy.ext",
     "sqlalchemy.ext.asyncio",
-    # #22280: models/self_model.py and services/self_model_store.py import from here.
-    "sqlalchemy.dialects",
-    "sqlalchemy.dialects.postgresql",
     "sqlalchemy.orm",
 ]:
     _stub(_m)

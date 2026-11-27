@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Self-model AUTOBOT_* environment variable registrations (#22277).
 
+Imported from the end of ``env_registry_slm_health`` (``env_registry.py`` is at its size ceiling, #22280).
 Registration contract (import side effect, ordering): see ``env_registry`` (#16415).
 """
 

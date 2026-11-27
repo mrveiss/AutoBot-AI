@@ -46,9 +46,9 @@ def test_read_snapshot_decodes_bytes_and_text_replies():
 
 
 def test_probe_is_on_the_beat_schedule():
-    from celery_app import celery_app
+    """The schedule is read from celery_app.py's source: the conftest stubs celery_app (#22280)."""
     from tasks.service_health_probe_task import probe_service_health
+    from testkit.beat_schedule import beat_schedule_entries
 
     assert probe_service_health.name == "tasks.probe_service_health"
-    scheduled = {entry["task"] for entry in celery_app.conf.beat_schedule.values()}
-    assert "tasks.probe_service_health" in scheduled
+    assert beat_schedule_entries()["service-health-probe"]["task"] == "tasks.probe_service_health"

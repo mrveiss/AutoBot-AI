@@ -83,7 +83,7 @@ class InventoryReporter:
 
     def __init__(self, clock=time.monotonic) -> None:
         self._clock = clock
-        self._signature: Optional[Tuple[Tuple[str, int], ...]] = None
+        self._scanned_mtimes: Optional[Tuple[Tuple[str, int], ...]] = None
         self._inventory: Dict[str, Any] = {}
         self._hash: Optional[str] = None
         self._sent_hash: Optional[str] = None
@@ -91,9 +91,9 @@ class InventoryReporter:
 
     def _refresh(self) -> None:
         current = signature()
-        if current == self._signature:
+        if current == self._scanned_mtimes:
             return
-        self._signature = current
+        self._scanned_mtimes = current
         self._inventory = {"packages": scan_packages(), "commands": scan_commands()}
         self._hash = inventory_hash(self._inventory)
 

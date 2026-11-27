@@ -331,7 +331,7 @@ def _beat_with_failing_extra_data_write(error: Exception):
 
 def test_a_failed_self_model_write_is_logged_and_the_heartbeat_still_commits():
     node, session, warn = _beat_with_failing_extra_data_write(IntegrityError("INSERT", {}, Exception("dup")))
-    assert session.committed
+    assert session.committed and session.rollbacks == 1  # the savepoint, not the heartbeat, was rolled back
     assert node.cpu_percent == _CALM_CPU and node.status == reconciler.NodeStatus.ONLINE.value
     warn.assert_called_once()
     assert node.node_id in warn.call_args.args and isinstance(warn.call_args.args[-1], IntegrityError)

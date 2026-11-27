@@ -6,24 +6,41 @@
 
 Loaded by path under a private name: the conftest stubs ``services.self_model_store`` for the real-loaded
 reconciler, so this file loads the real module for its own scope and never registers it in ``sys.modules``.
-Its SQL runs against the conftest's sqlalchemy stubs; ``load_rows`` and ``persist`` are replaced with an
-in-memory table, so what is checked is the fold itself.
+``sqlalchemy.dialects.postgresql`` is stubbed only while it loads: a session-wide stub would shadow the real
+dialect for the tests that swap the real ORM in (tests/api/_real_orm_import.py). Its SQL runs against the
+conftest's sqlalchemy stubs; ``load_rows`` and ``persist`` are replaced with an in-memory table, so what is
+checked is the fold itself.
 """
 
 import asyncio
 import importlib.util
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.exc import DataError
 
 from services.self_model_reconcile import entity_key
+from testkit.fake_async_session import FakeAsyncSession
 
 _spec = importlib.util.spec_from_file_location(
     "_self_model_store_under_test", Path(__file__).with_name("self_model_store.py")
 )
 store = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(store)
+# Only these two keys are swapped and put back: patch.dict would also drop every module first imported here.
+_DIALECT_STUBS = {"sqlalchemy.dialects": MagicMock(), "sqlalchemy.dialects.postgresql": MagicMock()}
+_saved = {name: sys.modules.get(name) for name in _DIALECT_STUBS}
+sys.modules.update(_DIALECT_STUBS)
+try:
+    _spec.loader.exec_module(store)
+finally:
+    for _name, _module in _saved.items():
+        if _module is None:
+            sys.modules.pop(_name, None)
+        else:
+            sys.modules[_name] = _module
 
 NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
 NODE = entity_key("node", "n1")
@@ -74,3 +91,20 @@ def test_the_next_full_inventory_advances_the_stored_hash(beat):
     beat({"inventory_hash": "h1", "inventory": FULL})
     beat({"inventory_hash": "h2"})
     assert beat({"inventory_hash": "h2", "inventory": {"packages": {"git": "2.44"}, "commands": ["git"]}}) == "h2"
+
+
+def test_a_misshapen_inventory_does_not_advance_the_stored_hash(beat):
+    beat({"inventory_hash": "h1", "inventory": FULL})
+    assert beat({"inventory_hash": "h2", "inventory": {"packages": ["git"], "commands": ["git"]}}) == "h1"
+    assert beat({"inventory_hash": "h3", "inventory": {"packages": {}, "commands": "git"}}) == "h1"
+
+
+def test_a_failed_self_model_fold_keeps_the_capability_profile(monkeypatch):
+    """Each half runs in its own SAVEPOINT: a DataError in the fold rolls back the fold alone (#22280)."""
+    capability = AsyncMock()
+    monkeypatch.setattr(store, "apply_capability_profile", capability)
+    monkeypatch.setattr(store, "_fold_heartbeat", AsyncMock(side_effect=DataError("INSERT", {}, Exception("bad"))))
+    session = FakeAsyncSession()
+    asyncio.run(store.apply_heartbeat_extra_data(session, "n1", {"inventory_hash": "h1"}))
+    capability.assert_awaited_once_with(session, "n1", {"inventory_hash": "h1"})
+    assert session.rollbacks == 1

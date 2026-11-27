@@ -88,6 +88,7 @@ WRITE_PATHS: dict[str, tuple[str, str]] = {
     _B + "knowledge/adapters/okf_adapter.py": (SYSTEM, "OKF import"),
     _B + "knowledge/claude_memory_importer.py": (SYSTEM, "owner chosen by the importing code"),
     _B + "tasks/knowledge_tasks.py": (SYSTEM, "man-page background tasks"),
+    _B + "services/man_page_ingestion.py": (SYSTEM, "man-page indexing: metadata built by build_man_page_metadata"),
     _B + "llc/kb/diary_writer.py": (SYSTEM, "company-OS agent diaries"),
     _B + "memory/agent_diary.py": (SYSTEM, "agent diaries: metadata built by code"),
     _B + "agents/kb_librarian/librarian.py": (SYSTEM, "librarian summaries"),

@@ -4,7 +4,7 @@
 # Author: mrveiss
 """The Celery refresh's man-page indexing, called in-process (#22272).
 
-This used to shell out to ``index_all_man_pages.py`` and parse "Successfully indexed" out of
+This used to shell out to ``index_all_man_pages.py`` and parse the indexed count out of
 its stdout (#15853) -- but the script logs to stderr, so the counts were always 0, and the
 script path was a second thing that could resolve nowhere. It now awaits the canonical
 ``services.man_page_ingestion.index_all_man_pages`` and uses its return value. Kept out of

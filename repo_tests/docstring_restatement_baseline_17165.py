@@ -117,14 +117,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-backend/services/workflow_automation/models.py": frozenset({"WorkflowStepStatus"}),
     "autobot-backend/temporal_knowledge_manager.py": frozenset({"stop_background_processing"}),
     "autobot-backend/tools/kb_write_tools.py": frozenset({"add_file_to_knowledge_base"}),
-    "autobot-backend/tools/tool_registry.py": frozenset(
-        {
-            "bring_window_to_front",
-            "execute_system_command",
-            "list_system_services",
-            "query_system_information",
-        }
-    ),
+    "autobot-backend/tools/tool_registry.py": frozenset({"bring_window_to_front", "execute_system_command"}),
     "autobot-backend/utils/advanced_cache_manager.py": frozenset({"get_cached_system_status"}),
     "autobot-backend/utils/async_stream_processor.py": frozenset({"StreamProcessingResult"}),
     "autobot-backend/utils/catalog_http_exceptions.py": frozenset({"raise_validation_error"}),

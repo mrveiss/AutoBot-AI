@@ -119,10 +119,12 @@ class TestOneAgentRecord:
         import pathlib
         import re
 
+        from autobot_shared.testfile_names import is_test_filename
+
         root = pathlib.Path(__file__).resolve().parents[2]
         found = set()
         for path in root.rglob("*.py"):
-            if "tests" in path.parts or path.name.endswith("_test.py") or "venv" in path.parts:
+            if "tests" in path.parts or is_test_filename(path.name) or "venv" in path.parts:
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore")
             found.update(re.findall(r"^class (Agent\w*Registry)\b", text, re.MULTILINE))

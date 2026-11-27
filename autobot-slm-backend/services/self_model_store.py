@@ -24,6 +24,7 @@ from autobot_shared.self_model_constants import STALE_AFTER
 from models.database import Node
 from models.self_model import self_model_entities as entities
 from models.self_model import self_model_history as history
+from services.db_transaction_errors import write_in_savepoint
 from services.node_capability import apply_capability_profile
 from services.self_model_reconcile import (
     PROBED_FAILED,
@@ -98,6 +99,13 @@ async def apply_observations(
     return plan
 
 
+def _well_formed(inventory: Any) -> bool:
+    """An inventory the fold can read: a mapping whose ``packages`` is a mapping and ``commands`` a list (#22280)."""
+    if not isinstance(inventory, dict):
+        return False
+    return isinstance(inventory.get("packages") or {}, dict) and isinstance(inventory.get("commands") or [], list)
+
+
 def _inventory_observations(node_id: str, inventory: Dict[str, Any]) -> List[Observation]:
     parent = entity_key("node", node_id)
     packages = [
@@ -125,7 +133,7 @@ async def _inventory_plan(
     parent = entity_key("node", node_id)
     rows = await load_rows(db, entities.c.parent_key == parent)
     if "inventory" in extra:
-        if not isinstance(extra["inventory"], dict):
+        if not _well_formed(extra["inventory"]):
             logger.warning("node %s sent a malformed inventory; ignoring it", node_id)
             return InventoryPlan()
         observed = _inventory_observations(node_id, extra["inventory"])
@@ -147,7 +155,7 @@ async def apply_heartbeat_inventory(
     # The stored hash advances only when the inventory it describes was actually folded in.
     reported = extra.get("inventory_hash")
     # A malformed inventory is ignored by _inventory_plan, so it is not folded either (#22280).
-    folded = isinstance(extra.get("inventory"), dict) or reported == previous
+    folded = _well_formed(extra.get("inventory")) or reported == previous
     attrs = {"inventory_hash": reported} if folded and reported else {}
     node_obs = Observation("node", node_id, PROBED_OK, node_id=node_id, attrs=attrs)
     node_plan = reconcile_observations(node_rows, [node_obs], now, source=HEARTBEAT_SOURCE, scope_kinds=())
@@ -171,8 +179,16 @@ async def sweep_stale(db: AsyncSession, now: datetime) -> InventoryPlan:
 
 
 async def apply_heartbeat_extra_data(db: AsyncSession, node_id: str, extra_data: dict) -> None:
-    """Everything one heartbeat's ``extra_data`` feeds: the capability profile, then the self-model (#22277)."""
-    await apply_capability_profile(db, node_id, extra_data)
+    """Everything one heartbeat's ``extra_data`` feeds: the capability profile, then the self-model (#22277).
+
+    Each in its own SAVEPOINT (#22280), so a failed self-model fold never rolls back the capability profile.
+    """
+    await write_in_savepoint(db, node_id, apply_capability_profile, extra_data)
+    await write_in_savepoint(db, node_id, _fold_heartbeat, extra_data)
+
+
+async def _fold_heartbeat(db: AsyncSession, node_id: str, extra_data: dict) -> None:
+    """The self-model half of a heartbeat: node liveness and inventory, then the stale sweep."""
     now = datetime.now(timezone.utc)
     plan = await apply_heartbeat_inventory(db, node_id, extra_data, now)
     swept = await sweep_stale(db, now)

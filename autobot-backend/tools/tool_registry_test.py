@@ -194,6 +194,7 @@ def test_no_second_tool_list():
     import ast
     import pathlib
 
+    from autobot_shared.testfile_names import is_test_filename
     from tools.tool_records import REGISTRY_TOOLS
 
     root = pathlib.Path(__file__).resolve().parents[1]
@@ -201,7 +202,7 @@ def test_no_second_tool_list():
     offenders = []
     for path in root.rglob("*.py"):
         skip = {"tests", "venv", "node_modules"} & set(path.parts)
-        if skip or path.name.endswith("_test.py") or path.name == "tool_records.py":
+        if skip or is_test_filename(path.name) or path.name == "tool_records.py":
             continue
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))

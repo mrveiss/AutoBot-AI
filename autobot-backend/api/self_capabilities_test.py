@@ -291,8 +291,13 @@ async def test_route_records_are_plain_records_with_a_serving_service():
 
 def test_developer_endpoint_view_derives_from_the_canonical_crawl():
     """#22274: ``RuntimeEndpointRegistry`` (never populated) is retired; developer.py reads the crawl."""
+    import ast
     import pathlib
 
-    src = (pathlib.Path(__file__).parent / "developer.py").read_text(encoding="utf-8")
-    assert "RuntimeEndpointRegistry" not in src
-    assert "discover_endpoints" in src
+    tree = ast.parse((pathlib.Path(__file__).parent / "developer.py").read_text(encoding="utf-8"))
+    # Code, not text: the docstring that records the retirement may name it (#22280).
+    used = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+    used |= {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    used |= {a.asname or a.name for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) for a in n.names}
+    assert "RuntimeEndpointRegistry" not in used
+    assert "discover_endpoints" in used
