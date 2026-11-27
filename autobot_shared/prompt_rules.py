@@ -15,7 +15,7 @@ Issue #15651: the untrusted-text sanitize/frame pair, moved here from
 """
 
 import re
-from typing import Any, List
+from typing import Any, List, Tuple
 
 LEDGER_VS_EXECUTOR_RULE = """
 LEDGER vs EXECUTOR
@@ -82,6 +82,44 @@ def neutralize_frame_markers(text: str) -> str:
     return _FRAME_MARKER_RE.sub("&lt;&lt;&lt;", text)
 
 
+def neutralize_marker_names(text: str, names: Tuple[str, ...]) -> str:
+    """Defuse any delimiter that names one of ``names``: ``<tag>``, ``</tag>`` or ``<<<[BEGIN_|END_]NAME``.
+
+    Case-insensitive, tolerant of whitespace and invisible characters, and of fullwidth ``<`` (#22285). The
+    leading brackets become ``&lt;`` so the text stays readable but can no longer open or close a frame.
+    """
+    if not names:
+        return text
+    alternatives = "|".join(_spelled(name) for name in names)
+    prefix = f"(?:(?:{_spelled('BEGIN')}|{_spelled('END')}){_INVISIBLE}_)?"
+    pattern = re.compile(
+        rf"[<\uff1c]++(?={_GAP}/?{_GAP}{prefix}(?:{alternatives}))",
+        re.IGNORECASE,
+    )
+    return pattern.sub("&lt;", text)
+
+
+def frame_untrusted_text(
+    open_marker: str,
+    close_marker: str,
+    text: str,
+    *,
+    names: Tuple[str, ...],
+    preamble: str = "",
+    trailer: str = "",
+) -> str:
+    """Frame ``text`` between caller-chosen markers; the single injection-safe framing path (#22285).
+
+    ``text`` is neutralized here, never by the caller: every marker naming one of ``names`` (any case, spacing,
+    bracket style) and every ``<<<BEGIN_``/``<<<END_`` marker is defused first, so no content can forge the
+    close marker and end the frame early. ``names`` must hold the tag/label words used in the two markers.
+    """
+    safe = neutralize_marker_names(neutralize_frame_markers(text), names)
+    head = f"{preamble}\n" if preamble else ""
+    tail = f"\n{trailer}" if trailer else ""
+    return f"{head}{open_marker}\n{safe}\n{close_marker}{tail}"
+
+
 def frame_untrusted_block(label: str, warning_lines: List[str], body_lines: List[str]) -> str:
     """Wrap already-sanitized untrusted content in data-only framing (#11074).
 
@@ -89,12 +127,15 @@ def frame_untrusted_block(label: str, warning_lines: List[str], body_lines: List
     warning preamble followed by ``<<<BEGIN_{label}>>> ... <<<END_{label}>>>``
     delimiters, every row indented 8 spaces to match the prompt templates that
     embed it. ``body_lines`` MUST already be passed through
-    :func:`sanitize_injected` — this helper only frames, it does not sanitize.
+    :func:`sanitize_injected`. #22285: the helper also defuses forged ``<<<BEGIN_``/``<<<END_`` markers
+    (and ``label``'s own) in the body itself, so no caller can frame without neutralizing.
 
     #15651: moved here from ``orchestration/orchestrator_prompts.py`` so the
     convention is reachable from every backend package rather than through a
     private cross-package import.
     """
     indent = "        "
-    rows = [*warning_lines, f"<<<BEGIN_{label}>>>", *body_lines, f"<<<END_{label}>>>"]
+    joined = neutralize_marker_names(neutralize_frame_markers("\n".join(body_lines)), (label,))
+    safe_body = joined.split("\n") if body_lines else []
+    rows = [*warning_lines, f"<<<BEGIN_{label}>>>", *safe_body, f"<<<END_{label}>>>"]
     return "\n" + "\n".join(f"{indent}{row}" for row in rows) + "\n"
