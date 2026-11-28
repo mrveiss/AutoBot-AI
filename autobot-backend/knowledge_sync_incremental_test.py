@@ -54,8 +54,8 @@ from knowledge_sync_incremental import (
     IncrementalKnowledgeSync,
     SyncMetrics,
     _classify_file_change,
-    _delete_fact_safe,
 )
+from knowledge_sync_replacement import _delete_fact_safe
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -251,20 +251,24 @@ class TestIncrementalKnowledgeSyncChangedFiles:
         assert missing in removed
 
     @pytest.mark.asyncio
-    async def test_removed_obsolete_knowledge_deletes_facts(self, tmp_path):
-        """Removed files must have their KB facts deleted."""
+    async def test_removed_obsolete_knowledge_deletes_nothing_and_proposes(self, tmp_path, monkeypatch):
+        """A partial-tree removal is proposed for approval; the sync deletes no fact (#20028)."""
         sync = self._make_sync(tmp_path)
         kb = MagicMock()
         kb.delete_fact = AsyncMock(return_value=None)
+        kb.get_fact = MagicMock(return_value={"content": "x"})
         sync.kb = kb
+        proposed = AsyncMock(return_value=True)
+        monkeypatch.setattr("knowledge_sync_removal_proposals.propose_removal", proposed)
 
         gone = str(tmp_path / "gone.md")
         sync.file_metadata[gone] = _make_file_metadata(gone, _sha256("old"), 0.0)
 
         await sync._remove_obsolete_knowledge([gone])
 
-        assert gone not in sync.file_metadata
-        assert kb.delete_fact.await_count == 2  # two fact_ids in fixture
+        kb.delete_fact.assert_not_awaited()
+        assert gone in sync.file_metadata
+        assert proposed.await_count == 1 and proposed.await_args.args[0] == "partial_tree"
 
     @pytest.mark.asyncio
     async def test_unchanged_vault_completes_quickly(self, tmp_path):
@@ -489,8 +493,7 @@ class TestTheDocSetNarrowing19701:
         kept = tmp_path / "reports.md"
         sync = self._sync(tmp_path)
         sync.file_metadata[str(kept)] = self._tracked(kept)
-        await sync._invalidate_expired_knowledge()
-        sync.kb.delete_fact.assert_not_awaited()
+        assert sync._expired_paths() == []
         assert str(kept) in sync.file_metadata
 
     @pytest.mark.asyncio
@@ -499,8 +502,7 @@ class TestTheDocSetNarrowing19701:
         sync = self._sync(tmp_path)
         sync.file_metadata[str(doc)] = self._tracked(doc)
         sync._scanned_paths = {str(doc)}
-        await sync._invalidate_expired_knowledge()
-        sync.kb.delete_fact.assert_awaited_once_with("f")
+        assert sync._expired_paths() == [str(doc)]
 
     @pytest.mark.asyncio
     async def test_excludes_read_the_path_below_the_root_only(self, tmp_path):
@@ -522,8 +524,7 @@ class TestTheDocSetNarrowing19701:
         sync.doc_patterns = ["docs/**/*.md"]
         _changed, removed, _new = await sync._analyze_file_changes(await sync._scan_files())
         assert removed == []
-        await sync._invalidate_expired_knowledge()
-        sync.kb.delete_fact.assert_not_awaited()
+        assert sync._expired_paths() == []
 
     @pytest.mark.asyncio
     async def test_a_file_gone_from_disk_is_still_removed_beside_a_live_scan(self, tmp_path):
@@ -556,3 +557,4 @@ class TestTheDocSetNarrowing19701:
         sync.file_metadata[str(unmounted)] = self._tracked(unmounted)
         _changed, removed, _new = await sync._analyze_file_changes([live])
         assert removed == []
+        assert sync._vanished_paths == [str(unmounted)]  # proposed for approval, never removed (#20028)

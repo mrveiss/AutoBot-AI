@@ -40,10 +40,19 @@ from autobot_shared.logging_manager import get_llm_logger
 from constants.threshold_constants import TimingConstants
 from knowledge.ingestion_visibility import stamp_if_document
 from knowledge_base import get_knowledge_base
-from knowledge_sync_replacement import SYNC_INGEST_ROUTE, _delete_fact_safe, delete_replaced_facts, fact_ids_held_by
+from knowledge_sync_removal_proposals import (
+    DIRECTORY_MISSING,
+    PARTIAL_TREE,
+    propose_expired_replaced,
+    propose_for_paths,
+    register_sync_removal,
+)
+from knowledge_sync_replacement import SYNC_INGEST_ROUTE, delete_replaced_facts, fact_ids_held_by
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("knowledge_sync_incremental")
+
+register_sync_removal()  # the executor must exist before any approve() can reach it (#20028)
 
 # O(1) lookup optimization constants (Issue #326)
 APPROVAL_KEYWORDS = {"approved", "denied", "executed", "rejected"}
@@ -223,6 +232,7 @@ class IncrementalKnowledgeSync:
         self.doc_patterns = list(DOC_PATTERNS)
         # Paths the last scan found; only those may expire (#19701)
         self._scanned_paths: set[str] = set()
+        self._vanished_paths: List[str] = []
 
         logger.info("IncrementalKnowledgeSync initialized")
         logger.info("Project root: %s", self.project_root)
@@ -382,6 +392,7 @@ class IncrementalKnowledgeSync:
             await self._classify_and_append_file(file_path, changed_files, new_files)
 
         self._scanned_paths = current_files
+        self._vanished_paths = []
         if not current_files and self.file_metadata:
             # An unmounted or empty root reads as every file deleted; that is never evidence (#19701).
             logger.warning("Scan found no files under %s; removing nothing", self.project_root)
@@ -392,9 +403,13 @@ class IncrementalKnowledgeSync:
         # because neither is evidence the document was deleted (#19701).
         removed_files = []
         for stored_path in list(self.file_metadata.keys()):
-            if stored_path not in current_files and await asyncio.to_thread(_gone_from_a_live_directory, stored_path):
+            if stored_path in current_files:
+                continue
+            if await asyncio.to_thread(_gone_from_a_live_directory, stored_path):
                 removed_files.append(stored_path)
                 logger.debug("Removed file: %s", Path(stored_path).relative_to(self.project_root))
+            elif not await asyncio.to_thread(Path(stored_path).exists):
+                self._vanished_paths.append(stored_path)  # proposed, never removed by the sync (#20028)
 
         return changed_files + new_files, removed_files, new_files
 
@@ -614,24 +629,9 @@ class IncrementalKnowledgeSync:
 
         return "documentation"
 
-    async def _remove_obsolete_knowledge(self, removed_files: List[str]):
-        """Remove knowledge entries for deleted files (Issue #315 - refactored)."""
-        for file_path in removed_files:
-            if file_path not in self.file_metadata:
-                continue
-
-            metadata = self.file_metadata[file_path]
-
-            del self.file_metadata[file_path]
-            held = fact_ids_held_by(self.file_metadata.values())  # another file's chunk stays (#20074)
-            await self._delete_facts([fid for fid in metadata.fact_ids if fid not in held])
-            shared = [fid for fid in metadata.shared_fact_ids if fid not in held and fid not in metadata.fact_ids]
-            await delete_replaced_facts(self.kb, shared)  # not this file's own: only if the sync made it
-            logger.info("Removed knowledge for: %s", Path(file_path).relative_to(self.project_root))
-
-    async def _delete_facts(self, fact_ids: List[str]) -> None:
-        """Delete facts in parallel - eliminates N+1 sequential deletions."""
-        await asyncio.gather(*[_delete_fact_safe(self.kb, fid) for fid in fact_ids], return_exceptions=True)
+    async def _remove_obsolete_knowledge(self, removed_files: List[str], kind: str = PARTIAL_TREE):
+        """Propose removing the facts of files that are gone; the approval deletes, not the sync (#20028)."""
+        await propose_for_paths(kind, self.kb, self.project_root, self.file_metadata, removed_files)
 
     def _update_metadata_from_results(
         self, changed_files: List[Path], results: List[Any], metrics: SyncMetrics
@@ -660,13 +660,6 @@ class IncrementalKnowledgeSync:
             if path in self._scanned_paths and metadata.sync_time and metadata.sync_time < oldest_allowed
         ]
 
-    async def _invalidate_expired_knowledge(self):
-        """Remove knowledge that has exceeded TTL."""
-        expired_files = self._expired_paths()
-        if expired_files:
-            logger.info("Invalidating %d expired knowledge entries", len(expired_files))
-            await self._remove_obsolete_knowledge(expired_files)
-
     async def _process_sync_changes(
         self,
         changed_files: List[Path],
@@ -683,9 +676,16 @@ class IncrementalKnowledgeSync:
             removed_files: Files that were removed
             metrics: Sync metrics to update
         """
-        # Step 3: Remove obsolete knowledge (fast operation)
+        # Step 3: propose removing obsolete knowledge; the approval deletes it, not this sync (#20028)
         if removed_files:
             await self._remove_obsolete_knowledge(removed_files)
+        if getattr(self, "_vanished_paths", None):
+            await self._remove_obsolete_knowledge(self._vanished_paths, DIRECTORY_MISSING)
+
+        # An expired file is re-indexed in place, never deleted first; its old facts are proposed (#20028).
+        expired = [Path(p) for p in self._expired_paths() if Path(p) not in changed_files]
+        prior = {str(path): self.file_metadata[str(path)] for path in expired}
+        changed_files = [*changed_files, *expired]
 
         # Step 4: Process changed/new files with GPU acceleration
         if changed_files:
@@ -704,13 +704,12 @@ class IncrementalKnowledgeSync:
             # Saved first: a crash before the delete leaves stray facts, never a state naming deleted ones.
             if replaced:
                 await self._save_sync_state()
-                await delete_replaced_facts(self.kb, replaced)
+                await delete_replaced_facts(
+                    self.kb, await propose_expired_replaced(self.kb, self.project_root, prior, replaced)
+                )
             metrics.gpu_acceleration_used = True
         else:
             logger.info("No files to process - all up to date!")
-
-        # Step 5: Invalidate expired knowledge
-        await self._invalidate_expired_knowledge()
 
     async def _scan_and_analyze_changes(self, metrics: SyncMetrics) -> tuple[list, list]:
         """

@@ -144,9 +144,9 @@ class TestOnlyTheSyncsOwnUntouchedFactsGo:
 async def test_the_removal_paths_delete_reports_a_kb_failure():
     kb = MagicMock()
     kb.delete_fact = AsyncMock(return_value={"status": "error", "message": "boom"})
-    assert await sync_module._delete_fact_safe(kb, "old") is False
+    assert await replacement._delete_fact_safe(kb, "old") is False
     kb.delete_fact = AsyncMock(return_value={"status": "success"})
-    assert await sync_module._delete_fact_safe(kb, "old") is True
+    assert await replacement._delete_fact_safe(kb, "old") is True
 
 
 def test_a_real_sync_fact_passes_the_real_predicate():
