@@ -27,7 +27,6 @@ is a lossless code tokenizer, not word extraction.
 from __future__ import annotations
 
 import re
-import sys
 import unicodedata
 from functools import lru_cache
 from typing import FrozenSet, List, Pattern
