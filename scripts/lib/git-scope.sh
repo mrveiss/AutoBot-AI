@@ -75,6 +75,10 @@ git_scope_have_commit() {
 #
 # Order, first match wins -- this is the UNION of what the five call sites did,
 # not a pick of one of them:
+#   0. a `workflow_dispatch` run (#20825): the event base IS the answer, never HEAD^1. A dispatched run tests the
+#      branch head, which has no merge ref, so its parents are the branch's own commits (a sync merge of main
+#      has two, and `HEAD^1` is then the branch's previous commit, not the base). The base is fetched when the
+#      clone lacks it, and an absent one is fatal rather than a fallback to a different, smaller scope.
 #   1. merge-commit parents (the only source that is always present and always
 #      scoped to this pull request alone)
 #   2. the event payload's base sha, when it actually resolves in this clone
@@ -84,6 +88,14 @@ git_scope_have_commit() {
 # must never degrade into "no changes".
 git_scope_resolve_base() {
     local head="${1:-${GITHUB_SHA:-HEAD}}" event_base="${2:-}"
+    if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ]; then
+        git_scope_have_commit "$event_base" || git fetch --no-tags --depth=1 origin "$event_base" >/dev/null 2>&1 || true
+        git_scope_have_commit "$event_base" \
+            || git_scope_die "a workflow_dispatch run needs its pull request's merge base and '${event_base}' does not resolve; refusing to guess from HEAD^1 (#20825)." \
+            || return 1
+        printf '%s\n' "$event_base"
+        return 0
+    fi
     if git_scope_have_commit "${head}^2" && git_scope_have_commit "${head}^1"; then
         printf '%s\n' "${head}^1"
         return 0

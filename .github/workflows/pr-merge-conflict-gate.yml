@@ -4,8 +4,8 @@
 # autofail". A push to main can put an open PR into conflict while its CI is mid-run;
 # those runs measure a tree that can never merge and hold runner slots.
 #
-# On pull_request (opened, reopened, synchronize, ready_for_review) it checks that PR;
-# on push to main it checks every open PR into main, `train-*` branches included
+# There is no `pull_request` trigger any more (#20825): a pull request without a CI slot creates no run.
+# On push to main (and on the schedule) it checks every open PR into main, `train-*` branches included
 # (branch sync skips them, #19724). A CONFLICTING PR gets its queued and in-progress
 # runs cancelled (this run excepted) and `no-merge-conflicts` set to failure; a
 # MERGEABLE one gets success. UNKNOWN after the bounded retry is `pending`, never green.
@@ -16,9 +16,8 @@
 # 4 minutes after the push, and went green. A PR whose test merge is older is re-read, and
 # stays UNKNOWN (`pending`, never green) if it does not settle.
 #
-# WHY THERE IS A SCHEDULE. GitHub starts no pull_request run on a head that conflicts
-# with its base, so a PR that is pushed already conflicting never triggers the
-# pull_request path above. The same full open-PR sweep as a push to main runs on this
+# WHY THERE IS A SCHEDULE. A PR that is pushed already conflicting has no push-to-main
+# event to be swept by. The same full open-PR sweep as a push to main runs on this
 # schedule (and on workflow_dispatch), which fails such a PR and cancels its runs.
 # The sweep also re-checks PRs left `pending` as UNKNOWN, so they are not stuck.
 # The cron asks for every 10 minutes; GitHub delivers far fewer: the latest 25 scheduled
@@ -36,17 +35,14 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches: [ main ]
-    types: [ opened, reopened, synchronize, ready_for_review, labeled ]
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
-# Per PR on pull_request; one group for main pushes. A newer run supersedes an older
+# One group per event kind. A newer run supersedes an older
 # one: the status is recomputed from live state each time.
 concurrency:
-  group: pr-merge-conflict-gate-${{ github.event_name }}-${{ github.event.pull_request.number || 'main' }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
+  group: pr-merge-conflict-gate-${{ github.event_name }}
   # A scheduled sweep queues behind the active one: cancelling it mid-list leaves later PRs unchecked.
   cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
@@ -56,7 +52,6 @@ jobs:
   gate:
     name: no-merge-conflicts gate
     # Only a land-next pull request runs (#20825); push, schedule and dispatch are unaffected.
-    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -85,7 +80,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_BRANCH: main
           PYTHONPATH: ${{ github.workspace }}
         run: python3 pipeline-scripts/pr_conflict_gate.py

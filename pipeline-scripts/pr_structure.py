@@ -44,8 +44,10 @@ def check(pull: Dict[str, Any]) -> List[str]:
 
 
 def main() -> int:
-    event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
-    missing = check(event["pull_request"])
+    # The pull request as the API returned it, written by the pr-context action (#20825): a dispatched run has no
+    # pull_request payload, and the labels and milestone are read live.
+    pull = json.loads(Path(os.environ["PR_PULL_PATH"]).read_text(encoding="utf-8"))
+    missing = check(pull)
     for item in missing:
         sys.stdout.write(f"::error::{item}\n")
     if missing:

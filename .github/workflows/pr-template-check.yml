@@ -7,10 +7,24 @@
 name: PR Template Check
 
 on:
-  pull_request:
-    types: [opened, edited, synchronize, reopened, ready_for_review, labeled]
-    branches: [main, release]
+  # The PR coordinator dispatches this for a `land-next` pull request and again when its metadata changes (#20825);
+  # there is no `pull_request` trigger, so an edit starts nothing by itself.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for
+        required: true
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: true
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: true
+        type: string
 
+run-name: "${{ inputs.pr_number && format('PR #{0} @ {1}', inputs.pr_number, inputs.head_sha) || github.workflow }}"
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
 # read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
@@ -23,10 +37,37 @@ on:
 # workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 jobs:
+  # The pull request's facts, looked up live (#20825); a stale dispatch ends the run cancelled here.
+  pr-context:
+    name: pr-context
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      admitted: ${{ steps.pr.outputs.admitted }}
+      author_type: ${{ steps.pr.outputs.author-type }}
+      same_repo: ${{ steps.pr.outputs.same-repo }}
+      base_ref: ${{ steps.pr.outputs.base-ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        id: pr
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   check-template:
     name: Validate PR template sections
     # #12796: bots (Dependabot et al.) write their own fixed PR body and can
@@ -43,10 +84,11 @@ jobs:
     # GitHub's web compose UI populate it (e.g. a PR opened through the API).
     # Penalizing them for a convention the tooling didn't show them inverts
     # the point of the check, so fork PRs skip it the same way bot PRs do.
+    needs: pr-context
     if: >
-      (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) &&
-      github.event.pull_request.user.type != 'Bot' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      needs.pr-context.outputs.admitted == 'true' &&
+      needs.pr-context.outputs.author_type != 'Bot' &&
+      needs.pr-context.outputs.same_repo == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -68,7 +110,7 @@ jobs:
     - name: Check required sections
       env:
         GH_TOKEN: ${{ github.token }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_NUMBER: ${{ needs.pr-context.outputs.number }}
         REPO: ${{ github.repository }}
       run: |
         set -euo pipefail
@@ -142,10 +184,11 @@ jobs:
     # The residual case -- someone squash-merging a promotion after all -- costs
     # nothing: that subject lands on `release`, and the range check reads
     # release..main, so a subject ON release is never in a scanned range.
+    needs: pr-context
     if: >
-      (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) &&
-      github.event.pull_request.user.type != 'Bot' &&
-      github.event.pull_request.base.ref == 'main'
+      needs.pr-context.outputs.admitted == 'true' &&
+      needs.pr-context.outputs.author_type != 'Bot' &&
+      needs.pr-context.outputs.base_ref == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -178,7 +221,7 @@ jobs:
     - name: Check the PR title can become a commit subject (#15473)
       env:
         GH_TOKEN: ${{ github.token }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_NUMBER: ${{ needs.pr-context.outputs.number }}
         REPO: ${{ github.repository }}
       run: |
         set -euo pipefail

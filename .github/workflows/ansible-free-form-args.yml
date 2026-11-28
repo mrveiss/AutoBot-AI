@@ -4,26 +4,56 @@
 name: ansible-free-form-args
 
 on:
-  pull_request:
-    # ready_for_review: the job skips drafts, and marking one ready fires only this event (#20705).
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
-    paths:
-      - 'autobot-slm-backend/ansible/**'
-      - 'tools/lint/check_ansible_free_form_args.py'
-      - 'constraints/ansible-core.txt'
-      - '.github/workflows/ansible-free-form-args.yml'
-
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions:
   contents: read
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   free-form-args:
     runs-on: ubuntu-latest
-    if: (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next'))
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     steps:
       - uses: actions/checkout@v7
       # The runner's python3, as ansible-role-facts-test.yml does: this ansible-core predates .python-version.

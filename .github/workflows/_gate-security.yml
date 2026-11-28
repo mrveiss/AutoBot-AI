@@ -69,6 +69,10 @@ on:
         description: "'true' runs the SAST scan (ci.yml passes the static_analysis filter; scheduled runs keep the default)"
         type: string
         default: 'true'
+      draft:
+        description: "'true' when the dispatched pull request is a draft; empty outside a pull request run"
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -539,7 +543,7 @@ jobs:
         exit "${status}"
 
   compliance-check:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ inputs.draft != 'true' }}
     name: Security Compliance Check
     runs-on: ubuntu-latest
 

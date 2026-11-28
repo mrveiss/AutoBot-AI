@@ -11,9 +11,23 @@
 name: Validate PR Issue Link
 
 on:
-  pull_request:
-    types: [opened, edited, synchronize, reopened, ready_for_review, labeled]
+  # The PR coordinator dispatches this for a `land-next` pull request and again when its metadata changes (#20825).
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for
+        required: true
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: true
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: true
+        type: string
 
+run-name: "${{ inputs.pr_number && format('PR #{0} @ {1}', inputs.pr_number, inputs.head_sha) || github.workflow }}"
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
 # read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
@@ -26,20 +40,33 @@ on:
 # workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions:
+  contents: read
+  actions: write        # pr-context cancels a stale dispatch
   pull-requests: read
 
 jobs:
   validate:
-    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
     name: Check PR links to its issue
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/pr-context
+        id: pr
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+      - name: Fail closed unless admitted to a CI slot
+        if: ${{ steps.pr.outputs.admitted != 'true' }}
+        run: |
+          echo "::error title=not admitted::this pull request is not admitted to a CI slot (no land-next label)"
+          exit 1
 
       # #20903: the repo scripts import autobot_shared, which refuses an interpreter
       # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
@@ -51,11 +78,11 @@ jobs:
       - name: Validate PR issue linkage
         id: validate
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          PR_BODY_FILE: ${{ steps.pr.outputs.body-file }}
+          PR_BRANCH: ${{ steps.pr.outputs.head-ref }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_TITLE: ${{ steps.pr.outputs.title }}
+          PR_IS_FORK: ${{ steps.pr.outputs.same-repo != 'true' }}
         run: |
           set -euo pipefail
 
@@ -82,7 +109,7 @@ jobs:
           fi
           echo "Expected issue from branch: $EXPECTED_ISSUE"
 
-          BODY="${PR_BODY:-}"
+          BODY="$(cat "${PR_BODY_FILE}")"
 
           # (a) The body must link the issue with a recognised keyword, so a PR
           # that merely mentions an issue in prose is not treated as linking it.
@@ -195,12 +222,23 @@ jobs:
   # outright, and 0-with-a-`::warning::` (rather than 1) for any other
   # single-issue or closes-nothing PR that has not stated a rationale.
   batching:
-    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
     name: Check same-scope batching
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/pr-context
+        id: pr
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+      - name: Fail closed unless admitted to a CI slot
+        if: ${{ steps.pr.outputs.admitted != 'true' }}
+        run: |
+          echo "::error title=not admitted::this pull request is not admitted to a CI slot (no land-next label)"
+          exit 1
 
       # #20903: the repo scripts import autobot_shared, which refuses an interpreter
       # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
@@ -211,8 +249,8 @@ jobs:
 
       - name: Validate same-scope batching
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_ACTOR: ${{ github.event.pull_request.user.login }}
-        run: python3 scripts/check_pr_issue_batching.py
+          PR_BODY_FILE: ${{ steps.pr.outputs.body-file }}
+          PR_BRANCH: ${{ steps.pr.outputs.head-ref }}
+          PR_TITLE: ${{ steps.pr.outputs.title }}
+          PR_ACTOR: ${{ steps.pr.outputs.author }}
+        run: PR_BODY="$(cat "${PR_BODY_FILE}")" python3 scripts/check_pr_issue_batching.py

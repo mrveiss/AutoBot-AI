@@ -8,56 +8,60 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
-    branches:
-      - main
-    # #13388: SAFE — this workflow publishes `hardened-smoke-test`, which is NOT
-    # one of the ten required contexts (the required `smoke-test` comes from
-    # docker-smoke-test.yml, which is deliberately left unfiltered).
-    #
-    # `paths-ignore` rather than `paths` ON PURPOSE. This job builds all three
-    # images and starts the hardened compose overlay, so almost any source,
-    # dependency, Dockerfile or compose edit can legitimately break it and an
-    # allow-list would eventually miss one. An ignore-list inverts the risk: the
-    # run still happens for everything except changes that are purely
-    # documentation, which cannot alter a container's runtime behaviour. GitHub
-    # skips the run only when EVERY changed file matches, so a pull request
-    # mixing docs with code still runs the full smoke test.
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '.claude/**'
-      - '.github/ISSUE_TEMPLATE/**'
   schedule:
     - cron: '0 11 * * 0'  # Every Sunday at 11 AM UTC (offset from regular smoke test)
 
 # Least privilege (#15331). Builds images, runs the compose stack and uploads
 # an artifact — no write scope needed. Flagged by CodeQL actions/missing-workflow-permissions.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   hardened-smoke-test:
-    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
-    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
-    if: >-
-      ${{ github.event_name != 'pull_request'
-          || ((contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next'))
-              && (github.event.pull_request.user.login != 'dependabot[bot]'
-                  || startsWith(github.event.pull_request.head.ref, 'train-')
-                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
-              && (github.event.pull_request.head.ref != github.event.repository.default_branch
-                  || github.event.pull_request.head.repo.full_name != github.repository
-                  || github.event.pull_request.base.ref != 'release'
-                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     timeout-minutes: 45
 

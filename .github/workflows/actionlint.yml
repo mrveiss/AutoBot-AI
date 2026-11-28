@@ -10,29 +10,56 @@ on:
       - "repo_tests/release_promotion_base_wiring_21713_test.py"  # #21713
       - "scripts/**"  # #22195: the pipefail guard reads every script
       - "repo_tests/test_pr_issue_validation_14241.py"  # #22195
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
-    paths:
-      - ".github/workflows/**"
-      - ".github/actions/release-promotion-base/**"  # #21713
-      - "repo_tests/release_promotion_base_wiring_21713_test.py"  # #21713
-      - "scripts/**"  # #22195: the pipefail guard reads every script
-      - "repo_tests/test_pr_issue_validation_14241.py"  # #22195
-
 # Least privilege (#15331). Lints workflow files; no token writes.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   lint:
-    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -44,20 +71,34 @@ jobs:
   # repo_tests/_glob_declared_uncovered.py). It reads the ratchet base itself, so it takes the same two
   # steps it requires of every other job.
   promotion-base-wiring:
-    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     name: Base-reading jobs take the release-promotion base
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 2  # #21713: the HEAD^1 fallback of repo_tests/_ratchet_base.py needs the parent
 
+      - uses: ./.github/actions/pr-context
+        id: pr
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
       - uses: ./.github/actions/release-promotion-base  # #21713
         id: release-base
+        with:
+          is-pr: ${{ steps.pr.outputs.is-pr }}
+          base-ref: ${{ steps.pr.outputs.base-ref }}
+          head-sha: ${{ steps.pr.outputs.head-sha }}
       - name: Ratchet base (#19283)  # #21713
         env:
-          EVENT_BASE: ${{ steps.release-base.outputs.base-sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
+          EVENT_BASE: ${{ steps.release-base.outputs.base-sha || inputs.base_sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
         run: |
           if [ -n "${EVENT_BASE//0/}" ]; then
             git fetch --no-tags --depth=1 origin "$EVENT_BASE"

@@ -19,46 +19,6 @@
 name: ansible-role-facts-test
 
 on:
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
-    paths:
-      - 'autobot-slm-backend/ansible/ansible.cfg'
-      # #15824: the ansible-core the guard runs is part of the guard.
-      - 'constraints/ansible-core.txt'
-      - 'autobot-slm-backend/ansible/inventory/group_vars/**'
-      # #17642: check_network_refusal.py evaluates every network_subnet/gateway definition
-      - 'autobot-slm-backend/ansible/inventory/*.yml'
-      - 'autobot-slm-backend/services/inventory_builder.py'
-      - 'install.sh'
-      - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
-      - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
-      - 'autobot-slm-backend/ansible/playbooks/remove-role.yml'  # #22030: its role_target_dir checks run here
-      - 'autobot-slm-backend/ansible/requirements.yml'  # #22030: the collection versions the job installs
-      - 'repo_tests/remove_role_rejects_hostile_dir_22030_test.py'
-      - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
-      - 'autobot-slm-backend/ansible/update-all-nodes.yml'
-      - 'autobot-slm-backend/ansible/roles/*/tasks/clean.yml'
-      - 'autobot-slm-backend/ansible/roles/_shared/tasks/**'
-      # #13746: the venv-producer guard reads every play and role task file,
-      # so it has to trigger on them — otherwise the check cannot fire on the
-      # change that breaks it.
-      - 'autobot-slm-backend/ansible/playbooks/**'
-      - 'autobot-slm-backend/ansible/roles/**'
-      - 'autobot-slm-backend/ansible/tests/**'
-      - 'autobot-slm-backend/ansible/tests/**'
-      - 'autobot-slm-backend/ansible/deploy.yml'
-      - 'tools/lint/check_role_facts_single_source.py'
-      - 'tools/lint/check_test_inventory_is_generated.py'
-      - 'tools/lint/check_group_vars_no_shadow.py'
-      - 'tools/lint/check_network_refusal.py'
-      # #19944: the fleet-address facts test runs the role's real task file.
-      - 'autobot-slm-backend/ansible/roles/postgresql/**'
-      - 'repo_tests/postgresql_fleet_address_gathers_its_facts_19944_test.py'
-      - 'repo_tests/gpu_detection_finds_wsl2_19731_test.py'
-      - '.github/workflows/ansible-role-facts-test.yml'
   push:
     branches:
       - main
@@ -110,16 +70,55 @@ on:
 # workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 # Least privilege (#15331). Checks out and runs ansible assertions only.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   test:
-    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

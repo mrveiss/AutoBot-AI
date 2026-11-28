@@ -466,6 +466,25 @@ def run_evidence(client: LandingClient, event: Dict[str, Any]) -> bool:
     return True
 
 
+def landings_for_push(client: LandingClient, before: str, after: str, branch: str) -> List[Landing]:
+    """The pull requests a push to ``branch`` merged (#20825): no ``pull_request: closed`` event exists any more.
+
+    A pull request merged by ANY route (the coordinator, the UI) is a commit on the branch, and the commit-to-PR
+    lookup names it. Only the pull request whose own merge commit is the pushed commit counts, so the member
+    commits of a merged branch do not repeat it. A first push (``before`` all zeros) reads only ``after``.
+    """
+    shas = [after]
+    if before.strip("0"):
+        shas = [c["sha"] for c in client.call("GET", f"/repos/{client.repo}/compare/{before}...{after}")["commits"]] or [after]
+    found: Dict[int, Landing] = {}
+    for sha in shas:
+        for pr in client.try_get(f"/repos/{client.repo}/commits/{sha}/pulls") or []:
+            same_repo = ((pr.get("head") or {}).get("repo") or {}).get("full_name") == client.repo
+            if pr.get("merged_at") and pr.get("merge_commit_sha") == sha and pr["base"]["ref"] == branch and same_repo:
+                found[int(pr["number"])] = landing_from_pr(pr)
+    return [found[n] for n in sorted(found)]
+
+
 def _landing_for(client: LandingClient, args: argparse.Namespace) -> Landing:
     if args.pr:
         return landing_from_pr(client.call("GET", f"/repos/{client.repo}/pulls/{args.pr}"))
@@ -475,7 +494,10 @@ def _landing_for(client: LandingClient, args: argparse.Namespace) -> Landing:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=("merged", "evidence"))
+    parser.add_argument("command", choices=("merged", "evidence", "pushed"))
+    parser.add_argument("--before", default="", help="pushed only: the branch tip before the push")
+    parser.add_argument("--after", default="", help="pushed only: the branch tip after the push")
+    parser.add_argument("--branch", default="main", help="pushed only: the branch that was pushed")
     parser.add_argument("--event", help="GITHUB_EVENT_PATH")
     parser.add_argument("--pr", type=int, help="merged only: read this PR from the API instead of --event")
     parser.add_argument("--dry-run", action="store_true", help="merged only: read, resolve and print; write nothing")
@@ -487,6 +509,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             run_evidence(client, json.load(handle))
         return 0
     try:
+        if args.command == "pushed":
+            for landing in landings_for_push(client, args.before, args.after, args.branch):
+                run_merged(client, landing, dry_run=args.dry_run)
+            return 0
         run_merged(client, _landing_for(client, args), dry_run=args.dry_run)
     except LandingNoteError as exc:
         logger.error("%s", exc)

@@ -20,26 +20,6 @@ name: Stylelint Token Guard
 # `npm ci` — no drift between what CI pins and what a checkout gets.
 
 on:
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
-    paths:
-      - "autobot-frontend/**/*.vue"
-      - "autobot-frontend/**/*.css"
-      - "autobot-slm-frontend/**/*.vue"
-      - "autobot-slm-frontend/**/*.css"
-      # The shared kit's CSS is a third project with no node_modules of its own;
-      # it is linted with the user frontend's pinned stylelint (#14579).
-      - "libs/autobot-ui/**/*.vue"
-      - "libs/autobot-ui/**/*.css"
-      # Self-validate when the guard or either config changes.
-      - "autobot-frontend/.stylelintrc.json"
-      - "autobot-slm-frontend/.stylelintrc.json"
-      - "libs/autobot-ui/.stylelintrc.json"
-      - ".github/workflows/stylelint-tokens.yml"
-
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
 # read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
@@ -51,23 +31,72 @@ on:
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
 # workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions:
   contents: read
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   stylelint-changed:
-    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     name: Stylelint (changed CSS/Vue)
     runs-on: ubuntu-latest
     continue-on-error: true
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/pr-context
+        id: pr
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -80,7 +109,7 @@ jobs:
         env:
           # Untrusted-ish inputs handled via env (never interpolated into the
           # shell command directly) to avoid workflow command injection.
-          BASE_REF: ${{ github.base_ref }}
+          BASE_REF: ${{ steps.pr.outputs.base-ref || github.event.repository.default_branch }}
         run: |
           git fetch origin "$BASE_REF" --depth=1 || true
           # Split by project: each has its own node_modules/.stylelintrc, and

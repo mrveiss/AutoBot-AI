@@ -73,95 +73,56 @@ on:
       - "requirements-ci/monitoring.txt"
       - "constraints/shared.txt"  # #21471: CI-plane versions live here
       - ".github/workflows/llm-optimization-real-torch.yml"
-  pull_request:
-    # ready_for_review is REQUIRED: the job is gated on draft == false, and
-    # marking a PR ready fires ONLY this event (see actionlint.yml).
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
-    paths:
-      - "autobot-backend/llm_shared/**"
-      - "autobot_shared/__init__.py"
-      - "autobot_shared/alert_cooldown.py"
-      - "autobot_shared/async_compat.py"
-      - "autobot_shared/auth/__init__.py"
-      - "autobot_shared/auth/jwt_core.py"
-      - "autobot_shared/circuit_breaker.py"
-      - "autobot_shared/coordination/__init__.py"
-      - "autobot_shared/coordination/run_progress.py"
-      - "autobot_shared/credential_gated_registry.py"
-      - "autobot_shared/doc_chunking.py"
-      - "autobot_shared/egress_allowlist.py"
-      - "autobot_shared/env_utils.py"
-      - "autobot_shared/http_client.py"
-      - "autobot_shared/http_client_manager.py"
-      - "autobot_shared/http_egress_guard.py"
-      - "autobot_shared/llm_provider_candidates.py"
-      - "autobot_shared/llm_provider_order.py"
-      - "autobot_shared/logging_manager.py"
-      - "autobot_shared/missing_dep.py"
-      - "autobot_shared/model_taxonomy.py"
-      - "autobot_shared/monitoring/__init__.py"
-      - "autobot_shared/monitoring/prometheus_metrics.py"
-      - "autobot_shared/monitoring/prometheus_query.py"
-      - "autobot_shared/network_constants.py"
-      - "autobot_shared/paths.py"
-      - "autobot_shared/pinned_model_registry.py"
-      - "autobot_shared/rate_limiter.py"
-      - "autobot_shared/redis_client.py"
-      - "autobot_shared/redis_management/__init__.py"
-      - "autobot_shared/redis_management/config.py"
-      - "autobot_shared/redis_management/connection_manager.py"
-      - "autobot_shared/redis_management/database_names.py"
-      - "autobot_shared/redis_management/pool_params.py"
-      - "autobot_shared/redis_management/pool_stats.py"
-      - "autobot_shared/redis_management/statistics.py"
-      - "autobot_shared/redis_management/types.py"
-      - "autobot_shared/retry_mechanism.py"
-      - "autobot_shared/secret_redaction.py"
-      - "autobot_shared/secret_redaction_vocabulary.py"
-      - "autobot_shared/secrets_vault.py"
-      - "autobot_shared/security/__init__.py"
-      - "autobot_shared/security/input_sanitizer.py"
-      - "autobot_shared/security/password_weakness.py"
-      - "autobot_shared/security/path_validator.py"
-      - "autobot_shared/security/redaction.py"
-      - "autobot_shared/security/safe_response.py"
-      - "autobot_shared/security/sql_identifier.py"
-      - "autobot_shared/security/ssrf_guard.py"
-      - "autobot_shared/service_signing.py"
-      - "autobot_shared/singleton_factory.py"
-      - "autobot_shared/ssot_config.py"
-      - "autobot_shared/ssot_constants.py"
-      - "autobot_shared/ssot_tls.py"
-      - "autobot_shared/status_enums.py"
-      - "autobot_shared/stream_logging.py"
-      - "autobot_shared/token_count.py"
-      - "autobot_shared/url_safety.py"
-      - "requirements-ci/monitoring.txt"
-      - "constraints/shared.txt"  # #21471: CI-plane versions live here
-      - ".github/workflows/llm-optimization-real-torch.yml"
-
 # Least privilege (#15331). Runs tests only; no token writes.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for (set by ci.yml's fan-out; empty on a manual run)
+        required: false
+        default: ''
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: false
+        default: ''
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 jobs:
+  # #20825: a dispatched run validates its pins and ends CANCELLED when its head is stale. Parallel to the work on
+  # purpose: this workflow is advisory, and ci.yml's fan-out only passes values its own `changes` job validated.
+  pr-context:
+    name: pr-context
+    if: ${{ inputs.pr_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/pr-context
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
   real-torch:
-    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
-    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
-    if: >-
-      ${{ github.event_name != 'pull_request'
-          || ((contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next'))
-              && (github.event.pull_request.user.login != 'dependabot[bot]'
-                  || startsWith(github.event.pull_request.head.ref, 'train-')
-                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
-              && (github.event.pull_request.head.ref != github.event.repository.default_branch
-                  || github.event.pull_request.head.repo.full_name != github.repository
-                  || github.event.pull_request.base.ref != 'release'
-                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
+    # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

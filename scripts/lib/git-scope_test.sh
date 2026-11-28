@@ -173,6 +173,16 @@ echo "== git_scope_require_base_ref =="
 git_scope_require_base_ref HEAD 2>/dev/null;              check "resolvable base -> 0" "0" "$?"
 git_scope_require_base_ref origin/nope 2>/dev/null;       check "missing base -> 1"    "1" "$?"
 
+echo "== git_scope_resolve_base on a workflow_dispatch run (#20825) =="
+cd "$TMP/merge" || exit 1
+# On a merge commit HEAD^1 is the branch's previous commit, never the base: a dispatch must use the event base.
+check "a dispatch uses the event base, not HEAD^1" "$PRE_MERGE_BASE_TIP" \
+  "$(GITHUB_EVENT_NAME=workflow_dispatch git_scope_resolve_base HEAD "$PRE_MERGE_BASE_TIP")"
+GITHUB_EVENT_NAME=workflow_dispatch git_scope_resolve_base HEAD >/dev/null 2>&1; check "a dispatch with no base is fatal" "1" "$?"
+GITHUB_EVENT_NAME=workflow_dispatch git_scope_resolve_base HEAD "$(printf 'f%.0s' {1..40})" >/dev/null 2>&1; check "a dispatch whose base does not resolve is fatal" "1" "$?"
+check "control: the same merge commit on any other event still resolves HEAD^1" "HEAD^1" \
+  "$(GITHUB_EVENT_NAME=push git_scope_resolve_base HEAD "$PRE_MERGE_BASE_TIP")"
+
 echo
 echo "git-scope: ${pass} passed, ${fail} failed"
 [ "$fail" -eq 0 ] || exit 1

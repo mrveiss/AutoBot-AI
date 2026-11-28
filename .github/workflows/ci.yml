@@ -1,10 +1,11 @@
 # AutoBot CI/CD Pipeline
 #
-# THE pull-request workflow (#18208, delivering #15360's "8 -> 1"). Change detection runs
-# ONCE here, in the `changes` job; every gate below reads its answer. Before #18208 about
-# twenty workflows each booted a runner to run the same dorny/paths-filter against the
-# same diff (13 rows on a docs-only pull request, 17 on a train), and a required context
-# was published by a real job plus a "shim" job of the same name in a second workflow.
+# THE pull-request workflow (#18208, delivering #15360's "8 -> 1"), started ONLY by the PR coordinator
+# (#20825): it dispatches this file (`workflow_dispatch`, inputs `pr_number`, `head_sha`, `base_sha`) for the
+# pull requests that hold a `land-next` slot. There is NO `pull_request` trigger on purpose: a pull request
+# without a slot creates no run at all. Change detection runs ONCE here, in the `changes` job; every gate below
+# reads its answer. Before #18208 about twenty workflows each booted a runner to run the same dorny/paths-filter
+# against the same diff, and a required context was published by a real job plus a "shim" job of the same name.
 #
 # SHAPE
 #   changes   one job, one dorny step per filter file in .github/filters/. Its outputs are
@@ -24,8 +25,10 @@
 # enforces that, and that each gate is `if: always()`.
 #
 # NOT HERE, ON PURPOSE. `No commit trailers` and `No open blocks-merge issues reference
-# this PR` stay their own workflows: the second listens to `edited`, and folding it in would
-# rerun full CI on every pull-request body edit. Scheduled and manual runs of the bodies
+# this PR` stay their own workflows, dispatched by the coordinator next to this one: the second is
+# re-dispatched when the pull request's metadata changes, and folding it in would rerun full CI on
+# every body edit. The path-filtered advisory workflows are started by the `fan-out` job below from
+# the `changes` answer (.github/filters/satellite-paths.yml). Scheduled and manual runs of the bodies
 # are the thin `scheduled-*.yml` callers.
 
 name: AutoBot CI/CD Pipeline
@@ -36,38 +39,39 @@ on:
   merge_group:
     # #14054: every required context reports inside a merge queue. Inert until the
     # `merge_queue` ruleset rule is enabled -- this event does not exist before then.
-  pull_request:
-    # ready_for_review stays listed so unparking re-fires the gates; the work waits for `land-next` (#20825).
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
-    # `labeled` starts the suite when the coordinator adds `land-next`; the `ready_for_review` run that precedes
-    # it finds no label and skips, so nothing runs twice (#20825).
-    # NO `branches:` FILTER (#14747): a STACKED pull request -- base is another feature
-    # branch -- must start the run, or no required context ever reports on it.
-    #
-    # NO `paths:` FILTER, DELIBERATE (#13388, #14353): a path-filtered workflow that
-    # publishes a required context deadlocks every pull request that misses the filter.
-    # Which gates have work is decided by `changes` below, never by the event filter.
+  workflow_dispatch:
+    # The ONLY way a pull request gets CI: the PR coordinator dispatches this for a `land-next` pull request
+    # (#20825). The three inputs are REQUIRED: a hand dispatch must name the pull request, its head and its
+    # merge base, and `pr-context` checks all three live.
+    # A STACKED pull request (base is another feature branch) is dispatched like any other (#14747).
+    # No `paths:` filter exists, deliberately (#13388, #14353): which gates have work is decided by
+    # `changes` below, never by an event filter.
+    inputs:
+      pr_number:
+        description: Pull request this run is for
+        required: true
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: true
+        type: string
+      base_sha:
+        description: Merge base of the head with the PR's base branch; change detection and ratchets diff from it
+        required: true
+        type: string
 
+run-name: "${{ inputs.pr_number && format('PR #{0} @ {1}', inputs.pr_number, inputs.head_sha) || github.workflow }}"
 concurrency:
   # #19283 review: a push keys on its own commit, so no later merge can cancel it. With one
   # group per ref, GitHub's `queue: single` cancelled a PENDING push run when the next merge
   # queued -- and the ratchets' base for a push is the commit before it, so a raise in the
-  # cancelled merge was accepted for good by the next one (`queue: max` cannot be combined
-  # with cancel-in-progress, which PRs need). PRs and merge groups keep the per-ref group.
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  # #13432: cancel superseded PR runs, but let a push to a base branch finish.
-  #
-  # On a pull request a new push makes the previous run obsolete, so cancelling is right.
-  # On a push to main it meant each merge cancelled the previous merge's verification, and
-  # merges arrive faster than the suite completes: of the last 39 completed base runs, 26
-  # were cancelled and NONE succeeded.
-  #
-  # Base pushes no longer serialise in one group (#19283 review, above): each runs in its
-  # own, so every merge gets a verdict. That is bounded by the merge rate -- trains land a
-  # few times an hour -- not by PR traffic, which keeps the per-ref, cancel-superseded group.
-  #
-  # #18558: this is the ONE concurrency block. Seven workflows used to carry a copy of it.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # cancelled merge was accepted for good by the next one. A pull request keys on its NUMBER (#20825):
+  # a renamed head or a fork mirror stays one group, and a new head of the same pull request
+  # cancels the superseded run. Merge groups keep the per-ref group.
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || (github.event_name == 'push' && github.sha || github.ref) }}
+  # #13432: cancel superseded PR runs, but let a push to a base branch finish (each merge gets a verdict).
+  # #18558: this is the ONE concurrency block.
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions:
   contents: read
@@ -75,18 +79,34 @@ permissions:
 
 jobs:
   changes:
-    # Only a `land-next` pull request runs (#20825). On any other pull request this job is SKIPPED, and
-    # that is safe: every gate reads `needs.changes.result` and the `admitted` input, and fails closed
-    # ("not admitted to a CI slot") -- a REQUIRED context reports FAILED, never success.
+    # A hand dispatch on a pull request that holds no slot is safe: `admitted` is read LIVE from the pull
+    # request (the label), every gate fails closed on it ("not admitted to a CI slot"), so no required
+    # context can report success for a branch the coordinator did not admit (#20825).
     name: Detect changed paths
-    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write        # pr-context cancels a stale dispatch
+      pull-requests: read
     outputs:
-      # ready: the pull request carries `land-next` (the coordinator labels exactly the admitted ones, #20825)
-      # and is not held. Work behind a required gate is held back until then; the gate itself fails with the
-      # reason. A `labeled` run for any other label is not ready either: it does no work and cancels none.
-      ready: ${{ github.event_name != 'pull_request' || ((contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) && steps.hold.outputs.held != 'true') }}
+      # The facts of the pull request, looked up live by `pr-context` (empty on push / merge_group / manual runs).
+      is_pr: ${{ steps.pr.outputs.is-pr }}
+      pr_number: ${{ steps.pr.outputs.number }}
+      head_sha: ${{ steps.pr.outputs.head-sha }}
+      base_sha: ${{ steps.pr.outputs.base-sha }}
+      base_ref: ${{ steps.pr.outputs.base-ref }}
+      head_ref: ${{ steps.pr.outputs.head-ref }}
+      same_repo: ${{ steps.pr.outputs.same-repo }}
+      author: ${{ steps.pr.outputs.author }}
+      draft: ${{ steps.pr.outputs.draft }}
+      admitted: ${{ steps.pr.outputs.admitted }}
+      # JSON list of the path-filtered advisory workflows whose paths changed; `fan-out` dispatches them.
+      satellites: ${{ steps.sat.outputs.satellites }}
+      # ready: not a pull request, or the pull request carries `land-next` (the coordinator labels exactly the
+      # admitted ones) and is not held. Work behind a required gate is held back until then; the gate itself
+      # fails with the reason.
+      ready: ${{ steps.pr.outputs.is-pr != 'true' || (steps.pr.outputs.admitted == 'true' && steps.hold.outputs.held != 'true') }}
       # held (#21490, #21519): a dependabot pull request that is neither a `train-*` head nor labelled `ci:full`,
       # or the release promotion pull request without `ci:full`.
       # It starts no expensive work; every gate reports it as held (fails, never passes) in its summary.
@@ -113,12 +133,12 @@ jobs:
       run_precommit_sweep: ${{ steps.docs.outputs.precommit_sweep == 'true' }}
       run_security: >-
         ${{ (github.event_name == 'push' && contains(fromJSON('["release","main"]'), github.ref_name))
-            || (github.event_name == 'pull_request'
+            || (steps.pr.outputs.is-pr == 'true'
                 && (steps.gp.outputs.self == 'true' || steps.gp.outputs.security_scope == 'true')) }}
       run_deps_scan: ${{ steps.gp.outputs.self == 'true' || steps.bp.outputs.deps == 'true' }}
       run_static_analysis: ${{ steps.gp.outputs.self == 'true' || steps.bp.outputs.static_analysis == 'true' }}
       codeql_languages: ${{ steps.langs.outputs.languages }}
-      run_ai_review: ${{ github.event_name == 'pull_request' && (steps.gp.outputs.self == 'true' || steps.bp.outputs.reviewable == 'true') }}
+      run_ai_review: ${{ steps.pr.outputs.is-pr == 'true' && (steps.gp.outputs.self == 'true' || steps.bp.outputs.reviewable == 'true') }}
       run_npm: >-
         ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_browser_worker == 'true'
             || steps.gp.outputs.npm_mcp == 'true' || steps.gp.outputs.npm_sdk_ts == 'true'
@@ -129,22 +149,33 @@ jobs:
       npm_structured_thinking: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_structured_thinking == 'true' }}
       run_slm_frontend: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.slm_frontend == 'true' }}
     steps:
-      # #21490 / #21519: decide first, from facts of the PULL REQUEST (its author, its head and base)
-      # -- `github.actor` becomes the human who re-runs it. Labels are read from the event payload, so
-      # `ci:full` takes effect on the next run the event starts (push, reopen, ready for review), not
-      # when the label is applied. Two kinds are held: a dependabot pull request, and the release
-      # promotion pull request (head = the default branch of THIS repository, base = release).
+      - uses: actions/checkout@v7
+
+      # The pull request's facts, live (#20825). A stale dispatch ends the run CANCELLED here; a closed pull
+      # request or a wrong base fails `changes`, and with it every gate, closed.
+      - uses: ./.github/actions/pr-context
+        id: pr
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
+      # #21490 / #21519: decide from facts of the PULL REQUEST (its author, its head and base) as `pr-context`
+      # read them -- never `github.actor`, which is the coordinator's token owner on a dispatch. Labels are
+      # read live, so `ci:full` takes effect on the next dispatch. Two kinds are held: a dependabot pull
+      # request, and the release promotion pull request (head = the default branch of THIS repository,
+      # base = release).
       - name: Hold dependabot and release promotion pull requests
         id: hold
         env:
-          EVENT: ${{ github.event_name }}
-          AUTHOR: ${{ github.event.pull_request.user.login }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          IS_PR: ${{ steps.pr.outputs.is-pr }}
+          AUTHOR: ${{ steps.pr.outputs.author }}
+          HEAD_REF: ${{ steps.pr.outputs.head-ref }}
+          HEAD_REPO: ${{ steps.pr.outputs.head-repo }}
+          BASE_REF: ${{ steps.pr.outputs.base-ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           REPO: ${{ github.repository }}
-          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          LABELS: ${{ steps.pr.outputs.labels }}
         # FAILS OPEN. A broken hold step must degrade to "run everything", never "block everything":
         # a failure here fails `changes` and with it every gate of every pull request. So no `set -e`,
         # and an unreadable label list (jq missing, malformed payload) means NOT held, plus a warning.
@@ -153,7 +184,7 @@ jobs:
           set -uo pipefail
           held=false
           kind=""
-          if [ "${EVENT}" = "pull_request" ]; then
+          if [ "${IS_PR}" = "true" ]; then
             if [ "${AUTHOR}" = "dependabot[bot]" ] && [[ "${HEAD_REF}" != train-* ]]; then
               kind="dependabot pull request"
             # Same-repository head only: a fork branch that happens to be called main is not a promotion.
@@ -179,54 +210,51 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - uses: actions/checkout@v7
-
-      # One dorny step per filter file, each with a distinct id. `base` is the merge group's
-      # base on EVERY step: dorny/paths-filter errors on a merge_group event unless it is
-      # given, and a failed `changes` job fails every gate closed (#14054). It is empty on
-      # push/PR, so their behaviour is unchanged. This subsumes #18191 (the old ci.yml
-      # steps never set it).
+      # One dorny step per filter file, each with a distinct id. `base` is the dispatched run's merge base
+      # (`inputs.base_sha`, validated by pr-context above) or the merge group's base on EVERY step:
+      # dorny/paths-filter errors on a merge_group event unless it is given, and a failed `changes` job fails
+      # every gate closed (#14054). It is empty on push, so push behaviour is unchanged.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: gp
         with:
-          base: ${{ github.event.merge_group.base_sha || '' }}
+          base: ${{ inputs.base_sha || github.event.merge_group.base_sha || '' }}
           filters: .github/filters/gate-paths.yml
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: suite
         with:
-          base: ${{ github.event.merge_group.base_sha || '' }}
+          base: ${{ inputs.base_sha || github.event.merge_group.base_sha || '' }}
           filters: .github/filters/python-paths.yml
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: cq
         with:
-          base: ${{ github.event.merge_group.base_sha || '' }}
+          base: ${{ inputs.base_sha || github.event.merge_group.base_sha || '' }}
           filters: .github/filters/code-quality-paths.yml
 
       # #12986: the canonical backend-Python set and every filter composed from it.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: bp
         with:
-          base: ${{ github.event.merge_group.base_sha || '' }}
+          base: ${{ inputs.base_sha || github.event.merge_group.base_sha || '' }}
           filters: .github/filters/backend-python-paths.yml
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: fe
         with:
-          base: ${{ github.event.merge_group.base_sha || '' }}
+          base: ${{ inputs.base_sha || github.event.merge_group.base_sha || '' }}
           filters: .github/filters/frontend-paths.yml
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: dk
         with:
-          base: ${{ github.event.merge_group.base_sha || '' }}
+          base: ${{ inputs.base_sha || github.event.merge_group.base_sha || '' }}
           filters: .github/filters/docker-paths.yml
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: docs
         with:
-          base: ${{ github.event.merge_group.base_sha || '' }}
+          base: ${{ inputs.base_sha || github.event.merge_group.base_sha || '' }}
           filters: .github/filters/docs-only-paths.yml
 
       # The languages CodeQL analyses. A pull request analyses the languages whose filter
@@ -238,6 +266,7 @@ jobs:
       - name: Select the CodeQL languages
         id: langs
         env:
+          IS_PR: ${{ steps.pr.outputs.is-pr }}
           EVENT: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           SELF: ${{ steps.gp.outputs.self }}
@@ -247,11 +276,8 @@ jobs:
         run: |
           set -euo pipefail
           all='["python","javascript-typescript","actions"]'
-          case "${EVENT}" in
-            push)
-              if [ "${REF_NAME}" = "release" ] || [ "${REF_NAME}" = "main" ]; then langs="${all}"; else langs='[]'; fi
-              ;;
-            pull_request)
+          case "${IS_PR}:${EVENT}" in
+            true:*)
               if [ "${SELF}" = "true" ]; then
                 langs="${all}"
               else
@@ -262,12 +288,84 @@ jobs:
                 langs="[$(IFS=,; echo "${picked[*]:-}")]"
               fi
               ;;
+            *:push)
+              if [ "${REF_NAME}" = "release" ] || [ "${REF_NAME}" = "main" ]; then langs="${all}"; else langs='[]'; fi
+              ;;
             *)
               langs='[]'
               ;;
           esac
           echo "languages=${langs}" >> "$GITHUB_OUTPUT"
           echo "CodeQL languages: ${langs}"
+
+      # The path-filtered advisory workflows (#20825). Their `pull_request` triggers are gone, so the path
+      # filter is evaluated HERE, once, and `fan-out` dispatches what matched. Two filter files because a
+      # `paths-ignore` rule needs dorny's `every` quantifier, which applies to a whole step.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: sat_paths
+        if: ${{ steps.pr.outputs.is-pr == 'true' }}
+        with:
+          base: ${{ inputs.base_sha }}
+          filters: .github/filters/satellite-paths.yml
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: sat_ignore
+        if: ${{ steps.pr.outputs.is-pr == 'true' }}
+        with:
+          base: ${{ inputs.base_sha }}
+          predicate-quantifier: every
+          filters: .github/filters/satellite-paths-ignore.yml
+
+      - name: Select the satellite workflows
+        id: sat
+        env:
+          MATCHED: ${{ steps.sat_paths.outputs.changes || '[]' }}
+          MATCHED_IGNORE: ${{ steps.sat_ignore.outputs.changes || '[]' }}
+        run: |
+          set -euo pipefail
+          echo "satellites=$(jq -cn --argjson a "${MATCHED}" --argjson b "${MATCHED_IGNORE}" '$a + $b | unique')" >> "$GITHUB_OUTPUT"
+
+  # #20825: the path-filtered advisory workflows have no `pull_request` trigger any more. `changes` evaluated their
+  # path sets (.github/filters/satellite-paths*.yml) against this run's merge base; this job dispatches each one
+  # that matched, with the same three pins. A dispatch by GITHUB_TOKEN is allowed because `workflow_dispatch` is
+  # the one event it may start. A held (dependabot / release promotion) or draft pull request starts none.
+  # A satellite is advisory: this job being red never changes a required context.
+  fan-out:
+    name: Dispatch the advisory workflows
+    needs: changes
+    if: ${{ needs.changes.outputs.is_pr == 'true' && needs.changes.outputs.ready == 'true' && needs.changes.outputs.draft != 'true' && needs.changes.outputs.satellites != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Dispatch the satellites whose paths changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SATELLITES: ${{ needs.changes.outputs.satellites }}
+          PR_NUMBER: ${{ needs.changes.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.changes.outputs.head_sha }}
+          BASE_SHA: ${{ needs.changes.outputs.base_sha }}
+          BASE_REF: ${{ needs.changes.outputs.base_ref }}
+          HEAD_REF: ${{ needs.changes.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+          # The branch conditions their `pull_request` blocks carried (`branches:`), kept here, in one place.
+          main_only=" co-located-smoke hardened-smoke-test import-hermeticity-sweep train-content-gate "
+          main_or_release=" company-os-contract company-os-workflow-e2e slm-migration-gate ssot-coverage test-durations trajectory-eval "
+          release_only=" phase_validation "
+          failed=0
+          for key in $(jq -r '.[]' <<<"${SATELLITES}"); do
+            case "${main_only}" in *" ${key} "*) [ "${BASE_REF}" = "main" ] || { echo "skip ${key}: base is ${BASE_REF}"; continue; } ;; esac
+            case "${main_or_release}" in *" ${key} "*) case "${BASE_REF}" in main|release) ;; *) echo "skip ${key}: base is ${BASE_REF}"; continue ;; esac ;; esac
+            case "${release_only}" in *" ${key} "*) [ "${BASE_REF}" = "release" ] || { echo "skip ${key}: base is ${BASE_REF}"; continue; } ;; esac
+            case "${key}" in train-content-gate) case "${HEAD_REF}" in train-*) ;; *) echo "skip ${key}: not a train head"; continue ;; esac ;; esac
+            echo "dispatch ${key}.yml for #${PR_NUMBER} at ${HEAD_SHA}"
+            gh workflow run "${key}.yml" --repo "${GITHUB_REPOSITORY}" --ref "${GITHUB_REF_NAME}" \
+              -f pr_number="${PR_NUMBER}" -f head_sha="${HEAD_SHA}" -f base_sha="${BASE_SHA}" || failed=1
+          done
+          exit "${failed}"
 
   # Short check (#20552): the fast guards, seconds to minutes, before anything expensive starts.
   # Every expensive job needs it, so a red here stops them, and each gate then fails on its own
@@ -289,9 +387,13 @@ jobs:
         python-version-file: '.python-version'
     - uses: ./.github/actions/release-promotion-base
       id: release-base
+      with:
+        is-pr: ${{ needs.changes.outputs.is_pr }}
+        base-ref: ${{ needs.changes.outputs.base_ref }}
+        head-sha: ${{ needs.changes.outputs.head_sha }}
     - name: Ratchet base (#19283)
       env:
-        EVENT_BASE: ${{ steps.release-base.outputs.base-sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
+        EVENT_BASE: ${{ steps.release-base.outputs.base-sha || needs.changes.outputs.base_sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
       run: |
         if [ -n "${EVENT_BASE//0/}" ]; then
           git fetch --no-tags --depth=1 origin "$EVENT_BASE"
@@ -449,7 +551,7 @@ jobs:
     #   line and isn't waiting for a runner. Watchdogs must not read it as an
     #   outage (#16309).
     concurrency:
-      group: ${{ github.event_name == 'pull_request' && format('python-suite-shard-{0}', matrix.shard) || format('python-suite-shard-{0}-{1}', matrix.shard, github.ref) }}
+      group: ${{ inputs.pr_number != '' && format('python-suite-shard-{0}', matrix.shard) || format('python-suite-shard-{0}-{1}', matrix.shard, github.ref) }}
       queue: max
       cancel-in-progress: false
     # An eighth of a ~51-minute run, with generous headroom: observed runner
@@ -544,10 +646,14 @@ jobs:
     # The action yields nothing for any other event or base; the step below fetches the base.
     - uses: ./.github/actions/release-promotion-base
       id: release-base
+      with:
+        is-pr: ${{ needs.changes.outputs.is_pr }}
+        base-ref: ${{ needs.changes.outputs.base_ref }}
+        head-sha: ${{ needs.changes.outputs.head_sha }}
 
     - name: Ratchet base (#19283)
       env:
-        EVENT_BASE: ${{ steps.release-base.outputs.base-sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
+        EVENT_BASE: ${{ steps.release-base.outputs.base-sha || needs.changes.outputs.base_sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
       run: |
         if [ -n "${EVENT_BASE//0/}" ]; then
           git fetch --no-tags --depth=1 origin "$EVENT_BASE"
@@ -899,7 +1005,7 @@ jobs:
   python-suite:
     name: python-suite
     needs: [changes, short-check, provision-packages, python-shard]
-    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    if: ${{ always() }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -922,9 +1028,9 @@ jobs:
           applies: ${{ needs.changes.outputs.run_python_suite }}
           work-ok: ${{ needs.python-shard.result == 'success' }}
           work-detail: short-check=${{ needs.short-check.result }} ${{ needs.python-shard.result == 'success' && 'All 8 python-suite shards passed.' || format('python-shard={0}', needs.python-shard.result) }}
-          event: ${{ github.event_name }}
-          draft: ${{ github.event.pull_request.draft == true }}
-          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          event: ${{ needs.changes.outputs.is_pr == 'true' && 'pull_request' || github.event_name }}
+          draft: ${{ needs.changes.outputs.draft == 'true' }}
+          admitted: ${{ needs.changes.outputs.admitted == 'true' }}
           held: ${{ needs.changes.outputs.held }}
 
   # #22114: the specs that import what a pull request changed, run first. The full frontend suites type-check, lint and run
@@ -935,7 +1041,7 @@ jobs:
   frontend-related-specs:
     name: frontend-related-specs
     needs: [changes, short-check]
-    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.ready == 'true' && needs.changes.outputs.held != 'true' }}
+    if: ${{ needs.changes.outputs.is_pr == 'true' && needs.changes.outputs.ready == 'true' && needs.changes.outputs.held != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -943,7 +1049,7 @@ jobs:
       pull-requests: read  # list the pull request's files
     env:
       GH_TOKEN: ${{ github.token }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_NUMBER: ${{ needs.changes.outputs.pr_number }}
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v7
@@ -1069,12 +1175,15 @@ jobs:
     permissions:
       contents: read
       security-events: read
+    with:
+      base_sha: ${{ needs.changes.outputs.base_sha }}
+      head_sha: ${{ needs.changes.outputs.head_sha }}
 
   # Gate: publishes the REQUIRED `code-quality` context.
   code-quality:
     name: code-quality
     needs: [changes, short-check, run-code-quality]
-    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    if: ${{ always() }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1097,9 +1206,9 @@ jobs:
           applies: ${{ needs.changes.outputs.run_code_quality }}
           work-ok: ${{ needs.run-code-quality.outputs.ok == 'true' }}
           work-detail: short-check=${{ needs.short-check.result }} run-code-quality=${{ needs.run-code-quality.result }}
-          event: ${{ github.event_name }}
-          draft: ${{ github.event.pull_request.draft == true }}
-          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          event: ${{ needs.changes.outputs.is_pr == 'true' && 'pull_request' || github.event_name }}
+          draft: ${{ needs.changes.outputs.draft == 'true' }}
+          admitted: ${{ needs.changes.outputs.admitted == 'true' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-startup-import-smoke:
@@ -1113,7 +1222,7 @@ jobs:
   startup-import-smoke:
     name: startup-import-smoke
     needs: [changes, short-check, run-startup-import-smoke]
-    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    if: ${{ always() }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1136,9 +1245,9 @@ jobs:
           applies: ${{ needs.changes.outputs.run_startup_smoke }}
           work-ok: ${{ needs.run-startup-import-smoke.outputs.ok == 'true' }}
           work-detail: short-check=${{ needs.short-check.result }} run-startup-import-smoke=${{ needs.run-startup-import-smoke.result }}
-          event: ${{ github.event_name }}
-          draft: ${{ github.event.pull_request.draft == true }}
-          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          event: ${{ needs.changes.outputs.is_pr == 'true' && 'pull_request' || github.event_name }}
+          draft: ${{ needs.changes.outputs.draft == 'true' }}
+          admitted: ${{ needs.changes.outputs.admitted == 'true' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-frontend-test:
@@ -1153,7 +1262,7 @@ jobs:
   unit-tests:
     name: Unit & Integration Tests
     needs: [changes, short-check, run-frontend-test]
-    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    if: ${{ always() }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1176,9 +1285,9 @@ jobs:
           applies: ${{ needs.changes.outputs.run_unit_tests }}
           work-ok: ${{ needs.run-frontend-test.outputs.ok == 'true' }}
           work-detail: short-check=${{ needs.short-check.result }} run-frontend-test=${{ needs.run-frontend-test.result }}
-          event: ${{ github.event_name }}
-          draft: ${{ github.event.pull_request.draft == true }}
-          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          event: ${{ needs.changes.outputs.is_pr == 'true' && 'pull_request' || github.event_name }}
+          draft: ${{ needs.changes.outputs.draft == 'true' }}
+          admitted: ${{ needs.changes.outputs.admitted == 'true' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-docker-smoke:
@@ -1193,7 +1302,7 @@ jobs:
   smoke-test:
     name: smoke-test
     needs: [changes, short-check, run-docker-smoke]
-    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    if: ${{ always() }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1216,9 +1325,9 @@ jobs:
           applies: ${{ needs.changes.outputs.run_docker_smoke }}
           work-ok: ${{ needs.run-docker-smoke.outputs.ok == 'true' }}
           work-detail: short-check=${{ needs.short-check.result }} run-docker-smoke=${{ needs.run-docker-smoke.result }}
-          event: ${{ github.event_name }}
-          draft: ${{ github.event.pull_request.draft == true }}
-          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          event: ${{ needs.changes.outputs.is_pr == 'true' && 'pull_request' || github.event_name }}
+          draft: ${{ needs.changes.outputs.draft == 'true' }}
+          admitted: ${{ needs.changes.outputs.admitted == 'true' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-api-wiring:
@@ -1232,7 +1341,7 @@ jobs:
   api-wiring:
     name: api-wiring
     needs: [changes, short-check, run-api-wiring]
-    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    if: ${{ always() }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1255,9 +1364,9 @@ jobs:
           applies: ${{ needs.changes.outputs.run_api_wiring }}
           work-ok: ${{ needs.run-api-wiring.outputs.ok == 'true' }}
           work-detail: short-check=${{ needs.short-check.result }} run-api-wiring=${{ needs.run-api-wiring.result }}
-          event: ${{ github.event_name }}
-          draft: ${{ github.event.pull_request.draft == true }}
-          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          event: ${{ needs.changes.outputs.is_pr == 'true' && 'pull_request' || github.event_name }}
+          draft: ${{ needs.changes.outputs.draft == 'true' }}
+          admitted: ${{ needs.changes.outputs.admitted == 'true' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-migration-gate:
@@ -1272,7 +1381,7 @@ jobs:
   migration-matrix:
     name: migration-matrix
     needs: [changes, short-check, run-migration-gate]
-    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    if: ${{ always() }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1295,9 +1404,9 @@ jobs:
           applies: ${{ needs.changes.outputs.run_migrations }}
           work-ok: ${{ needs.run-migration-gate.outputs.ok == 'true' }}
           work-detail: short-check=${{ needs.short-check.result }} run-migration-gate=${{ needs.run-migration-gate.result }}
-          event: ${{ github.event_name }}
-          draft: ${{ github.event.pull_request.draft == true }}
-          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          event: ${{ needs.changes.outputs.is_pr == 'true' && 'pull_request' || github.event_name }}
+          draft: ${{ needs.changes.outputs.draft == 'true' }}
+          admitted: ${{ needs.changes.outputs.admitted == 'true' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-generated-types:
@@ -1313,8 +1422,11 @@ jobs:
   # #20552: regenerate only after verify failed; a green or skipped verify has nothing to fix.
   run-auto-fix-types:
     needs: [changes, run-generated-types]
-    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.run-generated-types.result == 'failure' }}
+    if: ${{ !cancelled() && needs.changes.outputs.is_pr == 'true' && needs.run-generated-types.result == 'failure' }}
     uses: ./.github/workflows/auto-fix-generated-types.yml
+    with:
+      pr_number: ${{ needs.changes.outputs.pr_number }}
+      same_repo: ${{ needs.changes.outputs.same_repo }}
     secrets:
       AUTOBOT_PUSH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
     permissions:
@@ -1329,7 +1441,7 @@ jobs:
   verify-generated-types:
     name: verify-generated-types
     needs: [changes, short-check, run-generated-types]
-    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    if: ${{ always() }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1352,9 +1464,9 @@ jobs:
           applies: ${{ needs.changes.outputs.run_types == 'true' || needs.changes.outputs.run_slm_types == 'true' }}
           work-ok: ${{ (needs.changes.outputs.run_types != 'true' || needs.run-generated-types.outputs.ok == 'true') && (needs.changes.outputs.run_slm_types != 'true' || needs.run-generated-types.outputs.slm_ok == 'true') }}
           work-detail: short-check=${{ needs.short-check.result }} run-generated-types=${{ needs.run-generated-types.result }}
-          event: ${{ github.event_name }}
-          draft: ${{ github.event.pull_request.draft == true }}
-          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          event: ${{ needs.changes.outputs.is_pr == 'true' && 'pull_request' || github.event_name }}
+          draft: ${{ needs.changes.outputs.draft == 'true' }}
+          admitted: ${{ needs.changes.outputs.admitted == 'true' }}
           held: ${{ needs.changes.outputs.held }}
 
   # Never filtered and never draft-gated: it carries the SPDX and symlink checks, which must cover EVERY pull
@@ -1367,13 +1479,15 @@ jobs:
       contents: read
     with:
       sweep: ${{ needs.changes.outputs.run_precommit_sweep }}
+      is_pr: ${{ needs.changes.outputs.is_pr }}
+      base_sha: ${{ needs.changes.outputs.base_sha }}
 
   # Gate: publishes the REQUIRED `verify-precommit-config` context. It always applies: nothing about a diff
   # makes the config check not affected, so `applies` is the literal 'true' and drafts run it too.
   verify-precommit-config:
     name: verify-precommit-config
     needs: [changes, run-precommit]
-    if: ${{ always() && !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    if: ${{ always() }}
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
       contents: read
@@ -1396,9 +1510,9 @@ jobs:
           applies: 'true'
           work-ok: ${{ needs.run-precommit.outputs.ok == 'true' }}
           work-detail: run-precommit=${{ needs.run-precommit.result }}
-          event: ${{ github.event_name }}
-          draft: ${{ github.event.pull_request.draft == true }}
-          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          event: ${{ needs.changes.outputs.is_pr == 'true' && 'pull_request' || github.event_name }}
+          draft: ${{ needs.changes.outputs.draft == 'true' }}
+          admitted: ${{ needs.changes.outputs.admitted == 'true' }}
           draft-gated: 'false'
 
   # ---- checks that are not required contexts: same bodies, same conditions as before ----
@@ -1413,6 +1527,7 @@ jobs:
     with:
       deps: ${{ needs.changes.outputs.run_deps_scan }}
       static_analysis: ${{ needs.changes.outputs.run_static_analysis }}
+      draft: ${{ needs.changes.outputs.draft }}
 
   run-codeql:
     needs: [changes, short-check]
@@ -1423,11 +1538,16 @@ jobs:
       security-events: write
     with:
       languages: ${{ needs.changes.outputs.codeql_languages }}
+      draft: ${{ needs.changes.outputs.draft }}
 
   run-ai-security-review:
     needs: [changes, short-check]
     if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_ai_review == 'true' }}
     uses: ./.github/workflows/_gate-ai-security-review.yml
+    with:
+      pr_number: ${{ needs.changes.outputs.pr_number }}
+      base_sha: ${{ needs.changes.outputs.base_sha }}
+      head_sha: ${{ needs.changes.outputs.head_sha }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     permissions:
@@ -1445,6 +1565,7 @@ jobs:
       mcp: ${{ needs.changes.outputs.npm_mcp }}
       sdk_ts: ${{ needs.changes.outputs.npm_sdk_ts }}
       structured_thinking: ${{ needs.changes.outputs.npm_structured_thinking }}
+      draft: ${{ needs.changes.outputs.draft }}
 
   run-slm-frontend:
     needs: [changes, short-check]
@@ -1454,6 +1575,11 @@ jobs:
       contents: read
     with:
       slm_frontend: ${{ needs.changes.outputs.run_slm_frontend }}
+      draft: ${{ needs.changes.outputs.draft }}
+      is_pr: ${{ needs.changes.outputs.is_pr }}
+      base_sha: ${{ needs.changes.outputs.base_sha }}
+      base_ref: ${{ needs.changes.outputs.base_ref }}
+      head_sha: ${{ needs.changes.outputs.head_sha }}
 
   deployment-check:
     runs-on: ubuntu-latest
@@ -1551,7 +1677,7 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     needs: [changes, python-suite, frontend-tests, deployment-check]
-    if: ${{ always() && (github.event_name != 'pull_request' || needs.changes.outputs.ready == 'true') }}
+    if: ${{ always() && needs.changes.outputs.ready == 'true' }}
 
     steps:
     - name: Notify results

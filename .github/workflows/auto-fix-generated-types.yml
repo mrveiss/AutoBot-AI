@@ -24,6 +24,15 @@ name: Auto-fix Generated Types
 # the path set is the verify gate's own, so this file carries neither.
 on:
   workflow_call:
+    inputs:
+      pr_number:
+        description: "The pull request's number (pr-context output; validated numeric)"
+        type: string
+        default: ''
+      same_repo:
+        description: "'true' when the pull request's head lives in this repository"
+        type: string
+        default: ''
     secrets:
       AUTOBOT_PUSH_TOKEN:
         description: "Push token used by the checkout so a regenerated-types report can trigger checks"
@@ -50,13 +59,12 @@ jobs:
     # never grants. Skip rather than fail. (auto-fix-formatting.yml carried the
     # identical guard until #15934 removed it as redundant; this is now the
     # only workflow of the shape.)
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: inputs.same_repo == 'true'
 
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.head_ref }}
           # #13791: prefer a token attributed to a human. Pushing with the
           # default GITHUB_TOKEN attributes the commit to github-actions[bot],
           # and this repository's fork-PR policy (all_external_contributors)
@@ -115,7 +123,7 @@ jobs:
   # approval job's `needs`/guard are unchanged — one push, one approval.
   approve-parked-runs:
     needs: autofix-types
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: inputs.same_repo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -143,7 +151,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WATCHDOG_ONLY_PR: ${{ github.event.pull_request.number }}
+          WATCHDOG_ONLY_PR: ${{ inputs.pr_number }}
         shell: bash
         run: |
           set -o pipefail
@@ -155,7 +163,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## Parked-run approval for PR #${{ github.event.pull_request.number }}"
+            echo "## Parked-run approval for PR #${{ inputs.pr_number }}"
             echo
             grep -E "Sweep complete:|could NOT approve|left with parked runs|leaving .* parked" \
               "$RUNNER_TEMP/approval-sweep.log" 2>/dev/null || echo "The sweep printed no result line; see its step log."
@@ -172,6 +180,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "::error title=Parked-run approval was cancelled::PR #${{ github.event.pull_request.number }} may still have runs awaiting approval; dispatching the CI Dispatch Watchdog sweep (#16360)."
+          echo "::error title=Parked-run approval was cancelled::PR #${{ inputs.pr_number }} may still have runs awaiting approval; dispatching the CI Dispatch Watchdog sweep (#16360)."
           echo "Approval sweep cancelled before it finished; CI Dispatch Watchdog dispatched to finish it (#16360)." >> "$GITHUB_STEP_SUMMARY"
           gh workflow run ci-dispatch-watchdog.yml --repo "${{ github.repository }}" --ref "$WATCHDOG_BASE_BRANCH"

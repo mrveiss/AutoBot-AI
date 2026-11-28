@@ -13,23 +13,37 @@ on:
   # fires, and the queue waits on it forever. Inert until the `merge_queue`
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
+  # The PR coordinator dispatches this for a `land-next` pull request (#20825); there is no `pull_request` trigger.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for
+        required: true
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: true
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: true
+        type: string
 
+run-name: "${{ inputs.pr_number && format('PR #{0} @ {1}', inputs.pr_number, inputs.head_sha) || github.workflow }}"
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
 # read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
 # degradation that wasted load became failures on unrelated pull requests (#14444).
 #
-# cancel-in-progress is guarded on the event rather than set to a bare `true`:
+# cancel-in-progress is guarded on the dispatch rather than set to a bare `true`:
 # #13432 found that cancelling base-branch runs meant each merge cancelled the
 # previous merge's verification, and merges arrive faster than a suite completes -
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
 # workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions:
   contents: read
@@ -37,13 +51,29 @@ permissions:
 jobs:
   check-trailers:
     name: No commit trailers
-    # Required context: never skipped for an un-admitted pull request (#20825). The first step fails it
-    # closed, so the context reports FAILURE, not success; an unrelated label event skips the job and publishes nothing new.
-    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    # Required context: a hand dispatch for a pull request that holds no slot fails it closed (#20825),
+    # so the context reports FAILURE, never success.
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
     steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
+      # The pull request's facts, live; a stale dispatch ends the run cancelled here.
+      - uses: ./.github/actions/pr-context
+        id: pr
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
       - name: Fail closed unless admitted to a CI slot
-        if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'land-next') }}
+        if: ${{ steps.pr.outputs.is-pr == 'true' && steps.pr.outputs.admitted != 'true' }}
         run: |
           echo "::error title=not admitted::this pull request is not admitted to a CI slot (no land-next label), so nothing behind this context ran"
           exit 1
@@ -66,7 +96,7 @@ jobs:
           # depth 100 is guaranteed to fail anyway, so this never spends the #16207 cost
           # on a PR that would have passed. Ordinary PRs keep depth 100. Expressions
           # have comparison but no arithmetic, hence a threshold, not `commits + N`.
-          fetch-depth: ${{ (github.event_name == 'merge_group' || github.event.pull_request.commits > 90) && '0' || '100' }}
+          fetch-depth: ${{ (github.event_name == 'merge_group' || steps.pr.outputs.commits > 90) && '0' || '100' }}
 
       # #19466: a PR into `release` is judged only on commits not already on main
       # (owner ruling 2026-10-24: "Gates judge only new commits"). Every commit on
@@ -79,6 +109,9 @@ jobs:
         id: release-base
         with:
           fetch: 'true'
+          is-pr: ${{ steps.pr.outputs.is-pr }}
+          base-ref: ${{ steps.pr.outputs.base-ref }}
+          head-sha: ${{ steps.pr.outputs.head-sha }}
 
       # #22001: the range and its cross-check live in scripts/ci/trailer_gate_range.sh so
       # they are tested against temp repos. It takes the CURRENT base-branch tip (what
@@ -87,12 +120,12 @@ jobs:
       - name: Resolve the commit range
         id: range
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          BASE_SHA: ${{ steps.pr.outputs.base-sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ steps.pr.outputs.head-sha || github.event.merge_group.head_sha }}
           # The TRUE number of commits in the PR, from GitHub rather than from the
           # clone. This is what makes truncation detectable (#16210 review).
-          EXPECTED_COMMITS: ${{ github.event.pull_request.commits || '' }}
-          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+          EXPECTED_COMMITS: ${{ steps.pr.outputs.commits }}
+          # No BASE_REF: the range runs from the validated merge base (pr-context), not from the base branch tip.
           RELEASE_BASE_SHA: ${{ steps.release-base.outputs.base-sha }}
           RELEASE_NEW_COMMITS: ${{ steps.release-base.outputs.new-commits }}
         run: bash scripts/ci/trailer_gate_range.sh
@@ -100,7 +133,7 @@ jobs:
       - name: Scan PR commits for banned trailers
         env:
           BASE_SHA: ${{ steps.range.outputs.base-sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          HEAD_SHA: ${{ steps.pr.outputs.head-sha || github.event.merge_group.head_sha }}
         run: |
           set -euo pipefail
           # Agent/tooling trailers are never allowed, for any author (#13654).

@@ -26,13 +26,33 @@ on:
         description: "'true' when autobot-slm-frontend or its i18n inputs changed"
         type: string
         default: 'false'
+      draft:
+        description: "'true' when the dispatched pull request is a draft; empty outside a pull request run"
+        type: string
+        default: ''
+      is_pr:
+        description: "'true' for a dispatched pull request run"
+        type: string
+        default: ''
+      base_sha:
+        description: "Merge base of the dispatched pull request (ci.yml passes the validated pr-context value); empty outside a pull request run"
+        type: string
+        default: ''
+      base_ref:
+        description: "Base branch of the dispatched pull request"
+        type: string
+        default: ''
+      head_sha:
+        description: "Head commit of the dispatched pull request; empty outside a pull request run"
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
   slm-frontend-check:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ inputs.draft != 'true' }}
     name: SLM Frontend Check
     runs-on: ubuntu-latest
     defaults:
@@ -53,10 +73,14 @@ jobs:
       - uses: ./.github/actions/release-promotion-base  # #21713
         if: inputs.slm_frontend == 'true'
         id: release-base
+        with:
+          is-pr: ${{ inputs.is_pr }}
+          base-ref: ${{ inputs.base_ref }}
+          head-sha: ${{ inputs.head_sha }}
       - name: Ratchet base (#19283)  # #21713
         if: inputs.slm_frontend == 'true'
         env:
-          EVENT_BASE: ${{ steps.release-base.outputs.base-sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
+          EVENT_BASE: ${{ steps.release-base.outputs.base-sha || inputs.base_sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
         run: |
           if [ -n "${EVENT_BASE//0/}" ]; then
             git fetch --no-tags --depth=1 origin "$EVENT_BASE"

@@ -19,6 +19,14 @@ on:
         description: "'true' runs the repo-wide pre-commit sweep; 'false' (a docs-only diff) skips it. Scheduled and manual runs keep the default."
         type: string
         default: 'true'
+      is_pr:
+        description: "'true' for a dispatched pull request run"
+        type: string
+        default: ''
+      base_sha:
+        description: "Merge base of the dispatched pull request (ci.yml passes the validated pr-context value); empty outside a pull request run"
+        type: string
+        default: ''
     outputs:
       ok:
         description: "'true' only when every step of the pre-commit config job passed"
@@ -52,11 +60,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          # fetch-depth: 2 (not the actions/checkout default of 1) so the PR
-          # base commit is present. On a pull_request the checkout is the
-          # merge commit: depth 2 supplies both parents — HEAD^1 (base tip)
-          # and HEAD^2 (PR head) — which the #14137 symlink-diff step below
-          # needs. Same reasoning as code-quality.yml (#13880).
+          # fetch-depth: 2 (not the actions/checkout default of 1). A dispatched run checks out the
+          # branch head (#20825), not a merge commit, so the base is NOT among the parents: the
+          # steps below take the validated merge base from `inputs.base_sha` and fetch it on its own
+          # (git_scope_resolve_base, scripts/lib/git-scope.sh).
           fetch-depth: 2
 
       - name: Check for pre-commit config
@@ -155,7 +162,8 @@ jobs:
       - name: Run pre-commit over the change under review
         if: inputs.sweep == 'true'
         env:
-          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
+          IS_PULL_REQUEST: ${{ inputs.is_pr == 'true' }}
+          BASE_SHA: ${{ inputs.base_sha }}
         run: |
           # #14181: this used to swallow the result entirely with
           # `|| { echo "::warning::..."; exit 0; }`. The comment said the goal was
@@ -177,14 +185,13 @@ jobs:
           # review. Measured at 1008s of the job's 1142s on a one-file PR
           # (#15299), diff-blind: a one-line change linted the whole tree.
           #
-          # HEAD^1/HEAD^2, not origin/${GITHUB_BASE_REF}: the checkout above is
-          # fetch-depth: 2, so the base BRANCH ref is never fetched, but both
-          # parents of the pull_request merge commit are present -- HEAD^1 is
-          # the base tip and HEAD^2 the PR head. The #14137 symlink step below
-          # already depends on exactly that pair, so this adds no new
-          # requirement on the checkout.
+          # The validated merge base (pr-context, #20825) to HEAD, the dispatched branch head. Not HEAD^1/HEAD^2:
+          # a dispatched run has no merge ref, and a branch head that merged main has two parents of its own.
+          # Not origin/${GITHUB_BASE_REF} either: the checkout is fetch-depth: 2, so the base BRANCH ref is never
+          # fetched; the base SHA is, here, at depth 1.
           if [ "${IS_PULL_REQUEST}" = "true" ]; then
-            scope="--from-ref HEAD^1 --to-ref HEAD^2"
+            git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "${BASE_SHA}"
+            scope="--from-ref ${BASE_SHA} --to-ref HEAD"
           else
             scope="--all-files"
           fi
@@ -340,7 +347,7 @@ jobs:
           # PR_HEAD_SHA removed with it: the step resolves the head as HEAD and
           # never read this binding. Verified unreferenced in this workflow and
           # in scripts/lib/, so no capability goes with it.
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          PR_BASE_SHA: ${{ inputs.base_sha || github.event.merge_group.base_sha }}
         run: |
           set -euo pipefail
           # BLOCKING, and diff-scoped rather than a full-tree scan: #14149
@@ -351,9 +358,8 @@ jobs:
           # added or modified mode-120000 entry still fails; #14149's,
           # untouched by a given PR, does not block that PR.
           #
-          # Resolve through HEAD's own parents first (#13880): on a
-          # pull_request the checkout is the merge commit, so HEAD^1 is the
-          # base tip and HEAD^2 is the PR head — no event payload needed.
+          # On a dispatched run the base is the validated merge base the caller passes
+          # (#20825); git_scope_resolve_base uses it as is, and fetches it when the clone lacks it.
           # #13984: this was the FIFTH hand-written copy of the same base
           # resolution. It now comes from the canonical resolver, which also
           # supplies the origin/<base> and last-resort-parent fallbacks this

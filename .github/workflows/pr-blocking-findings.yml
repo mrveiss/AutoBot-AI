@@ -19,39 +19,66 @@ on:
   # fires, and the queue waits on it forever. Inert until the `merge_queue`
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
-  pull_request:
-    types: [opened, edited, synchronize, reopened, ready_for_review, labeled]
-    branches: [main, release]
+  # The PR coordinator dispatches this for a `land-next` pull request, and again right before each merge (#20825);
+  # there is no `pull_request` trigger, so a body edit starts nothing.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request this run is for
+        required: true
+        type: string
+      head_sha:
+        description: Head commit the coordinator read; the run cancels itself when the branch tip differs
+        required: true
+        type: string
+      base_sha:
+        description: Merge base of the head with the pull request's base branch
+        required: true
+        type: string
 
+run-name: "${{ inputs.pr_number && format('PR #{0} @ {1}', inputs.pr_number, inputs.head_sha) || github.workflow }}"
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
 # read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
 # degradation that wasted load became failures on unrelated pull requests (#14444).
 #
-# cancel-in-progress is guarded on the event rather than set to a bare `true`:
+# cancel-in-progress is guarded on the dispatch rather than set to a bare `true`:
 # #13432 found that cancelling base-branch runs meant each merge cancelled the
 # previous merge's verification, and merges arrive faster than a suite completes -
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
 # workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ inputs.pr_number && format('pr-{0}', inputs.pr_number) || github.ref }}
+  cancel-in-progress: ${{ inputs.pr_number != '' }}
 
 permissions:
+  contents: read
+  actions: write        # pr-context cancels a stale dispatch
   issues: read
   pull-requests: read
 
 jobs:
   blocking-findings:
     name: No open blocks-merge issues reference this PR
-    # Required context: never skipped for an un-admitted pull request (#20825). The first step fails it
-    # closed, so the context reports FAILURE, not success; an unrelated label event skips the job and publishes nothing new.
-    if: ${{ !(github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'land-next') }}
+    # Required context: a hand dispatch for a pull request that holds no slot fails it closed (#20825),
+    # so the context reports FAILURE, never success.
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
+      - uses: ./.github/actions/pr-context
+        id: pr
+        with:
+          pr-number: ${{ inputs.pr_number }}
+          head-sha: ${{ inputs.head_sha }}
+          base-sha: ${{ inputs.base_sha }}
+
       - name: Fail closed unless admitted to a CI slot
-        if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'land-next') }}
+        if: ${{ steps.pr.outputs.is-pr == 'true' && steps.pr.outputs.admitted != 'true' }}
         run: |
           echo "::error title=not admitted::this pull request is not admitted to a CI slot (no land-next label), so nothing behind this context ran"
           exit 1
@@ -59,7 +86,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
           # #14054: a merge_group event carries no pull_request object. The
           # queue ref does carry the number --
           #   refs/heads/gh-readonly-queue/<base>/pr-<N>-<sha>
