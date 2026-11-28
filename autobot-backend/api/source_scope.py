@@ -31,6 +31,7 @@ import re
 from typing import Annotated
 
 from fastapi import HTTPException, Query
+from pydantic import Field
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
@@ -86,6 +87,10 @@ SourceIdQuery = Annotated[
         description="Required (#17758): the code source this result belongs to",
     ),
 ]
+
+
+#: The same required source id for a request BODY: a model field spells this, not `source_id: str = ""` (#20402).
+SourceIdBody = Annotated[str, Field(pattern=_SOURCE_ID_SHAPE.pattern, description="Required: the code source")]
 
 
 #: ``openapi_extra`` for the routes whose result is not about one source: the source

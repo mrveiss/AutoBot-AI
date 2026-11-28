@@ -2,14 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Response builders for the code-search duplicate analytics, and the scope both analytics report."""
-
-#: The index keys files by their path relative to the indexed root and does not record the root, so
-#: a search cannot be limited to one root. `analysis_root` is what was indexed, not a filter (#20224).
-RESULTS_SCOPE = "whole_index"
+"""Response builders for the code-search duplicate analytics."""
 
 
-def build_duplicates_response(patterns_count: int, duplicate_candidates: list, root_path: str) -> dict:
+def build_duplicates_response(patterns_count: int, duplicate_candidates: list, root_path: str, source_id: str) -> dict:
     """
     Build the response dictionary for duplicate detection.
 
@@ -18,7 +14,7 @@ def build_duplicates_response(patterns_count: int, duplicate_candidates: list, r
     return {
         "summary": {
             "analysis_root": root_path,
-            "results_scope": RESULTS_SCOPE,
+            "source_id": source_id,
             "patterns_analyzed": patterns_count,
             "duplicate_candidates_found": len(duplicate_candidates),
             "total_similar_blocks": sum(len(c["similar_blocks"]) for c in duplicate_candidates),

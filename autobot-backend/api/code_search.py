@@ -22,8 +22,10 @@ from agents.npu_code_search_agent import (
     index_project,
     search_codebase,
 )
-from api.code_search_duplicates import RESULTS_SCOPE, build_duplicate_candidate, build_duplicates_response
+from api.code_search_duplicates import build_duplicate_candidate, build_duplicates_response
 from api.code_search_examples import SEARCH_EXAMPLES_DATA
+from api.code_search_refactor import REFACTOR_SUGGESTIONS, build_refactor_response
+from api.codebase_analytics.endpoints.shared import authorize_source_access
 from api.embedding_refusal import reraise_http_or_refusal
 from api.schemas_code import (
     CodeAnalyticsRequest,
@@ -41,6 +43,7 @@ from api.schemas_code import (
     CodeSearchStatusResultResponse,
 )
 from api.schemas_common import DataResponse
+from api.source_scope import SourceIdQuery, source_scoped_prefix
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -66,17 +69,20 @@ _get_code_search_agent = lazy_singleton(get_npu_code_search)
     operation="index_codebase",
     error_code_prefix="CODE_SEARCH",
 )
-async def index_codebase(request: CodeSearchIndexRequest, _: bool = Depends(check_admin_permission)):
+async def index_codebase(
+    request: CodeSearchIndexRequest, user=Depends(get_current_user), _: bool = Depends(check_admin_permission)
+):
     """
     Index a codebase for fast searching.
 
     This endpoint indexes all supported code files in the specified directory,
     creating optimized data structures for fast searching.
     """
+    await authorize_source_access(request.source_id, user)  # outside the try: a 404 must stay a 404
     try:
         logger.info("Starting codebase indexing: %s", request.root_path)
 
-        result = await index_project(request.root_path, request.force_reindex)
+        result = await index_project(request.root_path, request.force_reindex, source_id=request.source_id)
 
         if result["status"] == "success":
             return JSONResponse(
@@ -118,13 +124,14 @@ async def index_codebase(request: CodeSearchIndexRequest, _: bool = Depends(chec
     operation="search_code",
     error_code_prefix="CODE_SEARCH",
 )
-async def search_code(request: CodeSearchRequest):
+async def search_code(request: CodeSearchRequest, user=Depends(get_current_user)):
     """Search through indexed code. Supports multiple search types:
     - semantic: AI-powered semantic similarity search (NPU-accelerated when available)
     - exact: Exact string matching
     - regex: Regular expression search
     - element: Search for specific code elements (functions, classes, etc.)
     """
+    await authorize_source_access(request.source_id, user)  # outside the try: a 404 must stay a 404
     try:
         logger.info("Code search: '%s' (type: %s)", request.query, request.search_type)
 
@@ -135,8 +142,8 @@ async def search_code(request: CodeSearchRequest):
                 detail=f"Invalid search_type. Must be one of: {sorted(_VALID_SEARCH_TYPES)}",
             )
 
-        # Perform search
         results = await search_codebase(
+            source_id=request.source_id,
             query=request.query,
             search_type=request.search_type,
             language=request.language,
@@ -189,6 +196,8 @@ async def search_code(request: CodeSearchRequest):
     error_code_prefix="CODE_SEARCH",
 )
 async def search_code_get(
+    source_id: SourceIdQuery,
+    user=Depends(get_current_user),
     q: str = Query(..., description="Search query"),
     type: str = Query("semantic", description="Search type"),
     lang: str | None = Query(None, description="Programming language filter"),
@@ -203,8 +212,8 @@ async def search_code_get(
     - lang: Language filter (python, javascript, etc.)
     - max: Maximum number of results (1-100)
     """
-    request = CodeSearchRequest(query=q, search_type=type, language=lang, max_results=max)
-    return await search_code(request)
+    request = CodeSearchRequest(query=q, source_id=source_id, search_type=type, language=lang, max_results=max)
+    return await search_code(request, user)
 
 
 @router.get("/status", response_model=DataResponse[CodeSearchStatusResultResponse])
@@ -213,15 +222,16 @@ async def search_code_get(
     operation="get_search_status",
     error_code_prefix="CODE_SEARCH",
 )
-async def get_search_status():
+async def get_search_status(source_id: SourceIdQuery, user=Depends(get_current_user)):
     """
-    Get code search system status.
+    Get code search system status for ONE source (#20402).
 
     Returns information about indexed files, NPU availability,
     language distribution, and cache statistics.
     """
+    await authorize_source_access(source_id, user)  # outside the try: a 404 must stay a 404
     try:
-        status = await _get_code_search_agent().get_index_status()
+        status = await _get_code_search_agent().get_index_status(source_id)
 
         return JSONResponse(
             status_code=200,
@@ -374,13 +384,14 @@ def _update_declaration_stats(
 async def _process_pattern_matches(
     pattern: str,
     declaration_stats: dict,
+    source_id: str,
 ) -> None:
     """Process matches for a single pattern (Issue #315).
 
     Issue #508: Optimized by precompiling regex pattern once instead of
     per-iteration compilation.
     """
-    search_results = await search_codebase(query=pattern, search_type="regex", max_results=1000)
+    search_results = await search_codebase(query=pattern, search_type="regex", max_results=1000, source_id=source_id)
 
     # Issue #508: Precompile pattern once - O(1) instead of O(n) compilations
     compiled_pattern = re.compile(pattern, re.MULTILINE)
@@ -399,10 +410,10 @@ async def _process_pattern_matches(
                 )
 
 
-async def _count_usages(declaration_stats: dict) -> None:
+async def _count_usages(declaration_stats: dict, source_id: str) -> None:
     """Count usages for all declarations (Issue #315)."""
     for name in list(declaration_stats.keys()):
-        usage_results = await search_codebase(query=name, search_type="exact", max_results=500)
+        usage_results = await search_codebase(query=name, search_type="exact", max_results=500, source_id=source_id)
         declaration_stats[name]["usage_count"] = len(usage_results)
 
 
@@ -460,46 +471,6 @@ def _build_similar_block_entry(result) -> dict:
     }
 
 
-# Issue #665: Module-level constant for refactoring suggestions
-_REFACTOR_SUGGESTIONS = (
-    {
-        "type": "Extract Utility Functions",
-        "priority": "high",
-        "description": ("Functions with high usage but multiple definitions " "can be centralized"),
-        "impact": "Reduces code duplication and improves maintainability",
-        "effort": "medium",
-    },
-    {
-        "type": "Create Base Classes",
-        "priority": "medium",
-        "description": ("Similar classes can be refactored to use inheritance " "or composition"),
-        "impact": "Improves code organization and reduces repetition",
-        "effort": "high",
-    },
-    {
-        "type": "Standardize Error Handling",
-        "priority": "high",
-        "description": "Inconsistent error handling patterns detected",
-        "impact": "Improves reliability and debugging experience",
-        "effort": "medium",
-    },
-    {
-        "type": "Configuration Centralization",
-        "priority": "medium",
-        "description": "Multiple configuration loading patterns found",
-        "impact": "Simplifies configuration management",
-        "effort": "low",
-    },
-)
-
-# Issue #665: Module-level constant for next steps
-_REFACTOR_NEXT_STEPS = (
-    "Review high-priority suggestions first",
-    "Use duplicate detection to identify specific refactoring targets",
-    "Run declaration analysis to understand usage patterns",
-    "Test thoroughly after any refactoring changes",
-)
-
 # Issue #380: Module-level tuple for common duplicate detection patterns
 _DUPLICATE_DETECTION_PATTERNS = (
     "error handling",
@@ -515,7 +486,7 @@ _DUPLICATE_DETECTION_PATTERNS = (
 )
 
 
-async def _search_pattern_for_duplicates(pattern: str) -> dict | None:
+async def _search_pattern_for_duplicates(pattern: str, source_id: str) -> dict | None:
     """
     Search for duplicates matching a pattern.
 
@@ -527,7 +498,7 @@ async def _search_pattern_for_duplicates(pattern: str) -> dict | None:
     Returns:
         Duplicate candidate dict if multiple similar blocks found, None otherwise
     """
-    results = await search_codebase(query=pattern, search_type="semantic", max_results=20)
+    results = await search_codebase(query=pattern, search_type="semantic", max_results=20, source_id=source_id)
 
     if len(results) <= 1:
         return None
@@ -540,7 +511,7 @@ async def _search_pattern_for_duplicates(pattern: str) -> dict | None:
     return None
 
 
-def _build_declarations_summary(analysis_results: dict, root_path: str) -> dict:
+def _build_declarations_summary(analysis_results: dict, root_path: str, source_id: str) -> dict:
     """Helper for analyze_declarations. Ref: #1088."""
     total_declarations = sum(len(results) for results in analysis_results.values())
     most_reused = max(
@@ -554,7 +525,7 @@ def _build_declarations_summary(analysis_results: dict, root_path: str) -> dict:
             "most_reused_declaration": most_reused["name"],
             "max_usage_count": most_reused["usage_count"],
             "analysis_root": root_path,
-            "results_scope": RESULTS_SCOPE,
+            "source_id": source_id,
             "pattern_types_analyzed": list(DECLARATION_PATTERNS.keys()),
         },
         "declarations_by_type": analysis_results,
@@ -562,7 +533,7 @@ def _build_declarations_summary(analysis_results: dict, root_path: str) -> dict:
     }
 
 
-async def _analyze_all_pattern_types() -> dict:
+async def _analyze_all_pattern_types(source_id: str) -> dict:
     """Helper for analyze_declarations. Ref: #1088."""
     analysis_results = {}
     for pattern_type, pattern_list in DECLARATION_PATTERNS.items():
@@ -577,8 +548,8 @@ async def _analyze_all_pattern_types() -> dict:
             }
         )
         for pattern in pattern_list:
-            await _process_pattern_matches(pattern, declaration_stats)
-        await _count_usages(declaration_stats)
+            await _process_pattern_matches(pattern, declaration_stats, source_id)
+        await _count_usages(declaration_stats, source_id)
         analysis_results[pattern_type] = _build_type_results(declaration_stats, pattern_type)
     return analysis_results
 
@@ -589,26 +560,26 @@ async def _analyze_all_pattern_types() -> dict:
     operation="analyze_declarations",
     error_code_prefix="CODE_SEARCH",
 )
-async def analyze_declarations(request: CodeAnalyticsRequest):
+async def analyze_declarations(request: CodeAnalyticsRequest, user=Depends(get_current_user)):
     """
     Analyze codebase declarations for usage statistics and reusability potential.
 
     Returns detailed statistics about functions, classes, variables and their usage
     patterns across the codebase. Uses Redis caching for performance.
     """
+    await authorize_source_access(request.source_id, user)  # outside the try: a 404 must stay a 404
     try:
         logger.info("Starting declaration analysis for: %s", request.root_path)
 
-        # First ensure the codebase is indexed
-        index_result = await index_project(request.root_path, force_reindex=False)
+        index_result = await index_project(request.root_path, force_reindex=False, source_id=request.source_id)
         if index_result["status"] not in SUCCESSFUL_INDEX_STATUSES:
             raise HTTPException(status_code=500, detail="Failed to index codebase")
 
-        analysis_results = await _analyze_all_pattern_types()
+        analysis_results = await _analyze_all_pattern_types(request.source_id)
 
         return JSONResponse(
             status_code=200,
-            content=_build_declarations_summary(analysis_results, request.root_path),
+            content=_build_declarations_summary(analysis_results, request.root_path, request.source_id),
         )
 
     except Exception as e:
@@ -622,7 +593,7 @@ async def analyze_declarations(request: CodeAnalyticsRequest):
     operation="find_code_duplicates",
     error_code_prefix="CODE_SEARCH",
 )
-async def find_code_duplicates(request: CodeAnalyticsRequest):
+async def find_code_duplicates(request: CodeAnalyticsRequest, user=Depends(get_current_user)):
     """Find potential code duplicates and similar patterns for refactoring opportunities.
     Issue #665: Refactored from 85 lines to use extracted helper methods.
     Issue #380: Uses module-level constant for patterns.
@@ -630,18 +601,18 @@ async def find_code_duplicates(request: CodeAnalyticsRequest):
     Uses semantic search to identify similar code blocks that could be refactored
     into reusable functions or modules.
     """
+    await authorize_source_access(request.source_id, user)  # outside the try: a 404 must stay a 404
     try:
         logger.info("Starting duplicate detection for: %s", request.root_path)
 
-        # Index codebase if needed
-        index_result = await index_project(request.root_path, force_reindex=False)
+        index_result = await index_project(request.root_path, force_reindex=False, source_id=request.source_id)
         if index_result["status"] not in SUCCESSFUL_INDEX_STATUSES:
             raise HTTPException(status_code=500, detail="Failed to index codebase")
 
         # Search patterns for duplicates (Issue #665: uses helper)
         duplicate_candidates = []
         for pattern in _DUPLICATE_DETECTION_PATTERNS:
-            candidate = await _search_pattern_for_duplicates(pattern)
+            candidate = await _search_pattern_for_duplicates(pattern, request.source_id)
             if candidate:
                 duplicate_candidates.append(candidate)
 
@@ -652,7 +623,7 @@ async def find_code_duplicates(request: CodeAnalyticsRequest):
         return JSONResponse(
             status_code=200,
             content=build_duplicates_response(
-                len(_DUPLICATE_DETECTION_PATTERNS), duplicate_candidates, request.root_path
+                len(_DUPLICATE_DETECTION_PATTERNS), duplicate_candidates, request.root_path, request.source_id
             ),
         )
 
@@ -668,18 +639,19 @@ async def find_code_duplicates(request: CodeAnalyticsRequest):
     operation="get_codebase_statistics",
     error_code_prefix="CODE_SEARCH",
 )
-async def get_codebase_statistics():
+async def get_codebase_statistics(source_id: SourceIdQuery, user=Depends(get_current_user)):
     """
-    Get comprehensive codebase statistics from Redis index.
+    Get comprehensive statistics of ONE source's Redis index (#20402).
 
     Returns language distribution, file types, complexity metrics,
     and usage patterns across the indexed codebase.
     """
+    await authorize_source_access(source_id, user)  # outside the try: a 404 must stay a 404
     try:
         # Get current index status
-        index_status = await _get_code_search_agent().get_index_status()
+        index_status = await _get_code_search_agent().get_index_status(source_id)
 
-        if not index_status.get("is_indexed", False):
+        if not index_status.get("total_files_indexed", 0) > 0:
             raise HTTPException(
                 status_code=404,
                 detail="No codebase currently indexed. Use /code_search/index first.",
@@ -690,7 +662,7 @@ async def get_codebase_statistics():
 
         # Get all index keys
         # Issue #361 - avoid blocking
-        index_pattern = "code_index:*"
+        index_pattern = f"{source_scoped_prefix(_get_code_search_agent().index_prefix, source_id)}*"
         index_keys = await asyncio.to_thread(redis_client.keys, index_pattern)
 
         stats = {
@@ -699,51 +671,29 @@ async def get_codebase_statistics():
             "search_performance": {
                 "npu_available": index_status.get("npu_available", False),
                 "cache_efficiency": "Redis-powered indexing active",
-                "supported_languages": index_status.get("language_distribution", {}),
+                "supported_languages": index_status.get("languages", {}),
             },
             "recommendations": [],
         }
 
         # Add performance recommendations
-        total_files = index_status.get("total_files", 0)
+        total_files = index_status.get("total_files_indexed", 0)
         if total_files > 1000:
             stats["recommendations"].append("Large codebase detected - NPU acceleration recommended")
         if total_files > 5000:
             stats["recommendations"].append("Very large codebase - consider incremental indexing")
 
-        language_dist = index_status.get("language_distribution", {})
+        language_dist = index_status.get("languages", {})
         if len(language_dist) > 5:
             stats["recommendations"].append("Multi-language codebase - use language filters for targeted searches")
 
         return JSONResponse(status_code=200, content=stats)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Statistics error: %s", e)
         raise HTTPException(status_code=500, detail="Statistics failed")
-
-
-def _build_refactor_response(root_path: str, suggestions: list) -> dict:
-    """
-    Build refactor suggestions response.
-
-    Issue #665: Extracted from get_refactor_suggestions to reduce function length.
-
-    Args:
-        root_path: The analyzed codebase path
-        suggestions: List of suggestion dicts
-
-    Returns:
-        Response content dictionary
-    """
-    return {
-        "refactor_suggestions": suggestions,
-        "analysis_summary": {
-            "root_path": root_path,
-            "suggestion_count": len(suggestions),
-            "high_priority_count": sum(1 for s in suggestions if s["priority"] == "high"),
-        },
-        "next_steps": list(_REFACTOR_NEXT_STEPS),
-    }
 
 
 @router.post(
@@ -754,7 +704,7 @@ def _build_refactor_response(root_path: str, suggestions: list) -> dict:
     operation="get_refactor_suggestions",
     error_code_prefix="CODE_SEARCH",
 )
-async def get_refactor_suggestions(request: CodeAnalyticsRequest):
+async def get_refactor_suggestions(request: CodeAnalyticsRequest, user=Depends(get_current_user)):
     """
     Generate intelligent refactoring suggestions based on codebase analysis.
 
@@ -763,22 +713,23 @@ async def get_refactor_suggestions(request: CodeAnalyticsRequest):
     Analyzes code patterns, usage statistics, and complexity to suggest
     specific refactoring opportunities for improved maintainability.
     """
+    await authorize_source_access(request.source_id, user)  # outside the try: a 404 must stay a 404
     try:
         logger.info("Generating refactor suggestions for: %s", request.root_path)
 
         # Get declaration analysis (for future integration)
-        await analyze_declarations(request)
+        await analyze_declarations(request, user)
 
         # Get duplicate analysis (for future integration)
-        await find_code_duplicates(request)
+        await find_code_duplicates(request, user)
 
         # Issue #665: Use module-level constant for suggestions
-        suggestions = list(_REFACTOR_SUGGESTIONS)
+        suggestions = list(REFACTOR_SUGGESTIONS)
 
         # Issue #665: Use helper to build response
         return JSONResponse(
             status_code=200,
-            content=_build_refactor_response(request.root_path, suggestions),
+            content=build_refactor_response(request.root_path, suggestions),
         )
 
     except Exception as e:

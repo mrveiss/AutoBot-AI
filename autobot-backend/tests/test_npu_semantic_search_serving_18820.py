@@ -126,3 +126,25 @@ def test_a_cached_fact_that_expires_within_the_cache_ttl_is_not_served_on_the_ne
     obj._generate_cache_key = lambda *_a: "k"
     assert asyncio.run(obj.search("q"))[0] == []
     assert asyncio.run(obj.batch_search(["q"]))[0][0] == []
+
+
+def test_the_code_search_filter_refuses_a_missing_source_instead_of_dropping_it():
+    import pytest
+
+    obj = _engine()
+    for missing in (None, ""):
+        with pytest.raises(ValueError):
+            obj._build_code_search_filter("python", None, missing)
+    assert obj._build_code_search_filter(None, None, "src-a") == {"source_id": "src-a"}
+    assert obj._build_code_search_filter("python", "function", "src-a") == {
+        "$and": [{"language": "python"}, {"element_type": "function"}, {"source_id": "src-a"}]
+    }
+
+
+def test_identical_code_in_two_sources_gets_different_doc_ids():
+    obj = _engine()
+    a = obj._generate_code_doc_id("function", "python", "h" * 40, "src-a")
+    b = obj._generate_code_doc_id("function", "python", "h" * 40, "src-b")
+    assert "src-a" in a and "src-b" in b
+    assert a.split("src-a")[0] == b.split("src-b")[0]
+    assert a != b

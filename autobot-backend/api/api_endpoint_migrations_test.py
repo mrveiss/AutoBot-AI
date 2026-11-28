@@ -30934,7 +30934,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Verify get_development_speedup_status includes NPU and capabilities
         source = inspect.getsource(development_speedup.get_development_speedup_status)
-        self.assertIn("npu_code_search.get_index_status()", source)
+        self.assertIn("get_npu_code_search().get_index_status(source_id)", source)
         self.assertIn('"capabilities":', source)
         self.assertIn('"npu_acceleration":', source)
         self.assertIn('"redis_indexing":', source)

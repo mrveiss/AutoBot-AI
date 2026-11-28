@@ -37,6 +37,8 @@ from autobot_shared.ssot_config import config
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+TEST_SOURCE_ID = "src-a"  # the index is keyed by source (#20402)
+
 
 @pytest.fixture(autouse=True)
 def _live_redis_only() -> None:
@@ -52,7 +54,7 @@ async def test_npu_code_search():
     # Test 1: Check system status
     print("\n1. Checking system status...")
     try:
-        status = await get_npu_code_search().get_index_status()
+        status = await get_npu_code_search().get_index_status(TEST_SOURCE_ID)
         print("   ✅ System operational")
         print(f"   📊 Files indexed: {status.get('total_files_indexed', 0)}")
         print(f"   🔧 NPU available: {status.get('npu_available', False)}")
@@ -65,7 +67,7 @@ async def test_npu_code_search():
     print("\n2. Indexing current project...")
     try:
         project_root = str(Path(__file__).parent)
-        result = await index_project(project_root, force_reindex=True)
+        result = await index_project(project_root, force_reindex=True, source_id=TEST_SOURCE_ID)
 
         if result["status"] == "success":
             print(f"   ✅ Indexed {result['indexed_files']} files")
@@ -106,7 +108,9 @@ async def test_npu_code_search():
     print("\n3. Testing search capabilities...")
     for i, test in enumerate(search_tests, 1):
         try:
-            results = await search_codebase(query=test["query"], search_type=test["type"], max_results=5)
+            results = await search_codebase(
+                query=test["query"], search_type=test["type"], max_results=5, source_id=TEST_SOURCE_ID
+            )
 
             stats = get_npu_code_search().get_search_stats()
             print(f"   {i}. {test['name']}")
@@ -257,7 +261,7 @@ async def test_performance_comparison():
     project_root = str(Path(__file__).parent)
 
     # Ensure project is indexed
-    await index_project(project_root, force_reindex=False)
+    await index_project(project_root, force_reindex=False, source_id=TEST_SOURCE_ID)
 
     # Test queries for performance comparison
     test_queries = [
@@ -274,7 +278,7 @@ async def test_performance_comparison():
     for i, (query, search_type) in enumerate(test_queries, 1):
         try:
             start_time = time.time()
-            results = await search_codebase(query, search_type, max_results=10)
+            results = await search_codebase(query, search_type, max_results=10, source_id=TEST_SOURCE_ID)
             search_time = time.time() - start_time
 
             stats = get_npu_code_search().get_search_stats()
@@ -323,7 +327,7 @@ async def test_cache_performance():
 
     # First search (no cache)
     start_time = time.time()
-    results1 = await search_codebase(query, search_type, max_results=10)
+    results1 = await search_codebase(query, search_type, max_results=10, source_id=TEST_SOURCE_ID)
     time1 = time.time() - start_time
     stats1 = get_npu_code_search().get_search_stats()
 
@@ -331,7 +335,7 @@ async def test_cache_performance():
 
     # Second search (should hit cache)
     start_time = time.time()
-    results2 = await search_codebase(query, search_type, max_results=10)
+    results2 = await search_codebase(query, search_type, max_results=10, source_id=TEST_SOURCE_ID)
     time2 = time.time() - start_time
     stats2 = get_npu_code_search().get_search_stats()
 

@@ -1146,18 +1146,22 @@ class NPUSemanticSearch:
             logger.error("Failed to store multimodal embedding: %s", e)
             return False
 
-    def _generate_code_doc_id(self, element_type: str, language: str, content_hash: str) -> str:
+    def _generate_code_doc_id(
+        self, element_type: str, language: str, content_hash: str, source_id: str | None = None
+    ) -> str:
         """Generate unique document ID for code embedding. Issue #620.
 
         Args:
             element_type: Type of code element
             language: Programming language
             content_hash: Hash of code content
+            source_id: Source the code belongs to; identical code in two sources must not collide (#20402)
 
         Returns:
             Unique document ID string. Issue #620.
         """
-        return f"code_{element_type}_{language}_{content_hash[:16]}_{int(time.time() * 1000)}"
+        scope = f"{source_id}_" if source_id else ""
+        return f"code_{element_type}_{language}_{scope}{content_hash[:16]}_{int(time.time() * 1000)}"
 
     def _prepare_code_metadata(
         self,
@@ -1212,7 +1216,7 @@ class NPUSemanticSearch:
             return None
 
         try:
-            doc_id = self._generate_code_doc_id(element_type, language, content_hash)
+            doc_id = self._generate_code_doc_id(element_type, language, content_hash, (metadata or {}).get("source_id"))
             doc_metadata = self._prepare_code_metadata(
                 file_path,
                 line_number,
@@ -1244,25 +1248,15 @@ class NPUSemanticSearch:
             logger.error("Failed to store code embedding: %s", e)
             return None
 
-    def _build_code_search_filter(self, language: str | None, element_type: str | None) -> Dict[str, Any] | None:
-        """Build ChromaDB where filter for code search. Issue #620.
-
-        Args:
-            language: Filter by programming language
-            element_type: Filter by element type (function, class, etc.)
-
-        Returns:
-            ChromaDB where filter dict or None if no filters. Issue #620.
-        """
-        if not language and not element_type:
-            return None
-
-        conditions = []
-        if language:
-            conditions.append({"language": language})
-        if element_type:
-            conditions.append({"element_type": element_type})
-
+    def _build_code_search_filter(
+        self, language: str | None, element_type: str | None, source_id: str | None = None
+    ) -> Dict[str, Any]:
+        """ChromaDB where filter for code search; a missing ``source_id`` is refused, never dropped. #620, #20402."""
+        if not source_id:
+            raise ValueError("code search requires a source_id")
+        conditions = [
+            {key: value} for key, value in (("language", language), ("element_type", element_type)) if value
+        ] + [{"source_id": source_id}]
         if len(conditions) == 1:
             return conditions[0]
         return {"$and": conditions}
@@ -1310,16 +1304,17 @@ class NPUSemanticSearch:
         element_type: str | None = None,
         max_results: int = 20,
         similarity_threshold: float = 0.5,
+        source_id: str | None = None,
     ) -> List[Dict[str, Any]]:
-        """Search the code collection; a query not in its space is refused. Issue #207, #620, #18185."""
+        """Search the code collection (one source's with ``source_id``); a foreign query space is refused. #20402."""
         if not self.chroma_client or "code" not in self.collections:
             logger.warning("ChromaDB code collection not available")
             return []
         require_query_dim(self.collection_names["code"], query_embedding)
+        where_filter = self._build_code_search_filter(language, element_type, source_id)
 
         try:
             collection = self.collections["code"]
-            where_filter = self._build_code_search_filter(language, element_type)
 
             search_results = collection.query(
                 query_embeddings=[query_embedding.tolist()],

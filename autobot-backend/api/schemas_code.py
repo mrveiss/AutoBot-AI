@@ -12,6 +12,11 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
+from api.schemas_code_search import (  # noqa: F401 - re-exported for existing importers
+    CodeAnalyticsRequest,
+    CodeSearchIndexRequest,
+    CodeSearchRequest,
+)
 from api.schemas_common import SuccessMessageResponse
 from api.schemas_playwright import (  # noqa: F401 - re-exported for existing importers
     PlaywrightInteractRequest,
@@ -2577,30 +2582,11 @@ class GitShowRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class CodeSearchIndexRequest(BaseModel):
-    root_path: str
-    force_reindex: bool = False
-
-
-class CodeSearchRequest(BaseModel):
-    query: str
-    search_type: str = "semantic"
-    language: str | None = None
-    max_results: int = 20
-
-
 class CodeSearchResponse(BaseModel):
     results: List[dict]
     stats: dict
     query: str
     search_type: str
-
-
-class CodeAnalyticsRequest(BaseModel):
-    # The analysis reads the shared index, so a filter can't apply: refuse one, never ignore it (#20014).
-    model_config = {"extra": "forbid"}
-
-    root_path: str
 
 
 class CodeDeclaration(BaseModel):
