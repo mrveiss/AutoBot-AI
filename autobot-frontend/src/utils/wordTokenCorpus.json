@@ -1,0 +1,37 @@
+[
+  {
+    "name": "devanagari",
+    "text": "\u0909\u0924\u094d\u0924\u0930\u0940 \u092d\u093e\u0930\u0924",
+    "tokens": 2
+  },
+  {
+    "name": "tamil",
+    "text": "\u0ba4\u0bae\u0bbf\u0bb4\u0bcd \u0bae\u0bca\u0bb4\u0bbf",
+    "tokens": 2
+  },
+  {
+    "name": "bengali",
+    "text": "\u09ac\u09be\u0982\u09b2\u09be \u09ad\u09be\u09b7\u09be",
+    "tokens": 2
+  },
+  {
+    "name": "thai without spaces",
+    "text": "\u0e2a\u0e27\u0e31\u0e2a\u0e14\u0e35\u0e04\u0e23\u0e31\u0e1a",
+    "tokens": 1
+  },
+  {
+    "name": "arabic with harakat",
+    "text": "\u0645\u064e\u0631\u0652\u062d\u064e\u0628\u064b\u0627 \u0628\u0650\u0643\u064e",
+    "tokens": 2
+  },
+  {
+    "name": "latin with NFD diacritics",
+    "text": "cafe\u0301 nai\u0308ve",
+    "tokens": 2
+  },
+  {
+    "name": "emoji with skin tone and ZWJ",
+    "text": "\ud83d\udc4d\ud83c\udffd ok \ud83d\udc69\ud83c\udffd\u200d\ud83d\udcbb done",
+    "tokens": 2
+  }
+]

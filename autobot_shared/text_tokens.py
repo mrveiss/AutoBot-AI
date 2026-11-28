@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The one word tokenizer: lowercase, split on non-word characters (#18093).
+"""The one word tokenizer: lowercase, split on non-word characters, marks kept in the word (#18093, #21891).
 
 Three copies existed and are now parameter sets of this module:
 
@@ -27,12 +27,42 @@ is a lossless code tokenizer, not word extraction.
 from __future__ import annotations
 
 import re
-from typing import FrozenSet, List
+import sys
+import unicodedata
+from functools import lru_cache
+from typing import FrozenSet, List, Pattern
 
 __all__ = ["word_token_list", "word_tokens"]
 
-_SPLIT_UNDERSCORE = re.compile(r"[\W_]+")
-_KEEP_UNDERSCORE = re.compile(r"\W+")
+_MARK_CATEGORIES = frozenset({"Mn", "Mc", "Me"})
+
+
+def _mark_class_body() -> str:
+    """Regex class body listing every Unicode mark (Mn, Mc, Me) as `\\U` ranges.
+
+    `re` has no `\\p{M}` and the `regex` package is not a dependency, so the ranges
+    are read from `unicodedata`, the tables `str.isalnum` (and so `\\w`) already use.
+    """
+    ranges, start = [], None
+    for cp in range(sys.maxunicode + 2):
+        is_mark = cp <= sys.maxunicode and unicodedata.category(chr(cp)) in _MARK_CATEGORIES
+        if is_mark and start is None:
+            start = cp
+        elif not is_mark and start is not None:
+            ranges.append((start, cp - 1))
+            start = None
+    return "".join(f"\\U{a:08x}" if a == b else f"\\U{a:08x}-\\U{b:08x}" for a, b in ranges)
+
+
+@lru_cache(maxsize=None)
+def _pattern(split_underscore: bool) -> Pattern[str]:
+    """Separator pattern: a run of non-word characters, with marks kept inside the word (#21891).
+
+    Marks (Devanagari vowel signs, Tamil pulli, Arabic harakat, NFD diacritics) are not
+    `\\w`, so `\\W+` cut such words apart. Built on first use, not at import.
+    """
+    separator = f"[^\\w{_mark_class_body()}]"
+    return re.compile(f"(?:_|{separator})+" if split_underscore else f"{separator}+")
 
 
 def word_token_list(text: str, *, split_underscore: bool = True, lowercase: bool = True) -> List[str]:
@@ -50,7 +80,7 @@ def word_token_list(text: str, *, split_underscore: bool = True, lowercase: bool
     >>> word_token_list("Analyze_this PDF-document!", split_underscore=False)
     ['analyze_this', 'pdf', 'document']
     """
-    pattern = _SPLIT_UNDERSCORE if split_underscore else _KEEP_UNDERSCORE
+    pattern = _pattern(split_underscore)
     return [t for t in pattern.split(text.lower() if lowercase else text) if t]
 
 

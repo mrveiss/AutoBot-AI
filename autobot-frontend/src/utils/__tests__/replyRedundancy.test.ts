@@ -2,12 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from 'vitest'
 import cases from '../replyRedundancyCases.json'
-import { isRedundantNarration, withoutRepeatedNarration } from '../replyRedundancy'
+import wordCorpus from '../wordTokenCorpus.json'
+import { isRedundantNarration, normalizeReply, withoutRepeatedNarration } from '../replyRedundancy'
 import { visibleMessages } from '../internalMessage'
 
 describe('the shared case table with the backend (#21880)', () => {
   it.each(cases)('$name', ({ narration, answer, redundant }) => {
     expect(isRedundantNarration(narration, answer)).toBe(redundant)
+  })
+})
+
+describe('combining marks stay in the word, same corpus as the backend (#21891)', () => {
+  it.each(wordCorpus)('$name', ({ text, tokens }) => {
+    expect(normalizeReply(text).split(' ')).toHaveLength(tokens)
   })
 })
 

@@ -4,7 +4,10 @@
 # Author: mrveiss
 """`word_tokens` equals both previous copies on a corpus (#18093)."""
 
+import json
 import re
+import unicodedata
+from pathlib import Path
 
 import pytest
 
@@ -80,9 +83,11 @@ def test_lowercase_false_is_the_caller_has_already_lowered_mode():
     for text in _CORPUS + ["İa", "ǅ_x"]:
         assert word_token_list(text, split_underscore=False, lowercase=False) == re.findall(r"\b\w+\b", text)
         low = text.lower()
-        assert word_token_list(low, split_underscore=False, lowercase=False) == re.findall(r"\b\w+\b", low)
+        if not any(unicodedata.category(c).startswith("M") for c in low):
+            assert word_token_list(low, split_underscore=False, lowercase=False) == re.findall(r"\b\w+\b", low)
     assert len(word_token_list("İa", split_underscore=False, lowercase=False)) == 1
-    assert len(word_token_list("İa", split_underscore=False)) == 2
+    # Lowering gives 'i' + U+0307 (a combining mark) + 'a'; the mark stays in the word (#21891).
+    assert len(word_token_list("İa", split_underscore=False)) == 1
 
 
 def test_migrated_findall_sites_no_longer_hold_the_regex():
@@ -100,3 +105,17 @@ def test_migrated_findall_sites_no_longer_hold_the_regex():
         src = (root / rel).read_text(encoding="utf-8")
         assert "word_token" in src
         assert not any(isinstance(n, ast.Constant) and n.value == r"\b\w+\b" for n in ast.walk(ast.parse(src))), rel
+
+
+_WORD_CORPUS = json.loads(
+    (Path(__file__).resolve().parents[2] / "autobot-frontend/src/utils/wordTokenCorpus.json").read_text(
+        encoding="utf-8"
+    )
+)
+
+
+@pytest.mark.parametrize("case", _WORD_CORPUS, ids=[c["name"] for c in _WORD_CORPUS])
+def test_combining_marks_stay_in_the_word_on_the_shared_corpus(case):
+    """The frontend asserts the same counts on the same file (#21891); NFKC first, as both sides do."""
+    text = unicodedata.normalize("NFKC", case["text"])
+    assert len(word_token_list(text)) == case["tokens"]
