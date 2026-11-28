@@ -15,10 +15,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from services import secrets_maintenance as maintenance
 from services.envelope_secrets_service import SecretAccessError
 from services.secrets_coordinator import SecretsCoordinator
 from services.secrets_maintenance import MaintenanceActor
+from tests.helpers.audit_double import audit_log_shim
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
@@ -55,7 +55,7 @@ def _coordinator(monkeypatch):
     service = MagicMock(read=AsyncMock(return_value=b"v"), delete=AsyncMock())
     coordinator = SecretsCoordinator(service)
     audit = AsyncMock(return_value=True)
-    monkeypatch.setattr(maintenance, "audit_log", audit)
+    monkeypatch.setattr("services.audit.audit.record_committed", audit_log_shim(audit))
     monkeypatch.setattr(coordinator, "_owner_vault", AsyncMock(return_value=MagicMock()))
     return coordinator, service, audit
 
@@ -81,7 +81,7 @@ async def test_a_stored_administrator_passes_and_is_audited_first(session, monke
     coordinator, service, audit = _coordinator(monkeypatch)
     value = await coordinator.maintenance_read(session, actor=MaintenanceActor(_ADMIN, "ref"), secret_id=_SECRET)
     assert value == b"v"
-    audit.assert_awaited_once()
+    assert audit.await_count == 2  # the attempt, then its outcome
     assert audit.await_args.kwargs["user_id"] == str(_ADMIN)
     service.read.assert_awaited_once()
 

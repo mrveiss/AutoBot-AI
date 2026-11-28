@@ -13,6 +13,7 @@ import pytest
 from autobot_shared.ai_lines import VERIFIED_USER_KEY
 from services.mcp_dispatch import MCPDispatcher
 from services.mcp_external_bridge import MCPExternalBridge, _ExternalToolEntry
+from tests.helpers.audit_double import AuditDouble, patch_audit_log, unwritable_attempt
 
 _TOOL = {"name": "search", "bridge": "external", "endpoint": "", "input_schema": {}}
 
@@ -50,6 +51,7 @@ async def _dispatch_external(user_id, arguments=None, session_id=None) -> AsyncM
         patch("services.mcp_external_bridge.get_mcp_external_bridge", return_value=_bridge()),
         patch("services.mcp_external_bridge._get_mcp_client_class", return_value=lambda uri, **_: _client()),
         patch("services.audit_logger.audit_log", audit),
+        patch_audit_log(audit),
         patch("chat_workflow.cot_events.emit_tool_call"),
         patch("chat_workflow.cot_events.emit_tool_result"),
     ):
@@ -187,3 +189,33 @@ async def test_a_working_audit_store_still_calls_the_tool_and_records_before_and
     client.call_tool.assert_awaited_once_with("search", {"q": 1})
     assert [c.kwargs["result"] for c in audit.await_args_list] == ["attempted", "success"]
     assert all(c.kwargs["durable"] is True for c in audit.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_an_unwritable_attempt_refuses_the_call_and_the_external_server_is_never_reached():
+    """The attempt row comes first; with none committed the tool is not called and the caller is told so."""
+    client = _client()
+    audit = AuditDouble(unwritable_attempt)
+    with (
+        patch("services.mcp_external_bridge._get_mcp_client_class", return_value=lambda uri, **_: client),
+        audit.patch(),
+    ):
+        result = await _bridge().call_tool("search", {}, role="user", user_id="alice")
+    assert result.success is False and "audit trail unavailable" in result.error
+    client.call_tool.assert_not_awaited()
+    assert audit.results == ["attempted"]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_call_records_an_error_outcome_linked_to_its_attempt():
+    client = _client()
+    client.call_tool = AsyncMock(side_effect=ConnectionError("down"))
+    audit = AuditDouble()
+    with (
+        patch("services.mcp_external_bridge._get_mcp_client_class", return_value=lambda uri, **_: client),
+        audit.patch(),
+    ):
+        result = await _bridge().call_tool("search", {}, role="user", user_id="alice")
+    assert result.success is False
+    assert audit.results == ["attempted", "error"]
+    assert audit.events[1].metadata["attempt_id"] == audit.events[0].id

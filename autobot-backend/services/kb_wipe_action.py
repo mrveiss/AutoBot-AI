@@ -340,13 +340,12 @@ async def execute_kb_wipe_action(approval: "Approval", session: "AsyncSession") 
 
     await run_audited_delete(
         approval,
-        lambda result, details: _audit(approval, result, details),
+        AuditAction.KNOWLEDGE_WIPE,
         what="the wipe",
         intent=decision_details(approval, self_approval, scope=scope),
         delete=lambda: _wipe(approval, scope, self_approval, record),
         failure=failed,
         completion=lambda _: _outcome_details(approval, self_approval, record),
-        log=logger,
     )
     body = _summary(record) + (" (self-approved by the only admin)." if self_approval else ".")
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))

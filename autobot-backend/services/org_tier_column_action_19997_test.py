@@ -17,6 +17,7 @@ from llc.tests.test_ai_lines_api_18430 import _gates_client, _rows
 from models.approval import Approval, ApprovalComment
 from services import approval_execution
 from services import org_tier_column_action as action
+from tests.helpers.audit_double import AuditDouble, unwritable_attempt
 from user_management.models.organization import Organization
 from user_management.models.user import User
 
@@ -57,18 +58,21 @@ def _dropped(session: MagicMock) -> bool:
 @pytest.mark.parametrize(("present", "said"), [(True, "Dropped"), (False, "was gone")])
 async def test_approval_drops_it_and_leaves_a_record(present: bool, said: str) -> None:
     session = _session(present)
-    with patch.object(action, "audit_log", AsyncMock()) as audit:
+    audit = AuditDouble()
+    with audit.patch():
         await action.execute_tier_column_drop(_approval(), session)
     assert _dropped(session) and said in session.add.call_args.args[0].body
     session.commit.assert_awaited_once()
-    assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started", "done"]
-    assert [c.kwargs["result"] for c in audit.await_args_list] == ["attempted", "success"]
-    assert audit.await_args.kwargs["details"]["was_present"] is present
+    assert [d["stage"] for d in audit.details] == ["started", "done"]
+    assert audit.results == ["attempted", "success"]
+    assert audit.details[-1]["was_present"] is present
+    assert audit.events[-1].metadata["attempt_id"] == audit.events[0].id  # the outcome is linked to its attempt
 
 
-async def test_no_audit_entry_means_no_drop() -> None:
+@pytest.mark.parametrize("written", [unwritable_attempt, OSError("no log")], ids=["refused", "raises"])
+async def test_no_audit_entry_means_no_drop(written) -> None:
     session = _session()
-    with patch.object(action, "audit_log", AsyncMock(side_effect=OSError("no log"))), pytest.raises(OSError):
+    with AuditDouble(written).patch(), pytest.raises(RuntimeError, match="audit entry could not be written"):
         await action.execute_tier_column_drop(_approval(), session)
     assert not _dropped(session)
 
@@ -83,11 +87,11 @@ async def test_a_failed_drop_records_no_success() -> None:
         return await real(statement)
 
     session.execute = _fail
-    with patch.object(action, "audit_log", AsyncMock()) as audit, pytest.raises(RuntimeError):
+    audit = AuditDouble()
+    with audit.patch(), pytest.raises(RuntimeError, match="locked"):
         await action.execute_tier_column_drop(_approval(), session)
-    assert [(c.kwargs["result"], c.kwargs["details"]["stage"]) for c in audit.await_args_list] == [
-        ("attempted", "started")
-    ]
+    assert audit.results == ["attempted", "failed"] and audit.details[-1]["stage"] == "failed"
+    assert audit.events[-1].metadata["failure"] == "RuntimeError"
 
 
 @pytest.mark.parametrize(
@@ -102,18 +106,20 @@ async def test_a_failed_drop_records_no_success() -> None:
 )
 async def test_a_decider_who_may_not_decide_changes_nothing(decider, requester, admins: tuple) -> None:
     session = _session(admins=admins)
-    with patch.object(action, "audit_log", AsyncMock()) as audit, pytest.raises(ValueError):
+    audit = AuditDouble()
+    with audit.patch(), pytest.raises(ValueError):
         await action.execute_tier_column_drop(_approval(decider, requester), session)
     assert not _dropped(session)
-    audit.assert_not_awaited()
+    assert not audit.awaited
 
 
 async def test_the_only_admin_may_self_approve_and_it_is_flagged() -> None:
     session = _session(admins=(_ADMIN,))
-    with patch.object(action, "audit_log", AsyncMock()) as audit:
+    audit = AuditDouble()
+    with audit.patch():
         await action.execute_tier_column_drop(_approval(_ADMIN, _ADMIN), session)
     assert _dropped(session) and "self-approved" in session.add.call_args.args[0].body
-    assert audit.await_args.kwargs["details"]["self_approval"] is True
+    assert audit.details[-1]["self_approval"] is True
 
 
 def test_the_action_is_server_only_with_its_proposer() -> None:
@@ -160,20 +166,21 @@ async def test_the_requester_gets_400_and_the_other_admin_then_succeeds(factory)
     """The real route, service and review over a real store; only the Postgres-only SQL and the audit file stand in."""
     action.register_tier_column_action()
     approval_id = await _proposal_by_one_of_two_admins(factory)
+    audit = AuditDouble()
     url = f"/api/approval-gates/{approval_id}/approve"
     with (
         patch.object(action, "_COLUMN_PRESENT", text("SELECT 1")),
         patch.object(action, "_DROP", text("SELECT 1")),
-        patch.object(action, "audit_log", AsyncMock()) as audit,
+        audit.patch(),
         patch("events.bus.publish_event", AsyncMock()),
     ):
         assert _gates_client(factory, _ADMIN).post(url, json={}).status_code == 400
         [row] = await _rows(factory, Approval)
         assert (row.status, row.decided_by_user) == ("pending", None)
         assert await _rows(factory, ApprovalComment) == []
-        audit.assert_not_awaited()
+        assert not audit.awaited
         assert _gates_client(factory, _OTHER).post(url, json={}).status_code == 200
     [row] = await _rows(factory, Approval)
     assert row.status == "approved"
     assert [c.body for c in await _rows(factory, ApprovalComment)] == ["Dropped organizations.subscription_tier."]
-    assert [c.kwargs["result"] for c in audit.await_args_list] == ["attempted", "success"]  # #20445 vocabulary
+    assert audit.results == ["attempted", "success"]  # #20445 vocabulary

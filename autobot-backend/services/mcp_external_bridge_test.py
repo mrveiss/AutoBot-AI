@@ -18,6 +18,7 @@ import pytest
 from services.mcp_external_bridge import MCPExternalBridge
 from services.mcp_external_servers import MCPServerConfig
 from testkit.mcp_client_doubles import mcp_client_double
+from tests.helpers.audit_double import AuditDouble
 from type_defs.mcp import MCPToolDefinition
 
 
@@ -40,7 +41,7 @@ def _remote_server(server_id="s2", url="https://mcp-a.example.com/mcp", enabled=
 
 @pytest.fixture(autouse=True)
 def _stub_audit():
-    with patch("services.mcp_external_bridge._audit_log", new_callable=AsyncMock):
+    with patch("services.mcp_external_bridge._audit_log", new_callable=AsyncMock), AuditDouble().patch():
         yield
 
 

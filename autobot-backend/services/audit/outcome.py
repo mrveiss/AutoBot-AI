@@ -8,11 +8,15 @@ A control that must be on the trail BEFORE it runs writes an ``attempted`` row, 
 the outcome row (``success``, ``denied`` or ``failed``) linked to it by ``attempt_id``. The trail then never
 claims a change that did not happen: a bare ``attempted`` row is an intent, and only its own ``success`` row
 counts it as done. This is the ONE implementation of that shape: the heartbeat controls call it directly and
-the secret routes reach it through ``api.secrets_audit.audit_secret_op``; no route writes its own pair.
+the secret routes reach it through ``api.secrets_audit.audit_secret_op``; no route writes its own pair. A service
+that is not a route (an approval action, a bridge) uses :func:`record_control_attempt` and
+:func:`record_control_outcome` and refuses with its own error type when the attempt comes back ``None`` (#22130).
 """
 
+import time
 import uuid
 from dataclasses import replace
+from typing import Any
 
 from fastapi import HTTPException
 
@@ -26,6 +30,7 @@ ATTEMPTED = "attempted"
 SUCCESS = "success"
 FAILED = "failed"
 DENIED = "denied"  # a refusal (permission, dependents, a conflict): nothing was changed on purpose
+ERROR = "error"  # the control raised or was cancelled part-way, so how far it got is not known (#22130)
 
 #: Stable log marker: a bare ``attempted`` row whose change happened can be found by searching for it.
 OUTCOME_MISSING_MARKER = "AUDIT_OUTCOME_MISSING"
@@ -48,17 +53,46 @@ async def _written(event: AuditEvent) -> bool:
         return False
 
 
+async def build_audit_event(operation: str, result: str = SUCCESS, **fields: Any) -> AuditEvent:
+    """The event ``audit_log`` would write for *fields*, built the same way and not written."""
+    from services.audit_logger import get_audit_logger  # noqa: PLC0415 -- audit_logger imports the audit package
+
+    return (await get_audit_logger()).event(operation, result, **fields)
+
+
+async def _attempt_row(event: AuditEvent, refusal: str = "refusing the action") -> AuditEvent | None:
+    """Write *event* as the ``attempted`` row; the event as written, or None (logged) when it was not committed."""
+    attempt = replace(event, outcome=ATTEMPTED)
+    if not await _written(attempt):
+        logger.error("audit: attempt row for %s (%s) was not written; %s", event.action, event.id, refusal)
+        return None
+    return attempt
+
+
 async def record_audit_attempt(event: AuditEvent) -> AuditEvent:
     """Durably record the intent; raise 503 when the write fails so nothing is changed.
 
     This is the one place the ``attempted`` result is stamped, whatever outcome *event* was built with. Returns
     the event as written (its id is the ``attempt_id`` the outcome row links to).
     """
-    attempt = replace(event, outcome=ATTEMPTED)
-    if not await _written(attempt):
-        logger.error("audit: attempt row for %s (%s) was not written; refusing with 503", event.action, event.id)
+    attempt = await _attempt_row(event, "refusing with 503")
+    if attempt is None:
         raise attempt_unrecorded()
     return attempt
+
+
+async def record_control_attempt(operation: str, **fields: Any) -> AuditEvent | None:
+    """The ``attempted`` row of a non-route control, built from ``audit_log``'s *fields* (``user_id``, ``resource``,
+    ``details``, ...) and written durably; None when it could not be built or committed.
+
+    The caller must then change nothing and refuse in its own vocabulary (an exception, a result object).
+    """
+    try:
+        event = await build_audit_event(operation, ATTEMPTED, **fields)
+    except Exception as exc:  # noqa: BLE001 -- an unbuildable record is an unwritten one
+        logger.error("audit: could not build the %s attempt: %s", operation, type(exc).__name__)
+        return None
+    return await _attempt_row(event)
 
 
 async def record_audit_outcome(
@@ -86,3 +120,14 @@ async def record_audit_outcome(
             outcome,
         )
     return written
+
+
+async def record_control_outcome(
+    attempt: AuditEvent, outcome: str, failure: str | None = None, details: dict[str, Any] | None = None
+) -> bool:
+    """How a :func:`record_control_attempt` ended: its own row, linked by ``attempt_id``, with *details* added to the
+    attempt's. False (logged under ``OUTCOME_MISSING_MARKER``) when it could not be written; never raises."""
+    meta = dict(attempt.metadata or {})
+    meta["details"] = {**(meta.get("details") or {}), **(details or {})}
+    event = replace(attempt, metadata=meta, occurred_at=time.time())
+    return await record_audit_outcome(event, outcome, failure)

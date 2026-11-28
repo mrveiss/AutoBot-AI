@@ -9,13 +9,14 @@ import os
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from services import approval_execution
 from services import install_cleanup_actions as acts
 from testkit.fake_async_session import FakeAsyncSession
+from tests.helpers.audit_double import AuditDouble, unwritable_attempt
 
 _ADMIN, _OTHER = uuid.uuid4(), uuid.uuid4()
 _SECRET = "SECRET-VALUE-MUST-NOT-APPEAR"  # pragma: allowlist secret
@@ -53,9 +54,15 @@ def _names(backend: Path) -> list[str]:
     return sorted(p.name for p in backend.iterdir())
 
 
-async def _run(handler, approval, root: Path, session=None) -> MagicMock:
-    audit = AsyncMock()
-    with patch.object(acts, "install_root", return_value=root), patch.object(acts, "audit_log", audit):
+async def _run(handler, approval, root: Path, session=None) -> AuditDouble:
+    """``audit`` holds the attempt/outcome rows; ``audit.plain`` the rows no attempt came before."""
+    audit = AuditDouble()
+    audit.plain = AsyncMock()
+    with (
+        patch.object(acts, "install_root", return_value=root),
+        patch.object(acts, "audit_log", audit.plain),
+        audit.patch(),
+    ):
         await handler(approval, session or _session())
     return audit
 
@@ -65,11 +72,12 @@ async def test_env_copies_keep_only_the_newest(tmp_path: Path) -> None:
     session = _session()
     audit = await _run(acts.execute_env_copies_cleanup, _approval(acts.ENV_COPIES_ACTION), tmp_path, session)
     assert await asyncio.to_thread(_names, backend) == [".env", ".env.3~"]
-    details = audit.await_args.kwargs["details"]
-    assert audit.await_args.kwargs["result"] == "success" and details["removed"] == 2
-    assert _SECRET not in repr(audit.await_args_list) and _SECRET not in session.added[-1].body
-    intent = audit.await_args_list[0].kwargs  # a consumer counting completed removals must not count this
-    assert intent["result"] == "attempted" and intent["details"]["phase"] == "intent"
+    details = audit.details[-1]
+    assert audit.results[-1] == "success" and details["removed"] == 2
+    assert _SECRET not in repr(audit.events) and _SECRET not in session.added[-1].body
+    # a consumer counting completed removals must not count the intent row
+    assert audit.results[0] == "attempted" and audit.details[0]["phase"] == "intent"
+    assert audit.events[-1].metadata["attempt_id"] == audit.events[0].id
 
 
 async def test_nothing_to_do_removes_nothing(tmp_path: Path) -> None:
@@ -143,7 +151,7 @@ async def test_no_audit_entry_means_nothing_is_removed(tmp_path: Path) -> None:
     before = _names(backend)
     with (
         patch.object(acts, "install_root", return_value=tmp_path),
-        patch.object(acts, "audit_log", AsyncMock(return_value=False)),
+        AuditDouble(unwritable_attempt).patch(),
         pytest.raises(ValueError),
     ):
         await acts.execute_env_copies_cleanup(_approval(acts.ENV_COPIES_ACTION), _session())
@@ -236,7 +244,7 @@ def test_a_copy_that_vanishes_during_planning_is_skipped_not_a_crash(tmp_path: P
 
 async def test_a_target_gone_between_plan_and_act_is_audited_as_already_gone(tmp_path: Path) -> None:
     backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200, ".env.3~": 300})
-    audit, session = AsyncMock(), _session()
+    audit, session = AuditDouble(), _session()
     real_remove = acts._remove_env_copies
 
     def vanish_then_remove(plan, root):
@@ -245,12 +253,12 @@ async def test_a_target_gone_between_plan_and_act_is_audited_as_already_gone(tmp
 
     with (
         patch.object(acts, "install_root", return_value=tmp_path),
-        patch.object(acts, "audit_log", audit),
+        audit.patch(),
         patch.object(acts, "_remove_env_copies", vanish_then_remove),
     ):
         await acts.execute_env_copies_cleanup(_approval(acts.ENV_COPIES_ACTION), session)
-    details = audit.await_args.kwargs["details"]
-    assert audit.await_args.kwargs["result"] == "success"
+    details = audit.details[-1]
+    assert audit.results[-1] == "success"
     assert details["removed"] == 1 and details["already_gone"] == [".env.1~"]
     assert "already gone" in session.added[-1].body
     assert await asyncio.to_thread(_names, backend) == [".env", ".env.3~"]
@@ -258,10 +266,10 @@ async def test_a_target_gone_between_plan_and_act_is_audited_as_already_gone(tmp
 
 async def test_a_failed_completion_audit_is_reported_not_swallowed(tmp_path: Path) -> None:
     backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
-    audit, session = AsyncMock(side_effect=[True, False]), _session()  # intent written, completion not
+    audit, session = AuditDouble(lambda event: event.outcome == "attempted"), _session()  # completion not written
     with (
         patch.object(acts, "install_root", return_value=tmp_path),
-        patch.object(acts, "audit_log", audit),
+        audit.patch(),
         pytest.raises(ValueError, match="completion audit entry could not be written"),
     ):
         await acts.execute_env_copies_cleanup(_approval(acts.ENV_COPIES_ACTION), session)

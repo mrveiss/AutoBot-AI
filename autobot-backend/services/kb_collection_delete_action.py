@@ -373,13 +373,13 @@ async def execute(op: CollectionOp, approval: "Approval", session: "AsyncSession
     facts = await _guarded_state(op, approval, kb, selector, audit)
     deleted = await run_audited_delete(
         approval,
-        audit,
+        op.audit,
         what="the deletion",
         intent={"facts": facts},
         delete=lambda: _run_delete(op, kb, selector, _approved_scope(approval)),
         failure=lambda exc: {"error": type(exc).__name__},
         completion=lambda count: {"deleted": count},
-        log=logger,
+        details=lambda fields: decision_details(approval, self_approval, selector=selector, **fields),
     )
     suffix = " (self-approved by the only admin)." if self_approval else "."
     body = f"Ran {op.operation}: {deleted} facts deleted{suffix}"

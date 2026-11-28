@@ -31,6 +31,7 @@ from services.approval_gate_service_test import _make_approval, _make_session
 from services.kb_wipe_action_21048_test import PLAN
 from services.kb_wipe_scope_21048_test import FOREIGN_INDEX, FOREIGN_KEY, kb_index, world  # noqa: F401 -- fixtures
 from testkit.fake_approval_session import ApprovalClaimSession
+from tests.helpers.audit_double import audit_log_shim
 
 pytestmark = pytest.mark.asyncio
 
@@ -150,6 +151,7 @@ async def test_a_consumed_approval_cannot_be_approved_again(factory, monkeypatch
     wipe, audit = AsyncMock(), AsyncMock(return_value=True)
     monkeypatch.setattr(action, "_wipe", wipe)
     monkeypatch.setattr(action, "audit_log", audit)
+    monkeypatch.setattr("services.audit.audit.record_committed", audit_log_shim(audit))  # attempt/outcome rows
     context = {"action": action.ACTION, "plan": PLAN}
     async with factory() as session:
         row = Approval(

@@ -18,12 +18,13 @@ from sqlalchemy import text
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action
 from services.approval_four_eyes import is_self_approval
-from services.audit_logger import audit_log
+from services.audit.outcome import FAILED, SUCCESS, record_control_attempt, record_control_outcome
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from models.approval import Approval
+    from services.audit.taxonomy import AuditEvent
 
 #: The ``context["action"]`` value a proposal names to route here.
 ACTION = "org_subscription_tier_drop"
@@ -42,14 +43,17 @@ async def column_present(session: "AsyncSession") -> bool:
     return (await session.execute(_COLUMN_PRESENT)).first() is not None
 
 
-async def _audit(approval: "Approval", result: str, **details: object) -> None:
-    await audit_log(
+async def _record_drop_attempt(approval: "Approval", **details: object) -> "AuditEvent":
+    """The ``attempted`` row, through the shared helper; with none committed the schema is not touched (#22130)."""
+    attempt = await record_control_attempt(
         "org.subscription_tier.drop",
-        result=result,
         user_id=approval.decided_by_user,
         resource="organizations.subscription_tier",
         details={"approval_id": str(approval.id), **details},
     )
+    if attempt is None:
+        raise RuntimeError("the audit entry could not be written, so the column was not dropped")
+    return attempt
 
 
 async def _review_drop(approval: "Approval", session: "AsyncSession") -> bool:
@@ -65,13 +69,18 @@ async def execute_tier_column_drop(approval: "Approval", session: "AsyncSession"
     """
     self_approval = await _review_drop(approval, session)
     was_present = await column_present(session)
-    await _audit(approval, "attempted", stage="started", self_approval=self_approval, was_present=was_present)
-    await session.execute(_DROP)
+    flags = {"self_approval": self_approval, "was_present": was_present}
+    attempt = await _record_drop_attempt(approval, stage="started", **flags)
+    try:
+        await session.execute(_DROP)
+    except BaseException as exc:  # a cancelled drop is an outcome too; the error that raised stays the one raised
+        await record_control_outcome(attempt, FAILED, type(exc).__name__, {"stage": "failed"})
+        raise
     body = "Dropped organizations.subscription_tier" if was_present else "organizations.subscription_tier was gone"
     body += " (self-approved by the only admin)." if self_approval else "."
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
     await session.commit()
-    await _audit(approval, "success", stage="done", self_approval=self_approval, was_present=was_present)
+    await record_control_outcome(attempt, SUCCESS, details={"stage": "done"})
 
 
 def register_tier_column_action() -> None:

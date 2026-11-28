@@ -12,9 +12,10 @@ envelope service themselves:
 * **admin only** -- the actor must resolve to an active administrator (``SecretsCoordinator._load_maintenance_actor``);
 * **attributable** -- every call names the administrator and a reference (the approval id, or the request that
   raised the proposal), both written to the audit row;
-* **audited first** -- a durable audit entry is committed BEFORE the read or the delete; when it cannot be written
-  the operation does not run (:class:`MaintenanceAuditError`), so a credential is never opened or destroyed
-  without its paper trail.
+* **audited first** -- a durable ``attempted`` entry is committed BEFORE the read or the delete; when it cannot be
+  written the operation does not run (:class:`MaintenanceAuditError`), so a credential is never opened or destroyed
+  without its paper trail. The outcome entry is linked to it by ``attempt_id``; both go through
+  ``services.audit.outcome`` (#22130).
 
 Approval stays mandatory for removal: this module authorizes a principal, the approval queue authorizes the action.
 Ids only are recorded -- never a name or a value.
@@ -23,10 +24,14 @@ Ids only are recorded -- never a name or a value.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import TypeVar
 
+from services.audit.outcome import FAILED, SUCCESS, record_control_attempt, record_control_outcome
 from services.audit.taxonomy import AuditAction
-from services.audit_logger import audit_log
+
+_T = TypeVar("_T")
 
 
 class MaintenanceAuditError(RuntimeError):
@@ -45,15 +50,25 @@ class MaintenanceActor:
     reference: str  # the approval id, or the request that raised the proposal -- never a secret name
 
 
-async def audit_maintenance(operation: str, secret_id: uuid.UUID, actor: MaintenanceActor) -> None:
-    """Commit the audit entry for *operation* on *secret_id* before it runs; raises when it cannot be written."""
-    written = await audit_log(
+async def audited_maintenance(
+    operation: str, secret_id: uuid.UUID, actor: MaintenanceActor, run: Callable[[], Awaitable[_T]]
+) -> _T:
+    """Commit the ``attempted`` entry for *operation* on *secret_id*, run it, then record how it ended.
+
+    Raises :class:`MaintenanceAuditError` without running *run* when the attempt cannot be written.
+    """
+    attempt = await record_control_attempt(
         AuditAction.SECRET_ACCESS.value,
-        result="attempted",
         user_id=str(actor.admin_id),
         resource=f"secret:{secret_id}",
         details={"operation": f"maintenance_{operation}", "reference": actor.reference},
-        durable=True,
     )
-    if not written:
+    if attempt is None:
         raise MaintenanceAuditError(f"the audit entry for maintenance {operation} could not be written")
+    try:
+        result = await run()
+    except BaseException as exc:  # a cancelled operation is an outcome too; the error that raised stays the one raised
+        await record_control_outcome(attempt, FAILED, type(exc).__name__)
+        raise
+    await record_control_outcome(attempt, SUCCESS)
+    return result

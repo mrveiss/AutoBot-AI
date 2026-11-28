@@ -12,12 +12,13 @@ keep only what differs (the scope check, the delete itself, the detail fields):
 * :func:`pending_approval` -- the pending proposal of an action, optionally narrowed to one scope;
 * :func:`write_audit` -- one durable entry, resource ``knowledge_base``;
 * :func:`refuse_more_than_approved` -- delete nothing when more is in scope now than the approver saw;
-* :func:`run_audited_delete` -- the paper trail around a delete: the durable *intent* entry first (no committed entry
-  means nothing is deleted), then the delete, then the *completion* entry, or a *failure* entry that never replaces
-  the delete's own error.
+* :func:`run_audited_delete` -- the paper trail around a delete, through ``services.audit.outcome`` (#22130): the
+  durable *intent* entry first (no committed entry means nothing is deleted), then the delete, then the *completion*
+  entry, or a *failure* entry that never replaces the delete's own error; each links to the intent by ``attempt_id``.
 
-The callers pass an ``audit`` callable ``(result, details) -> bool`` of their own, which looks ``audit_log`` up in
-their own module, so each action stays patchable and keeps its own action name and detail shape.
+The callers pass an ``audit`` callable ``(result, details) -> bool`` of their own for the rows no attempt precedes (a
+refusal), which looks ``audit_log`` up in their own module, so each action keeps its own action name and detail
+shape. ``run_audited_delete`` takes the action and a ``details`` shaper instead.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from sqlalchemy import select
 
 from autobot_shared.logging_manager import get_logger
 from models.approval import Approval, ApprovalStatus
+from services.audit.outcome import FAILED, SUCCESS, record_control_attempt, record_control_outcome
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import AuditResult
 
@@ -119,23 +121,32 @@ async def refuse_more_than_approved(
 
 async def run_audited_delete(
     approval: "Approval",
-    audit: Audit,
+    action: AuditAction,
     *,
     what: str,
     intent: dict,
     delete: Callable[[], Awaitable[Any]],
     failure: Callable[[BaseException], dict],
     completion: Callable[[Any], dict],
-    log: Any = logger,
+    details: Callable[[dict], dict] = lambda fields: fields,
 ) -> Any:
-    """Intent entry, then the delete, then the outcome entry; returns what *delete* returned."""
-    if not await audit("attempted", {**intent, "phase": "intent"}):
+    """Intent entry, then the delete, then the outcome entry; returns what *delete* returned.
+
+    *details* turns one row's fields into its full details (the decision fields the action adds to every row).
+    """
+    attempt = await record_control_attempt(
+        action.value,
+        user_id=approval.decided_by_user,
+        resource="knowledge_base",
+        details=details({**intent, "phase": "intent"}),
+    )
+    if attempt is None:
         raise RuntimeError(f"the audit entry for approval {approval.id} could not be written; nothing was deleted")
     try:
         done = await delete()
     except Exception as exc:
-        await audit_failure(audit, approval, {**failure(exc), "phase": "failure"}, what, log)
+        await record_control_outcome(attempt, FAILED, type(exc).__name__, details({**failure(exc), "phase": "failure"}))
         raise
-    if not await audit("success", {**completion(done), "phase": "completion"}):
+    if not await record_control_outcome(attempt, SUCCESS, details=details({**completion(done), "phase": "completion"})):
         raise RuntimeError(f"{what} for approval {approval.id} ran but its audit record could not be written")
     return done

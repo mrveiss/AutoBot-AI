@@ -30,6 +30,7 @@ from services.kb_wipe_action_21048_test import (  # noqa: F401  (kb_index is an 
     _session,
     kb_index,
 )
+from tests.helpers.audit_double import audit_log_shim
 
 #: An index and documents that belong to another component: RediSearch lists them from every connection.
 FOREIGN_INDEX = "idx:agent_memory"
@@ -95,6 +96,7 @@ def world(monkeypatch):
     monkeypatch.setattr(chroma_mod, "CLEAR_BATCH", 3)
     monkeypatch.setattr(action, "kb_collection_names", lambda: ["autobot_memory", "space_b"])
     monkeypatch.setattr(action, "audit_log", audit)
+    monkeypatch.setattr("services.audit.audit.record_committed", audit_log_shim(audit))  # attempt/outcome rows
     monkeypatch.setattr(action, "execute_redis", lambda record, scope, stop=None: real(record, scope, factory, stop))
     return types.SimpleNamespace(log=log, redis=redis, chroma=chroma, audit=audit, factory=factory)
 

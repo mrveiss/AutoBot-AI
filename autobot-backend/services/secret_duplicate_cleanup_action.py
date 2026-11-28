@@ -40,8 +40,8 @@ from autobot_shared.logging_manager import get_logger
 from models.approval import ApprovalComment
 from models.secret import Secret
 from services.approval_execution import register_post_approval_action, verified_decider
+from services.audit.outcome import FAILED, SUCCESS, record_control_attempt, record_control_outcome
 from services.audit.taxonomy import AuditAction
-from services.audit_logger import audit_log
 from services.secret_unique_constraint import ensure_after_duplicate_removal
 from services.secrets_coordinator import SecretsCoordinator
 from services.secrets_maintenance import MaintenanceActor
@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from models.approval import Approval
+    from services.audit.taxonomy import AuditEvent
 
 logger = get_logger(__name__)
 
@@ -105,15 +106,13 @@ async def _survivor_still_works(session: "AsyncSession", survivor: Secret, actor
     return await verify_copy(session, SecretsCoordinator(), actor, group, survivor.id) is Verdict.VERIFIED
 
 
-async def _audit(review: _Review, result: str, secret_id: uuid.UUID, **extra: str) -> bool:
-    """One durable audit entry; ids and the outcome only. False when it could not be committed."""
-    return await audit_log(
+async def _record_removal_attempt(review: _Review, secret_id: uuid.UUID) -> "AuditEvent | None":
+    """The durable ``attempted`` row through the shared helper; ids only. None when it could not be committed."""
+    return await record_control_attempt(
         AuditAction.SECRET_DUPLICATE_CLEANUP.value,
-        result=result,
         user_id=review.decider,
         resource=f"secret:{secret_id}",
-        details={"approval_id": review.approval_id, "survivor_id": str(review.survivor_id), **extra},
-        durable=True,
+        details={"approval_id": review.approval_id, "survivor_id": str(review.survivor_id)},
     )
 
 
@@ -156,15 +155,16 @@ async def _guarded_remove(session: "AsyncSession", secret_id: uuid.UUID, review:
 
 async def _remove_one(approval: "Approval", session: "AsyncSession", secret_id: uuid.UUID, review: _Review) -> str:
     """Audit, guarded-delete, audit. Returns the outcome word for the approval comment."""
-    if not await _audit(review, "attempted", secret_id):
+    attempt = await _record_removal_attempt(review, secret_id)
+    if attempt is None:
         return "kept (the audit entry could not be written)"
     try:
         await _guarded_remove(session, secret_id, review)
     except Exception as exc:  # a copy with dependents (409), a changed survivor or a lock timeout: kept, and said so
         await session.refresh(approval)  # the guarded delete's rollback expired it; later steps read it
-        await _audit(review, "failed", secret_id, error=type(exc).__name__)
+        await record_control_outcome(attempt, FAILED, type(exc).__name__, {"error": type(exc).__name__})
         return f"kept ({type(exc).__name__})"
-    await _audit(review, "success", secret_id)
+    await record_control_outcome(attempt, SUCCESS)
     return "removed"
 
 
