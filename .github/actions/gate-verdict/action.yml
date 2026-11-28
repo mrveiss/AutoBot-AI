@@ -39,6 +39,14 @@ inputs:
     description: "'true' when the pull request is a dependabot or release promotion one held back from the full suite (#21490, #21519)."
     required: false
     default: 'false'
+  admitted:
+    description: "'true' when the pull request carries the land-next label (admitted to a CI slot, #20825). Anything else fails a pull_request gate closed."
+    required: false
+    default: 'true'
+  noop:
+    description: "'true' for a `labeled` run whose label is not land-next: it verifies nothing and the admitted run's verdict stands."
+    required: false
+    default: 'false'
   draft-gated:
     description: "'false' for the one context that runs on drafts (verify-precommit-config, #17957)."
     required: false
@@ -57,6 +65,8 @@ runs:
         GATE_WORK_DETAIL: ${{ inputs.work-detail }}
         GATE_EVENT: ${{ inputs.event }}
         GATE_DRAFT: ${{ inputs.draft }}
+        GATE_ADMITTED: ${{ inputs.admitted }}
+        GATE_NOOP: ${{ inputs.noop }}
         GATE_HELD: ${{ inputs.held }}
         GATE_DRAFT_GATED: ${{ inputs.draft-gated }}
       run: bash "${{ github.action_path }}/verdict.sh"

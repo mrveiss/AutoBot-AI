@@ -109,10 +109,6 @@ CHEAP: dict[str, int] = {
 EXEMPT_JOBS: dict[tuple[str, str], str] = {
     ("ci.yml", "run-auto-fix-types"): "runs only when run-generated-types FAILED; that job is skipped when held",
     (
-        "ci.yml",
-        "run-precommit",
-    ): "the config check carries the SPDX and symlink checks and runs on every PR, drafts included (#17957)",
-    (
         "test-durations.yml",
         "land",
     ): "needs a successful store-durations (held) and never runs on a pull_request, so it is skipped when held",

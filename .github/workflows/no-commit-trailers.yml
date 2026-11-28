@@ -14,7 +14,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -28,7 +28,7 @@ on:
 # workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -37,8 +37,16 @@ permissions:
 jobs:
   check-trailers:
     name: No commit trailers
+    # Required context: never skipped for an un-admitted pull request (#20825). The first step fails it
+    # closed, so the context reports FAILURE, not success; an unrelated label on an admitted one is a no-op.
+    if: ${{ github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'land-next' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Fail closed unless admitted to a CI slot
+        if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'land-next') }}
+        run: |
+          echo "::error title=not admitted::this pull request is not admitted to a CI slot (no land-next label), so nothing behind this context ran"
+          exit 1
       - name: Checkout
         uses: actions/checkout@v7
         with:

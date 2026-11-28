@@ -48,7 +48,7 @@ on:
     # ready_for_review is REQUIRED here: the jobs below are gated on
     # draft == false, and marking a PR ready fires ONLY this event. Without
     # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - 'autobot-backend/**/*.py'
       - 'autobot-frontend/src/**/*.ts'
@@ -124,7 +124,7 @@ on:
 # workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -132,7 +132,7 @@ permissions:
 
 jobs:
   duplication-guard:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
     runs-on: ubuntu-latest
     env:
       # Pins live in .github/duplication-pins.json, the ONE home of every pin (the
@@ -383,7 +383,7 @@ jobs:
     name: Lower pins that main has moved under
     needs: duplication-guard
     # The draft clause mirrors the dependency's own gate (#17957); on a push it is vacuous.
-    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event_name == 'push' && needs.duplication-guard.result == 'success' }}
+    if: ${{ (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next'))) && github.event_name == 'push' && needs.duplication-guard.result == 'success' }}
     runs-on: ubuntu-latest
     # One bot branch, one PR: two pushes to main must not race on it.
     concurrency: duplication-pins

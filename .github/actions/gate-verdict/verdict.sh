@@ -5,6 +5,8 @@
 # Verdict of one required-context gate (#18208). Read from the environment so the
 # composite action and the test drive the same code. The ORDER is the contract:
 #
+#   0. a `labeled` run for an unrelated label -> PASS no-op: verifies nothing, the admitted run's verdict stands
+#   0b. pull request not admitted (no land-next label, #20825) -> FAIL, checked before detection: the work never ran
 #   1. detection did not succeed        -> FAIL  (cannot tell whether the gate applies)
 #   2. draft pull request               -> FAIL  "draft: mark ready for review" (D4)
 #   2b. held pull request (dependabot, or the release promotion, #21519) -> FAIL  "held": the work was not run, so nothing is verified (#21490)
@@ -29,9 +31,23 @@ set -euo pipefail
 GATE_DRAFT="${GATE_DRAFT:-false}"
 GATE_DRAFT_GATED="${GATE_DRAFT_GATED:-true}"
 GATE_HELD="${GATE_HELD:-false}"
+GATE_ADMITTED="${GATE_ADMITTED:-true}"
+GATE_NOOP="${GATE_NOOP:-false}"
 GATE_WORK_DETAIL="${GATE_WORK_DETAIL:-}"
 
 echo "context=${GATE_CONTEXT} changes=${GATE_CHANGES_RESULT} applies=${GATE_APPLIES} work_ok=${GATE_WORK_OK} event=${GATE_EVENT} draft=${GATE_DRAFT}"
+
+if [ "${GATE_NOOP}" = "true" ] && [ "${GATE_EVENT}" = "pull_request" ]; then
+  echo "no-op: a label other than land-next changed; nothing behind '${GATE_CONTEXT}' is verified by this run"
+  exit 0
+fi
+
+if [ "${GATE_ADMITTED}" != "true" ] && [ "${GATE_EVENT}" = "pull_request" ]; then
+  echo "::error title=${GATE_CONTEXT}::not admitted to a CI slot: the pull request does not carry the land-next label"
+  echo "Only the pull requests the coordinator labels land-next run any job (#20825), so nothing behind"
+  echo "'${GATE_CONTEXT}' was verified. It is neither passed nor skipped."
+  exit 1
+fi
 
 if [ "${GATE_CHANGES_RESULT}" != "success" ]; then
   echo "::error title=${GATE_CONTEXT}::path detection ${GATE_CHANGES_RESULT} -- cannot tell whether this gate applies, so it cannot pass"

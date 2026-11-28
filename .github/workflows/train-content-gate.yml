@@ -14,10 +14,10 @@ name: train-content-gate
 on:
   pull_request:
     branches: [ main ]
-    types: [ opened, reopened, synchronize, ready_for_review, closed ]
+    types: [ opened, reopened, synchronize, ready_for_review, closed, labeled ]
 
 concurrency:
-  group: train-content-gate-${{ github.event.pull_request.number }}-${{ github.event.action == 'closed' }}
+  group: train-content-gate-${{ github.event.pull_request.number }}-${{ github.event.action == 'closed' }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 permissions: {}
@@ -27,6 +27,7 @@ jobs:
     name: train-content
     if: >-
       startsWith(github.head_ref, 'train-') &&
+      (github.event.action == 'closed' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next'))) &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       (github.event.action != 'closed' || github.event.pull_request.merged == true)
     runs-on: ubuntu-latest

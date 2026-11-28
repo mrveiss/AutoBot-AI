@@ -16,7 +16,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - docs/wiki/manifest.yml
       - scripts/ci/build_wiki.py
@@ -28,14 +28,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: wiki-from-docs-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  group: wiki-from-docs-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   # Publishes queue rather than cancel: a cancelled run could leave the wiki a commit behind.
   cancel-in-progress: false
 
 jobs:
   wiki:
     # A draft is parked and runs nothing heavy; marking it ready re-fires this (#20825).
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

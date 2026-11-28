@@ -38,7 +38,10 @@ WORKFLOWS = repo_root() / ".github" / "workflows"
 #: The gate as it is actually written. Matched on the parsed condition, never on
 #: file text -- a comment quoting the expression (this file is full of them)
 #: must not count as a gate (#17941).
-_DRAFT_GATE = re.compile(r"github\.event\.pull_request\.draft\s*==\s*false")
+_DRAFT_GATE = re.compile(
+    r"github\.event\.pull_request\.draft\s*==\s*false"
+    r"|contains\(github\.event\.pull_request\.labels\.\*\.name,\s*'land-next'\)"
+)
 
 #: `needs.<job>.result` compared against anything. The comparison direction does
 #: not matter: `!= 'success'` fails on a skip, `== 'failure'` does not, but both

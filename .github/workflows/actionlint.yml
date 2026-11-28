@@ -14,7 +14,7 @@ on:
     # ready_for_review is REQUIRED here: the jobs below are gated on
     # draft == false, and marking a PR ready fires ONLY this event. Without
     # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - ".github/workflows/**"
       - ".github/actions/release-promotion-base/**"  # #21713
@@ -27,12 +27,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -44,7 +44,7 @@ jobs:
   # repo_tests/_glob_declared_uncovered.py). It reads the ratchet base itself, so it takes the same two
   # steps it requires of every other job.
   promotion-base-wiring:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
     name: Base-reading jobs take the release-promotion base
     runs-on: ubuntu-latest
     timeout-minutes: 10

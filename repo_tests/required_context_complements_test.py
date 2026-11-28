@@ -23,15 +23,14 @@ G2  each gated context's job is a top-level job of ci.yml, `if: always()`, and n
     `changes` and the work it stands for
 G3  the gate reads `needs.changes.result` (fail closed) and the work's result
 G4  no work job or reusable-body job takes the name of a required context
-G5  ci.yml's pull_request trigger carries no paths/branches filter and has the four
-    types; the contexts that carry no draft clause still carry none
+G5  ci.yml's pull_request trigger carries no paths/branches filter and has the five
+    types (labeled starts the suite when the coordinator adds land-next, #20825)
 G6  the required list is non-vacuous: the scan resolves every one of the eleven
 G7  control fixtures: a gate missing `if: always()`, a gate gated on a filter output
     and a duplicated context name must each FAIL the checker
 """
 
 import copy
-import re
 from pathlib import Path
 
 import pytest
@@ -192,6 +191,10 @@ def _verdict_step_violations(context: str, spec: dict, work: tuple, draft_gated:
             problems.append(f"G3 {context!r}: `work-ok` does not read the result of {w!r}")
     if "pull_request.draft" not in str(with_.get("draft", "")):
         problems.append(f"G3 {context!r}: `draft` is not wired to the pull request")
+    if "'land-next'" not in str(with_.get("admitted", "")):
+        problems.append(f"G3 {context!r}: `admitted` does not read the land-next label (fail closed, #20825)")
+    if "label.name != 'land-next'" not in str(with_.get("noop", "")):
+        problems.append(f"G3 {context!r}: `noop` does not skip an unrelated-label run (#20825)")
     is_gated = str(with_.get("draft-gated", "true")).lower() != "false"
     if is_gated != draft_gated:
         problems.append(f"G3 {context!r}: draft-gated is {is_gated}, expected {draft_gated}")
@@ -267,7 +270,7 @@ def test_ci_triggers_on_stacked_pull_requests_and_on_merge_group():
     assert isinstance(pull_request, dict)
     for key in ("paths", "paths-ignore", "branches", "branches-ignore"):
         assert key not in pull_request, f"ci.yml filters pull_request.{key}: a context can fail to report"
-    assert {"opened", "synchronize", "reopened", "ready_for_review"} <= set(pull_request.get("types", []))
+    assert {"opened", "synchronize", "reopened", "ready_for_review", "labeled"} <= set(pull_request.get("types", []))
 
 
 @pytest.mark.parametrize("fname", sorted(set(GOVERNANCE.values())))
@@ -331,9 +334,9 @@ def test_control_a_gate_that_ignores_its_work_fails_the_checker():
 
 
 def test_the_work_callers_hold_back_draft_pull_requests():
-    """A required gate's work does not run on a draft; the gate says why (D4).
+    """A required gate's work does not run until the PR carries land-next; the gate says why (D4, #20825).
 
-    The exception is `run-precommit`, which carries no `ready` condition.
+    `ready` requires the label, so this holds for run-precommit too (it no longer runs on drafts).
     """
     jobs = _load(CI)["jobs"]
     for context, (_, work, draft_gated) in GATES.items():
@@ -342,10 +345,7 @@ def test_the_work_callers_hold_back_draft_pull_requests():
                 cond = str(jobs["python-shard"].get("if", ""))
             else:
                 cond = str(jobs[w].get("if", ""))
-            if draft_gated:
-                assert "outputs.ready == 'true'" in cond, f"{w} (for {context}) is not held back on a draft"
-            else:
-                assert "ready" not in cond, f"{w} (for {context}) must run on drafts"
+            assert "outputs.ready == 'true'" in cond, f"{w} (for {context}) is not held back until land-next"
 
 
 def test_the_gate_names_are_the_exact_branch_protection_strings():
@@ -374,36 +374,29 @@ def test_control_a_cancel_step_after_the_verdict_fails_the_checker():
     assert any(p.startswith("G5 'code-quality'") and "after the verdict" in p for p in problems), problems
 
 
-# --- Parked pull requests are drafts (#20825) -----------------------------------------------------
-# A pull request not admitted to a CI slot is a draft; unparking marks it ready, which must re-fire
-# every pull_request workflow, and heavy jobs must not run while it is a draft.
+# --- Only land-next pull requests run (#20825) ---------------------------------------------------
+# Owner rule 2026-11-28: the PRs labelled `land-next` are the only ones that run. The coordinator labels
+# exactly the admitted ones and parks the rest. For `pull_request` events NO job does real work without
+# the label; push, merge_group, schedule and dispatch are unaffected. A required context never reports
+# success for an un-admitted PR: ci.yml's gates read `admitted` (verdict.sh fails closed), and the two
+# governance workflows fail their first step.
 
-# Workflows whose jobs are metadata or governance checks (seconds, no build), or fire only on `closed`.
-# They still list `ready_for_review` (except the closed-only one) so unparking re-runs them.
-DRAFT_EXEMPT_WORKFLOWS = frozenset(
-    {
-        "ci-dispatch-watchdog.yml",
-        "issue-landing-notes.yml",
-        "no-commit-trailers.yml",
-        "pr-blocking-findings.yml",
-        "pr-merge-conflict-gate.yml",
-        "pr-structure.yml",
-        "pr-template-check.yml",
-        "train-content-gate.yml",
-    }
-)
-# Exempt by job: depends on a gated job (`needs`) or is not a pull_request job at all.
-DRAFT_EXEMPT_JOBS = frozenset({("phase_validation.yml", "integration-validation")})
-CLOSED_ONLY_WORKFLOWS = frozenset({"issue-landing-notes.yml"})
-# ci.yml's expensive non-gate jobs: held back through the `changes.ready` output.
-CI_DRAFT_HELD_JOBS = (
-    "frontend-tests",
-    "run-security",
-    "run-codeql",
-    "run-ai-security-review",
-    "run-npm-package-tests",
-    "run-slm-frontend",
-)
+# THE one form. GitHub expressions cannot import, so every workflow spells the condition this way and
+# this guard rejects anything else (a negation, a comment quoting it, an unrelated label name).
+LAND_NEXT = "contains(github.event.pull_request.labels.*.name, 'land-next')"
+# A `labeled` run for another label skips, so an unrelated label starts no work.
+LABEL_IS_LAND_NEXT = "github.event.label.name == 'land-next'"
+LABEL_NOT_LAND_NEXT = "github.event.label.name != 'land-next'"
+
+# Workflows with no land-next condition, each justified. Only a workflow whose work cannot be a PR's.
+LAND_NEXT_EXEMPT_WORKFLOWS = {
+    "issue-landing-notes.yml": "fires only on `closed` (post-merge issue notes); it never runs for an open PR",
+}
+CLOSED_ONLY_WORKFLOWS = frozenset(LAND_NEXT_EXEMPT_WORKFLOWS)
+# Exempt by job, each justified.
+LAND_NEXT_EXEMPT_JOBS = {
+    ("phase_validation.yml", "integration-validation"): "not a pull_request job: it runs on push and dispatch only",
+}
 
 
 def _pr_trigger(doc: dict):
@@ -420,24 +413,38 @@ def _pr_workflows(workflows: dict) -> dict:
     return {n: d for n, d in workflows.items() if _pr_trigger(d) is not None}
 
 
-# A real draft-false condition: the event field compared to false, or the ci.yml `ready` output.
-_DRAFT_FALSE = re.compile(
-    r"pull_request\.draft\s*==\s*false|pull_request\.draft\s*!=\s*true|outputs\.ready\s*==\s*'true'"
-)
+def _cond(spec: dict) -> str:
+    return code_text(str(spec.get("if", "")), name="workflow.yml")
 
 
-def _skips_draft(spec: dict) -> bool:
-    cond = code_text(str(spec.get("if", "")), name="workflow.yml")
-    return bool(_DRAFT_FALSE.search(cond))
+def _holds_back(spec: dict) -> bool:
+    """A real land-next condition: the label test AND the unrelated-label skip, or ci.yml's `ready` output."""
+    cond = _cond(spec)
+    if "outputs.ready == 'true'" in cond:
+        return True
+    return f"{LAND_NEXT} &&" in cond and LABEL_IS_LAND_NEXT in cond and f"!{LAND_NEXT}" not in cond
+
+
+def _fails_closed(spec: dict) -> bool:
+    """A required-context job: skips only an unrelated label, and its first step fails an un-admitted PR."""
+    steps = spec.get("steps") or []
+    first = steps[0] if steps else {}
+    return (
+        LABEL_IS_LAND_NEXT in _cond(spec)
+        and f"!{LAND_NEXT}" in code_text(str(first.get("if", "")), name="workflow.yml")
+        and "exit 1" in str(first.get("run", ""))
+    )
 
 
 def _held_back(jobs: dict, name: str, job_id: str, seen: frozenset = frozenset()) -> bool:
-    """Gated on a draft, exempt, or every job it needs is held back (transitively)."""
+    """Held by land-next, exempt, a ci.yml gate, or every job it needs is held back (transitively)."""
     spec = jobs.get(job_id)
     if spec is None or job_id in seen:
         return False
-    if (name, job_id) in DRAFT_EXEMPT_JOBS or _skips_draft(spec):
+    if (name, job_id) in LAND_NEXT_EXEMPT_JOBS or _holds_back(spec):
         return True
+    if name == "ci.yml" and job_id in {g[0] for g in GATES.values()}:
+        return True  # a gate: `if: always()` by design; it fails closed through `admitted` (G3)
     needed = _needs(spec)
     return bool(needed) and all(_held_back(jobs, name, n, seen | {job_id}) for n in needed)
 
@@ -445,45 +452,87 @@ def _held_back(jobs: dict, name: str, job_id: str, seen: frozenset = frozenset()
 def _park_violations(workflows: dict) -> list:
     problems = []
     for name, doc in _pr_workflows(workflows).items():
-        types = _pr_trigger(doc).get("types")
-        if name not in CLOSED_ONLY_WORKFLOWS and (not types or "ready_for_review" not in types):
-            problems.append(f"{name}: pull_request.types lacks ready_for_review ({types!r})")
-        if name == "ci.yml":
-            for job in CI_DRAFT_HELD_JOBS:
-                if "outputs.ready == 'true'" not in str(doc["jobs"][job].get("if", "")):
-                    problems.append(f"ci.yml '{job}' is not held back on a draft")
+        if name in LAND_NEXT_EXEMPT_WORKFLOWS:
             continue
-        if name in DRAFT_EXEMPT_WORKFLOWS:
-            continue
-        for job_id in doc["jobs"]:
-            if not _held_back(doc["jobs"], name, job_id):
-                problems.append(f"{name} '{job_id}' does not skip on a draft")
+        types = _pr_trigger(doc).get("types") or []
+        for needed in ("labeled", "ready_for_review"):
+            if needed not in types:
+                problems.append(f"{name}: pull_request.types lacks {needed} ({types!r})")
+        if "-noop-" not in str(doc.get("concurrency", "")) and doc.get("concurrency"):
+            problems.append(f"{name}: the concurrency group does not isolate an unrelated-label run")
+        governance = name in set(GOVERNANCE.values())
+        for job_id, spec in doc["jobs"].items():
+            if governance:
+                if not _fails_closed(spec):
+                    problems.append(f"{name} '{job_id}' is a required context that does not fail closed when not admitted")
+            elif not _held_back(doc["jobs"], name, job_id):
+                problems.append(f"{name} '{job_id}' is not held back by the land-next condition")
+    ready = str((((workflows.get("ci.yml") or {}).get("jobs") or {}).get("changes") or {}).get("outputs", {}).get("ready", ""))
+    if LAND_NEXT not in ready:
+        problems.append("ci.yml: changes.outputs.ready does not require the land-next label")
     return problems
 
 
-def test_every_pull_request_workflow_refires_on_ready_and_skips_drafts():
+def test_every_pull_request_workflow_refires_on_label_and_runs_only_for_land_next():
     assert _park_violations(_all_workflows()) == []
 
 
-def test_control_a_workflow_without_ready_for_review_fails_the_park_checker():
-    docs = _fixture()
-    docs["marker-tests.yml"][True]["pull_request"]["types"] = ["opened", "synchronize"]
-    assert any(p.startswith("marker-tests.yml: pull_request.types") for p in _park_violations(docs))
+def test_every_exemption_names_a_workflow_that_exists_and_a_reason():
+    names = {p.name for p in WORKFLOW_DIR.glob("*.yml")}
+    assert set(LAND_NEXT_EXEMPT_WORKFLOWS) <= names and all(LAND_NEXT_EXEMPT_WORKFLOWS.values())
+    assert all(j in _load(WORKFLOW_DIR / w)["jobs"] and r for (w, j), r in LAND_NEXT_EXEMPT_JOBS.items())
 
 
-def test_control_a_job_that_runs_on_drafts_fails_the_park_checker():
+def test_the_required_gates_fail_closed_on_an_unadmitted_pull_request():
+    """Each ci.yml gate hands the verdict script `admitted` (the label) and `noop`; verdict.sh fails on `false`."""
+    for context, (job_id, _, _) in GATES.items():
+        with_ = (_verdict_step(_load(CI)["jobs"][job_id]).get("with")) or {}
+        assert str(with_.get("admitted", "")).replace(" ", "") == "${{" + LAND_NEXT + "}}", context
+        assert LABEL_NOT_LAND_NEXT in str(with_.get("noop", "")), context
+    script = (REPO_ROOT / ".github" / "actions" / "gate-verdict" / "verdict.sh").read_text(encoding="utf-8")
+    assert script.index("GATE_ADMITTED}\" != \"true\"") < script.index("GATE_CHANGES_RESULT}\" != \"success\"")
+
+
+def test_control_a_workflow_without_labeled_fails_the_park_checker():
     docs = _fixture()
-    docs["marker-tests.yml"]["jobs"]["marker-tests"]["if"] = "${{ github.event_name != 'pull_request' }}"
-    assert any("marker-tests.yml 'marker-tests' does not skip" in p for p in _park_violations(docs))
+    docs["marker-tests.yml"][True]["pull_request"]["types"] = ["opened", "synchronize", "ready_for_review"]
+    assert any(p.startswith("marker-tests.yml: pull_request.types lacks labeled") for p in _park_violations(docs))
+    docs = _fixture()
+    docs["marker-tests.yml"][True]["pull_request"]["types"] = ["opened", "synchronize", "labeled"]
+    assert any("lacks ready_for_review" in p for p in _park_violations(docs))
+
+
+def test_control_a_job_missing_the_land_next_condition_fails_the_park_checker():
+    for cond in (
+        "${{ github.event_name != 'pull_request' }}",
+        "${{ github.event.pull_request.draft == false }}",
+        f"${{{{ !{LAND_NEXT} }}}}",
+        "${{ true }}\n# " + LAND_NEXT + " && " + LABEL_IS_LAND_NEXT,
+    ):
+        docs = _fixture()
+        docs["marker-tests.yml"]["jobs"]["marker-tests"]["if"] = cond
+        assert any("marker-tests.yml 'marker-tests' is not held back" in p for p in _park_violations(docs)), cond
     docs = _fixture()
     docs["ci.yml"]["jobs"]["run-security"]["if"] = "${{ needs.changes.outputs.held != 'true' }}"
     assert any("'run-security'" in p for p in _park_violations(docs))
     docs = _fixture()
-    docs["marker-tests.yml"]["jobs"]["marker-tests"]["if"] = "${{ github.event.pull_request.draft == true }}"
-    assert any("marker-tests.yml 'marker-tests' does not skip" in p for p in _park_violations(docs))
+    docs["ci.yml"]["jobs"]["changes"]["outputs"]["ready"] = "${{ github.event.pull_request.draft == false }}"
+    assert any("ready does not require" in p for p in _park_violations(docs))
+
+
+def test_control_a_required_context_that_can_pass_unadmitted_fails_the_park_checker():
     docs = _fixture()
-    docs["marker-tests.yml"]["jobs"]["marker-tests"]["if"] = "${{ true }}\n# pull_request.draft == false"
-    assert any("marker-tests.yml 'marker-tests' does not skip" in p for p in _park_violations(docs))
+    del docs["no-commit-trailers.yml"]["jobs"]["check-trailers"]["steps"][0]["run"]
+    assert any("no-commit-trailers.yml 'check-trailers'" in p for p in _park_violations(docs))
+    docs = _fixture()
+    docs["pr-blocking-findings.yml"]["jobs"]["blocking-findings"]["if"] = f"${{{{ {LAND_NEXT} }}}}"
+    assert any("pr-blocking-findings.yml" in p for p in _park_violations(docs))
+
+
+def test_control_a_gate_that_ignores_admission_fails_the_checker():
+    docs = _fixture()
+    del _verdict_step(docs["ci.yml"]["jobs"]["python-suite"])["with"]["admitted"]
+    assert any(p.startswith("G3 'python-suite'") and "admitted" in p for p in _gate_violations(docs))
 
 
 def test_control_a_job_needing_an_ungated_job_fails_the_park_checker():
@@ -491,7 +540,7 @@ def test_control_a_job_needing_an_ungated_job_fails_the_park_checker():
     jobs = docs["marker-tests.yml"]["jobs"]
     jobs["follower"] = {"needs": "marker-tests", "runs-on": "ubuntu-latest"}
     jobs["marker-tests"]["if"] = "${{ github.event_name == 'pull_request' }}"
-    assert any("marker-tests.yml 'follower' does not skip" in p for p in _park_violations(docs))
+    assert any("marker-tests.yml 'follower' is not held back" in p for p in _park_violations(docs))
 
 
 def test_the_park_checker_reads_every_pull_request_trigger_shape():

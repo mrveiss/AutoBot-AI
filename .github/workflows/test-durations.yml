@@ -26,7 +26,7 @@ on:
     # ready_for_review is REQUIRED here: the jobs below are gated on
     # draft == false, and marking a PR ready fires ONLY this event. Without
     # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     branches: [ release, main ]
     paths:
       # A workflow that only ever runs on a schedule is never exercised until
@@ -41,7 +41,7 @@ permissions:
   packages: read  # pull the ghcr CI image mirror (#18160)
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -50,7 +50,7 @@ jobs:
     # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
     if: >-
       ${{ github.event_name != 'pull_request'
-          || (github.event.pull_request.draft == false
+          || ((contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next'))
               && (github.event.pull_request.user.login != 'dependabot[bot]'
                   || startsWith(github.event.pull_request.head.ref, 'train-')
                   || contains(github.event.pull_request.labels.*.name, 'ci:full'))

@@ -7,7 +7,7 @@ on:
     types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled, milestoned, demilestoned]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 permissions:
@@ -16,6 +16,7 @@ permissions:
 jobs:
   pr-structure:
     name: PR has its milestone and phase
+    if: ${{ (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

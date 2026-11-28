@@ -8,7 +8,7 @@ name: PR Template Check
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened, ready_for_review]
+    types: [opened, edited, synchronize, reopened, ready_for_review, labeled]
     branches: [main, release]
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
@@ -23,7 +23,7 @@ on:
 # workflows this was applied to also trigger on push to main, so the guard
 # is load-bearing there and harmless where it is not.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -44,6 +44,7 @@ jobs:
     # Penalizing them for a convention the tooling didn't show them inverts
     # the point of the check, so fork PRs skip it the same way bot PRs do.
     if: >
+      (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) &&
       github.event.pull_request.user.type != 'Bot' &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
@@ -142,6 +143,7 @@ jobs:
     # nothing: that subject lands on `release`, and the range check reads
     # release..main, so a subject ON release is never in a scanned range.
     if: >
+      (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) &&
       github.event.pull_request.user.type != 'Bot' &&
       github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest

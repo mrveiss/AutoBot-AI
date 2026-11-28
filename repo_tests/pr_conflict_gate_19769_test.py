@@ -192,7 +192,7 @@ def test_workflow_triggers_permissions_and_no_pat() -> None:
     assert triggers["push"]["branches"] == ["main"]
     assert triggers["schedule"] == [{"cron": "*/10 * * * *"}]
     assert "workflow_dispatch" in triggers
-    assert triggers["pull_request"]["types"] == ["opened", "reopened", "synchronize", "ready_for_review"]
+    assert triggers["pull_request"]["types"] == ["opened", "reopened", "synchronize", "ready_for_review", "labeled"]
     assert spec["jobs"]["gate"]["permissions"] == {
         "contents": "read",
         "statuses": "write",

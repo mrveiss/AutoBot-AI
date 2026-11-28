@@ -74,7 +74,7 @@ on:
     # very approval it exists to grant. The bot case is repaired by the
     # (now retired) `approve-refreshed-runs` job of auto-update-pr-branches.yml. What this
     # trigger adds is immediate coverage for every OTHER way a head moves.
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
 
 concurrency:
   # Never cancel a sweep in flight — a half-finished sweep leaves some PRs
@@ -94,7 +94,7 @@ concurrency:
   # the job actually does, and let twelve PR sweeps proceed in parallel.
   # Everything else (schedule, base push, manual dispatch) shares the single
   # `base` group, keeping the one genuinely repo-wide sweep serialised.
-  group: ci-dispatch-watchdog-${{ github.event.pull_request.number || 'base' }}
+  group: ci-dispatch-watchdog-${{ github.event.pull_request.number || 'base' }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: false
 
 permissions:
@@ -116,7 +116,8 @@ jobs:
     # scheduled and base-push sweeps, which run from this repository.
     if: >-
       github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      (github.event.pull_request.head.repo.full_name == github.repository
+       && (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

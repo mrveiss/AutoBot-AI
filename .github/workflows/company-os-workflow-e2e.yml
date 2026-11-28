@@ -40,7 +40,7 @@ on:
   pull_request:
     # ready_for_review fires ONLY this event when a draft is marked ready; the job is gated on
     # draft == false, so without it the job would stay skipped on a PR that became ready.
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     branches: [ release, main ]
     paths: *paths
   # Nightly, so a regression the path filter cannot see (a shared module, a dependency bump) still
@@ -50,7 +50,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -64,7 +64,7 @@ jobs:
     # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
     if: >-
       ${{ github.event_name != 'pull_request'
-          || (github.event.pull_request.draft == false
+          || ((contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next'))
               && (github.event.pull_request.user.login != 'dependabot[bot]'
                   || startsWith(github.event.pull_request.head.ref, 'train-')
                   || contains(github.event.pull_request.labels.*.name, 'ci:full'))

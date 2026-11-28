@@ -37,9 +37,10 @@ on:
     # #14054: every required context reports inside a merge queue. Inert until the
     # `merge_queue` ruleset rule is enabled -- this event does not exist before then.
   pull_request:
-    # ready_for_review is REQUIRED here: marking a PR ready fires ONLY this event, and the
-    # gates fail ("draft: mark ready for review") on a draft until it does.
-    types: [opened, synchronize, reopened, ready_for_review]
+    # ready_for_review stays listed so unparking re-fires the gates; the work waits for `land-next` (#20825).
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    # `labeled` starts the suite when the coordinator adds `land-next`; the `ready_for_review` run that precedes
+    # it finds no label and skips, so nothing runs twice (#20825).
     # NO `branches:` FILTER (#14747): a STACKED pull request -- base is another feature
     # branch -- must start the run, or no required context ever reports on it.
     #
@@ -53,7 +54,7 @@ concurrency:
   # queued -- and the ratchets' base for a push is the commit before it, so a raise in the
   # cancelled merge was accepted for good by the next one (`queue: max` cannot be combined
   # with cancel-in-progress, which PRs need). PRs and merge groups keep the per-ref group.
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   # #13432: cancel superseded PR runs, but let a push to a base branch finish.
   #
   # On a pull request a new push makes the previous run obsolete, so cancelling is right.
@@ -74,16 +75,18 @@ permissions:
 
 jobs:
   changes:
-    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and every gate reads
-    # `needs.changes.result`. Gating it makes those read `skipped` and fail, so a REQUIRED
-    # context would report FAILED on every draft -- worse than no gate.
+    # Only a `land-next` pull request runs (#20825). On any other pull request this job is SKIPPED, and
+    # that is safe: every gate reads `needs.changes.result` and the `admitted` input, and fails closed
+    # ("not admitted to a CI slot") -- a REQUIRED context reports FAILED, never success.
     name: Detect changed paths
+    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      # ready: the run is not a draft pull request. Work behind a required gate is held back
-      # until then; the gate itself fails with the reason (D4, #18208).
-      ready: ${{ github.event_name != 'pull_request' || (github.event.pull_request.draft == false && steps.hold.outputs.held != 'true') }}
+      # ready: the pull request carries `land-next` (the coordinator labels exactly the admitted ones, #20825)
+      # and is not held. Work behind a required gate is held back until then; the gate itself fails with the
+      # reason. A `labeled` run for any other label is not ready either: it does no work and cancels none.
+      ready: ${{ github.event_name != 'pull_request' || ((contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) && steps.hold.outputs.held != 'true') }}
       # held (#21490, #21519): a dependabot pull request that is neither a `train-*` head nor labelled `ci:full`,
       # or the release promotion pull request without `ci:full`.
       # It starts no expensive work; every gate reports it as held (fails, never passes) in its summary.
@@ -921,6 +924,8 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} ${{ needs.python-shard.result == 'success' && 'All 8 python-suite shards passed.' || format('python-shard={0}', needs.python-shard.result) }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   # #22114: the specs that import what a pull request changed, run first. The full frontend suites type-check, lint and run
@@ -1095,6 +1100,8 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-code-quality=${{ needs.run-code-quality.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-startup-import-smoke:
@@ -1133,6 +1140,8 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-startup-import-smoke=${{ needs.run-startup-import-smoke.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-frontend-test:
@@ -1172,6 +1181,8 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-frontend-test=${{ needs.run-frontend-test.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-docker-smoke:
@@ -1211,6 +1222,8 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-docker-smoke=${{ needs.run-docker-smoke.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-api-wiring:
@@ -1249,6 +1262,8 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-api-wiring=${{ needs.run-api-wiring.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-migration-gate:
@@ -1288,6 +1303,8 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-migration-gate=${{ needs.run-migration-gate.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   run-generated-types:
@@ -1344,12 +1361,15 @@ jobs:
           work-detail: short-check=${{ needs.short-check.result }} run-generated-types=${{ needs.run-generated-types.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           held: ${{ needs.changes.outputs.held }}
 
   # Never filtered and never draft-gated: it carries the SPDX and symlink checks, which must cover EVERY pull
   # request including docs-only drafts (#17957). Only the repo-wide sweep inside is scoped, by `sweep`.
   run-precommit:
     needs: changes
+    if: ${{ needs.changes.outputs.ready == 'true' }}
     uses: ./.github/workflows/_gate-precommit.yml
     permissions:
       contents: read
@@ -1386,6 +1406,8 @@ jobs:
           work-detail: run-precommit=${{ needs.run-precommit.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
+          admitted: ${{ contains(github.event.pull_request.labels.*.name, 'land-next') }}
+          noop: ${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' }}
           draft-gated: 'false'
 
   # ---- checks that are not required contexts: same bodies, same conditions as before ----
@@ -1538,7 +1560,7 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     needs: [changes, python-suite, frontend-tests, deployment-check]
-    if: always()
+    if: ${{ always() && (github.event_name != 'pull_request' || needs.changes.outputs.ready == 'true') }}
 
     steps:
     - name: Notify results

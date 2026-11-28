@@ -38,7 +38,7 @@ on:
       - main
   pull_request:
     branches: [ main ]
-    types: [ opened, reopened, synchronize, ready_for_review ]
+    types: [ opened, reopened, synchronize, ready_for_review, labeled ]
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
@@ -46,7 +46,7 @@ on:
 # Per PR on pull_request; one group for main pushes. A newer run supersedes an older
 # one: the status is recomputed from live state each time.
 concurrency:
-  group: pr-merge-conflict-gate-${{ github.event_name }}-${{ github.event.pull_request.number || 'main' }}
+  group: pr-merge-conflict-gate-${{ github.event_name }}-${{ github.event.pull_request.number || 'main' }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   # A scheduled sweep queues behind the active one: cancelling it mid-list leaves later PRs unchecked.
   cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
@@ -55,6 +55,8 @@ permissions: {}
 jobs:
   gate:
     name: no-merge-conflicts gate
+    # Only a land-next pull request runs (#20825); push, schedule and dispatch are unaffected.
+    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

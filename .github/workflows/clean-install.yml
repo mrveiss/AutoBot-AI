@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
   # An installer, install-doc or pipeline change gets a clean-host run before it merges.
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - install.sh
       - INSTALL.md
@@ -33,7 +33,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: clean-install-${{ github.ref }}
+  group: clean-install-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'land-next' && format('-noop-{0}', github.run_id) || '' }}
   cancel-in-progress: false
 
 jobs:
@@ -44,7 +44,7 @@ jobs:
     # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
     if: >-
       ${{ github.event_name != 'pull_request'
-          || (github.event.pull_request.draft == false
+          || ((contains(github.event.pull_request.labels.*.name, 'land-next') && (github.event.action != 'labeled' || github.event.label.name == 'land-next'))
               && github.event.pull_request.head.repo.full_name == github.repository
               && (github.event.pull_request.user.login != 'dependabot[bot]'
                   || startsWith(github.event.pull_request.head.ref, 'train-')

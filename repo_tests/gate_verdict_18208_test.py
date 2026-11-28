@@ -60,6 +60,20 @@ def test_a_draft_fails_even_when_the_gate_would_not_apply():
     assert rc == 1 and "draft: mark ready for review" in out
 
 
+def test_a_pull_request_without_land_next_fails_closed_before_anything_else():
+    """#20825: only the land-next pull requests run; the gate fails first, even when detection and work are fine."""
+    rc, out = _run(GATE_ADMITTED="false")
+    assert rc == 1 and "not admitted to a CI slot" in out
+    rc, out = _run(GATE_ADMITTED="false", GATE_CHANGES_RESULT="skipped", GATE_APPLIES="false")
+    assert rc == 1 and "not admitted to a CI slot" in out
+    assert _run(GATE_ADMITTED="false", GATE_EVENT="push")[0] == 0, "a push has no label"
+
+
+def test_an_unrelated_label_run_is_a_no_op_not_a_verdict():
+    rc, out = _run(GATE_NOOP="true", GATE_ADMITTED="true", GATE_WORK_OK="false")
+    assert rc == 0 and "no-op" in out
+
+
 def test_a_draft_does_not_fail_the_one_context_that_runs_on_drafts():
     """verify-precommit-config carries SPDX and symlink checks that cover every PR (#17957)."""
     rc, out = _run(GATE_CONTEXT="verify-precommit-config", GATE_DRAFT="true", GATE_DRAFT_GATED="false")
