@@ -40,7 +40,7 @@ from autobot_shared.tool_spec import (  # noqa: F401 - re-exported: callers impo
     LOCATION_WORKER,
     SELF_MODEL_QUERY_TOOL_NAME,
     ToolSpec,
-    declared_tools,
+    tool_specs_declared_on,
 )
 
 TOOL_RECORD_KIND = "tool"
@@ -72,7 +72,7 @@ def _all_specs() -> Dict[str, ToolSpec]:
     from chat_workflow.tool_handler import ToolHandlerMixin  # noqa: PLC0415 - tool_handler imports this module
     from tools.tool_registry import ToolRegistry  # noqa: PLC0415 - ToolRegistry imports this module's leaf
 
-    return declared_tools(ToolRegistry, ToolHandlerMixin)
+    return tool_specs_declared_on(ToolRegistry, ToolHandlerMixin)
 
 
 def _build() -> None:
@@ -108,7 +108,7 @@ def tool_names_in_category(category: str) -> List[str]:
     """
     from tools.tool_registry import ToolRegistry  # noqa: PLC0415
 
-    return [n for n, s in declared_tools(ToolRegistry).items() if s.listed and s.category == category]
+    return [n for n, s in tool_specs_declared_on(ToolRegistry).items() if s.listed and s.category == category]
 
 
 def required_permission_for(tool_name: str) -> Optional[Permission]:

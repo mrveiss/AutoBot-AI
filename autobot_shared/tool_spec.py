@@ -68,7 +68,7 @@ def declares_tool(
     return mark
 
 
-def declared_tools(*classes: type) -> Dict[str, ToolSpec]:
+def tool_specs_declared_on(*classes: type) -> Dict[str, ToolSpec]:
     """Every tool declared on *classes* (methods, inherited ones included), in definition order per class."""
     found: Dict[str, ToolSpec] = {}
     for cls in classes:
