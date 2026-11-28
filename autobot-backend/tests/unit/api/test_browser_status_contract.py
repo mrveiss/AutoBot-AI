@@ -157,3 +157,18 @@ def test_every_status_the_frontend_can_show_has_a_translation():
     labels = locale["tools"]["admin"]["browserTool"]["status"]
     expected = set(_ts_status_map().values()) | {"unknown", "connecting"}
     assert set(labels) == expected
+
+
+# ------------------------------------------------ tool count (#16615)
+
+
+@pytest.mark.asyncio
+async def test_status_tool_count_equals_the_served_tool_list():
+    """tools_available is derived from /mcp/tools, never a hand-kept literal."""
+    with patch("api.browser_mcp.get_http_client", side_effect=RuntimeError("VM down")):
+        with _fleet(hosts=("10.77.4.21",)):
+            payload = await browser_mcp.get_browser_mcp_status()
+    served = await browser_mcp.get_browser_mcp_tools()
+
+    assert payload["tools_available"] == len(served) > 0
+    assert len({tool.name for tool in served}) == len(served), "tool names must be unique"
