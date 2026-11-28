@@ -271,7 +271,7 @@ jobs:
   # verdict (a skipped upstream is no evidence, verdict.sh step 5): a required context reports a
   # failure, never a skip. A cancel still clears the way: the gates pass this result to
   # cancel-run-on-cancelled-upstream. The three reach_* guards import the whole backend, so they
-  # stay with the suite. Drafts run it too, because run-security and friends run on drafts.
+  # stay with the suite. Drafts run it too: it is seconds-cheap and the gates read its result.
   short-check:
     name: short-check
     needs: changes
@@ -1002,7 +1002,7 @@ jobs:
 
   frontend-tests:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_frontend_tests == 'true' }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_frontend_tests == 'true' }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
@@ -1392,7 +1392,7 @@ jobs:
 
   run-security:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_security == 'true' }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_security == 'true' }}
     uses: ./.github/workflows/_gate-security.yml
     permissions:
       contents: read
@@ -1403,7 +1403,7 @@ jobs:
 
   run-codeql:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.codeql_languages != '[]' }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.codeql_languages != '[]' }}
     uses: ./.github/workflows/_gate-codeql.yml
     permissions:
       contents: read
@@ -1413,7 +1413,7 @@ jobs:
 
   run-ai-security-review:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_ai_review == 'true' }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_ai_review == 'true' }}
     uses: ./.github/workflows/_gate-ai-security-review.yml
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -1423,7 +1423,7 @@ jobs:
 
   run-npm-package-tests:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_npm == 'true' }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_npm == 'true' }}
     uses: ./.github/workflows/_gate-npm-package-tests.yml
     permissions:
       contents: read
@@ -1435,7 +1435,7 @@ jobs:
 
   run-slm-frontend:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.held != 'true' && needs.changes.outputs.run_slm_frontend == 'true' }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_slm_frontend == 'true' }}
     uses: ./.github/workflows/_gate-slm-frontend.yml
     permissions:
       contents: read

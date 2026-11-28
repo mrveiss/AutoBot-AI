@@ -8,7 +8,7 @@ name: PR Template Check
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
     branches: [main, release]
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run

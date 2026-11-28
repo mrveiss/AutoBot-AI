@@ -20,7 +20,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
     branches: [main, release]
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run

@@ -14,7 +14,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever

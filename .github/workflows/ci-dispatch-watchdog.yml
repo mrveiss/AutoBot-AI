@@ -74,7 +74,7 @@ on:
     # very approval it exists to grant. The bot case is repaired by the
     # (now retired) `approve-refreshed-runs` job of auto-update-pr-branches.yml. What this
     # trigger adds is immediate coverage for every OTHER way a head moves.
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   # Never cancel a sweep in flight — a half-finished sweep leaves some PRs

@@ -370,3 +370,79 @@ def test_control_a_cancel_step_after_the_verdict_fails_the_checker():
     steps.append(steps.pop(i))
     problems = _gate_violations(docs)
     assert any(p.startswith("G5 'code-quality'") and "after the verdict" in p for p in problems), problems
+
+
+# --- Parked pull requests are drafts (#20825) -----------------------------------------------------
+# A pull request not admitted to a CI slot is a draft; unparking marks it ready, which must re-fire
+# every pull_request workflow, and heavy jobs must not run while it is a draft.
+
+# Workflows whose jobs are metadata or governance checks (seconds, no build), or fire only on `closed`.
+# They still list `ready_for_review` (except the closed-only one) so unparking re-runs them.
+DRAFT_EXEMPT_WORKFLOWS = frozenset(
+    {
+        "ci-dispatch-watchdog.yml",
+        "issue-landing-notes.yml",
+        "no-commit-trailers.yml",
+        "pr-blocking-findings.yml",
+        "pr-merge-conflict-gate.yml",
+        "pr-structure.yml",
+        "pr-template-check.yml",
+        "train-content-gate.yml",
+    }
+)
+# Exempt by job: depends on a gated job (`needs`) or is not a pull_request job at all.
+DRAFT_EXEMPT_JOBS = frozenset({("phase_validation.yml", "integration-validation")})
+CLOSED_ONLY_WORKFLOWS = frozenset({"issue-landing-notes.yml"})
+# ci.yml's expensive non-gate jobs: held back through the `changes.ready` output.
+CI_DRAFT_HELD_JOBS = (
+    "frontend-tests",
+    "run-security",
+    "run-codeql",
+    "run-ai-security-review",
+    "run-npm-package-tests",
+    "run-slm-frontend",
+)
+
+
+def _pr_workflows(workflows: dict) -> dict:
+    return {n: d for n, d in workflows.items() if "pull_request" in (_on(d) if isinstance(_on(d), dict) else {})}
+
+
+def _park_violations(workflows: dict) -> list:
+    problems = []
+    for name, doc in _pr_workflows(workflows).items():
+        types = (_on(doc)["pull_request"] or {}).get("types")
+        if name not in CLOSED_ONLY_WORKFLOWS and (not types or "ready_for_review" not in types):
+            problems.append(f"{name}: pull_request.types lacks ready_for_review ({types!r})")
+        if name == "ci.yml":
+            for job in CI_DRAFT_HELD_JOBS:
+                if "outputs.ready == 'true'" not in str(doc["jobs"][job].get("if", "")):
+                    problems.append(f"ci.yml '{job}' is not held back on a draft")
+            continue
+        if name in DRAFT_EXEMPT_WORKFLOWS:
+            continue
+        for job_id, spec in doc["jobs"].items():
+            if (name, job_id) in DRAFT_EXEMPT_JOBS or "needs" in spec:
+                continue
+            if "draft" not in str(spec.get("if", "")):
+                problems.append(f"{name} '{job_id}' does not skip on a draft")
+    return problems
+
+
+def test_every_pull_request_workflow_refires_on_ready_and_skips_drafts():
+    assert _park_violations(_all_workflows()) == []
+
+
+def test_control_a_workflow_without_ready_for_review_fails_the_park_checker():
+    docs = _fixture()
+    docs["marker-tests.yml"][True]["pull_request"]["types"] = ["opened", "synchronize"]
+    assert any(p.startswith("marker-tests.yml: pull_request.types") for p in _park_violations(docs))
+
+
+def test_control_a_job_that_runs_on_drafts_fails_the_park_checker():
+    docs = _fixture()
+    docs["marker-tests.yml"]["jobs"]["marker-tests"]["if"] = "${{ github.event_name != 'pull_request' }}"
+    assert any("marker-tests.yml 'marker-tests' does not skip" in p for p in _park_violations(docs))
+    docs = _fixture()
+    docs["ci.yml"]["jobs"]["run-security"]["if"] = "${{ needs.changes.outputs.held != 'true' }}"
+    assert any("'run-security'" in p for p in _park_violations(docs))
