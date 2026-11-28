@@ -27,8 +27,7 @@ from llc.adapters.claude_code_adapter import (
     _state_path,
 )
 
-from .conftest import agent_cfg as _agent_cfg
-from .conftest import make_fake_proc as _make_fake_proc
+from .conftest import agent_cfg as _agent_cfg, make_fake_proc as _make_fake_proc, scoped_os_kill
 
 # ---------------------------------------------------------------------------
 # Protocol conformance
@@ -553,7 +552,7 @@ class TestCancel:
 
         with tempfile.TemporaryDirectory() as td:
             with (
-                patch("os.kill") as mock_kill,
+                scoped_os_kill(5678) as mock_kill,
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
@@ -570,7 +569,7 @@ class TestCancel:
 
         with tempfile.TemporaryDirectory() as td:
             with (
-                patch("os.kill", side_effect=ProcessLookupError()),
+                scoped_os_kill(918273, side_effect=ProcessLookupError()),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client",
                     new_callable=AsyncMock,

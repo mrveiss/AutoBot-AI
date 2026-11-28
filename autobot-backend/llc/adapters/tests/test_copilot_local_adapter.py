@@ -15,6 +15,7 @@ import json
 import os
 import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
+from .conftest import scoped_os_kill
 
 import pytest
 
@@ -331,7 +332,7 @@ class TestCancel:
             # sequence test, not a process-group one (covered separately).
             with (
                 patch("os.getpgid", side_effect=ProcessLookupError),
-                patch("os.kill", side_effect=smart_kill),
+                scoped_os_kill(5678, side_effect=smart_kill),
                 patch("asyncio.sleep", new_callable=AsyncMock),
                 patch(_PSUTIL_PROCESS) as mock_psutil,
             ):
@@ -345,7 +346,7 @@ class TestCancel:
         cancel() can only probe -- it never signals, and never raises."""
         adapter = CopilotLocalAdapter()
         with tempfile.TemporaryDirectory() as td:
-            with patch("os.kill") as mock_kill:
+            with scoped_os_kill(9999) as mock_kill:
                 await adapter.cancel(_agent_cfg(agent_id="a2", output_dir=td), "9999/session-r")
         mock_kill.assert_not_called()
 
@@ -365,7 +366,7 @@ class TestCancel:
 
             with (
                 patch("os.getpgid", side_effect=ProcessLookupError),
-                patch("os.kill", side_effect=ProcessLookupError()),
+                scoped_os_kill(4321, side_effect=ProcessLookupError()),
             ):
                 await adapter.cancel(_agent_cfg(output_dir=td), run_id)
 

@@ -29,6 +29,8 @@ import pytest
 from autobot_shared.eventually import eventually
 from llc.adapters.subprocess_support import spawn_detached, terminate_pid
 
+from .conftest import scoped_os_kill
+
 _ADAPTERS_DIR = pathlib.Path(__file__).resolve().parent.parent
 _TEST_LOG_NAME = "ProcessGroupKillTest"
 
@@ -201,7 +203,7 @@ class TestPidReuseSafety:
 
         with (
             patch(_PSUTIL_PROCESS) as mock_cls,
-            patch("os.kill") as mock_kill,
+            scoped_os_kill(proc.pid) as mock_kill,
             patch("os.killpg") as mock_killpg,
         ):
             mock_cls.return_value._ident = (0, create_time + 1.0)  # a DIFFERENT process

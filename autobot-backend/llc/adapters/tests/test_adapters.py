@@ -6,6 +6,7 @@
 
 import signal
 from unittest.mock import AsyncMock, MagicMock, patch
+from .conftest import scoped_os_kill
 
 import pytest
 
@@ -159,7 +160,7 @@ class TestProcessAdapter:
 
     async def test_status_running_when_pid_alive(self) -> None:
         adapter = LLCProcessAdapter()
-        with patch("os.kill", return_value=None):  # signal 0 succeeds → process alive
+        with scoped_os_kill(12345):  # signal 0 succeeds → process alive
             result = await adapter.status({}, "12345")
         assert result.status is LLCRunStatus.RUNNING
 
@@ -169,13 +170,13 @@ class TestProcessAdapter:
         def _raise(*_):
             raise ProcessLookupError
 
-        with patch("os.kill", side_effect=_raise):
+        with scoped_os_kill(99999, side_effect=_raise):
             result = await adapter.status({}, "99999")
         assert result.status is LLCRunStatus.COMPLETED
 
     async def test_status_failed_on_oserror(self) -> None:
         adapter = LLCProcessAdapter()
-        with patch("os.kill", side_effect=OSError("bad")):
+        with scoped_os_kill(12345, side_effect=OSError("bad")):
             result = await adapter.status({}, "12345")
         assert result.status is LLCRunStatus.FAILED
         assert "bad" in (result.error or "")
@@ -206,7 +207,7 @@ class TestProcessAdapter:
         # create_time (packed into run_id) still matches.
         with (
             patch("os.getpgid", side_effect=ProcessLookupError),
-            patch("os.kill", side_effect=smart_kill),
+            scoped_os_kill(12345, side_effect=smart_kill),
             patch("asyncio.sleep", new_callable=AsyncMock),
             patch(_PSUTIL_PROCESS) as mock_psutil,
         ):
@@ -219,7 +220,7 @@ class TestProcessAdapter:
         """PR#16284 review: a bare-pid run_id (no create_time) means cancel()
         can only probe -- it never signals, and never raises."""
         adapter = LLCProcessAdapter()
-        with patch("os.kill") as mock_kill:
+        with scoped_os_kill(99999) as mock_kill:
             await adapter.cancel({}, "99999")
         mock_kill.assert_not_called()
 

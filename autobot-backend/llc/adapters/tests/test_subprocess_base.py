@@ -18,6 +18,7 @@ import signal
 import tempfile
 import time
 from unittest.mock import AsyncMock, patch
+from .conftest import scoped_os_kill
 
 import psutil
 import pytest
@@ -299,12 +300,12 @@ class TestLoadStatePathTraversal:
 @pytest.mark.asyncio
 class TestSharedStatus:
     async def test_running_pid_returns_running(self) -> None:
-        with patch("os.kill", return_value=None):
+        with scoped_os_kill(1234):
             result = await _DummyAdapter().status({"adapter_config": {}}, "1234/session-abc")
         assert result.status == LLCRunStatus.RUNNING
 
     async def test_dead_pid_returns_completed(self) -> None:
-        with patch("os.kill", side_effect=ProcessLookupError):
+        with scoped_os_kill(9999, side_effect=ProcessLookupError):
             result = await _DummyAdapter().status({"adapter_config": {}}, "9999/session-abc")
         assert result.status == LLCRunStatus.COMPLETED
 
@@ -334,7 +335,7 @@ class TestSharedStatus:
             # create_time is recorded here, so probe_pid_identity falls back
             # to a plain liveness probe — force it alive so the test reaches
             # the timeout check deterministically, not by luck of a real PID.
-            with patch("os.kill", return_value=None):
+            with scoped_os_kill(1111):
                 result = await adapter.status({"adapter_config": {"output_dir": td}}, run_id)
 
         assert result.status == LLCRunStatus.TIMEOUT
@@ -346,7 +347,7 @@ class TestSharedStatus:
         assert result.status == LLCRunStatus.FAILED
 
     async def test_exception_in_probe_returns_failed(self) -> None:
-        with patch("os.kill", side_effect=OSError("unexpected")):
+        with scoped_os_kill(1234, side_effect=OSError("unexpected")):
             result = await _DummyAdapter().status({"adapter_config": {}}, "1234/session-abc")
         assert result.status == LLCRunStatus.FAILED
 
@@ -393,20 +394,10 @@ class TestSharedGracefulTimeout:
         """cancel() sends SIGTERM, polls 10s, then sends SIGKILL."""
         adapter = _DummyAdapter()
         kill_signals = []
-        real_kill = os.kill  # captured before the patch below replaces it
 
-        # ``patch("os.kill")`` replaces the function for the whole interpreter,
-        # not just for this adapter. Sibling modules in this very directory run
-        # real processes and reap them with ``os.kill(pid, SIGKILL)``, and a
-        # garbage-collected asyncio subprocess transport kills its child the
-        # same way -- either can land here mid-block. Recording those made
-        # ``kill_signals[0]`` a foreign (real PID, SIGKILL) pair, and swallowing
-        # them stopped the signal reaching the process it was aimed at. Scope
-        # both the recording and the simulated ProcessLookupError to the PID
-        # under test; pass every other PID through to the real ``os.kill``.
+        # The PID-scoped fake keeps foreign PIDs (sibling modules' real reaps,
+        # GC'd asyncio transports) on the real ``os.kill`` -- see conftest.
         def fake_kill(pid, sig):
-            if pid != _CANCEL_TARGET_PID:
-                return real_kill(pid, sig)
             kill_signals.append((pid, sig))
             if sig == signal.SIGKILL:
                 raise ProcessLookupError()
@@ -424,7 +415,7 @@ class TestSharedGracefulTimeout:
             # SIGTERM/SIGKILL sequence, not process-group resolution (covered separately).
             with (
                 patch("os.getpgid", side_effect=ProcessLookupError),
-                patch("os.kill", side_effect=fake_kill),
+                scoped_os_kill(_CANCEL_TARGET_PID, side_effect=fake_kill),
                 patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
                 patch(_PSUTIL_PROCESS) as mock_psutil_cls,
             ):
