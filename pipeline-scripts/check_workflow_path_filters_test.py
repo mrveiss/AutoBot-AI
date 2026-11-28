@@ -91,17 +91,38 @@ def test_dropping_a_canonical_path_from_the_security_scope_key_fails(tmp_path: P
     assert "filter 'security_scope' is missing" in result.stdout
 
 
-def test_reintroducing_ci_pull_request_paths_fails(tmp_path: Path) -> None:
-    """#12934's deliberate asymmetry must not be tidied back into a deadlock."""
+@pytest.mark.parametrize("event", ["push", "merge_group", "workflow_dispatch"])
+def test_adding_paths_to_a_ci_event_fails(tmp_path: Path, event: str) -> None:
+    """#12934's deliberate asymmetry must not be tidied back into a deadlock, on any event that starts ci.yml."""
     root = _sandbox(tmp_path)
-    _edit(
-        root / CI,
-        "    types: [opened, synchronize, reopened, ready_for_review, labeled]\n",
-        "    types: [opened, synchronize, reopened, ready_for_review, labeled]\n    paths:\n      - 'autobot-backend/**/*.py'\n",
-    )
+    text = (root / CI).read_text(encoding="utf-8")
+    head, marker, tail = text.partition(f"\n  {event}:")
+    assert marker, f"{event} is not declared in ci.yml"
+    (root / CI).write_text(head + marker + "\n    paths:\n      - 'autobot-backend/**/*.py'" + tail, encoding="utf-8")
     result = _run(root)
     assert result.returncode == 1, result.stdout
-    assert "must stay ABSENT" in result.stdout
+    assert f"`on.{event}.paths` must stay ABSENT" in result.stdout
+
+
+def test_dropping_a_ci_event_fails_rather_than_passing_silently(tmp_path: Path) -> None:
+    root = _sandbox(tmp_path)
+    _edit(root / CI, "\n  merge_group:", "\n  merge_group_renamed:")
+    result = _run(root)
+    assert result.returncode == 1, result.stdout
+    assert "declares no `on.merge_group`" in result.stdout
+
+
+def test_dropping_a_canonical_path_from_the_satellite_phase_validation_key_fails(tmp_path: Path) -> None:
+    """satellite-paths.yml's phase_validation key replaced phase_validation.yml's trigger paths (#20825)."""
+    root = _sandbox(tmp_path)
+    path = root / ".github/filters/satellite-paths.yml"
+    text = path.read_text(encoding="utf-8")
+    head, _, tail = text.partition("phase_validation:\n")
+    assert "  - 'autobot_shared/**/*.py'\n" in tail
+    path.write_text(head + "phase_validation:\n" + tail.replace("  - 'autobot_shared/**/*.py'\n", "", 1), encoding="utf-8")
+    result = _run(root)
+    assert result.returncode == 1, result.stdout
+    assert "filter 'phase_validation' is missing" in result.stdout
 
 
 def test_a_stale_declaration_fails_rather_than_exempting_silently(tmp_path: Path) -> None:

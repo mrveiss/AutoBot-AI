@@ -40,9 +40,8 @@ inputs:
     required: false
     default: 'false'
   admitted:
-    description: "'true' when the pull request carries the land-next label (admitted to a CI slot, #20825). Anything else fails a pull_request gate closed."
-    required: false
-    default: 'true'
+    description: "'true' when the pull request carries the land-next label (admitted to a CI slot, #20825). Anything else fails a pull_request gate closed. Required: a caller that forgets it must not read as admitted."
+    required: true
   draft-gated:
     description: "'false' for the one context that runs on drafts (verify-precommit-config, #17957)."
     required: false

@@ -27,6 +27,7 @@ from __future__ import annotations
 import ast
 import re
 
+import pytest
 import yaml
 from repo_tests._paths import repo_root
 
@@ -223,14 +224,23 @@ def test_protected_branches_are_never_push_targets() -> None:
                 assert f"refs/heads/{protected}" not in line, f"pushes to `{protected}`: {line.strip()!r}"
 
 
+_OLD_MECHANISM = ("start_ci_for_pr", "start-ci-for-pr", "START_CI_SUBJECT", "suite_already_started")
+
+
+def leftover_mechanism(texts: dict[str, str]) -> dict[str, list[str]]:
+    """Per file, the words of the retired start-CI mechanism it still contains."""
+    return {name: [w for w in _OLD_MECHANISM if w in text] for name, text in texts.items()}
+
+
 def test_the_start_ci_request_is_gone_from_the_workflow_and_the_script() -> None:
     """#20825: no workflow listens to a pull request event, so an empty start-CI commit starts nothing."""
     texts = {path.name: path.read_text(encoding="utf-8") for path in [_WORKFLOW, *_SCRIPTS]}
     assert len(texts) == 3 and all(texts.values()), "the population is the three files that carried the mechanism"
-    leftover = {name: [w for w in ("start_ci_for_pr", "start-ci-for-pr", "START_CI_SUBJECT", "suite_already_started") if w in text]
-                for name, text in texts.items()}
-    assert not any(leftover.values()), leftover
+    assert not any(leftover_mechanism(texts).values()), leftover_mechanism(texts)
 
 
-def test_control_the_leftover_check_sees_the_old_mechanism() -> None:
-    assert "start_ci_for_pr" in "gh workflow run sync-branches-with-main.yml -f start_ci_for_pr=1"
+@pytest.mark.parametrize("word", _OLD_MECHANISM)
+def test_control_the_leftover_check_sees_the_old_mechanism(word: str) -> None:
+    """Known-bad: the REAL detector, fed a text that still holds the mechanism, reports it; a clean text reports nothing."""
+    assert leftover_mechanism({"x.yml": f"run: gh workflow run sync.yml -f {word}=1"}) == {"x.yml": [word]}
+    assert leftover_mechanism({"x.yml": "run: gh workflow run sync.yml"}) == {"x.yml": []}

@@ -101,6 +101,11 @@ jobs:
       author: ${{ steps.pr.outputs.author }}
       draft: ${{ steps.pr.outputs.draft }}
       admitted: ${{ steps.pr.outputs.admitted }}
+      # trusted (#20825, defence in depth): the head may run secret-bearing and self-hosted jobs. A same-repository
+      # head, or a fork head the coordinator mirrored to `ci/pr-<N>` after a per-commit owner approval AND whose
+      # commit is the pull request's live head (pr-context validated `github.sha` against it). `pr-context`
+      # already refuses any other fork head; every such job repeats the check, so one missed step is not a hole.
+      trusted: ${{ steps.pr.outputs.is-pr != 'true' || steps.pr.outputs.same-repo == 'true' || (github.ref == format('refs/heads/ci/pr-{0}', steps.pr.outputs.number) && github.sha == steps.pr.outputs.head-sha) }}
       # JSON list of the path-filtered advisory workflows whose paths changed; `fan-out` dispatches them.
       satellites: ${{ steps.sat.outputs.satellites }}
       # ready: not a pull request, or the pull request carries `land-next` (the coordinator labels exactly the
@@ -149,7 +154,11 @@ jobs:
       npm_structured_thinking: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_structured_thinking == 'true' }}
       run_slm_frontend: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.slm_frontend == 'true' }}
     steps:
+      # fetch-depth 0: dorny diffs against `inputs.base_sha` (a bare commit, not a branch tip), and the merge
+      # base has to be in the clone for it to compute the three-dot diff, as on the merge-group path.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       # The pull request's facts, live (#20825). A stale dispatch ends the run CANCELLED here; a closed pull
       # request or a wrong base fails `changes`, and with it every gate, closed.
@@ -333,7 +342,7 @@ jobs:
   fan-out:
     name: Dispatch the advisory workflows
     needs: changes
-    if: ${{ needs.changes.outputs.is_pr == 'true' && needs.changes.outputs.ready == 'true' && needs.changes.outputs.draft != 'true' && needs.changes.outputs.satellites != '[]' }}
+    if: ${{ needs.changes.outputs.is_pr == 'true' && needs.changes.outputs.ready == 'true' && needs.changes.outputs.trusted == 'true' && needs.changes.outputs.draft != 'true' && needs.changes.outputs.satellites != '[]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -362,9 +371,18 @@ jobs:
             case "${release_only}" in *" ${key} "*) [ "${BASE_REF}" = "release" ] || { echo "skip ${key}: base is ${BASE_REF}"; continue; } ;; esac
             case "${key}" in train-content-gate) case "${HEAD_REF}" in train-*) ;; *) echo "skip ${key}: not a train head"; continue ;; esac ;; esac
             echo "dispatch ${key}.yml for #${PR_NUMBER} at ${HEAD_SHA}"
-            gh workflow run "${key}.yml" --repo "${GITHUB_REPOSITORY}" --ref "${GITHUB_REF_NAME}" \
-              -f pr_number="${PR_NUMBER}" -f head_sha="${HEAD_SHA}" -f base_sha="${BASE_SHA}" || failed=1
+            if ! gh workflow run "${key}.yml" --repo "${GITHUB_REPOSITORY}" --ref "${GITHUB_REF_NAME}" \
+              -f pr_number="${PR_NUMBER}" -f head_sha="${HEAD_SHA}" -f base_sha="${BASE_SHA}"; then
+              failed=1
+              failed_keys="${failed_keys:-} ${key}"
+            fi
           done
+          # A failed dispatch reaches no gate (the satellites are advisory), so it is written where the coordinator
+          # reads it: one `satellite-dispatch-failed` line per run, with the pull request, head and workflows.
+          if [ "${failed}" -ne 0 ]; then
+            echo "satellite-dispatch-failed pr=#${PR_NUMBER} head=${HEAD_SHA} workflows=${failed_keys# }" | tee -a "${GITHUB_STEP_SUMMARY}"
+            echo "::error title=satellite-dispatch-failed::#${PR_NUMBER} at ${HEAD_SHA}:${failed_keys}"
+          fi
           exit "${failed}"
 
   # Short check (#20552): the fast guards, seconds to minutes, before anything expensive starts.
@@ -1168,7 +1186,7 @@ jobs:
   # Work behind the `code-quality` gate. Only the body's one secret is passed, by name (never `secrets: inherit`).
   run-code-quality:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_code_quality == 'true' }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.trusted == 'true' && needs.changes.outputs.run_code_quality == 'true' }}
     uses: ./.github/workflows/_gate-code-quality.yml
     secrets:
       CONVENTIONS_DENYLIST: ${{ secrets.CONVENTIONS_DENYLIST }}
@@ -1252,7 +1270,7 @@ jobs:
 
   run-frontend-test:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_unit_tests == 'true' }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.trusted == 'true' && needs.changes.outputs.run_unit_tests == 'true' }}
     uses: ./.github/workflows/_gate-frontend-test.yml
     permissions:
       contents: read
@@ -1411,7 +1429,7 @@ jobs:
 
   run-generated-types:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.ready == 'true' && (needs.changes.outputs.run_types == 'true' || needs.changes.outputs.run_slm_types == 'true') }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.trusted == 'true' && (needs.changes.outputs.run_types == 'true' || needs.changes.outputs.run_slm_types == 'true') }}
     uses: ./.github/workflows/_gate-generated-types.yml
     permissions:
       contents: read
@@ -1473,7 +1491,7 @@ jobs:
   # request including docs-only drafts (#17957). Only the repo-wide sweep inside is scoped, by `sweep`.
   run-precommit:
     needs: changes
-    if: ${{ needs.changes.outputs.ready == 'true' }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.trusted == 'true' }}
     uses: ./.github/workflows/_gate-precommit.yml
     permissions:
       contents: read
@@ -1542,7 +1560,7 @@ jobs:
 
   run-ai-security-review:
     needs: [changes, short-check]
-    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_ai_review == 'true' }}
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.trusted == 'true' && needs.changes.outputs.run_ai_review == 'true' }}
     uses: ./.github/workflows/_gate-ai-security-review.yml
     with:
       pr_number: ${{ needs.changes.outputs.pr_number }}

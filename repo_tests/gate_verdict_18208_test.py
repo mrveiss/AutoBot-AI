@@ -115,6 +115,13 @@ def test_a_skipped_or_failed_suite_that_applies_is_not_evidence(detail):
     assert rc == 1 and "did not pass" in out
 
 
+def test_an_unset_admitted_is_not_admitted():
+    """Fail closed (#20825): a caller that never passes `admitted` must not read as admitted."""
+    env = {k: v for k, v in BASE.items() if k != "GATE_ADMITTED"}
+    result = run_verdict_env(env)
+    assert result.returncode == 1 and "not admitted to a CI slot" in result.stdout + result.stderr
+
+
 @pytest.mark.parametrize(
     "missing", ["GATE_CONTEXT", "GATE_CHANGES_RESULT", "GATE_APPLIES", "GATE_WORK_OK", "GATE_EVENT"]
 )

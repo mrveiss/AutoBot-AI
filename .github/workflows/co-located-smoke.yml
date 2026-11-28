@@ -78,6 +78,10 @@ jobs:
 
   # Classes (c) + (d): pytest-shaped regression pins. Fast, no containers.
   authz-and-selection:
+    # Runs only after `pr-context` passed or was skipped (no pull request): a fork head that is not the coordinator's
+    # `ci/pr-<N>` mirror fails there, so this job never starts for it (#20825).
+    needs: pr-context
+    if: ${{ !cancelled() && (needs.pr-context.result == 'success' || needs.pr-context.result == 'skipped') }}
     # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -130,6 +134,10 @@ jobs:
   # Classes (a) + (b): live co-located compose stack (frontend at /, SLM at
   # /slm — the same single-host topology as bare-metal co-located installs).
   colocated-stack:
+    # Runs only after `pr-context` passed or was skipped (no pull request): a fork head that is not the coordinator's
+    # `ci/pr-<N>` mirror fails there, so this job never starts for it (#20825).
+    needs: pr-context
+    if: ${{ !cancelled() && (needs.pr-context.result == 'success' || needs.pr-context.result == 'skipped') }}
     # Held (dependabot / release promotion), draft and un-admitted pull requests never reach this job: ci.yml's `fan-out` dispatches only what its `changes` job marked ready (#20825).
     runs-on: ubuntu-latest
     timeout-minutes: 45

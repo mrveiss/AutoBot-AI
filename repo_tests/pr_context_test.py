@@ -144,3 +144,26 @@ def test_the_body_goes_to_a_file_and_never_to_an_output_line(tmp_path: Path) -> 
 def test_control_the_fake_gh_is_not_passing_everything(tmp_path: Path) -> None:
     rc, _, _, _ = run(tmp_path, compare={f"{BASE}...{HEAD}": "ahead"})
     assert rc != 0, "with the branch comparison missing the lookup must fail, so the fake can fail"
+
+
+def _fork_pull() -> Dict[str, Any]:
+    pull = _pull()
+    pull["head"] = {"sha": HEAD, "ref": "patch-1", "repo": {"full_name": "someone/r"}}
+    return pull
+
+
+def test_a_fork_head_runs_only_from_the_coordinators_mirror_ref(tmp_path: Path) -> None:
+    rc, out, _, _ = run(tmp_path, pull=_fork_pull(), RUN_REF="refs/heads/ci/pr-1")
+    assert rc == 0 and out["same-repo"] == "false" and out["is-pr"] == "true"
+
+
+@pytest.mark.parametrize("ref", ["", "refs/heads/patch-1", "refs/heads/ci/pr-2", "refs/heads/ci/pr-1x", "refs/pull/1/merge"])
+def test_a_fork_head_on_any_other_ref_is_refused(tmp_path: Path, ref: str) -> None:
+    """Known-bad controls: unset, the fork's own branch name, another PR's mirror, a near-miss, a merge ref."""
+    rc, out, _, _ = run(tmp_path, pull=_fork_pull(), RUN_REF=ref)
+    assert rc == 1 and "is-pr" not in out
+
+
+def test_a_same_repository_head_needs_no_mirror_ref(tmp_path: Path) -> None:
+    rc, out, _, _ = run(tmp_path, RUN_REF="refs/heads/issue-1-x")
+    assert rc == 0 and out["same-repo"] == "true"

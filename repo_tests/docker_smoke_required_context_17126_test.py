@@ -75,6 +75,7 @@ def _verdict(**env: str) -> subprocess.CompletedProcess:
         "GATE_APPLIES": "true",
         "GATE_WORK_OK": "true",
         "GATE_EVENT": "pull_request",
+        "GATE_ADMITTED": "true",
     }
     return subprocess.run(
         ["bash", str(repo_root() / _VERDICT)], env={**base, **env}, capture_output=True, text=True, check=False

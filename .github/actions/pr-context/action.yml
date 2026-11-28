@@ -11,6 +11,8 @@
 # output is empty. Otherwise, in order:
 #   1. the run's commit or the live head differs from `head-sha`  -> the run is cancelled (never failed)
 #   2. the pull request is not open                                -> fail
+#   2b. the head is not in this repository and the run's ref is not exactly `ci/pr-<N>` (the coordinator's mirror of an
+#       approved fork head)                                      -> fail
 #   3. `base-sha` equals the head, is not an ancestor of the head, or is not on the base branch -> fail
 # The body goes to a file (`body-file`), never to an output or an expression (script injection).
 #
@@ -108,4 +110,5 @@ runs:
         REPO: ${{ github.repository }}
         RUN_ID: ${{ github.run_id }}
         RUN_SHA: ${{ github.sha }}
+        RUN_REF: ${{ github.ref }}
       run: bash "$GITHUB_ACTION_PATH/pr_context.sh"

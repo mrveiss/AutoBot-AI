@@ -16,9 +16,9 @@
 # creates no workflow run at all unless it holds a CI slot, and a merge to main is a push
 # whatever route merged it. The pull requests a push merged are resolved from its commits
 # (`GET commits/{sha}/pulls`). There is no `issue_comment` leg: it ran once per comment on
-# every issue and pull request. The script's `evidence` command (clear `needs-ac-evidence`
-# when an owner comments an AC evidence table) stays in pipeline-scripts/landing_notes.py;
-# it has no trigger now, tracked on #20825.
+# every issue and pull request. Its `evidence` work (clear `needs-ac-evidence` when an owner comments an
+# AC evidence table) is the `sweep` command now: a schedule and a manual dispatch list the issues that
+# carry the label and clear it from each one that holds a trusted AC evidence table. No per-comment run.
 #
 # The job ticks, closes, reopens or edits no issue. The logic and its fixture tests
 # live in pipeline-scripts/landing_notes.py.
@@ -30,6 +30,9 @@ name: Issue landing notes
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '17 */4 * * *'
+  workflow_dispatch:
 
 concurrency:
   # Never cancel: a half-finished run leaves some issues without their note.
@@ -41,6 +44,7 @@ permissions: {}
 jobs:
   landing-notes:
     name: Post landing notes on referenced issues
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -68,3 +72,31 @@ jobs:
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
         run: python3 pipeline-scripts/landing_notes.py pushed --before "$BEFORE" --after "$AFTER" --branch main
+
+  evidence-sweep:
+    name: Clear needs-ac-evidence where an owner posted the AC table
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: |
+            pipeline-scripts
+            .github/actions/upsert-pr-comment
+
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Sweep
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 pipeline-scripts/landing_notes.py sweep

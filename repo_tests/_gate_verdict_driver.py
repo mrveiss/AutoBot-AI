@@ -23,6 +23,7 @@ BASE = {
     "GATE_EVENT": "pull_request",
     "GATE_DRAFT": "false",
     "GATE_DRAFT_GATED": "true",
+    "GATE_ADMITTED": "true",
 }
 
 

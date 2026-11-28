@@ -25,6 +25,7 @@ import yaml
 from repo_tests._pr_dispatch import (
     COORDINATOR_DISPATCHED,
     PINS,
+    ACTIONS,
     WORKFLOWS,
     dispatch_inputs,
     load,
@@ -33,7 +34,7 @@ from repo_tests._pr_dispatch import (
 )
 
 #: Dispatched workflows whose concurrency group is deliberately NOT per pull request, with the reason.
-GLOBAL_GROUP = {"marker-tests.yml": "one queue for the single self-hosted runner; runs wait their turn and are never cancelled"}
+GLOBAL_GROUP = {"marker-tests.yml": "one global queue (a GitHub-hosted, scheduled long suite): runs wait their turn and are never cancelled"}
 
 FANOUT_BASE_LISTS = re.compile(r'(main_only|main_or_release|release_only)="([^"]*)"')
 
@@ -140,6 +141,44 @@ def test_the_gates_are_always_and_read_the_looked_up_facts() -> None:
         assert verdict["draft"] == "${{ needs.changes.outputs.draft == 'true' }}"
 
 
+#: ci.yml jobs that hold a secret or run on a self-hosted runner. They run only when `changes` says `trusted`.
+TRUSTED_ONLY_JOBS = ("run-code-quality", "run-ai-security-review", "run-frontend-test", "run-generated-types", "run-precommit", "fan-out")
+#: Satellites that build and run containers: their work jobs wait for `pr-context`, which refuses an unmirrored fork head.
+PR_CONTEXT_GATED_SATELLITES = {"co-located-smoke.yml": ("authz-and-selection", "colocated-stack"), "hardened-smoke-test.yml": ("hardened-smoke-test",)}
+
+
+def not_trusted_only(jobs: Dict[str, Any], names: Any = TRUSTED_ONLY_JOBS) -> List[str]:
+    """The named jobs whose `if` does not require `needs.changes.outputs.trusted == 'true'`."""
+    return [n for n in names if "needs.changes.outputs.trusted == 'true'" not in str(jobs[n].get("if", ""))]
+
+
+def test_secret_bearing_and_self_hosted_jobs_run_only_for_a_trusted_head() -> None:
+    ci = load(WORKFLOWS / "ci.yml")
+    assert not_trusted_only(ci["jobs"]) == []
+    trusted = ci["jobs"]["changes"]["outputs"]["trusted"]
+    for part in ("same-repo == 'true'", "refs/heads/ci/pr-{0}", "github.sha == steps.pr.outputs.head-sha"):
+        assert part in trusted, f"`trusted` lost {part!r}"
+
+
+def test_the_changes_checkout_has_the_history_dorny_needs_for_a_base_sha() -> None:
+    steps = load(WORKFLOWS / "ci.yml")["jobs"]["changes"]["steps"]
+    checkout = next(st for st in steps if str(st.get("uses", "")).startswith("actions/checkout"))
+    assert checkout["with"]["fetch-depth"] == 0
+
+
+@pytest.mark.parametrize("name", sorted(PR_CONTEXT_GATED_SATELLITES))
+def test_the_container_satellites_wait_for_pr_context(name: str) -> None:
+    jobs = load(WORKFLOWS / name)["jobs"]
+    for job in PR_CONTEXT_GATED_SATELLITES[name]:
+        assert jobs[job]["needs"] == "pr-context", f"{name}:{job}"
+        assert "needs.pr-context.result == 'success'" in jobs[job]["if"] and "!cancelled()" in jobs[job]["if"]
+
+
+def test_the_gate_verdict_action_requires_admitted() -> None:
+    declared = load(ACTIONS / "gate-verdict" / "action.yml")["inputs"]["admitted"]
+    assert declared.get("required") is True and "default" not in declared
+
+
 # --- known-bad controls: each way the contract breaks must be seen ---------------------------------------
 
 
@@ -180,3 +219,8 @@ def test_control_a_filter_key_without_a_file_and_a_file_without_a_key_are_both_v
 @pytest.mark.parametrize("name", ["ci.yml", "no-commit-trailers.yml", "pr-blocking-findings.yml"])
 def test_control_the_required_context_workflows_are_in_the_dispatched_set(name: str) -> None:
     assert name in COORDINATOR_DISPATCHED
+
+
+def test_control_a_job_without_the_trusted_condition_is_caught() -> None:
+    jobs = {"a": {"if": "${{ needs.changes.outputs.ready == 'true' }}"}, "b": {"if": "${{ needs.changes.outputs.trusted == 'true' }}"}, "c": {}}
+    assert not_trusted_only(jobs, ("a", "b", "c")) == ["a", "c"]

@@ -33,7 +33,7 @@ set -euo pipefail
 GATE_DRAFT="${GATE_DRAFT:-false}"
 GATE_DRAFT_GATED="${GATE_DRAFT_GATED:-true}"
 GATE_HELD="${GATE_HELD:-false}"
-GATE_ADMITTED="${GATE_ADMITTED:-true}"
+GATE_ADMITTED="${GATE_ADMITTED:-false}"   # unset is not admitted: fail closed (#20825)
 GATE_WORK_DETAIL="${GATE_WORK_DETAIL:-}"
 
 echo "context=${GATE_CONTEXT} changes=${GATE_CHANGES_RESULT} applies=${GATE_APPLIES} work_ok=${GATE_WORK_OK} event=${GATE_EVENT} draft=${GATE_DRAFT}"

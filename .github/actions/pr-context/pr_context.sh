@@ -7,7 +7,7 @@
 # Live pull-request facts for a coordinator-dispatched run (#20825). Contract: action.yml next to this file;
 # repo_tests/pr_context_test.py drives this script against a fake `gh`.
 #
-# Inputs (env): PR_NUMBER, HEAD_SHA, BASE_SHA (the dispatch pins), REPO, RUN_ID, RUN_SHA (github.sha),
+# Inputs (env): PR_NUMBER, HEAD_SHA, BASE_SHA (the dispatch pins), REPO, RUN_ID, RUN_SHA (github.sha), RUN_REF (github.ref),
 # RUNNER_TEMP, GITHUB_OUTPUT, CANCEL_WAIT_SECONDS (default 120). `gh` reads GH_TOKEN.
 set -euo pipefail
 
@@ -36,6 +36,14 @@ if [ "${RUN_SHA}" != "${HEAD_SHA}" ] || [ "${live_head}" != "${HEAD_SHA}" ]; the
   gh api -X POST "repos/${REPO}/actions/runs/${RUN_ID}/force-cancel" >/dev/null || fail "could not cancel the stale run"
   sleep "${CANCEL_WAIT_SECONDS:-120}"
   fail "the cancel of a stale dispatch did not take effect"
+fi
+
+# A fork head runs only from the coordinator's mirror: the run's ref is exactly `ci/pr-<N>`, and the check above
+# already proved the run's commit is the pull request's live head. Anything else is a fork head that was
+# dispatched from a branch the coordinator did not mirror, so no secret or self-hosted job may see it.
+if [ "$(jq -r --arg r "${REPO}" '(.head.repo.full_name // "") == $r' <<<"${pr}")" != "true" ] \
+   && [ "${RUN_REF:-}" != "refs/heads/ci/pr-${PR_NUMBER}" ]; then
+  fail "the head of pull request #${PR_NUMBER} is not in ${REPO} and the run's ref '${RUN_REF:-}' is not refs/heads/ci/pr-${PR_NUMBER}: a fork head runs only from the coordinator's mirror"
 fi
 
 [ "$(jq -r '.state' <<<"${pr}")" = "open" ] || fail "pull request #${PR_NUMBER} is not open"

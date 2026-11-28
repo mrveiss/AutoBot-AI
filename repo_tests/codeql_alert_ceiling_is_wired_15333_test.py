@@ -206,6 +206,7 @@ def _fake_gh(
     analyses: str,
     alerts: str,
     alerts_unscoped: str | None = None,
+    alerts_main: str | None = None,
     checks: str = _CHECKS_WITHOUT_CODEQL,
     checks_fail: bool = False,
     analyses_seq: list[str] | None = None,
@@ -269,7 +270,8 @@ def _fake_gh(
         '      case " $* " in *" --paginate "*) ' + checks_answer + " ;;\n"
         f"        *) jq -c '.[0]' '{checks_file}' | {{ if [ -n \"$JQF\" ]; then jq -r \"$JQF\"; else cat; fi; }} ;; esac\n"
         "      exit 0 ;;\n"
-        f"    *code-scanning/alerts*ref=*) printf '%s' '{alerts}'; exit 0 ;;\n"
+        + (f"    *code-scanning/alerts*ref=refs/heads/main*) printf '%s' '{alerts_main}'; exit 0 ;;\n" if alerts_main else "")
+        + f"    *code-scanning/alerts*ref=*) printf '%s' '{alerts}'; exit 0 ;;\n"
         f"    *code-scanning/alerts*)   printf '%s' '{unscoped}'; exit 0 ;;\n"
         "  esac\n"
         "done\n"
@@ -287,6 +289,7 @@ def _run_gate(
     alerts: str,
     sha: str = "cafe1234",
     alerts_unscoped: str | None = None,
+    alerts_main: str | None = None,
     checks: str = _CHECKS_WITHOUT_CODEQL,
     checks_fail: bool = False,
     analyses_seq: list[str] | None = None,
@@ -305,6 +308,7 @@ def _gate(
     alerts: str,
     sha: str = "cafe1234",
     alerts_unscoped: str | None = None,
+    alerts_main: str | None = None,
     checks: str = _CHECKS_WITHOUT_CODEQL,
     checks_fail: bool = False,
     analyses_seq: list[str] | None = None,
@@ -318,6 +322,7 @@ def _gate(
         analyses=analyses,
         alerts=alerts,
         alerts_unscoped=alerts_unscoped,
+        alerts_main=alerts_main,
         checks=checks,
         checks_fail=checks_fail,
         analyses_seq=analyses_seq,

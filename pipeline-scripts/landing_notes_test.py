@@ -51,6 +51,9 @@ class FakeApi:
         if parsed.path == "/search/issues":
             sha = urllib.parse.parse_qs(parsed.query)["q"][0].rsplit("sha:", 1)[1]
             return 200, {"items": [{"number": n} for n in self.data["search"].get(sha, [])]}
+        if parts == ["issues"]:
+            wanted = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)["labels"][0]
+            return 200, [i for i in self.data["issues"].values() if wanted in {x["name"] for x in i.get("labels", [])}]
         table = {"pulls": self.data["pulls"], "issues": self.data["issues"]}.get(parts[0], {})
         if len(parts) == 2 and parts[1] in table:
             return 200, table[parts[1]]
@@ -466,3 +469,60 @@ def test_a_pushed_merge_commit_names_its_pull_request() -> None:
 def test_a_push_does_not_land_what_it_did_not_merge(pr: dict) -> None:
     client = _push_client({"a" * 40: [pr]})
     assert ln.landings_for_push(client, "0" * 40, "a" * 40, "main") == []
+
+
+# ---- the sweep replaces the per-comment evidence run (#20825) ---------------------------------------
+
+
+def _sweep_data(comments: dict[int, list[dict]], labelled=(101, 102), pr: int | None = None) -> dict:
+    labels = [{"name": ln.EVIDENCE_LABEL}]
+    issues = {str(n): {"number": n, "state": "closed", "labels": labels} for n in labelled}
+    if pr:
+        issues[str(pr)] = {"number": pr, "state": "open", "labels": labels, "pull_request": {"url": "x"}}
+    return {"issues": issues, "comments": {str(k): v for k, v in comments.items()}, "labels": [ln.EVIDENCE_LABEL]}
+
+
+def _owner(body: str = _TABLE, assoc: str = "OWNER", user: dict | None = None) -> dict:
+    return {"user": user or {"login": "mrveiss", "type": "User"}, "author_association": assoc, "body": body}
+
+
+def test_the_sweep_clears_only_the_issue_holding_trusted_evidence() -> None:
+    client, fake = _client(_sweep_data({101: [_owner()], 102: [_owner(body="looks done")]}))
+    assert ln.run_sweep(client) == [101]
+    assert fake.writes == [("DELETE", f"/repos/{REPO}/issues/101/labels/{ln.EVIDENCE_LABEL}", None)]
+
+
+@pytest.mark.parametrize(
+    "comment",
+    [
+        _owner(assoc="NONE"),
+        _owner(assoc="CONTRIBUTOR"),
+        _owner(user=BOT),
+        _owner(user={"login": "coderabbitai[bot]", "type": "User"}),
+        _owner(body="| Item | Notes |\n| --- | --- |\n| x | y |"),
+    ],
+    ids=["association NONE", "association CONTRIBUTOR", "bot", "bot by login", "a table without AC and Evidence"],
+)
+def test_the_sweep_keeps_the_label_on_a_comment_that_does_not_qualify(comment: dict) -> None:
+    client, fake = _client(_sweep_data({101: [comment]}, labelled=(101,)))
+    assert ln.run_sweep(client) == []
+    assert fake.writes == []
+
+
+def test_the_sweep_with_nothing_labelled_writes_nothing() -> None:
+    client, fake = _client(_sweep_data({}, labelled=()))
+    assert ln.run_sweep(client) == []
+    assert fake.writes == []
+
+
+def test_the_sweep_never_touches_a_pull_request() -> None:
+    client, fake = _client(_sweep_data({7: [_owner()]}, labelled=(), pr=7))
+    assert ln.run_sweep(client) == []
+    assert fake.writes == []
+
+
+def test_a_sweep_cut_by_the_page_cap_fails_rather_than_passing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ln, "list_issues", lambda client, params: ([], False))
+    client, _ = _client(_sweep_data({}))
+    with pytest.raises(ln.LandingNoteError):
+        ln.run_sweep(client)

@@ -91,6 +91,9 @@ INLINE_CONSUMERS: dict[str, tuple[str, ...]] = {
 # filter file name -> keys
 FILTER_KEY_COPIES: dict[str, tuple[str, ...]] = {
     "gate-paths.yml": ("security_scope",),
+    # The satellite copy of the canonical set for phase_validation.yml, whose `pull_request.paths` it
+    # replaced (#20825): fan-out dispatches that workflow from this key alone.
+    "satellite-paths.yml": ("phase_validation",),
 }
 
 # Workflows that name a backend-Python directory but are deliberately NOT
@@ -165,17 +168,17 @@ SHARED_TREE_WATCHERS: dict[str, tuple[str, ...]] = {
     "gate-paths.yml": ("types", "slm_types"),
 }
 
-# `paths:` on this event must stay ABSENT for these workflows (#12934).
-REQUIRED_ABSENT_PATHS: dict[str, tuple[str, str]] = {
-    "ci.yml": (
-        "pull_request",
-        "#12934: a path-filtered required check never triggers, and an absent "
-        "required context is treated as unsatisfied rather than passed, so the "
-        "pull request is permanently blocked. Which gates have work is decided by "
-        "the `changes` job instead.",
-    ),
+# `paths:` on these events must stay ABSENT for these workflows (#12934). ci.yml has no `pull_request`
+# trigger since #20825 (the PR coordinator dispatches it), so the events left to police are the three
+# that still start it.
+_CI_ABSENCE_REASON = (
+    "#12934: a path-filtered required check never triggers, and an absent required context is "
+    "treated as unsatisfied rather than passed, so the pull request is permanently blocked. Which "
+    "gates have work is decided by the `changes` job instead."
+)
+REQUIRED_ABSENT_PATHS: dict[str, tuple[tuple[str, ...], str]] = {
+    "ci.yml": (("push", "merge_group", "workflow_dispatch"), _CI_ABSENCE_REASON),
 }
-
 
 def _load_yaml(path: Path) -> dict:
     """Parse *path*, or die. A file that will not parse is not a pass."""
@@ -276,15 +279,31 @@ def check_inline_consumers(
     return failures, checked
 
 
+def _declared_event_paths(parsed: dict, path: Path, event: str) -> tuple[bool, list[str] | None]:
+    """(declared, paths) for *event*. An event written bare (`merge_group:`) parses to None and is declared."""
+    block = _on_block(parsed, path)
+    if event not in block:
+        return False, None
+    entry = block[event]
+    if not isinstance(entry, dict) or entry.get("paths") is None:
+        return True, None
+    return True, [p for p in entry["paths"] if isinstance(p, str)]
+
+
 def check_required_absences() -> list[str]:
     """An absence that is load-bearing has to be asserted, not assumed."""
     failures: list[str] = []
-    for name, (event, reason) in REQUIRED_ABSENT_PATHS.items():
+    for name, (events, reason) in REQUIRED_ABSENT_PATHS.items():
         workflow = WORKFLOWS / name
-        if _event_paths(_load_yaml(workflow), workflow, event) is not None:
-            failures.append(f"{workflow}: `on.{event}.paths` must stay ABSENT. {reason}")
-        else:
-            print(f"  OK     {workflow} on.{event} has no `paths:` filter, as required")  # noqa: print
+        parsed = _load_yaml(workflow)
+        for event in events:
+            declared, paths = _declared_event_paths(parsed, workflow, event)
+            if not declared:
+                failures.append(f"{workflow}: declares no `on.{event}`, but the guard's table says it should")
+            elif paths is not None:
+                failures.append(f"{workflow}: `on.{event}.paths` must stay ABSENT. {reason}")
+            else:
+                print(f"  OK     {workflow} on.{event} has no `paths:` filter, as required")  # noqa: print
     return failures
 
 
