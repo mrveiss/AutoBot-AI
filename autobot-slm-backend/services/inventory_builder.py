@@ -53,7 +53,11 @@ from typing import Any
 from autobot_shared.role_group_ownership import declared_and_detected, withhold_unowned_groups
 from autobot_shared.ssot_config import config
 from services.ansible_extra_vars import port_vars
-from services.inventory_files import _write_inventory_file, write_temp_extra_vars, write_temp_inventory  # noqa: F401
+from services.inventory_files import (  # noqa: F401
+    _write_inventory_file,
+    write_temp_extra_vars,
+    write_temp_inventory,
+)
 
 logger = logging.getLogger(__name__)
 

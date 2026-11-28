@@ -388,6 +388,7 @@ _REAL_SERVICE_MODULES = (
     "ssh_utils",
     "deploy_artifacts",
     "ansible_extra_vars",  # #19005: inventory_builder imports it, so it loads first
+    "inventory_files",  # #22262: inventory_builder re-exports its write_temp_* helpers, so it loads first
     "inventory_builder",
     "a2a_card_fetcher",
     "hf_token_validator",
