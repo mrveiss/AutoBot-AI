@@ -48,11 +48,7 @@ Key = tuple[str, str, str]  # (file, enclosing function qualname, stripped line 
 
 #: Sites still hand-rolled in a file an open PR owns: (file, function, line, count). **Only shrinks.** They move onto
 #: `kill_and_reap` when that PR lands (same file => one PR, CLAUDE_REVIEW.md#pr-granularity).
-_PENDING_ROWS = (
-    ("autobot-backend/api/knowledge_population.py", "_fetch_man_page", "proc.kill()", 1),  # open PR #22310
-    ("autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py", "get_all_available_commands", "process.kill()", 1),
-    ("autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py", "_get_man_page_description", "desc_process.kill()", 1),
-    ("autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py", "_get_man_content", "process.kill()", 1),
+_PENDING_ROWS: tuple[tuple[str, str, str, int], ...] = (
 )  # fmt: skip
 
 _SYNC = "synchronous subprocess.Popen, not an asyncio child"

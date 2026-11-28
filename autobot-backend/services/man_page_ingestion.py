@@ -19,6 +19,7 @@ import os
 from typing import NamedTuple, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.subprocess_reap import kill_and_reap
 from knowledge.ingestion_visibility import INGESTED_DOCUMENT_VISIBILITY
 from utils.system_context import generate_unique_key, get_compatible_os_list, get_system_context
 
@@ -45,9 +46,7 @@ async def _communicate(process, timeout: float) -> Tuple[bytes, bytes]:
     try:
         return await asyncio.wait_for(process.communicate(), timeout=timeout)
     except (asyncio.TimeoutError, asyncio.CancelledError):
-        if process.returncode is None:
-            process.kill()
-        await process.wait()
+        await kill_and_reap(process, bounded=True)
         raise
 
 
