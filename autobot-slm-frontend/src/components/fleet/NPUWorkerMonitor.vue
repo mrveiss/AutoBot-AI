@@ -174,7 +174,7 @@ onMounted(() => refresh())
       @retry="metricsPoller.start('')"
     />
     <!-- Fleet Summary Bar -->
-    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 mb-6">
+    <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4 mb-6">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-6">
           <div class="flex items-center gap-2">
@@ -210,7 +210,7 @@ onMounted(() => refresh())
     <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Empty State -->
-    <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-xs border border-autobot-border p-12 text-center">
+    <div v-if="npuNodes.length === 0 && !loading" class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-12 text-center">
       <svg class="mx-auto w-12 h-12 text-autobot-text-tertiary mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
       </svg>
@@ -224,7 +224,7 @@ onMounted(() => refresh())
         v-for="node in npuNodes"
         :key="node.node_id"
         @click="emit('select-node', node)"
-        class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 cursor-pointer hover:shadow-md hover:border-autobot-primary-light transition-all"
+        class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-4 cursor-pointer hover:shadow-md hover:border-autobot-primary-light transition-all"
       >
         <!-- Header: hostname, IP, status dot -->
         <div class="flex items-start justify-between mb-3">

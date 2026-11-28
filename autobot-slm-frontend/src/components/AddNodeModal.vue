@@ -102,7 +102,7 @@
               'flex-1 flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all',
               formData.auth_method === 'password'
                 ? 'border-autobot-primary bg-autobot-primary-bg'
-                : 'border-autobot-border hover:border-autobot-border-strong bg-white'
+                : 'border-autobot-border hover:border-autobot-border-strong bg-autobot-bg-secondary'
             ]"
           >
             <input
@@ -127,7 +127,7 @@
               'flex-1 flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all',
               formData.auth_method === 'pki'
                 ? 'border-autobot-primary bg-autobot-primary-bg'
-                : 'border-autobot-border hover:border-autobot-border-strong bg-white'
+                : 'border-autobot-border hover:border-autobot-border-strong bg-autobot-bg-secondary'
             ]"
           >
             <input

@@ -267,7 +267,7 @@ onMounted(() => refreshPoller.start(''))
     <!-- ============================================================ -->
     <!-- Strategy Configuration                                        -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+    <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-6">
       <h2 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('fleet.loadBalancingView.strategyConfiguration') }}</h2>
 
       <div class="flex flex-col sm:flex-row sm:items-end gap-4">
@@ -281,7 +281,7 @@ onMounted(() => refreshPoller.start(''))
           <select
             id="lb-strategy"
             v-model="selectedStrategy"
-            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary bg-white text-sm"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary focus:border-autobot-primary bg-autobot-bg-input text-sm"
           >
             <option value="round-robin">{{ $t('fleet.loadBalancingView.roundRobin') }}</option>
             <option value="least-loaded">{{ $t('fleet.loadBalancingView.leastLoaded') }}</option>
@@ -305,7 +305,7 @@ onMounted(() => refreshPoller.start(''))
     <!-- ============================================================ -->
     <!-- Task Distribution Bar Chart                                   -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+    <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-6">
       <h2 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('fleet.loadBalancingView.taskDistribution') }}</h2>
 
       <div v-if="workerMetrics.length === 0 && !loading" class="text-sm text-autobot-text-tertiary text-center py-8">
@@ -358,7 +358,7 @@ onMounted(() => refreshPoller.start(''))
     <!-- ============================================================ -->
     <!-- Worker Load Overview                                          -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+    <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-6">
       <h2 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('fleet.loadBalancingView.workerLoadOverview') }}</h2>
 
       <div v-if="sortedWorkers.length === 0 && !loading" class="text-sm text-autobot-text-tertiary text-center py-8">
@@ -432,7 +432,7 @@ onMounted(() => refreshPoller.start(''))
     <!-- ============================================================ -->
     <!-- Rebalancing Controls                                          -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+    <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-6">
       <h2 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('fleet.loadBalancingView.rebalancingControls') }}</h2>
 
       <div class="flex flex-col sm:flex-row sm:items-center gap-4">

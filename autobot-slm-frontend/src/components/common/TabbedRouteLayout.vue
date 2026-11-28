@@ -68,7 +68,7 @@ function navigateTo(path: string): void {
     <PollingPausedAlert v-if="notice" :poller="notice.alertSource" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mx-6 mt-4" @retry="notice.retry" />
     <PollingPausedAlert v-else-if="!hasOuterNotice" :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mx-6 mt-4" @retry="poller.start('')" />
     <!-- Header -->
-    <div :class="['bg-white border-b border-autobot-border px-6', nested ? 'py-2' : 'py-4']">
+    <div :class="['bg-autobot-bg-secondary border-b border-autobot-border px-6', nested ? 'py-2' : 'py-4']">
       <div :class="['flex items-center', nested ? 'justify-end' : 'justify-between']">
         <div v-if="!nested" class="flex items-center gap-4">
           <h1 class="text-2xl font-bold text-autobot-text-primary">{{ title }}</h1>

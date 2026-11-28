@@ -203,7 +203,7 @@ watch(
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+  <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border">
     <PollingPausedAlert
       :poller="statusPoller"
       :message="t('common.polling.paused')"
@@ -286,17 +286,17 @@ watch(
 
     <!-- Metrics grid -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-px bg-autobot-bg-tertiary border-b border-autobot-border">
-      <div class="bg-white px-4 py-3">
+      <div class="bg-autobot-bg-secondary px-4 py-3">
         <div class="text-xs text-autobot-text-tertiary mb-0.5">{{ $t('redisServicePanel.state') }}</div>
         <div class="text-sm font-semibold text-autobot-text-primary">{{ stateText }}</div>
       </div>
-      <div class="bg-white px-4 py-3">
+      <div class="bg-autobot-bg-secondary px-4 py-3">
         <div class="text-xs text-autobot-text-tertiary mb-0.5">{{ $t('redisServicePanel.mainPid') }}</div>
         <div class="text-sm font-semibold text-autobot-text-primary">
           {{ service?.main_pid ?? $t('redisServicePanel.unknown') }}
         </div>
       </div>
-      <div class="bg-white px-4 py-3">
+      <div class="bg-autobot-bg-secondary px-4 py-3">
         <div class="text-xs text-autobot-text-tertiary mb-0.5">{{ $t('redisServicePanel.memoryUsed') }}</div>
         <div class="text-sm font-semibold text-autobot-text-primary">{{ memoryText }}</div>
       </div>
@@ -364,7 +364,7 @@ watch(
         @click="openLogs"
         :disabled="!hasTarget"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border transition-colors
-               text-autobot-text-secondary border-autobot-border-strong bg-white hover:bg-autobot-bg-hover
+               text-autobot-text-secondary border-autobot-border-strong bg-autobot-bg-secondary hover:bg-autobot-bg-hover
                disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -399,7 +399,7 @@ watch(
       <template #actions>
         <button
           @click="cancelStop"
-          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-secondary border border-autobot-border-strong rounded-md hover:bg-autobot-bg-hover"
         >
           {{ $t('redisServicePanel.cancel') }}
         </button>
