@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import List
 
+import pytest
 from fastapi import APIRouter, Depends, FastAPI
 
 from autobot_shared.api_routing.router_routes import (
@@ -356,7 +357,7 @@ def test_the_private_matcher_matched_route_relies_on_still_exists_on_a_deferred_
     """Fails loudly if FastAPI renames ``_IncludedRouter._match``: otherwise every route would read as unguarded."""
     wrappers = [r for r in _nested_app().router.routes if included_router(r) is not None]
     if not wrappers:
-        return  # eager shape: no wrapper exists, nothing private is read
+        pytest.skip("eager FastAPI shape: no _IncludedRouter wrapper")
     assert callable(getattr(wrappers[0], "_match", None)), "FastAPI changed _IncludedRouter; update matched_route()"
     match, _child, route, _context = wrappers[0]._match(_scope("/mid/leaf/guarded"))
     assert route is not None

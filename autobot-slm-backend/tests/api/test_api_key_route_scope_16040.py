@@ -224,6 +224,21 @@ def test_a_failed_audit_write_is_an_explicit_503_never_a_bare_500(call, method, 
     assert "audit" in response.json()["detail"]
 
 
+def test_an_unreadable_route_shape_refuses_a_keyed_request_with_403_and_audits_it(call, caplog):
+    """#22136: RouteShapeError on a keyed request is the normal refusal, not a bare 500."""
+    from autobot_shared.api_routing.router_routes import RouteShapeError
+
+    with patch(
+        "middleware.api_key_allow_list.accepts_api_key", side_effect=RouteShapeError("matcher gone")
+    ), caplog.at_level("ERROR"):
+        response = call("GET", "/knowledge", scopes=("admin:*",))
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == "API keys are not accepted on this route"
+    assert _audited(call)["action"] == "api_key_refused_off_allow_list"
+    assert "matcher gone" in caplog.text and _KEY not in caplog.text
+
+
 # --- #22136: accepts_api_key resolves the concrete route through deferred includes --
 
 

@@ -234,6 +234,7 @@ def _resolve(route: Any, scope: dict) -> Optional[MatchedRoute]:
             return None
     effective = getattr(context, "dependant", None)
     leaf = getattr(context, "original_route", None) or route
+    # Fallback can only cause a refusal, never a grant: the leaf's own dependant lacks include-time dependencies.
     return MatchedRoute(route=leaf, dependant=effective or getattr(leaf, "dependant", None))
 
 
