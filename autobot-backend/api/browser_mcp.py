@@ -1239,7 +1239,7 @@ async def get_browser_mcp_status() -> Metadata:
             "max_per_minute": MAX_REQUESTS_PER_MINUTE,
             "reset_time": reset_time_iso,
         },
-        "tools_available": 17,  # #5136 page_snapshot+intercept_api, #11537 +5 indexed-element tools
+        "tools_available": len(await get_browser_mcp_tools()),  # the list /mcp/tools serves (#16615)
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
