@@ -19,7 +19,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers
+from autobot_shared.prompt_rules import frame_untrusted_block
 from autobot_shared.ssot_constants import CategoryDefaults
 
 logger = get_logger(__name__)
@@ -79,9 +79,7 @@ class SummaryResult:
 
 def frame_conversation(text: str) -> str:
     """*text* as an untrusted-data block it cannot close early."""
-    return frame_untrusted_block(
-        FRAME_LABEL, list(TRANSCRIPT_FRAME_WARNING), neutralize_frame_markers(text).split("\n")
-    )
+    return frame_untrusted_block(FRAME_LABEL, list(TRANSCRIPT_FRAME_WARNING), text.split("\n"))
 
 
 def build_prompt(conversation_text: str, turns: int, target_tokens: int, template: str = SUMMARIZATION_PROMPT) -> str:

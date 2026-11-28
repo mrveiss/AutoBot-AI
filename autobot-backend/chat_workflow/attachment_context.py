@@ -26,8 +26,8 @@ Trust model
   from the file store for each turn (``restore_block``), so a soft-deleted file stops reaching the answer.
 * Before any extraction: a file-size cap, a declared-uncompressed-size cap for archives, and a timeout
   (``attachment_guards``).
-* The text is untrusted DATA. It is framed with the repo's ``frame_untrusted_block`` after
-  ``neutralize_frame_markers`` (the same treatment as retrieved transcripts and trajectories), so it cannot
+* The text is untrusted DATA. It is framed with the repo's ``frame_untrusted_block``, which
+  neutralizes the text itself (the same treatment as retrieved transcripts and trajectories), so it cannot
   forge the closing delimiter and is labelled "not instructions".
 * File contents are never logged; only ids, codes and lengths.
 
@@ -44,7 +44,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.ai_lines import ATTACHMENT_TURN_KEY, VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_USER_KEY
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers, sanitize_injected
+from autobot_shared.prompt_rules import frame_untrusted_block, sanitize_injected
 from autobot_shared.store_authority import system_of_record
 from chat_history.message_schema import ATTACHMENT_NOTICE_TYPE
 from chat_workflow import attachment_extract, attachment_floor, attachment_guards, limits
@@ -179,9 +179,7 @@ def _frame(name: str, text: str, total: int | None = None) -> str:
     """The framed file text; a cut file says so, so the model never takes the start for the whole (#22016)."""
     label = f"File name (data): {sanitize_injected(name, _NAME_LIMIT)}"
     partial = [f"PARTIAL: only the first {len(text)} of {total} characters of this file are shown."] if total else []
-    return frame_untrusted_block(
-        "ATTACHED_FILE", [*_WARNING, label, *partial], neutralize_frame_markers(text).splitlines() or [""]
-    )
+    return frame_untrusted_block("ATTACHED_FILE", [*_WARNING, label, *partial], text.splitlines() or [""])
 
 
 async def resolve_attachments(
