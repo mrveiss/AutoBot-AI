@@ -97,6 +97,15 @@ def test_no_route_leaks_its_source(analytics_router):
     )
 
 
+def test_every_technical_debt_route_requires_its_source():
+    """The /api/debt routes live outside the codebase router; they are held to the same classes (#22198)."""
+    from api.analytics_debt import router as debt_router
+
+    classes = _classes(debt_router)
+    assert not classes.get("LEAK"), classes.get("LEAK")
+    assert len(classes.get("REQUIRED", [])) == 6, {k: len(v) for k, v in classes.items()}
+
+
 def test_the_walk_still_sees_the_routes(analytics_router):
     classes = _classes(analytics_router)
     examined = sum(len(v) for v in classes.values())

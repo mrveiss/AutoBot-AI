@@ -14,6 +14,7 @@ import en from '@/i18n/locales/en.json'
 
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: vi.fn() }))
 vi.mock('@/config/AppConfig.js', () => ({ default: { getServiceUrl: vi.fn(async () => 'http://backend') } }))
+vi.mock('vue-router', () => ({ useRoute: () => ({ params: { sourceId: 'src-a' } }) }))
 vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ post: vi.fn(), get: vi.fn() }) }))
 
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -27,7 +28,15 @@ const page = (n: number, total: number) => ({
 })
 
 describe('useTechnicalDebtData ROI paging (#12741)', () => {
-  beforeEach(() => mockFetch.mockReset())
+  it('sends the route source with every request (#22198)', async () => {
+    mockFetch.mockResolvedValueOnce(page(10, 240))
+    await useTechnicalDebtData().fetchRoiPriorities(10)
+    expect(String(mockFetch.mock.calls[0][0])).toContain('source_id=src-a')
+  })
+
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
 
   it('requests the given limit and exposes total_available', async () => {
     mockFetch.mockResolvedValueOnce(page(10, 240))

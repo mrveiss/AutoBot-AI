@@ -55,7 +55,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/analytics_continuous_learning.py": 1170,
     "autobot-backend/api/analytics_conversation.py": 988,
     "autobot-backend/api/analytics_cost.py": 616,
-    "autobot-backend/api/analytics_debt.py": 800,
     "autobot-backend/api/analytics_dfa.py": 1219,
     "autobot-backend/api/analytics_embedding_patterns.py": 603,
     "autobot-backend/api/analytics_evolution.py": 1202,

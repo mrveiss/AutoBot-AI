@@ -221,9 +221,16 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
 
   /** Codebase-wide quality score (admin); the server scores the last analysis, not a snippet. */
   async function getQualityScore(): Promise<QualityScore | null> {
+    // The route requires source_id (#22198); without a scoper the call could only answer 422.
+    if (!withSourceId) {
+      logger.debug('Quality score skipped: no withSourceId supplied')
+      return null
+    }
     startLoading()
     try {
-      const raw = await ApiClient.get<CodebaseQualityScoreResponse>(`${getApiBase()}/analytics/code/metrics/quality-score`)
+      const raw = await ApiClient.get<CodebaseQualityScoreResponse>(
+        withSourceId('/api/analytics/code/metrics/quality-score')
+      )
       const data = toQualityScore(raw)
       qualityScore.value = data
       logger.debug('Quality score:', data)

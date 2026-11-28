@@ -14,17 +14,32 @@ Features:
 - Actionable recommendations
 """
 
-import asyncio
-import json
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
+from api.analytics_debt_models import (
+    DEBT_HOURS_ESTIMATE,
+    SEVERITY_WEIGHTS,
+    DebtCategory,
+    DebtItem,
+    DebtSeverity,
+)
+from api.analytics_debt_report import generate_markdown_report
+from api.analytics_debt_store import (
+    get_antipatterns_from_redis,
+    get_debt_trend_data,
+    get_latest_debt_data,
+    get_problems_from_chromadb,
+    store_debt_result,
+)
 from api.analytics_shared import no_data_response
+from api.codebase_analytics.endpoints.shared import (
+    require_source_access,
+    resolve_scan_root,
+)
 from api.schemas_analytics import (
     AnalyticsDebtByCategoryResponse,
     AnalyticsDebtCalculateResponse,
@@ -35,93 +50,16 @@ from api.schemas_analytics import (
     DebtCalculationRequest,
 )
 from api.schemas_common import DataResponse
+from api.source_scope import SourceIdQuery, require_source_id
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
-from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
-from autobot_shared.status_enums import Severity as DebtSeverity  # #6689 consolidation
-from constants.ttl_constants import TTL_30_DAYS
 
 logger = get_logger(__name__)
-router = APIRouter(tags=["technical-debt", "analytics"])  # Prefix set in router_registry
-
-# Redis key prefix
-DEBT_PREFIX = "debt:"
-
-
-class DebtCategory(str, Enum):
-    """Categories of technical debt"""
-
-    CODE_COMPLEXITY = "code_complexity"
-    CODE_DUPLICATION = "code_duplication"
-    MISSING_TESTS = "missing_tests"
-    MISSING_DOCS = "missing_docs"
-    ANTI_PATTERNS = "anti_patterns"
-    SECURITY_ISSUES = "security_issues"
-    PERFORMANCE_ISSUES = "performance_issues"
-    OUTDATED_DEPS = "outdated_dependencies"
-    HARDCODED_VALUES = "hardcoded_values"
-    DEAD_CODE = "dead_code"
-
-
-@dataclass
-class DebtItem:
-    """Individual technical debt item"""
-
-    category: DebtCategory
-    severity: DebtSeverity
-    file_path: str
-    line_number: int | None
-    description: str
-    estimated_hours: float
-    fix_complexity: str  # easy, medium, hard
-    business_impact: str  # high, medium, low
-    recommendation: str
-    tags: List[str] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert technical debt item to serializable dictionary."""
-        return {
-            "category": self.category.value,
-            "severity": self.severity.value,
-            "file_path": self.file_path,
-            "line_number": self.line_number,
-            "description": self.description,
-            "estimated_hours": self.estimated_hours,
-            "fix_complexity": self.fix_complexity,
-            "business_impact": self.business_impact,
-            "recommendation": self.recommendation,
-            "tags": self.tags,
-        }
-
-
-# Debt calculation weights
-SEVERITY_WEIGHTS = {
-    DebtSeverity.CRITICAL: 4.0,
-    DebtSeverity.HIGH: 2.0,
-    DebtSeverity.MEDIUM: 1.0,
-    DebtSeverity.LOW: 0.5,
-}
-
-# Estimated hours per debt type
-DEBT_HOURS_ESTIMATE = {
-    DebtCategory.CODE_COMPLEXITY: 2.0,
-    DebtCategory.CODE_DUPLICATION: 1.5,
-    DebtCategory.MISSING_TESTS: 1.0,
-    DebtCategory.MISSING_DOCS: 0.5,
-    DebtCategory.ANTI_PATTERNS: 3.0,
-    DebtCategory.SECURITY_ISSUES: 4.0,
-    DebtCategory.PERFORMANCE_ISSUES: 2.5,
-    DebtCategory.OUTDATED_DEPS: 1.0,
-    DebtCategory.HARDCODED_VALUES: 0.5,
-    DebtCategory.DEAD_CODE: 0.5,
-}
-
-
-def get_debt_redis():
-    """Get Redis client for debt data storage"""
-    return get_redis_client(database="analytics")
+router = APIRouter(
+    tags=["technical-debt", "analytics"],
+    dependencies=[Depends(require_source_access)],  # per-source authorization on top of the admin gate (#12358)
+)  # Prefix set in router_registry
 
 
 async def calculate_debt_from_analysis(analysis_data: Dict[str, Any], hourly_rate: float = 75.0) -> Dict[str, Any]:
@@ -296,7 +234,9 @@ def _process_complexity(complexity_data: Dict[str, Any]) -> List[DebtItem]:
             severity = (
                 DebtSeverity.CRITICAL
                 if complexity > 20
-                else DebtSeverity.HIGH if complexity > 15 else DebtSeverity.MEDIUM
+                else DebtSeverity.HIGH
+                if complexity > 15
+                else DebtSeverity.MEDIUM
             )
             debt_items.append(
                 DebtItem(
@@ -377,79 +317,24 @@ def _calculate_roi_ranking(debt_items: List[DebtItem]) -> List[Dict[str, Any]]:
     return sorted(roi_items, key=lambda x: x["roi_score"], reverse=True)[:20]
 
 
-def _extract_problem_from_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract problem data from metadata (Issue #315 - extracted helper)."""
+async def _require_scoped_source(source_id: str) -> str:
+    """The validated source id, once it resolves to a checkout (#22198); never the install tree."""
+    await resolve_scan_root(require_source_id(source_id, "technical-debt request"))
+    return source_id
+
+
+async def _gather_debt_inputs(source_id: str) -> Dict[str, Any]:
+    """The anti-pattern and problem inputs for ONE source's debt calculation (#22198)."""
+    from api.codebase_analytics import get_code_collection, get_redis_connection
+
+    code_collection = get_code_collection()
+    redis_client = await get_redis_connection()
     return {
-        "type": meta.get("problem_type", "unknown"),
-        "severity": meta.get("severity", "medium"),
-        "file_path": meta.get("file_path", "unknown"),
-        "line_number": (int(meta.get("line_number", 0)) if meta.get("line_number") else None),
-        "description": meta.get("description", ""),
-        "suggestion": meta.get("suggestion", ""),
+        "anti_patterns": await get_antipatterns_from_redis(redis_client, source_id),
+        "problems": get_problems_from_chromadb(code_collection, source_id),
+        "hardcodes": [],
+        "complexity": {},
     }
-
-
-def _get_problems_from_chromadb(code_collection) -> List[Dict[str, Any]]:
-    """Get problems from ChromaDB collection (Issue #315 - extracted helper)."""
-    if not code_collection:
-        return []
-    try:
-        problems_result = code_collection.get(where={"type": "problem"}, include=["metadatas"])
-        if not problems_result.get("metadatas"):
-            return []
-        return [_extract_problem_from_meta(meta) for meta in problems_result["metadatas"]]
-    except Exception as e:
-        logger.warning("ChromaDB query failed: %s", e)
-        return []
-
-
-async def _get_antipatterns_from_redis(redis_client) -> List[Dict[str, Any]]:
-    """Get anti-patterns from Redis (Issue #315 - extracted helper)."""
-    if not redis_client:
-        return []
-    try:
-        # Issue #361 - avoid blocking
-        ap_data = await asyncio.to_thread(redis_client.get, "antipattern:latest_results")
-        if not ap_data:
-            return []
-        if isinstance(ap_data, bytes):
-            ap_data = ap_data.decode("utf-8")
-        ap_results = json.loads(ap_data)
-        return ap_results.get("anti_patterns", [])
-    except Exception as e:
-        logger.warning("Redis anti-pattern fetch failed: %s", e)
-        return []
-
-
-def _store_debt_result(debt_result: Dict[str, Any]) -> None:
-    """Store debt calculation result in Redis (Issue #315 - extracted helper)."""
-    debt_redis = get_debt_redis()
-    if not debt_redis:
-        return
-    try:
-        key = f"{DEBT_PREFIX}calculation:{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}"
-        debt_redis.set(key, json.dumps(debt_result), ex=TTL_30_DAYS)
-        debt_redis.set(f"{DEBT_PREFIX}latest", key)
-    except Exception as e:
-        logger.warning("Failed to store debt calculation: %s", e)
-
-
-def _get_latest_debt_data() -> Dict[str, Any] | None:
-    """Get latest debt data from Redis (Issue #315 - extracted helper)."""
-    redis_client = get_debt_redis()
-    if not redis_client:
-        return None
-    try:
-        latest_key = _decode_redis_value(redis_client.get(f"{DEBT_PREFIX}latest"))
-        if not latest_key:
-            return None
-        debt_data = _decode_redis_value(redis_client.get(latest_key))
-        if not debt_data:
-            return None
-        return json.loads(debt_data)
-    except Exception as e:
-        logger.warning("Redis fetch failed: %s", e)
-        return None
 
 
 @router.post("/calculate", response_model=DataResponse[AnalyticsDebtCalculateResponse])
@@ -459,7 +344,9 @@ def _get_latest_debt_data() -> Dict[str, Any] | None:
     error_code_prefix="ANALYTICS_DEBT",
 )
 async def calculate_technical_debt(
-    request: DebtCalculationRequest, admin_check: bool = Depends(check_admin_permission)
+    request: DebtCalculationRequest,
+    source_id: SourceIdQuery,
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Calculate technical debt for the codebase (Issue #315 - refactored).
@@ -467,21 +354,12 @@ async def calculate_technical_debt(
 
     Analyzes code quality issues and estimates remediation cost.
     """
+    await _require_scoped_source(source_id)
     try:
-        from api.codebase_analytics import get_code_collection, get_redis_connection
-
-        code_collection = get_code_collection()
-        redis_client = await get_redis_connection()
-
-        analysis_data = {
-            "anti_patterns": await _get_antipatterns_from_redis(redis_client),
-            "problems": _get_problems_from_chromadb(code_collection),
-            "hardcodes": [],
-            "complexity": {},
-        }
+        analysis_data = await _gather_debt_inputs(source_id)
 
         debt_result = await calculate_debt_from_analysis(analysis_data, request.hourly_rate)
-        _store_debt_result(debt_result)
+        store_debt_result(debt_result, source_id)
 
         return JSONResponse(
             {
@@ -505,14 +383,15 @@ async def calculate_technical_debt(
     operation="get_debt_summary",
     error_code_prefix="ANALYTICS_DEBT",
 )
-async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
+async def get_debt_summary(source_id: SourceIdQuery, admin_check: bool = Depends(check_admin_permission)):
     """
     Get summary of current technical debt (Issue #543 - refactored).
     Issue #744: Requires admin authentication.
 
     Returns high-level metrics for dashboard display.
     """
-    data = _get_latest_debt_data()
+    await _require_scoped_source(source_id)
+    data = get_latest_debt_data(source_id)
 
     if data:
         return JSONResponse(
@@ -536,13 +415,20 @@ async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
-@router.get("/by-category/{category}", response_model=DataResponse[AnalyticsDebtByCategoryResponse])
+@router.get(
+    "/by-category/{category}",
+    response_model=DataResponse[AnalyticsDebtByCategoryResponse],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_debt_by_category",
     error_code_prefix="ANALYTICS_DEBT",
 )
-async def get_debt_by_category(category: str, admin_check: bool = Depends(check_admin_permission)):
+async def get_debt_by_category(
+    category: str,
+    source_id: SourceIdQuery,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get technical debt items filtered by category (Issue #315 - refactored).
     Issue #744: Requires admin authentication.
@@ -550,7 +436,8 @@ async def get_debt_by_category(category: str, admin_check: bool = Depends(check_
     Args:
         category: Debt category to filter by
     """
-    data = _get_latest_debt_data()
+    await _require_scoped_source(source_id)
+    data = get_latest_debt_data(source_id)
 
     if data:
         items = [item for item in data.get("items", []) if item.get("category") == category]
@@ -564,51 +451,6 @@ async def get_debt_by_category(category: str, admin_check: bool = Depends(check_
         )
 
     return JSONResponse({"status": "no_data", "message": "No debt analysis found", "items": []})
-
-
-def _get_debt_trend_data() -> List[Dict[str, Any]]:
-    """Get historical debt trend data from Redis.
-
-    Issue #315: Extracted helper.
-    Issue #561: Fixed N+1 query pattern - now uses pipeline batching.
-    """
-    redis_client = get_debt_redis()
-    if not redis_client:
-        return []
-
-    trend_data = []
-    try:
-        # Issue #561: Collect all keys first, then batch fetch with pipeline
-        keys = []
-        for key in redis_client.scan_iter(match=f"{DEBT_PREFIX}calculation:*"):
-            keys.append(_decode_redis_value(key))
-
-        if not keys:
-            return []
-
-        # Batch fetch all values using pipeline (eliminates N+1 pattern)
-        pipe = redis_client.pipeline()
-        for key_str in keys:
-            pipe.get(key_str)
-        results = pipe.execute()
-
-        for data in results:
-            if not data:
-                continue
-            data_str = _decode_redis_value(data)
-            calc = json.loads(data_str)
-            summary = calc.get("summary", {})
-            trend_data.append(
-                {
-                    "timestamp": calc.get("timestamp"),
-                    "total_items": summary.get("total_items", 0),
-                    "total_hours": summary.get("total_hours", 0),
-                    "total_cost_usd": summary.get("total_cost_usd", 0),
-                }
-            )
-    except Exception as e:
-        logger.warning("Redis trend fetch failed: %s", e)
-    return trend_data
 
 
 def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
@@ -633,6 +475,7 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
     error_code_prefix="ANALYTICS_DEBT",
 )
 async def get_debt_trends(
+    source_id: SourceIdQuery,
     days: int = Query(default=30, ge=1, le=365),
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -642,7 +485,8 @@ async def get_debt_trends(
 
     Shows how debt has changed over the specified period.
     """
-    trend_data = _get_debt_trend_data()
+    await _require_scoped_source(source_id)
+    trend_data = get_debt_trend_data(source_id)
     trend_data.sort(key=lambda x: x.get("timestamp", ""))
 
     change, direction = _calculate_trend_change(trend_data)
@@ -665,6 +509,7 @@ async def get_debt_trends(
     error_code_prefix="ANALYTICS_DEBT",
 )
 async def get_roi_priorities(
+    source_id: SourceIdQuery,
     limit: int = Query(default=20, ge=1, le=100),
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -674,7 +519,8 @@ async def get_roi_priorities(
 
     Quick wins (high impact, low effort) are ranked first.
     """
-    data = _get_latest_debt_data()
+    await _require_scoped_source(source_id)
+    data = get_latest_debt_data(source_id)
 
     if data:
         roi_ranking = data.get("roi_ranking", [])
@@ -689,81 +535,6 @@ async def get_roi_priorities(
     return JSONResponse({"status": "no_data", "message": "No debt analysis found", "priorities": []})
 
 
-def _build_debt_executive_summary(debt_data: dict) -> str:
-    """Build executive summary section of report (Issue #398: extracted)."""
-    summary = debt_data.get("summary", {})
-    return f"""# Technical Debt Report
-
-**Generated:** {debt_data.get('timestamp', 'N/A')}
-
-## Executive Summary
-
-| Metric | Value |
-|--------|-------|
-| Total Debt Items | {summary.get('total_items', 0)} |
-| Estimated Hours | {summary.get('total_hours', 0):.1f} |
-| Estimated Cost | ${summary.get('total_cost_usd', 0):,.2f} |
-| Hourly Rate Used | ${summary.get('hourly_rate', 75)}/hr |
-"""
-
-
-def _build_debt_tables(debt_data: dict) -> str:
-    """Build severity, category, files, and ROI tables (Issue #398: extracted)."""
-    summary = debt_data.get("summary", {})
-
-    # Severity section
-    severity_rows = [f"| {sev.capitalize()} | {count} |" for sev, count in summary.get("by_severity", {}).items()]
-    result = "\n## Debt by Severity\n\n| Severity | Count |\n|----------|-------|\n" + "\n".join(severity_rows) + "\n"
-
-    # Category section
-    category_rows = [
-        f"| {cat.replace('_', ' ').title()} | {count} |" for cat, count in summary.get("by_category", {}).items()
-    ]
-    result += "\n## Debt by Category\n\n| Category | Count |\n|----------|-------|\n" + "\n".join(category_rows) + "\n"
-
-    # Top files section
-    file_rows = [
-        f"| {f.get('file', 'unknown')[-50:]} | {f.get('hours', 0):.1f} | ${f.get('cost_usd', 0):.2f} |"
-        for f in debt_data.get("top_files", [])[:10]
-    ]
-    result += (
-        "\n## Top Files by Debt\n\n| File | Hours | Cost |\n|------|-------|------|\n" + "\n".join(file_rows) + "\n"
-    )
-
-    # ROI priorities section
-    roi_rows = []
-    for item in debt_data.get("roi_ranking", [])[:10]:
-        desc = item.get("description", "")[:40]
-        roi = item.get("roi_score", 0)
-        hours = item.get("estimated_hours", 0)
-        complexity = item.get("fix_complexity", "unknown")
-        roi_rows.append(f"| {desc}... | {roi} | {hours:.1f} | {complexity} |")
-    result += (
-        "\n## Top ROI Priorities (Quick Wins)\n\n"
-        "| Description | ROI | Hours | Complexity |\n"
-        "|-------------|-----|-------|------------|\n" + "\n".join(roi_rows) + "\n"
-    )
-
-    return result
-
-
-def _build_debt_recommendations() -> str:
-    """Build recommendations section (Issue #398: extracted)."""
-    return """
-## Recommendations
-
-1. **Start with Quick Wins**: Address items with high ROI scores first
-2. **Focus on Critical Issues**: Prioritize critical severity items
-3. **Track Progress**: Run debt calculation regularly to monitor trends
-4. **Set Targets**: Aim to reduce total debt hours by 10% per sprint
-"""
-
-
-def _generate_markdown_report(debt_data: dict) -> str:
-    """Generate complete markdown debt report (Issue #398: extracted)."""
-    return _build_debt_executive_summary(debt_data) + _build_debt_tables(debt_data) + _build_debt_recommendations()
-
-
 @router.get("/report", response_model=DataResponse[AnalyticsDebtReportResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -771,6 +542,7 @@ def _generate_markdown_report(debt_data: dict) -> str:
     error_code_prefix="ANALYTICS_DEBT",
 )
 async def get_debt_report(
+    source_id: SourceIdQuery,
     format: str = Query(default="json", description="json or markdown"),
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -778,7 +550,8 @@ async def get_debt_report(
     Generate a comprehensive debt report (Issue #398: refactored).
     Issue #744: Requires admin authentication.
     """
-    debt_data = _get_latest_debt_data()
+    await _require_scoped_source(source_id)
+    debt_data = get_latest_debt_data(source_id)
 
     if not debt_data:
         return JSONResponse(
@@ -793,7 +566,7 @@ async def get_debt_report(
             {
                 "status": "success",
                 "format": "markdown",
-                "report": _generate_markdown_report(debt_data),
+                "report": generate_markdown_report(debt_data),
             }
         )
 

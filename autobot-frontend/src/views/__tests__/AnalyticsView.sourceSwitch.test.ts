@@ -31,6 +31,7 @@ const SUB_TABS = [
   'analytics-codebase-code-quality',
   'analytics-codebase-code-review',
   'analytics-codebase-evolution',
+  'analytics-codebase-technical-debt',
   'analytics-codebase-code-generation',
 ]
 const mounts = { page: 0, subTab: 0 }

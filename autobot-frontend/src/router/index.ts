@@ -451,6 +451,15 @@ export const routes: RouteRecordRaw[] = [
             }
           },
           {
+            path: 'technical-debt',
+            name: 'analytics-codebase-technical-debt',
+            component: () => import('@/components/analytics/TechnicalDebtDashboard.vue'),
+            meta: {
+              title: 'Technical Debt',
+              parent: 'analytics'
+            }
+          },
+          {
             path: 'code-generation',
             name: 'analytics-codebase-code-generation',
             component: () => import('@/components/analytics/CodeGenerationDashboard.vue'),
@@ -565,15 +574,6 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/components/analytics/PrecommitHookDashboard.vue'),
         meta: {
           title: 'Pre-commit Hooks',
-          parent: 'analytics'
-        }
-      },
-      {
-        path: 'technical-debt',
-        name: 'analytics-technical-debt',
-        component: () => import('@/components/analytics/TechnicalDebtDashboard.vue'),
-        meta: {
-          title: 'Technical Debt',
           parent: 'analytics'
         }
       },

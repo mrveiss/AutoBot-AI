@@ -95,11 +95,16 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
     { withSourceId: deps.withSourceId },
   )
 
-  const debtSummaryEndpoint = useFetchEndpoint<Raw, Raw>({
-    path: '/api/debt/summary',
-    pickData: (r) => r,
-    label: 'Technical debt summary',
-  })
+  const debtSummaryEndpoint = useFetchEndpoint<Raw, Raw>(
+    {
+      path: '/api/debt/summary',
+      scopeToSource: true,
+      requireSource: true, // #22198: the route answers 422 without `source_id`
+      pickData: (r) => r,
+      label: 'Technical debt summary',
+    },
+    { withSourceId: deps.withSourceId },
+  )
 
   const performanceSummaryEndpoint = useFetchEndpoint<Raw, Raw>({
     path: '/api/performance/summary',
