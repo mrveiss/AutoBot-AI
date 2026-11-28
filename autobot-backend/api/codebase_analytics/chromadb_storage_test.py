@@ -16,7 +16,9 @@ These tests fail against the pre-#6695 code (``existing`` is a coroutine →
 attribute 'get'`` and the bug branch logs a warning instead of deleting).
 """
 
+import ast
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -26,6 +28,7 @@ from api.codebase_analytics.chromadb_storage import (
     _prepare_batch_data,
     _prepare_import_document,
     _prepare_imports_batch,
+    _prepare_stats_document,
 )
 
 
@@ -188,3 +191,77 @@ class TestPrepareImportsBatch:
         assert import_metas[0]["file_path"] == "mod.py"
         assert json.loads(import_metas[0]["imports"]) == ["os", "sys"]
         assert batch_ids and batch_documents
+
+
+_STATS_RESULTS = {
+    "stats": {
+        "total_files": 1,
+        "total_lines": 2,
+        "python_files": 1,
+        "javascript_files": 0,
+        "vue_files": 0,
+        "total_functions": 0,
+        "total_classes": 0,
+        "last_indexed": "2026-01-01",
+        "lines_by_category": {"code": 2},
+    }
+}
+
+
+class TestPrepareStatsDocument:
+    """#17665: the stats preparer shares the other preparers' refusal boundary."""
+
+    def test_scoped_carries_source_id_and_per_source_id(self):
+        stats_id, _doc, metadata = _prepare_stats_document(_STATS_RESULTS, source_id="src-A")
+
+        assert metadata["source_id"] == "src-A"
+        assert metadata["type"] == "stats"
+        assert stats_id == "codebase_stats_src-A"
+
+    @pytest.mark.parametrize("missing", [None, ""])
+    def test_unscoped_is_refused(self, missing):
+        with pytest.raises(ValueError, match="source_id"):
+            _prepare_stats_document(_STATS_RESULTS, source_id=missing)
+
+
+_PACKAGE = Path(__file__).parent
+
+
+def _unrouted_preparers(source: str) -> list[str]:
+    """Names of `_prepare_*_document` functions that never call `require_source_id`."""
+    unrouted = []
+    for node in ast.walk(ast.parse(source)):
+        is_fn = isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        if not (is_fn and node.name.startswith("_prepare_") and node.name.endswith("_document")):
+            continue
+        calls = {c.func.id for c in ast.walk(node) if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
+        if "require_source_id" not in calls:
+            unrouted.append(node.name)
+    return unrouted
+
+
+class TestEveryPreparerRoutesSourceIdThroughRequireSourceId:
+    """#17665: the preparer set is derived (AST), not named, so a sixth one cannot slip by."""
+
+    def test_derived_preparers_all_call_require_source_id(self):
+        found, unrouted = [], []
+        for path in sorted(_PACKAGE.glob("*.py")):
+            if path.name.endswith("_test.py") or path.name.startswith("test_"):
+                continue
+            source = path.read_text(encoding="utf-8")
+            found += [
+                n.name
+                for n in ast.walk(ast.parse(source))
+                if isinstance(n, ast.FunctionDef) and n.name.startswith("_prepare_") and n.name.endswith("_document")
+            ]
+            unrouted += [f"{path.name}:{n}" for n in _unrouted_preparers(source)]
+
+        assert len(found) >= 5, f"discovery found only {found}; re-derive, do not pass vacuously"
+        assert not unrouted, f"preparers that do not call require_source_id: {unrouted}"
+
+    def test_contrast_a_preparer_without_it_is_detected(self):
+        bad = "def _prepare_x_document(d, source_id=None):\n    m = {}\n    if source_id:\n        m['source_id'] = source_id\n"
+        good = "def _prepare_y_document(d, source_id=None):\n    return require_source_id(source_id, 'y')\n"
+
+        assert _unrouted_preparers(bad) == ["_prepare_x_document"]
+        assert _unrouted_preparers(good) == []
