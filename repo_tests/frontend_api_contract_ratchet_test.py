@@ -287,8 +287,29 @@ def _vue_markup_uncommented(path: Path) -> str:
     return strip_html_comments(text) if path.suffix == ".vue" else text
 
 
+# #17641: each parametrised case re-scanned both full trees, past the pre-push budget. The checkout and the
+# exported base never change in a run, so they are measured once; a tree a test builds itself is never cached.
+_STABLE_ROOTS: set[Path] = {_REPO_ROOT}
+_MEASURED: dict[tuple, object] = {}
+
+
+def _once(kind: str, app: str, repo: Path, extra: object, compute):
+    """`compute()`, remembered when *repo* is a registered stable tree."""
+    if repo not in _STABLE_ROOTS:
+        return compute()
+    key = (kind, app, repo, extra)
+    if key not in _MEASURED:
+        _MEASURED[key] = compute()
+    return _MEASURED[key]
+
+
 def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | None = None) -> dict[str, int]:
     """The counts (see `_DIMENSION_ADVICE`) for *app* in the tree rooted at *repo* (the checkout, or an exported base)."""
+    key = None if exceptions is None else frozenset(exceptions)
+    return _once("measure", app, repo, key, lambda: _measure_uncached(app, repo, exceptions))  # type: ignore[return-value]
+
+
+def _measure_uncached(app: str, repo: Path, exceptions: Collection[str] | None) -> dict[str, int]:
     root = repo / app / "src"
     return {
         "clients": len(_client_class_names(root)),
@@ -303,6 +324,10 @@ def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | No
 
 def _identities(app: str, repo: Path = _REPO_ROOT) -> dict[str, Counter[tuple[str, ...]]]:
     """The measured MEMBERS of the two identity-compared dimensions, as multisets of stable keys."""
+    return _once("identities", app, repo, None, lambda: _identities_uncached(app, repo))  # type: ignore[return-value]
+
+
+def _identities_uncached(app: str, repo: Path) -> dict[str, Counter[tuple[str, ...]]]:
     root = repo / app / "src"
     importers = Counter((rel,) for rel in _fetch_with_auth_importers(root, repo))
     return {"fetch_with_auth_importers": importers, "hand_built_urls": Counter(_hand_built_urls(root, repo))}
@@ -339,7 +364,9 @@ def _regressions(app: str, head: Path, base: Path, base_exceptions: Collection[s
 @pytest.fixture(scope="module")
 def base_tree(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, frozenset[str]]:
     """The merge base's app trees exported to a directory, and the exceptions the base recorded."""
-    return _export_base(tmp_path_factory.mktemp("contract_base")), _base_exceptions()
+    base = _export_base(tmp_path_factory.mktemp("contract_base"))
+    _STABLE_ROOTS.add(base)
+    return base, _base_exceptions()
 
 
 _DIMENSION_ADVICE = {

@@ -129,13 +129,13 @@ ALLOW_UNRUNNABLE="${AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE:-0}"
 # frontend and backend sections).
 PREPUSH_FULL="${AUTOBOT_PREPUSH_FULL:-0}"
 did_not_run() {
-    # $1 = tool, $2 = seconds
+    # $1 = tool, $2 = seconds, $3 = optional how it ended (default: "timed out after ${2}s")
     STAGE_CLEAN=0  # #19472: allowed or not, an unverified stage is never cached as a pass
     if [ "$ALLOW_TIMEOUT" = "1" ]; then
-        warn "$1 DID NOT RUN (timed out after ${2}s) — allowed by AUTOBOT_PREPUSH_ALLOW_TIMEOUT=1"
+        warn "$1 DID NOT RUN (${3:-timed out after ${2}s}) — allowed by AUTOBOT_PREPUSH_ALLOW_TIMEOUT=1"
         return 0
     fi
-    printf "${RED}[pre-push DID NOT RUN]${CLR} %s timed out after %ss — this push is NOT verified.\n" "$1" "$2" >&2
+    printf "${RED}[pre-push DID NOT RUN]${CLR} %s %s — this push is NOT verified.\n" "$1" "${3:-timed out after ${2}s}" >&2
     printf "${RED}[pre-push DID NOT RUN]${CLR} Run it yourself, or re-push with AUTOBOT_PREPUSH_ALLOW_TIMEOUT=1 to accept an unverified push.\n" >&2
     EXIT_CODE=1
 }
@@ -183,7 +183,7 @@ fail()  { printf "${RED}[pre-push FAIL]${CLR} %s\n" "$*" >&2; }
 # ---------------------------------------------------------------------------
 STAGE_CLEAN=1
 STAGE_CACHE_OK=0
-STAGE_PIDS=(); STAGE_LOGS=(); STAGE_NAMES=(); STAGE_KEYS=()
+STAGE_PIDS=(); STAGE_LOGS=(); STAGE_NAMES=(); STAGE_KEYS=(); STAGE_STARTS=()
 # 0 when the working tree IS $local_sha: HEAD is it and nothing is modified or untracked.
 stage_cache_usable() {
   [ "${AUTOBOT_PREPUSH_CACHE:-1}" = "1" ] || return 1
@@ -207,6 +207,8 @@ stage_abort() {
   for pid in ${STAGE_PIDS[@]+"${STAGE_PIDS[@]}"}; do stage_kill_tree "$pid"; done
   # ${a[@]+...}: an empty array under `set -u` aborts the trap on bash < 4.4.
   rm -f ${STAGE_LOGS[@]+"${STAGE_LOGS[@]}"}
+  local l
+  for l in ${STAGE_LOGS[@]+"${STAGE_LOGS[@]}"}; do rm -f "$l.budget"; done
   exit 130
 }
 trap stage_abort INT TERM
@@ -364,9 +366,35 @@ stage_exit() {
   [ "$STAGE_CLEAN" = "1" ] && exit 0
   exit 3
 }
+# A stage reports its own current budget to the heartbeat (the reach-floor leg has a different one
+# from the first leg); read from "<stage log>.budget" by stage_wait_one. No-op outside a stage.
+stage_budget() {
+  [ -n "${STAGE_LOG:-}" ] && [ -f "$STAGE_LOG" ] && printf '%s\n' "$1" > "${STAGE_LOG}.budget"
+  return 0
+}
 stage_track() {
   STAGE_PIDS+=("$1")
+  STAGE_STARTS+=("$(machine_slot_clock)")  # the launch time, so the heartbeat's elapsed counts from it
   [ "${AUTOBOT_PREPUSH_PARALLEL:-1}" = "1" ] || stage_wait_all
+}
+# #17641: a stage writes to its own log, printed only when it ends, so a slow stage looked like a
+# hang -- 4 to 10+ minutes of silence until the caller killed the push. This wait prints a line
+# every AUTOBOT_PREPUSH_HEARTBEAT seconds (default 60) naming the stage still running and its
+# budget, on the hook's own stderr. Returns the stage's exit code.
+stage_wait_one() {
+  local pid="$1" name="$2" slog="$3" start="$4" every="${AUTOBOT_PREPUSH_HEARTBEAT:-60}" now next budget
+  case "$every" in ''|*[!0-9]*|0) every=60 ;; esac
+  next=$((start + every))
+  while kill -0 "$pid" 2>/dev/null; do
+    sleep 1
+    now=$(machine_slot_clock)
+    if [ "$now" -ge "$next" ]; then
+      budget=$(cat "${slog}.budget" 2>/dev/null) || budget=$MAX_BUDGET
+      log "${name}: still running after $((now - start))s since launch (stage budget ${budget}s, then DID NOT RUN)"
+      next=$((now + every))
+    fi
+  done
+  wait "$pid"
 }
 # Waits for every tracked stage in launch order, prints each log as one block, folds the
 # verdicts into EXIT_CODE, and records a marker for each pass.
@@ -374,16 +402,16 @@ stage_wait_all() {
   local i rc
   for i in "${!STAGE_PIDS[@]}"; do
     rc=0
-    wait "${STAGE_PIDS[$i]}" || rc=$?
+    stage_wait_one "${STAGE_PIDS[$i]}" "${STAGE_NAMES[$i]}" "${STAGE_LOGS[$i]}" "${STAGE_STARTS[$i]}" || rc=$?
     cat "${STAGE_LOGS[$i]}" >&2
-    rm -f "${STAGE_LOGS[$i]}"
+    rm -f "${STAGE_LOGS[$i]}" "${STAGE_LOGS[$i]}.budget"
     if [ "$rc" = "0" ]; then
       stage_record "${STAGE_NAMES[$i]}" "${STAGE_KEYS[$i]}"
     elif [ "$rc" != "3" ]; then
       EXIT_CODE=1
     fi
   done
-  STAGE_PIDS=(); STAGE_LOGS=(); STAGE_NAMES=(); STAGE_KEYS=()
+  STAGE_PIDS=(); STAGE_LOGS=(); STAGE_NAMES=(); STAGE_KEYS=(); STAGE_STARTS=()
 }
 stage_record() {
   local marker
@@ -514,7 +542,8 @@ remote_guard_pytest() {
 # some guard modules cannot import locally -- both still judged by their STALE/PIN lines;
 # 124 is a timeout; any other exit is a crash and fails, never reads as clean).
 run_fast_guards() {
-  local guards missing guard_output out rc=0
+  local guards missing guard_output out rc=0 gate_start leg2_budget
+  gate_start=$(machine_slot_clock)  # #17641: both legs share ONE MAX_BUDGET, not one each (worst case 2x)
   if ! guards=$(fast_guard_tests) || [ -z "$guards" ]; then
     fail "no fast guard list: ${FAST_GUARD_LIST} is in neither ${local_sha:0:10} nor the working tree"
     EXIT_CODE=1
@@ -532,19 +561,23 @@ run_fast_guards() {
   if remote_guard_pytest "$guards" "$missing"; then where="on the remote test node"; else
   # shellcheck disable=SC2046,SC2086 # word-splitting the file list and xdist args is intended
   # -m "not reach_floor" as every pre-push pytest (#17810): the floors are CI's; the pins are below.
-  guard_output=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" -m pytest -q -p no:cacheprovider -m "not reach_floor" \
+  stage_budget "$MAX_BUDGET"
+  guard_output=$(cd "$REPO_ROOT" && exec 9>&- && timeout -k 10 "$MAX_BUDGET" "$PYTEST_PYTHON" -m pytest -q -p no:cacheprovider -m "not reach_floor" \
     $(pytest_xdist_args) --tb=line $(printf '%s\n' "$guards" | grep -vxF -f <(printf '%s\n' "$missing")) 2>&1) || rc=$?
   fi
   # As the full pytest run (#19312 review): an interpreter that cannot import pytest ran nothing.
   if [ "$where" = "locally" ] && ! "$PYTEST_PYTHON" -c 'import pytest' >/dev/null 2>&1; then
     could_not_run "fast guards" "${PYTEST_PYTHON} cannot import pytest, so the guard tests did not run"
-  elif [ "$rc" = "124" ]; then did_not_run "fast guards" "$MAX_BUDGET"
+  elif [ "$rc" = "124" ] || [ "$rc" = "137" ]; then did_not_run "fast guards" "$MAX_BUDGET" "$([ "$rc" = "137" ] && echo "timed out or was killed (rc 137)")"  # 137: timeout -k had to KILL it
   elif [ "$rc" != "0" ]; then fail "fast guards failed ${where}:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
   else ok "fast guards ${where}: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
   rc=0
-  out=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check --changed-since origin/main 2>&1) || rc=$?
-  if [ "$rc" = "124" ]; then
-    did_not_run "repin_reach_floors.py --check" "$MAX_BUDGET"
+  leg2_budget=$((MAX_BUDGET - ($(machine_slot_clock) - gate_start)))
+  [ "$leg2_budget" -ge 60 ] || leg2_budget=60  # a floor, so a slow first leg cannot starve the pins into an instant timeout
+  stage_budget "$leg2_budget"
+  out=$(cd "$REPO_ROOT" && exec 9>&- && timeout -k 10 "$leg2_budget" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check --changed-since origin/main 2>&1) || rc=$?
+  if [ "$rc" = "124" ] || [ "$rc" = "137" ]; then
+    did_not_run "repin_reach_floors.py --check" "$leg2_budget" "$([ "$rc" = "137" ] && echo "timed out or was killed (rc 137)")"
   elif printf '%s\n' "$out" | grep -qE '^(STALE|PIN)'; then
     fail "reach floors are stale -- run scripts/repin_reach_floors.py and commit:"
     printf '%s\n' "$out" | grep -E '^(STALE|PIN)' | head -20 >&2
@@ -937,6 +970,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       ! stage_cached "vue-tsc ${project}" "$tsc_key" || exit 0  # the same tree passed while this one queued
     EXIT_CODE=0; STAGE_CLEAN=1
     log "${project}: frontend files changed — running vue-tsc (timeout ${TYPE_CHECK_TIMEOUT}s)"
+    stage_budget "$TYPE_CHECK_TIMEOUT"
     if node_modules_usable "$project_dir"; then
       tsc_output=$(
         cd "$project_dir" \
@@ -1056,6 +1090,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     EXIT_CODE=0; STAGE_CLEAN=1
     if [ -n "$all_tests" ] && node_modules_usable "$project_dir"; then
       log "${project}: running vitest on relevant tests (timeout ${TEST_TIMEOUT}s):"
+      stage_budget "$TEST_TIMEOUT"
       echo "$all_tests" | sed 's/^/    /' >&2
       vitest_output=$(
         cd "$project_dir" \
@@ -1104,7 +1139,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     EXIT_CODE=0; STAGE_CLEAN=1
     if [ -n "$kit_changed" ] && node_modules_usable "$project_dir"; then
       kit_rel=$(echo "$kit_changed" | sed 's|^|../|')
-      kit_timeout=$(kit_related_budget "$project_dir")
+      kit_timeout=$(kit_related_budget "$project_dir"); stage_budget "$kit_timeout"
       log "${project}: ${KIT_TREE} changed — running vitest related (timeout ${kit_timeout}s, #18578)"
       kit_exit=0
       kit_output=$(
@@ -1223,6 +1258,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     always_count=$(printf '%s\n' "$selection" | awk -F'\t' '$2 ~ /^whole-tree:/ {n++} END {print n+0}')
     PYTEST_TIMEOUT=$(pytest_budget "$TEST_TIMEOUT" "$((selected_count - always_count))" "$pytest_parallel")
     [ "$always_count" -gt 0 ] && PYTEST_TIMEOUT=$((PYTEST_TIMEOUT + ALWAYS_RUN_BUDGET_S))
+    stage_budget "$PYTEST_TIMEOUT"
     log "pytest selected ${selected_count} file(s), ${always_count} of them whole-tree guards (+${ALWAYS_RUN_BUDGET_S}s) -> budget ${PYTEST_TIMEOUT}s ($([ "$pytest_parallel" = 1 ] && echo "parallel, ${PYTEST_XDIST_ARGS%% --dist*}" || echo 'serial (AUTOBOT_PREPUSH_PYTEST_WORKERS=0 or no xdist for '"$PYTEST_PYTHON)"))"
 
     # #16069: autobot-slm-backend must be a SEPARATE pytest invocation.
