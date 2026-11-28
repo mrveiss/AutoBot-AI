@@ -32,3 +32,19 @@ def test_the_quality_score_route_requires_a_source():
     app.dependency_overrides[check_admin_permission] = lambda: True
     response = TestClient(app, raise_server_exceptions=False).get("/code/metrics/quality-score")
     assert response.status_code == 422
+
+
+def test_an_unresolvable_source_is_a_404_for_the_quality_score():
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    import pytest
+
+    from api.codebase_analytics.endpoints.shared import UnresolvedSourceError
+
+    with patch.object(
+        mod, "resolve_scan_root", new=AsyncMock(side_effect=UnresolvedSourceError("src-x"))
+    ):
+        with pytest.raises(UnresolvedSourceError) as exc:
+            asyncio.run(mod.get_code_quality_score(source_id="src-x", admin_check=True))
+    assert exc.value.status_code == 404

@@ -14,7 +14,10 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.codebase_analytics.endpoints.shared import require_source_access
+from api.codebase_analytics.endpoints.shared import (
+    require_source_access,
+    resolve_scan_root,
+)
 from api.schemas_analytics import (
     AnalyticsCodeCommunicationChainsResponse,
     AnalyticsCodeIndexResponse,
@@ -24,7 +27,7 @@ from api.schemas_analytics import (
     AnalyticsCodeStatusResponse,
     CodeAnalysisRequest,
 )
-from api.source_scope import SourceIdQuery
+from api.source_scope import SourceIdQuery, require_source_id
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -309,10 +312,7 @@ def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> lis
     return insights
 
 
-@router.get(
-    "/code/communication-chains",
-    response_model=AnalyticsCodeCommunicationChainsResponse,
-)
+@router.get("/code/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_chains",
@@ -426,10 +426,7 @@ def _generate_communication_chain_insights(
     return insights
 
 
-@router.post(
-    "/code/analyze/communication-chains",
-    response_model=AnalyticsCodeCommunicationChainsResponse,
-)
+@router.post("/code/analyze/communication-chains", response_model=AnalyticsCodeCommunicationChainsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_communication_chains_detailed",
@@ -581,6 +578,8 @@ async def get_code_quality_score(
     Issue #665: Refactored with extracted helper functions.
     Issue #744: Requires admin authentication.
     """
+    # A source with no checkout is a 404, as the debt routes answer (#22198).
+    await resolve_scan_root(require_source_id(source_id, "quality-score request"))
     cached_analysis = analytics_state.get("code_analysis_cache")
 
     if not cached_analysis:
