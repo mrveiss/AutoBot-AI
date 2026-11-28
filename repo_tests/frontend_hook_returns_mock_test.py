@@ -29,23 +29,44 @@ from repo_tests._reach import declare
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _TEST_FILE = re.compile(r"\.(?:test|spec)\.(?:ts|tsx|js)$")
 _HOOK_CALL = re.compile(r"\b(?:beforeEach|beforeAll|afterEach|afterAll)\(\s*")
-_EXPRESSION_ARROW = re.compile(r"(?:async\s*)?\(\)\s*=>\s*(?!\{)")
+_EXPRESSION_ARROW = re.compile(r"(?:async\s*)?(?:\([^()]*\)|[\w$]+)\s*=>\s*(?!\{)")
 _MOCK_CALL = re.compile(r"\.mock[A-Z]\w*\(")
 _BARE_MOCK_REFERENCE = re.compile(r"[\w.$]+\.mock(?:Reset|Clear|Restore)\s*")
 _FLOOR = 830
-_PAIRS = {"(": ")", "{": "}"}
+
+
+def _skip_literal(text: str, i: int) -> int:
+    """Index just past the string, template literal or comment starting at *i*; *i* itself if none."""
+    ch = text[i]
+    if ch in "'\"`":
+        j = i + 1
+        while j < len(text) and text[j] != ch:
+            j += 2 if text[j] == "\\" else 1
+        return j + 1
+    if text.startswith("//", i):
+        end = text.find("\n", i)
+        return len(text) if end < 0 else end
+    if text.startswith("/*", i):
+        end = text.find("*/", i + 2)
+        return len(text) if end < 0 else end + 2
+    return i
 
 
 def _argument(text: str, start: int) -> str:
-    """The hook's first argument: from *start* to the call's closing paren, nesting-aware."""
-    depth = 1
-    for i in range(start, len(text)):
+    """The hook's first argument: from *start* to the call's closing paren, nesting- and literal-aware."""
+    depth, i = 1, start
+    while i < len(text):
+        skipped = _skip_literal(text, i)
+        if skipped != i:
+            i = skipped
+            continue
         if text[i] in "({[":
             depth += 1
         elif text[i] in ")}]":
             depth -= 1
             if depth == 0:
                 return text[start:i]
+        i += 1
     return text[start:]
 
 
@@ -103,6 +124,10 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         assert offending("beforeEach(() => vi.fn(() => {}).mockReset())") == 1  # nested block arrow
         assert offending("beforeEach(mock.mockReset)") == 1  # bare mock reference
         assert offending("afterAll(x.mockClear )") == 1
+        assert offending("beforeEach(() => get('a)').mockReset())") == 1  # paren in a string, expression body
+        assert offending("beforeEach((ctx) => m.mockReset())") == 1  # arrow parameters
+        assert offending("beforeEach(async (x) => m.mockReset())") == 1
+        assert offending("beforeEach(x => x.mockReset())") == 1
 
     def test_the_block_form_passes(self) -> None:  # negative control, the contrast pair
         assert offending("beforeEach(() => { get.mockReset() })") == 0
@@ -112,6 +137,9 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         assert offending("beforeEach(() => {\n  x\n    .mockReset()\n})") == 0  # chain, block form
         assert offending("beforeEach(() => { vi.fn(() => {}).mockReset() })") == 0  # nested, block form
         assert offending("beforeEach(() => { mock.mockReset() })") == 0  # bare reference, block form
+        assert offending("beforeEach(() => { get('a)').mockReset() })") == 0  # paren in a string, block hook
+        assert offending("beforeEach(() => { /* ) */ m.mockReset() })") == 0  # paren in a comment, block hook
+        assert offending("beforeEach((ctx) => { m.mockReset() })") == 0  # arrow parameters, block form
         assert offending("beforeEach(resetApi)") == 0  # bare non-mock function
         assert offending("beforeEach(() => wrap(() => { m.mockReset() }))") == 0  # mock only inside a block
 
