@@ -29,7 +29,7 @@ from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 
 from . import event_buffer, request_timeouts
 from .health_collector import HealthCollector
-from .heartbeat_payload import build_heartbeat_payload
+from .heartbeat_payload import build_heartbeat_payload, confirm_inventory
 from .role_detector import RoleDetector
 from .version import get_agent_version
 
@@ -223,9 +223,9 @@ class SLMAgent:
                 ssl=False,  # mTLS pending PKI setup (Issue #725)
             ) as response:
                 if response.status == 200:
-                    # Issue #741: Process heartbeat response
                     response_data = await response.json()
-                    self._process_heartbeat_response(response_data)
+                    self._process_heartbeat_response(response_data)  # Issue #741
+                    confirm_inventory(payload, response_data)  # #22280
                     if self._reg_backoff_seconds:
                         logger.info("Heartbeat accepted — node registration confirmed")
                         self._reg_backoff_seconds = 0

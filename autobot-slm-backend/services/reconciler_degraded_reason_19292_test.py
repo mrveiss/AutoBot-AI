@@ -9,6 +9,9 @@ DEGRADED landed in ``_attempt_remediation``, which restarted slm-agent -- a
 remedy that cannot lower load. These drive the REAL reconciler (loaded from
 disk; the package conftest stubs ``services.reconciler``) through the
 heartbeat path and the remediation selection.
+
+The heartbeat's capability-profile and self-model write runs in its own SAVEPOINT (#22280): its
+failure is logged and rolled back alone, and the beat's liveness and metrics still commit.
 """
 
 from __future__ import annotations
@@ -21,6 +24,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from testkit.fake_async_session import FakeAsyncSession
 
@@ -304,3 +310,33 @@ def test_the_14465_tracker_guarantees_are_untouched():
     assert callable(service._forgive_if_expired)
     assert callable(service._heartbeat_returned)
     assert not isinstance(reconciler.ReconcilerService, MagicMock)
+
+
+def _beat_with_failing_extra_data_write(error: Exception):
+    """One heartbeat whose ``apply_heartbeat_extra_data`` raises *error* (#22280)."""
+    service, node = reconciler.ReconcilerService(), _node("n-self-model")
+    failing = AsyncMock(side_effect=error)
+    session = FakeAsyncSession(results=[[node]])
+    log = reconciler.write_in_savepoint.__globals__["logger"]
+    with patch.object(reconciler, "apply_heartbeat_extra_data", failing), patch.object(log, "warning") as warn:
+        with _recorded_events():
+            asyncio.run(
+                service.update_node_heartbeat(
+                    session, node.node_id, _CALM_CPU, 10.0, 10.0, extra_data={"inventory_hash": "h"}
+                )
+            )
+    failing.assert_awaited_once()
+    return node, session, warn
+
+
+def test_a_failed_self_model_write_is_logged_and_the_heartbeat_still_commits():
+    node, session, warn = _beat_with_failing_extra_data_write(IntegrityError("INSERT", {}, Exception("dup")))
+    assert session.committed and session.rollbacks == 1  # the savepoint, not the heartbeat, was rolled back
+    assert node.cpu_percent == _CALM_CPU and node.status == reconciler.NodeStatus.ONLINE.value
+    warn.assert_called_once()
+    assert node.node_id in warn.call_args.args and isinstance(warn.call_args.args[-1], IntegrityError)
+
+
+def test_a_lost_connection_during_the_self_model_write_is_not_swallowed():
+    with pytest.raises(OperationalError):
+        _beat_with_failing_extra_data_write(OperationalError("INSERT", {}, Exception("connection lost")))

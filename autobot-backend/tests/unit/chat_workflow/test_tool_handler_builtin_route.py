@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from chat_workflow.catalogue_tool_handlers import REGISTRY_CHAT_TOOL_NAMES
 from chat_workflow.tool_handler import (
     _BUILTIN_TOOL_SCHEMAS,
     _UNIFORM_BUILTIN_TOOLS,
@@ -88,6 +89,7 @@ def test_uniform_set_is_union_of_builtin_families() -> None:
         # #13919: read_spilled_output joined the uniform set so the spill
         # excerpt's note names something this seam can actually route.
         | {"web_search", "execute_command", "read_spilled_output", "command_manual"}
+        | REGISTRY_CHAT_TOOL_NAMES  # #22278
     )
     # respond/delegate are non-uniform (special return shapes) and must stay out.
     assert "respond" not in _UNIFORM_BUILTIN_TOOLS

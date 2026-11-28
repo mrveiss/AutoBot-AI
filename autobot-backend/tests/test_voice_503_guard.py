@@ -75,7 +75,7 @@ class TestVoice503Guard:
         client = TestClient(app, raise_server_exceptions=False)
         fake = mock.MagicMock()
         fake.synthesize = mock.AsyncMock(return_value=b"RIFFfakewavdata")
-        with mock.patch("api.voice.get_tts_client", return_value=fake):
+        with mock.patch("api.voice.resolve_tts_provider", return_value=fake):
             response = client.post("/api/voice/speak", data={"text": "hello", "user_role": "user"})
         assert response.status_code == 200
         assert response.headers["content-type"] == "audio/wav"
@@ -101,7 +101,7 @@ class TestVoice503Guard:
         client = TestClient(app, raise_server_exceptions=True)
         fake = mock.MagicMock()
         fake.synthesize = mock.AsyncMock(return_value=b"RIFFfakewavdata")
-        with mock.patch("api.voice.get_tts_client", return_value=fake):
+        with mock.patch("api.voice.resolve_tts_provider", return_value=fake):
             response = client.post("/api/voice/speak", data={"text": "hello", "user_role": "user"})
         assert response.status_code == 200
 
@@ -138,7 +138,7 @@ class TestSpeakHasOneResponseShape:
         import unittest.mock as mock
 
         client = TestClient(app, raise_server_exceptions=False)
-        with mock.patch("api.voice.get_tts_client", return_value=self._tts()):
+        with mock.patch("api.voice.resolve_tts_provider", return_value=self._tts()):
             return client.post("/api/voice/speak", data={"text": "hello", "user_role": "user", **extra})
 
     def test_speak_returns_wav_when_the_interface_is_present(self):

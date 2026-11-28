@@ -148,3 +148,196 @@ async def test_agent_kb_tools_never_return_another_users_private_fact(call):
     assert "alice only" not in repr(await run("bob"))
     assert "alice only" not in repr(await run(None))
     assert "alice only" in repr(await run("alice"))
+
+
+@pytest.mark.asyncio
+async def test_system_read_tools_work_through_get_tool_registry_without_worker_node(monkeypatch):
+    """#22267: the system-info tool returns real data from the production singleton (service list: unit test below)."""
+    from tools.tool_registry import get_tool_registry
+
+    registry = get_tool_registry()
+    assert registry.worker_node is None
+    monkeypatch.setattr(registry, "_system_integration", None)  # undo restores None: no real instance stays cached
+
+    info = await registry.query_system_information()
+
+    assert info["status"] == "success"
+    assert "os_type" in info["result"]
+
+
+@pytest.mark.asyncio
+async def test_list_system_services_returns_the_services_or_the_error_message(monkeypatch):
+    """#22280: unit test, no real systemctl; a failure's message reaches the caller."""
+    from unittest.mock import create_autospec
+
+    from system_integration import SystemIntegration
+    from tools.tool_registry import ToolRegistry
+
+    registry = ToolRegistry()
+    fake = create_autospec(SystemIntegration, instance=True)
+    monkeypatch.setattr(registry, "_system_integration", fake)
+
+    services = [{"Name": "ssh", "Status": "active"}]
+    fake.list_services.return_value = {"status": "success", "services": services}
+    assert (await registry.list_system_services())["result"] == services
+
+    fake.list_services.return_value = {"status": "success", "services": []}
+    assert (await registry.list_system_services())["result"] == []
+
+    fake.list_services.return_value = {"status": "error", "message": "systemctl unavailable", "output": ""}
+    assert (await registry.list_system_services())["result"] == "systemctl unavailable"
+
+
+# ---------------------------------------------------------------------------
+# One tool catalogue, each tool recording where it runs (#22276)
+# ---------------------------------------------------------------------------
+
+
+def test_available_tools_derive_from_the_catalogue():
+    """#22276: ``get_available_tools`` is the catalogue's prompt list, not a literal."""
+    from tools.tool_records import REGISTRY_TOOLS, prompt_tool_names
+    from tools.tool_registry import ToolRegistry
+
+    names = ToolRegistry().get_available_tools()
+    assert names == prompt_tool_names()
+    assert set(REGISTRY_TOOLS) <= set(names)
+
+
+def test_every_tool_record_names_where_it_runs():
+    from tools.tool_records import tool_records
+
+    records = tool_records()
+    assert records and all(r["kind"] == "tool" and r["serving_service"] for r in records)
+    assert {r["fields"]["source"] for r in records} >= {"tool_registry", "browser"}
+
+
+def test_no_second_tool_list():
+    """#22276: a list/set literal restating five or more catalogue tool names is a second list."""
+    import ast
+    import pathlib
+
+    from autobot_shared.testfile_names import is_test_filename
+    from tools.tool_records import REGISTRY_TOOLS
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    names = set(REGISTRY_TOOLS)
+    offenders = []
+    for path in root.rglob("*.py"):
+        skip = {"tests", "venv", "node_modules"} & set(path.parts)
+        if skip or is_test_filename(path.name) or path.name == "tool_records.py":
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+                hits = sum(1 for e in node.elts if isinstance(e, ast.Constant) and e.value in names)
+                if hits >= 5:
+                    offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert not offenders, f"#22276: second tool-name list in {offenders}; derive from tools.tool_records"
+
+
+# ---------------------------------------------------------------------------
+# One definition of each tool's required permission (#22278)
+# ---------------------------------------------------------------------------
+
+
+def test_every_registry_tool_declares_its_required_permission():
+    from autobot_shared.auth.permissions import Permission
+    from tools.tool_records import CHAT_SHELL_TOOL, REGISTRY_TOOLS, SPILL_READ_TOOL
+
+    for name, entry in {**REGISTRY_TOOLS, **dict([SPILL_READ_TOOL, CHAT_SHELL_TOOL])}.items():
+        assert len(entry) == 3, f"{name} must declare (category, location, required permission or None)"
+        assert entry[2] is None or isinstance(entry[2], Permission), name
+
+
+def test_catalogue_permissions_agree_with_the_mcp_permission_table():
+    from autobot_shared.auth.mcp_tool_permissions import TOOL_PERMISSIONS
+    from tools.tool_records import REGISTRY_TOOLS, required_permission_for
+
+    for name in set(REGISTRY_TOOLS) & set(TOOL_PERMISSIONS):
+        assert required_permission_for(name) == TOOL_PERMISSIONS[name], name
+
+
+def test_catalogue_declares_the_checks_the_handler_enforced():
+    from autobot_shared.auth.permissions import Permission
+    from tools.tool_records import required_permission_for
+
+    assert required_permission_for("web_search") == Permission.MCP_BROWSER_READ
+    assert required_permission_for("crawl_site") == Permission.KNOWLEDGE_WRITE
+    assert required_permission_for("scrape_url") == Permission.KNOWLEDGE_READ
+    assert required_permission_for("execute_system_command") == Permission.SHELL_EXECUTE
+    assert required_permission_for("execute_command") == Permission.SHELL_EXECUTE
+    assert required_permission_for("search_knowledge_base") == Permission.KNOWLEDGE_READ
+    assert required_permission_for("get_fact") == Permission.KNOWLEDGE_READ
+
+
+def test_the_chat_shell_tool_is_a_record_with_its_permission_and_the_host_it_is_served_from():
+    from tools.tool_records import LOCATION_BACKEND, tool_records
+
+    shell = next(r for r in tool_records() if r["name"] == "execute_command")
+    assert shell["fields"]["required_permission"] == "allow_shell_execute"
+    assert shell["node_id"] and shell["serving_service"] == LOCATION_BACKEND
+
+
+def test_a_tool_served_from_a_placed_service_carries_its_host_and_one_not_placed_carries_none():
+    from tools.tool_records import LOCATION_WORKER, tool_records
+
+    by_name = {r["name"]: r for r in tool_records()}
+    assert by_name["web_search"]["node_id"]
+    assert by_name["type_text"]["serving_service"] == LOCATION_WORKER and by_name["type_text"]["node_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_execute_command_takes_its_permission_from_the_catalogue(monkeypatch):
+    from autobot_shared.auth.permissions import Permission
+    from chat_workflow import tool_handler
+    from tools import tool_records
+
+    seen = []
+
+    async def record(name, params, session_id, tool_permission=None, user_role=None):
+        seen.append(tool_permission)
+        return False
+
+    monkeypatch.setattr(tool_handler, "_emit_before_tool_execute", record)
+    monkeypatch.setattr(
+        tool_records, "_UNLISTED_TOOLS", {"execute_command": ("system", "x", Permission.WORKFLOW_CREATE)}
+    )
+    handler = tool_handler.ToolHandlerMixin()
+    gen = handler._dispatch_execute_command({"params": {"command": "ls"}}, "s", "t", "e", "m", [], [], role="user")
+    async for _ in gen:
+        pass
+    assert seen == [Permission.WORKFLOW_CREATE.value]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["scrape_url", "crawl_site"])
+async def test_handler_gate_takes_the_permission_from_the_catalogue(monkeypatch, tool):
+    from autobot_shared.auth.permissions import Permission
+    from chat_workflow import tool_handler
+    from tools import tool_records
+
+    gate = []
+
+    async def deny(name, params, session_id, permission, role, results):
+        gate.append(permission)
+        return object()
+
+    monkeypatch.setattr(tool_handler, "permission_denial", deny)
+    entry = tool_records.REGISTRY_TOOLS[tool]
+    monkeypatch.setitem(tool_records.REGISTRY_TOOLS, tool, (*entry[:2], Permission.WORKFLOW_CREATE))
+    handler = tool_handler.ToolHandlerMixin()
+    async for _ in handler._handle_web_research_tool(tool, {"params": {}}, [], "s", "user"):
+        pass
+    assert gate == [Permission.WORKFLOW_CREATE.value]
+
+
+def test_worker_dispatched_tools_are_recorded_at_the_worker_not_the_backend():
+    """#22280: web_fetch, ask_user_for_manual and respond_conversationally go through _execute_worker_task."""
+    from tools.tool_records import LOCATION_WORKER, tool_records
+
+    by_name = {r["name"]: r for r in tool_records()}
+    for name in ("web_fetch", "ask_user_for_manual", "respond_conversationally"):
+        assert by_name[name]["serving_service"] == LOCATION_WORKER, name

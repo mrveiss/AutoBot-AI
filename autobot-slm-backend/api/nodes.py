@@ -87,6 +87,7 @@ from services.node_events import create_node_event, enrollment_details
 from services.provision_inventory import PROVISION_TARGET, build_decommission_inventory, provision_inventory_for
 from services.reconciler import reconciler_service
 from services.role_removal_dir import record_role_report, role_removal_path
+from services.self_model_store import acknowledged_inventory_hash
 from services.ssh_utils import build_ssh_base_cmd
 from services.temp_inventory import write_linked_inventory
 
@@ -1925,9 +1926,7 @@ async def node_heartbeat(
             )
 
         await _apply_heartbeat_reports(db, node_id, heartbeat, node)
-
         await _auto_populate_ansible_name(db, node, node_id, heartbeat)
-
         latest_version = await _update_heartbeat_code_status(db, node, heartbeat.extra_data)
         await db.commit()
         await db.refresh(node)
@@ -1938,6 +1937,7 @@ async def node_heartbeat(
             update_available=update_available,
             latest_version=latest_version if update_available else None,
             update_url=(f"/api/nodes/{node_id}/package" if update_available else None),
+            inventory_ack=await acknowledged_inventory_hash(db, node.node_id),
         )
 
     except HTTPException:
