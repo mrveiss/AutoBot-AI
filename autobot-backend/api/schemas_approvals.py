@@ -93,6 +93,7 @@ class ApprovalGateResponse(BaseModel):
     approval_type: str
     status: str
     requested_by_agent: str | None = None
+    requested_by_name: str | None = None  # read-time display name of the requester id; the raw value if unknown
     decided_by_user: str | None = None
     workflow_id: str | None = None
     workflow_step: str | None = None
