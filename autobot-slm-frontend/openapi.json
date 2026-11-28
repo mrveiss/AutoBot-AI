@@ -27677,6 +27677,79 @@
         ]
       }
     },
+    "/api/nodes/self-model/node-ids": {
+      "get": {
+        "description": "The SLM node id of each given host address that is a managed node (the mapping ``rename_hosts`` applies).\n\nA backend fact names its host by address; the self-model keys its entities by node id. This is the one\ntranslation, so a fact's link to a ``command`` entity cannot disagree with the entity the SLM wrote.",
+        "operationId": "node_ids_api_nodes_self_model_node_ids_get",
+        "parameters": [
+          {
+            "description": "Comma-separated host addresses",
+            "in": "query",
+            "name": "hosts",
+            "required": true,
+            "schema": {
+              "description": "Comma-separated host addresses",
+              "maxLength": 4096,
+              "minLength": 1,
+              "title": "Hosts",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Node Ids Api Nodes Self Model Node Ids Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Node Ids",
+        "tags": [
+          "nodes",
+          "self-model"
+        ]
+      }
+    },
     "/api/nodes/self-model/observations": {
       "post": {
         "description": "Fold a producer's batch into the model; entities it owns and no longer lists become ``absent``.",
