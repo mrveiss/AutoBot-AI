@@ -59,6 +59,12 @@ _LOOP: asyncio.AbstractEventLoop | None = None
 # ---------------------------------------------------------------------------
 
 
+def _failure_detail(exc: Exception) -> str:
+    """The exception class, plus the missing module's name when an import failed (#22188)."""
+    missing = exc.name if isinstance(exc, ImportError) else None
+    return f"{type(exc).__name__} ({missing})" if missing else type(exc).__name__
+
+
 async def _analyse_for_threats(event: AuditEvent) -> None:
     """Hand one audit event to the threat detection engine (#13562).
 
@@ -72,7 +78,7 @@ async def _analyse_for_threats(event: AuditEvent) -> None:
 
         await analyze_audit_event(event.to_dict())
     except Exception as exc:  # noqa: BLE001 — the audit write must survive it
-        logger.error("Threat analysis could not run for %s: %s", event.action, type(exc).__name__)
+        logger.error("Threat analysis could not run for %s: %s", event.action, _failure_detail(exc))
 
 
 async def record(event: AuditEvent) -> bool:

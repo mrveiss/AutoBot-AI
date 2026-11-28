@@ -11,6 +11,7 @@ cross-thread hand-off, the read filters, and the one retention path.
 import asyncio
 import json
 import threading
+import types
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -325,3 +326,20 @@ class TestOnePurgePath:
         redis.zremrangebyscore.assert_not_called()
         redis.zrem.assert_not_called()
         assert result.deleted == len(AuditCategory) + 1
+
+
+class TestThreatAnalysisFailureLog:
+    """#22188: a failed threat-analysis import names the missing module in the log."""
+
+    @pytest.mark.asyncio
+    async def test_log_names_the_missing_module(self, caplog: pytest.LogCaptureFixture) -> None:
+        failure = ModuleNotFoundError("No module named 'sklearn'", name="sklearn")
+        ingest = types.SimpleNamespace(analyze_audit_event=AsyncMock(side_effect=failure))
+        with patch.dict("sys.modules", {"security.enterprise.threat_detection.ingest": ingest}):
+            with caplog.at_level("ERROR"):
+                await audit._analyse_for_threats(_event())
+        assert audit._failure_detail(failure) in caplog.text
+        assert "ModuleNotFoundError (sklearn)" in caplog.text
+
+    def test_non_import_failure_keeps_the_class_name_only(self) -> None:
+        assert audit._failure_detail(RuntimeError("x")) == "RuntimeError"
