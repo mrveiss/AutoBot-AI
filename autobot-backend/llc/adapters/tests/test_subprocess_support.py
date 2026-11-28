@@ -26,6 +26,8 @@ from llc.adapters.subprocess_support import (
 )
 from llc.models.enums import LLCRunStatus
 
+from .conftest import scoped_os_kill
+
 _PSUTIL_PROCESS = "llc.adapters.subprocess_support.psutil.Process"
 
 # psutil.Process.create_time() computes an absolute epoch time via
@@ -111,22 +113,22 @@ class TestInjectAgentCredentials:
 
 class TestProbePid:
     def test_running_when_kill_succeeds(self) -> None:
-        with patch("os.kill", return_value=None):
+        with scoped_os_kill(12345):
             result = probe_pid(12345)
         assert result.status is LLCRunStatus.RUNNING
 
     def test_completed_on_process_lookup_error(self) -> None:
-        with patch("os.kill", side_effect=ProcessLookupError):
+        with scoped_os_kill(99999, side_effect=ProcessLookupError):
             result = probe_pid(99999)
         assert result.status is LLCRunStatus.COMPLETED
 
     def test_running_on_permission_error(self) -> None:
-        with patch("os.kill", side_effect=PermissionError):
+        with scoped_os_kill(1, side_effect=PermissionError):
             result = probe_pid(1)
         assert result.status is LLCRunStatus.RUNNING
 
     def test_failed_on_oserror(self) -> None:
-        with patch("os.kill", side_effect=OSError("bad fd")):
+        with scoped_os_kill(12345, side_effect=OSError("bad fd")):
             result = probe_pid(12345)
         assert result.status is LLCRunStatus.FAILED
         assert "bad fd" in (result.error or "")
@@ -137,7 +139,7 @@ class TestProbePid:
         def capture(pid, sig):
             calls.append((pid, sig))
 
-        with patch("os.kill", side_effect=capture):
+        with scoped_os_kill(42, side_effect=capture):
             probe_pid(42)
 
         assert calls == [(42, 0)]
@@ -157,7 +159,7 @@ class TestTerminatePid:
 
     async def test_returns_true_when_already_gone(self) -> None:
         # Identity verifies; SIGTERM itself then raises ProcessLookupError.
-        with patch(_PSUTIL_PROCESS) as mock_cls, patch("os.kill", side_effect=ProcessLookupError):
+        with patch(_PSUTIL_PROCESS) as mock_cls, scoped_os_kill(99999, side_effect=ProcessLookupError):
             mock_cls.return_value._ident = (0, 100.0)
             result = await terminate_pid(99999, grace_seconds=1, log_name="Test", expected_create_time=100.0)
         assert result is True
@@ -173,7 +175,7 @@ class TestTerminatePid:
 
         with (
             patch(_PSUTIL_PROCESS) as mock_cls,
-            patch("os.kill", side_effect=smart_kill),
+            scoped_os_kill(12345, side_effect=smart_kill),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             mock_cls.return_value._ident = (0, 100.0)
@@ -193,7 +195,7 @@ class TestTerminatePid:
 
         with (
             patch(_PSUTIL_PROCESS) as mock_cls,
-            patch("os.kill", side_effect=stubborn_kill),
+            scoped_os_kill(12345, side_effect=stubborn_kill),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             mock_cls.return_value._ident = (0, 100.0)
@@ -216,7 +218,7 @@ class TestTerminatePid:
 
         with (
             patch(_PSUTIL_PROCESS) as mock_cls,
-            patch("os.kill", side_effect=kill_fn),
+            scoped_os_kill(12345, side_effect=kill_fn),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             mock_cls.return_value._ident = (0, 100.0)
@@ -236,7 +238,7 @@ class TestTerminatePid:
 class TestTerminatePidIdentityGuards:
     async def test_no_recorded_create_time_never_signals(self) -> None:
         """An old state file (no create_time recorded) probes only, never signals."""
-        with patch("os.kill") as mock_kill, patch("os.killpg") as mock_killpg:
+        with scoped_os_kill(12345) as mock_kill, patch("os.killpg") as mock_killpg:
             result = await terminate_pid(12345, grace_seconds=1, log_name="Test", expected_create_time=None)
         assert result is True
         mock_kill.assert_not_called()
@@ -246,7 +248,7 @@ class TestTerminatePidIdentityGuards:
         """A live pid under a DIFFERENT identity (reused) is never signalled."""
         with (
             patch(_PSUTIL_PROCESS) as mock_cls,
-            patch("os.kill") as mock_kill,
+            scoped_os_kill(12345) as mock_kill,
             patch("os.killpg") as mock_killpg,
         ):
             mock_cls.return_value._ident = (0, 200.0)  # not the recorded 100.0
@@ -260,7 +262,7 @@ class TestTerminatePidIdentityGuards:
         """pid<=1 is refused outright, even when identity would otherwise verify."""
         with (
             patch(_PSUTIL_PROCESS) as mock_cls,
-            patch("os.kill") as mock_kill,
+            scoped_os_kill(protected_pid) as mock_kill,
             patch("os.killpg") as mock_killpg,
         ):
             mock_cls.return_value._ident = (0, 100.0)
@@ -299,7 +301,7 @@ class TestSpawnCreateTime:
 
 class TestProbePidIdentity:
     def test_no_expected_create_time_falls_back_to_probe_pid(self) -> None:
-        with patch("os.kill", return_value=None):
+        with scoped_os_kill(12345):
             result = probe_pid_identity(12345, None)
         assert result.status is LLCRunStatus.RUNNING
 
@@ -324,7 +326,7 @@ class TestProbePidIdentity:
     def test_access_denied_falls_back_to_probe_pid(self) -> None:
         with (
             patch(_PSUTIL_PROCESS, side_effect=psutil.AccessDenied(12345)),
-            patch("os.kill", return_value=None),
+            scoped_os_kill(12345),
         ):
             result = probe_pid_identity(12345, 100.0)
         assert result.status is LLCRunStatus.RUNNING
@@ -332,7 +334,7 @@ class TestProbePidIdentity:
     def test_boot_time_runtime_error_falls_back_to_probe_pid(self) -> None:
         with (
             patch(_PSUTIL_PROCESS, side_effect=_BOOT_TIME_ERROR),
-            patch("os.kill", return_value=None),
+            scoped_os_kill(12345),
         ):
             result = probe_pid_identity(12345, 100.0)
         assert result.status is LLCRunStatus.RUNNING

@@ -7,6 +7,7 @@
 import os
 import tempfile
 from unittest.mock import AsyncMock, patch
+from .conftest import scoped_os_kill
 
 import pytest
 
@@ -127,7 +128,7 @@ class TestClaudeCodeSubscriptionAdapter:
             cfg = {"agent_id": "agent-quota", "adapter_config": {"output_dir": td}}
 
             with (
-                patch("os.kill", side_effect=ProcessLookupError()),
+                scoped_os_kill(3001, side_effect=ProcessLookupError()),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client",
                     new_callable=AsyncMock,

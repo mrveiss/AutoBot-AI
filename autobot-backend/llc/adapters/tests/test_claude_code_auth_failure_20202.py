@@ -12,6 +12,7 @@ import json
 import logging
 import time
 from unittest.mock import AsyncMock, patch
+from .conftest import scoped_os_kill
 
 import pytest
 
@@ -61,7 +62,7 @@ async def _final_status(tmp_path, events: list[dict], adapter=None):
         json.dump(state, fh)
     cfg = {"agent_id": "agent-auth", "adapter_config": {"output_dir": str(tmp_path)}}
     with (
-        patch("os.kill", side_effect=ProcessLookupError()),
+        scoped_os_kill(4001, side_effect=ProcessLookupError()),
         patch("llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None),
     ):
         return await (adapter or ClaudeCodeAdapter()).status(cfg, run_id)
