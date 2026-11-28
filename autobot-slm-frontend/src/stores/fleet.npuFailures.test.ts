@@ -10,6 +10,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import type { CertificateResponse } from '@/types/slm'
 import { useFleetStore } from './fleet'
 
 const api = vi.hoisted(() => ({
@@ -64,11 +65,12 @@ describe('fleet store certificate state uses the contract type (#20263)', () => 
       cert_id: 'c1',
       node_id: 'n1',
       created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
       not_before: '2026-01-01T00:00:00Z',
       not_after: '2027-01-01T00:00:00Z',
       status: 'revoked',
       fingerprint: 'ab:cd',
-    }
+    } satisfies CertificateResponse
     api.getCertificateStatus.mockResolvedValue(cert)
     setActivePinia(createPinia())
     const store = useFleetStore()
