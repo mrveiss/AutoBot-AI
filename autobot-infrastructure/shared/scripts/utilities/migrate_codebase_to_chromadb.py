@@ -30,9 +30,11 @@ if str(_REPO_ROOT) not in sys.path:
 
 # `api.source_scope` lives under autobot-backend/; it is the one validator for a source id
 # (#17758), so this script imports it rather than re-deciding what a valid id is (#22398).
+# Appended, never inserted at 0: the backend's own top-level `tools`/`tests`/`scripts` packages
+# must not shadow the repository root's when this module is imported in-process.
 _BACKEND_ROOT = _REPO_ROOT / "autobot-backend"
 if str(_BACKEND_ROOT) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_ROOT))
+    sys.path.append(str(_BACKEND_ROOT))
 
 from api.source_scope import require_source_id  # noqa: E402
 from autobot_shared.redis_client import require_redis_client  # noqa: E402
