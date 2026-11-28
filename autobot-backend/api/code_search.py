@@ -651,7 +651,7 @@ async def get_codebase_statistics(source_id: SourceIdQuery, user=Depends(get_cur
         # Get current index status
         index_status = await _get_code_search_agent().get_index_status(source_id)
 
-        if not index_status.get("is_indexed", False):
+        if not index_status.get("total_files_indexed", 0) > 0:
             raise HTTPException(
                 status_code=404,
                 detail="No codebase currently indexed. Use /code_search/index first.",
@@ -671,24 +671,26 @@ async def get_codebase_statistics(source_id: SourceIdQuery, user=Depends(get_cur
             "search_performance": {
                 "npu_available": index_status.get("npu_available", False),
                 "cache_efficiency": "Redis-powered indexing active",
-                "supported_languages": index_status.get("language_distribution", {}),
+                "supported_languages": index_status.get("languages", {}),
             },
             "recommendations": [],
         }
 
         # Add performance recommendations
-        total_files = index_status.get("total_files", 0)
+        total_files = index_status.get("total_files_indexed", 0)
         if total_files > 1000:
             stats["recommendations"].append("Large codebase detected - NPU acceleration recommended")
         if total_files > 5000:
             stats["recommendations"].append("Very large codebase - consider incremental indexing")
 
-        language_dist = index_status.get("language_distribution", {})
+        language_dist = index_status.get("languages", {})
         if len(language_dist) > 5:
             stats["recommendations"].append("Multi-language codebase - use language filters for targeted searches")
 
         return JSONResponse(status_code=200, content=stats)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Statistics error: %s", e)
         raise HTTPException(status_code=500, detail="Statistics failed")

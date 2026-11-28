@@ -460,10 +460,10 @@ async def get_development_speedup_status(source_id: SourceIdQuery, user=Depends(
     """
     await authorize_source_access(source_id, user)  # outside the try: a 404 must stay a 404
     try:
-        from agents.npu_code_search_agent import npu_code_search
+        from agents.npu_code_search_agent import get_npu_code_search
 
         # Get NPU and search status
-        search_status = await npu_code_search.get_index_status(source_id)
+        search_status = await get_npu_code_search().get_index_status(source_id)
 
         return JSONResponse(
             status_code=200,

@@ -31,6 +31,8 @@ from agents.npu_code_search_agent import get_npu_code_search, index_project, sea
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+TEST_SOURCE_ID = "src-a"  # the index is keyed by source (#20402)
+
 
 async def test_npu_code_search():
     """Test NPU code search capabilities"""
@@ -40,7 +42,7 @@ async def test_npu_code_search():
     # Test 1: Check system status
     logger.info("\n1. Checking system status...")
     try:
-        status = await get_npu_code_search().get_index_status()
+        status = await get_npu_code_search().get_index_status(TEST_SOURCE_ID)
         logger.info("   ✅ System operational")
         logger.info(f"   📊 Files indexed: {status.get('total_files_indexed', 0)}")
         logger.info(f"   🔧 NPU available: {status.get('npu_available', False)}")
@@ -53,7 +55,7 @@ async def test_npu_code_search():
     logger.info("\n2. Indexing current project...")
     try:
         project_root = str(Path(__file__).parent)
-        result = await index_project(project_root, force_reindex=True)
+        result = await index_project(project_root, force_reindex=True, source_id=TEST_SOURCE_ID)
 
         if result["status"] == "success":
             logger.info(f"   ✅ Indexed {result['indexed_files']} files")
@@ -94,7 +96,9 @@ async def test_npu_code_search():
     logger.info("\n3. Testing search capabilities...")
     for i, test in enumerate(search_tests, 1):
         try:
-            results = await search_codebase(query=test["query"], search_type=test["type"], max_results=5)
+            results = await search_codebase(
+                query=test["query"], search_type=test["type"], max_results=5, source_id=TEST_SOURCE_ID
+            )
 
             stats = get_npu_code_search().get_search_stats()
             logger.info(f"   {i}. {test['name']}")
@@ -245,7 +249,7 @@ async def test_performance_comparison():
     project_root = str(Path(__file__).parent)
 
     # Ensure project is indexed
-    await index_project(project_root, force_reindex=False)
+    await index_project(project_root, force_reindex=False, source_id=TEST_SOURCE_ID)
 
     # Test queries for performance comparison
     test_queries = [
@@ -262,7 +266,7 @@ async def test_performance_comparison():
     for i, (query, search_type) in enumerate(test_queries, 1):
         try:
             start_time = time.time()
-            results = await search_codebase(query, search_type, max_results=10)
+            results = await search_codebase(query, search_type, max_results=10, source_id=TEST_SOURCE_ID)
             search_time = time.time() - start_time
 
             stats = get_npu_code_search().get_search_stats()
@@ -312,7 +316,7 @@ async def test_cache_performance():
 
     # First search (no cache)
     start_time = time.time()
-    results1 = await search_codebase(query, search_type, max_results=10)
+    results1 = await search_codebase(query, search_type, max_results=10, source_id=TEST_SOURCE_ID)
     time1 = time.time() - start_time
     stats1 = get_npu_code_search().get_search_stats()
 
@@ -320,7 +324,7 @@ async def test_cache_performance():
 
     # Second search (should hit cache)
     start_time = time.time()
-    results2 = await search_codebase(query, search_type, max_results=10)
+    results2 = await search_codebase(query, search_type, max_results=10, source_id=TEST_SOURCE_ID)
     time2 = time.time() - start_time
     stats2 = get_npu_code_search().get_search_stats()
 
@@ -334,9 +338,9 @@ async def test_cache_performance():
     # Verify results are identical
     # #14920: a mismatch logged a warning and still returned True, so the one
     # invariant this test exists to check could not fail it.
-    assert len(results1) == len(results2), (
-        f"cached and uncached searches disagreed: {len(results1)} vs {len(results2)} items"
-    )
+    assert len(results1) == len(
+        results2
+    ), f"cached and uncached searches disagreed: {len(results1)} vs {len(results2)} items"
     logger.info(f"   Results consistent: {len(results1)} items")
     # The driver sums truthiness (`if result`), so a bare assert would leave a
     # passing test counted as failed. The assert makes it able to fail; this

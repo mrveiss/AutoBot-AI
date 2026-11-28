@@ -121,3 +121,48 @@ async def test_status_reports_only_the_requested_source() -> None:
     ):
         await mod.get_search_status("src-a", {"u": 1})
     agent.get_index_status.assert_awaited_once_with("src-a")
+
+
+@pytest.mark.asyncio
+async def test_stats_answer_200_for_an_indexed_source_and_404_for_an_empty_one() -> None:
+    from fastapi import HTTPException
+
+    agent = AsyncMock()
+    agent.index_prefix = "autobot:code:index:"
+    agent.get_index_status.return_value = {"total_files_indexed": 3, "languages": {"python": 3}, "npu_available": False}
+    redis = AsyncMock()
+    redis.keys = lambda pattern: ["k1", "k2"]
+    with (
+        patch.object(mod, "authorize_source_access", AsyncMock()),
+        patch.object(mod, "_get_code_search_agent", return_value=agent),
+        patch.object(mod, "get_redis_client", return_value=redis),
+    ):
+        response = await mod.get_codebase_statistics("src-a", {"u": 1})
+        assert response.status_code == 200
+        body = json.loads(response.body)
+        assert body["index_statistics"]["total_files_indexed"] == 3
+        assert body["redis_keys"] == 2
+        agent.get_index_status.return_value = {"total_files_indexed": 0, "languages": {}}
+        with pytest.raises(HTTPException) as empty:
+            await mod.get_codebase_statistics("src-a", {"u": 1})
+    assert empty.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_dev_speedup_status_resolves_the_search_agent_without_import_error() -> None:
+    from api import development_speedup as dev
+
+    agent = AsyncMock()
+    agent.get_index_status.return_value = {"npu_available": False}
+    with (
+        patch.object(dev, "authorize_source_access", AsyncMock()),
+        patch("agents.npu_code_search_agent.get_npu_code_search", return_value=agent),
+        patch.object(
+            dev,
+            "get_dev_speedup_agent",
+            return_value=AsyncMock(duplicate_threshold=1, min_duplicate_lines=1, complexity_threshold=1),
+        ),
+    ):
+        response = await dev.get_development_speedup_status("src-a", {"u": 1})
+    assert response.status_code == 200
+    agent.get_index_status.assert_awaited_once_with("src-a")
