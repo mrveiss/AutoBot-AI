@@ -25,6 +25,7 @@ import itertools
 import re
 
 from repo_tests._paths import repo_root
+from tools.lint._comment_syntax import strip_block_comments
 
 _ROOT = repo_root()
 _DOC = _ROOT / "docs" / "developer" / "DESIGN_SYSTEM.md"
@@ -44,9 +45,6 @@ _OBJECT_KEY = re.compile(r"""['"](--[\w-]+)['"]\s*:""")
 _STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL)
 _STYLE_ATTR = re.compile(r"""\bstyle\s*=\s*"([^"]*)"|\bstyle\s*=\s*'([^']*)'""")
 _VAR_USE = re.compile(r"var\(\s*(--[\w-]+)")
-# A CSS comment, lazily to the first `*/`: one quantifier, no nesting, so it is linear. A declaration after one
-# (`a{color:red; /* note */ --x:1}`) is still a declaration, and a declaration-like text inside one is not.
-_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 _DECLARATION_PROBE = re.compile(r"--[\w-]+\s*:")
 
 
@@ -59,7 +57,7 @@ def _slm_files(*suffixes: str) -> list:
 
 
 def _strip_css_comments(text: str) -> str:
-    return _CSS_COMMENT.sub(" ", text)
+    return strip_block_comments(text)
 
 
 def _names_in(kind: str, text: str) -> set[str]:
@@ -209,11 +207,10 @@ _TOKEN = re.compile(r"""[^\s'"`,\[\]{};?:]+(?::[^\s'"`,\[\]{};?:]+)*""")
 _ALIAS = re.compile(r"^var\(\s*(--[\w-]+)\s*\)$")
 _ARBITRARY = re.compile(r"^\((--[\w-]+)\)$")
 # One element's opening tag, quote-aware: a `>` or an apostrophe inside a quoted attribute value never ends
-# or shifts it, which a whole-file quote pairing cannot promise. An unquoted value never holds `=`, so a name
-# and its value have exactly one split point (a value that could swallow `=` made the match ambiguous: CodeQL py/redos).
-_TAG = re.compile(
-    r"""<([a-zA-Z][\w.-]*)((?:\s+[^\s=>/"']+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"'=]+))?)*)\s*/?>""",
-)
+# or shifts it, which a whole-file quote pairing cannot promise. The attribute run is a repeat of three branches
+# whose first characters are disjoint (a plain character, `"`, `'`), so every character has exactly one way to
+# match and the repeat is linear (an attribute-grammar pattern with an optional value made CodeQL py/redos).
+_TAG = re.compile(r"""<([a-zA-Z][\w.-]*)(?=[\s/>])((?:[^>"']|"[^"]*"|'[^']*')*)>""")
 _ATTR = re.compile(r"""\s([:@\w.-]*class)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
 _JS_STRING = re.compile(r"""'([^'\n]*)'|`([^`]*)`|"([^"\n]*)\"""")
 _SINGLE_QUOTED = re.compile(r"'([^'\n]*)'")
