@@ -231,9 +231,10 @@ export class ChatRepository {
     onChunk?: (chunk: ChatStreamResponse) => void
   ): Promise<void> {
     try {
-      const response = await apiClient.rawRequest(`${getApiBase()}/chat`, {
-        method: 'POST',
-        body: { message, chat_id: chatId, stream: true },
+      // callRaw: typed contract key, base applied by the client (VITE_API_BASE_PATH). The stream body predates the
+      // generated ChatMessage schema (content/role/session_id), so it is passed as written.
+      const response = await apiClient.callRaw('post', '/api/chat', {
+        body: { message, chat_id: chatId, stream: true } as never,
       })
 
       if (!response.ok) {
