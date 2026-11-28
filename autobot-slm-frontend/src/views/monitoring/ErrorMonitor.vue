@@ -302,13 +302,13 @@ onMounted(() => dataPoller.start(''))
                 v-model="searchQuery"
                 type="text"
                 :placeholder="$t('monitoring.errorMonitor.searchErrors')"
-                class="w-full px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+                class="w-full px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
               />
             </div>
             <select
               v-model="filterSeverity"
               @change="onFilterChange"
-              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="all">{{ $t('monitoring.errorMonitor.allSeverities') }}</option>
               <option value="critical">{{ $t('monitoring.errorMonitor.critical') }}</option>
@@ -317,7 +317,7 @@ onMounted(() => dataPoller.start(''))
             <select
               v-model="filterResolved"
               @change="onFilterChange"
-              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="all">{{ $t('monitoring.errorMonitor.allStatus') }}</option>
               <option value="unresolved">{{ $t('monitoring.errorMonitor.unresolved') }}</option>

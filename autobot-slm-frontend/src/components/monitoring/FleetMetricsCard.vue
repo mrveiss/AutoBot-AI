@@ -26,22 +26,22 @@ const healthPercentage = computed(() => {
 
 const healthColor = computed(() => {
   const pct = healthPercentage.value
-  if (pct >= 90) return 'text-success-600'
-  if (pct >= 70) return 'text-warning-600'
-  return 'text-error-600'
+  if (pct >= 90) return 'text-autobot-pill-ok-fg'
+  if (pct >= 70) return 'text-autobot-pill-warn-fg'
+  return 'text-autobot-alert-text'
 })
 
 function getMetricColor(value: number): string {
-  if (value >= 90) return 'text-error-600'
-  if (value >= 70) return 'text-warning-600'
-  return 'text-success-600'
+  if (value >= 90) return 'text-autobot-alert-text'
+  if (value >= 70) return 'text-autobot-pill-warn-fg'
+  return 'text-autobot-pill-ok-fg'
 }
 
 const formatTimestamp = createDateFormatter({ kind: 'time' })
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+  <div class="bg-autobot-bg-secondary rounded-lg shadow-xs border border-autobot-border p-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('monitoring.fleetMetricsCard.fleetMetricsSummary') }}</h3>
@@ -49,7 +49,7 @@ const formatTimestamp = createDateFormatter({ kind: 'time' })
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-8">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-autobot-primary"></div>
     </div>
 
     <div v-else-if="!metrics" class="text-center py-8 text-autobot-text-tertiary">
@@ -91,8 +91,8 @@ const formatTimestamp = createDateFormatter({ kind: 'time' })
           {{ metrics.running_services }}/{{ metrics.total_services }}
         </div>
         <div class="text-xs text-autobot-text-secondary">
-          <span v-if="metrics.failed_services > 0" class="text-error-600">{{ $t('monitoring.fleetMetricsCard.value0Failed', { value0: metrics.failed_services }) }}</span>
-          <span v-else class="text-success-600">{{ $t('monitoring.fleetMetricsCard.allHealthy') }}</span>
+          <span v-if="metrics.failed_services > 0" class="text-autobot-alert-text">{{ $t('monitoring.fleetMetricsCard.value0Failed', { value0: metrics.failed_services }) }}</span>
+          <span v-else class="text-autobot-pill-ok-fg">{{ $t('monitoring.fleetMetricsCard.allHealthy') }}</span>
         </div>
       </div>
     </div>
@@ -101,11 +101,11 @@ const formatTimestamp = createDateFormatter({ kind: 'time' })
     <div v-if="metrics" class="mt-6 pt-6 border-t border-autobot-border">
       <div class="grid grid-cols-3 gap-4 text-center">
         <div>
-          <div class="text-2xl font-bold text-success-600">{{ metrics.online_nodes }}</div>
+          <div class="text-2xl font-bold text-autobot-pill-ok-fg">{{ metrics.online_nodes }}</div>
           <div class="text-xs text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.online') }}</div>
         </div>
         <div>
-          <div class="text-2xl font-bold text-warning-600">{{ metrics.degraded_nodes }}</div>
+          <div class="text-2xl font-bold text-autobot-pill-warn-fg">{{ metrics.degraded_nodes }}</div>
           <div class="text-xs text-autobot-text-tertiary">{{ $t('monitoring.fleetMetricsCard.degraded') }}</div>
         </div>
         <div>

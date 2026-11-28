@@ -124,7 +124,7 @@ onMounted(fetchSettings)
   <div class="p-6">
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-8">
-      <svg class="animate-spin w-8 h-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+      <svg class="animate-spin w-8 h-8 text-autobot-primary" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
@@ -152,7 +152,7 @@ onMounted(fetchSettings)
             <select
               v-model="settings.monitoring_location"
               @change="saveSetting('monitoring_location', settings.monitoring_location)"
-              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="local">{{ $t('settings.monitoringSettings.localOnSLMHost') }}</option>
               <option value="external">{{ $t('settings.monitoringSettings.externalSeparateHost') }}</option>
@@ -169,7 +169,7 @@ onMounted(fetchSettings)
               <input
                 v-model="settings.prometheus_url"
                 type="text"
-                class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+                class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
               />
               <button
                 @click="testPrometheusConnection"
@@ -183,7 +183,7 @@ onMounted(fetchSettings)
               <button
                 @click="saveSetting('prometheus_url', settings.prometheus_url)"
                 :disabled="saving"
-                class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
               >
                 {{ $t('settings.monitoringSettings.save') }}
               </button>
@@ -200,7 +200,7 @@ onMounted(fetchSettings)
               <input
                 v-model="settings.grafana_url"
                 type="text"
-                class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+                class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
               />
               <button
                 @click="testGrafanaConnection"
@@ -214,7 +214,7 @@ onMounted(fetchSettings)
               <button
                 @click="saveSetting('grafana_url', settings.grafana_url)"
                 :disabled="saving"
-                class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50"
               >
                 {{ $t('settings.monitoringSettings.save') }}
               </button>
@@ -229,7 +229,7 @@ onMounted(fetchSettings)
             </div>
             <select
               v-model="settings.scrape_interval"
-              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="10">{{ $t('settings.monitoringSettings.10Seconds') }}</option>
               <option value="15">{{ $t('settings.monitoringSettings.15Seconds') }}</option>
@@ -246,7 +246,7 @@ onMounted(fetchSettings)
             </div>
             <select
               v-model="settings.retention_days"
-              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-64 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="7">{{ $t('settings.monitoringSettings.7Days') }}</option>
               <option value="15">{{ $t('settings.monitoringSettings.15Days') }}</option>
@@ -275,7 +275,7 @@ onMounted(fetchSettings)
         </p>
         <button
           @click="deployMonitoringRole"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
