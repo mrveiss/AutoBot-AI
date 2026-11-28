@@ -26,7 +26,7 @@ from fastapi import (
     WebSocket,
 )
 
-from api.analytics_code_cache import cached_source_ids
+from api.analytics_code_cache import cached_source_count
 from api.analytics_controller import (
     analytics_controller,
     analytics_state,
@@ -119,7 +119,7 @@ async def _get_code_analysis_status() -> Dict[str, Any]:
     return {
         "last_analysis": analytics_state.get("last_analysis_time"),
         "cache_available": bool(analytics_state.get("code_analysis_cache")),  # any source
-        "cached_sources": cached_source_ids(analytics_state),
+        "cached_source_count": cached_source_count(analytics_state),
         "tools_available": tools_available,
     }
 
@@ -776,7 +776,7 @@ def _build_analytics_status_base(collector) -> Dict[str, Any]:
             "performance_history_points": len(analytics_state["performance_history"]),
             "communication_chains": len(analytics_controller.communication_chains),
             "cached_code_analysis": bool(analytics_state.get("code_analysis_cache")),  # any source
-            "cached_sources": cached_source_ids(analytics_state),
+            "cached_source_count": cached_source_count(analytics_state),
         },
         "integration_status": {"redis_connectivity": {}, "code_analysis_tools": {}},
     }

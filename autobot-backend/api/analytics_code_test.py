@@ -87,22 +87,24 @@ def test_one_sources_analysis_is_never_served_for_another(tmp_path):
     assert again["last_analysis"] == "t-src-a"
 
 
-def test_status_reports_which_sources_have_a_cached_analysis_without_content():
+def test_status_reports_a_cached_source_count_without_ids_or_content():
     import asyncio
     from unittest.mock import AsyncMock
 
     from api import analytics as analytics_mod
-    from api.analytics_code_cache import cached_source_ids
+    from api.analytics_code_cache import cached_source_count
 
     state = {"code_analysis_cache": {"src-b": {"secret": 1}, "src-a": {"secret": 2}}, "last_analysis_time": None}
-    assert cached_source_ids(state) == ["src-a", "src-b"]
-    assert cached_source_ids({}) == []
+    assert cached_source_count(state) == 2
+    assert cached_source_count({}) == 0
     controller = MagicMock()
     controller.code_tools_available = AsyncMock(return_value={"code_analysis_suite": False, "code_index_mcp": False})
     with patch.object(mod, "analytics_state", state), patch.object(mod, "analytics_controller", controller):
         status = asyncio.run(mod.get_code_analysis_status(admin_check=True))
-    assert status["cache_status"]["cached_sources"] == ["src-a", "src-b"]
+    assert status["cache_status"]["cached_source_count"] == 2
+    assert "src-a" not in str(status) and "src-b" not in str(status)
     assert status["cache_status"]["has_cached_results"] is True
     with patch.object(analytics_mod, "analytics_state", state), patch.object(analytics_mod, "analytics_controller", controller):
         brief = asyncio.run(analytics_mod._get_code_analysis_status())
-    assert brief["cached_sources"] == ["src-a", "src-b"] and "secret" not in str(brief)
+    assert brief["cached_source_count"] == 2 and "secret" not in str(brief)
+    assert "src-a" not in str(brief) and "src-b" not in str(brief)

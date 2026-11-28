@@ -31,9 +31,9 @@ def get_cached_analysis(state: dict, source_id: str) -> "dict[str, Any] | None":
     return state.get("code_analysis_cache", {}).get(source)
 
 
-def cached_source_ids(state: dict) -> "list[str]":
-    """Ids of the sources that have a cached analysis; ids only, never cached content."""
-    return sorted(state.get("code_analysis_cache", {}))
+def cached_source_count(state: dict) -> int:
+    """How many sources have a cached analysis; a count, never ids (they would disclose other users' sources)."""
+    return len(state.get("code_analysis_cache", {}))
 
 
 async def run_source_analysis(controller, source_id: str, scan_root: Path, analysis_type: str, **options):
