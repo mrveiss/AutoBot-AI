@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   getNpuFleetMetrics: vi.fn(),
   getNpuNodeMetrics: vi.fn(),
   getNpuWorkerConfig: vi.fn(),
+  getCertificateStatus: vi.fn(),
 }))
 
 vi.mock('@/composables/useSlmApi', () => ({ useSlmApi: () => api }))
@@ -54,5 +55,29 @@ describe('fleet store NPU reads report failure (#19068)', () => {
   it('returns the data on success', async () => {
     api.getNpuWorkerConfig.mockResolvedValue({ priority: 3 })
     expect(await useFleetStore().fetchNpuWorkerConfig('n1')).toEqual({ priority: 3 })
+  })
+})
+
+describe('fleet store certificate state uses the contract type (#20263)', () => {
+  it('keeps the CertificateResponse fields (not_before / not_after, string status) per node', async () => {
+    const cert = {
+      cert_id: 'c1',
+      node_id: 'n1',
+      created_at: '2026-01-01T00:00:00Z',
+      not_before: '2026-01-01T00:00:00Z',
+      not_after: '2027-01-01T00:00:00Z',
+      status: 'revoked',
+      fingerprint: 'ab:cd',
+    }
+    api.getCertificateStatus.mockResolvedValue(cert)
+    setActivePinia(createPinia())
+    const store = useFleetStore()
+    await store.checkNodeCertificate('n1')
+    const stored = store.certificateStatus.get('n1')
+    expect(stored?.not_before).toBe(cert.not_before)
+    expect(stored?.not_after).toBe(cert.not_after)
+    expect(stored?.status).toBe('revoked')
+    expect(stored).not.toHaveProperty('issued_at')
+    expect(stored).not.toHaveProperty('expires_at')
   })
 })

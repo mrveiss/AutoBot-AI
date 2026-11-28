@@ -22,7 +22,7 @@ import type {
   NodeRole,
   NodeEvent,
   NodeEventFilters,
-  CertificateInfo,
+  CertificateResponse,
   NodeUpdateCheckResponse,
   ConnectionTestRequest,
   ConnectionTestResult,
@@ -231,8 +231,8 @@ export function useSlmApi() {
   }
 
   // Certificates
-  async function getCertificateStatus(nodeId: string): Promise<CertificateInfo> {
-    const response = await client.get<CertificateInfo>(`/nodes/${nodeId}/certificate`)
+  async function getCertificateStatus(nodeId: string): Promise<CertificateResponse> {
+    const response = await client.get<CertificateResponse>(`/nodes/${nodeId}/certificate`)
     return response.data
   }
 
