@@ -17,7 +17,7 @@ const json = (status: number, body: unknown) =>
 const selection = (...names: string[]) => names.map((n) => new File(['x'], n)) as unknown as FileList
 
 describe('useFileBrowser.uploadFiles', () => {
-  beforeEach(() => fetchWithAuth.mockReset())
+  beforeEach(() => { fetchWithAuth.mockReset() })
 
   it('sends each file as its own request with the route field names', async () => {
     fetchWithAuth.mockResolvedValue(json(200, { success: true }))

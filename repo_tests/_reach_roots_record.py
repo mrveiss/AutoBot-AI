@@ -146,6 +146,7 @@ REACH_ROOTS = {
         "autobot-frontend/src",
         "autobot-slm-frontend/src",
     ),
+    "repo_tests/frontend_hook_returns_mock_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/frontend_local_date_formatter_ratchet_19905_test.py": (
         "autobot-frontend/src",
         "autobot-slm-frontend/src",

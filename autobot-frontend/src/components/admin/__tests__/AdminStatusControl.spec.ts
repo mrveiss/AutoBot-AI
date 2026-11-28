@@ -37,7 +37,7 @@ function buttonByText(text: string): HTMLElement {
   return button
 }
 
-beforeEach(() => callMock.mockReset())
+beforeEach(() => { callMock.mockReset() })
 afterEach(() => {
   wrappers.forEach(w => w.unmount())
   wrappers.length = 0

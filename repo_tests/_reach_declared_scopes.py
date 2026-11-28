@@ -313,6 +313,7 @@ DECLARED_SCOPES = {
     "frontend-local-date-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-hand-built-relative-time-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-hand-rolled-file-save-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "frontend-hook-returns-mock-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-hand-rolled-spinner-scan": ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins"),
     "search-mode-copies": ("autobot-backend",),
     "redaction-placeholder-literals": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),

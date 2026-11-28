@@ -15,7 +15,7 @@ vi.mock('@/utils/debugUtils', () => ({ createLogger: () => ({ warn: vi.fn(), err
 import { useGuiAutomationOpportunities } from '../useGuiAutomationOpportunities'
 
 describe('useGuiAutomationOpportunities', () => {
-  beforeEach(() => getAutomationOpportunities.mockReset())
+  beforeEach(() => { getAutomationOpportunities.mockReset() })
 
   it('loads the opportunities', async () => {
     getAutomationOpportunities.mockResolvedValue({ opportunities: [{ id: 'o1' }] })

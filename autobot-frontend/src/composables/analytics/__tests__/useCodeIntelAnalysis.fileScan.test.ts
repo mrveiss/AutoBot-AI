@@ -43,7 +43,7 @@ function setup() {
 }
 
 describe('handleFileScan issue count', () => {
-  beforeEach(() => scanFile.mockReset())
+  beforeEach(() => { scanFile.mockReset() })
 
   it('reports no issues only for a numeric zero', async () => {
     scanFile.mockResolvedValue({ statistics: { issues_found: 0 } })

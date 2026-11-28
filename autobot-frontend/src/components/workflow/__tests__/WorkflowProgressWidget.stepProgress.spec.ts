@@ -36,7 +36,7 @@ async function render(w: unknown) {
 }
 
 describe('WorkflowProgressWidget step progress (#21106)', () => {
-  beforeEach(() => get.mockReset())
+  beforeEach(() => { get.mockReset() })
 
   it('a completed run is 5/5 at 100%', async () => {
     const r = await render(workflow({ current_step: 4, status: 'completed' }))

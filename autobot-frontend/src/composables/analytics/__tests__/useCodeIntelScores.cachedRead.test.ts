@@ -65,7 +65,7 @@ describe('cached security score read (#20491)', () => {
   beforeAll(async () => {
     await loadLocaleMessages('en')
   })
-  beforeEach(() => mockedFetch.mockReset())
+  beforeEach(() => { mockedFetch.mockReset() })
 
   it('sends the selected source and issues no write', async () => {
     mockedFetch.mockResolvedValueOnce(

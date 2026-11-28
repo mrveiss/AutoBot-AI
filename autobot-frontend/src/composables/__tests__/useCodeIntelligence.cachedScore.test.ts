@@ -29,7 +29,7 @@ function jsonResponse(body: unknown): Response {
 }
 
 describe('useCodeIntelligence cached security score (#18907)', () => {
-  beforeEach(() => mockedFetch.mockReset())
+  beforeEach(() => { mockedFetch.mockReset() })
 
   it('sends source_id and keeps every payload field', async () => {
     mockedFetch.mockResolvedValueOnce(

@@ -39,7 +39,7 @@ async function render(agents: unknown[]) {
   return w
 }
 
-beforeEach(() => get.mockReset())
+beforeEach(() => { get.mockReset() })
 
 describe('Agent Activity Monitor reports only what it measured (#17514)', () => {
   it('an agent with no activity data reads "not reported", never a measured zero', async () => {

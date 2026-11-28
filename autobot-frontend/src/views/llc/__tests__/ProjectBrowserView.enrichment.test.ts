@@ -46,7 +46,7 @@ const PROJECT = {
 }
 
 describe('ProjectBrowserView enrichment (GH#10232)', () => {
-  beforeEach(() => get.mockReset())
+  beforeEach(() => { get.mockReset() })
 
   it('shows open-item count, active sprint, and a velocity sparkline', async () => {
     get.mockImplementation((url?: string) => {

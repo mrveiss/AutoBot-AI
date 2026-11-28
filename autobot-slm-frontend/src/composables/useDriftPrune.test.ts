@@ -22,7 +22,7 @@ const filesOf = (from: number, count: number) =>
   Array.from({ length: count }, (_, i) => ({ path: `f${from + i}.py`, detail: null }))
 
 describe('useDriftPrune batching (#22082)', () => {
-  beforeEach(() => call.mockReset())
+  beforeEach(() => { call.mockReset() })
 
   it('shows and confirms one batch of at most the cap, then re-previews the rest', async () => {
     const total = DRIFT_PRUNE_MAX_PATHS + 7

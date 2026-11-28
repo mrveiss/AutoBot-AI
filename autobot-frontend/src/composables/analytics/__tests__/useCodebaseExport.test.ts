@@ -126,7 +126,7 @@ function makeExport() {
 }
 
 describe('section export carries the displayed data (#20492)', () => {
-  beforeEach(() => saved.mockClear())
+  beforeEach(() => { saved.mockClear() })
 
   it.each(SECTIONS)('%s: the JSON export is the loaded data', async (section) => {
     const { exportSection, notify } = makeExport()

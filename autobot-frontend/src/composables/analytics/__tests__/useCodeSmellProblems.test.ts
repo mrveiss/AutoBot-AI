@@ -25,7 +25,7 @@ vi.mock('@/composables/api/useFetchEndpoint', () => ({
 import { useCodeSmellProblems } from '../useCodeSmellProblems'
 
 describe('useCodeSmellProblems category wiring (#20493)', () => {
-  beforeEach(() => load.mockClear())
+  beforeEach(() => { load.mockClear() })
 
   it('loads production code by default, sending file_category', async () => {
     const s = useCodeSmellProblems((u) => u)

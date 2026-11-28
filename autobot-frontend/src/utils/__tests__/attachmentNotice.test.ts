@@ -28,7 +28,7 @@ vi.mock('@/i18n', () => ({
 import { ATTACHMENT_NOTICE_CODES, attachmentNoticeText, showAttachmentNotice } from '../attachmentNotice'
 
 describe('attachment notices (#20195)', () => {
-  beforeEach(() => showToast.mockClear())
+  beforeEach(() => { showToast.mockClear() })
 
   it('renders the named code with the file name and limit', () => {
     expect(attachmentNoticeText({ code: 'truncated', filename: 'big.txt' })).toBe('chat.attachmentNotice.truncated_legacy|big.txt|||')
