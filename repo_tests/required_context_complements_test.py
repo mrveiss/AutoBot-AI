@@ -513,7 +513,7 @@ def _unadmitted_violations(workflows: dict, script: str) -> list:
     for context, (job_id, _, _) in GATES.items():
         spec = jobs[job_id]
         with_ = (_verdict_step(spec).get("with")) or {}
-        if str(with_.get("admitted", "")).replace(" ", "") != "${{" + LAND_NEXT + "}}":
+        if str(with_.get("admitted", "")).replace(" ", "") != ("${{" + LAND_NEXT + "}}").replace(" ", ""):
             problems.append(f"{context}: `admitted` is not the land-next label test")
         if not _gate_if_ok(spec):
             problems.append(f"{context}: the gate `if` does not skip the no-op label event")
@@ -560,7 +560,7 @@ def test_control_a_job_missing_the_land_next_condition_fails_the_park_checker():
         docs["marker-tests.yml"]["jobs"]["marker-tests"]["if"] = cond
         assert any("marker-tests.yml 'marker-tests' is not held back" in p for p in _park_violations(docs)), cond
     docs = _fixture()
-    docs["ci.yml"]["jobs"]["run-security"]["if"] = "${{ needs.changes.outputs.held != 'true' }}"
+    docs["ci.yml"]["jobs"]["run-security"].update({"if": "${{ needs.changes.outputs.held != 'true' }}", "needs": []})
     assert any("'run-security'" in p for p in _park_violations(docs))
     docs = _fixture()
     docs["ci.yml"]["jobs"]["changes"]["outputs"]["ready"] = "${{ github.event.pull_request.draft == false }}"

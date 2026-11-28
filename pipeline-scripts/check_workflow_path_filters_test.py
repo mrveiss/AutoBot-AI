@@ -96,8 +96,8 @@ def test_reintroducing_ci_pull_request_paths_fails(tmp_path: Path) -> None:
     root = _sandbox(tmp_path)
     _edit(
         root / CI,
-        "    types: [opened, synchronize, reopened, ready_for_review]\n",
-        "    types: [opened, synchronize, reopened, ready_for_review]\n    paths:\n      - 'autobot-backend/**/*.py'\n",
+        "    types: [opened, synchronize, reopened, ready_for_review, labeled]\n",
+        "    types: [opened, synchronize, reopened, ready_for_review, labeled]\n    paths:\n      - 'autobot-backend/**/*.py'\n",
     )
     result = _run(root)
     assert result.returncode == 1, result.stdout

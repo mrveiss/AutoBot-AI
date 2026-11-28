@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 import yaml
+from repo_tests._gate_if import gate_always_runs
 from repo_tests._gate_verdict_driver import run_cancel_decision, run_verdict
 from repo_tests._github_expressions import evaluate, strip_expression_braces
 from repo_tests._paths import repo_root
@@ -144,7 +145,7 @@ def test_a_failed_short_check_fails_every_gate_that_applies_never_skips_or_passe
     gates = _gates()
     assert len(gates) == 8, sorted(gates)
     for name, job in gates.items():
-        assert job["if"] == "always()" and "short-check" in _needs(job), name
+        assert gate_always_runs(job["if"]) and "short-check" in _needs(job), name
         rc, out = _verdict(job, short_check="failure", work="skipped")
         assert rc == 1 and "did not pass" in out, (name, out)
         rc, out = _verdict(job, short_check="success", work="success")

@@ -32,6 +32,7 @@ import subprocess
 from pathlib import Path
 
 import yaml
+from repo_tests._gate_if import gate_always_runs
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
@@ -96,7 +97,7 @@ def test_exactly_one_job_in_the_whole_tree_publishes_the_context() -> None:
 def test_the_gate_cannot_be_skipped_and_depends_on_the_detector_and_the_build() -> None:
     """#17126 AC1: without `always()` the job is skipped when `changes` fails, and a skip satisfies."""
     gate = _gate()
-    assert str(gate.get("if", "")).strip() == "always()"
+    assert gate_always_runs(gate.get("if"))
     needs = gate.get("needs")
     needs = [needs] if isinstance(needs, str) else list(needs or [])
     assert {"changes", "run-docker-smoke"} <= set(needs)

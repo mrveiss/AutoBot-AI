@@ -31,6 +31,7 @@ import shutil
 import subprocess
 
 import pytest
+from repo_tests._gate_if import gate_always_runs
 from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflows")
@@ -452,7 +453,7 @@ def test_control_an_always_running_dependent_does_not_inherit_the_hold(condition
 
 def test_the_reporting_gates_are_real_ci_jobs_that_always_run():
     jobs = pull_request_workflows()["ci.yml"]["jobs"]
-    assert all(g in jobs and jobs[g].get("if") == "always()" for g in REPORTING_GATES)
+    assert all(g in jobs and gate_always_runs(jobs[g].get("if")) for g in REPORTING_GATES)
 
 
 _HOLD = "github.event.pull_request.user.login != 'dependabot[bot]'"
