@@ -573,6 +573,7 @@ async def _prepare_imports_batch(
 
 def _prepare_stats_document(analysis_results: Dict, source_id: str | None = None) -> tuple:
     """Prepare stats document for ChromaDB storage (Issue #281: extracted)."""
+    source_id = require_source_id(source_id, "codebase stats document id")  # #17665
     stats = analysis_results["stats"]
 
     # Get category counts for document
@@ -600,10 +601,9 @@ Last Indexed: {stats['last_indexed']}
             metadata[k] = json.dumps(v)
         else:
             metadata[k] = str(v)
-    if source_id:
-        metadata["source_id"] = source_id
+    metadata["source_id"] = source_id
 
-    stats_id = f"codebase_stats_{source_id}" if source_id else "codebase_stats"
+    stats_id = f"codebase_stats_{source_id}"
     return stats_id, stats_doc, metadata
 
 
